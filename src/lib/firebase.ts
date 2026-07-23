@@ -1,18 +1,16 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
 import { getFirestore } from 'firebase/firestore';
-import appletConfig from '../../firebase-applet-config.json';
 
 export const firebaseConfig = {
-  apiKey: appletConfig?.apiKey || "AIzaSyDqnrSSkaea_JG6xre3AD5dNfg1Ss4e7VU",
-  authDomain: appletConfig?.authDomain || "sabush-bpt.firebaseapp.com",
-  projectId: appletConfig?.projectId || "sabush-bpt",
-  storageBucket: appletConfig?.storageBucket || "sabush-bpt.firebasestorage.app",
-  messagingSenderId: appletConfig?.messagingSenderId || "143242763699",
-  appId: appletConfig?.appId || "1:143242763699:web:93b9b3ef712449240f3fc6",
-  measurementId: appletConfig?.measurementId || "G-5VYDEJ7RRV"
+  apiKey: import.meta.env.VITE_FIREBASE_API_KEY,
+  authDomain: import.meta.env.VITE_FIREBASE_AUTH_DOMAIN,
+  projectId: import.meta.env.VITE_FIREBASE_PROJECT_ID,
+  storageBucket: import.meta.env.VITE_FIREBASE_STORAGE_BUCKET,
+  messagingSenderId: import.meta.env.VITE_FIREBASE_MESSAGING_SENDER_ID,
+  appId: import.meta.env.VITE_FIREBASE_APP_ID,
+  measurementId: import.meta.env.VITE_FIREBASE_MEASUREMENT_ID,
 };
-
 console.log('[Firebase Init] Config in use:', {
   projectId: firebaseConfig.projectId,
   authDomain: firebaseConfig.authDomain,
