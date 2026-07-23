@@ -1,0 +1,6 @@
+{
+  "name": "Batch Profit Tracker",
+  "description": "Inferred profit tracking for small business based on stock batch replacements, loss recording, and general expenses.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

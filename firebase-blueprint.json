@@ -1,0 +1,89 @@
+{
+  "entities": {
+    "users": {
+      "title": "User Profiles",
+      "description": "User profiles with roles and business association",
+      "type": "object",
+      "properties": {
+        "uid": { "type": "string" },
+        "email": { "type": "string" },
+        "name": { "type": "string" },
+        "role": { "type": "string", "enum": ["owner", "staff"] },
+        "businessId": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["uid", "email", "name", "role", "businessId"]
+    },
+    "businesses": {
+      "title": "Businesses",
+      "description": "Multi-tenant business accounts",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "ownerUid": { "type": "string" },
+        "category": { "type": "string" },
+        "currencySymbol": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name", "ownerUid"]
+    },
+    "products": {
+      "title": "Products",
+      "description": "Products belonging to a business",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "name"]
+    },
+    "batches": {
+      "title": "Stock Batches",
+      "description": "Stock batches per product",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "dateEntered": { "type": "string" },
+        "quantity": { "type": "number" },
+        "unit": { "type": "string" },
+        "costPrice": { "type": "number" },
+        "sellingPrice": { "type": "number" },
+        "status": { "type": "string", "enum": ["open", "closed"] },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "productId", "quantity", "costPrice", "sellingPrice", "status"]
+    },
+    "quebras": {
+      "title": "Quebras",
+      "description": "Product loss records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "productId": { "type": "string" },
+        "batchId": { "type": "string" },
+        "date": { "type": "string" },
+        "quantityLost": { "type": "number" },
+        "reason": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "productId", "batchId", "quantityLost"]
+    },
+    "expenses": {
+      "title": "Expenses",
+      "description": "Business expense records",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "date": { "type": "string" },
+        "description": { "type": "string" },
+        "amount": { "type": "number" },
+        "category": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "date", "description", "amount"]
+    }
+  }
+}
