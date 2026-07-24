@@ -22,19 +22,19 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      <header className="bg-slate-900 text-white sticky top-0 z-30 border-b border-slate-800 shadow-md">
+      <header className="bg-white sticky top-0 z-30 border-b border-gray-200 shadow-md">
         <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
           {/* Logo & Business Name */}
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 shadow-inner shrink-0">
+            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shadow-inner shrink-0">
               <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
             </div>
             <div>
-              <h1 className="font-bold text-sm sm:text-base leading-tight tracking-tight text-slate-100 flex items-center gap-2">
+              <h1 className="font-bold text-sm sm:text-base leading-tight tracking-tight text-gray-900 flex items-center gap-2">
                 {business?.name || 'Batch Profit Tracker'}
               </h1>
-              <p className="text-[11px] text-slate-400 flex items-center gap-1.5">
-                <span className="truncate max-w-[120px] sm:max-w-[200px] text-emerald-400 font-medium">
+              <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
+                <span className="truncate max-w-[120px] sm:max-w-[200px] text-orange-600 font-medium">
                   {businessCategory || 'Negócio Registado'}
                 </span>
               </p>
@@ -47,10 +47,10 @@ export const Header: React.FC = () => {
             {isOwner && (
               <button
                 onClick={() => setShowSettingsModal(true)}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
+                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-800 text-xs font-semibold transition"
                 title="Definições do Negócio & Staff"
               >
-                <Settings className="w-4 h-4 text-emerald-400" />
+                <Settings className="w-4 h-4 text-orange-600" />
                 <span className="hidden md:inline">Definições</span>
               </button>
             )}
@@ -59,10 +59,10 @@ export const Header: React.FC = () => {
             {isOwner && (
               <button
                 onClick={() => setShowCurrencyModal(true)}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-200 text-xs font-semibold transition"
+                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-800 text-xs font-semibold transition"
                 title="Moeda"
               >
-                <DollarSign className="w-3.5 h-3.5 text-emerald-400" />
+                <DollarSign className="w-3.5 h-3.5 text-orange-600" />
                 <span>{currencySymbol}</span>
               </button>
             )}
@@ -71,7 +71,7 @@ export const Header: React.FC = () => {
             {isOwner && (
               <button
                 onClick={() => setShowHelpModal(true)}
-                className="p-2 rounded-xl bg-slate-800 hover:bg-slate-700 border border-slate-700 text-slate-300 transition"
+                className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-700 transition"
                 title="Ajuda e Conceito"
               >
                 <HelpCircle className="w-4 h-4" />
@@ -79,19 +79,19 @@ export const Header: React.FC = () => {
             )}
 
             {/* User Profile Badge & Logout */}
-            <div className="flex items-center pl-1 sm:pl-2 border-l border-slate-800 space-x-1.5">
+            <div className="flex items-center pl-1 sm:pl-2 border-l border-gray-200 space-x-1.5">
               <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-bold text-slate-200 leading-tight">
+                <span className="text-xs font-bold text-gray-800 leading-tight">
                   {userProfile?.name || 'Utilizador'}
                 </span>
-                <span className="text-[10px] font-mono uppercase text-slate-400 font-bold">
+                <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">
                   {isOwner ? '👑 Dono' : '👤 Staff'}
                 </span>
               </div>
 
               <button
                 onClick={logout}
-                className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-300 transition"
+                className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-700 transition"
                 title="Sair (Logout)"
               >
                 <LogOut className="w-4 h-4" />
@@ -108,20 +108,20 @@ export const Header: React.FC = () => {
 
       {/* Currency Modal */}
       {showCurrencyModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-md p-6 text-slate-100 shadow-2xl">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6 text-gray-900 shadow-2xl">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-emerald-400" /> Seleccionar Moeda
+                <DollarSign className="w-5 h-5 text-orange-600" /> Seleccionar Moeda
               </h3>
               <button
                 onClick={() => setShowCurrencyModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-gray-900"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-slate-400 my-3">
+            <p className="text-xs text-gray-500 my-3">
               Todos os valores e relatórios serão apresentados com a moeda selecionada.
             </p>
 
@@ -137,12 +137,12 @@ export const Header: React.FC = () => {
                     }}
                     className={`flex items-center justify-between p-3 rounded-xl border text-sm font-medium transition ${
                       isSelected
-                        ? 'bg-emerald-950/50 border-emerald-500 text-emerald-300'
-                        : 'bg-slate-800/50 border-slate-800 text-slate-300 hover:bg-slate-800'
+                        ? 'bg-orange-50 border-orange-500 text-orange-700'
+                        : 'bg-gray-100/50 border-gray-200 text-gray-700 hover:bg-gray-50'
                     }`}
                   >
                     <span>{opt.label}</span>
-                    {isSelected && <Check className="w-4 h-4 text-emerald-400" />}
+                    {isSelected && <Check className="w-4 h-4 text-orange-600" />}
                   </button>
                 );
               })}
@@ -150,7 +150,7 @@ export const Header: React.FC = () => {
 
             <button
               onClick={() => setShowCurrencyModal(false)}
-              className="w-full py-2.5 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 text-sm font-medium transition"
+              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium transition"
             >
               Concluído
             </button>
@@ -160,48 +160,48 @@ export const Header: React.FC = () => {
 
       {/* Help Modal */}
       {showHelpModal && (
-        <div className="fixed inset-0 z-50 bg-slate-950/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-slate-900 border border-slate-800 rounded-2xl w-full max-w-lg p-6 text-slate-100 shadow-2xl max-h-[90vh] overflow-y-auto">
-            <div className="flex items-center justify-between pb-4 border-b border-slate-800">
-              <h3 className="font-bold text-lg text-emerald-400 flex items-center gap-2">
+        <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-lg p-6 text-gray-900 shadow-2xl max-h-[90vh] overflow-y-auto">
+            <div className="flex items-center justify-between pb-4 border-b border-gray-200">
+              <h3 className="font-bold text-lg text-orange-600 flex items-center gap-2">
                 <HelpCircle className="w-5 h-5" /> Como Funciona o Lucro por Lote
               </h3>
               <button
                 onClick={() => setShowHelpModal(false)}
-                className="p-1 rounded-lg hover:bg-slate-800 text-slate-400 hover:text-white"
+                className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-gray-900"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 my-4 text-sm text-slate-300 leading-relaxed">
-              <div className="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60">
-                <span className="font-semibold text-emerald-300 block mb-1">1. Sem Necessidade de Registar Vendas Diárias</span>
+            <div className="space-y-4 my-4 text-sm text-gray-700 leading-relaxed">
+              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+                <span className="font-semibold text-orange-700 block mb-1">1. Sem Necessidade de Registar Vendas Diárias</span>
                 <p>
                   Não precisa de registar cada venda individual. Em vez disso, ao registar um <strong>novo lote de stock</strong> de um produto, o sistema infere automaticamente que o <strong>lote anterior foi totalmente vendido</strong> (descontando as quebras registadas).
                 </p>
               </div>
 
-              <div className="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60">
-                <span className="font-semibold text-emerald-300 block mb-1">2. Lotes Fechados = Lucro Finalizado</span>
+              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+                <span className="font-semibold text-orange-700 block mb-1">2. Lotes Fechados = Lucro Finalizado</span>
                 <p>
                   Quando um lote é substituído por um novo, o seu lucro é finalizado:
                   <br />
-                  <code className="text-xs bg-slate-950 px-2 py-1 rounded text-emerald-400 inline-block my-1 font-mono">
+                  <code className="text-xs bg-white px-2 py-1 rounded text-orange-600 inline-block my-1 font-mono">
                     Unidades Vendidas = Stock Inicial do Lote − Quebras
                   </code>
                 </p>
               </div>
 
-              <div className="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60">
-                <span className="font-semibold text-emerald-300 block mb-1">3. Lote Ativo = Estimativa em Curso</span>
+              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+                <span className="font-semibold text-orange-700 block mb-1">3. Lote Ativo = Estimativa em Curso</span>
                 <p>
                   Para o stock ativo atual, a aplicação mostra uma <strong>estimativa em curso</strong> do lucro projetado caso as unidades restantes sejam vendidas ao preço definido.
                 </p>
               </div>
 
-              <div className="bg-slate-800/60 p-3.5 rounded-xl border border-slate-700/60">
-                <span className="font-semibold text-emerald-300 block mb-1">4. Quebras e Despesas Gerais</span>
+              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+                <span className="font-semibold text-orange-700 block mb-1">4. Quebras e Despesas Gerais</span>
                 <p>
                   Registe produtos estragados ou fora de validade em <strong>Quebras</strong>. Custos fixos como renda e eletricidade são registados em <strong>Despesas</strong> para determinar o <strong>Rendimento Líquido</strong> real.
                 </p>
@@ -210,7 +210,7 @@ export const Header: React.FC = () => {
 
             <button
               onClick={() => setShowHelpModal(false)}
-              className="w-full py-2.5 rounded-xl bg-emerald-600 hover:bg-emerald-500 text-white text-sm font-semibold transition shadow-md"
+              className="w-full py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-sm font-semibold transition shadow-md"
             >
               Entendido!
             </button>
