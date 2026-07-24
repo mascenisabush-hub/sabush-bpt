@@ -68,7 +68,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
   return (
     <>
       {/* Desktop / Tablet Top Nav Bar */}
-      <nav className="bg-slate-900/95 backdrop-blur-md border-b border-slate-800/80 sticky top-14 z-20 hidden md:block">
+    <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200/80 sticky top-14 z-20 hidden md:block">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-2.5 gap-2">
             {visibleTabs.map(tab => {
