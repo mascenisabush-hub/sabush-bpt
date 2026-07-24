@@ -68,7 +68,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
   return (
     <>
       {/* Desktop / Tablet Top Nav Bar */}
-    <nav className="bg-white/95 backdrop-blur-md border-b border-gray-200/80 sticky top-14 z-20 hidden md:block">
+   <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-lg border-t border-gray-200 z-40 px-2 py-1.5 shadow-2xl">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between py-2.5 gap-2">
             {visibleTabs.map(tab => {
@@ -85,7 +85,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                       : 'bg-white/50 hover:bg-gray-100/60 text-gray-500 hover:text-gray-800 border border-transparent'
                   }`}
                 >
-                  <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
+                 <Icon className={`w-4 h-4 ${isActive ? 'text-orange-600' : 'text-gray-500'}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -107,11 +107,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex flex-col items-center justify-center min-w-[56px] py-1.5 px-1 rounded-xl text-[10px] font-medium transition active:scale-95 ${
                   isActive
-                    ? 'text-emerald-400 font-bold bg-emerald-500/10'
-                    : 'text-slate-400 hover:text-slate-200'
+                   ? 'text-orange-600 font-bold bg-orange-500/10'
+                    : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
-                <div className={`p-1 rounded-lg ${isActive ? 'bg-emerald-500/20 text-emerald-400' : ''}`}>
+                <div className={`p-1 rounded-lg ${isActive ? 'bg-orange-500/20 text-orange-600' : ''}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <span className="mt-0.5 tracking-tight">{tab.shortLabel}</span>
