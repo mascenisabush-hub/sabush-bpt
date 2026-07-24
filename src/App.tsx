@@ -11,8 +11,8 @@ import { ReportsView } from './components/ReportsView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { BusinessCategoryModal } from './components/BusinessCategoryModal';
 import { AuthView } from './components/AuthView';
+import AppLoadingScreen from './components/AppLoadingScreen';
 import { Product } from './types';
-import { TrendingUp } from 'lucide-react';
 
 function MainApp() {
   const { currentUser, isAuthLoading, isStaff, businessCategory, setBusinessCategory } = useApp();
@@ -57,14 +57,7 @@ function MainApp() {
   }, [isStaff]);
 
   if (isAuthLoading) {
-    return (
-      <div className="min-h-screen bg-slate-950 flex flex-col items-center justify-center text-slate-200">
-        <div className="w-12 h-12 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3 animate-pulse">
-          <TrendingUp className="w-6 h-6" />
-        </div>
-        <p className="text-xs font-semibold text-slate-400">A carregar dados do negócio...</p>
-      </div>
-    );
+    return <AppLoadingScreen message="A carregar dados do negócio..." />;
   }
 
   if (!currentUser) {
