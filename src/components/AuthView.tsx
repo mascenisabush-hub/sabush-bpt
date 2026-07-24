@@ -241,26 +241,26 @@ export const AuthView: React.FC = () => {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
-      <div className="w-full max-w-md bg-slate-900 border border-slate-800 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
+    <div className="min-h-screen bg-white text-gray-900 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
+      <div className="w-full max-w-md bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         {/* Decorative background glow */}
-        <div className="absolute -top-12 -right-12 w-40 h-40 bg-emerald-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -top-12 -right-12 w-40 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-emerald-500/10 border border-emerald-500/30 flex items-center justify-center text-emerald-400 mb-3 shadow-inner">
+          <div className="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 mb-3 shadow-inner">
             <TrendingUp className="w-8 h-8" />
           </div>
-          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-slate-100">
+          <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">
             Batch Profit Tracker
           </h1>
-          <p className="text-xs text-slate-400 mt-1">
+          <p className="text-xs text-gray-500 mt-1">
             Gestão inteligente e controlo de lucro por lote para o seu negócio
           </p>
         </div>
 
         {/* Mode Toggle Tabs */}
-        <div className="grid grid-cols-2 gap-1 p-1 bg-slate-950/80 border border-slate-800 rounded-2xl mb-6 text-xs font-semibold">
+        <div className="grid grid-cols-2 gap-1 p-1 bg-gray-100/80 border border-gray-200 rounded-2xl mb-6 text-xs font-semibold">
           <button
             type="button"
             onClick={() => {
@@ -271,8 +271,8 @@ export const AuthView: React.FC = () => {
             }}
             className={`py-2 rounded-xl transition ${
               mode === 'login'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-600 text-white shadow-md'
+                : 'text-gray-500 hover:text-gray-800'
             }`}
           >
             Entrar
@@ -288,8 +288,8 @@ export const AuthView: React.FC = () => {
             }}
             className={`py-2 rounded-xl transition ${
               mode === 'register'
-                ? 'bg-emerald-600 text-white shadow-md'
-                : 'text-slate-400 hover:text-slate-200'
+                ? 'bg-orange-600 text-white shadow-md'
+                : 'text-gray-500 hover:text-gray-800'
             }`}
           >
             Registar Negócio
@@ -298,13 +298,13 @@ export const AuthView: React.FC = () => {
 
         {/* Role Selector hint on Login */}
         {mode === 'login' && (
-          <div className="flex items-center justify-center gap-2 mb-4 bg-slate-950/40 p-1.5 rounded-xl border border-slate-800/60 text-xs">
-            <span className="text-slate-400">Entrar como:</span>
+          <div className="flex items-center justify-center gap-2 mb-4 bg-gray-100/40 p-1.5 rounded-xl border border-gray-200/60 text-xs">
+            <span className="text-gray-500">Entrar como:</span>
             <button
               type="button"
               onClick={() => setRoleMode('owner')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
-                roleMode === 'owner' ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30' : 'text-slate-500 hover:text-slate-300'
+                roleMode === 'owner' ? 'bg-gray-50 text-orange-600 border border-orange-500/30' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Dono (Proprietário)
@@ -313,7 +313,7 @@ export const AuthView: React.FC = () => {
               type="button"
               onClick={() => setRoleMode('staff')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
-                roleMode === 'staff' ? 'bg-slate-800 text-amber-400 border border-amber-500/30' : 'text-slate-500 hover:text-slate-300'
+                roleMode === 'staff' ? 'bg-gray-50 text-orange-600 border border-orange-500/30' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Funcionário (Staff)
@@ -323,7 +323,7 @@ export const AuthView: React.FC = () => {
 
         {/* Error Alert */}
         {error && (
-          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-300 text-xs flex items-center gap-2">
+          <div className="mb-4 p-3 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs flex items-center gap-2">
             <AlertCircle className="w-4 h-4 shrink-0" />
             <span>{error}</span>
           </div>
@@ -334,48 +334,48 @@ export const AuthView: React.FC = () => {
           {mode === 'register' && (
             <>
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   O seu Nome
                 </label>
                 <div className="relative">
-                  <User className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                  <User className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
                   <input
                     type="text"
                     required
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Ex: João Silva"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
                   />
                 </div>
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-slate-300 mb-1">
+                <label className="block text-xs font-semibold text-gray-700 mb-1">
                   Nome do Negócio / Empresa
                 </label>
                 <div className="relative">
-                  <Store className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                  <Store className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
                   <input
                     type="text"
                     required
                     value={businessName}
                     onChange={e => setBusinessName(e.target.value)}
                     placeholder="Ex: Mercearia Esperança"
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
                   />
                 </div>
               </div>
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Ramo de Negócio
                   </label>
                   <select
                     value={category}
                     onChange={e => setCategory(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-orange-500 transition"
                   >
                     {BUSINESS_CATEGORY_GROUPS.map(group => (
                       <optgroup key={group.groupName} label={group.groupName}>
@@ -390,13 +390,13 @@ export const AuthView: React.FC = () => {
                 </div>
 
                 <div>
-                  <label className="block text-xs font-semibold text-slate-300 mb-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1">
                     Moeda Principal
                   </label>
                   <select
                     value={currency}
                     onChange={e => setCurrency(e.target.value)}
-                    className="w-full bg-slate-950 border border-slate-800 rounded-xl px-2.5 py-2.5 text-xs text-slate-100 focus:outline-none focus:border-emerald-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-orange-500 transition"
                   >
                     {CURRENCY_OPTIONS.map(opt => (
                       <option key={opt.code} value={opt.symbol}>
@@ -410,28 +410,28 @@ export const AuthView: React.FC = () => {
           )}
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
               Email
             </label>
             <div className="relative">
-              <Mail className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+              <Mail className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
               <input
                 type="email"
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="seuemail@exemplo.com"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-3 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
               />
             </div>
           </div>
 
           <div>
-            <label className="block text-xs font-semibold text-slate-300 mb-1">
+            <label className="block text-xs font-semibold text-gray-700 mb-1">
               Palavra-passe
             </label>
             <div className="relative">
-              <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+              <Lock className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
               <input
                 type={showPassword ? 'text' : 'password'}
                 required
@@ -439,12 +439,12 @@ export const AuthView: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
               />
               <button
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
-                className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 transition p-0.5"
+                className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700 transition p-0.5"
                 title={showPassword ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -454,11 +454,11 @@ export const AuthView: React.FC = () => {
 
           {mode === 'register' && (
             <div>
-              <label className="block text-xs font-semibold text-slate-300 mb-1">
+              <label className="block text-xs font-semibold text-gray-700 mb-1">
                 Confirmar Palavra-passe
               </label>
               <div className="relative">
-                <Lock className="w-4 h-4 absolute left-3 top-3 text-slate-500" />
+                <Lock className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
                 <input
                   type={showConfirmPassword ? 'text' : 'password'}
                   required
@@ -466,12 +466,12 @@ export const AuthView: React.FC = () => {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-slate-950 border border-slate-800 rounded-xl pl-9 pr-10 py-2.5 text-xs text-slate-100 placeholder-slate-600 focus:outline-none focus:border-emerald-500 transition"
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
                 />
                 <button
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
-                  className="absolute right-3 top-2.5 text-slate-500 hover:text-slate-300 transition p-0.5"
+                  className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700 transition p-0.5"
                   title={showConfirmPassword ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
@@ -483,7 +483,7 @@ export const AuthView: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-emerald-600 hover:bg-emerald-500 text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg disabled:opacity-50"
+            className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg disabled:opacity-50"
           >
             {loading ? (
               <span className="animate-pulse">A processar...</span>
@@ -496,12 +496,12 @@ export const AuthView: React.FC = () => {
           </button>
         </form>
 
-        <div className="mt-4 pt-3 border-t border-slate-800/80 flex flex-col space-y-2">
+        <div className="mt-4 pt-3 border-t border-gray-200/80 flex flex-col space-y-2">
           <button
             type="button"
             onClick={handleGoogleAuth}
             disabled={loading}
-            className="w-full py-2.5 px-3 bg-white hover:bg-slate-100 text-slate-900 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2 shadow"
+            className="w-full py-2.5 px-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2 shadow"
           >
             <svg className="w-4 h-4" viewBox="0 0 24 24">
               <path
@@ -528,14 +528,14 @@ export const AuthView: React.FC = () => {
             type="button"
             onClick={handleAnonymousAuth}
             disabled={loading}
-            className="w-full py-2.5 px-3 bg-slate-800/80 hover:bg-slate-800 border border-slate-700/80 text-emerald-400 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2"
+            className="w-full py-2.5 px-3 bg-gray-100/80 hover:bg-gray-50 border border-gray-300/80 text-orange-600 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2"
           >
             <UserCheck className="w-4 h-4" />
             <span>Entrar em Modo Demonstração (Sem Email)</span>
           </button>
         </div>
 
-        <div className="mt-4 text-center text-[11px] text-slate-500">
+        <div className="mt-4 text-center text-[11px] text-gray-500">
           🔒 Acesso seguro com isolamento total de dados por empresa.
         </div>
       </div>
