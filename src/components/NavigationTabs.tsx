@@ -81,8 +81,8 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-sm font-semibold transition active:scale-[0.98] ${
                     isActive
-                      ? 'bg-slate-800 text-emerald-400 border border-emerald-500/30 shadow-sm'
-                      : 'bg-slate-900/50 hover:bg-slate-800/60 text-slate-400 hover:text-slate-200 border border-transparent'
+                      ? 'bg-gray-50 text-orange-600 border border-orange-500/30 shadow-sm'
+                      : 'bg-white/50 hover:bg-gray-100/60 text-gray-500 hover:text-gray-800 border border-transparent'
                   }`}
                 >
                   <Icon className={`w-4 h-4 ${isActive ? 'text-emerald-400' : 'text-slate-400'}`} />
