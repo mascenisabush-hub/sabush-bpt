@@ -307,7 +307,7 @@ export default function AppLoadingScreen({ message = 'A carregar o sistema...' }
         <div className="text-center">
           <div className="als-word-main">SABUSH</div>
           <div className="als-word-tech">TECH</div>
-          <p className="mt-3 text-xs font-semibold text-slate-400 animate-pulse">{message}</p>
+          <p className="mt-3 text-xs font-semibold text-gray-500 animate-pulse">{message}</p>
         </div>
 
         <div className="relative w-[160px] h-[3px] rounded-full bg-white/10 overflow-hidden">
