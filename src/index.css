@@ -1,1 +1,37 @@
 @import "tailwindcss";
+
+/* ==========================================================================
+   SabushTech Brand Design Tokens
+   ========================================================================== */
+:root {
+  --background: #FFFFFF;
+  --foreground: #111111;
+
+  --primary: #EA580C;
+  --primary-hover: #C2410C;
+  --primary-foreground: #FFFFFF;
+
+  --secondary: #2563EB;
+  --secondary-hover: #1D4ED8;
+  --secondary-foreground: #FFFFFF;
+
+  --accent: #EA580C;
+
+  --muted: #F9FAFB;
+  --muted-foreground: #6B7280;
+
+  --border: #E5E7EB;
+  --ring: #EA580C;
+
+  --success: #059669;
+  --warning: #EA580C;
+  --info: #2563EB;
+  --error: #E11D48;
+}
+
+@theme {
+  --color-primary: #EA580C;
+  --color-primary-hover: #C2410C;
+  --color-secondary: #2563EB;
+  --color-secondary-hover: #1D4ED8;
+}
