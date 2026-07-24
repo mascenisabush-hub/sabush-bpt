@@ -75,7 +75,7 @@ function MainApp() {
   };
 
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 font-sans antialiased flex flex-col">
+  <div className="min-h-screen bg-white text-gray-900 font-sans antialiased flex flex-col">
       <Header />
       <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
 
