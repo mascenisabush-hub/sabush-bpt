@@ -120,6 +120,12 @@ service cloud.firestore {
         allow read, create, update, delete: if isOwnerOf(businessId);
       }
 
+      // Monthly/Yearly Closings: permanently lock a period's figures. Only
+      // the owner may record or remove these — staff never handle this.
+      match /closings/{closingId} {
+        allow read, create, update, delete: if isOwnerOf(businessId);
+      }
+
       // Staff roster management is owner-only.
       match /staff/{staffId} {
         allow read, write: if isOwnerOf(businessId);

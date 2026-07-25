@@ -111,6 +111,33 @@ export interface StockCount {
   createdAt: string; // ISO string
 }
 
+// ============================================================
+// CLOSINGS (Monthly/Yearly period locking)
+// ============================================================
+// A Closing permanently "locks" a calendar period (a month or a year).
+// Once recorded, that period's figures (profit, expenses, withdrawals)
+// are frozen as historical fact, alongside a snapshot of Business Worth
+// at the moment of closing. Closings are never edited — only recorded
+// or, in case of a mistake, deleted (which simply re-opens the period).
+export type ClosingPeriodType = 'monthly' | 'yearly';
+
+export interface Closing {
+  id: string;
+  periodType: ClosingPeriodType;
+  periodLabel: string; // e.g. "Julho 2026" or "2026"
+  startDate: string; // YYYY-MM-DD
+  endDate: string; // YYYY-MM-DD
+  netIncome: number;
+  totalProductProfit: number;
+  totalExpenses: number;
+  totalWithdrawals: number;
+  // Business Worth snapshot at the moment the period was closed.
+  cashOnHandAtClose: number;
+  inventoryValueAtClose: number;
+  businessWorthAtClose: number;
+  closedAt: string; // ISO string
+}
+
 export interface CurrencyOption {
   code: string;
   symbol: string;

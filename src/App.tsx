@@ -11,6 +11,7 @@ import { AddWithdrawalView } from './components/AddWithdrawalView';
 import { ReportsView } from './components/ReportsView';
 import { InitialStockCountView } from './components/InitialStockCountView';
 import { PeriodicStockCountView } from './components/PeriodicStockCountView';
+import { ClosingView } from './components/ClosingView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { BusinessProfileSetupModal } from './components/BusinessProfileSetupModal';
 import { AuthView } from './components/AuthView';
@@ -33,7 +34,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -48,7 +49,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -141,6 +142,10 @@ function MainApp() {
           <AddWithdrawalView
             onComplete={() => setActiveTab('dashboard')}
           />
+        )}
+
+        {!isStaff && activeTab === 'closing' && (
+          <ClosingView onComplete={() => setActiveTab('dashboard')} />
         )}
 
         {!isStaff && activeTab === 'reports' && <ReportsView />}

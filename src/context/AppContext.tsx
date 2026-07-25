@@ -26,9 +26,11 @@ import {
   StockCount,
   StockCountType,
   Withdrawal,
+  Closing,
+  ClosingPeriodType,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateBatch } from '../utils/calculations';
+import { calculateBatch, generateReportSummary, isDateInRange } from '../utils/calculations';
 
 interface AddStockParams {
   productName: string;
@@ -75,6 +77,13 @@ interface RecordStockCountParams {
   items: RecordStockCountItemInput[];
 }
 
+interface RecordClosingParams {
+  periodType: ClosingPeriodType;
+  periodLabel: string;
+  startDate: string;
+  endDate: string;
+}
+
 interface AppContextType {
   currentUser: FirebaseUser | null;
   userProfile: UserProfile | null;
@@ -115,6 +124,11 @@ interface AppContextType {
   businessWorth: number;
   capitalGrowth: number;
   capitalGrowthPct: number;
+  // Monthly/Yearly Closings — permanently lock a period's figures.
+  closings: Closing[];
+  recordClosing: (params: RecordClosingParams) => Promise<Closing>;
+  deleteClosing: (id: string) => Promise<void>;
+  isPeriodClosed: (periodType: ClosingPeriodType, startDate: string, endDate: string) => boolean;
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -140,6 +154,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [closings, setClosings] = useState<Closing[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
 
   const isOwner = userProfile?.role === 'owner';
@@ -218,6 +233,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setExpenses([]);
         setStockCounts([]);
         setWithdrawals([]);
+        setClosings([]);
         setStaffMembers([]);
         setIsAuthLoading(false);
       }
@@ -257,6 +273,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setExpenses([]);
       setStockCounts([]);
       setWithdrawals([]);
+      setClosings([]);
       setStaffMembers([]);
       return;
     }
@@ -353,6 +370,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching withdrawals:', err)
     );
 
+    // 5d. Closings collection (Monthly/Yearly period locks)
+    const closingsRef = collection(db, 'businesses', businessId, 'closings');
+    const unsubClosings = onSnapshot(
+      closingsRef,
+      (snap) => {
+        const list: Closing[] = [];
+        snap.forEach((doc) => list.push(doc.data() as Closing));
+        list.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
+        setClosings(list);
+      },
+      (err) => console.error('Error fetching closings:', err)
+    );
+
     // 6. Staff collection
     const staffRef = collection(db, 'businesses', businessId, 'staff');
     const unsubStaff = onSnapshot(
@@ -373,6 +403,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubExpenses();
       unsubStockCounts();
       unsubWithdrawals();
+      unsubClosings();
       unsubStaff();
     };
   }, [userProfile?.businessId]);
@@ -674,6 +705,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newCount;
   };
 
+  // A period is "closed" if any existing Closing of the same type shares
+  // its exact start/end range. Prevents accidentally closing the same
+  // month or year twice.
+  const isPeriodClosed = (periodType: ClosingPeriodType, startDate: string, endDate: string) => {
+    return closings.some(
+      (c) => c.periodType === periodType && c.startDate === startDate && c.endDate === endDate
+    );
+  };
+
+  // Records a Monthly or Yearly Closing. This permanently locks the period's
+  // figures (product profit, expenses, net income, withdrawals) as historical
+  // fact, plus a snapshot of Business Worth (Cash on Hand + Current Inventory
+  // Value) at the moment of closing. Closings are never edited — only
+  // recorded or deleted (deleting simply re-opens the period).
+  const recordClosing = async ({ periodType, periodLabel, startDate, endDate }: RecordClosingParams) => {
+    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+
+    if (isPeriodClosed(periodType, startDate, endDate)) {
+      throw new Error('Este período já foi fechado anteriormente.');
+    }
+
+    const report = generateReportSummary(startDate, endDate, products, batches, quebras, expenses);
+    const withdrawalsInRange = withdrawals.filter((w) => isDateInRange(w.date, startDate, endDate));
+    const totalWithdrawalsInRange = withdrawalsInRange.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+
+    const newClosing: Closing = {
+      id: 'closing-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      periodType,
+      periodLabel: periodLabel.trim(),
+      startDate,
+      endDate,
+      netIncome: report.netIncome,
+      totalProductProfit: report.totalProductProfit,
+      totalExpenses: report.totalExpenses,
+      totalWithdrawals: totalWithdrawalsInRange,
+      cashOnHandAtClose: cashOnHand,
+      inventoryValueAtClose: currentInventoryValue,
+      businessWorthAtClose: businessWorth,
+      closedAt: new Date().toISOString(),
+    };
+
+    await setDoc(doc(db, 'businesses', userProfile.businessId, 'closings', newClosing.id), newClosing);
+    return newClosing;
+  };
+
+  const deleteClosing = async (id: string) => {
+    if (!userProfile?.businessId) return;
+    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'closings', id));
+  };
+
   const deleteQuebra = async (id: string) => {
     if (!userProfile?.businessId) return;
     await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'quebras', id));
@@ -797,6 +878,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const w of withdrawals) {
       await deleteDoc(doc(db, 'businesses', businessId, 'withdrawals', w.id));
     }
+    for (const c of closings) {
+      await deleteDoc(doc(db, 'businesses', businessId, 'closings', c.id));
+    }
   };
 
   return (
@@ -839,6 +923,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         businessWorth,
         capitalGrowth,
         capitalGrowthPct,
+        closings,
+        recordClosing,
+        deleteClosing,
+        isPeriodClosed,
         deleteQuebra,
         deleteExpense,
         deleteProduct,
