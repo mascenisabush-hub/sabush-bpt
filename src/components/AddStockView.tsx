@@ -39,6 +39,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           initialCost = String(latest.costPrice);
           initialSell = String(latest.sellingPrice);
           if (latest.unit) initialUnit = latest.unit;
+        } else if (match.costPrice != null || match.sellingPrice != null) {
+          // No batches yet — fall back to the product's reference price
+          // (set via "Editar Detalhes") instead of the generic defaults.
+          if (match.costPrice != null) initialCost = String(match.costPrice);
+          if (match.sellingPrice != null) initialSell = String(match.sellingPrice);
         }
       }
     }
@@ -101,6 +106,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         newCost = String(latest.costPrice);
         newSell = String(latest.sellingPrice);
         if (latest.unit) newUnit = latest.unit;
+      } else if (match.costPrice != null || match.sellingPrice != null) {
+        if (match.costPrice != null) newCost = String(match.costPrice);
+        if (match.sellingPrice != null) newSell = String(match.sellingPrice);
       }
     }
 

@@ -154,6 +154,7 @@ interface AppContextType {
   logReportExport: (reportTitle: string) => Promise<void>;
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
+  updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addStaffMember: (name: string, email: string, password: string) => Promise<void>;
   deleteStaffMember: (staffUid: string) => Promise<void>;
@@ -1127,6 +1128,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'expenses', id));
   };
 
+  // Edits catalog metadata only (name, category, supplier, sku, barcode,
+  // reference cost/selling price). Never touches batches, quebras, or any
+  // Investment/Market/Profit figure — those are always derived from the
+  // StockBatch records themselves, untouched by this function.
+  const updateProduct = async (id: string, updates: Partial<Product>) => {
+    if (!userProfile?.businessId) return;
+    const businessId = userProfile.businessId;
+
+    const payload: Partial<Product> = { ...updates, updatedAt: new Date().toISOString() };
+    await updateDoc(doc(db, 'businesses', businessId, 'products', id), payload as any);
+  };
+
   const deleteProduct = async (id: string) => {
     if (!userProfile?.businessId) return;
     const businessId = userProfile.businessId;
@@ -1305,6 +1318,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logReportExport,
         deleteQuebra,
         deleteExpense,
+        updateProduct,
         deleteProduct,
         addStaffMember,
         deleteStaffMember,

@@ -96,10 +96,26 @@ export interface PurchaseBatch {
   archivedAt?: string; // ISO string
 }
 
+// ============================================================
+// PRODUCT — catalog metadata only. IMPORTANT: costPrice/sellingPrice
+// here are a REFERENCE price for browsing/editing/pre-filling Add
+// Stock — they are NOT used by any Investment/Market/Profit
+// calculation. Every calculation always reads price from the actual
+// StockBatch it belongs to (see calculations.ts), never from here.
+// This keeps historical batches accurate even if the reference price
+// on the product is edited later.
+// ============================================================
 export interface Product {
   id: string;
   name: string;
   createdAt: string; // ISO string
+  updatedAt?: string; // ISO string — last time catalog metadata was edited
+  category?: string;
+  supplier?: string;
+  sku?: string;
+  barcode?: string;
+  costPrice?: number; // reference price only, see note above
+  sellingPrice?: number; // reference price only, see note above
 }
 
 export interface Expense {

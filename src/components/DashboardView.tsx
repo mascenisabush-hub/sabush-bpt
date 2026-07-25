@@ -24,6 +24,7 @@ import {
   Store,
 } from 'lucide-react';
 import { Product } from '../types';
+import { EditProductModal } from './EditProductModal';
 
 interface DashboardViewProps {
   onNavigateToAddStock: (productName?: string) => void;
@@ -116,6 +117,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'profit' | 'cost'>('name');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
+  const [categoryFilter, setCategoryFilter] = useState('');
+  const [supplierFilter, setSupplierFilter] = useState('');
+  const [editingProduct, setEditingProduct] = useState<Product | null>(null);
 
   // Business-wide Embedded Profit split by batch status. None of this is
   // realized income — it's potential profit still sitting in unsold stock.
@@ -136,10 +140,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     totalQuebraValueAllTime += calc.quebraValue;
   });
 
-  // Filter products by search
-  let filteredProducts = products.filter(p =>
-    p.name.toLowerCase().includes(searchQuery.toLowerCase())
-  );
+  // Distinct category/supplier options derived from existing products,
+  // used to populate the filter dropdowns below.
+  const categoryOptions = Array.from(new Set(products.map(p => p.category).filter(Boolean))) as string[];
+  const supplierOptions = Array.from(new Set(products.map(p => p.supplier).filter(Boolean))) as string[];
+
+  // Filter products by search (name, SKU, barcode, category, supplier)
+  // and by the category/supplier dropdowns.
+  let filteredProducts = products.filter(p => {
+    const query = searchQuery.toLowerCase().trim();
+    const matchesQuery =
+      !query ||
+      p.name.toLowerCase().includes(query) ||
+      (p.sku || '').toLowerCase().includes(query) ||
+      (p.barcode || '').toLowerCase().includes(query) ||
+      (p.category || '').toLowerCase().includes(query) ||
+      (p.supplier || '').toLowerCase().includes(query);
+
+    if (!matchesQuery) return false;
+    if (categoryFilter && p.category !== categoryFilter) return false;
+    if (supplierFilter && p.supplier !== supplierFilter) return false;
+    return true;
+  });
 
   // Sort products
   filteredProducts = [...filteredProducts].sort((a, b) => {
@@ -341,6 +363,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </button>
           )}
         </div>
+
+        {/* Category / Supplier Filters */}
+        {categoryOptions.length > 0 && (
+          <select
+            value={categoryFilter}
+            onChange={e => setCategoryFilter(e.target.value)}
+            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-blue-500 shrink-0 max-w-[140px]"
+          >
+            <option value="">Todas Categorias</option>
+            {categoryOptions.map(c => (
+              <option key={c} value={c}>{c}</option>
+            ))}
+          </select>
+        )}
+        {supplierOptions.length > 0 && (
+          <select
+            value={supplierFilter}
+            onChange={e => setSupplierFilter(e.target.value)}
+            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-blue-500 shrink-0 max-w-[140px]"
+          >
+            <option value="">Todos Fornecedores</option>
+            {supplierOptions.map(s => (
+              <option key={s} value={s}>{s}</option>
+            ))}
+          </select>
+        )}
 
         {/* Right: Product Count & Sort Button */}
         <div className="flex items-center gap-1.5 shrink-0">
@@ -675,6 +723,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         ? `${closedBatches.length} ${closedBatches.length === 1 ? 'lote fechado' : 'lotes fechados'}`
                         : 'Sem lote'}
                     </span>
+                    {(product.category || product.supplier || product.sku) && (
+                      <span className="text-[9px] text-gray-400 block truncate">
+                        {[product.category, product.supplier, product.sku && `SKU: ${product.sku}`]
+                          .filter(Boolean)
+                          .join(' · ')}
+                      </span>
+                    )}
                   </div>
 
                   {/* COMPRA */}
@@ -776,6 +831,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               <AlertTriangle className="w-3.5 h-3.5 text-blue-600" />
                               <span>+ Quebra</span>
                             </button>
+
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setOpenActionMenuId(null);
+                                setEditingProduct(product);
+                              }}
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
+                            >
+                              <Tag className="w-3.5 h-3.5 text-blue-600" />
+                              <span>Editar Detalhes</span>
+                            </button>
                           </div>
                         </>
                       )}
@@ -786,6 +853,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             })}
           </div>
         </div>
+      )}
+
+      {editingProduct && (
+        <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} />
       )}
     </div>
   );

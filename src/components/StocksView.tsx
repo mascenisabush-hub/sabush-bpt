@@ -187,6 +187,11 @@ export const StocksView: React.FC = () => {
           </div>
           <div className="h-6 w-px bg-gray-50 mx-1"></div>
           <div>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Valor de Mercado</span>
+            <span className="text-gray-700 font-bold">{formatCurrency(summaryTotals.market, currencySymbol)}</span>
+          </div>
+          <div className="h-6 w-px bg-gray-50 mx-1"></div>
+          <div>
             <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Lucro Embutido Restante</span>
             <span className={`font-bold ${summaryTotals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(summaryTotals.profit, currencySymbol)}
