@@ -1,8 +1,8 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History } from 'lucide-react';
+import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History, Sparkles } from 'lucide-react';
 
-export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'closing' | 'timeline';
+export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'closing' | 'timeline' | 'dashboard-v2';
 
 interface NavigationTabsProps {
   activeTab: TabType;
@@ -91,6 +91,14 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
       shortLabel: 'Histórico',
       icon: History,
       color: 'blue',
+      ownerOnly: true,
+    },
+    {
+      id: 'dashboard-v2' as TabType,
+      label: 'Dashboard (Novo)',
+      shortLabel: 'Novo',
+      icon: Sparkles,
+      color: 'gold',
       ownerOnly: true,
     },
   ];

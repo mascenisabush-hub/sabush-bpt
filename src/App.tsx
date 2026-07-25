@@ -16,6 +16,7 @@ import { BusinessTimelineView } from './components/timeline/BusinessTimelineView
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
 import AppLoadingScreen from './components/AppLoadingScreen';
+import { NewSaaSDashboard } from './components/dashboard-v2/NewSaaSDashboard';
 import { Product } from './types';
 
 function MainApp() {
@@ -57,6 +58,10 @@ function MainApp() {
 
   if (!currentUser) {
     return <AuthView />;
+  }
+
+  if (activeTab === 'dashboard-v2') {
+    return <NewSaaSDashboard onExit={() => setActiveTab('dashboard')} />;
   }
 
   const handleNavigateToAddStock = (productName?: string) => {
