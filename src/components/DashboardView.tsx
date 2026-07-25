@@ -12,7 +12,12 @@ import {
   MoreVertical,
   SlidersHorizontal,
   Plus,
-  Eye
+  Eye,
+  Gem,
+  TrendingUp,
+  TrendingDown,
+  Banknote,
+  Boxes,
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -29,9 +34,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToInitialStockCount,
   onSelectProductDetail,
 }) => {
-  const { products, batches, quebras, expenses, withdrawals, currencySymbol, hasInitialStockCount, initialCapitalValue } = useApp();
+  const {
+    products, batches, quebras, expenses, withdrawals, currencySymbol,
+    hasInitialStockCount, initialCapitalValue,
+    currentInventoryValue, cashOnHand, businessWorth, capitalGrowth, capitalGrowthPct,
+    latestStockCount,
+  } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+  const [showWorthModal, setShowWorthModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'profit' | 'cost'>('name');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
@@ -102,11 +113,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-[11px] font-bold text-orange-700 group-hover:underline shrink-0">Configurar &rarr;</span>
         </button>
       ) : (
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl px-3.5 py-2 text-xs">
-          <Wallet className="w-3.5 h-3.5 text-orange-600 shrink-0" />
-          <span className="text-gray-500 font-semibold">Capital Inicial:</span>
-          <span className="font-bold text-gray-800 font-mono">{formatCurrency(initialCapitalValue, currencySymbol)}</span>
-        </div>
+        <button
+          type="button"
+          onClick={() => setShowWorthModal(true)}
+          className="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 text-left hover:border-indigo-500/40 hover:bg-indigo-50/40 transition group"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-600 shrink-0">
+              <Gem className="w-3.5 h-3.5" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-[10px] text-gray-500 font-semibold uppercase leading-tight">Valor do Negócio</p>
+              <p className="font-bold text-gray-800 font-mono text-sm leading-tight">
+                {formatCurrency(businessWorth, currencySymbol)}
+              </p>
+            </div>
+          </div>
+          <div className="flex items-center gap-1 shrink-0">
+            {capitalGrowth !== 0 && (
+              <span
+                className={`flex items-center gap-0.5 text-[11px] font-bold font-mono ${
+                  capitalGrowth > 0 ? 'text-emerald-600' : 'text-rose-600'
+                }`}
+              >
+                {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {capitalGrowth >= 0 ? '+' : ''}
+                {capitalGrowthPct.toFixed(1)}%
+              </span>
+            )}
+            <span className="text-[11px] font-bold text-indigo-700 group-hover:underline">Detalhes &rarr;</span>
+          </div>
+        </button>
       )}
 
       {/* TOP BAR (single slim row) */}
@@ -250,6 +287,94 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => setShowBreakdownModal(false)}
+              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
+            >
+              Fechar
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* Business Worth Modal */}
+      {showWorthModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-fadeIn">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-3">
+              <div className="flex items-center space-x-2">
+                <Gem className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-gray-900">Valor do Negócio</h3>
+              </div>
+              <button
+                onClick={() => setShowWorthModal(false)}
+                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <div className="space-y-2.5 text-xs">
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
+                <span className="flex items-center gap-1.5 text-gray-500">
+                  <Banknote className="w-3.5 h-3.5 text-emerald-600" /> Caixa (Dinheiro):
+                </span>
+                <span className="font-bold font-mono text-gray-800">
+                  {formatCurrency(cashOnHand, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
+                <span className="flex items-center gap-1.5 text-gray-500">
+                  <Boxes className="w-3.5 h-3.5 text-amber-600" /> Valor do Stock Atual:
+                </span>
+                <span className="font-bold font-mono text-gray-800">
+                  {formatCurrency(currentInventoryValue, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-indigo-50 border border-indigo-500/30">
+                <span className="text-gray-800 font-bold">Valor Total do Negócio:</span>
+                <span className="text-base font-extrabold font-mono text-indigo-700">
+                  {formatCurrency(businessWorth, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
+                <span className="text-gray-500">Capital Inicial (ponto de partida):</span>
+                <span className="font-bold font-mono text-slate-600">
+                  {formatCurrency(initialCapitalValue, currencySymbol)}
+                </span>
+              </div>
+
+              <div
+                className={`flex items-center justify-between p-3 rounded-xl border ${
+                  capitalGrowth >= 0 ? 'bg-emerald-50 border-emerald-500/30' : 'bg-rose-50 border-rose-500/30'
+                }`}
+              >
+                <span className="flex items-center gap-1.5 font-semibold text-gray-700">
+                  {capitalGrowth >= 0 ? (
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
+                  ) : (
+                    <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
+                  )}
+                  Crescimento do Capital:
+                </span>
+                <span className={`font-bold font-mono ${capitalGrowth >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                  {capitalGrowth >= 0 ? '+' : ''}
+                  {formatCurrency(capitalGrowth, currencySymbol)} ({capitalGrowthPct >= 0 ? '+' : ''}
+                  {capitalGrowthPct.toFixed(1)}%)
+                </span>
+              </div>
+
+              {latestStockCount && (
+                <p className="text-[10px] text-gray-400 text-center pt-1">
+                  Stock atual baseado na contagem de {latestStockCount.date.split('-').reverse().join('/')}
+                  {!hasInitialStockCount && ' · Defina o Capital Inicial para medir o crescimento.'}
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={() => setShowWorthModal(false)}
               className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
             >
               Fechar

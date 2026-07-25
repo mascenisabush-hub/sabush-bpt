@@ -28,6 +28,7 @@ import {
   Withdrawal,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
+import { calculateBatch } from '../utils/calculations';
 
 interface AddStockParams {
   productName: string;
@@ -104,6 +105,16 @@ interface AppContextType {
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
   recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
+  // Business Worth = Cash on Hand + Current Inventory Value.
+  // See the computation block in AppProvider for the full rationale.
+  latestStockCount: StockCount | null;
+  currentInventoryValue: number;
+  totalNetIncomeAllTime: number;
+  totalWithdrawalsAllTime: number;
+  cashOnHand: number;
+  businessWorth: number;
+  capitalGrowth: number;
+  capitalGrowthPct: number;
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -142,6 +153,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialStockCount = stockCounts.find((s) => s.type === 'initial') || null;
   const hasInitialStockCount = !!initialStockCount;
   const initialCapitalValue = initialStockCount?.totalValue || 0;
+
+  // ============================================================
+  // BUSINESS WORTH = CASH ON HAND + CURRENT INVENTORY VALUE
+  // ============================================================
+  // Current Inventory Value comes from the most recent physical Stock
+  // Count (initial or periodic) — NOT from inferring "units remaining"
+  // from batches/quebras, since this app doesn't track individual sales.
+  // A Stock Count is the owner's ground-truth snapshot of what's
+  // physically on the shelf, at cost, at that moment.
+  const latestStockCount = stockCounts.length > 0
+    ? [...stockCounts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
+    : null;
+  const currentInventoryValue = latestStockCount?.totalValue || 0;
+
+  // Cash on Hand is derived, not stored: every unit assumed sold (see
+  // calculateBatch) generates revenue, cost of goods reduces it, and
+  // general expenses reduce it further — that's all-time Net Income.
+  // Owner Withdrawals then remove cash from the business without
+  // touching profit (see Withdrawal type comment). What's left is cash.
+  let totalFinalizedProfitAllTime = 0;
+  let totalRunningEstimatedProfitAllTime = 0;
+  batches.forEach((batch) => {
+    const batchQuebras = quebras.filter((q) => q.batchId === batch.id);
+    const calc = calculateBatch(batch, batchQuebras);
+    if (batch.status === 'closed') {
+      totalFinalizedProfitAllTime += calc.profit;
+    } else {
+      totalRunningEstimatedProfitAllTime += calc.profit;
+    }
+  });
+  const totalExpensesAllTime = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalNetIncomeAllTime = totalFinalizedProfitAllTime + totalRunningEstimatedProfitAllTime - totalExpensesAllTime;
+  const totalWithdrawalsAllTime = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+  const cashOnHand = totalNetIncomeAllTime - totalWithdrawalsAllTime;
+
+  const businessWorth = cashOnHand + currentInventoryValue;
+  // Growth is measured against the Initial Business Capital baseline —
+  // the whole reason that baseline is permanent and never editable.
+  const capitalGrowth = businessWorth - initialCapitalValue;
+  const capitalGrowthPct = initialCapitalValue > 0 ? (capitalGrowth / initialCapitalValue) * 100 : 0;
 
   // A business is considered "complete" once it has a category plus the core
   // contact-card fields. Businesses created before these fields existed will
@@ -780,6 +831,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockCount,
         initialCapitalValue,
         recordStockCount,
+        latestStockCount,
+        currentInventoryValue,
+        totalNetIncomeAllTime,
+        totalWithdrawalsAllTime,
+        cashOnHand,
+        businessWorth,
+        capitalGrowth,
+        capitalGrowthPct,
         deleteQuebra,
         deleteExpense,
         deleteProduct,
