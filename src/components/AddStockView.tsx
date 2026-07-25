@@ -159,21 +159,21 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     }, 1200);
   };
 
-  // Calculate totals across all rows
+  // Calculate totals across all rows (new batches, so remainingQuantity == quantity — no quebras yet)
   const totals = rows.reduce(
     (acc, row) => {
       const q = parseFloat(row.quantity) || 0;
       const c = parseFloat(row.costPrice) || 0;
       const s = parseFloat(row.sellingPrice) || 0;
-      const cost = q * c;
-      const revenue = q * s;
+      const investmentValue = q * c;
+      const marketValue = q * s;
       return {
-        totalCost: acc.totalCost + cost,
-        totalRevenue: acc.totalRevenue + revenue,
-        totalProfit: acc.totalProfit + (revenue - cost),
+        totalInvestmentValue: acc.totalInvestmentValue + investmentValue,
+        totalMarketValue: acc.totalMarketValue + marketValue,
+        totalEmbeddedProfit: acc.totalEmbeddedProfit + (marketValue - investmentValue),
       };
     },
-    { totalCost: 0, totalRevenue: 0, totalProfit: 0 }
+    { totalInvestmentValue: 0, totalMarketValue: 0, totalEmbeddedProfit: 0 }
   );
 
   return (
@@ -635,27 +635,27 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                 <div className="flex items-center space-x-4 sm:space-x-6 text-[11px]">
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Custo Total:</span>
+                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Investimento Total:</span>
                     <span className="font-bold text-gray-800">
-                      {formatCurrency(totals.totalCost, currencySymbol)}
+                      {formatCurrency(totals.totalInvestmentValue, currencySymbol)}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Receita:</span>
+                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Valor de Mercado:</span>
                     <span className="font-bold text-gray-800">
-                      {formatCurrency(totals.totalRevenue, currencySymbol)}
+                      {formatCurrency(totals.totalMarketValue, currencySymbol)}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Lucro Projetado:</span>
+                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Lucro Embutido:</span>
                     <span
                       className={`font-bold ${
-                        totals.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                        totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                       }`}
                     >
-                      {formatCurrency(totals.totalProfit, currencySymbol)}
+                      {formatCurrency(totals.totalEmbeddedProfit, currencySymbol)}
                     </span>
                   </div>
                 </div>

@@ -47,8 +47,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
     deleteClosing,
     isPeriodClosed,
     currencySymbol,
-    cashOnHand,
-    currentInventoryValue,
+    totalMarketValueAllTime,
     businessWorth,
   } = useApp();
 
@@ -76,8 +75,8 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
   const alreadyClosed = isPeriodClosed(periodType, startDate, endDate);
 
   const preview = useMemo(
-    () => generateReportSummary(startDate, endDate, products, batches, quebras, expenses),
-    [startDate, endDate, products, batches, quebras, expenses]
+    () => generateReportSummary(startDate, endDate, products, batches, quebras, expenses, withdrawals),
+    [startDate, endDate, products, batches, quebras, expenses, withdrawals]
   );
 
   const withdrawalsInRange = withdrawals.filter((w) => isDateInRange(w.date, startDate, endDate));
@@ -208,8 +207,8 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             <div className="bg-white border border-gray-100 rounded-lg p-2">
-              <p className="text-[10px] text-gray-500">Lucro Produtos</p>
-              <p className="font-mono font-bold text-sm text-gray-800">{formatCurrency(preview.totalProductProfit, currencySymbol)}</p>
+              <p className="text-[10px] text-gray-500">Lucro Embutido</p>
+              <p className="font-mono font-bold text-sm text-gray-800">{formatCurrency(preview.totalEmbeddedProfit, currencySymbol)}</p>
             </div>
             <div className="bg-white border border-gray-100 rounded-lg p-2">
               <p className="text-[10px] text-gray-500">Despesas</p>
@@ -220,9 +219,9 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
               <p className="font-mono font-bold text-sm text-orange-600">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
             </div>
             <div className="bg-white border-2 border-teal-500/30 rounded-lg p-2">
-              <p className="text-[10px] text-gray-500">Rendimento Líquido</p>
-              <p className={`font-mono font-black text-sm ${preview.netIncome >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                {formatCurrency(preview.netIncome, currencySymbol)}
+              <p className="text-[10px] text-gray-500">Valor de Mercado do Stock</p>
+              <p className="font-mono font-black text-sm text-gray-800">
+                {formatCurrency(totalMarketValueAllTime, currencySymbol)}
               </p>
             </div>
           </div>
@@ -232,7 +231,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <span className="font-mono font-bold text-gray-800">{formatCurrency(businessWorth, currencySymbol)}</span>
           </div>
           <p className="text-[10px] text-gray-400">
-            Este é o valor que fica gravado como fotografia (snapshot) ao fechar o período — Caixa {formatCurrency(cashOnHand, currencySymbol)} + Inventário {formatCurrency(currentInventoryValue, currencySymbol)}.
+            Este é o valor que fica gravado como fotografia (snapshot) ao fechar o período — Valor de Mercado do Stock {formatCurrency(totalMarketValueAllTime, currencySymbol)} − Despesas − Levantamentos. Nenhuma venda é registada nesta app, por isso este número nunca representa dinheiro em caixa.
           </p>
         </div>
 
@@ -327,9 +326,9 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
                     <div className="grid grid-cols-3 gap-1.5 text-center pt-1">
                       <div className="bg-white border border-gray-100 rounded-lg p-1.5">
-                        <p className="text-[9px] text-gray-500">Líquido</p>
-                        <p className={`font-mono font-bold text-[11px] ${c.netIncome >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                          {formatCurrency(c.netIncome, currencySymbol)}
+                        <p className="text-[9px] text-gray-500">Lucro Embutido</p>
+                        <p className={`font-mono font-bold text-[11px] ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                          {formatCurrency(c.totalEmbeddedProfit, currencySymbol)}
                         </p>
                       </div>
                       <div className="bg-white border border-gray-100 rounded-lg p-1.5">

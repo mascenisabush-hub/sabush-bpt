@@ -1,5 +1,6 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { calculateBatch } from '../utils/calculations';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { Boxes, Calendar, Search, ChevronDown, ChevronUp, ShoppingBag, X, Sparkles, Filter } from 'lucide-react';
 import { StockBatch } from '../types';
@@ -7,13 +8,14 @@ import { StockBatch } from '../types';
 interface GroupedDayStocks {
   date: string; // YYYY-MM-DD
   batches: StockBatch[];
-  totalCompra: number;
-  totalVenda: number;
-  lucroSeTudoVender: number;
+  totalInvestmentValue: number;
+  totalMarketValue: number;
+  totalEmbeddedProfit: number;
+  allClosed: boolean;
 }
 
 export const StocksView: React.FC = () => {
-  const { batches, products, currencySymbol } = useApp();
+  const { batches, quebras, products, currencySymbol } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
   
@@ -61,43 +63,47 @@ export const StocksView: React.FC = () => {
 
     return sortedDates.map(date => {
       const dayBatches = groupsMap.get(date) || [];
-      let totalCompra = 0;
-      let totalVenda = 0;
+      let totalInvestmentValue = 0;
+      let totalMarketValue = 0;
       let allClosed = dayBatches.length > 0;
 
       dayBatches.forEach(b => {
-        totalCompra += Number(b.quantity) * Number(b.costPrice);
-        totalVenda += Number(b.quantity) * Number(b.sellingPrice);
+        // Quebra-aware: figures reflect remaining quantity, not the
+        // original purchased quantity, so a lost/damaged unit doesn't
+        // silently stay counted as still-sellable stock.
+        const calc = calculateBatch(b, quebras.filter(q => q.batchId === b.id));
+        totalInvestmentValue += calc.investmentValue;
+        totalMarketValue += calc.marketValue;
         if (b.status !== 'closed') {
           allClosed = false;
         }
       });
 
-      const lucroSeTudoVender = totalVenda - totalCompra;
+      const totalEmbeddedProfit = totalMarketValue - totalInvestmentValue;
 
       return {
         date,
         batches: dayBatches,
-        totalCompra,
-        totalVenda,
-        lucroSeTudoVender,
+        totalInvestmentValue,
+        totalMarketValue,
+        totalEmbeddedProfit,
         allClosed,
       };
     });
-  }, [batches, products, searchQuery, selectedDate]);
+  }, [batches, quebras, products, searchQuery, selectedDate]);
 
   // Overall totals across current filtered view
   const summaryTotals = useMemo(() => {
-    let compra = 0;
-    let venda = 0;
+    let investment = 0;
+    let market = 0;
     groupedDays.forEach(g => {
-      compra += g.totalCompra;
-      venda += g.totalVenda;
+      investment += g.totalInvestmentValue;
+      market += g.totalMarketValue;
     });
     return {
-      totalCompra: compra,
-      totalVenda: venda,
-      lucroPotencial: venda - compra,
+      totalInvestmentValue: investment,
+      totalMarketValue: market,
+      totalEmbeddedProfit: market - investment,
     };
   }, [groupedDays]);
 
@@ -114,7 +120,7 @@ export const StocksView: React.FC = () => {
               Histórico de Stocks (Compras)
             </h1>
             <p className="text-xs text-gray-500">
-              Jornal de entradas de stock agrupadas por dia com totais de compra, venda e lucro potencial.
+              Jornal de entradas de stock agrupadas por dia, com Valor de Investimento, Valor de Mercado e Lucro Embutido (ajustados por quebras).
             </p>
           </div>
         </div>
@@ -122,14 +128,14 @@ export const StocksView: React.FC = () => {
         {/* Global summary badge for current filter */}
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2.5 px-3.5 text-xs font-mono shrink-0">
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Compra Total</span>
-            <span className="text-gray-800 font-bold">{formatCurrency(summaryTotals.totalCompra, currencySymbol)}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Investimento Total</span>
+            <span className="text-gray-800 font-bold">{formatCurrency(summaryTotals.totalInvestmentValue, currencySymbol)}</span>
           </div>
           <div className="h-6 w-px bg-gray-50 mx-1"></div>
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Lucro Potencial</span>
-            <span className={`font-bold ${summaryTotals.lucroPotencial >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {formatCurrency(summaryTotals.lucroPotencial, currencySymbol)}
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Lucro Embutido</span>
+            <span className={`font-bold ${summaryTotals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatCurrency(summaryTotals.totalEmbeddedProfit, currencySymbol)}
             </span>
           </div>
         </div>
@@ -216,9 +222,9 @@ export const StocksView: React.FC = () => {
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-gray-100/90 border-b border-gray-200/80 text-[10px] font-bold uppercase tracking-wider text-gray-500">
             <div className="col-span-3 sm:col-span-3">Data</div>
-            <div className="col-span-3 text-right">Total Compra</div>
-            <div className="col-span-3 text-right">Total Venda</div>
-            <div className="col-span-3 text-right">Lucro</div>
+            <div className="col-span-3 text-right">Investimento</div>
+            <div className="col-span-3 text-right">Mercado</div>
+            <div className="col-span-3 text-right">Lucro Embutido</div>
           </div>
 
           {/* Table Body */}
@@ -237,35 +243,31 @@ export const StocksView: React.FC = () => {
                     </span>
                   </div>
 
-                  {/* TOTAL COMPRA */}
+                  {/* INVESTIMENTO */}
                   <div className="col-span-3 text-right font-mono">
                     <span className="text-xs font-semibold text-gray-800 block">
-                      {formatCurrency(group.totalCompra, currencySymbol)}
+                      {formatCurrency(group.totalInvestmentValue, currencySymbol)}
                     </span>
                   </div>
 
-                  {/* TOTAL VENDA */}
+                  {/* MERCADO */}
                   <div className="col-span-3 text-right font-mono">
                     <span className="text-xs font-semibold text-gray-700 block">
-                      {formatCurrency(group.totalVenda, currencySymbol)}
+                      {formatCurrency(group.totalMarketValue, currencySymbol)}
                     </span>
                   </div>
 
-                  {/* LUCRO */}
+                  {/* LUCRO EMBUTIDO */}
                   <div className="col-span-3 text-right font-mono">
                     <span
                       className={`text-xs font-bold block ${
-                        group.lucroSeTudoVender >= 0
-                          ? group.allClosed
-                            ? 'text-emerald-600'
-                            : 'text-emerald-600'
-                          : 'text-rose-600'
+                        group.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                       }`}
                     >
-                      {formatCurrency(group.lucroSeTudoVender, currencySymbol)}
+                      {formatCurrency(group.totalEmbeddedProfit, currencySymbol)}
                     </span>
                     <span className="text-[9px] text-gray-500 block font-mono">
-                      {group.allClosed ? 'Finalizado' : 'Potencial'}
+                      {group.allClosed ? 'Finalizado' : 'Estimado'}
                     </span>
                   </div>
                 </div>
@@ -307,33 +309,29 @@ export const StocksView: React.FC = () => {
             {/* Day Totals Summary Bar inside Modal */}
             <div className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-wrap items-center justify-around gap-3 text-xs font-mono shrink-0">
               <div className="text-center">
-                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">Total Compra</span>
+                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">Investimento</span>
                 <span className="font-bold text-gray-800 text-sm">
-                  {formatCurrency(selectedDayGroup.totalCompra, currencySymbol)}
+                  {formatCurrency(selectedDayGroup.totalInvestmentValue, currencySymbol)}
                 </span>
               </div>
               <div className="h-8 w-px bg-gray-50 hidden sm:block"></div>
               <div className="text-center">
-                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">Total Venda</span>
+                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">Mercado</span>
                 <span className="font-bold text-gray-700 text-sm">
-                  {formatCurrency(selectedDayGroup.totalVenda, currencySymbol)}
+                  {formatCurrency(selectedDayGroup.totalMarketValue, currencySymbol)}
                 </span>
               </div>
               <div className="h-8 w-px bg-gray-50 hidden sm:block"></div>
               <div className="text-center">
                 <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">
-                  {selectedDayGroup.allClosed ? 'Lucro Finalizado' : 'Lucro Potencial'}
+                  {selectedDayGroup.allClosed ? 'Lucro Embutido (Final)' : 'Lucro Embutido (Est.)'}
                 </span>
                 <span
                   className={`font-bold text-sm ${
-                    selectedDayGroup.lucroSeTudoVender >= 0
-                      ? selectedDayGroup.allClosed
-                        ? 'text-emerald-600'
-                        : 'text-emerald-600'
-                      : 'text-rose-600'
+                    selectedDayGroup.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                   }`}
                 >
-                  {formatCurrency(selectedDayGroup.lucroSeTudoVender, currencySymbol)}
+                  {formatCurrency(selectedDayGroup.totalEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
             </div>
@@ -344,19 +342,17 @@ export const StocksView: React.FC = () => {
                 <thead className="sticky top-0 bg-white z-10">
                   <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                     <th className="py-2 px-2.5">Produto</th>
-                    <th className="py-2 px-2.5 text-right">Qtd</th>
-                    <th className="py-2 px-2.5 text-right">Compra</th>
-                    <th className="py-2 px-2.5 text-right">Venda</th>
-                    <th className="py-2 px-2.5 text-right">Lucro</th>
+                    <th className="py-2 px-2.5 text-right">Qtd (Rest.)</th>
+                    <th className="py-2 px-2.5 text-right">Investimento</th>
+                    <th className="py-2 px-2.5 text-right">Mercado</th>
+                    <th className="py-2 px-2.5 text-right">Lucro Embutido</th>
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-gray-200/50">
                   {selectedDayGroup.batches.map(batch => {
                     const product = products.find(p => p.id === batch.productId);
                     const productName = product ? product.name : 'Produto Removido';
-                    const batchCompra = batch.quantity * batch.costPrice;
-                    const batchVenda = batch.quantity * batch.sellingPrice;
-                    const batchLucro = batchVenda - batchCompra;
+                    const calc = calculateBatch(batch, quebras.filter(q => q.batchId === batch.id));
 
                     return (
                       <tr key={batch.id} className="hover:bg-white/60 transition">
@@ -367,7 +363,7 @@ export const StocksView: React.FC = () => {
                           </span>
                         </td>
                         <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-800">
-                          {batch.quantity}{' '}
+                          {batch.quantity} → {calc.remainingQuantity}{' '}
                           <span className="text-[10px] font-sans font-normal text-gray-500">
                             {batch.unit || 'un'}
                           </span>
@@ -375,18 +371,18 @@ export const StocksView: React.FC = () => {
                         <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
                           <div>{formatCurrency(batch.costPrice, currencySymbol)}</div>
                           <div className="text-[10px] text-gray-500">
-                            Tot: {formatCurrency(batchCompra, currencySymbol)}
+                            Tot: {formatCurrency(calc.investmentValue, currencySymbol)}
                           </div>
                         </td>
                         <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
                           <div>{formatCurrency(batch.sellingPrice, currencySymbol)}</div>
                           <div className="text-[10px] text-gray-500">
-                            Tot: {formatCurrency(batchVenda, currencySymbol)}
+                            Tot: {formatCurrency(calc.marketValue, currencySymbol)}
                           </div>
                         </td>
                         <td className="py-2.5 px-2.5 text-right font-mono font-bold">
-                          <span className={batchLucro >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                            {formatCurrency(batchLucro, currencySymbol)}
+                          <span className={calc.embeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                            {formatCurrency(calc.embeddedProfit, currencySymbol)}
                           </span>
                         </td>
                       </tr>
