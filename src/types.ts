@@ -16,6 +16,9 @@ export interface Business {
   category: string;
   currencySymbol: string;
   createdAt: string;
+  contact?: string;
+  location?: string;
+  email?: string;
 }
 
 export interface StaffMember {

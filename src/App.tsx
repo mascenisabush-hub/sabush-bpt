@@ -9,13 +9,13 @@ import { AddQuebraView } from './components/AddQuebraView';
 import { AddExpenseView } from './components/AddExpenseView';
 import { ReportsView } from './components/ReportsView';
 import { ProductDetailModal } from './components/ProductDetailModal';
-import { BusinessCategoryModal } from './components/BusinessCategoryModal';
+import { BusinessProfileSetupModal } from './components/BusinessProfileSetupModal';
 import { AuthView } from './components/AuthView';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import { Product } from './types';
 
 function MainApp() {
-  const { currentUser, isAuthLoading, isStaff, businessCategory, setBusinessCategory } = useApp();
+  const { currentUser, isAuthLoading, isStaff, business, isBusinessProfileComplete, updateBusinessProfile } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   
   // Pre-fill parameters when navigating from dashboard cards
@@ -25,8 +25,8 @@ function MainApp() {
   // Detail Modal state
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<Product | null>(null);
 
-  // First time category modal
-  const [showFirstTimeCategory, setShowFirstTimeCategory] = useState(false);
+  // First time business profile setup (name, category, contact, location, email)
+  const [showFirstTimeProfileSetup, setShowFirstTimeProfileSetup] = useState(false);
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
@@ -36,10 +36,10 @@ function MainApp() {
   }, [isStaff, activeTab]);
 
   useEffect(() => {
-    if (!businessCategory && currentUser && !isStaff) {
-      setShowFirstTimeCategory(true);
+    if (!isBusinessProfileComplete && currentUser && !isStaff) {
+      setShowFirstTimeProfileSetup(true);
     }
-  }, [businessCategory, currentUser, isStaff]);
+  }, [isBusinessProfileComplete, currentUser, isStaff]);
 
   useEffect(() => {
     const handleCustomNav = (e: Event) => {
@@ -131,14 +131,18 @@ function MainApp() {
         />
       )}
 
-      {/* First Time Setup Category Modal */}
-      {!isStaff && showFirstTimeCategory && !businessCategory && (
-        <BusinessCategoryModal
-          currentCategory=""
+      {/* First Time Setup: Business Profile (name, category, contact, location, email) */}
+      {!isStaff && showFirstTimeProfileSetup && !isBusinessProfileComplete && (
+        <BusinessProfileSetupModal
+          currentName={business?.name || ''}
+          currentCategory={business?.category || ''}
+          currentContact={business?.contact || ''}
+          currentLocation={business?.location || ''}
+          currentEmail={business?.email || ''}
           isFirstTimeSetup={true}
-          onSelectCategory={cat => {
-            setBusinessCategory(cat);
-            setShowFirstTimeCategory(false);
+          onSave={async profile => {
+            await updateBusinessProfile(profile);
+            setShowFirstTimeProfileSetup(false);
           }}
         />
       )}

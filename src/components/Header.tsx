@@ -33,10 +33,19 @@ export const Header: React.FC = () => {
               <h1 className="font-bold text-sm sm:text-base leading-tight tracking-tight text-gray-900 flex items-center gap-2">
                 {business?.name || 'Batch Profit Tracker'}
               </h1>
-              <p className="text-[11px] text-gray-500 flex items-center gap-1.5">
-                <span className="truncate max-w-[120px] sm:max-w-[200px] text-orange-600 font-medium">
+              <p
+                className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[180px] sm:max-w-[280px]"
+                title={business?.contact ? `Contacto: ${business.contact}` : undefined}
+              >
+                <span className="truncate text-orange-600 font-medium">
                   {businessCategory || 'Negócio Registado'}
                 </span>
+                {business?.location && (
+                  <>
+                    <span className="text-gray-300">·</span>
+                    <span className="truncate text-gray-500">{business.location}</span>
+                  </>
+                )}
               </p>
             </div>
           </div>

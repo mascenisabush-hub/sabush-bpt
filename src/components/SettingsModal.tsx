@@ -1,8 +1,9 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle } from 'lucide-react';
+import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3 } from 'lucide-react';
 import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
+import { BusinessProfileSetupModal } from './BusinessProfileSetupModal';
 
 interface SettingsModalProps {
   onClose: () => void;
@@ -16,6 +17,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
     setCurrencySymbol,
     businessCategory,
     setBusinessCategory,
+    updateBusinessProfile,
     staffMembers,
     addStaffMember,
     deleteStaffMember,
@@ -25,6 +27,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'general' | 'staff'>('general');
+  const [showProfileEdit, setShowProfileEdit] = useState(false);
 
   // Staff creation states
   const [staffName, setStaffName] = useState('');
@@ -122,6 +125,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
         <div className="p-5 overflow-y-auto space-y-6 flex-1">
           {activeSection === 'general' && (
             <>
+              {/* Business Profile Card */}
+              <div className="p-4 bg-gray-100/60 border border-gray-200 rounded-2xl space-y-2">
+                <div className="flex items-center justify-between">
+                  <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
+                    <Store className="w-3.5 h-3.5 text-orange-600" /> Perfil do Negócio
+                  </h4>
+                  {isOwner && (
+                    <button
+                      type="button"
+                      onClick={() => setShowProfileEdit(true)}
+                      className="text-[11px] text-orange-600 font-semibold hover:underline flex items-center gap-1"
+                    >
+                      <Edit3 className="w-3 h-3" /> Editar
+                    </button>
+                  )}
+                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
+                  <p><span className="text-gray-400">Nome:</span> <span className="font-semibold text-gray-800">{business?.name || 'N/D'}</span></p>
+                  <p><span className="text-gray-400">Contacto:</span> <span className="font-semibold text-gray-800">{business?.contact || 'N/D'}</span></p>
+                  <p><span className="text-gray-400">Localização:</span> <span className="font-semibold text-gray-800">{business?.location || 'N/D'}</span></p>
+                  <p><span className="text-gray-400">Email:</span> <span className="font-semibold text-gray-800">{business?.email || 'N/D'}</span></p>
+                </div>
+              </div>
+
               {/* Category selector */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
@@ -346,6 +373,22 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
           </button>
         </div>
       </div>
+
+      {showProfileEdit && (
+        <BusinessProfileSetupModal
+          currentName={business?.name || ''}
+          currentCategory={business?.category || ''}
+          currentContact={business?.contact || ''}
+          currentLocation={business?.location || ''}
+          currentEmail={business?.email || ''}
+          isFirstTimeSetup={false}
+          onClose={() => setShowProfileEdit(false)}
+          onSave={async profile => {
+            await updateBusinessProfile(profile);
+            setShowProfileEdit(false);
+          }}
+        />
+      )}
     </div>
   );
 };

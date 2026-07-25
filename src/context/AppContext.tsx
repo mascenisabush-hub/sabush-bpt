@@ -66,6 +66,8 @@ interface AppContextType {
   setCurrencySymbol: (symbol: string) => void;
   businessCategory: string;
   setBusinessCategory: (category: string) => void;
+  isBusinessProfileComplete: boolean;
+  updateBusinessProfile: (profile: { name: string; category: string; contact: string; location: string; email: string }) => Promise<void>;
   addStockBatch: (params: AddStockParams) => Promise<{ productId: string; batchId: string }>;
   addMultipleStockBatches: (items: AddStockParams[]) => Promise<void>;
   addQuebra: (params: AddQuebraParams) => Promise<Quebra>;
@@ -100,6 +102,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const currencySymbol = business?.currencySymbol || 'MT';
   const businessCategory = business?.category || '';
+  // A business is considered "complete" once it has a category plus the core
+  // contact-card fields. Businesses created before these fields existed will
+  // be missing them and get prompted once to fill the gap.
+  const isBusinessProfileComplete = !!(
+    business &&
+    business.category &&
+    business.contact &&
+    business.location &&
+    business.email
+  );
 
   // Listen to Auth State
   useEffect(() => {
@@ -253,6 +265,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!userProfile?.businessId) return;
     await updateDoc(doc(db, 'businesses', userProfile.businessId), {
       category,
+    });
+  };
+
+  const updateBusinessProfile = async (profile: { name: string; category: string; contact: string; location: string; email: string }) => {
+    if (!userProfile?.businessId) return;
+    await updateDoc(doc(db, 'businesses', userProfile.businessId), {
+      name: profile.name.trim(),
+      category: profile.category.trim(),
+      contact: profile.contact.trim(),
+      location: profile.location.trim(),
+      email: profile.email.trim(),
     });
   };
 
@@ -562,6 +585,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setCurrencySymbol,
         businessCategory,
         setBusinessCategory,
+        isBusinessProfileComplete,
+        updateBusinessProfile,
         addStockBatch,
         addMultipleStockBatches,
         addQuebra,
