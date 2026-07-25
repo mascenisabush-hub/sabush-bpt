@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatCurrency } from '../../../utils/formatters';
+import { useApp } from '../../../context/AppContext';
 import { ArrowLeft, Lightbulb, FileDown, Sheet, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ============================================================
@@ -75,7 +76,31 @@ interface ReportHeaderProps {
   onPrint?: () => void;
 }
 
-export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, onBack, onExportPdf, onExportExcel, onPrint }) => (
+export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, onBack, onExportPdf, onExportExcel, onPrint }) => {
+  const { logReportExport } = useApp();
+
+  const handleExportPdf = onExportPdf
+    ? () => {
+        logReportExport(title);
+        onExportPdf();
+      }
+    : undefined;
+
+  const handleExportExcel = onExportExcel
+    ? () => {
+        logReportExport(title);
+        onExportExcel();
+      }
+    : undefined;
+
+  const handlePrint = onPrint
+    ? () => {
+        logReportExport(title);
+        onPrint();
+      }
+    : undefined;
+
+  return (
   <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 report-no-print">
     <div className="flex items-start gap-3">
       <button
@@ -91,27 +116,27 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, 
       </div>
     </div>
 
-    {(onExportPdf || onExportExcel || onPrint) && (
+    {(handleExportPdf || handleExportExcel || handlePrint) && (
       <div className="flex flex-wrap gap-1.5">
-        {onExportPdf && (
+        {handleExportPdf && (
           <button
-            onClick={onExportPdf}
+            onClick={handleExportPdf}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 transition min-h-[36px]"
           >
             <FileDown className="w-3.5 h-3.5" /> PDF
           </button>
         )}
-        {onExportExcel && (
+        {handleExportExcel && (
           <button
-            onClick={onExportExcel}
+            onClick={handleExportExcel}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 transition min-h-[36px]"
           >
             <Sheet className="w-3.5 h-3.5" /> Excel
           </button>
         )}
-        {onPrint && (
+        {handlePrint && (
           <button
-            onClick={onPrint}
+            onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 transition min-h-[36px]"
           >
             <Printer className="w-3.5 h-3.5" /> Imprimir
@@ -120,7 +145,8 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, 
       </div>
     )}
   </div>
-);
+  );
+};
 
 // ============================================================
 // SECTION CARD — consistent white-card wrapper for report sections.

@@ -243,3 +243,51 @@ export interface ReportSummary {
   totalWithdrawals: number;
   expensesList: Expense[];
 }
+
+// ============================================================
+// BUSINESS TIMELINE — chronological history of the business.
+// ============================================================
+// A TimelineEvent is a permanent, append-only record of something that
+// happened in the business. It never drives any calculation — it is a
+// read-only narration layer written alongside the existing collections at
+// the moment each action already happens (see AppContext). Nothing here
+// is ever edited; if a mistake needs correcting, a new event describing
+// the correction is what would be added — the log itself stays intact.
+export type TimelineActivityType =
+  | 'initial-stock-count'
+  | 'stock-batch-created'
+  | 'stock-verification'
+  | 'expense-recorded'
+  | 'withdrawal-recorded'
+  | 'quebra-recorded'
+  | 'product-created'
+  | 'business-profile-updated'
+  | 'monthly-closing'
+  | 'yearly-closing'
+  | 'report-exported';
+
+export interface TimelineFinancialImpact {
+  label: string; // e.g. "Investimento", "Despesa", "Retirada", "Perda"
+  amount: number; // signed value: negative for money/stock leaving the business
+  tone: 'positive' | 'negative' | 'neutral';
+}
+
+export interface TimelineEvent {
+  id: string;
+  type: TimelineActivityType;
+  date: string; // YYYY-MM-DD — the business date of the underlying record
+  createdAt: string; // ISO string — exact moment the event was logged; used for time-of-day display and default sort
+  userName: string; // display name of whoever performed the action
+  title: string;
+  description: string;
+  financialImpact?: TimelineFinancialImpact[];
+  // Free-form structured fields for the Detail View. Each activity type
+  // populates only the keys relevant to it (e.g. a batch event carries
+  // batchNumber/supplier/investment; an expense carries category/amount).
+  details?: Record<string, string | number | undefined>;
+  // Denormalized fields purely for filtering/search — never a source of truth.
+  productName?: string;
+  supplierName?: string;
+  batchNumber?: string;
+  expenseCategory?: string;
+}

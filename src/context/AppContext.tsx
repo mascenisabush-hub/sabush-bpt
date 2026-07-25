@@ -30,10 +30,14 @@ import {
   ClosingPeriodType,
   PurchaseBatch,
   Supplier,
+  TimelineEvent,
+  TimelineActivityType,
+  TimelineFinancialImpact,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq } from '../utils/purchaseBatchCalculations';
+import { getTodayDateString } from '../utils/formatters';
 
 interface AddStockParams {
   productName: string;
@@ -143,6 +147,11 @@ interface AppContextType {
   recordClosing: (params: RecordClosingParams) => Promise<Closing>;
   deleteClosing: (id: string) => Promise<void>;
   isPeriodClosed: (periodType: ClosingPeriodType, startDate: string, endDate: string) => boolean;
+  // Business Timeline — chronological history log (see types.ts). Populated
+  // automatically by the actions above; logReportExport is the one manual
+  // hook, called by the Reports screen when a report is exported/printed.
+  timelineEvents: TimelineEvent[];
+  logReportExport: (reportTitle: string) => Promise<void>;
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -171,6 +180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [closings, setClosings] = useState<Closing[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
 
   const isOwner = userProfile?.role === 'owner';
   const isStaff = userProfile?.role === 'staff';
@@ -253,6 +263,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
+        setTimelineEvents([]);
         setIsAuthLoading(false);
       }
     });
@@ -294,6 +305,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setWithdrawals([]);
       setClosings([]);
       setStaffMembers([]);
+      setTimelineEvents([]);
       return;
     }
 
@@ -429,6 +441,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching staff:', err)
     );
 
+    // 7. Timeline Events collection (Business Timeline — see types.ts).
+    // Sorted by createdAt (the moment the event was logged) so entries
+    // read newest-first even when several happen on the same business date.
+    const timelineRef = collection(db, 'businesses', businessId, 'timelineEvents');
+    const unsubTimeline = onSnapshot(
+      timelineRef,
+      (snap) => {
+        const list: TimelineEvent[] = [];
+        snap.forEach((doc) => list.push(doc.data() as TimelineEvent));
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setTimelineEvents(list);
+      },
+      (err) => console.error('Error fetching timeline events:', err)
+    );
+
     return () => {
       unsubBusiness();
       unsubProducts();
@@ -440,6 +467,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubWithdrawals();
       unsubClosings();
       unsubStaff();
+      unsubTimeline();
     };
   }, [userProfile?.businessId]);
 
@@ -466,6 +494,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       contact: profile.contact.trim(),
       location: profile.location.trim(),
       email: profile.email.trim(),
+    });
+
+    await logTimelineEvent({
+      type: 'business-profile-updated',
+      date: getTodayDateString(),
+      title: 'Perfil do Negócio Atualizado',
+      description: `Informações de "${profile.name.trim()}" foram atualizadas.`,
+      details: {
+        name: profile.name.trim(),
+        category: profile.category.trim(),
+        contact: profile.contact.trim(),
+        location: profile.location.trim(),
+        email: profile.email.trim(),
+      },
     });
   };
 
@@ -498,6 +540,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await setDoc(doc(db, 'users', currentUser.uid), profile);
   };
 
+  // ============================================================
+  // BUSINESS TIMELINE LOGGING
+  // ============================================================
+  // Writes one append-only history entry alongside an action that already
+  // happened elsewhere in this file. Never touches — and is never touched
+  // by — any calculation. If logging fails for any reason, it is swallowed
+  // so the underlying business action (which already succeeded) is never
+  // rolled back or reported as failed just because its history entry didn't
+  // get written.
+  const logTimelineEvent = async (input: {
+    type: TimelineActivityType;
+    date: string;
+    title: string;
+    description: string;
+    financialImpact?: TimelineFinancialImpact[];
+    details?: Record<string, string | number | undefined>;
+    productName?: string;
+    supplierName?: string;
+    batchNumber?: string;
+    expenseCategory?: string;
+  }) => {
+    if (!userProfile?.businessId) return;
+    const newEvent: TimelineEvent = {
+      id: 'tl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+      type: input.type,
+      date: input.date,
+      createdAt: new Date().toISOString(),
+      userName: userProfile.name || 'Utilizador',
+      title: input.title,
+      description: input.description,
+      financialImpact: input.financialImpact,
+      details: input.details,
+      productName: input.productName,
+      supplierName: input.supplierName,
+      batchNumber: input.batchNumber,
+      expenseCategory: input.expenseCategory,
+    };
+    try {
+      await setDoc(doc(db, 'businesses', userProfile.businessId, 'timelineEvents', newEvent.id), newEvent);
+    } catch (err) {
+      console.error('Error logging timeline event:', err);
+    }
+  };
+
+  // Report exports have no other collection to hook into — the Reports
+  // screen calls this directly whenever a PDF/Excel export or print action
+  // completes.
+  const logReportExport = async (reportTitle: string) => {
+    await logTimelineEvent({
+      type: 'report-exported',
+      date: getTodayDateString(),
+      title: 'Relatório Exportado',
+      description: `Relatório "${reportTitle}" foi exportado.`,
+      details: { reportTitle },
+    });
+  };
+
   const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice }: AddStockParams) => {
     if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
 
@@ -506,6 +605,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     let product = products.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
     let productId = product?.id;
+    let isNewProduct = false;
 
     if (!product) {
       productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
@@ -515,6 +615,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         createdAt: new Date().toISOString(),
       };
       await setDoc(doc(db, 'businesses', businessId, 'products', productId), newProd);
+      isNewProduct = true;
     }
 
     // Close any active open batch for this product
@@ -539,6 +640,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await setDoc(doc(db, 'businesses', businessId, 'batches', newBatchId), newBatch);
 
+    if (isNewProduct) {
+      await logTimelineEvent({
+        type: 'product-created',
+        date: dateEntered,
+        title: 'Produto Criado',
+        description: `"${trimmedName}" foi adicionado como novo produto.`,
+        productName: trimmedName,
+        details: { productName: trimmedName },
+      });
+    }
+
+    const investmentValue = Number(quantity) * Number(costPrice);
+    const marketValue = Number(quantity) * Number(sellingPrice);
+    await logTimelineEvent({
+      type: 'stock-batch-created',
+      date: dateEntered,
+      title: 'Stock Adicionado',
+      description: `${quantity} ${unit ? unit.trim() : 'un'} de "${trimmedName}" adicionado(s) ao stock.`,
+      productName: trimmedName,
+      financialImpact: [
+        { label: 'Investimento', amount: investmentValue, tone: 'neutral' },
+        { label: 'Lucro Embutido', amount: marketValue - investmentValue, tone: 'positive' },
+      ],
+      details: {
+        productName: trimmedName,
+        quantity,
+        unit: unit ? unit.trim() : 'un',
+        costPrice,
+        sellingPrice,
+        investmentValue,
+        marketValue,
+        embeddedProfit: marketValue - investmentValue,
+      },
+    });
+
     return { productId: productId!, batchId: newBatchId };
   };
 
@@ -551,6 +687,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Track products updated/created in this loop
     const tempProducts = [...products];
     const tempBatches = [...batches];
+    const newlyCreatedProductNames: string[] = [];
+    let totalInvestmentValue = 0;
+    let totalMarketValue = 0;
+    const lineItemSummaries: { productName: string; quantity: number; unit: string }[] = [];
 
     // Create the Purchase Batch envelope (the Investment Ledger entry) that
     // will group every line item created below under one supplier/date/
@@ -593,6 +733,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const prodRef = doc(db, 'businesses', businessId, 'products', productId);
         fsBatch.set(prodRef, newProd);
         tempProducts.push(newProd);
+        newlyCreatedProductNames.push(trimmedName);
       }
 
       // Close open batches for this product
@@ -624,9 +765,53 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const newBatchRef = doc(db, 'businesses', businessId, 'batches', newBatchId);
       fsBatch.set(newBatchRef, newBatch);
       tempBatches.push(newBatch);
+
+      totalInvestmentValue += Number(item.quantity) * Number(item.costPrice);
+      totalMarketValue += Number(item.quantity) * Number(item.sellingPrice);
+      lineItemSummaries.push({
+        productName: trimmedName,
+        quantity: Number(item.quantity),
+        unit: item.unit ? item.unit.trim() : 'un',
+      });
     }
 
     await fsBatch.commit();
+
+    for (const newProductName of newlyCreatedProductNames) {
+      await logTimelineEvent({
+        type: 'product-created',
+        date: items[0].dateEntered,
+        title: 'Produto Criado',
+        description: `"${newProductName}" foi adicionado como novo produto.`,
+        productName: newProductName,
+        details: { productName: newProductName },
+      });
+    }
+
+    const supplierName = newPurchaseBatch.supplier.name;
+    await logTimelineEvent({
+      type: 'stock-batch-created',
+      date: newPurchaseBatch.date,
+      title: 'Lote de Compra Criado',
+      description: `Lote ${newPurchaseBatch.batchNumber} registado junto de ${supplierName}, com ${lineItemSummaries.length} produto(s).`,
+      productName: lineItemSummaries.length === 1 ? lineItemSummaries[0].productName : undefined,
+      supplierName,
+      batchNumber: newPurchaseBatch.batchNumber,
+      financialImpact: [
+        { label: 'Investimento', amount: totalInvestmentValue, tone: 'neutral' },
+        { label: 'Lucro Embutido', amount: totalMarketValue - totalInvestmentValue, tone: 'positive' },
+      ],
+      details: {
+        batchNumber: newPurchaseBatch.batchNumber,
+        supplierName,
+        notes: newPurchaseBatch.notes,
+        products: lineItemSummaries.map((li) => `${li.quantity} ${li.unit} ${li.productName}`).join(', '),
+        investmentValue: totalInvestmentValue,
+        marketValue: totalMarketValue,
+        embeddedProfit: totalMarketValue - totalInvestmentValue,
+      },
+    });
+
     return { purchaseBatchId: newPurchaseBatchId };
   };
 
@@ -663,6 +848,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     await setDoc(doc(db, 'businesses', userProfile.businessId, 'quebras', newQuebra.id), newQuebra);
+
+    const relatedBatch = batches.find((b) => b.id === batchId);
+    const relatedProduct = products.find((p) => p.id === productId);
+    const lossValue = relatedBatch ? Number(quantityLost) * relatedBatch.costPrice : 0;
+
+    await logTimelineEvent({
+      type: 'quebra-recorded',
+      date,
+      title: 'Quebra Registada',
+      description: `${quantityLost} ${relatedBatch?.unit || 'un'} de "${relatedProduct?.name || 'produto'}" perdido(s) — ${reason.trim()}.`,
+      productName: relatedProduct?.name,
+      financialImpact: [{ label: 'Perda', amount: -lossValue, tone: 'negative' }],
+      details: {
+        productName: relatedProduct?.name,
+        quantityLost,
+        reason: reason.trim(),
+        lossValue,
+      },
+    });
+
     return newQuebra;
   };
 
@@ -679,6 +884,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     await setDoc(doc(db, 'businesses', userProfile.businessId, 'expenses', newExpense.id), newExpense);
+
+    await logTimelineEvent({
+      type: 'expense-recorded',
+      date,
+      title: 'Despesa Registada',
+      description: newExpense.description,
+      expenseCategory: newExpense.category,
+      financialImpact: [{ label: 'Despesa', amount: -newExpense.amount, tone: 'negative' }],
+      details: {
+        description: newExpense.description,
+        category: newExpense.category,
+        amount: newExpense.amount,
+      },
+    });
+
     return newExpense;
   };
 
@@ -698,6 +918,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     await setDoc(doc(db, 'businesses', userProfile.businessId, 'withdrawals', newWithdrawal.id), newWithdrawal);
+
+    await logTimelineEvent({
+      type: 'withdrawal-recorded',
+      date,
+      title: 'Retirada do Proprietário',
+      description: newWithdrawal.reason
+        ? `Retirada para "${newWithdrawal.reason}".`
+        : 'Retirada registada.',
+      financialImpact: [{ label: 'Retirada', amount: -newWithdrawal.amount, tone: 'negative' }],
+      details: {
+        reason: newWithdrawal.reason,
+        notes: newWithdrawal.notes,
+        amount: newWithdrawal.amount,
+      },
+    });
+
     return newWithdrawal;
   };
 
@@ -781,6 +1017,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), newCount);
     await fsBatch.commit();
 
+    if (type === 'initial') {
+      await logTimelineEvent({
+        type: 'initial-stock-count',
+        date,
+        title: 'Contagem Inicial de Stock Concluída',
+        description: `Capital inicial do negócio estabelecido com ${countItems.length} produto(s).`,
+        financialImpact: [{ label: 'Capital Inicial', amount: newCount.totalValue, tone: 'neutral' }],
+        details: {
+          productCount: countItems.length,
+          totalValue: newCount.totalValue,
+        },
+      });
+    } else {
+      await logTimelineEvent({
+        type: 'stock-verification',
+        date,
+        title: 'Verificação de Stock Concluída',
+        description: `Contagem física de stock (${label?.trim() || type}) com ${countItems.length} produto(s).`,
+        financialImpact: [{ label: 'Valor Contado', amount: newCount.totalValue, tone: 'neutral' }],
+        details: {
+          countType: type,
+          label: label?.trim(),
+          productCount: countItems.length,
+          totalValue: newCount.totalValue,
+        },
+      });
+    }
+
     return newCount;
   };
 
@@ -823,6 +1087,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
 
     await setDoc(doc(db, 'businesses', userProfile.businessId, 'closings', newClosing.id), newClosing);
+
+    await logTimelineEvent({
+      type: periodType === 'monthly' ? 'monthly-closing' : 'yearly-closing',
+      date: endDate,
+      title: periodType === 'monthly' ? 'Fecho Mensal Concluído' : 'Fecho Anual Concluído',
+      description: `Período "${periodLabel.trim()}" fechado e bloqueado permanentemente.`,
+      financialImpact: [
+        { label: 'Lucro Embutido', amount: newClosing.totalEmbeddedProfit, tone: 'positive' },
+        { label: 'Despesas', amount: -newClosing.totalExpenses, tone: 'negative' },
+        { label: 'Retiradas', amount: -newClosing.totalWithdrawals, tone: 'negative' },
+      ],
+      details: {
+        periodLabel: periodLabel.trim(),
+        startDate,
+        endDate,
+        totalEmbeddedProfit: newClosing.totalEmbeddedProfit,
+        totalExpenses: newClosing.totalExpenses,
+        totalWithdrawals: newClosing.totalWithdrawals,
+        businessWorthAtClose: newClosing.businessWorthAtClose,
+      },
+    });
+
     return newClosing;
   };
 
@@ -960,6 +1246,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const c of closings) {
       await deleteDoc(doc(db, 'businesses', businessId, 'closings', c.id));
     }
+    for (const t of timelineEvents) {
+      await deleteDoc(doc(db, 'businesses', businessId, 'timelineEvents', t.id));
+    }
   };
 
   return (
@@ -1012,6 +1301,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         recordClosing,
         deleteClosing,
         isPeriodClosed,
+        timelineEvents,
+        logReportExport,
         deleteQuebra,
         deleteExpense,
         deleteProduct,

@@ -142,6 +142,18 @@ service cloud.firestore {
       match /staff/{staffId} {
         allow read, write: if isOwnerOf(businessId);
       }
+
+      // Business Timeline: an append-only history log written alongside the
+      // actions above (e.g. a staff member adding stock also writes the
+      // matching timeline entry). Any team member can read and create
+      // entries; entries are never edited once written — only the owner can
+      // remove one (used solely by clearAllData / data reset).
+      match /timelineEvents/{timelineEventId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        allow update: if false;
+        allow delete: if isOwnerOf(businessId);
+      }
     }
   }
 }

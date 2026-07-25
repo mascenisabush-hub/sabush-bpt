@@ -12,6 +12,7 @@ import { ReportsView } from './components/ReportsView';
 import { InitialStockCountView } from './components/InitialStockCountView';
 import { PeriodicStockCountView } from './components/PeriodicStockCountView';
 import { ClosingView } from './components/ClosingView';
+import { BusinessTimelineView } from './components/timeline/BusinessTimelineView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
 import AppLoadingScreen from './components/AppLoadingScreen';
@@ -30,7 +31,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing' || activeTab === 'timeline')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -39,7 +40,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing' || customEvent.detail === 'timeline')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -139,6 +140,8 @@ function MainApp() {
         )}
 
         {!isStaff && activeTab === 'reports' && <ReportsView />}
+
+        {!isStaff && activeTab === 'timeline' && <BusinessTimelineView />}
       </main>
 
       {/* Product Detail Modal */}
