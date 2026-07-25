@@ -188,11 +188,18 @@ export const AuthView: React.FC = () => {
         });
 
         // Step 2: Create Business doc
+        // NOTE: category must NOT be hardcoded here. Saving a fixed value
+        // would look like the owner manually chose it, which permanently
+        // disables auto-detection from the business name in the
+        // first-time setup modal (BusinessProfileSetupModal). Fall back to
+        // name-based detection, and leave it blank otherwise so the setup
+        // modal can auto-detect (or the owner can pick/search manually)
+        // once the business name is entered/confirmed.
         await setDoc(doc(db, 'businesses', businessId), {
           id: businessId,
           name: bName,
           ownerUid: uid,
-          category: category || 'Mercearia',
+          category: category || detectCategoryFromName(bName) || '',
           currencySymbol: currency || 'MT',
           createdAt: new Date().toISOString(),
         });
@@ -224,11 +231,14 @@ export const AuthView: React.FC = () => {
       // Check if user doc exists
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (!userDoc.exists()) {
+        // See note above: never hardcode a fallback category — it would
+        // block auto-detection later in BusinessProfileSetupModal.
+        const demoBName = businessName.trim() || 'Negócio de Demonstração';
         await setDoc(doc(db, 'businesses', businessId), {
           id: businessId,
-          name: businessName.trim() || 'Negócio de Demonstração',
+          name: demoBName,
           ownerUid: uid,
-          category: category || 'Mercearia',
+          category: category || detectCategoryFromName(demoBName) || '',
           currencySymbol: currency || 'MT',
           createdAt: new Date().toISOString(),
         });
