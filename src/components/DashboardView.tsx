@@ -63,8 +63,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     }
     const aBatches = batches.filter(batch => batch.productId === a.id);
     const bBatches = batches.filter(batch => batch.productId === b.id);
-    const aLatest = aBatches[aBatches.length - 1];
-    const bLatest = bBatches[bBatches.length - 1];
+    const aLatest = aBatches[0];
+    const bLatest = bBatches[0];
 
     if (sortBy === 'cost') {
       return (bLatest?.costPrice || 0) - (aLatest?.costPrice || 0);
@@ -272,7 +272,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               const productBatches = batches.filter(b => b.productId === product.id);
               const activeBatch = productBatches.find(b => b.status === 'open');
               const closedBatches = productBatches.filter(b => b.status === 'closed');
-              const latestBatch = productBatches[productBatches.length - 1];
+              const latestBatch = productBatches[0];
 
               let activeCalc = null;
               if (activeBatch) {

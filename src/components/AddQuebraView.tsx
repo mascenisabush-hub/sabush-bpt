@@ -46,7 +46,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
       if (active) {
         setSelectedBatchId(active.id);
       } else if (productBatches.length > 0) {
-        setSelectedBatchId(productBatches[productBatches.length - 1].id);
+        setSelectedBatchId(productBatches[0].id);
       } else {
         setSelectedBatchId('');
       }

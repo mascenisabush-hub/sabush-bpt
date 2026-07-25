@@ -35,7 +35,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       if (match) {
         const productBatches = batches.filter(b => b.productId === match.id);
         if (productBatches.length > 0) {
-          const latest = productBatches[productBatches.length - 1];
+          const latest = productBatches[0];
           initialCost = String(latest.costPrice);
           initialSell = String(latest.sellingPrice);
           if (latest.unit) initialUnit = latest.unit;
@@ -90,7 +90,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     if (match) {
       const productBatches = batches.filter(b => b.productId === match.id);
       if (productBatches.length > 0) {
-        const latest = productBatches[productBatches.length - 1];
+        const latest = productBatches[0];
         newCost = String(latest.costPrice);
         newSell = String(latest.sellingPrice);
         if (latest.unit) newUnit = latest.unit;

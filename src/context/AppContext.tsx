@@ -364,7 +364,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       for (const b of openBatches) {
         const batchRef = doc(db, 'businesses', businessId, 'batches', b.id);
         fsBatch.update(batchRef, { status: 'closed' });
-        b.status = 'closed';
+        const idx = tempBatches.findIndex((tb) => tb.id === b.id);
+        if (idx !== -1) {
+          tempBatches[idx] = { ...tempBatches[idx], status: 'closed' };
+        }
       }
 
       // Add new batch

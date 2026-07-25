@@ -2,21 +2,112 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
 
-    function isAuthenticated() {
+    function isSignedIn() {
       return request.auth != null;
     }
 
-    // User profile documents
-    match /users/{userId} {
-      allow read, write: if isAuthenticated();
+    // The signed-in user's own profile document (contains role + businessId).
+    // Used by nearly every rule below to establish membership/ownership.
+    function myProfile() {
+      return get(/databases/$(database)/documents/users/$(request.auth.uid)).data;
     }
 
-    // Business documents and all subcollections
-    match /businesses/{businessId} {
-      allow read, write: if isAuthenticated();
+    function isMemberOf(businessId) {
+      return isSignedIn() && myProfile().businessId == businessId;
+    }
 
-      match /{allPaths=**} {
-        allow read, write: if isAuthenticated();
+    function isOwnerOf(businessId) {
+      return isSignedIn() && myProfile().businessId == businessId && myProfile().role == 'owner';
+    }
+
+    // ==========================================================
+    // /users/{userId} - one profile doc per authenticated user
+    // ==========================================================
+    match /users/{userId} {
+      // A user can always read their own profile. An owner can also read the
+      // profiles of staff that belong to their own business (e.g. staff list).
+      allow read: if isSignedIn() && (
+        request.auth.uid == userId ||
+        (myProfile().role == 'owner' && myProfile().businessId == resource.data.businessId)
+      );
+
+      // Creating a profile happens in two flows:
+      //  1) Self-registration - a brand new owner creating their own profile.
+      //  2) An owner provisioning a staff account (created via a secondary
+      //     Firebase Auth app, then written here under the owner's session).
+      allow create: if isSignedIn() && (
+        (request.auth.uid == userId && request.resource.data.role == 'owner') ||
+        (
+          request.auth.uid != userId &&
+          request.resource.data.role == 'staff' &&
+          isOwnerOf(request.resource.data.businessId)
+        )
+      );
+
+      // A user may only update their own profile, and may never change their
+      // own role or business (that would be a privilege-escalation path).
+      allow update: if isSignedIn() && request.auth.uid == userId &&
+        request.resource.data.role == resource.data.role &&
+        request.resource.data.businessId == resource.data.businessId;
+
+      // A user can delete their own profile; an owner can remove a staff
+      // member's profile that belongs to their own business.
+      allow delete: if isSignedIn() && (
+        request.auth.uid == userId ||
+        isOwnerOf(resource.data.businessId)
+      );
+    }
+
+    // ==========================================================
+    // /businesses/{businessId}
+    // ==========================================================
+    match /businesses/{businessId} {
+      allow read: if isMemberOf(businessId);
+
+      // A business is only ever created by its own owner (uid matches the
+      // ownerUid on the new document), and the id doesn't exist yet.
+      allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
+
+      // Only the owner can change business settings (currency, category, name).
+      allow update: if isOwnerOf(businessId);
+      allow delete: if false;
+
+      // ----------------------------------------------------------
+      // Operational data any team member (owner or staff) can read
+      // and create, but only the owner can edit/delete.
+      // ----------------------------------------------------------
+      match /products/{productId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        allow update, delete: if isOwnerOf(businessId);
+      }
+
+      match /batches/{batchId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        // Batches are also updated by staff/owner alike when a new batch
+        // closes out the previous open one (addStockBatch / addMultipleStockBatches).
+        allow update: if isMemberOf(businessId);
+        allow delete: if isOwnerOf(businessId);
+      }
+
+      match /quebras/{quebraId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        allow update: if isMemberOf(businessId);
+        allow delete: if isOwnerOf(businessId);
+      }
+
+      match /expenses/{expenseId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        allow update: if isMemberOf(businessId);
+        allow delete: if isOwnerOf(businessId);
+      }
+
+      // Staff roster management is owner-only.
+      match /staff/{staffId} {
+        allow read, write: if isOwnerOf(businessId);
       }
     }
   }
