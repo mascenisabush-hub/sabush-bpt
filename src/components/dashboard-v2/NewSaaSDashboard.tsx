@@ -58,10 +58,12 @@ export const NewSaaSDashboard: React.FC<NewSaaSDashboardProps> = ({ onExit }) =>
           </>
         )}
 
+        {/* Inventory/Reports briefly render this while the real tab takes
+            over (both trigger an immediate 'navigate-tab' switch away
+            from this view — see TopNavbar.tsx). */}
         {section !== 'Dashboard' && (
           <div className="flex flex-col items-center justify-center py-24 text-center">
-            <p className="text-lg font-bold text-[#0B1F3A]">{section}</p>
-            <p className="text-sm text-gray-400 mt-1">Esta secção ainda não foi construída neste protótipo.</p>
+            <p className="text-sm text-gray-400">A abrir {section}…</p>
           </div>
         )}
       </main>
