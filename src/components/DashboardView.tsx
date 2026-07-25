@@ -17,6 +17,10 @@ import {
   TrendingUp,
   TrendingDown,
   Boxes,
+  Landmark,
+  Tag,
+  Receipt,
+  HandCoins,
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -26,6 +30,68 @@ interface DashboardViewProps {
   onNavigateToInitialStockCount: () => void;
   onSelectProductDetail: (product: Product) => void;
 }
+
+// ============================================================
+// KPI CARD — a single dashboard metric: icon, title, value, and a
+// short plain-language explanation. Reused for all 9 top-level cards
+// so the owner can read the health of the business without opening
+// any modal. Purely presentational — no calculations happen here,
+// every value is passed in already computed by the existing engine.
+// ============================================================
+interface KpiCardProps {
+  icon: React.ComponentType<{ className?: string }>;
+  iconBgClass: string;
+  iconTextClass: string;
+  label: string;
+  value: string;
+  valueClass?: string;
+  description: string;
+  onClick?: () => void;
+  badge?: React.ReactNode;
+  highlight?: boolean;
+}
+
+const KpiCard: React.FC<KpiCardProps> = ({
+  icon: Icon,
+  iconBgClass,
+  iconTextClass,
+  label,
+  value,
+  valueClass,
+  description,
+  onClick,
+  badge,
+  highlight,
+}) => (
+  <button
+    type="button"
+    onClick={onClick}
+    disabled={!onClick}
+    className={`h-full text-left bg-white border rounded-2xl p-3.5 shadow-sm flex flex-col gap-2 transition ${
+      highlight
+        ? 'border-amber-500/40 bg-amber-50/50 hover:bg-amber-100/60'
+        : 'border-gray-200'
+    } ${onClick ? 'hover:shadow-md hover:border-gray-300 cursor-pointer active:scale-[0.98]' : 'cursor-default'}`}
+  >
+    <div className="flex items-start justify-between gap-1">
+      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
+        <Icon className="w-4 h-4" />
+      </div>
+      {badge}
+    </div>
+    <div>
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 leading-tight">
+        {label}
+      </p>
+      <p className={`text-base sm:text-lg font-extrabold font-mono mt-0.5 leading-tight truncate ${valueClass || 'text-gray-800'}`}>
+        {value}
+      </p>
+    </div>
+    <p className="text-[10.5px] text-gray-500 leading-snug mt-auto">
+      {description}
+    </p>
+  </button>
+);
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToAddStock,
@@ -50,8 +116,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Business-wide Embedded Profit split by batch status. None of this is
   // realized income — it's potential profit still sitting in unsold stock.
+  // Also aggregate total Quebra (inventory loss) value at cost, reusing
+  // the same per-batch calculation — no new formula, just a sum.
   let finalizedEmbeddedProfit = 0;
   let estimatedEmbeddedProfit = 0;
+  let totalQuebraValueAllTime = 0;
 
   batches.forEach(batch => {
     const batchQuebras = quebras.filter(q => q.batchId === batch.id);
@@ -61,6 +130,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     } else {
       estimatedEmbeddedProfit += calc.embeddedProfit;
     }
+    totalQuebraValueAllTime += calc.quebraValue;
   });
 
   // Filter products by search
@@ -95,42 +165,69 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-2.5 pb-6">
-      {/* INITIAL CAPITAL banner (not yet set) or chip (already set) */}
-      {!hasInitialStockCount ? (
-        <button
-          type="button"
-          onClick={onNavigateToInitialStockCount}
-          className="w-full flex items-center justify-between gap-2 bg-orange-50 border border-orange-500/30 rounded-2xl px-3.5 py-2.5 text-left hover:bg-orange-100/60 transition group"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <Wallet className="w-4 h-4 text-orange-600 shrink-0" />
-            <span className="text-xs font-bold text-orange-800 truncate">
-              Ainda não definiu o seu Capital Inicial — registe o stock que já possui.
-            </span>
-          </div>
-          <span className="text-[11px] font-bold text-orange-700 group-hover:underline shrink-0">Configurar &rarr;</span>
-        </button>
-      ) : (
-        <button
-          type="button"
+      {/* KPI DASHBOARD CARDS — the health of the business at a glance.
+          Every value here reuses the existing calculation engine
+          (calculateBatch / calculateInventoryTotals / AppContext);
+          this is presentation only, nothing is recalculated. */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+        <KpiCard
+          icon={Landmark}
+          iconBgClass="bg-slate-500/10"
+          iconTextClass="text-slate-600"
+          label="Capital Inicial do Negócio"
+          value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido'}
+          valueClass={hasInitialStockCount ? 'text-gray-800' : 'text-amber-700'}
+          description={
+            hasInitialStockCount
+              ? 'O valor verificado do stock registado quando começou a usar o Sabush.'
+              : 'Toque para registar o stock que já possui e definir o ponto de partida.'
+          }
+          onClick={!hasInitialStockCount ? onNavigateToInitialStockCount : undefined}
+          highlight={!hasInitialStockCount}
+        />
+
+        <KpiCard
+          icon={Package}
+          iconBgClass="bg-amber-500/10"
+          iconTextClass="text-amber-600"
+          label="Custo do Stock Atual"
+          value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
+          description="O valor investido no stock que ainda resta."
+        />
+
+        <KpiCard
+          icon={Tag}
+          iconBgClass="bg-sky-500/10"
+          iconTextClass="text-sky-600"
+          label="Valor de Mercado do Stock"
+          value={formatCurrency(totalMarketValueAllTime, currencySymbol)}
+          description="O valor estimado de venda do stock que ainda resta."
+        />
+
+        <KpiCard
+          icon={Wallet}
+          iconBgClass="bg-orange-500/10"
+          iconTextClass="text-orange-600"
+          label="Lucro Embutido"
+          value={formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
+          valueClass={totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}
+          description="O lucro potencial contido no stock que ainda resta."
+          onClick={() => setShowBreakdownModal(true)}
+        />
+
+        <KpiCard
+          icon={Gem}
+          iconBgClass="bg-indigo-500/10"
+          iconTextClass="text-indigo-600"
+          label="Valor do Negócio"
+          value={formatCurrency(businessWorth, currencySymbol)}
+          valueClass="text-indigo-700"
+          description="O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados."
           onClick={() => setShowWorthModal(true)}
-          className="w-full flex items-center justify-between gap-2 bg-white border border-gray-200 rounded-2xl px-3.5 py-2.5 text-left hover:border-indigo-500/40 hover:bg-indigo-50/40 transition group"
-        >
-          <div className="flex items-center gap-2 min-w-0">
-            <div className="w-7 h-7 rounded-lg bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-600 shrink-0">
-              <Gem className="w-3.5 h-3.5" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-[10px] text-gray-500 font-semibold uppercase leading-tight">Valor do Negócio</p>
-              <p className="font-bold text-gray-800 font-mono text-sm leading-tight">
-                {formatCurrency(businessWorth, currencySymbol)}
-              </p>
-            </div>
-          </div>
-          <div className="flex items-center gap-1 shrink-0">
-            {capitalGrowth !== 0 && (
+          badge={
+            hasInitialStockCount && capitalGrowth !== 0 ? (
               <span
-                className={`flex items-center gap-0.5 text-[11px] font-bold font-mono ${
+                className={`inline-flex items-center gap-0.5 text-[10px] font-bold font-mono ${
                   capitalGrowth > 0 ? 'text-emerald-600' : 'text-rose-600'
                 }`}
               >
@@ -138,27 +235,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 {capitalGrowth >= 0 ? '+' : ''}
                 {capitalGrowthPct.toFixed(1)}%
               </span>
-            )}
-            <span className="text-[11px] font-bold text-indigo-700 group-hover:underline">Detalhes &rarr;</span>
-          </div>
-        </button>
-      )}
+            ) : null
+          }
+        />
+
+        <KpiCard
+          icon={Receipt}
+          iconBgClass="bg-rose-500/10"
+          iconTextClass="text-rose-600"
+          label="Despesas Gerais"
+          value={formatCurrency(totalExpensesAllTime, currencySymbol)}
+          valueClass="text-rose-700"
+          description="Custos operacionais registados pelo negócio."
+        />
+
+        <KpiCard
+          icon={HandCoins}
+          iconBgClass="bg-violet-500/10"
+          iconTextClass="text-violet-600"
+          label="Levantamentos do Dono"
+          value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
+          valueClass="text-violet-700"
+          description="Dinheiro retirado intencionalmente pelo dono."
+        />
+
+        <KpiCard
+          icon={AlertTriangle}
+          iconBgClass="bg-red-500/10"
+          iconTextClass="text-red-600"
+          label="Perdas de Stock (Quebras)"
+          value={formatCurrency(totalQuebraValueAllTime, currencySymbol)}
+          valueClass="text-red-700"
+          description="Valor perdido por produtos danificados, expirados ou em falta."
+        />
+
+        <KpiCard
+          icon={Boxes}
+          iconBgClass="bg-emerald-500/10"
+          iconTextClass="text-emerald-600"
+          label="Lotes Ativos"
+          value={String(activeBatchCount)}
+          description="Número de lotes de stock que contribuem atualmente para o inventário."
+        />
+      </div>
 
       {/* TOP BAR (single slim row) */}
       <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2 sm:p-2.5 shadow-sm">
-        {/* Left: Net Income Wallet Icon Button */}
-        <div className="relative shrink-0">
-          <button
-            type="button"
-            onClick={() => setShowBreakdownModal(true)}
-            title="Rendimento Líquido - Clique para ver o resumo financeiro"
-            className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-600 hover:bg-orange-500/20 hover:border-orange-500/50 flex items-center justify-center transition active:scale-95"
-          >
-            <Wallet className="w-5 h-5" />
-          </button>
-        </div>
-
-        {/* Center: Search Bar */}
+        {/* Search Bar */}
         <div className="flex-1 relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
           <input
