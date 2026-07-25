@@ -1,6 +1,6 @@
-import React, { useState } from 'react';
-import { Search, Store, Check, X, Building2, Phone, MapPin, Mail, User } from 'lucide-react';
-import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
+import React, { useState, useEffect } from 'react';
+import { Search, Store, Check, X, Building2, Phone, MapPin, Mail, User, Sparkles } from 'lucide-react';
+import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 
 interface BusinessProfileSetupModalProps {
   currentName: string;
@@ -36,7 +36,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
   const [error, setError] = useState<string | null>(null);
 
   const [searchTerm, setSearchTerm] = useState('');
-  const [selectedCat, setSelectedCat] = useState(currentCategory || 'Mercearia');
+  const [selectedCat, setSelectedCat] = useState(currentCategory || '');
   const [customText, setCustomText] = useState(
     currentCategory && !BUSINESS_CATEGORY_GROUPS.some(g => g.categories.includes(currentCategory))
       ? currentCategory
@@ -47,8 +47,27 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
       (!!currentCategory && !BUSINESS_CATEGORY_GROUPS.some(g => g.categories.includes(currentCategory)))
   );
   const [showCategoryPicker, setShowCategoryPicker] = useState(false);
+  // Once the user manually interacts with the category picker, stop
+  // overwriting their choice as they keep editing the business name.
+  const [categoryTouchedManually, setCategoryTouchedManually] = useState(!!currentCategory);
+  const [autoDetectedCategory, setAutoDetectedCategory] = useState<string | null>(null);
+
+  // Auto-detect category from the business name as the owner types it.
+  useEffect(() => {
+    if (categoryTouchedManually) return;
+    const detected = detectCategoryFromName(name);
+    if (detected) {
+      setSelectedCat(detected);
+      setIsCustomMode(false);
+      setAutoDetectedCategory(detected);
+    } else {
+      setAutoDetectedCategory(null);
+    }
+  }, [name, categoryTouchedManually]);
 
   const handleCategoryClick = (cat: string) => {
+    setCategoryTouchedManually(true);
+    setAutoDetectedCategory(null);
     if (cat === 'Outro') {
       setIsCustomMode(true);
       setSelectedCat('Outro');
@@ -205,12 +224,30 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                 {showCategoryPicker ? 'Fechar lista' : 'Alterar'}
               </button>
             </div>
-            <div className="px-3.5 py-2.5 bg-orange-50 border border-orange-200 rounded-xl text-sm font-semibold text-orange-800 flex items-center justify-between">
-              <span className="truncate">{isCustomMode ? (customText || 'Outro') : selectedCat}</span>
-              <Check className="w-4 h-4 text-orange-600 shrink-0" />
+            <div
+              className={`px-3.5 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-2 border ${
+                selectedCat || (isCustomMode && customText)
+                  ? 'bg-orange-50 border-orange-200 text-orange-800'
+                  : 'bg-gray-100/60 border-gray-200 text-gray-400 italic font-normal'
+              }`}
+            >
+              <span className="truncate">
+                {isCustomMode
+                  ? (customText || 'Outro')
+                  : (selectedCat || 'Comece a escrever o nome do negócio para detetar automaticamente...')}
+              </span>
+              {(selectedCat || (isCustomMode && customText)) && (
+                autoDetectedCategory && !categoryTouchedManually ? (
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600 shrink-0 whitespace-nowrap">
+                    <Sparkles className="w-3.5 h-3.5" /> Auto-detetado
+                  </span>
+                ) : (
+                  <Check className="w-4 h-4 text-orange-600 shrink-0" />
+                )
+              )}
             </div>
             <p className="text-[11px] text-gray-500">
-              A categoria selecionada personaliza as unidades de medida sugeridas na entrada de stock.
+              A categoria selecionada personaliza as unidades de medida sugeridas na entrada de stock. Detetamos automaticamente a partir do nome do negócio — clique em &quot;Alterar&quot; para escolher manualmente.
             </p>
 
             {showCategoryPicker && (

@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
@@ -9,7 +9,7 @@ import {
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { TrendingUp, Store, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCircle, Sparkles, UserCheck, Eye, EyeOff } from 'lucide-react';
-import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
+import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 
 export const AuthView: React.FC = () => {
@@ -24,8 +24,17 @@ export const AuthView: React.FC = () => {
   const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [name, setName] = useState('');
   const [businessName, setBusinessName] = useState('');
-  const [category, setCategory] = useState('Mercearia');
+  const [category, setCategory] = useState('');
+  const [categoryTouchedManually, setCategoryTouchedManually] = useState(false);
   const [currency, setCurrency] = useState('MT');
+
+  // Auto-detect category from the business name as it's typed, unless the
+  // owner has already manually picked one from the dropdown.
+  useEffect(() => {
+    if (categoryTouchedManually) return;
+    const detected = detectCategoryFromName(businessName);
+    if (detected) setCategory(detected);
+  }, [businessName, categoryTouchedManually]);
 
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
@@ -77,6 +86,11 @@ export const AuthView: React.FC = () => {
         }
         if (!businessName.trim()) {
           setError('Por favor insira o nome do seu negócio.');
+          setLoading(false);
+          return;
+        }
+        if (!category) {
+          setError('Por favor selecione o ramo do seu negócio.');
           setLoading(false);
           return;
         }
@@ -369,14 +383,27 @@ export const AuthView: React.FC = () => {
 
               <div className="grid grid-cols-2 gap-2">
                 <div>
-                  <label className="block text-xs font-semibold text-gray-700 mb-1">
+                  <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1">
                     Ramo de Negócio
+                    {category && !categoryTouchedManually && (
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-orange-600 normal-case">
+                        <Sparkles className="w-2.5 h-2.5" /> auto
+                      </span>
+                    )}
                   </label>
                   <select
                     value={category}
-                    onChange={e => setCategory(e.target.value)}
+                    onChange={e => {
+                      setCategory(e.target.value);
+                      setCategoryTouchedManually(true);
+                    }}
                     className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-orange-500 transition"
                   >
+                    {!category && (
+                      <option value="" disabled>
+                        Selecione uma categoria...
+                      </option>
+                    )}
                     {BUSINESS_CATEGORY_GROUPS.map(group => (
                       <optgroup key={group.groupName} label={group.groupName}>
                         {group.categories.map(cat => (
