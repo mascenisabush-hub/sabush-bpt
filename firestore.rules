@@ -105,6 +105,15 @@ service cloud.firestore {
         allow delete: if isOwnerOf(businessId);
       }
 
+      // Stock Counts (Initial Capital baseline + periodic physical counts).
+      // These establish/verify business capital, so only the owner may
+      // record or remove them; any team member may read them.
+      match /stockCounts/{stockCountId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isOwnerOf(businessId);
+        allow update, delete: if isOwnerOf(businessId);
+      }
+
       // Staff roster management is owner-only.
       match /staff/{staffId} {
         allow read, write: if isOwnerOf(businessId);

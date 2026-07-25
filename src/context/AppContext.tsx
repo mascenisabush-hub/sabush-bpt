@@ -23,6 +23,8 @@ import {
   UserProfile,
   Business,
   StaffMember,
+  StockCount,
+  StockCountType,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 
@@ -50,6 +52,20 @@ interface AddExpenseParams {
   category?: string;
 }
 
+interface RecordStockCountItemInput {
+  productName: string;
+  quantity: number;
+  unit?: string;
+  costPrice: number;
+}
+
+interface RecordStockCountParams {
+  type: StockCountType;
+  label?: string;
+  date: string;
+  items: RecordStockCountItemInput[];
+}
+
 interface AppContextType {
   currentUser: FirebaseUser | null;
   userProfile: UserProfile | null;
@@ -61,6 +77,7 @@ interface AppContextType {
   batches: StockBatch[];
   quebras: Quebra[];
   expenses: Expense[];
+  stockCounts: StockCount[];
   staffMembers: StaffMember[];
   currencySymbol: string;
   setCurrencySymbol: (symbol: string) => void;
@@ -72,6 +89,10 @@ interface AppContextType {
   addMultipleStockBatches: (items: AddStockParams[]) => Promise<void>;
   addQuebra: (params: AddQuebraParams) => Promise<Quebra>;
   addExpense: (params: AddExpenseParams) => Promise<Expense>;
+  hasInitialStockCount: boolean;
+  initialStockCount: StockCount | null;
+  initialCapitalValue: number;
+  recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
@@ -95,6 +116,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [batches, setBatches] = useState<StockBatch[]>([]);
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
+  const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
 
   const isOwner = userProfile?.role === 'owner';
@@ -102,6 +124,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const currencySymbol = business?.currencySymbol || 'MT';
   const businessCategory = business?.category || '';
+
+  // The one-and-only 'initial' StockCount establishes the permanent
+  // Initial Business Capital baseline (see types.ts for the rationale).
+  const initialStockCount = stockCounts.find((s) => s.type === 'initial') || null;
+  const hasInitialStockCount = !!initialStockCount;
+  const initialCapitalValue = initialStockCount?.totalValue || 0;
+
   // A business is considered "complete" once it has a category plus the core
   // contact-card fields. Businesses created before these fields existed will
   // be missing them and get prompted once to fill the gap.
@@ -124,6 +153,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBatches([]);
         setQuebras([]);
         setExpenses([]);
+        setStockCounts([]);
         setStaffMembers([]);
         setIsAuthLoading(false);
       }
@@ -161,6 +191,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setBatches([]);
       setQuebras([]);
       setExpenses([]);
+      setStockCounts([]);
       setStaffMembers([]);
       return;
     }
@@ -231,6 +262,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching expenses:', err)
     );
 
+    // 5b. Stock Counts collection (Initial Capital + periodic counts)
+    const stockCountsRef = collection(db, 'businesses', businessId, 'stockCounts');
+    const unsubStockCounts = onSnapshot(
+      stockCountsRef,
+      (snap) => {
+        const list: StockCount[] = [];
+        snap.forEach((doc) => list.push(doc.data() as StockCount));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setStockCounts(list);
+      },
+      (err) => console.error('Error fetching stock counts:', err)
+    );
+
     // 6. Staff collection
     const staffRef = collection(db, 'businesses', businessId, 'staff');
     const unsubStaff = onSnapshot(
@@ -249,6 +293,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubBatches();
       unsubQuebras();
       unsubExpenses();
+      unsubStockCounts();
       unsubStaff();
     };
   }, [userProfile?.businessId]);
@@ -448,6 +493,84 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newExpense;
   };
 
+  // Records a physical Stock Count. This is NEVER a purchase and NEVER
+  // creates/touches a StockBatch — it simply records what the owner
+  // physically counted as already owned, at a point in time.
+  //
+  // type === 'initial' is special: it can only ever be recorded once per
+  // business. Once set, it becomes the permanent Initial Business Capital
+  // baseline that everything else (capital growth, business worth) is
+  // measured against, so it is intentionally never editable or repeatable.
+  const recordStockCount = async ({ type, label, date, items }: RecordStockCountParams) => {
+    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
+
+    if (type === 'initial' && hasInitialStockCount) {
+      throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
+    }
+
+    const businessId = userProfile.businessId;
+    const fsBatch = createFirestoreBatch(db);
+    const tempProducts = [...products];
+
+    const countItems: StockCount['items'] = [];
+    let totalValue = 0;
+
+    for (const raw of items) {
+      const trimmedName = raw.productName.trim();
+      if (!trimmedName) continue;
+
+      // Find or create the product, exactly like addStockBatch does —
+      // a Stock Count can introduce products the business hasn't
+      // purchased through a batch yet (e.g. inventory owned before
+      // starting to use this system).
+      let product = tempProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+      let productId = product?.id;
+
+      if (!product) {
+        productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+        const newProd: Product = {
+          id: productId,
+          name: trimmedName,
+          createdAt: new Date().toISOString(),
+        };
+        fsBatch.set(doc(db, 'businesses', businessId, 'products', productId), newProd);
+        tempProducts.push(newProd);
+      }
+
+      const quantity = Number(raw.quantity) || 0;
+      const costPrice = Number(raw.costPrice) || 0;
+      const itemTotal = Number((quantity * costPrice).toFixed(2));
+      totalValue += itemTotal;
+
+      countItems.push({
+        productId: productId!,
+        productName: trimmedName,
+        quantity,
+        unit: raw.unit ? raw.unit.trim() : 'un',
+        costPrice,
+        totalValue: itemTotal,
+      });
+    }
+
+    if (!countItems.length) throw new Error('Adicione pelo menos um produto válido à contagem.');
+
+    const newCount: StockCount = {
+      id: (type === 'initial' ? 'stockcount-initial-' : 'stockcount-') + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      type,
+      label: label?.trim() || undefined,
+      date,
+      items: countItems,
+      totalValue: Number(totalValue.toFixed(2)),
+      createdAt: new Date().toISOString(),
+    };
+
+    fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), newCount);
+    await fsBatch.commit();
+
+    return newCount;
+  };
+
   const deleteQuebra = async (id: string) => {
     if (!userProfile?.businessId) return;
     await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'quebras', id));
@@ -565,6 +688,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const e of expenses) {
       await deleteDoc(doc(db, 'businesses', businessId, 'expenses', e.id));
     }
+    for (const s of stockCounts) {
+      await deleteDoc(doc(db, 'businesses', businessId, 'stockCounts', s.id));
+    }
   };
 
   return (
@@ -580,6 +706,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         batches,
         quebras,
         expenses,
+        stockCounts,
         staffMembers,
         currencySymbol,
         setCurrencySymbol,
@@ -591,6 +718,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMultipleStockBatches,
         addQuebra,
         addExpense,
+        hasInitialStockCount,
+        initialStockCount,
+        initialCapitalValue,
+        recordStockCount,
         deleteQuebra,
         deleteExpense,
         deleteProduct,

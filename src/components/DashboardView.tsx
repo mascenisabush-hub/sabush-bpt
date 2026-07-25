@@ -19,15 +19,17 @@ import { Product } from '../types';
 interface DashboardViewProps {
   onNavigateToAddStock: (productName?: string) => void;
   onNavigateToAddQuebra: (productId?: string) => void;
+  onNavigateToInitialStockCount: () => void;
   onSelectProductDetail: (product: Product) => void;
 }
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToAddStock,
   onNavigateToAddQuebra,
+  onNavigateToInitialStockCount,
   onSelectProductDetail,
 }) => {
-  const { products, batches, quebras, expenses, currencySymbol } = useApp();
+  const { products, batches, quebras, expenses, currencySymbol, hasInitialStockCount, initialCapitalValue } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -83,6 +85,29 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-2.5 pb-6">
+      {/* INITIAL CAPITAL banner (not yet set) or chip (already set) */}
+      {!hasInitialStockCount ? (
+        <button
+          type="button"
+          onClick={onNavigateToInitialStockCount}
+          className="w-full flex items-center justify-between gap-2 bg-orange-50 border border-orange-500/30 rounded-2xl px-3.5 py-2.5 text-left hover:bg-orange-100/60 transition group"
+        >
+          <div className="flex items-center gap-2 min-w-0">
+            <Wallet className="w-4 h-4 text-orange-600 shrink-0" />
+            <span className="text-xs font-bold text-orange-800 truncate">
+              Ainda não definiu o seu Capital Inicial — registe o stock que já possui.
+            </span>
+          </div>
+          <span className="text-[11px] font-bold text-orange-700 group-hover:underline shrink-0">Configurar &rarr;</span>
+        </button>
+      ) : (
+        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl px-3.5 py-2 text-xs">
+          <Wallet className="w-3.5 h-3.5 text-orange-600 shrink-0" />
+          <span className="text-gray-500 font-semibold">Capital Inicial:</span>
+          <span className="font-bold text-gray-800 font-mono">{formatCurrency(initialCapitalValue, currencySymbol)}</span>
+        </div>
+      )}
+
       {/* TOP BAR (single slim row) */}
       <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2 sm:p-2.5 shadow-sm">
         {/* Left: Net Income Wallet Icon Button */}

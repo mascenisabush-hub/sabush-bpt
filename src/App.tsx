@@ -8,6 +8,7 @@ import { AddStockView } from './components/AddStockView';
 import { AddQuebraView } from './components/AddQuebraView';
 import { AddExpenseView } from './components/AddExpenseView';
 import { ReportsView } from './components/ReportsView';
+import { InitialStockCountView } from './components/InitialStockCountView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { BusinessProfileSetupModal } from './components/BusinessProfileSetupModal';
 import { AuthView } from './components/AuthView';
@@ -30,7 +31,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -45,7 +46,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -74,6 +75,10 @@ function MainApp() {
     setActiveTab('add-quebra');
   };
 
+  const handleNavigateToInitialStockCount = () => {
+    setActiveTab('initial-stock');
+  };
+
   return (
   <div className="min-h-screen bg-white text-gray-900 font-sans antialiased flex flex-col">
       <Header />
@@ -84,7 +89,15 @@ function MainApp() {
           <DashboardView
             onNavigateToAddStock={handleNavigateToAddStock}
             onNavigateToAddQuebra={handleNavigateToAddQuebra}
+            onNavigateToInitialStockCount={handleNavigateToInitialStockCount}
             onSelectProductDetail={prod => setSelectedDetailProduct(prod)}
+          />
+        )}
+
+        {!isStaff && activeTab === 'initial-stock' && (
+          <InitialStockCountView
+            onComplete={() => setActiveTab('dashboard')}
+            onSkip={() => setActiveTab('dashboard')}
           />
         )}
 

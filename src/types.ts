@@ -68,6 +68,36 @@ export interface Expense {
   createdAt: string; // ISO string
 }
 
+// ============================================================
+// STOCK COUNTS (Capital baseline + periodic physical counts)
+// ============================================================
+// IMPORTANT: A StockCount is NOT a purchase and NOT a batch. It records
+// what the owner physically counts as already owned, at a point in time,
+// for the purpose of establishing/verifying business capital. The very
+// first StockCount a business ever records (type: 'initial') becomes the
+// permanent INITIAL BUSINESS CAPITAL baseline and can never be re-created
+// or edited afterwards — everything else is measured against it.
+export type StockCountType = 'initial' | 'weekly' | 'monthly' | 'quarterly' | 'yearly' | 'custom';
+
+export interface StockCountItem {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit?: string;
+  costPrice: number; // cost per unit at the time of the count
+  totalValue: number; // quantity * costPrice
+}
+
+export interface StockCount {
+  id: string;
+  type: StockCountType;
+  label?: string; // owner-given label, mainly used for 'custom' counts
+  date: string; // YYYY-MM-DD
+  items: StockCountItem[];
+  totalValue: number; // sum of all items' totalValue = inventory value at this count
+  createdAt: string; // ISO string
+}
+
 export interface CurrencyOption {
   code: string;
   symbol: string;
