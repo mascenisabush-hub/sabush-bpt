@@ -28,9 +28,12 @@ import {
   Withdrawal,
   Closing,
   ClosingPeriodType,
+  PurchaseBatch,
+  Supplier,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
+import { generateBatchNumber, getNextBatchSeq } from '../utils/purchaseBatchCalculations';
 
 interface AddStockParams {
   productName: string;
@@ -93,6 +96,7 @@ interface AppContextType {
   isStaff: boolean;
   products: Product[];
   batches: StockBatch[];
+  purchaseBatches: PurchaseBatch[];
   quebras: Quebra[];
   expenses: Expense[];
   stockCounts: StockCount[];
@@ -105,7 +109,9 @@ interface AppContextType {
   isBusinessProfileComplete: boolean;
   updateBusinessProfile: (profile: { name: string; category: string; contact: string; location: string; email: string }) => Promise<void>;
   addStockBatch: (params: AddStockParams) => Promise<{ productId: string; batchId: string }>;
-  addMultipleStockBatches: (items: AddStockParams[]) => Promise<void>;
+  addMultipleStockBatches: (items: AddStockParams[], supplier?: Supplier, notes?: string) => Promise<{ purchaseBatchId: string | null }>;
+  archivePurchaseBatch: (id: string) => Promise<void>;
+  unarchivePurchaseBatch: (id: string) => Promise<void>;
   addQuebra: (params: AddQuebraParams) => Promise<Quebra>;
   addExpense: (params: AddExpenseParams) => Promise<Expense>;
   addWithdrawal: (params: AddWithdrawalParams) => Promise<Withdrawal>;
@@ -158,6 +164,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<StockBatch[]>([]);
+  const [purchaseBatches, setPurchaseBatches] = useState<PurchaseBatch[]>([]);
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
@@ -239,6 +246,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBusiness(null);
         setProducts([]);
         setBatches([]);
+        setPurchaseBatches([]);
         setQuebras([]);
         setExpenses([]);
         setStockCounts([]);
@@ -279,6 +287,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setBusiness(null);
       setProducts([]);
       setBatches([]);
+      setPurchaseBatches([]);
       setQuebras([]);
       setExpenses([]);
       setStockCounts([]);
@@ -326,6 +335,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBatches(list);
       },
       (err) => console.error('Error fetching batches:', err)
+    );
+
+    // 3b. Purchase Batches collection (Investment Ledger — one doc per
+    // real-world purchase/investment event, grouping one or more of the
+    // per-product StockBatch line items above).
+    const purchaseBatchesRef = collection(db, 'businesses', businessId, 'purchaseBatches');
+    const unsubPurchaseBatches = onSnapshot(
+      purchaseBatchesRef,
+      (snap) => {
+        const list: PurchaseBatch[] = [];
+        snap.forEach((doc) => list.push(doc.data() as PurchaseBatch));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setPurchaseBatches(list);
+      },
+      (err) => console.error('Error fetching purchase batches:', err)
     );
 
     // 4. Quebras collection
@@ -409,6 +433,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubBusiness();
       unsubProducts();
       unsubBatches();
+      unsubPurchaseBatches();
       unsubQuebras();
       unsubExpenses();
       unsubStockCounts();
@@ -517,8 +542,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { productId: productId!, batchId: newBatchId };
   };
 
-  const addMultipleStockBatches = async (items: AddStockParams[]) => {
-    if (!userProfile?.businessId || !items.length) return;
+  const addMultipleStockBatches = async (items: AddStockParams[], supplier?: Supplier, notes?: string) => {
+    if (!userProfile?.businessId || !items.length) return { purchaseBatchId: null };
     const businessId = userProfile.businessId;
 
     const fsBatch = createFirestoreBatch(db);
@@ -526,6 +551,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Track products updated/created in this loop
     const tempProducts = [...products];
     const tempBatches = [...batches];
+
+    // Create the Purchase Batch envelope (the Investment Ledger entry) that
+    // will group every line item created below under one supplier/date/
+    // batch number. This never touches cost/price figures — those still
+    // live entirely on the StockBatch line items and the existing
+    // Embedded Profit engine in calculations.ts.
+    const newBatchSeq = getNextBatchSeq(purchaseBatches);
+    const newPurchaseBatchId = 'pbatch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const newPurchaseBatch: PurchaseBatch = {
+      id: newPurchaseBatchId,
+      batchNumber: generateBatchNumber(newBatchSeq),
+      batchSeq: newBatchSeq,
+      date: items[0].dateEntered,
+      supplier: {
+        name: (supplier?.name || '').trim() || 'Fornecedor Não Especificado',
+        phone: supplier?.phone?.trim() || undefined,
+        notes: supplier?.notes?.trim() || undefined,
+      },
+      notes: notes?.trim() || undefined,
+      createdByName: userProfile.name,
+      createdAt: new Date().toISOString(),
+    };
+    fsBatch.set(doc(db, 'businesses', businessId, 'purchaseBatches', newPurchaseBatchId), newPurchaseBatch);
 
     for (let idx = 0; idx < items.length; idx++) {
       const item = items[idx];
@@ -570,6 +618,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         sellingPrice: Number(item.sellingPrice),
         status: 'open',
         createdAt: new Date().toISOString(),
+        purchaseBatchId: newPurchaseBatchId,
       };
 
       const newBatchRef = doc(db, 'businesses', businessId, 'batches', newBatchId);
@@ -578,6 +627,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     await fsBatch.commit();
+    return { purchaseBatchId: newPurchaseBatchId };
+  };
+
+  // Archiving is a reversible, explicit action (never automatic) that
+  // simply hides a fully-settled Purchase Batch from the default active
+  // ledger view — it does not touch any StockBatch line item or figure.
+  const archivePurchaseBatch = async (id: string) => {
+    if (!userProfile?.businessId) return;
+    await updateDoc(doc(db, 'businesses', userProfile.businessId, 'purchaseBatches', id), {
+      archived: true,
+      archivedAt: new Date().toISOString(),
+    });
+  };
+
+  const unarchivePurchaseBatch = async (id: string) => {
+    if (!userProfile?.businessId) return;
+    await updateDoc(doc(db, 'businesses', userProfile.businessId, 'purchaseBatches', id), {
+      archived: false,
+      archivedAt: null,
+    });
   };
 
   const addQuebra = async ({ productId, batchId, date, quantityLost, reason }: AddQuebraParams) => {
@@ -873,6 +942,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const b of batches) {
       await deleteDoc(doc(db, 'businesses', businessId, 'batches', b.id));
     }
+    for (const pb of purchaseBatches) {
+      await deleteDoc(doc(db, 'businesses', businessId, 'purchaseBatches', pb.id));
+    }
     for (const q of quebras) {
       await deleteDoc(doc(db, 'businesses', businessId, 'quebras', q.id));
     }
@@ -901,6 +973,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isStaff,
         products,
         batches,
+        purchaseBatches,
         quebras,
         expenses,
         stockCounts,
@@ -914,6 +987,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateBusinessProfile,
         addStockBatch,
         addMultipleStockBatches,
+        archivePurchaseBatch,
+        unarchivePurchaseBatch,
         addQuebra,
         addExpense,
         addWithdrawal,

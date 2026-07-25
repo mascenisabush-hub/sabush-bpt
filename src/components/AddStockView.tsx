@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X } from 'lucide-react';
+import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 
 interface AddStockViewProps {
@@ -58,6 +58,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+
+  // Supplier applies to the whole purchase (batch), not to individual
+  // product rows — every item added in this session was bought from the
+  // same supplier, on the same purchase event.
+  const [supplierName, setSupplierName] = useState('');
+  const [supplierPhone, setSupplierPhone] = useState('');
+  const [batchNotes, setBatchNotes] = useState('');
 
   // If initialProductName changes from prop
   useEffect(() => {
@@ -144,8 +151,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       });
     }
 
-    // Call multi-batch handler
-    addMultipleStockBatches(itemsToSave);
+    // Call multi-batch handler — everything in this session is grouped
+    // into one Purchase Batch (Investment Ledger entry) under this supplier.
+    addMultipleStockBatches(
+      itemsToSave,
+      { name: supplierName, phone: supplierPhone, notes: '' },
+      batchNotes
+    );
 
     const messageText =
       itemsToSave.length === 1
@@ -153,6 +165,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         : `${itemsToSave.length} lotes de stock adicionados com sucesso!`;
 
     setSubmittedMessage(messageText);
+    setSupplierName('');
+    setSupplierPhone('');
+    setBatchNotes('');
 
     setTimeout(() => {
       onComplete();
@@ -204,6 +219,55 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
+            {/* SUPPLIER (applies to this whole purchase / batch) */}
+            <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2.5">
+              <div className="flex items-center space-x-2">
+                <Truck className="w-4 h-4 text-orange-600 shrink-0" />
+                <span className="text-xs font-bold text-gray-800">Fornecedor deste Lote</span>
+              </div>
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+                <div className="sm:col-span-2">
+                  <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                    Nome do Fornecedor
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex.: Distribuidora Central"
+                    value={supplierName}
+                    onChange={e => setSupplierName(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+                <div>
+                  <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                    Telefone (opcional)
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Ex.: 84 000 0000"
+                    value={supplierPhone}
+                    onChange={e => setSupplierPhone(e.target.value)}
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                  />
+                </div>
+              </div>
+              <div>
+                <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                  Notas do Lote (opcional)
+                </label>
+                <input
+                  type="text"
+                  placeholder="Ex.: Compra à vista, entrega parcial..."
+                  value={batchNotes}
+                  onChange={e => setBatchNotes(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+              <p className="text-[10px] text-gray-500">
+                Se não indicar um fornecedor, este lote será guardado como "Fornecedor Não Especificado".
+              </p>
+            </div>
+
             {/* COMPACT TABLE */}
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
               {/* Table Header (Desktop) */}

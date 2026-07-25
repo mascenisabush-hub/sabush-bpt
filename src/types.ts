@@ -51,6 +51,49 @@ export interface StockBatch {
   sellingPrice: number; // per unit
   status: BatchStatus;
   createdAt: string; // ISO string
+  // Links this per-product stock line back to the Purchase Batch (the
+  // investment/purchase event) it was bought under. Optional because
+  // batches created before this feature existed have no Purchase Batch —
+  // those are still shown in the Investment Ledger, just grouped by date
+  // instead, so no historical data is ever lost or hidden.
+  purchaseBatchId?: string;
+}
+
+// ============================================================
+// SUPPLIER (attached to a Purchase Batch, not to individual products)
+// ============================================================
+export interface Supplier {
+  name: string;
+  phone?: string;
+  notes?: string;
+}
+
+// A Purchase Batch's status is always derived automatically from its line
+// items' remaining quantities (see calculatePurchaseBatchSummary) — never
+// stored/edited directly, except for 'archived' which is an explicit,
+// reversible owner action to declutter old, fully-settled investments.
+export type PurchaseBatchStatus = 'active' | 'partially_remaining' | 'fully_consumed' | 'archived';
+
+// ============================================================
+// PURCHASE BATCH — one real-world stock purchase / investment event.
+// ============================================================
+// A Purchase Batch is the "envelope" around one or more StockBatch line
+// items (one per product) that were all bought together, on the same
+// date, from the same supplier. This is what the Investment Ledger
+// (Batch History) is built around. It never carries its own cost/price
+// figures — those always come from its StockBatch line items via the
+// existing Embedded Profit engine in calculations.ts.
+export interface PurchaseBatch {
+  id: string;
+  batchNumber: string; // human-readable, permanent, e.g. "BAT-000001"
+  batchSeq: number; // numeric sequence used to generate batchNumber
+  date: string; // YYYY-MM-DD — purchase date
+  supplier: Supplier;
+  notes?: string;
+  createdByName?: string; // display name of whoever recorded the purchase
+  createdAt: string; // ISO string
+  archived?: boolean;
+  archivedAt?: string; // ISO string
 }
 
 export interface Product {

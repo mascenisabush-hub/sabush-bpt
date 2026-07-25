@@ -1,111 +1,166 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
-import { calculateBatch } from '../utils/calculations';
+import {
+  calculatePurchaseBatchSummary,
+  buildPurchaseBatchTimeline,
+  PURCHASE_BATCH_STATUS_LABELS,
+  PurchaseBatchSummary,
+} from '../utils/purchaseBatchCalculations';
+import { exportPurchaseBatchToPdf } from '../utils/batchPdfExport';
 import { formatCurrency, formatDate } from '../utils/formatters';
-import { Boxes, Calendar, Search, ChevronDown, ChevronUp, ShoppingBag, X, Sparkles, Filter } from 'lucide-react';
-import { StockBatch } from '../types';
+import {
+  Boxes,
+  Calendar,
+  Search,
+  X,
+  Truck,
+  Archive,
+  ArchiveRestore,
+  Download,
+  Package,
+  Clock,
+  User,
+  FileText,
+  AlertTriangle,
+} from 'lucide-react';
+import { PurchaseBatch, PurchaseBatchStatus, StockBatch } from '../types';
 
-interface GroupedDayStocks {
-  date: string; // YYYY-MM-DD
-  batches: StockBatch[];
-  totalInvestmentValue: number;
-  totalMarketValue: number;
-  totalEmbeddedProfit: number;
-  allClosed: boolean;
-}
+const STATUS_STYLES: Record<PurchaseBatchStatus, string> = {
+  active: 'bg-emerald-50 text-emerald-700 border-emerald-500/30',
+  partially_remaining: 'bg-amber-50 text-amber-700 border-amber-500/30',
+  fully_consumed: 'bg-gray-100 text-gray-600 border-gray-300',
+  archived: 'bg-gray-100 text-gray-500 border-gray-300',
+};
 
 export const StocksView: React.FC = () => {
-  const { batches, quebras, products, currencySymbol } = useApp();
+  const {
+    batches,
+    purchaseBatches,
+    quebras,
+    products,
+    business,
+    isOwner,
+    currencySymbol,
+    archivePurchaseBatch,
+    unarchivePurchaseBatch,
+  } = useApp();
+
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
-  
-  // Selected day group for isolated modal view
-  const [selectedDayGroup, setSelectedDayGroup] = useState<GroupedDayStocks | null>(null);
+  const [supplierFilter, setSupplierFilter] = useState('');
+  const [statusFilter, setStatusFilter] = useState<'all' | PurchaseBatchStatus>('all');
+  const [showArchived, setShowArchived] = useState(false);
+  const [selectedSummary, setSelectedSummary] = useState<PurchaseBatchSummary | null>(null);
+  const [isExportingPdf, setIsExportingPdf] = useState(false);
 
-  // Group and filter batches
-  const groupedDays = useMemo(() => {
-    // Helper map for quick product name lookup
-    const productNameMap = new Map<string, string>();
-    products.forEach(p => productNameMap.set(p.id, p.name.toLowerCase()));
+  // ============================================================
+  // Build one summary per real Purchase Batch, PLUS one synthetic summary
+  // per date for any legacy StockBatch line items that predate this
+  // feature (no purchaseBatchId). Nothing historical is ever hidden or
+  // lost — old data just shows up under a "Histórico (Pré-Atualização)"
+  // placeholder supplier, grouped the way it always was (by date).
+  // ============================================================
+  const allSummaries = useMemo(() => {
+    const grouped = new Map<string, StockBatch[]>();
+    const legacyByDate = new Map<string, StockBatch[]>();
 
-    // Filter batches by date and query
-    const filtered = batches.filter(b => {
-      // Date filter
-      if (selectedDate && b.dateEntered !== selectedDate) {
-        return false;
+    batches.forEach((b) => {
+      if (b.purchaseBatchId) {
+        const existing = grouped.get(b.purchaseBatchId) || [];
+        existing.push(b);
+        grouped.set(b.purchaseBatchId, existing);
+      } else {
+        const existing = legacyByDate.get(b.dateEntered) || [];
+        existing.push(b);
+        legacyByDate.set(b.dateEntered, existing);
       }
+    });
 
-      // Search query filter (matches product name or date)
+    const summaries: PurchaseBatchSummary[] = [];
+
+    purchaseBatches.forEach((pb) => {
+      const lineItems = grouped.get(pb.id) || [];
+      summaries.push(calculatePurchaseBatchSummary(pb, lineItems, quebras, products));
+    });
+
+    // Synthetic envelopes for pre-feature data, one per legacy date.
+    Array.from(legacyByDate.entries()).forEach(([date, lineItems], idx) => {
+      const syntheticBatch: PurchaseBatch = {
+        id: 'legacy-' + date,
+        batchNumber: 'LEGADO',
+        batchSeq: -1 - idx,
+        date,
+        supplier: { name: 'Histórico (Pré-Atualização)' },
+        createdAt: lineItems[0]?.createdAt || date,
+      };
+      summaries.push(calculatePurchaseBatchSummary(syntheticBatch, lineItems, quebras, products));
+    });
+
+    return summaries.sort((a, b) => new Date(b.purchaseBatch.date).getTime() - new Date(a.purchaseBatch.date).getTime());
+  }, [batches, purchaseBatches, quebras, products]);
+
+  const supplierOptions = useMemo(() => {
+    const names = new Set<string>();
+    allSummaries.forEach((s) => names.add(s.purchaseBatch.supplier.name));
+    return Array.from(names).sort();
+  }, [allSummaries]);
+
+  const filteredSummaries = useMemo(() => {
+    const productNameMap = new Map<string, string>();
+    products.forEach((p) => productNameMap.set(p.id, p.name.toLowerCase()));
+
+    return allSummaries.filter((s) => {
+      if (!showArchived && s.status === 'archived') return false;
+
+      if (selectedDate && s.purchaseBatch.date !== selectedDate) return false;
+
+      if (supplierFilter && s.purchaseBatch.supplier.name !== supplierFilter) return false;
+
+      if (statusFilter !== 'all' && s.status !== statusFilter) return false;
+
       if (searchQuery.trim()) {
         const query = searchQuery.trim().toLowerCase();
-        const pName = productNameMap.get(b.productId) || '';
-        const dateStr = b.dateEntered.toLowerCase();
-        const formattedDateStr = formatDate(b.dateEntered).toLowerCase();
-
-        if (!pName.includes(query) && !dateStr.includes(query) && !formattedDateStr.includes(query)) {
-          return false;
-        }
+        const matchesBatchNumber = s.purchaseBatch.batchNumber.toLowerCase().includes(query);
+        const matchesSupplier = s.purchaseBatch.supplier.name.toLowerCase().includes(query);
+        const matchesDate = formatDate(s.purchaseBatch.date).toLowerCase().includes(query);
+        const matchesProduct = s.lineItems.some((li) =>
+          (productNameMap.get(li.batch.productId) || '').includes(query)
+        );
+        if (!matchesBatchNumber && !matchesSupplier && !matchesDate && !matchesProduct) return false;
       }
 
       return true;
     });
+  }, [allSummaries, showArchived, selectedDate, supplierFilter, statusFilter, searchQuery, products]);
 
-    // Group by dateEntered
-    const groupsMap = new Map<string, StockBatch[]>();
-    filtered.forEach(b => {
-      const existing = groupsMap.get(b.dateEntered) || [];
-      existing.push(b);
-      groupsMap.set(b.dateEntered, existing);
-    });
-
-    // Convert map to sorted array (newest date first)
-    const sortedDates = Array.from(groupsMap.keys()).sort((a, b) => b.localeCompare(a));
-
-    return sortedDates.map(date => {
-      const dayBatches = groupsMap.get(date) || [];
-      let totalInvestmentValue = 0;
-      let totalMarketValue = 0;
-      let allClosed = dayBatches.length > 0;
-
-      dayBatches.forEach(b => {
-        // Quebra-aware: figures reflect remaining quantity, not the
-        // original purchased quantity, so a lost/damaged unit doesn't
-        // silently stay counted as still-sellable stock.
-        const calc = calculateBatch(b, quebras.filter(q => q.batchId === b.id));
-        totalInvestmentValue += calc.investmentValue;
-        totalMarketValue += calc.marketValue;
-        if (b.status !== 'closed') {
-          allClosed = false;
-        }
-      });
-
-      const totalEmbeddedProfit = totalMarketValue - totalInvestmentValue;
-
-      return {
-        date,
-        batches: dayBatches,
-        totalInvestmentValue,
-        totalMarketValue,
-        totalEmbeddedProfit,
-        allClosed,
-      };
-    });
-  }, [batches, quebras, products, searchQuery, selectedDate]);
-
-  // Overall totals across current filtered view
   const summaryTotals = useMemo(() => {
-    let investment = 0;
-    let market = 0;
-    groupedDays.forEach(g => {
-      investment += g.totalInvestmentValue;
-      market += g.totalMarketValue;
-    });
-    return {
-      totalInvestmentValue: investment,
-      totalMarketValue: market,
-      totalEmbeddedProfit: market - investment,
-    };
-  }, [groupedDays]);
+    return filteredSummaries.reduce(
+      (acc, s) => {
+        acc.investment += s.remainingInvestmentValue;
+        acc.market += s.remainingMarketValue;
+        acc.profit += s.remainingEmbeddedProfit;
+        return acc;
+      },
+      { investment: 0, market: 0, profit: 0 }
+    );
+  }, [filteredSummaries]);
+
+  const selectedTimeline = useMemo(() => {
+    if (!selectedSummary) return [];
+    return buildPurchaseBatchTimeline(selectedSummary, quebras);
+  }, [selectedSummary, quebras]);
+
+  const handleExportPdf = async () => {
+    if (!selectedSummary || isExportingPdf) return;
+    setIsExportingPdf(true);
+    try {
+      await exportPurchaseBatchToPdf(selectedSummary, selectedTimeline, currencySymbol, business?.name || 'Sabush');
+    } finally {
+      setIsExportingPdf(false);
+    }
+  };
+
+  const isLegacy = (s: PurchaseBatchSummary) => s.purchaseBatch.batchSeq < 0;
 
   return (
     <div className="space-y-4 pb-12">
@@ -117,41 +172,39 @@ export const StocksView: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              Histórico de Stocks (Compras)
+              Histórico de Lotes — Registo de Investimento
             </h1>
             <p className="text-xs text-gray-500">
-              Jornal de entradas de stock agrupadas por dia, com Valor de Investimento, Valor de Mercado e Lucro Embutido (ajustados por quebras).
+              Cada compra de stock é um investimento. Reveja cada lote, o seu fornecedor, valor investido e lucro embutido.
             </p>
           </div>
         </div>
 
-        {/* Global summary badge for current filter */}
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2.5 px-3.5 text-xs font-mono shrink-0">
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Investimento Total</span>
-            <span className="text-gray-800 font-bold">{formatCurrency(summaryTotals.totalInvestmentValue, currencySymbol)}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Investimento Restante</span>
+            <span className="text-gray-800 font-bold">{formatCurrency(summaryTotals.investment, currencySymbol)}</span>
           </div>
           <div className="h-6 w-px bg-gray-50 mx-1"></div>
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Lucro Embutido</span>
-            <span className={`font-bold ${summaryTotals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-              {formatCurrency(summaryTotals.totalEmbeddedProfit, currencySymbol)}
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Lucro Embutido Restante</span>
+            <span className={`font-bold ${summaryTotals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatCurrency(summaryTotals.profit, currencySymbol)}
             </span>
           </div>
         </div>
       </div>
 
-      {/* Filter and Search Bar */}
+      {/* Filters */}
       <div className="bg-white border border-gray-200 rounded-2xl p-3.5 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
-          {/* Text Search */}
-          <div className="sm:col-span-7 relative">
+          <div className="sm:col-span-5 relative">
             <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Pesquisar por produto ou data (ex.: Arroz, Julho)..."
+              placeholder="Pesquisar por nº de lote, fornecedor ou produto..."
               value={searchQuery}
-              onChange={e => setSearchQuery(e.target.value)}
+              onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
             />
             {searchQuery && (
@@ -164,240 +217,361 @@ export const StocksView: React.FC = () => {
             )}
           </div>
 
-          {/* Date Picker Filter */}
-          <div className="sm:col-span-5 flex items-center gap-2">
-            <div className="relative flex-1">
-              <input
-                type="date"
-                value={selectedDate}
-                onChange={e => setSelectedDate(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500 font-mono"
-              />
-            </div>
+          <div className="sm:col-span-2">
+            <select
+              value={supplierFilter}
+              onChange={(e) => setSupplierFilter(e.target.value)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+            >
+              <option value="">Todos os Fornecedores</option>
+              {supplierOptions.map((name) => (
+                <option key={name} value={name}>
+                  {name}
+                </option>
+              ))}
+            </select>
+          </div>
 
-            {(selectedDate || searchQuery) && (
+          <div className="sm:col-span-2">
+            <select
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value as any)}
+              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+            >
+              <option value="all">Todos os Estados</option>
+              <option value="active">Ativo</option>
+              <option value="partially_remaining">Parcialmente Restante</option>
+              <option value="fully_consumed">Totalmente Consumido</option>
+              <option value="archived">Arquivado</option>
+            </select>
+          </div>
+
+          <div className="sm:col-span-3 flex items-center gap-2">
+            <input
+              type="date"
+              value={selectedDate}
+              onChange={(e) => setSelectedDate(e.target.value)}
+              className="flex-1 bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 font-mono focus:outline-none focus:border-orange-500"
+            />
+            {selectedDate && (
               <button
-                onClick={() => {
-                  setSelectedDate('');
-                  setSearchQuery('');
-                }}
-                className="px-3 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-semibold transition shrink-0 flex items-center gap-1"
-                title="Limpar filtros"
+                onClick={() => setSelectedDate('')}
+                className="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl"
               >
                 <X className="w-3.5 h-3.5" />
-                <span className="hidden sm:inline">Limpar</span>
               </button>
             )}
           </div>
         </div>
 
-        {/* Items count */}
-        {groupedDays.length > 0 && (
-          <div className="flex items-center justify-between pt-1 border-t border-gray-200/60 text-xs text-gray-500">
-            <span>
-              A mostrar <strong className="text-gray-800">{groupedDays.length}</strong> {groupedDays.length === 1 ? 'dia' : 'dias'} de compras
-            </span>
-            <span className="text-[11px] text-gray-500 font-sans">
-              Clique numa linha para ver os produtos do dia
-            </span>
-          </div>
-        )}
+        <label className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold select-none">
+          <input
+            type="checkbox"
+            checked={showArchived}
+            onChange={(e) => setShowArchived(e.target.checked)}
+            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+          />
+          Mostrar lotes arquivados
+        </label>
       </div>
 
-      {/* Stocks Grouped List */}
-      {groupedDays.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-3xl p-8 text-center max-w-lg mx-auto my-6 space-y-2">
-          <div className="w-12 h-12 rounded-2xl bg-gray-50 flex items-center justify-center text-gray-500 mx-auto">
-            <ShoppingBag className="w-6 h-6" />
-          </div>
-          <h3 className="text-base font-bold text-gray-800">Nenhuma compra de stock encontrada</h3>
-          <p className="text-xs text-gray-500">
-            {batches.length === 0
-              ? 'Ainda não registou nenhuma entrada de stock. Use o separador "+ Stock" para adicionar.'
-              : 'Nenhuma compra corresponde aos filtros selecionados.'}
-          </p>
+      {/* Batch List */}
+      {filteredSummaries.length === 0 ? (
+        <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
+          <Boxes className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+          <p className="text-sm text-gray-500">Nenhum lote encontrado com os filtros atuais.</p>
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
-          {/* Table Header */}
-          <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-gray-100/90 border-b border-gray-200/80 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-            <div className="col-span-3 sm:col-span-3">Data</div>
-            <div className="col-span-3 text-right">Investimento</div>
-            <div className="col-span-3 text-right">Mercado</div>
-            <div className="col-span-3 text-right">Lucro Embutido</div>
-          </div>
+        <div className="space-y-2.5">
+          {filteredSummaries.map((s) => (
+            <button
+              key={s.purchaseBatch.id}
+              onClick={() => setSelectedSummary(s)}
+              className="w-full text-left bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:border-orange-500/50 hover:shadow-md transition group"
+            >
+              <div className="flex flex-wrap items-start justify-between gap-3">
+                <div className="flex items-start gap-3 min-w-0">
+                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+                    <Package className="w-5 h-5" />
+                  </div>
+                  <div className="min-w-0">
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <span className="font-mono font-bold text-sm text-gray-900 group-hover:text-orange-600 transition">
+                        {s.purchaseBatch.batchNumber}
+                      </span>
+                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
+                        {PURCHASE_BATCH_STATUS_LABELS[s.status]}
+                      </span>
+                      {isLegacy(s) && (
+                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300">
+                          Legado
+                        </span>
+                      )}
+                    </div>
+                    <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
+                      <span className="flex items-center gap-1">
+                        <Calendar className="w-3 h-3" /> {formatDate(s.purchaseBatch.date)}
+                      </span>
+                      <span className="flex items-center gap-1 truncate">
+                        <Truck className="w-3 h-3 shrink-0" /> {s.purchaseBatch.supplier.name}
+                      </span>
+                      <span className="flex items-center gap-1">
+                        <Package className="w-3 h-3" /> {s.productCount} {s.productCount === 1 ? 'produto' : 'produtos'}
+                      </span>
+                    </div>
+                  </div>
+                </div>
 
-          {/* Table Body */}
-          <div className="divide-y divide-gray-200/60">
-            {groupedDays.map(group => {
-              return (
-                <div
-                  key={group.date}
-                  onClick={() => setSelectedDayGroup(group)}
-                  className="grid grid-cols-12 gap-1 items-center px-3 py-2.5 hover:bg-gray-100/60 transition cursor-pointer group"
-                >
-                  {/* DATA */}
-                  <div className="col-span-3 sm:col-span-3 min-w-0 flex items-center gap-1.5">
-                    <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-orange-600 transition font-mono truncate">
-                      {formatDate(group.date)}
+                <div className="flex items-center gap-4 text-right font-mono">
+                  <div>
+                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">Investido</span>
+                    <span className="text-xs font-bold text-gray-800">
+                      {formatCurrency(s.remainingInvestmentValue, currencySymbol)}
                     </span>
                   </div>
-
-                  {/* INVESTIMENTO */}
-                  <div className="col-span-3 text-right font-mono">
-                    <span className="text-xs font-semibold text-gray-800 block">
-                      {formatCurrency(group.totalInvestmentValue, currencySymbol)}
+                  <div>
+                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">Mercado</span>
+                    <span className="text-xs font-semibold text-gray-700">
+                      {formatCurrency(s.remainingMarketValue, currencySymbol)}
                     </span>
                   </div>
-
-                  {/* MERCADO */}
-                  <div className="col-span-3 text-right font-mono">
-                    <span className="text-xs font-semibold text-gray-700 block">
-                      {formatCurrency(group.totalMarketValue, currencySymbol)}
-                    </span>
-                  </div>
-
-                  {/* LUCRO EMBUTIDO */}
-                  <div className="col-span-3 text-right font-mono">
-                    <span
-                      className={`text-xs font-bold block ${
-                        group.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      }`}
-                    >
-                      {formatCurrency(group.totalEmbeddedProfit, currencySymbol)}
-                    </span>
-                    <span className="text-[9px] text-gray-500 block font-mono">
-                      {group.allClosed ? 'Finalizado' : 'Estimado'}
+                  <div>
+                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">Lucro Embutido</span>
+                    <span className={`text-xs font-bold ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      {formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}
                     </span>
                   </div>
                 </div>
-              );
-            })}
-          </div>
+              </div>
+            </button>
+          ))}
         </div>
       )}
 
-      {/* ISOLATED DAY DETAIL MODAL */}
-      {selectedDayGroup && (
+      {/* ============================================================ */}
+      {/* BATCH DETAIL MODAL — full Investment Ledger detail page       */}
+      {/* ============================================================ */}
+      {selectedSummary && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
-          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 max-w-2xl w-full shadow-2xl max-h-[90vh] flex flex-col space-y-4 overflow-hidden">
+          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl max-h-[92vh] flex flex-col space-y-4 overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-center justify-between pb-3 border-b border-gray-200 shrink-0">
-              <div className="flex items-center space-x-3">
+            <div className="flex items-start justify-between pb-3 border-b border-gray-200 shrink-0">
+              <div className="flex items-center space-x-3 min-w-0">
                 <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
-                  <Calendar className="w-5 h-5" />
+                  <Package className="w-5 h-5" />
                 </div>
-                <div>
-                  <h2 className="font-bold text-base text-gray-900 flex items-center gap-2 font-mono">
-                    {formatDate(selectedDayGroup.date)}
+                <div className="min-w-0">
+                  <h2 className="font-bold text-base text-gray-900 flex items-center gap-2 font-mono truncate">
+                    {selectedSummary.purchaseBatch.batchNumber}
+                    <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[selectedSummary.status]}`}>
+                      {PURCHASE_BATCH_STATUS_LABELS[selectedSummary.status]}
+                    </span>
                   </h2>
-                  <p className="text-xs text-gray-500 font-mono">
-                    {selectedDayGroup.batches.length}{' '}
-                    {selectedDayGroup.batches.length === 1 ? 'produto comprado' : 'produtos comprados'}
+                  <p className="text-xs text-gray-500">
+                    {formatDate(selectedSummary.purchaseBatch.date)} · {selectedSummary.purchaseBatch.supplier.name}
                   </p>
                 </div>
               </div>
               <button
-                onClick={() => setSelectedDayGroup(null)}
-                className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition"
-                title="Fechar"
+                onClick={() => setSelectedSummary(null)}
+                className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            {/* Day Totals Summary Bar inside Modal */}
-            <div className="bg-white border border-gray-200 rounded-2xl p-3 flex flex-wrap items-center justify-around gap-3 text-xs font-mono shrink-0">
-              <div className="text-center">
-                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">Investimento</span>
-                <span className="font-bold text-gray-800 text-sm">
-                  {formatCurrency(selectedDayGroup.totalInvestmentValue, currencySymbol)}
-                </span>
+            <div className="overflow-y-auto flex-1 space-y-4 pr-1">
+              {/* Batch info */}
+              <div className="bg-gray-100/60 border border-gray-200 rounded-2xl p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+                <div className="flex items-start gap-2">
+                  <Truck className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">Fornecedor</span>
+                    <span className="text-gray-800 font-semibold">{selectedSummary.purchaseBatch.supplier.name}</span>
+                    {selectedSummary.purchaseBatch.supplier.phone && (
+                      <span className="text-gray-500 block">{selectedSummary.purchaseBatch.supplier.phone}</span>
+                    )}
+                  </div>
+                </div>
+                <div className="flex items-start gap-2">
+                  <User className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
+                  <div>
+                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">Criado Por</span>
+                    <span className="text-gray-800 font-semibold">{selectedSummary.purchaseBatch.createdByName || '—'}</span>
+                  </div>
+                </div>
+                {selectedSummary.purchaseBatch.notes && (
+                  <div className="sm:col-span-2 flex items-start gap-2">
+                    <FileText className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
+                    <div>
+                      <span className="text-gray-500 block text-[10px] uppercase font-semibold">Notas</span>
+                      <span className="text-gray-800">{selectedSummary.purchaseBatch.notes}</span>
+                    </div>
+                  </div>
+                )}
               </div>
-              <div className="h-8 w-px bg-gray-50 hidden sm:block"></div>
-              <div className="text-center">
-                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">Mercado</span>
-                <span className="font-bold text-gray-700 text-sm">
-                  {formatCurrency(selectedDayGroup.totalMarketValue, currencySymbol)}
-                </span>
-              </div>
-              <div className="h-8 w-px bg-gray-50 hidden sm:block"></div>
-              <div className="text-center">
-                <span className="text-[10px] text-gray-500 block font-sans font-semibold uppercase">
-                  {selectedDayGroup.allClosed ? 'Lucro Embutido (Final)' : 'Lucro Embutido (Est.)'}
-                </span>
-                <span
-                  className={`font-bold text-sm ${
-                    selectedDayGroup.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                  }`}
-                >
-                  {formatCurrency(selectedDayGroup.totalEmbeddedProfit, currencySymbol)}
-                </span>
-              </div>
-            </div>
 
-            {/* Individual Batches Table */}
-            <div className="overflow-y-auto flex-1 border border-gray-200 rounded-2xl bg-gray-100/60 p-2">
-              <table className="w-full text-left text-xs">
-                <thead className="sticky top-0 bg-white z-10">
-                  <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                    <th className="py-2 px-2.5">Produto</th>
-                    <th className="py-2 px-2.5 text-right">Qtd (Rest.)</th>
-                    <th className="py-2 px-2.5 text-right">Investimento</th>
-                    <th className="py-2 px-2.5 text-right">Mercado</th>
-                    <th className="py-2 px-2.5 text-right">Lucro Embutido</th>
-                  </tr>
-                </thead>
-                <tbody className="divide-y divide-gray-200/50">
-                  {selectedDayGroup.batches.map(batch => {
-                    const product = products.find(p => p.id === batch.productId);
-                    const productName = product ? product.name : 'Produto Removido';
-                    const calc = calculateBatch(batch, quebras.filter(q => q.batchId === batch.id));
+              {/* Investment Summary */}
+              <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
+                <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Investimento Total</span>
+                  <span className="text-sm font-bold text-gray-800 font-mono">
+                    {formatCurrency(selectedSummary.totalInvestmentValue, currencySymbol)}
+                  </span>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Valor de Mercado</span>
+                  <span className="text-sm font-bold text-gray-700 font-mono">
+                    {formatCurrency(selectedSummary.totalMarketValue, currencySymbol)}
+                  </span>
+                </div>
+                <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Lucro Embutido</span>
+                  <span className={`text-sm font-bold font-mono ${selectedSummary.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    {formatCurrency(selectedSummary.totalEmbeddedProfit, currencySymbol)}
+                  </span>
+                </div>
+                <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-orange-700 uppercase font-bold block">Invest. Restante</span>
+                  <span className="text-sm font-bold text-orange-700 font-mono">
+                    {formatCurrency(selectedSummary.remainingInvestmentValue, currencySymbol)}
+                  </span>
+                </div>
+                <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-orange-700 uppercase font-bold block">Mercado Restante</span>
+                  <span className="text-sm font-bold text-orange-700 font-mono">
+                    {formatCurrency(selectedSummary.remainingMarketValue, currencySymbol)}
+                  </span>
+                </div>
+                <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-orange-700 uppercase font-bold block">Lucro Restante</span>
+                  <span className={`text-sm font-bold font-mono ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                    {formatCurrency(selectedSummary.remainingEmbeddedProfit, currencySymbol)}
+                  </span>
+                </div>
+              </div>
 
-                    return (
-                      <tr key={batch.id} className="hover:bg-white/60 transition">
-                        <td className="py-2.5 px-2.5 font-semibold text-gray-900">
-                          <span className="block font-bold">{productName}</span>
-                          <span className="text-[10px] font-normal text-gray-500 font-mono">
-                            Status: {batch.status === 'open' ? '🟢 Ativo' : '🔒 Fechado'}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-800">
-                          {batch.quantity} → {calc.remainingQuantity}{' '}
-                          <span className="text-[10px] font-sans font-normal text-gray-500">
-                            {batch.unit || 'un'}
-                          </span>
-                        </td>
-                        <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
-                          <div>{formatCurrency(batch.costPrice, currencySymbol)}</div>
-                          <div className="text-[10px] text-gray-500">
-                            Tot: {formatCurrency(calc.investmentValue, currencySymbol)}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
-                          <div>{formatCurrency(batch.sellingPrice, currencySymbol)}</div>
-                          <div className="text-[10px] text-gray-500">
-                            Tot: {formatCurrency(calc.marketValue, currencySymbol)}
-                          </div>
-                        </td>
-                        <td className="py-2.5 px-2.5 text-right font-mono font-bold">
-                          <span className={calc.embeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
-                            {formatCurrency(calc.embeddedProfit, currencySymbol)}
-                          </span>
-                        </td>
+              {selectedSummary.inventoryLostValue > 0 && (
+                <div className="bg-rose-50 border border-rose-500/20 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Inventário perdido (quebras) neste lote: {formatCurrency(selectedSummary.inventoryLostValue, currencySymbol)}
+                  </span>
+                </div>
+              )}
+
+              {/* Product Table */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-orange-600" /> Produtos
+                </h3>
+                <div className="border border-gray-200 rounded-2xl bg-gray-100/60 p-2 overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[560px]">
+                    <thead>
+                      <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                        <th className="py-2 px-2.5">Produto</th>
+                        <th className="py-2 px-2.5 text-right">Qtd (Rest.)</th>
+                        <th className="py-2 px-2.5 text-right">Custo / Venda</th>
+                        <th className="py-2 px-2.5 text-right">Invest. Restante</th>
+                        <th className="py-2 px-2.5 text-right">Lucro Embutido</th>
                       </tr>
-                    );
-                  })}
-                </tbody>
-              </table>
+                    </thead>
+                    <tbody className="divide-y divide-gray-200/50">
+                      {selectedSummary.lineItems.map((li) => (
+                        <tr key={li.batch.id} className="hover:bg-white/60 transition">
+                          <td className="py-2.5 px-2.5 font-semibold text-gray-900">
+                            <span className="block font-bold">{li.product?.name || 'Produto Removido'}</span>
+                            <span className="text-[10px] font-normal text-gray-500 font-mono">
+                              Status: {li.batch.status === 'open' ? '🟢 Ativo' : '🔒 Fechado'}
+                            </span>
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-800">
+                            {li.batch.quantity} → {li.remainingQuantity}{' '}
+                            <span className="text-[10px] font-sans font-normal text-gray-500">{li.batch.unit || 'un'}</span>
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
+                            {formatCurrency(li.batch.costPrice, currencySymbol)} / {formatCurrency(li.batch.sellingPrice, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
+                            {formatCurrency(li.investmentValue, currencySymbol)}
+                          </td>
+                          <td className="py-2.5 px-2.5 text-right font-mono font-bold">
+                            <span className={li.embeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
+                              {formatCurrency(li.embeddedProfit, currencySymbol)}
+                            </span>
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              </div>
+
+              {/* Timeline */}
+              <div>
+                <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-orange-600" /> Linha do Tempo
+                </h3>
+                <div className="space-y-2">
+                  {selectedTimeline.map((ev, idx) => (
+                    <div key={idx} className="flex items-start gap-2.5 bg-white border border-gray-200 rounded-xl p-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />
+                      <div className="min-w-0 flex-1">
+                        <div className="flex items-center justify-between gap-2">
+                          <span className="text-xs font-bold text-gray-800">{ev.label}</span>
+                          <span className="text-[10px] text-gray-500 font-mono shrink-0">
+                            {new Date(ev.date).toLocaleDateString('pt-PT')}
+                          </span>
+                        </div>
+                        <p className="text-[11px] text-gray-600">{ev.description}</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
             </div>
 
-            {/* Modal Footer */}
-            <div className="pt-2 border-t border-gray-200 flex justify-end shrink-0">
+            {/* Modal Footer Actions */}
+            <div className="pt-3 border-t border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2">
+                {isOwner && !isLegacy(selectedSummary) && (
+                  selectedSummary.status === 'archived' ? (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await unarchivePurchaseBatch(selectedSummary.purchaseBatch.id);
+                        setSelectedSummary(null);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5"
+                    >
+                      <ArchiveRestore className="w-3.5 h-3.5" /> Reativar Lote
+                    </button>
+                  ) : (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        await archivePurchaseBatch(selectedSummary.purchaseBatch.id);
+                        setSelectedSummary(null);
+                      }}
+                      className="px-3.5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-bold transition flex items-center gap-1.5"
+                    >
+                      <Archive className="w-3.5 h-3.5" /> Arquivar Lote
+                    </button>
+                  )
+                )}
+                <button
+                  type="button"
+                  onClick={handleExportPdf}
+                  disabled={isExportingPdf}
+                  className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5"
+                >
+                  <Download className="w-3.5 h-3.5" /> {isExportingPdf ? 'A gerar PDF...' : 'Exportar PDF'}
+                </button>
+              </div>
               <button
                 type="button"
-                onClick={() => setSelectedDayGroup(null)}
-                className="px-5 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition"
+                onClick={() => setSelectedSummary(null)}
+                className="px-5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition"
               >
                 Fechar
               </button>

@@ -91,6 +91,18 @@ service cloud.firestore {
         allow delete: if isOwnerOf(businessId);
       }
 
+      // Purchase Batches (Investment Ledger) — the envelope grouping one or
+      // more /batches line items into a single purchase/investment event.
+      // Same access pattern as /batches: any team member can read/create,
+      // any team member can update (archiving/unarchiving), only the owner
+      // can delete.
+      match /purchaseBatches/{purchaseBatchId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        allow update: if isMemberOf(businessId);
+        allow delete: if isOwnerOf(businessId);
+      }
+
       match /quebras/{quebraId} {
         allow read: if isMemberOf(businessId);
         allow create: if isMemberOf(businessId);
