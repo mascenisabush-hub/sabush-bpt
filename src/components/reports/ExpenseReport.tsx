@@ -188,7 +188,7 @@ export const ExpenseReport: React.FC<Props> = ({ onBack }) => {
                 <div className="space-y-1">
                   <div className="flex items-center gap-2">
                     <span className="font-bold text-gray-900 text-sm">{exp.description}</span>
-                    <span className="px-2 py-0.5 rounded-md bg-orange-50 text-orange-700 border border-orange-500/30 text-[10px] font-semibold">
+                    <span className="px-2 py-0.5 rounded-md bg-blue-50 text-blue-700 border border-blue-500/30 text-[10px] font-semibold">
                       {exp.category || 'Geral'}
                     </span>
                   </div>

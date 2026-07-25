@@ -172,9 +172,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           first-login modal. Lets the owner explore the app first and
           complete the profile whenever they choose, from Settings. */}
       {isOwner && !isBusinessProfileComplete && !profileNudgeDismissed && (
-        <div className="flex items-center justify-between gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+        <div className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
           <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
               <Store className="w-4 h-4" />
             </div>
             <div className="min-w-0">
@@ -190,7 +190,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition whitespace-nowrap"
+              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition whitespace-nowrap"
             >
               Completar Agora
             </button>
@@ -247,8 +247,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Wallet}
-          iconBgClass="bg-orange-500/10"
-          iconTextClass="text-orange-600"
+          iconBgClass="bg-blue-500/10"
+          iconTextClass="text-blue-600"
           label="Lucro Embutido"
           value={formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
           valueClass={totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}
@@ -330,7 +330,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             placeholder="Pesquisar produtos..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition font-medium"
+            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition font-medium"
           />
           {searchQuery && (
             <button
@@ -359,7 +359,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               title="Filtrar / Ordenar"
               className="p-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-800 transition active:scale-95 flex items-center gap-1 text-xs"
             >
-              <SlidersHorizontal className="w-4 h-4 text-orange-600" />
+              <SlidersHorizontal className="w-4 h-4 text-blue-600" />
             </button>
 
             {showSortDropdown && (
@@ -372,21 +372,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <button
                     type="button"
                     onClick={() => { setSortBy('name'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-orange-50 text-orange-700 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Nome (A-Z)
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('profit'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-orange-50 text-orange-700 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Maior Lucro
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('cost'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-orange-50 text-orange-700 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Preço Custo
                   </button>
@@ -403,7 +403,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
-                <Wallet className="w-5 h-5 text-orange-600" />
+                <Wallet className="w-5 h-5 text-blue-600" />
                 <h3 className="text-base font-bold text-gray-900">Lucro Embutido</h3>
               </div>
               <button
@@ -421,19 +421,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">Estimado (Lotes Abertos):</span>
-                <span className="font-bold font-mono text-orange-700">
+                <span className="font-bold font-mono text-blue-700">
                   {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">Finalizado (Lotes Fechados):</span>
-                <span className="font-bold font-mono text-orange-700">
+                <span className="font-bold font-mono text-blue-700">
                   {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-orange-50 border border-orange-500/30">
+              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-blue-50 border border-blue-500/30">
                 <span className="text-gray-800 font-bold">Lucro Embutido Total:</span>
                 <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
@@ -579,7 +579,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* TABLE */}
       {filteredProducts.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center max-w-lg mx-auto my-6">
-          <div className="w-12 h-12 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 mx-auto mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 mx-auto mb-3">
             <Package className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-bold text-gray-800">Nenhum produto encontrado</h3>
@@ -591,7 +591,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {products.length === 0 && (
             <button
               onClick={() => onNavigateToAddStock()}
-              className="mt-3 px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-semibold text-xs transition shadow-md active:scale-95"
+              className="mt-3 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-md active:scale-95"
             >
               + Adicionar Primeiro Lote
             </button>
@@ -659,7 +659,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className="col-span-4 sm:col-span-5 pr-1 min-w-0 cursor-pointer"
                   >
                     <div className="flex items-center gap-1">
-                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-orange-600 transition truncate">
+                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-blue-600 transition truncate">
                         {product.name}
                       </span>
                       {activeCalc?.hasExceededWarning && (
@@ -719,7 +719,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       type="button"
                       onClick={() => onNavigateToAddStock(product.name)}
                       title="Adicionar Stock / Editar Lote"
-                      className="p-1.5 text-gray-500 hover:text-orange-600 hover:bg-gray-50 rounded-lg transition"
+                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -749,7 +749,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Eye className="w-3.5 h-3.5 text-orange-600" />
+                              <Eye className="w-3.5 h-3.5 text-blue-600" />
                               <span>Ver detalhes</span>
                             </button>
 
@@ -761,7 +761,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Plus className="w-3.5 h-3.5 text-orange-600" />
+                              <Plus className="w-3.5 h-3.5 text-blue-600" />
                               <span>+ Add Stock</span>
                             </button>
 
@@ -773,7 +773,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <AlertTriangle className="w-3.5 h-3.5 text-orange-600" />
+                              <AlertTriangle className="w-3.5 h-3.5 text-blue-600" />
                               <span>+ Quebra</span>
                             </button>
                           </div>

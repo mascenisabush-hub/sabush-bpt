@@ -122,7 +122,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-200 flex-wrap gap-2">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
               <Wallet className="w-5 h-5" />
             </div>
             <div>
@@ -134,8 +134,8 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           </div>
         </div>
 
-        <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 flex items-start space-x-2 text-xs text-gray-700">
-          <Info className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+        <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 flex items-start space-x-2 text-xs text-gray-700">
+          <Info className="w-4 h-4 text-blue-600 shrink-0 mt-0.5" />
           <p>
             Esta contagem estabelece o seu <strong>Capital Inicial do Negócio</strong> — o ponto de partida contra o
             qual todo o crescimento (ou perda) de capital será medido a partir de agora. Ao contrário de uma compra
@@ -242,18 +242,18 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           <button
             type="button"
             onClick={handleAddRow}
-            className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-orange-500/60 hover:bg-orange-50 text-gray-700 hover:text-orange-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
+            className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-blue-500/60 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
           >
-            <Plus className="w-4 h-4 text-orange-600 group-hover:scale-110 transition-transform" />
+            <Plus className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
             <span>+ Adicionar outro produto</span>
           </button>
 
-          <div className="bg-white border-2 border-orange-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
+          <div className="bg-white border-2 border-blue-500/30 rounded-xl px-4 py-3 flex items-center justify-between gap-2">
             <div className="flex items-center space-x-2">
-              <ShieldCheck className="w-5 h-5 text-orange-600 shrink-0" />
+              <ShieldCheck className="w-5 h-5 text-blue-600 shrink-0" />
               <span className="font-bold text-gray-800 text-sm">Capital Inicial Total</span>
             </div>
-            <span className="font-black text-lg text-orange-700 font-mono">
+            <span className="font-black text-lg text-blue-700 font-mono">
               {formatCurrency(totalCapital, currencySymbol)}
             </span>
           </div>
@@ -271,7 +271,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             <button
               type="submit"
               disabled={isSaving}
-              className="flex-1 py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-60 text-white font-bold text-sm transition shadow-lg shadow-orange-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+              className="flex-1 py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white font-bold text-sm transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
             >
               <span>{isSaving ? 'A guardar...' : 'Confirmar Capital Inicial'}</span>
               <ArrowRight className="w-4 h-4" />

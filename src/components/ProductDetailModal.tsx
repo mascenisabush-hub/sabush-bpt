@@ -38,7 +38,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
         <div className="p-5 border-b border-gray-200 flex items-center justify-between bg-white/90 sticky top-0 z-10">
           <div>
             <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">
-              <Package className="w-5 h-5 text-orange-600" />
+              <Package className="w-5 h-5 text-blue-600" />
               {product.name}
             </h2>
             <p className="text-xs text-gray-500">
@@ -79,7 +79,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   onClose();
                   onNavigateToAddStock(product.name);
                 }}
-                className="px-3 py-1.5 rounded-lg bg-orange-600 hover:bg-orange-500 text-white text-xs font-semibold transition"
+                className="px-3 py-1.5 rounded-lg bg-blue-600 hover:bg-blue-500 text-white text-xs font-semibold transition"
               >
                 + Adicionar Lote
               </button>
@@ -98,7 +98,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           {/* Batches List */}
           <div>
             <h3 className="text-sm font-bold text-gray-800 uppercase tracking-wider mb-3 flex items-center gap-2">
-              <Layers className="w-4 h-4 text-orange-600" />
+              <Layers className="w-4 h-4 text-blue-600" />
               Lotes de Stock ({productBatches.length})
             </h3>
 

@@ -92,22 +92,6 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
       setError('Por favor indique o nome do negócio.');
       return;
     }
-    if (!finalCategory) {
-      setError('Por favor selecione o ramo do seu negócio.');
-      return;
-    }
-    if (!contact.trim()) {
-      setError('Por favor indique um contacto (telefone).');
-      return;
-    }
-    if (!location.trim()) {
-      setError('Por favor indique a localização do negócio.');
-      return;
-    }
-    if (!email.trim()) {
-      setError('Por favor indique um email de contacto.');
-      return;
-    }
 
     onSave({ name: name.trim(), category: finalCategory, contact: contact.trim(), location: location.trim(), email: email.trim() });
     if (onClose) onClose();
@@ -119,14 +103,14 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-gray-200 pb-4 shrink-0">
           <div className="flex items-center space-x-3">
-            <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+            <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
               <Store className="w-5 h-5" />
             </div>
             <div>
               <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2 flex-wrap">
                 {isFirstTimeSetup ? 'Perfil do seu Negócio' : 'Editar Perfil do Negócio'}
                 {isFirstTimeSetup && (
-                  <span className="text-[10px] bg-orange-500/20 text-orange-700 font-semibold px-2 py-0.5 rounded-full border border-orange-500/30">
+                  <span className="text-[10px] bg-blue-500/20 text-blue-700 font-semibold px-2 py-0.5 rounded-full border border-blue-500/30">
                     Configuração Inicial
                   </span>
                 )}
@@ -157,14 +141,14 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           {/* Business Name */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <User className="w-3.5 h-3.5 text-orange-600" /> Nome do Negócio
+              <User className="w-3.5 h-3.5 text-blue-600" /> Nome do Negócio
             </label>
             <input
               type="text"
               placeholder="ex.: Mercearia Central"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500"
+              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -172,26 +156,26 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                <Phone className="w-3.5 h-3.5 text-orange-600" /> Contacto (Telefone)
+                <Phone className="w-3.5 h-3.5 text-blue-600" /> Contacto (Telefone)
               </label>
               <input
                 type="tel"
                 placeholder="ex.: 84 123 4567"
                 value={contact}
                 onChange={e => setContact(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
               />
             </div>
             <div className="space-y-1.5">
               <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                <MapPin className="w-3.5 h-3.5 text-orange-600" /> Localização
+                <MapPin className="w-3.5 h-3.5 text-blue-600" /> Localização
               </label>
               <input
                 type="text"
                 placeholder="ex.: Maputo, Bairro Central"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
               />
             </div>
           </div>
@@ -199,14 +183,14 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           {/* Email */}
           <div className="space-y-1.5">
             <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-              <Mail className="w-3.5 h-3.5 text-orange-600" /> Email de Contacto
+              <Mail className="w-3.5 h-3.5 text-blue-600" /> Email de Contacto
             </label>
             <input
               type="email"
               placeholder="ex.: contacto@negocio.co.mz"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500"
+              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
             />
           </div>
 
@@ -214,12 +198,12 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           <div className="space-y-1.5">
             <div className="flex items-center justify-between">
               <label className="block text-xs font-semibold text-gray-700 flex items-center gap-1.5">
-                <Building2 className="w-3.5 h-3.5 text-orange-600" /> Ramo de Negócio
+                <Building2 className="w-3.5 h-3.5 text-blue-600" /> Ramo de Negócio
               </label>
               <button
                 type="button"
                 onClick={() => setShowCategoryPicker(v => !v)}
-                className="text-[11px] text-orange-600 font-semibold hover:underline"
+                className="text-[11px] text-blue-600 font-semibold hover:underline"
               >
                 {showCategoryPicker ? 'Fechar lista' : 'Alterar'}
               </button>
@@ -227,7 +211,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
             <div
               className={`px-3.5 py-2.5 rounded-xl text-sm font-semibold flex items-center justify-between gap-2 border ${
                 selectedCat || (isCustomMode && customText)
-                  ? 'bg-orange-50 border-orange-200 text-orange-800'
+                  ? 'bg-blue-50 border-blue-200 text-blue-800'
                   : 'bg-gray-100/60 border-gray-200 text-gray-400 italic font-normal'
               }`}
             >
@@ -238,11 +222,11 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
               </span>
               {(selectedCat || (isCustomMode && customText)) && (
                 autoDetectedCategory && !categoryTouchedManually ? (
-                  <span className="flex items-center gap-1 text-[10px] font-bold text-orange-600 shrink-0 whitespace-nowrap">
+                  <span className="flex items-center gap-1 text-[10px] font-bold text-blue-600 shrink-0 whitespace-nowrap">
                     <Sparkles className="w-3.5 h-3.5" /> Auto-detetado
                   </span>
                 ) : (
-                  <Check className="w-4 h-4 text-orange-600 shrink-0" />
+                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
                 )
               )}
             </div>
@@ -259,7 +243,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                     placeholder="Pesquisar categoria (ex.: Mercearia, Talho, Roupa...)"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
                   />
                 </div>
 
@@ -274,7 +258,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                           setCustomText(searchTerm);
                           setSelectedCat('Outro');
                         }}
-                        className="text-xs text-orange-600 hover:underline font-semibold"
+                        className="text-xs text-blue-600 hover:underline font-semibold"
                       >
                         + Usar &quot;{searchTerm}&quot; como categoria personalizada (Outro)
                       </button>
@@ -298,13 +282,13 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                                 onClick={() => handleCategoryClick(cat)}
                                 className={`text-left text-xs px-3 py-2.5 rounded-xl border transition flex items-center justify-between font-medium ${
                                   isSelected || isCustomSelected
-                                    ? 'bg-orange-50 border-orange-500 text-orange-800 shadow-md shadow-orange-50'
+                                    ? 'bg-blue-50 border-blue-500 text-blue-800 shadow-md shadow-blue-50'
                                     : 'bg-gray-100/60 border-gray-200 text-gray-700 hover:border-gray-300 hover:bg-gray-100/80'
                                 }`}
                               >
                                 <span className="truncate">{cat}</span>
                                 {(isSelected || isCustomSelected) && (
-                                  <Check className="w-3.5 h-3.5 text-orange-600 shrink-0 ml-1" />
+                                  <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />
                                 )}
                               </button>
                             );
@@ -317,7 +301,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
 
                 {isCustomMode && (
                   <div className="bg-gray-50 border border-gray-200 rounded-2xl p-3 space-y-2">
-                    <label className="block text-xs font-bold text-orange-600 uppercase tracking-wider">
+                    <label className="block text-xs font-bold text-blue-600 uppercase tracking-wider">
                       Especifique a Categoria
                     </label>
                     <input
@@ -325,7 +309,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                       placeholder="ex.: Loja de Molduras, Marcenaria..."
                       value={customText}
                       onChange={e => setCustomText(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 text-sm focus:outline-none focus:border-orange-500"
+                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 text-sm focus:outline-none focus:border-blue-500"
                       autoFocus
                     />
                   </div>
@@ -340,7 +324,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           <button
             type="button"
             onClick={handleSave}
-            className="py-2.5 px-6 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm transition shadow-lg shadow-orange-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+            className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
           >
             <span>{isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
           </button>

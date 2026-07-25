@@ -59,7 +59,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
       <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xl">
         {/* Title */}
         <div className="flex items-center space-x-3 pb-5 border-b border-gray-200">
-          <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600">
+          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600">
             <Receipt className="w-6 h-6" />
           </div>
           <div>
@@ -72,11 +72,11 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
 
         {submittedMessage ? (
           <div className="py-8 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-orange-500/20 text-orange-600 flex items-center justify-center mx-auto">
+            <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-600 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-gray-900">Despesa Registada!</h3>
-            <p className="text-sm text-orange-700 max-w-md mx-auto">{submittedMessage}</p>
+            <p className="text-sm text-blue-700 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5 my-5">
@@ -91,7 +91,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                 placeholder="ex.: Renda da loja, Conta de luz, Combustível..."
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
               />
             </div>
 
@@ -106,7 +106,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   required
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-orange-500"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-blue-500"
                 />
               </div>
 
@@ -122,7 +122,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   placeholder="0.00"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-orange-500 font-mono"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-blue-500 font-mono"
                 />
               </div>
             </div>
@@ -137,7 +137,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                 placeholder="ex.: Renda, Água/Luz, Transporte..."
                 value={category}
                 onChange={e => setCategory(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-orange-500 mb-2"
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 mb-2"
               />
 
               {/* Suggestions */}
@@ -160,7 +160,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
             <div className="flex items-center space-x-3 pt-2">
               <button
                 type="submit"
-                className="flex-1 min-h-[56px] py-3.5 px-5 rounded-2xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-base transition shadow-lg shadow-orange-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+                className="flex-1 min-h-[56px] py-3.5 px-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
               >
                 <span>Registar Despesa</span>
                 <ArrowRight className="w-5 h-5" />

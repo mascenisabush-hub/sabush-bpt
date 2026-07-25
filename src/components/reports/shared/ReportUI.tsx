@@ -18,14 +18,14 @@ const TONE_CLASSES: Record<string, string> = {
   default: 'text-gray-900',
   positive: 'text-emerald-600',
   negative: 'text-rose-600',
-  accent: 'text-orange-600',
+  accent: 'text-blue-600',
 };
 
 const TONE_ICON_BG: Record<string, string> = {
   default: 'bg-gray-100 text-gray-600',
   positive: 'bg-emerald-50 text-emerald-600',
   negative: 'bg-rose-50 text-rose-600',
-  accent: 'bg-orange-50 text-orange-600',
+  accent: 'bg-blue-50 text-blue-600',
 };
 
 export const ReportKpiCard: React.FC<ReportKpiProps> = ({ icon: Icon, label, value, tone = 'default', sub }) => (
@@ -50,8 +50,8 @@ export const ReportKpiCard: React.FC<ReportKpiProps> = ({ icon: Icon, label, val
 export const InsightBanner: React.FC<{ insights: string[] }> = ({ insights }) => {
   if (!insights.length) return null;
   return (
-    <div className="bg-gradient-to-br from-orange-50 to-white border border-orange-200 rounded-2xl p-4 flex gap-3">
-      <div className="w-8 h-8 rounded-xl bg-orange-100 text-orange-600 flex items-center justify-center shrink-0">
+    <div className="bg-gradient-to-br from-blue-50 to-white border border-blue-200 rounded-2xl p-4 flex gap-3">
+      <div className="w-8 h-8 rounded-xl bg-blue-100 text-blue-600 flex items-center justify-center shrink-0">
         <Lightbulb className="w-4 h-4" />
       </div>
       <div className="space-y-1">
@@ -135,7 +135,7 @@ export const ReportSection: React.FC<{ title?: string; icon?: React.ComponentTyp
     {title && (
       <div className="flex items-center justify-between gap-2">
         <h3 className="font-bold text-sm text-gray-900 flex items-center gap-2">
-          {Icon && <Icon className="w-4 h-4 text-orange-600" />}
+          {Icon && <Icon className="w-4 h-4 text-blue-600" />}
           {title}
         </h3>
         {right}
@@ -160,7 +160,7 @@ export const PillToggle: React.FC<{
         onClick={() => onChange(opt.value)}
         className={`px-2.5 py-1.5 rounded-lg text-[11px] font-semibold border transition active:scale-95 ${
           value === opt.value
-            ? 'bg-orange-600 border-orange-500 text-white shadow-sm'
+            ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
             : 'bg-gray-50 border-gray-200 text-gray-600 hover:bg-gray-100'
         }`}
       >

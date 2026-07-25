@@ -197,7 +197,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         {/* Title Header */}
         <div className="flex items-center justify-between pb-3 border-b border-gray-200">
           <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
               <PackagePlus className="w-5 h-5" />
             </div>
             <div>
@@ -211,18 +211,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
         {submittedMessage ? (
           <div className="py-10 text-center space-y-3">
-            <div className="w-14 h-14 rounded-full bg-orange-500/20 text-orange-600 flex items-center justify-center mx-auto animate-bounce">
+            <div className="w-14 h-14 rounded-full bg-blue-500/20 text-blue-600 flex items-center justify-center mx-auto animate-bounce">
               <CheckCircle2 className="w-8 h-8" />
             </div>
             <h3 className="text-lg font-bold text-gray-900">Stock Guardado com Sucesso!</h3>
-            <p className="text-sm text-orange-700 max-w-md mx-auto">{submittedMessage}</p>
+            <p className="text-sm text-blue-700 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-3">
             {/* SUPPLIER (applies to this whole purchase / batch) */}
             <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2.5">
               <div className="flex items-center space-x-2">
-                <Truck className="w-4 h-4 text-orange-600 shrink-0" />
+                <Truck className="w-4 h-4 text-blue-600 shrink-0" />
                 <span className="text-xs font-bold text-gray-800">Fornecedor deste Lote</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
@@ -235,7 +235,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     placeholder="Ex.: Distribuidora Central"
                     value={supplierName}
                     onChange={e => setSupplierName(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                   />
                 </div>
                 <div>
@@ -247,7 +247,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     placeholder="Ex.: 84 000 0000"
                     value={supplierPhone}
                     onChange={e => setSupplierPhone(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                   />
                 </div>
               </div>
@@ -260,7 +260,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   placeholder="Ex.: Compra à vista, entrega parcial..."
                   value={batchNotes}
                   onChange={e => setBatchNotes(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                  className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                 />
               </div>
               <p className="text-[10px] text-gray-500">
@@ -316,7 +316,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       <div className="hidden md:grid grid-cols-12 gap-2 items-center text-xs">
                         {/* Lote # */}
                         <div className="col-span-1 text-center">
-                          <span className="text-[10px] font-mono font-bold text-orange-600 bg-orange-50 border border-orange-500/30 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-500/30 px-1.5 py-0.5 rounded-md">
                             #{index + 1}
                           </span>
                         </div>
@@ -336,7 +336,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   isDropdownOpen: true,
                                 })
                               }
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs placeholder-gray-400 focus:outline-none focus:border-orange-500 font-medium pr-7"
+                              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs placeholder-gray-400 focus:outline-none focus:border-blue-500 font-medium pr-7"
                             />
                             <Search className="w-3 h-3 text-gray-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -372,7 +372,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                         isDropdownOpen: false,
                                       })
                                     }
-                                    className="w-full text-left px-3 py-2 hover:bg-orange-50 transition flex items-center space-x-2 text-xs text-orange-600 font-semibold"
+                                    className="w-full text-left px-3 py-2 hover:bg-blue-50 transition flex items-center space-x-2 text-xs text-blue-600 font-semibold"
                                   >
                                     <Sparkles className="w-3.5 h-3.5" />
                                     <span>+ Criar novo produto "{row.productName.trim()}"</span>
@@ -390,7 +390,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.dateEntered}
                             onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs focus:outline-none focus:border-orange-500 font-mono"
+                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs focus:outline-none focus:border-blue-500 font-mono"
                           />
                         </div>
 
@@ -402,7 +402,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.quantity}
                             onChange={e => updateRow(row.id, { quantity: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-orange-500 font-mono"
+                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-blue-500 font-mono"
                           />
                         </div>
 
@@ -415,7 +415,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               placeholder="un"
                               value={row.unit}
                               onChange={e => updateRow(row.id, { unit: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-1.5 py-1.5 text-gray-800 text-xs text-center focus:outline-none focus:border-orange-500 font-mono"
+                              className="w-full bg-white border border-gray-200 rounded-lg px-1.5 py-1.5 text-gray-800 text-xs text-center focus:outline-none focus:border-blue-500 font-mono"
                             />
                             <button
                               type="button"
@@ -423,7 +423,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 updateRow(row.id, { isUnitPopoverOpen: !row.isUnitPopoverOpen })
                               }
                               title="Sugestões de unidades"
-                              className="p-1 text-gray-500 hover:text-orange-600 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition shrink-0"
+                              className="p-1 text-gray-500 hover:text-blue-600 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition shrink-0"
                             >
                               <Tag className="w-3 h-3" />
                             </button>
@@ -453,7 +453,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                       }
                                       className={`text-[10px] px-2 py-1 rounded border font-mono transition ${
                                         row.unit.toLowerCase() === u.toLowerCase()
-                                          ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold'
+                                          ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold'
                                           : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
                                       }`}
                                     >
@@ -475,7 +475,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.costPrice}
                             onChange={e => updateRow(row.id, { costPrice: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-orange-500 font-mono"
+                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-blue-500 font-mono"
                           />
                         </div>
 
@@ -488,7 +488,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.sellingPrice}
                             onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-orange-500 font-mono"
+                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-blue-500 font-mono"
                           />
                         </div>
 
@@ -521,7 +521,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       {/* Mobile Compact Card/Row Layout (below md breakpoint) */}
                       <div className="md:hidden space-y-2 text-xs">
                         <div className="flex items-center justify-between border-b border-gray-200/60 pb-1.5">
-                          <span className="text-[10px] font-mono font-bold text-orange-600 bg-orange-50 border border-orange-500/30 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-500/30 px-1.5 py-0.5 rounded-md">
                             Lote #{index + 1}
                           </span>
                           <div className="flex items-center space-x-2">
@@ -589,7 +589,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                           isDropdownOpen: false,
                                         })
                                       }
-                                      className="w-full text-left px-3 py-1.5 text-xs text-orange-600 font-semibold"
+                                      className="w-full text-left px-3 py-1.5 text-xs text-blue-600 font-semibold"
                                     >
                                       + Criar "{row.productName.trim()}"
                                     </button>
@@ -681,9 +681,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <button
               type="button"
               onClick={handleAddRow}
-              className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-orange-500/60 hover:bg-orange-50 text-gray-700 hover:text-orange-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
+              className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-blue-500/60 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
             >
-              <Plus className="w-4 h-4 text-orange-600 group-hover:scale-110 transition-transform" />
+              <Plus className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
               <span>+ Adicionar outro produto</span>
             </button>
 
@@ -691,7 +691,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             {!isStaff && (
               <div className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
                 <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-orange-600 shrink-0" />
+                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
                   <span className="font-bold text-gray-800 font-sans">
                     Resumo ({rows.length} {rows.length === 1 ? 'lote' : 'lotes'})
                   </span>
@@ -727,8 +727,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             )}
 
             {/* Batch Auto-closing Notice */}
-            <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-2.5 flex items-start space-x-2 text-[11px] text-gray-700">
-              <Info className="w-3.5 h-3.5 text-orange-600 shrink-0 mt-0.5" />
+            <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-2.5 flex items-start space-x-2 text-[11px] text-gray-700">
+              <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
               <p>
                 Ao guardar, o lote ativo anterior de cada produto selecionado será automaticamente fechado.
               </p>
@@ -737,7 +737,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm transition shadow-lg shadow-orange-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
             >
               <span>
                 Guardar {rows.length > 1 ? `${rows.length} Lotes` : 'Lote'} e Ativar Stock

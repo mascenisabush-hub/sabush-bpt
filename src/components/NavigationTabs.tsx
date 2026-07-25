@@ -105,11 +105,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                   onClick={() => setActiveTab(tab.id)}
                   className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-sm font-semibold transition active:scale-[0.98] ${
                     isActive
-                      ? 'bg-gray-50 text-orange-600 border border-orange-500/30 shadow-sm'
+                      ? 'bg-gray-50 text-blue-600 border border-blue-500/30 shadow-sm'
                       : 'bg-white/50 hover:bg-gray-100/60 text-gray-500 hover:text-gray-800 border border-transparent'
                   }`}
                 >
-                 <Icon className={`w-4 h-4 ${isActive ? 'text-orange-600' : 'text-gray-500'}`} />
+                 <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
                   <span>{tab.label}</span>
                 </button>
               );
@@ -131,11 +131,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                 onClick={() => setActiveTab(tab.id)}
                 className={`flex flex-col items-center justify-center min-w-[56px] py-1.5 px-1 rounded-xl text-[10px] font-medium transition active:scale-95 ${
                   isActive
-                   ? 'text-orange-600 font-bold bg-orange-500/10'
+                   ? 'text-blue-600 font-bold bg-blue-500/10'
                     : 'text-gray-500 hover:text-gray-800'
                 }`}
               >
-                <div className={`p-1 rounded-lg ${isActive ? 'bg-orange-500/20 text-orange-600' : ''}`}>
+                <div className={`p-1 rounded-lg ${isActive ? 'bg-blue-500/20 text-blue-600' : ''}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <span className="mt-0.5 tracking-tight">{tab.shortLabel}</span>

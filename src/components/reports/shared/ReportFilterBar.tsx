@@ -69,7 +69,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStart
     <div className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3 report-no-print">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
-          <CalendarRange className="w-4 h-4 text-orange-600" /> Filtros
+          <CalendarRange className="w-4 h-4 text-blue-600" /> Filtros
         </div>
         <div className="flex flex-wrap gap-1.5 text-xs">
           {presets.map(p => (
@@ -78,7 +78,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStart
               onClick={() => onPreset(p.key)}
               className={`px-3 py-2 rounded-xl font-semibold transition border min-h-[38px] active:scale-95 ${
                 range.preset === p.key
-                  ? 'bg-orange-600 border-orange-500 text-white shadow-sm'
+                  ? 'bg-blue-600 border-blue-500 text-white shadow-sm'
                   : 'bg-gray-50 border-gray-300 text-gray-700 hover:bg-gray-100'
               }`}
             >
@@ -95,7 +95,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStart
             type="date"
             value={range.startDate}
             onChange={e => onStartDate(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
           />
         </div>
         <div>
@@ -104,7 +104,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStart
             type="date"
             value={range.endDate}
             onChange={e => onEndDate(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+            className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
           />
         </div>
       </div>

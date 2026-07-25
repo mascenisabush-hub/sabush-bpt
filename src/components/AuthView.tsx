@@ -268,11 +268,11 @@ export const AuthView: React.FC = () => {
     <div className="min-h-screen bg-white text-gray-900 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
       <div className="w-full max-w-md bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         {/* Decorative background glow */}
-        <div className="absolute -top-12 -right-12 w-40 h-40 bg-orange-500/10 rounded-full blur-3xl pointer-events-none"></div>
+        <div className="absolute -top-12 -right-12 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-14 h-14 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 mb-3 shadow-inner">
+          <div className="w-14 h-14 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 mb-3 shadow-inner">
             <TrendingUp className="w-8 h-8" />
           </div>
           <h1 className="text-xl sm:text-2xl font-bold tracking-tight text-gray-900">
@@ -295,7 +295,7 @@ export const AuthView: React.FC = () => {
             }}
             className={`py-2 rounded-xl transition ${
               mode === 'login'
-                ? 'bg-orange-600 text-white shadow-md'
+                ? 'bg-blue-600 text-white shadow-md'
                 : 'text-gray-500 hover:text-gray-800'
             }`}
           >
@@ -312,7 +312,7 @@ export const AuthView: React.FC = () => {
             }}
             className={`py-2 rounded-xl transition ${
               mode === 'register'
-                ? 'bg-orange-600 text-white shadow-md'
+                ? 'bg-blue-600 text-white shadow-md'
                 : 'text-gray-500 hover:text-gray-800'
             }`}
           >
@@ -328,7 +328,7 @@ export const AuthView: React.FC = () => {
               type="button"
               onClick={() => setRoleMode('owner')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
-                roleMode === 'owner' ? 'bg-gray-50 text-orange-600 border border-orange-500/30' : 'text-gray-500 hover:text-gray-700'
+                roleMode === 'owner' ? 'bg-gray-50 text-blue-600 border border-blue-500/30' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Dono (Proprietário)
@@ -337,7 +337,7 @@ export const AuthView: React.FC = () => {
               type="button"
               onClick={() => setRoleMode('staff')}
               className={`px-2.5 py-1 rounded-lg text-[11px] font-bold transition ${
-                roleMode === 'staff' ? 'bg-gray-50 text-orange-600 border border-orange-500/30' : 'text-gray-500 hover:text-gray-700'
+                roleMode === 'staff' ? 'bg-gray-50 text-blue-600 border border-blue-500/30' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
               Funcionário (Staff)
@@ -369,7 +369,7 @@ export const AuthView: React.FC = () => {
                     value={name}
                     onChange={e => setName(e.target.value)}
                     placeholder="Ex: João Silva"
-                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -386,7 +386,7 @@ export const AuthView: React.FC = () => {
                     value={businessName}
                     onChange={e => setBusinessName(e.target.value)}
                     placeholder="Ex: Mercearia Esperança"
-                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
               </div>
@@ -396,7 +396,7 @@ export const AuthView: React.FC = () => {
                   <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1">
                     Ramo de Negócio
                     {category && !categoryTouchedManually && (
-                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-orange-600 normal-case">
+                      <span className="flex items-center gap-0.5 text-[9px] font-bold text-blue-600 normal-case">
                         <Sparkles className="w-2.5 h-2.5" /> auto
                       </span>
                     )}
@@ -407,7 +407,7 @@ export const AuthView: React.FC = () => {
                       setCategory(e.target.value);
                       setCategoryTouchedManually(true);
                     }}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-orange-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-blue-500 transition"
                   >
                     {!category && (
                       <option value="" disabled>
@@ -433,7 +433,7 @@ export const AuthView: React.FC = () => {
                   <select
                     value={currency}
                     onChange={e => setCurrency(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-orange-500 transition"
+                    className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2.5 text-xs text-gray-900 focus:outline-none focus:border-blue-500 transition"
                   >
                     {CURRENCY_OPTIONS.map(opt => (
                       <option key={opt.code} value={opt.symbol}>
@@ -458,7 +458,7 @@ export const AuthView: React.FC = () => {
                 value={email}
                 onChange={e => setEmail(e.target.value)}
                 placeholder="seuemail@exemplo.com"
-                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
               />
             </div>
           </div>
@@ -476,7 +476,7 @@ export const AuthView: React.FC = () => {
                 value={password}
                 onChange={e => setPassword(e.target.value)}
                 placeholder="••••••••"
-                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
+                className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
               />
               <button
                 type="button"
@@ -503,7 +503,7 @@ export const AuthView: React.FC = () => {
                   value={confirmPassword}
                   onChange={e => setConfirmPassword(e.target.value)}
                   placeholder="••••••••"
-                  className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 transition"
+                  className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-10 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
                 />
                 <button
                   type="button"
@@ -520,7 +520,7 @@ export const AuthView: React.FC = () => {
           <button
             type="submit"
             disabled={loading}
-            className="w-full py-3 px-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg disabled:opacity-50"
+            className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg disabled:opacity-50"
           >
             {loading ? (
               <span className="animate-pulse">A processar...</span>
@@ -565,7 +565,7 @@ export const AuthView: React.FC = () => {
             type="button"
             onClick={handleAnonymousAuth}
             disabled={loading}
-            className="w-full py-2.5 px-3 bg-gray-100/80 hover:bg-gray-50 border border-gray-300/80 text-orange-600 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2"
+            className="w-full py-2.5 px-3 bg-gray-100/80 hover:bg-gray-50 border border-gray-300/80 text-blue-600 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2"
           >
             <UserCheck className="w-4 h-4" />
             <span>Entrar em Modo Demonstração (Sem Email)</span>

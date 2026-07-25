@@ -80,7 +80,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
         <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
           <div>
             <h2 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              <Store className="w-5 h-5 text-orange-600" /> Definições do Negócio
+              <Store className="w-5 h-5 text-blue-600" /> Definições do Negócio
             </h2>
             <p className="text-xs text-gray-500 font-mono mt-0.5">
               {business?.name || 'O meu Negócio'}
@@ -102,7 +102,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               onClick={() => setActiveSection('general')}
               className={`py-2 rounded-xl transition flex items-center justify-center gap-2 ${
                 activeSection === 'general'
-                  ? 'bg-gray-50 text-orange-600 border border-orange-500/30'
+                  ? 'bg-gray-50 text-blue-600 border border-blue-500/30'
                   : 'text-gray-500 hover:text-gray-800'
               }`}
             >
@@ -113,7 +113,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               onClick={() => setActiveSection('staff')}
               className={`py-2 rounded-xl transition flex items-center justify-center gap-2 ${
                 activeSection === 'staff'
-                  ? 'bg-gray-50 text-orange-600 border border-orange-500/30'
+                  ? 'bg-gray-50 text-blue-600 border border-blue-500/30'
                   : 'text-gray-500 hover:text-gray-800'
               }`}
             >
@@ -130,13 +130,13 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               <div className="p-4 bg-gray-100/60 border border-gray-200 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
-                    <Store className="w-3.5 h-3.5 text-orange-600" /> Perfil do Negócio
+                    <Store className="w-3.5 h-3.5 text-blue-600" /> Perfil do Negócio
                   </h4>
                   {isOwner && (
                     <button
                       type="button"
                       onClick={() => setShowProfileEdit(true)}
-                      className="text-[11px] text-orange-600 font-semibold hover:underline flex items-center gap-1"
+                      className="text-[11px] text-blue-600 font-semibold hover:underline flex items-center gap-1"
                     >
                       <Edit3 className="w-3 h-3" /> Editar
                     </button>
@@ -164,12 +164,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         onClick={() => setBusinessCategory(catName)}
                         className={`p-2.5 rounded-xl border text-left text-xs font-medium transition flex items-center justify-between ${
                           isSel
-                            ? 'bg-orange-50 border-orange-500 text-orange-700'
+                            ? 'bg-blue-50 border-blue-500 text-blue-700'
                             : 'bg-gray-100/60 border-gray-200 text-gray-700 hover:bg-gray-100/60'
                         }`}
                       >
                         <span className="truncate font-semibold">{catName}</span>
-                        {isSel && <Check className="w-3.5 h-3.5 text-orange-600 shrink-0 ml-1" />}
+                        {isSel && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />}
                       </button>
                     );
                   })}
@@ -190,12 +190,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         onClick={() => setCurrencySymbol(opt.symbol)}
                         className={`p-2.5 rounded-xl border text-xs font-medium transition flex items-center justify-between ${
                           isSel
-                            ? 'bg-orange-50 border-orange-500 text-orange-700'
+                            ? 'bg-blue-50 border-blue-500 text-blue-700'
                             : 'bg-gray-100/60 border-gray-200 text-gray-700 hover:bg-gray-100/60'
                         }`}
                       >
                         <span>{opt.label} ({opt.symbol})</span>
-                        {isSel && <Check className="w-3.5 h-3.5 text-orange-600 shrink-0" />}
+                        {isSel && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
                       </button>
                     );
                   })}
@@ -214,7 +214,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           await loadSampleData();
                         }
                       }}
-                      className="px-3 py-2 rounded-xl bg-orange-600/20 hover:bg-orange-600/30 border border-orange-500/40 text-orange-700 text-xs font-semibold transition flex items-center gap-1.5"
+                      className="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-700 text-xs font-semibold transition flex items-center gap-1.5"
                     >
                       <Sparkles className="w-3.5 h-3.5" />
                       Carregar Dados de Exemplo
@@ -243,7 +243,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
             <div className="space-y-6">
               {/* Form to Add Staff */}
               <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
-                <h3 className="text-xs font-bold text-orange-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4" /> Adicionar Novo Funcionário (Staff)
                 </h3>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">
@@ -258,7 +258,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                 )}
 
                 {staffSuccess && (
-                  <div className="mb-3 p-2.5 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-700 text-xs flex items-center gap-2">
+                  <div className="mb-3 p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/30 text-blue-700 text-xs flex items-center gap-2">
                     <Check className="w-4 h-4 shrink-0" />
                     <span>{staffSuccess}</span>
                   </div>
@@ -275,7 +275,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                       value={staffName}
                       onChange={e => setStaffName(e.target.value)}
                       placeholder="Ex: Carlos Mambo"
-                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                     />
                   </div>
 
@@ -290,7 +290,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         value={staffEmail}
                         onChange={e => setStaffEmail(e.target.value)}
                         placeholder="carlos@negocio.com"
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                       />
                     </div>
 
@@ -305,7 +305,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         value={staffPassword}
                         onChange={e => setStaffPassword(e.target.value)}
                         placeholder="Mínimo 6 caracteres"
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500 font-mono"
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono"
                       />
                     </div>
                   </div>
@@ -313,7 +313,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                   <button
                     type="submit"
                     disabled={staffLoading}
-                    className="w-full py-2.5 px-4 bg-orange-600 hover:bg-orange-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
+                    className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
                   >
                     {staffLoading ? 'A registar...' : 'Criar Conta de Funcionário'}
                   </button>
@@ -323,7 +323,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               {/* Staff List */}
               <div>
                 <h3 className="text-xs font-bold text-gray-700 mb-2 flex items-center gap-1.5">
-                  <ShieldCheck className="w-4 h-4 text-orange-600" /> Lista de Funcionários Ativos ({staffMembers.length})
+                  <ShieldCheck className="w-4 h-4 text-blue-600" /> Lista de Funcionários Ativos ({staffMembers.length})
                 </h3>
 
                 {staffMembers.length === 0 ? (
@@ -339,7 +339,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           <span className="text-[11px] text-gray-500 font-mono">{staff.email}</span>
                         </div>
                         <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/30">
+                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/30">
                             Staff
                           </span>
                           <button

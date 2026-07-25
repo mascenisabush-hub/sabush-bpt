@@ -26,7 +26,7 @@ const CATEGORIES: ReportCategoryDef[] = [
     icon: Gem,
     title: 'Valor do Negócio',
     description: 'Quanto vale o negócio hoje: capital, inventário, lucro embutido, despesas e retiradas.',
-    colorClass: 'bg-orange-50 text-orange-600',
+    colorClass: 'bg-blue-50 text-blue-600',
   },
   {
     key: 'inventory-valuation',

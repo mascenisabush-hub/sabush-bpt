@@ -216,7 +216,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             </div>
             <div className="bg-white border border-gray-100 rounded-lg p-2">
               <p className="text-[10px] text-gray-500">Levantamentos</p>
-              <p className="font-mono font-bold text-sm text-orange-600">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
+              <p className="font-mono font-bold text-sm text-blue-600">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
             </div>
             <div className="bg-white border-2 border-teal-500/30 rounded-lg p-2">
               <p className="text-[10px] text-gray-500">Valor de Mercado do Stock</p>
@@ -333,7 +333,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                       </div>
                       <div className="bg-white border border-gray-100 rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Levantado</p>
-                        <p className="font-mono font-bold text-[11px] text-orange-600">
+                        <p className="font-mono font-bold text-[11px] text-blue-600">
                           {formatCurrency(c.totalWithdrawals, currencySymbol)}
                         </p>
                       </div>

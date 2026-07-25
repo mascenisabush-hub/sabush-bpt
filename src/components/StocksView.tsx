@@ -167,7 +167,7 @@ export const StocksView: React.FC = () => {
       {/* Header Title */}
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+          <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
             <Boxes className="w-5 h-5" />
           </div>
           <div>
@@ -205,7 +205,7 @@ export const StocksView: React.FC = () => {
               placeholder="Pesquisar por nº de lote, fornecedor ou produto..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+              className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
             />
             {searchQuery && (
               <button
@@ -221,7 +221,7 @@ export const StocksView: React.FC = () => {
             <select
               value={supplierFilter}
               onChange={(e) => setSupplierFilter(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
             >
               <option value="">Todos os Fornecedores</option>
               {supplierOptions.map((name) => (
@@ -236,7 +236,7 @@ export const StocksView: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-orange-500"
+              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
             >
               <option value="all">Todos os Estados</option>
               <option value="active">Ativo</option>
@@ -251,7 +251,7 @@ export const StocksView: React.FC = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex-1 bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 font-mono focus:outline-none focus:border-orange-500"
+              className="flex-1 bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 font-mono focus:outline-none focus:border-blue-500"
             />
             {selectedDate && (
               <button
@@ -269,7 +269,7 @@ export const StocksView: React.FC = () => {
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-gray-300 text-orange-600 focus:ring-orange-500"
+            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
           Mostrar lotes arquivados
         </label>
@@ -287,16 +287,16 @@ export const StocksView: React.FC = () => {
             <button
               key={s.purchaseBatch.id}
               onClick={() => setSelectedSummary(s)}
-              className="w-full text-left bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:border-orange-500/50 hover:shadow-md transition group"
+              className="w-full text-left bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:border-blue-500/50 hover:shadow-md transition group"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
                     <Package className="w-5 h-5" />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-sm text-gray-900 group-hover:text-orange-600 transition">
+                      <span className="font-mono font-bold text-sm text-gray-900 group-hover:text-blue-600 transition">
                         {s.purchaseBatch.batchNumber}
                       </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
@@ -357,7 +357,7 @@ export const StocksView: React.FC = () => {
             {/* Modal Header */}
             <div className="flex items-start justify-between pb-3 border-b border-gray-200 shrink-0">
               <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
                   <Package className="w-5 h-5" />
                 </div>
                 <div className="min-w-0">
@@ -431,20 +431,20 @@ export const StocksView: React.FC = () => {
                     {formatCurrency(selectedSummary.totalEmbeddedProfit, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-orange-700 uppercase font-bold block">Invest. Restante</span>
-                  <span className="text-sm font-bold text-orange-700 font-mono">
+                <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-blue-700 uppercase font-bold block">Invest. Restante</span>
+                  <span className="text-sm font-bold text-blue-700 font-mono">
                     {formatCurrency(selectedSummary.remainingInvestmentValue, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-orange-700 uppercase font-bold block">Mercado Restante</span>
-                  <span className="text-sm font-bold text-orange-700 font-mono">
+                <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-blue-700 uppercase font-bold block">Mercado Restante</span>
+                  <span className="text-sm font-bold text-blue-700 font-mono">
                     {formatCurrency(selectedSummary.remainingMarketValue, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-orange-700 uppercase font-bold block">Lucro Restante</span>
+                <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-blue-700 uppercase font-bold block">Lucro Restante</span>
                   <span className={`text-sm font-bold font-mono ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.remainingEmbeddedProfit, currencySymbol)}
                   </span>
@@ -463,7 +463,7 @@ export const StocksView: React.FC = () => {
               {/* Product Table */}
               <div>
                 <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5 text-orange-600" /> Produtos
+                  <Package className="w-3.5 h-3.5 text-blue-600" /> Produtos
                 </h3>
                 <div className="border border-gray-200 rounded-2xl bg-gray-100/60 p-2 overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[560px]">
@@ -510,12 +510,12 @@ export const StocksView: React.FC = () => {
               {/* Timeline */}
               <div>
                 <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-orange-600" /> Linha do Tempo
+                  <Clock className="w-3.5 h-3.5 text-blue-600" /> Linha do Tempo
                 </h3>
                 <div className="space-y-2">
                   {selectedTimeline.map((ev, idx) => (
                     <div key={idx} className="flex items-start gap-2.5 bg-white border border-gray-200 rounded-xl p-2.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-orange-500 mt-1.5 shrink-0" />
+                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-bold text-gray-800">{ev.label}</span>
@@ -563,7 +563,7 @@ export const StocksView: React.FC = () => {
                   type="button"
                   onClick={handleExportPdf}
                   disabled={isExportingPdf}
-                  className="px-3.5 py-2 rounded-xl bg-orange-600 hover:bg-orange-500 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5"
+                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5"
                 >
                   <Download className="w-3.5 h-3.5" /> {isExportingPdf ? 'A gerar PDF...' : 'Exportar PDF'}
                 </button>
