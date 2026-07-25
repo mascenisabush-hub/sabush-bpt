@@ -1,685 +1,292 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
-import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X } from 'lucide-react';
-import { getSuggestedUnitsForCategory } from '../data/businessCategories';
+import { calculateBatch, isQuebraExceedingWarning } from '../utils/calculations';
+import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
+import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
 
-interface AddStockViewProps {
-  initialProductName?: string;
+interface AddQuebraViewProps {
+  initialProductId?: string;
   onComplete: () => void;
 }
 
-interface StockRowItem {
-  id: string;
-  productName: string;
-  dateEntered: string;
-  quantity: string;
-  unit: string;
-  costPrice: string;
-  sellingPrice: string;
-  isDropdownOpen?: boolean;
-  isUnitPopoverOpen?: boolean;
-}
+const COMMON_REASONS = [
+  'Fora do prazo',
+  'Partida / Danificada',
+  'Embalagem estragada / Fuga',
+  'Perda no transporte',
+  'Produto estragado / Mofo',
+  'Amostra / Oferta ao cliente',
+];
 
-export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
-  const { products, batches, addMultipleStockBatches, currencySymbol, businessCategory, isStaff } = useApp();
-  const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
+export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, onComplete }) => {
+  const { products, batches, quebras, addQuebra, currencySymbol } = useApp();
 
-  const createEmptyRow = (productName: string = ''): StockRowItem => {
-    let initialCost = '';
-    let initialSell = '';
-    let initialUnit = suggestedUnits[0] || 'un';
+  const [selectedProductId, setSelectedProductId] = useState<string>('');
+  const [selectedBatchId, setSelectedBatchId] = useState<string>('');
+  const [date, setDate] = useState<string>(getTodayDateString());
+  const [quantityLost, setQuantityLost] = useState<string>('1');
+  const [reason, setReason] = useState<string>('');
 
-    if (productName) {
-      const match = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
-      if (match) {
-        const productBatches = batches.filter(b => b.productId === match.id);
-        if (productBatches.length > 0) {
-          const latest = productBatches[productBatches.length - 1];
-          initialCost = String(latest.costPrice);
-          initialSell = String(latest.sellingPrice);
-          if (latest.unit) initialUnit = latest.unit;
-        }
-      }
-    }
-
-    return {
-      id: 'row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
-      productName,
-      dateEntered: getTodayDateString(),
-      quantity: '50',
-      unit: initialUnit,
-      costPrice: initialCost || '1.50',
-      sellingPrice: initialSell || '3.00',
-      isDropdownOpen: false,
-      isUnitPopoverOpen: false,
-    };
-  };
-
-  const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
 
-  // If initialProductName changes from prop
+  // Set initial product and batch
   useEffect(() => {
-    if (initialProductName && rows.length === 1 && !rows[0].productName) {
-      setRows([createEmptyRow(initialProductName)]);
+    if (initialProductId && products.some(p => p.id === initialProductId)) {
+      setSelectedProductId(initialProductId);
+    } else if (products.length > 0 && !selectedProductId) {
+      setSelectedProductId(products[0].id);
     }
-  }, [initialProductName]);
+  }, [initialProductId, products]);
 
-  const updateRow = (id: string, fields: Partial<StockRowItem>) => {
-    setRows(prev =>
-      prev.map(row => (row.id === id ? { ...row, ...fields } : row))
-    );
-  };
-
-  const handleAddRow = () => {
-    setRows(prev => [...prev, createEmptyRow('')]);
-  };
-
-  const handleRemoveRow = (id: string) => {
-    if (rows.length <= 1) return;
-    setRows(prev => prev.filter(row => row.id !== id));
-  };
-
-  const handleSelectProductForTool = (rowId: string, name: string) => {
-    const match = products.find(p => p.name.toLowerCase() === name.toLowerCase());
-    let newCost = '';
-    let newSell = '';
-    let newUnit = suggestedUnits[0] || 'un';
-
-    if (match) {
-      const productBatches = batches.filter(b => b.productId === match.id);
-      if (productBatches.length > 0) {
-        const latest = productBatches[productBatches.length - 1];
-        newCost = String(latest.costPrice);
-        newSell = String(latest.sellingPrice);
-        if (latest.unit) newUnit = latest.unit;
+  // When product changes, auto-select its active open batch, or latest batch
+  useEffect(() => {
+    if (selectedProductId) {
+      const productBatches = batches.filter(b => b.productId === selectedProductId);
+      const active = productBatches.find(b => b.status === 'open');
+      if (active) {
+        setSelectedBatchId(active.id);
+      } else if (productBatches.length > 0) {
+        setSelectedBatchId(productBatches[productBatches.length - 1].id);
+      } else {
+        setSelectedBatchId('');
       }
     }
+  }, [selectedProductId, batches]);
 
-    updateRow(rowId, {
-      productName: name,
-      costPrice: newCost || undefined,
-      sellingPrice: newSell || undefined,
-      unit: newUnit || undefined,
-      isDropdownOpen: false,
-    });
-  };
+  // Product batches
+  const availableBatches = batches.filter(b => b.productId === selectedProductId);
+  const targetBatch = batches.find(b => b.id === selectedBatchId);
 
-  // Submission validation and handling
+  // Calculate current state of target batch
+  let batchCalc = null;
+  let isWarning = false;
+  let remainingAfterLoss = 0;
+
+  if (targetBatch) {
+    const existingBatchQuebras = quebras.filter(q => q.batchId === targetBatch.id);
+    batchCalc = calculateBatch(targetBatch, existingBatchQuebras);
+    
+    const numLoss = parseFloat(quantityLost) || 0;
+    remainingAfterLoss = batchCalc.remainingQuantity - numLoss;
+    isWarning = isQuebraExceedingWarning(targetBatch, existingBatchQuebras, numLoss);
+  }
+
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
 
-    // Validate rows
-    const itemsToSave = [];
-    for (let i = 0; i < rows.length; i++) {
-      const row = rows[i];
-      const trimmedName = row.productName.trim();
-      const numQty = parseFloat(row.quantity) || 0;
-      const numCost = parseFloat(row.costPrice) || 0;
-      const numSell = parseFloat(row.sellingPrice) || 0;
-
-      if (!trimmedName) {
-        alert(`Por favor introduza o nome do produto no Lote #${i + 1}.`);
-        return;
-      }
-
-      if (numQty <= 0) {
-        alert(`Por favor introduza uma quantidade maior que zero no Lote #${i + 1} (${trimmedName}).`);
-        return;
-      }
-
-      if (numCost < 0 || numSell < 0) {
-        alert(`Por favor introduza preços válidos no Lote #${i + 1} (${trimmedName}).`);
-        return;
-      }
-
-      itemsToSave.push({
-        productName: trimmedName,
-        dateEntered: row.dateEntered,
-        quantity: numQty,
-        unit: row.unit || 'un',
-        costPrice: numCost,
-        sellingPrice: numSell,
-      });
+    if (!selectedProductId || !selectedBatchId) {
+      alert('Por favor selecione um produto e um lote.');
+      return;
     }
 
-    // Call multi-batch handler
-    addMultipleStockBatches(itemsToSave);
+    const numLoss = parseFloat(quantityLost);
+    if (!numLoss || numLoss <= 0) {
+      alert('Por favor introduza uma quantidade de perda válida superior a 0.');
+      return;
+    }
 
-    const messageText =
-      itemsToSave.length === 1
-        ? `Lote de stock para "${itemsToSave[0].productName}" adicionado com sucesso!`
-        : `${itemsToSave.length} lotes de stock adicionados com sucesso!`;
+    if (!reason.trim()) {
+      alert('Por favor indique um motivo para a perda (ex.: Fora do prazo, Danificada, etc.).');
+      return;
+    }
 
-    setSubmittedMessage(messageText);
+    addQuebra({
+      productId: selectedProductId,
+      batchId: selectedBatchId,
+      date,
+      quantityLost: numLoss,
+      reason: reason.trim(),
+    });
+
+    setSubmittedMessage(`Registada perda de ${numLoss} ${numLoss === 1 ? 'unidade' : 'unidades'} no lote.`);
 
     setTimeout(() => {
       onComplete();
     }, 1200);
   };
 
-  // Calculate totals across all rows
-  const totals = rows.reduce(
-    (acc, row) => {
-      const q = parseFloat(row.quantity) || 0;
-      const c = parseFloat(row.costPrice) || 0;
-      const s = parseFloat(row.sellingPrice) || 0;
-      const cost = q * c;
-      const revenue = q * s;
-      return {
-        totalCost: acc.totalCost + cost,
-        totalRevenue: acc.totalRevenue + revenue,
-        totalProfit: acc.totalProfit + (revenue - cost),
-      };
-    },
-    { totalCost: 0, totalRevenue: 0, totalProfit: 0 }
-  );
-
   return (
-    <div className="max-w-5xl mx-auto pb-12">
-      <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-xl space-y-4">
-        {/* Title Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
-              <PackagePlus className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-bold text-base text-gray-900">Entrada Rápida de Stock</h2>
-              <p className="text-[11px] text-gray-500">
-                Registe vários produtos numa única sessão. Os lotes anteriores serão fechados automaticamente.
-              </p>
-            </div>
+    <div className="max-w-2xl mx-auto pb-12">
+      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xl">
+        {/* Title */}
+        <div className="flex items-center space-x-3 pb-5 border-b border-gray-200">
+          <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-600">
+            <AlertTriangle className="w-6 h-6" />
+          </div>
+          <div>
+            <h2 className="font-bold text-lg text-gray-900">Registar Perda de Stock (Quebra)</h2>
+            <p className="text-xs text-gray-500">
+              Registe produtos estragados, partidos ou fora de validade associados a um lote de stock.
+            </p>
           </div>
         </div>
 
         {submittedMessage ? (
-          <div className="py-10 text-center space-y-3">
-            <div className="w-14 h-14 rounded-full bg-orange-500/20 text-orange-600 flex items-center justify-center mx-auto animate-bounce">
+          <div className="py-8 text-center space-y-3">
+            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-600 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">Stock Guardado com Sucesso!</h3>
-            <p className="text-sm text-orange-700 max-w-md mx-auto">{submittedMessage}</p>
+            <h3 className="text-lg font-bold text-gray-900">Quebra Registada!</h3>
+            <p className="text-sm text-rose-700 max-w-md mx-auto">{submittedMessage}</p>
+          </div>
+        ) : products.length === 0 ? (
+          <div className="py-8 text-center text-gray-500 text-sm">
+            Nenhum produto cadastrado. Adicione primeiro um lote de stock antes de registar quebras.
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
-            {/* COMPACT TABLE */}
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
-              {/* Table Header (Desktop) */}
-              <div className="hidden md:grid grid-cols-12 gap-1.5 items-center px-3 py-2 bg-white border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                <div className="col-span-1 text-center">Lote</div>
-                <div className="col-span-3">Produto</div>
-                <div className="col-span-2">Data Entrada</div>
-                <div className="col-span-1 text-right">Qtd</div>
-                <div className="col-span-1 text-center">Unid</div>
-                <div className="col-span-1.5 text-right">Compra</div>
-                <div className="col-span-1.5 text-right">Venda</div>
-                {!isStaff ? (
-                  <div className="col-span-1 text-right">Lucro Est.</div>
-                ) : (
-                  <div className="col-span-1 text-right">Ação</div>
-                )}
+          <form onSubmit={handleSubmit} className="space-y-5 my-5">
+            {/* Product Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                Selecionar Produto
+              </label>
+              <select
+                value={selectedProductId}
+                onChange={e => setSelectedProductId(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500"
+              >
+                {products.map(p => (
+                  <option key={p.id} value={p.id}>
+                    {p.name}
+                  </option>
+                ))}
+              </select>
+            </div>
+
+            {/* Batch Selector */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                Selecionar Lote
+              </label>
+              {availableBatches.length === 0 ? (
+                <div className="text-xs text-rose-600 bg-rose-50 border border-rose-300 p-3 rounded-xl">
+                  Nenhum lote de stock registado para este produto.
+                </div>
+              ) : (
+                <select
+                  value={selectedBatchId}
+                  onChange={e => setSelectedBatchId(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500 font-mono"
+                >
+                  {availableBatches.map(b => {
+                    const statusText = b.status === 'open' ? '🟢 Lote Aberto Ativo' : '🔒 Lote Fechado';
+                    return (
+                      <option key={b.id} value={b.id}>
+                        {formatDate(b.dateEntered)} — Qtd: {b.quantity} {b.unit || 'un'} @ {formatCurrency(b.costPrice, currencySymbol)} ({statusText})
+                      </option>
+                    );
+                  })}
+                </select>
+              )}
+            </div>
+
+            {/* Date & Quantity Lost */}
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Data da Perda
+                </label>
+                <input
+                  type="date"
+                  required
+                  value={date}
+                  onChange={e => setDate(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500"
+                />
               </div>
 
-              {/* Table Body / Dense Rows - Flush with no horizontal dividers */}
-              <div className="space-y-0">
-                {rows.map((row, index) => {
-                  const numQty = parseFloat(row.quantity) || 0;
-                  const numCost = parseFloat(row.costPrice) || 0;
-                  const numSell = parseFloat(row.sellingPrice) || 0;
-                  const rowCost = numQty * numCost;
-                  const rowRevenue = numQty * numSell;
-                  const rowProfit = rowRevenue - rowCost;
-
-                  // Filter existing products for autocomplete
-                  const searchLower = row.productName.trim().toLowerCase();
-                  const filteredProducts = products.filter(p =>
-                    p.name.toLowerCase().includes(searchLower)
-                  );
-                  const exactMatchExists = products.some(
-                    p => p.name.toLowerCase() === searchLower
-                  );
-
-                  return (
-                    <div
-                      key={row.id}
-                      className={`p-1.5 sm:p-2 transition group ${
-                        index % 2 === 1 ? 'bg-white/40' : 'bg-transparent'
-                      } hover:bg-gray-100/60`}
-                    >
-                      {/* Desktop Grid Layout */}
-                      <div className="hidden md:grid grid-cols-12 gap-2 items-center text-xs">
-                        {/* Lote # */}
-                        <div className="col-span-1 text-center">
-                          <span className="text-[10px] font-mono font-bold text-orange-600 bg-orange-50 border border-orange-500/30 px-1.5 py-0.5 rounded-md">
-                            #{index + 1}
-                          </span>
-                        </div>
-
-                        {/* Produto Autocomplete */}
-                        <div className="col-span-3 relative">
-                          <div className="relative">
-                            <input
-                              type="text"
-                              required
-                              placeholder="Pesquisar/criar produto..."
-                              value={row.productName}
-                              onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
-                              onChange={e =>
-                                updateRow(row.id, {
-                                  productName: e.target.value,
-                                  isDropdownOpen: true,
-                                })
-                              }
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs placeholder-gray-400 focus:outline-none focus:border-orange-500 font-medium pr-7"
-                            />
-                            <Search className="w-3 h-3 text-gray-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
-                          </div>
-
-                          {/* Autocomplete Dropdown Popup */}
-                          {row.isDropdownOpen && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => updateRow(row.id, { isDropdownOpen: false })}
-                              />
-                              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-48 overflow-y-auto z-30 divide-y divide-gray-200">
-                                {filteredProducts.map(p => (
-                                  <button
-                                    key={p.id}
-                                    type="button"
-                                    onClick={() => handleSelectProductForTool(row.id, p.name)}
-                                    className="w-full text-left px-3 py-2 hover:bg-gray-50 transition flex items-center justify-between text-xs text-gray-800"
-                                  >
-                                    <span className="font-semibold">{p.name}</span>
-                                    <span className="text-[10px] text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                      Existente
-                                    </span>
-                                  </button>
-                                ))}
-
-                                {row.productName.trim() && !exactMatchExists && (
-                                  <button
-                                    type="button"
-                                    onClick={() =>
-                                      updateRow(row.id, {
-                                        productName: row.productName.trim(),
-                                        isDropdownOpen: false,
-                                      })
-                                    }
-                                    className="w-full text-left px-3 py-2 hover:bg-orange-50 transition flex items-center space-x-2 text-xs text-orange-600 font-semibold"
-                                  >
-                                    <Sparkles className="w-3.5 h-3.5" />
-                                    <span>+ Criar novo produto "{row.productName.trim()}"</span>
-                                  </button>
-                                )}
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Data Entrada */}
-                        <div className="col-span-2">
-                          <input
-                            type="date"
-                            required
-                            value={row.dateEntered}
-                            onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs focus:outline-none focus:border-orange-500 font-mono"
-                          />
-                        </div>
-
-                        {/* Quantidade */}
-                        <div className="col-span-1">
-                          <input
-                            type="number"
-                            min="1"
-                            required
-                            value={row.quantity}
-                            onChange={e => updateRow(row.id, { quantity: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-orange-500 font-mono"
-                          />
-                        </div>
-
-                        {/* Unidade + Popover */}
-                        <div className="col-span-1 relative">
-                          <div className="flex items-center gap-1">
-                            <input
-                              type="text"
-                              required
-                              placeholder="un"
-                              value={row.unit}
-                              onChange={e => updateRow(row.id, { unit: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-1.5 py-1.5 text-gray-800 text-xs text-center focus:outline-none focus:border-orange-500 font-mono"
-                            />
-                            <button
-                              type="button"
-                              onClick={() =>
-                                updateRow(row.id, { isUnitPopoverOpen: !row.isUnitPopoverOpen })
-                              }
-                              title="Sugestões de unidades"
-                              className="p-1 text-gray-500 hover:text-orange-600 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition shrink-0"
-                            >
-                              <Tag className="w-3 h-3" />
-                            </button>
-                          </div>
-
-                          {/* Unit Popover */}
-                          {row.isUnitPopoverOpen && (
-                            <>
-                              <div
-                                className="fixed inset-0 z-10"
-                                onClick={() => updateRow(row.id, { isUnitPopoverOpen: false })}
-                              />
-                              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-xl p-2 z-30 w-36 space-y-1">
-                                <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">
-                                  Unidades:
-                                </div>
-                                <div className="flex flex-wrap gap-1">
-                                  {suggestedUnits.map(u => (
-                                    <button
-                                      key={u}
-                                      type="button"
-                                      onClick={() =>
-                                        updateRow(row.id, {
-                                          unit: u,
-                                          isUnitPopoverOpen: false,
-                                        })
-                                      }
-                                      className={`text-[10px] px-2 py-1 rounded border font-mono transition ${
-                                        row.unit.toLowerCase() === u.toLowerCase()
-                                          ? 'bg-orange-50 border-orange-500 text-orange-700 font-bold'
-                                          : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
-                                      }`}
-                                    >
-                                      {u}
-                                    </button>
-                                  ))}
-                                </div>
-                              </div>
-                            </>
-                          )}
-                        </div>
-
-                        {/* Preço Compra */}
-                        <div className="col-span-1.5">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            required
-                            value={row.costPrice}
-                            onChange={e => updateRow(row.id, { costPrice: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-orange-500 font-mono"
-                          />
-                        </div>
-
-                        {/* Preço Venda */}
-                        <div className="col-span-1.5">
-                          <input
-                            type="number"
-                            step="0.01"
-                            min="0"
-                            required
-                            value={row.sellingPrice}
-                            onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-orange-500 font-mono"
-                          />
-                        </div>
-
-                        {/* Lucro Estimado & Delete Button */}
-                        <div className="col-span-1 flex items-center justify-end space-x-1.5">
-                          {!isStaff && (
-                            <span
-                              className={`font-mono font-bold text-xs ${
-                                rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                              }`}
-                              title={`Lucro Total: ${formatCurrency(rowProfit, currencySymbol)}`}
-                            >
-                              {formatCurrency(rowProfit, currencySymbol)}
-                            </span>
-                          )}
-
-                          {rows.length > 1 && (
-                            <button
-                              type="button"
-                              onClick={() => handleRemoveRow(row.id)}
-                              className="p-1 text-gray-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-md transition"
-                              title="Remover este lote"
-                            >
-                              <Trash2 className="w-3.5 h-3.5" />
-                            </button>
-                          )}
-                        </div>
-                      </div>
-
-                      {/* Mobile Compact Card/Row Layout (below md breakpoint) */}
-                      <div className="md:hidden space-y-2 text-xs">
-                        <div className="flex items-center justify-between border-b border-gray-200/60 pb-1.5">
-                          <span className="text-[10px] font-mono font-bold text-orange-600 bg-orange-50 border border-orange-500/30 px-1.5 py-0.5 rounded-md">
-                            Lote #{index + 1}
-                          </span>
-                          <div className="flex items-center space-x-2">
-                            <span
-                              className={`font-mono font-bold text-xs ${
-                                rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                              }`}
-                            >
-                              Lucro Est: {formatCurrency(rowProfit, currencySymbol)}
-                            </span>
-                            {rows.length > 1 && (
-                              <button
-                                type="button"
-                                onClick={() => handleRemoveRow(row.id)}
-                                className="p-1 text-gray-500 hover:text-rose-600 rounded-md"
-                              >
-                                <Trash2 className="w-3.5 h-3.5" />
-                              </button>
-                            )}
-                          </div>
-                        </div>
-
-                        <div className="grid grid-cols-2 gap-2">
-                          <div className="col-span-2 relative">
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Produto
-                            </label>
-                            <input
-                              type="text"
-                              required
-                              placeholder="Pesquisar/criar produto..."
-                              value={row.productName}
-                              onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
-                              onChange={e =>
-                                updateRow(row.id, {
-                                  productName: e.target.value,
-                                  isDropdownOpen: true,
-                                })
-                              }
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs"
-                            />
-                            {row.isDropdownOpen && (
-                              <>
-                                <div
-                                  className="fixed inset-0 z-10"
-                                  onClick={() => updateRow(row.id, { isDropdownOpen: false })}
-                                />
-                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-200">
-                                  {filteredProducts.map(p => (
-                                    <button
-                                      key={p.id}
-                                      type="button"
-                                      onClick={() => handleSelectProductForTool(row.id, p.name)}
-                                      className="w-full text-left px-3 py-1.5 text-xs text-gray-800"
-                                    >
-                                      {p.name}
-                                    </button>
-                                  ))}
-                                  {row.productName.trim() && !exactMatchExists && (
-                                    <button
-                                      type="button"
-                                      onClick={() =>
-                                        updateRow(row.id, {
-                                          productName: row.productName.trim(),
-                                          isDropdownOpen: false,
-                                        })
-                                      }
-                                      className="w-full text-left px-3 py-1.5 text-xs text-orange-600 font-semibold"
-                                    >
-                                      + Criar "{row.productName.trim()}"
-                                    </button>
-                                  )}
-                                </div>
-                              </>
-                            )}
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Data Entrada
-                            </label>
-                            <input
-                              type="date"
-                              required
-                              value={row.dateEntered}
-                              onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
-                            />
-                          </div>
-
-                          <div className="flex gap-1">
-                            <div className="flex-1">
-                              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                                Qtd
-                              </label>
-                              <input
-                                type="number"
-                                min="1"
-                                required
-                                value={row.quantity}
-                                onChange={e => updateRow(row.id, { quantity: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
-                              />
-                            </div>
-                            <div className="w-16">
-                              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                                Unid
-                              </label>
-                              <input
-                                type="text"
-                                required
-                                value={row.unit}
-                                onChange={e => updateRow(row.id, { unit: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-lg px-1 py-1 text-gray-800 text-xs text-center font-mono"
-                              />
-                            </div>
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Custo ({currencySymbol})
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              required
-                              value={row.costPrice}
-                              onChange={e => updateRow(row.id, { costPrice: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
-                            />
-                          </div>
-
-                          <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Venda ({currencySymbol})
-                            </label>
-                            <input
-                              type="number"
-                              step="0.01"
-                              min="0"
-                              required
-                              value={row.sellingPrice}
-                              onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
-                            />
-                          </div>
-                        </div>
-                      </div>
-                    </div>
-                  );
-                })}
+              <div>
+                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                  Quantidade Perdida (Unidades)
+                </label>
+                <input
+                  type="number"
+                  min="1"
+                  required
+                  value={quantityLost}
+                  onChange={e => setQuantityLost(e.target.value)}
+                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500 font-mono"
+                />
               </div>
             </div>
 
-            {/* Action to Add Another Product Row */}
-            <button
-              type="button"
-              onClick={handleAddRow}
-              className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-orange-500/60 hover:bg-orange-50 text-gray-700 hover:text-orange-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
-            >
-              <Plus className="w-4 h-4 text-orange-600 group-hover:scale-110 transition-transform" />
-              <span>+ Adicionar outro produto</span>
-            </button>
-
-            {/* Combined Total Summary Bar */}
-            {!isStaff && (
-              <div className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-orange-600 shrink-0" />
-                  <span className="font-bold text-gray-800 font-sans">
-                    Resumo ({rows.length} {rows.length === 1 ? 'lote' : 'lotes'})
-                  </span>
-                </div>
-
-                <div className="flex items-center space-x-4 sm:space-x-6 text-[11px]">
-                  <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Custo Total:</span>
-                    <span className="font-bold text-gray-800">
-                      {formatCurrency(totals.totalCost, currencySymbol)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Receita:</span>
-                    <span className="font-bold text-gray-800">
-                      {formatCurrency(totals.totalRevenue, currencySymbol)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Lucro Projetado:</span>
-                    <span
-                      className={`font-bold ${
-                        totals.totalProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      }`}
-                    >
-                      {formatCurrency(totals.totalProfit, currencySymbol)}
-                    </span>
-                  </div>
+            {/* Warning Banner if Loss > Remaining Quantity */}
+            {isWarning && (
+              <div className="bg-rose-50 border border-rose-500/50 rounded-xl p-3.5 flex items-start space-x-3 text-xs text-rose-300 animate-pulse">
+                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+                <div>
+                  <span className="font-bold text-rose-700 block mb-0.5">⚠️ AVISO: Perda Excessiva</span>
+                  <p>
+                    A quantidade de perda de <strong>{quantityLost} unidades</strong> excede o stock restante deste lote (<strong>{batchCalc?.remainingQuantity} unidades</strong>). Pode registar esta entrada, mas um aviso será assinalado nos relatórios.
+                  </p>
                 </div>
               </div>
             )}
 
-            {/* Batch Auto-closing Notice */}
-            <div className="bg-orange-50 border border-orange-500/20 rounded-xl p-2.5 flex items-start space-x-2 text-[11px] text-gray-700">
-              <Info className="w-3.5 h-3.5 text-orange-600 shrink-0 mt-0.5" />
-              <p>
-                Ao guardar, o lote ativo anterior de cada produto selecionado será automaticamente fechado.
-              </p>
+            {/* Remaining Stock Preview */}
+            {targetBatch && batchCalc && (
+              <div className="bg-white rounded-xl p-3.5 border border-gray-200 flex items-center justify-between text-xs">
+                <div>
+                  <span className="text-gray-500 block text-[10px]">Stock Atual do Lote</span>
+                  <span className="font-bold text-gray-800">{batchCalc.remainingQuantity} unidades</span>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-400" />
+                <div>
+                  <span className="text-gray-500 block text-[10px]">Stock Após Perda</span>
+                  <span className={`font-bold ${remainingAfterLoss < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                    {remainingAfterLoss} unidades
+                  </span>
+                </div>
+                <div>
+                  <span className="text-gray-500 block text-[10px]">Valor do Custo Perdido</span>
+                  <span className="font-bold text-rose-600">
+                    {formatCurrency((parseFloat(quantityLost) || 0) * targetBatch.costPrice, currencySymbol)}
+                  </span>
+                </div>
+              </div>
+            )}
+
+            {/* Reason Free Text & Suggestion Chips */}
+            <div>
+              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                Motivo da Perda
+              </label>
+              <input
+                type="text"
+                required
+                placeholder="ex.: Fora do prazo, embalagem danificada, caiu no transporte..."
+                value={reason}
+                onChange={e => setReason(e.target.value)}
+                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-rose-500 mb-2"
+              />
+
+              {/* Suggestions */}
+              <div className="flex flex-wrap gap-2 mt-2">
+                <span className="text-[11px] text-gray-500 self-center mr-1">Sugestões Rápidas:</span>
+                {COMMON_REASONS.map(chip => (
+                  <button
+                    key={chip}
+                    type="button"
+                    onClick={() => setReason(chip)}
+                    className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-medium transition border border-gray-300/60 active:scale-95"
+                  >
+                    {chip}
+                  </button>
+                ))}
+              </div>
             </div>
 
             {/* Submit Button */}
-            <button
-              type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-orange-600 hover:bg-orange-500 text-white font-bold text-sm transition shadow-lg shadow-orange-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
-            >
-              <span>
-                Guardar {rows.length > 1 ? `${rows.length} Lotes` : 'Lote'} e Ativar Stock
-              </span>
-              <ArrowRight className="w-4 h-4" />
-            </button>
+            <div className="flex items-center space-x-3 pt-2">
+              <button
+                type="submit"
+                disabled={!selectedBatchId}
+                className="flex-1 min-h-[56px] py-3.5 px-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base transition shadow-lg shadow-rose-50 flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-[0.98]"
+              >
+                <span>Registar Entrada de Quebra</span>
+                <ArrowRight className="w-5 h-5" />
+              </button>
+            </div>
           </form>
         )}
       </div>
