@@ -13,13 +13,12 @@ import { InitialStockCountView } from './components/InitialStockCountView';
 import { PeriodicStockCountView } from './components/PeriodicStockCountView';
 import { ClosingView } from './components/ClosingView';
 import { ProductDetailModal } from './components/ProductDetailModal';
-import { BusinessProfileSetupModal } from './components/BusinessProfileSetupModal';
 import { AuthView } from './components/AuthView';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import { Product } from './types';
 
 function MainApp() {
-  const { currentUser, isAuthLoading, isStaff, business, isBusinessProfileComplete, updateBusinessProfile } = useApp();
+  const { currentUser, isAuthLoading, isStaff } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   
   // Pre-fill parameters when navigating from dashboard cards
@@ -29,21 +28,12 @@ function MainApp() {
   // Detail Modal state
   const [selectedDetailProduct, setSelectedDetailProduct] = useState<Product | null>(null);
 
-  // First time business profile setup (name, category, contact, location, email)
-  const [showFirstTimeProfileSetup, setShowFirstTimeProfileSetup] = useState(false);
-
   // Restrict staff users to allowed tabs
   useEffect(() => {
     if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
-
-  useEffect(() => {
-    if (!isBusinessProfileComplete && currentUser && !isStaff) {
-      setShowFirstTimeProfileSetup(true);
-    }
-  }, [isBusinessProfileComplete, currentUser, isStaff]);
 
   useEffect(() => {
     const handleCustomNav = (e: Event) => {
@@ -158,22 +148,6 @@ function MainApp() {
           onClose={() => setSelectedDetailProduct(null)}
           onNavigateToAddStock={handleNavigateToAddStock}
           onNavigateToAddQuebra={handleNavigateToAddQuebra}
-        />
-      )}
-
-      {/* First Time Setup: Business Profile (name, category, contact, location, email) */}
-      {!isStaff && showFirstTimeProfileSetup && !isBusinessProfileComplete && (
-        <BusinessProfileSetupModal
-          currentName={business?.name || ''}
-          currentCategory={business?.category || ''}
-          currentContact={business?.contact || ''}
-          currentLocation={business?.location || ''}
-          currentEmail={business?.email || ''}
-          isFirstTimeSetup={true}
-          onSave={async profile => {
-            await updateBusinessProfile(profile);
-            setShowFirstTimeProfileSetup(false);
-          }}
         />
       )}
     </div>

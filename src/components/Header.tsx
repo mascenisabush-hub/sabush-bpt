@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User } from 'lucide-react';
@@ -18,7 +18,21 @@ export const Header: React.FC = () => {
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  const [settingsAutoOpenProfileEdit, setSettingsAutoOpenProfileEdit] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+
+  // Allows other views (e.g. the "complete your profile" dashboard nudge) to
+  // open Settings directly, without needing this state lifted into App.tsx.
+  // detail.openProfileEdit jumps straight into the profile edit form.
+  useEffect(() => {
+    const handleOpenSettings = (e: Event) => {
+      const detail = (e as CustomEvent<{ openProfileEdit?: boolean }>).detail;
+      setSettingsAutoOpenProfileEdit(!!detail?.openProfileEdit);
+      setShowSettingsModal(true);
+    };
+    window.addEventListener('open-settings', handleOpenSettings);
+    return () => window.removeEventListener('open-settings', handleOpenSettings);
+  }, []);
 
   return (
     <>
@@ -112,7 +126,10 @@ export const Header: React.FC = () => {
 
       {/* Settings Modal */}
       {showSettingsModal && (
-        <SettingsModal onClose={() => setShowSettingsModal(false)} />
+        <SettingsModal
+          onClose={() => setShowSettingsModal(false)}
+          autoOpenProfileEdit={settingsAutoOpenProfileEdit}
+        />
       )}
 
       {/* Currency Modal */}

@@ -21,6 +21,7 @@ import {
   Tag,
   Receipt,
   HandCoins,
+  Store,
 } from 'lucide-react';
 import { Product } from '../types';
 
@@ -106,8 +107,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     totalInvestmentValueAllTime, totalMarketValueAllTime, totalEmbeddedProfitAllTime,
     activeBatchCount, totalExpensesAllTime, totalWithdrawalsAllTime,
     businessWorth, capitalGrowth, capitalGrowthPct,
+    isBusinessProfileComplete, isOwner,
   } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
+  const [profileNudgeDismissed, setProfileNudgeDismissed] = useState(false);
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [showWorthModal, setShowWorthModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -165,6 +168,44 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   return (
     <div className="space-y-2.5 pb-6">
+      {/* Business profile completion nudge — replaces the old blocking
+          first-login modal. Lets the owner explore the app first and
+          complete the profile whenever they choose, from Settings. */}
+      {isOwner && !isBusinessProfileComplete && !profileNudgeDismissed && (
+        <div className="flex items-center justify-between gap-3 bg-orange-50 border border-orange-200 rounded-2xl px-4 py-3">
+          <div className="flex items-center gap-3 min-w-0">
+            <div className="w-9 h-9 rounded-xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center text-orange-600 shrink-0">
+              <Store className="w-4 h-4" />
+            </div>
+            <div className="min-w-0">
+              <p className="text-xs font-bold text-gray-800">Complete o perfil do seu negócio</p>
+              <p className="text-[11px] text-gray-500 truncate">Nome, contacto e localização aparecem nos seus relatórios e recibos.</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
+                )
+              }
+              className="px-3 py-1.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition whitespace-nowrap"
+            >
+              Completar Agora
+            </button>
+            <button
+              type="button"
+              onClick={() => setProfileNudgeDismissed(true)}
+              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white transition"
+              title="Dispensar"
+            >
+              <X className="w-4 h-4" />
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* KPI DASHBOARD CARDS — the health of the business at a glance.
           Every value here reuses the existing calculation engine
           (calculateBatch / calculateInventoryTotals / AppContext);

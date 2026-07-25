@@ -7,9 +7,10 @@ import { BusinessProfileSetupModal } from './BusinessProfileSetupModal';
 
 interface SettingsModalProps {
   onClose: () => void;
+  autoOpenProfileEdit?: boolean;
 }
 
-export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
+export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenProfileEdit = false }) => {
   const {
     business,
     isOwner,
@@ -27,7 +28,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose }) => {
   } = useApp();
 
   const [activeSection, setActiveSection] = useState<'general' | 'staff'>('general');
-  const [showProfileEdit, setShowProfileEdit] = useState(false);
+  const [showProfileEdit, setShowProfileEdit] = useState(autoOpenProfileEdit);
 
   // Staff creation states
   const [staffName, setStaffName] = useState('');
