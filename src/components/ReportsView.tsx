@@ -13,7 +13,7 @@ import {
 } from 'lucide-react';
 
 export const ReportsView: React.FC = () => {
-  const { products, batches, quebras, expenses, currencySymbol, deleteExpense } = useApp();
+  const { products, batches, quebras, expenses, withdrawals, currencySymbol, deleteExpense } = useApp();
 
   // Date range presets helper
   const todayStr = getTodayDateString();
@@ -68,7 +68,8 @@ export const ReportsView: React.FC = () => {
     products,
     batches,
     quebras,
-    expenses
+    expenses,
+    withdrawals
   );
 
   return (
@@ -166,37 +167,37 @@ export const ReportsView: React.FC = () => {
 
       {/* Phone-Scannable Summary Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-        {/* Net Income Hero */}
+        {/* Embedded Profit Hero */}
         <div className={`border rounded-3xl p-5 shadow-md flex flex-col justify-between ${
-          report.netIncome >= 0
+          report.totalEmbeddedProfit >= 0
             ? 'bg-gradient-to-br from-emerald-50 to-white border-emerald-300 text-emerald-800'
             : 'bg-gradient-to-br from-rose-50 to-white border-rose-300 text-rose-800'
         }`}>
           <div>
             <span className="text-xs font-bold uppercase tracking-wider block opacity-90">
-              Rendimento Líquido do Período
+              Lucro Embutido do Período
             </span>
             <div className="text-3xl font-black mt-1">
-              {formatCurrency(report.netIncome, currencySymbol)}
+              {formatCurrency(report.totalEmbeddedProfit, currencySymbol)}
             </div>
           </div>
           <span className="text-[11px] opacity-80 block mt-2">
-            Lucro de Produtos − Despesas Gerais
+            Potencial, não realizado — nenhuma venda é registada nesta app
           </span>
         </div>
 
-        {/* Total Product Profit */}
+        {/* Total Withdrawals */}
         <div className="bg-white border border-gray-200 rounded-3xl p-5 shadow-sm flex flex-col justify-between">
           <div>
             <span className="text-xs font-semibold text-gray-500 uppercase tracking-wider block">
-              Lucro Total de Produtos
+              Levantamentos do Dono
             </span>
-            <div className="text-2xl font-bold text-emerald-600 mt-1">
-              {formatCurrency(report.totalProductProfit, currencySymbol)}
+            <div className="text-2xl font-bold text-slate-600 mt-1">
+              {formatCurrency(report.totalWithdrawals, currencySymbol)}
             </div>
           </div>
           <span className="text-[11px] text-gray-500 block mt-2">
-            Soma dos lucros inferidos por produto
+            Não afeta o Lucro Embutido
           </span>
         </div>
 
@@ -244,37 +245,37 @@ export const ReportsView: React.FC = () => {
                     <div>
                       <h4 className="font-bold text-base text-gray-900">{detail.product.name}</h4>
                       <span className="text-xs text-gray-500 block">
-                        Stock Entrado: {detail.quantityEntered} | Vendido (Inferido): {detail.assumedUnitsSold}
+                        Stock Entrado: {detail.quantityEntered}
                       </span>
                     </div>
 
                     <div className="text-right shrink-0">
                       <span className="text-[10px] text-gray-500 uppercase font-semibold block">
-                        Lucro Líquido do Produto
+                        Lucro Embutido do Produto
                       </span>
                       <span
                         className={`text-lg font-black ${
-                          detail.productProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          detail.productEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                         }`}
                       >
-                        {formatCurrency(detail.productProfit, currencySymbol)}
+                        {formatCurrency(detail.productEmbeddedProfit, currencySymbol)}
                       </span>
                     </div>
                   </div>
 
                   {/* Mobile Metrics Grid */}
-                  <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs">
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 text-xs">
                     <div className="bg-white p-2.5 rounded-xl border border-gray-200">
-                      <span className="text-gray-500 block text-[10px]">Custo do Lote</span>
+                      <span className="text-gray-500 block text-[10px]">Valor de Investimento</span>
                       <span className="font-semibold text-gray-800">
-                        {formatCurrency(detail.totalCost, currencySymbol)}
+                        {formatCurrency(detail.totalInvestmentValue, currencySymbol)}
                       </span>
                     </div>
 
                     <div className="bg-white p-2.5 rounded-xl border border-gray-200">
-                      <span className="text-gray-500 block text-[10px]">Receita</span>
+                      <span className="text-gray-500 block text-[10px]">Valor de Mercado</span>
                       <span className="font-semibold text-gray-800">
-                        {formatCurrency(detail.totalRevenue, currencySymbol)}
+                        {formatCurrency(detail.totalMarketValue, currencySymbol)}
                       </span>
                     </div>
 
@@ -282,13 +283,6 @@ export const ReportsView: React.FC = () => {
                       <span className="text-gray-500 block text-[10px]">Perdas (Quebras)</span>
                       <span className={`font-semibold ${detail.totalQuebraQuantity > 0 ? 'text-rose-600' : 'text-gray-500'}`}>
                         {detail.totalQuebraQuantity} un ({formatCurrency(detail.totalQuebraValue, currencySymbol)})
-                      </span>
-                    </div>
-
-                    <div className="bg-white p-2.5 rounded-xl border border-gray-200">
-                      <span className="text-gray-500 block text-[10px]">Unidades Vendidas</span>
-                      <span className="font-bold text-emerald-700">
-                        {detail.assumedUnitsSold} un
                       </span>
                     </div>
                   </div>

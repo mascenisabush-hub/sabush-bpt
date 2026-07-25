@@ -140,14 +140,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
                         <div className="text-right">
                           <span className="text-[10px] text-gray-500 block uppercase font-semibold">
-                            {batch.status === 'open' ? 'Est. Lucro em Curso' : 'Lucro Finalizado'}
+                            {batch.status === 'open' ? 'Lucro Embutido (Est.)' : 'Lucro Embutido (Final)'}
                           </span>
                           <span
                             className={`text-sm font-bold ${
-                              calc.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                              calc.embeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                             }`}
                           >
-                            {formatCurrency(calc.profit, currencySymbol)}
+                            {formatCurrency(calc.embeddedProfit, currencySymbol)}
                           </span>
                         </div>
                       </div>
@@ -161,18 +161,10 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       )}
 
                       {/* Batch Numbers Grid */}
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-2 text-xs my-3">
+                      <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-xs my-3">
                         <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                          <span className="text-gray-500 block text-[10px]">Qtd Inicial</span>
-                          <span className="font-bold text-gray-800">{batch.quantity} {batch.unit || 'un'}</span>
-                        </div>
-                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                          <span className="text-gray-500 block text-[10px]">Custo Unitar.</span>
-                          <span className="font-semibold text-gray-800">{formatCurrency(batch.costPrice, currencySymbol)}</span>
-                        </div>
-                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                          <span className="text-gray-500 block text-[10px]">Venda Unitar.</span>
-                          <span className="font-semibold text-gray-800">{formatCurrency(batch.sellingPrice, currencySymbol)}</span>
+                          <span className="text-gray-500 block text-[10px]">Qtd Inicial → Restante</span>
+                          <span className="font-bold text-gray-800">{batch.quantity} → {calc.remainingQuantity} {batch.unit || 'un'}</span>
                         </div>
                         <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
                           <span className="text-gray-500 block text-[10px]">Quebras</span>
@@ -181,8 +173,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                           </span>
                         </div>
                         <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
-                          <span className="text-gray-500 block text-[10px]">Vendidas (Inferido)</span>
-                          <span className="font-bold text-emerald-700">{calc.assumedUnitsSold} {batch.unit || 'un'}</span>
+                          <span className="text-gray-500 block text-[10px]">Valor de Investimento</span>
+                          <span className="font-semibold text-gray-800">{formatCurrency(calc.investmentValue, currencySymbol)}</span>
+                          <span className="text-[9px] text-gray-400 block">{formatCurrency(batch.costPrice, currencySymbol)}/{batch.unit || 'un'}</span>
+                        </div>
+                        <div className="bg-gray-50 p-2 rounded-lg border border-gray-200">
+                          <span className="text-gray-500 block text-[10px]">Valor de Mercado</span>
+                          <span className="font-semibold text-gray-800">{formatCurrency(calc.marketValue, currencySymbol)}</span>
+                          <span className="text-[9px] text-gray-400 block">{formatCurrency(batch.sellingPrice, currencySymbol)}/{batch.unit || 'un'}</span>
                         </div>
                       </div>
 

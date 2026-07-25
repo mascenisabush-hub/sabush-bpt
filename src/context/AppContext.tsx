@@ -30,7 +30,7 @@ import {
   ClosingPeriodType,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateBatch, generateReportSummary, isDateInRange } from '../utils/calculations';
+import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
 
 interface AddStockParams {
   productName: string;
@@ -114,13 +114,21 @@ interface AppContextType {
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
   recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
-  // Business Worth = Cash on Hand + Current Inventory Value.
-  // See the computation block in AppProvider for the full rationale.
+  // Ground-truth physical count value (from the latest Stock Count), kept
+  // separate from the batch-derived figures below. See the computation
+  // block in AppProvider for the full rationale.
   latestStockCount: StockCount | null;
   currentInventoryValue: number;
-  totalNetIncomeAllTime: number;
+  // Batch-derived, all-time inventory figures. Nothing here is "sold" or
+  // "realized" — this app never records sales. Business Worth is honestly
+  // built from Inventory Market Value minus what has actually left the
+  // business (expenses, withdrawals) — never from an assumed cash ledger.
+  totalInvestmentValueAllTime: number;
+  totalMarketValueAllTime: number;
+  totalEmbeddedProfitAllTime: number;
+  activeBatchCount: number;
+  totalExpensesAllTime: number;
   totalWithdrawalsAllTime: number;
-  cashOnHand: number;
   businessWorth: number;
   capitalGrowth: number;
   capitalGrowthPct: number;
@@ -170,40 +178,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialCapitalValue = initialStockCount?.totalValue || 0;
 
   // ============================================================
-  // BUSINESS WORTH = CASH ON HAND + CURRENT INVENTORY VALUE
+  // BUSINESS WORTH — no fabricated cash ledger.
   // ============================================================
-  // Current Inventory Value comes from the most recent physical Stock
-  // Count (initial or periodic) — NOT from inferring "units remaining"
-  // from batches/quebras, since this app doesn't track individual sales.
-  // A Stock Count is the owner's ground-truth snapshot of what's
-  // physically on the shelf, at cost, at that moment.
+  // Sabush never records sales, so there is no real "cash on hand" figure
+  // to compute — a previous version of this app faked one by assuming
+  // every remaining unit in every batch had been sold. That assumption
+  // leaked into Business Worth and made it silently wrong. We don't
+  // invent a substitute cash figure here.
+  //
+  // Current Inventory Value (ground truth) comes from the most recent
+  // physical Stock Count — the owner's own snapshot of what's physically
+  // on the shelf, at cost. It's kept as a separate, honest number and
+  // used for stock-recount comparisons, not folded into Business Worth.
   const latestStockCount = stockCounts.length > 0
     ? [...stockCounts].sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime())[0]
     : null;
   const currentInventoryValue = latestStockCount?.totalValue || 0;
 
-  // Cash on Hand is derived, not stored: every unit assumed sold (see
-  // calculateBatch) generates revenue, cost of goods reduces it, and
-  // general expenses reduce it further — that's all-time Net Income.
-  // Owner Withdrawals then remove cash from the business without
-  // touching profit (see Withdrawal type comment). What's left is cash.
-  let totalFinalizedProfitAllTime = 0;
-  let totalRunningEstimatedProfitAllTime = 0;
-  batches.forEach((batch) => {
-    const batchQuebras = quebras.filter((q) => q.batchId === batch.id);
-    const calc = calculateBatch(batch, batchQuebras);
-    if (batch.status === 'closed') {
-      totalFinalizedProfitAllTime += calc.profit;
-    } else {
-      totalRunningEstimatedProfitAllTime += calc.profit;
-    }
-  });
-  const totalExpensesAllTime = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const totalNetIncomeAllTime = totalFinalizedProfitAllTime + totalRunningEstimatedProfitAllTime - totalExpensesAllTime;
-  const totalWithdrawalsAllTime = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
-  const cashOnHand = totalNetIncomeAllTime - totalWithdrawalsAllTime;
+  // Batch-derived figures: Investment Value (what was paid), Market Value
+  // (what it's marked to sell for) and Embedded Profit (the difference) —
+  // all POTENTIAL, none realized. This is the single source of truth used
+  // everywhere else (Dashboard, Reports, Closings).
+  const {
+    totalInvestmentValue: totalInvestmentValueAllTime,
+    totalMarketValue: totalMarketValueAllTime,
+    totalEmbeddedProfit: totalEmbeddedProfitAllTime,
+    activeBatchCount,
+  } = calculateInventoryTotals(batches, quebras);
 
-  const businessWorth = cashOnHand + currentInventoryValue;
+  const totalExpensesAllTime = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalWithdrawalsAllTime = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+
+  // Business Worth = Inventory Market Value − Expenses − Withdrawals.
+  // Both Expenses and Withdrawals are real money that has actually left
+  // the business; Inventory Market Value is what's genuinely on the shelf
+  // valued at asking price. No assumed sale, no fabricated cash figure.
+  const businessWorth = totalMarketValueAllTime - totalExpensesAllTime - totalWithdrawalsAllTime;
   // Growth is measured against the Initial Business Capital baseline —
   // the whole reason that baseline is permanent and never editable.
   const capitalGrowth = businessWorth - initialCapitalValue;
@@ -726,9 +736,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error('Este período já foi fechado anteriormente.');
     }
 
-    const report = generateReportSummary(startDate, endDate, products, batches, quebras, expenses);
-    const withdrawalsInRange = withdrawals.filter((w) => isDateInRange(w.date, startDate, endDate));
-    const totalWithdrawalsInRange = withdrawalsInRange.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+    const report = generateReportSummary(startDate, endDate, products, batches, quebras, expenses, withdrawals);
 
     const newClosing: Closing = {
       id: 'closing-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -736,12 +744,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       periodLabel: periodLabel.trim(),
       startDate,
       endDate,
-      netIncome: report.netIncome,
-      totalProductProfit: report.totalProductProfit,
+      totalEmbeddedProfit: report.totalEmbeddedProfit,
       totalExpenses: report.totalExpenses,
-      totalWithdrawals: totalWithdrawalsInRange,
-      cashOnHandAtClose: cashOnHand,
-      inventoryValueAtClose: currentInventoryValue,
+      totalWithdrawals: report.totalWithdrawals,
+      inventoryCostAtClose: totalInvestmentValueAllTime,
+      inventoryMarketValueAtClose: totalMarketValueAllTime,
       businessWorthAtClose: businessWorth,
       closedAt: new Date().toISOString(),
     };
@@ -917,9 +924,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         recordStockCount,
         latestStockCount,
         currentInventoryValue,
-        totalNetIncomeAllTime,
+        totalInvestmentValueAllTime,
+        totalMarketValueAllTime,
+        totalEmbeddedProfitAllTime,
+        activeBatchCount,
+        totalExpensesAllTime,
         totalWithdrawalsAllTime,
-        cashOnHand,
         businessWorth,
         capitalGrowth,
         capitalGrowthPct,

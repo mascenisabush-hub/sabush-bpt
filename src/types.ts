@@ -127,13 +127,16 @@ export interface Closing {
   periodLabel: string; // e.g. "Julho 2026" or "2026"
   startDate: string; // YYYY-MM-DD
   endDate: string; // YYYY-MM-DD
-  netIncome: number;
-  totalProductProfit: number;
+  // Embedded Profit is NOT realized income — no sales are ever recorded in
+  // this app. It's the profit "built in" to inventory if it eventually
+  // sells at the marked selling price. Never call this "netIncome" or
+  // "revenue" anywhere in the UI.
+  totalEmbeddedProfit: number;
   totalExpenses: number;
   totalWithdrawals: number;
   // Business Worth snapshot at the moment the period was closed.
-  cashOnHandAtClose: number;
-  inventoryValueAtClose: number;
+  inventoryCostAtClose: number;
+  inventoryMarketValueAtClose: number;
   businessWorthAtClose: number;
   closedAt: string; // ISO string
 }
@@ -144,23 +147,37 @@ export interface CurrencyOption {
   label: string;
 }
 
+// ============================================================
+// BATCH CALCULATIONS — no sales are ever recorded in this app.
+// ============================================================
+// A batch's remaining quantity (after quebras) has TWO independent
+// values, always shown side by side, never netted into a single number
+// that implies a sale happened:
+//   - Investment Value = what was actually paid for the remaining stock
+//     (remainingQuantity * costPrice)
+//   - Market Value = what the remaining stock is marked to sell for
+//     (remainingQuantity * sellingPrice)
+//   - Embedded Profit = Market Value - Investment Value. This is
+//     POTENTIAL profit baked into unsold inventory, never realized
+//     income. Quebras reduce Investment Value and Market Value on the
+//     exact same basis (remainingQuantity), so Embedded Profit shrinks
+//     consistently on both sides.
 export interface BatchCalculation {
   batch: StockBatch;
   totalQuebraQuantity: number;
-  quebraValue: number;
+  quebraValue: number; // quebra loss valued at cost
   remainingQuantity: number;
-  assumedUnitsSold: number;
-  cost: number;
-  revenue: number;
-  profit: number;
-  isEstimate: boolean;
+  investmentValue: number;
+  marketValue: number;
+  embeddedProfit: number;
+  isEstimate: boolean; // true while batch is still 'open'
   hasExceededWarning: boolean;
 }
 
 export interface ProductReportDetail {
   product: Product;
   quantityEntered: number;
-  totalCost: number;
+  totalInvestmentValue: number;
   quebras: {
     quebra: Quebra;
     batchCostPrice: number;
@@ -168,19 +185,18 @@ export interface ProductReportDetail {
   }[];
   totalQuebraQuantity: number;
   totalQuebraValue: number;
-  assumedUnitsSold: number;
-  totalRevenue: number;
-  productProfit: number; // includes finalized profit + running estimates depending on option
-  finalizedProfit: number;
-  estimatedProfit: number;
+  totalMarketValue: number;
+  productEmbeddedProfit: number; // Market Value - Investment Value across all batches in range
+  finalizedEmbeddedProfit: number; // from closed batches only
+  estimatedEmbeddedProfit: number; // from still-open batches only
 }
 
 export interface ReportSummary {
   startDate: string;
   endDate: string;
   productDetails: ProductReportDetail[];
-  totalProductProfit: number;
+  totalEmbeddedProfit: number;
   totalExpenses: number;
-  netIncome: number;
+  totalWithdrawals: number;
   expensesList: Expense[];
 }

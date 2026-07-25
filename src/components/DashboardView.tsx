@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { calculateBatch } from '../utils/calculations';
+import { calculateBatch, calculateInventoryTotals } from '../utils/calculations';
 import { formatCurrency } from '../utils/formatters';
 import { 
   Package, 
@@ -16,7 +16,6 @@ import {
   Gem,
   TrendingUp,
   TrendingDown,
-  Banknote,
   Boxes,
 } from 'lucide-react';
 import { Product } from '../types';
@@ -35,10 +34,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectProductDetail,
 }) => {
   const {
-    products, batches, quebras, expenses, withdrawals, currencySymbol,
+    products, batches, quebras, currencySymbol,
     hasInitialStockCount, initialCapitalValue,
-    currentInventoryValue, cashOnHand, businessWorth, capitalGrowth, capitalGrowthPct,
-    latestStockCount,
+    currentInventoryValue, latestStockCount,
+    totalInvestmentValueAllTime, totalMarketValueAllTime, totalEmbeddedProfitAllTime,
+    activeBatchCount, totalExpensesAllTime, totalWithdrawalsAllTime,
+    businessWorth, capitalGrowth, capitalGrowthPct,
   } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
@@ -47,23 +48,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [sortBy, setSortBy] = useState<'name' | 'profit' | 'cost'>('name');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
 
-  // Business-wide high-level metrics
-  let totalFinalizedProfit = 0;
-  let totalRunningEstimatedProfit = 0;
+  // Business-wide Embedded Profit split by batch status. None of this is
+  // realized income — it's potential profit still sitting in unsold stock.
+  let finalizedEmbeddedProfit = 0;
+  let estimatedEmbeddedProfit = 0;
 
   batches.forEach(batch => {
     const batchQuebras = quebras.filter(q => q.batchId === batch.id);
     const calc = calculateBatch(batch, batchQuebras);
     if (batch.status === 'closed') {
-      totalFinalizedProfit += calc.profit;
+      finalizedEmbeddedProfit += calc.embeddedProfit;
     } else {
-      totalRunningEstimatedProfit += calc.profit;
+      estimatedEmbeddedProfit += calc.embeddedProfit;
     }
   });
-
-  const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-  const totalWithdrawals = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
-  const totalProjectedNetIncome = (totalFinalizedProfit + totalRunningEstimatedProfit) - totalExpenses;
 
   // Filter products by search
   let filteredProducts = products.filter(p =>
@@ -83,14 +81,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     if (sortBy === 'cost') {
       return (bLatest?.costPrice || 0) - (aLatest?.costPrice || 0);
     }
-    // profit
+    // embedded profit
     const aProfit = aBatches.reduce((acc, batch) => {
       const calc = calculateBatch(batch, quebras.filter(q => q.batchId === batch.id));
-      return acc + calc.profit;
+      return acc + calc.embeddedProfit;
     }, 0);
     const bProfit = bBatches.reduce((acc, batch) => {
       const calc = calculateBatch(batch, quebras.filter(q => q.batchId === batch.id));
-      return acc + calc.profit;
+      return acc + calc.embeddedProfit;
     }, 0);
     return bProfit - aProfit;
   });
@@ -185,6 +183,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <span className="text-[11px] font-semibold text-gray-500 bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 hidden sm:inline-block">
             {products.length} {products.length === 1 ? 'produto' : 'produtos'}
           </span>
+          <span className="text-[11px] font-semibold text-gray-500 bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 hidden sm:inline-flex items-center gap-1">
+            <Boxes className="w-3 h-3 text-amber-600" />
+            {activeBatchCount} {activeBatchCount === 1 ? 'lote ativo' : 'lotes ativos'}
+          </span>
 
           <div className="relative">
             <button
@@ -238,7 +240,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Wallet className="w-5 h-5 text-orange-600" />
-                <h3 className="text-base font-bold text-gray-900">Resumo Financeiro</h3>
+                <h3 className="text-base font-bold text-gray-900">Lucro Embutido</h3>
               </div>
               <button
                 onClick={() => setShowBreakdownModal(false)}
@@ -248,39 +250,43 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
+            <p className="text-[11px] text-gray-500 -mt-1">
+              Lucro Embutido é o lucro potencial marcado no stock — nenhuma venda é registada nesta app, por isso este valor nunca é rendimento realizado.
+            </p>
+
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500">Estimativa Ativa (Lotes Abertos):</span>
+                <span className="text-gray-500">Estimado (Lotes Abertos):</span>
                 <span className="font-bold font-mono text-orange-700">
-                  {formatCurrency(totalRunningEstimatedProfit, currencySymbol)}
+                  {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500">Lucros Finalizados (Lotes Fechados):</span>
+                <span className="text-gray-500">Finalizado (Lotes Fechados):</span>
                 <span className="font-bold font-mono text-orange-700">
-                  {formatCurrency(totalFinalizedProfit, currencySymbol)}
-                </span>
-              </div>
-
-              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500">Despesas Gerais:</span>
-                <span className="font-bold font-mono text-rose-700">
-                  − {formatCurrency(totalExpenses, currencySymbol)}
+                  {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-orange-50 border border-orange-500/30">
-                <span className="text-gray-800 font-bold">Rendimento Líquido Projetado:</span>
-                <span className={`text-base font-extrabold font-mono ${totalProjectedNetIncome >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                  {formatCurrency(totalProjectedNetIncome, currencySymbol)}
+                <span className="text-gray-800 font-bold">Lucro Embutido Total:</span>
+                <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
+                <span className="text-gray-500">Despesas Gerais (até hoje):</span>
+                <span className="font-bold font-mono text-rose-700">
+                  − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">Levantamentos do Dono (não afeta o lucro):</span>
                 <span className="font-bold font-mono text-slate-600">
-                  − {formatCurrency(totalWithdrawals, currencySymbol)}
+                  − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
             </div>
@@ -312,22 +318,38 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
+            <p className="text-[11px] text-gray-500 -mt-1">
+              Valor do Negócio = Valor de Mercado do Stock − Despesas − Levantamentos. Sem venda registada, não existe um valor de "caixa" real — por isso não inventamos um.
+            </p>
+
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="flex items-center gap-1.5 text-gray-500">
-                  <Banknote className="w-3.5 h-3.5 text-emerald-600" /> Caixa (Dinheiro):
+                  <Boxes className="w-3.5 h-3.5 text-amber-600" /> Valor de Mercado do Stock:
                 </span>
                 <span className="font-bold font-mono text-gray-800">
-                  {formatCurrency(cashOnHand, currencySymbol)}
+                  {formatCurrency(totalMarketValueAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="flex items-center gap-1.5 text-gray-500">
-                  <Boxes className="w-3.5 h-3.5 text-amber-600" /> Valor do Stock Atual:
-                </span>
+                <span className="text-gray-500">Custo do Stock (Investimento):</span>
                 <span className="font-bold font-mono text-gray-800">
-                  {formatCurrency(currentInventoryValue, currencySymbol)}
+                  {formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
+                <span className="text-gray-500">Despesas Gerais:</span>
+                <span className="font-bold font-mono text-rose-700">
+                  − {formatCurrency(totalExpensesAllTime, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
+                <span className="text-gray-500">Levantamentos do Dono:</span>
+                <span className="font-bold font-mono text-rose-700">
+                  − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
 
@@ -335,6 +357,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-gray-800 font-bold">Valor Total do Negócio:</span>
                 <span className="text-base font-extrabold font-mono text-indigo-700">
                   {formatCurrency(businessWorth, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
+                <span className="text-gray-500">Contagem Física Mais Recente:</span>
+                <span className="font-bold font-mono text-slate-600">
+                  {formatCurrency(currentInventoryValue, currencySymbol)}
                 </span>
               </div>
 
@@ -442,7 +471,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               closedBatches.forEach(cb => {
                 const cbQuebras = quebras.filter(q => q.batchId === cb.id);
                 const cCalc = calculateBatch(cb, cbQuebras);
-                productFinalizedProfit += cCalc.profit;
+                productFinalizedProfit += cCalc.embeddedProfit;
               });
 
               const displayBatch = activeBatch || latestBatch;
@@ -450,7 +479,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               const sellingPriceText = displayBatch ? formatCurrency(displayBatch.sellingPrice, currencySymbol) : '-';
 
               const displayProfit = activeBatch && activeCalc 
-                ? activeCalc.profit 
+                ? activeCalc.embeddedProfit 
                 : productFinalizedProfit;
 
               const isMenuOpen = openActionMenuId === product.id;
