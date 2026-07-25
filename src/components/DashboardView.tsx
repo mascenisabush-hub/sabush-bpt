@@ -21,7 +21,6 @@ import {
   Tag,
   Receipt,
   HandCoins,
-  Store,
 } from 'lucide-react';
 import { Product } from '../types';
 import { EditProductModal } from './EditProductModal';
@@ -69,7 +68,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
     type="button"
     onClick={onClick}
     disabled={!onClick}
-    className={`h-full text-left bg-white rounded-xl p-4 flex flex-col gap-3 transition ${
+    className={`h-full text-left bg-white rounded-xl p-5 flex flex-col gap-3 transition ${
       highlight ? 'bg-amber-50/40' : ''
     } ${onClick ? 'hover:bg-gray-50 cursor-pointer active:scale-[0.98]' : 'cursor-default'}`}
     style={{ boxShadow: highlight ? undefined : '0 1px 2px rgba(11,30,63,0.04)' }}
@@ -107,10 +106,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     totalInvestmentValueAllTime, totalMarketValueAllTime, totalEmbeddedProfitAllTime,
     activeBatchCount, totalExpensesAllTime, totalWithdrawalsAllTime,
     businessWorth, capitalGrowth, capitalGrowthPct,
-    isBusinessProfileComplete, isOwner,
   } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
-  const [profileNudgeDismissed, setProfileNudgeDismissed] = useState(false);
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [showWorthModal, setShowWorthModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -188,50 +185,17 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   return (
-    <div className="space-y-2.5 pb-6">
-      {/* Business profile completion nudge — replaces the old blocking
-          first-login modal. Lets the owner explore the app first and
-          complete the profile whenever they choose, from Settings. */}
-      {isOwner && !isBusinessProfileComplete && !profileNudgeDismissed && (
-        <div className="flex items-center justify-between gap-3 bg-blue-50 border border-blue-200 rounded-2xl px-4 py-3">
-          <div className="flex items-center gap-3 min-w-0">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
-              <Store className="w-4 h-4" />
-            </div>
-            <div className="min-w-0">
-              <p className="text-xs font-bold text-gray-800">Complete o perfil do seu negócio</p>
-              <p className="text-[11px] text-gray-500 truncate">Nome, contacto e localização aparecem nos seus relatórios e recibos.</p>
-            </div>
-          </div>
-          <div className="flex items-center gap-2 shrink-0">
-            <button
-              type="button"
-              onClick={() =>
-                window.dispatchEvent(
-                  new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
-                )
-              }
-              className="px-3 py-1.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition whitespace-nowrap"
-            >
-              Completar Agora
-            </button>
-            <button
-              type="button"
-              onClick={() => setProfileNudgeDismissed(true)}
-              className="p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-white transition"
-              title="Dispensar"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
-      )}
+    <div className="space-y-8 pb-6">
+      {/* Business profile completion reminder now lives in the Header as a
+          small inline nudge — see Header.tsx. Kept out of the dashboard body
+          so nothing here competes with the KPI cards for attention. */}
+
 
       {/* KPI DASHBOARD CARDS — the health of the business at a glance.
           Every value here reuses the existing calculation engine
           (calculateBatch / calculateInventoryTotals / AppContext);
           this is presentation only, nothing is recalculated. */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-2.5">
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
         <KpiCard
           icon={Landmark}
           iconBgClass="bg-slate-500/10"
@@ -342,7 +306,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* TOP BAR (single slim row) */}
-      <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2 sm:p-2.5 shadow-sm">
+      <div className="flex items-center gap-2 bg-white rounded-xl p-2.5 sm:p-3 shadow-sm">
         {/* Search Bar */}
         <div className="flex-1 relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none" />
@@ -625,7 +589,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* TABLE */}
       {filteredProducts.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-8 text-center max-w-lg mx-auto my-6">
+        <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 shadow-sm">
           <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 mx-auto mb-3">
             <Package className="w-6 h-6" />
           </div>
@@ -645,9 +609,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
       ) : (
-        <div className="bg-white border border-gray-200 rounded-2xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded-xl overflow-hidden shadow-sm">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-1 px-3 py-2 bg-gray-100/90 border-b border-gray-200/80 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+          <div className="grid grid-cols-12 gap-1 px-4 py-3 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
             <div className="col-span-4 sm:col-span-5">Produto</div>
             <div className="col-span-2 text-right">
               Compra
@@ -665,7 +629,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           </div>
 
           {/* Table Body */}
-          <div className="divide-y divide-gray-200/60 max-h-[calc(100vh-190px)] overflow-y-auto">
+          <div className="divide-y divide-gray-100 max-h-[calc(100vh-190px)] overflow-y-auto">
             {filteredProducts.map(product => {
               const productBatches = batches.filter(b => b.productId === product.id);
               const activeBatch = productBatches.find(b => b.status === 'open');

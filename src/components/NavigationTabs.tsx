@@ -107,12 +107,12 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
 
   return (
     <>
-      {/* Desktop / Tablet Icon Action Bar — same tabs, no boxed pills, spacing does
-          the separating instead of borders. Label appears only on hover/active so
-          the bar stays quiet until the person actually looks at it. */}
-      <nav className="hidden md:block sticky top-16 bg-white/95 backdrop-blur-lg z-20">
+      {/* Desktop / Tablet Icon Action Bar — same tabs, no boxed pills, spacing
+          does the separating instead of borders. Icon in blue, small gray
+          label always visible below it, consistent gaps, subtle hover highlight. */}
+      <nav className="hidden md:block bg-white">
         <div className="max-w-7xl mx-auto px-8">
-          <div className="flex items-center justify-center gap-1 py-3">
+          <div className="flex items-center justify-center flex-wrap gap-x-5 gap-y-2 py-4">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -122,20 +122,12 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   title={tab.label}
-                  className="group flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg transition active:scale-[0.97]"
+                  className={`group flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl transition active:scale-[0.97] ${
+                    isActive ? 'bg-blue-50' : 'hover:bg-gray-50'
+                  }`}
                 >
-                  <div
-                    className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
-                      isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-400 group-hover:text-title group-hover:bg-gray-50'
-                    }`}
-                  >
-                    <Icon className="w-[18px] h-[18px]" />
-                  </div>
-                  <span
-                    className={`text-[10px] font-semibold tracking-tight transition-opacity ${
-                      isActive ? 'opacity-100 text-blue-600' : 'opacity-0 group-hover:opacity-100 text-gray-500'
-                    }`}
-                  >
+                  <Icon className={`w-[18px] h-[18px] transition ${isActive ? 'text-blue-600' : 'text-blue-500/80 group-hover:text-blue-600'}`} />
+                  <span className={`text-[10.5px] font-semibold tracking-tight ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
                     {tab.shortLabel}
                   </span>
                 </button>

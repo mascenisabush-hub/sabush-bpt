@@ -13,6 +13,7 @@ export const Header: React.FC = () => {
     currencySymbol,
     setCurrencySymbol,
     businessCategory,
+    isBusinessProfileComplete,
     logout,
   } = useApp();
 
@@ -21,6 +22,7 @@ export const Header: React.FC = () => {
   const [settingsAutoOpenProfileEdit, setSettingsAutoOpenProfileEdit] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const [reminderDismissed, setReminderDismissed] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
 
   // Close the profile menu on outside click — same behaviour users already
@@ -50,89 +52,121 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      <header className="bg-white sticky top-0 z-30">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
-          {/* Business name — no icon box, no border, just clean type hierarchy */}
-          <div>
-            <h1 className="font-bold text-[15px] sm:text-base leading-tight tracking-tight text-title">
-              {business?.name || 'Batch Profit Tracker'}
-            </h1>
-            <p
-              className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-[320px] mt-0.5"
-              title={business?.contact ? `Contacto: ${business.contact}` : undefined}
-            >
-              <span className="truncate text-blue-600 font-medium">
-                {businessCategory || 'Negócio Registado'}
-              </span>
-              {business?.location && (
-                <>
-                  <span className="text-gray-300">·</span>
-                  <span className="truncate text-gray-500">{business.location}</span>
-                </>
-              )}
-            </p>
-          </div>
-
-          {/* Single profile control — every prior action still lives here, just consolidated */}
-          <div className="relative" ref={profileMenuRef}>
-            <button
-              onClick={() => setShowProfileMenu(v => !v)}
-              className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-2 rounded-full hover:bg-gray-50 transition"
-            >
-              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
-                <User className="w-4 h-4" />
-              </div>
-              <div className="hidden sm:flex flex-col text-left">
-                <span className="text-xs font-bold text-title leading-tight">
-                  {userProfile?.name || 'Utilizador'}
-                </span>
-                <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
-                  {isOwner ? 'Dono' : 'Staff'}
-                </span>
-              </div>
-              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
-            </button>
-
-            {showProfileMenu && (
-              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg py-2 z-40">
-                {isOwner && (
-                  <button
-                    onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
-                  >
-                    <Settings className="w-4 h-4 text-gray-400" />
-                    Definições
-                  </button>
-                )}
-                {isOwner && (
-                  <button
-                    onClick={() => { setShowCurrencyModal(true); setShowProfileMenu(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
-                  >
-                    <DollarSign className="w-4 h-4 text-gray-400" />
-                    Moeda <span className="ml-auto text-gray-400">{currencySymbol}</span>
-                  </button>
-                )}
-                {isOwner && (
-                  <button
-                    onClick={() => { setShowHelpModal(true); setShowProfileMenu(false); }}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
-                  >
-                    <HelpCircle className="w-4 h-4 text-gray-400" />
-                    Ajuda e Conceito
-                  </button>
-                )}
-                <div className="my-1.5 border-t" style={{ borderColor: 'var(--border)' }} />
-                <button
-                  onClick={logout}
-                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition"
+      <header className="bg-white">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-3">
+          <div className="h-14 flex items-center justify-between">
+            {/* Business name — falls back to a quiet placeholder, never a blank/generic app name */}
+            {business?.name ? (
+              <div>
+                <h1 className="font-bold text-[15px] sm:text-base leading-tight tracking-tight text-title">
+                  {business.name}
+                </h1>
+                <p
+                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-[320px] mt-0.5"
+                  title={business?.contact ? `Contacto: ${business.contact}` : undefined}
                 >
-                  <LogOut className="w-4 h-4" />
-                  Sair
-                </button>
+                  <span className="truncate text-blue-600 font-medium">
+                    {businessCategory || 'Negócio Registado'}
+                  </span>
+                  {business?.location && (
+                    <>
+                      <span className="text-gray-300">·</span>
+                      <span className="truncate text-gray-500">{business.location}</span>
+                    </>
+                  )}
+                </p>
+              </div>
+            ) : (
+              <div className="flex items-center gap-2.5">
+                <div className="w-8 h-8 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center shrink-0">
+                  <Store className="w-4 h-4" />
+                </div>
+                <span className="text-[13px] font-semibold text-gray-400">Perfil não definido</span>
               </div>
             )}
+
+            {/* Single profile control — every prior action still lives here, just consolidated */}
+            <div className="relative" ref={profileMenuRef}>
+              <button
+                onClick={() => setShowProfileMenu(v => !v)}
+                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-2 rounded-full hover:bg-gray-50 transition"
+              >
+                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                  <User className="w-4 h-4" />
+                </div>
+                <div className="hidden sm:flex flex-col text-left">
+                  <span className="text-xs font-bold text-title leading-tight">
+                    {userProfile?.name || 'Utilizador'}
+                  </span>
+                  <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+                    {isOwner ? 'Dono' : 'Staff'}
+                  </span>
+                </div>
+                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
+              </button>
+
+              {showProfileMenu && (
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg py-2 z-40">
+                  {isOwner && (
+                    <button
+                      onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                    >
+                      <Settings className="w-4 h-4 text-gray-400" />
+                      Definições
+                    </button>
+                  )}
+                  {isOwner && (
+                    <button
+                      onClick={() => { setShowCurrencyModal(true); setShowProfileMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                    >
+                      <DollarSign className="w-4 h-4 text-gray-400" />
+                      Moeda <span className="ml-auto text-gray-400">{currencySymbol}</span>
+                    </button>
+                  )}
+                  {isOwner && (
+                    <button
+                      onClick={() => { setShowHelpModal(true); setShowProfileMenu(false); }}
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                    >
+                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                      Ajuda e Conceito
+                    </button>
+                  )}
+                  <div className="my-1.5 border-t" style={{ borderColor: 'var(--border)' }} />
+                  <button
+                    onClick={logout}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition"
+                  >
+                    <LogOut className="w-4 h-4" />
+                    Sair
+                  </button>
+                </div>
+              )}
+            </div>
           </div>
+
+          {/* Small inline reminder — replaces the old full-width banner. Same action
+              (jumps into Settings → profile edit), just quiet instead of dominant. */}
+          {isOwner && !isBusinessProfileComplete && !reminderDismissed && (
+            <button
+              type="button"
+              onClick={() =>
+                window.dispatchEvent(
+                  new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
+                )
+              }
+              className="group flex items-center gap-1.5 pb-2.5 text-[11.5px] text-blue-600 hover:text-blue-700 transition"
+            >
+              <HelpCircle className="w-3.5 h-3.5" />
+              <span className="font-medium">Complete o perfil do seu negócio</span>
+              <X
+                className="w-3 h-3 ml-1 text-gray-300 group-hover:text-gray-500"
+                onClick={(e) => { e.stopPropagation(); setReminderDismissed(true); }}
+              />
+            </button>
+          )}
         </div>
       </header>
 
