@@ -10,6 +10,7 @@ import { AddExpenseView } from './components/AddExpenseView';
 import { AddWithdrawalView } from './components/AddWithdrawalView';
 import { ReportsView } from './components/ReportsView';
 import { InitialStockCountView } from './components/InitialStockCountView';
+import { PeriodicStockCountView } from './components/PeriodicStockCountView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { BusinessProfileSetupModal } from './components/BusinessProfileSetupModal';
 import { AuthView } from './components/AuthView';
@@ -32,7 +33,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -47,7 +48,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -103,6 +104,10 @@ function MainApp() {
         )}
 
         {!isStaff && activeTab === 'stocks' && <StocksView />}
+
+        {!isStaff && activeTab === 'stock-count' && (
+          <PeriodicStockCountView onComplete={() => setActiveTab('dashboard')} />
+        )}
 
         {activeTab === 'add-stock' && (
           <AddStockView
