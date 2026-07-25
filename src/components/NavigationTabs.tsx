@@ -1,8 +1,8 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
-import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3 } from 'lucide-react';
+import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins } from 'lucide-react';
 
-export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'reports' | 'initial-stock';
+export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock';
 
 interface NavigationTabsProps {
   activeTab: TabType;
@@ -52,6 +52,14 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
       icon: Receipt,
       color: 'purple',
       ownerOnly: false,
+    },
+    {
+      id: 'add-withdrawal' as TabType,
+      label: 'Registar Levantamento',
+      shortLabel: '+ Levant.',
+      icon: HandCoins,
+      color: 'orange',
+      ownerOnly: true,
     },
     {
       id: 'reports' as TabType,

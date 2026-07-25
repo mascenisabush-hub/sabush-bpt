@@ -68,6 +68,19 @@ export interface Expense {
   createdAt: string; // ISO string
 }
 
+// Owner Withdrawals: money taken out of the business by the owner for
+// personal use. This is intentionally a SEPARATE concept from Expense —
+// a withdrawal is not a business cost, it's capital leaving the business
+// in the owner's hands. Never merge these two collections.
+export interface Withdrawal {
+  id: string;
+  date: string; // YYYY-MM-DD
+  amount: number;
+  reason?: string; // e.g. Uso Pessoal, Salário, Família, Emergência, Casa, Veículo, Outro
+  notes?: string;
+  createdAt: string; // ISO string
+}
+
 // ============================================================
 // STOCK COUNTS (Capital baseline + periodic physical counts)
 // ============================================================

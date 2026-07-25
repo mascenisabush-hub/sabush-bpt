@@ -114,6 +114,12 @@ service cloud.firestore {
         allow update, delete: if isOwnerOf(businessId);
       }
 
+      // Owner Withdrawals: money taken by the owner personally. Only the
+      // owner may record/edit/remove these — staff never handle this.
+      match /withdrawals/{withdrawalId} {
+        allow read, create, update, delete: if isOwnerOf(businessId);
+      }
+
       // Staff roster management is owner-only.
       match /staff/{staffId} {
         allow read, write: if isOwnerOf(businessId);

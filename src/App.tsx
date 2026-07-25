@@ -7,6 +7,7 @@ import { StocksView } from './components/StocksView';
 import { AddStockView } from './components/AddStockView';
 import { AddQuebraView } from './components/AddQuebraView';
 import { AddExpenseView } from './components/AddExpenseView';
+import { AddWithdrawalView } from './components/AddWithdrawalView';
 import { ReportsView } from './components/ReportsView';
 import { InitialStockCountView } from './components/InitialStockCountView';
 import { ProductDetailModal } from './components/ProductDetailModal';
@@ -31,7 +32,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -46,7 +47,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -128,6 +129,12 @@ function MainApp() {
             onComplete={() => {
               setActiveTab(isStaff ? 'add-expense' : 'dashboard');
             }}
+          />
+        )}
+
+        {!isStaff && activeTab === 'add-withdrawal' && (
+          <AddWithdrawalView
+            onComplete={() => setActiveTab('dashboard')}
           />
         )}
 

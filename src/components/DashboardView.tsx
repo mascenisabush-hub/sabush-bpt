@@ -29,7 +29,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToInitialStockCount,
   onSelectProductDetail,
 }) => {
-  const { products, batches, quebras, expenses, currencySymbol, hasInitialStockCount, initialCapitalValue } = useApp();
+  const { products, batches, quebras, expenses, withdrawals, currencySymbol, hasInitialStockCount, initialCapitalValue } = useApp();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
@@ -51,6 +51,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   });
 
   const totalExpenses = expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+  const totalWithdrawals = withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
   const totalProjectedNetIncome = (totalFinalizedProfit + totalRunningEstimatedProfit) - totalExpenses;
 
   // Filter products by search
@@ -236,6 +237,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="text-gray-800 font-bold">Rendimento Líquido Projetado:</span>
                 <span className={`text-base font-extrabold font-mono ${totalProjectedNetIncome >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(totalProjectedNetIncome, currencySymbol)}
+                </span>
+              </div>
+
+              <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
+                <span className="text-gray-500">Levantamentos do Dono (não afeta o lucro):</span>
+                <span className="font-bold font-mono text-slate-600">
+                  − {formatCurrency(totalWithdrawals, currencySymbol)}
                 </span>
               </div>
             </div>

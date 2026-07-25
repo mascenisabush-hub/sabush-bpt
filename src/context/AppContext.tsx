@@ -25,6 +25,7 @@ import {
   StaffMember,
   StockCount,
   StockCountType,
+  Withdrawal,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 
@@ -50,6 +51,13 @@ interface AddExpenseParams {
   description: string;
   amount: number;
   category?: string;
+}
+
+interface AddWithdrawalParams {
+  date: string;
+  amount: number;
+  reason?: string;
+  notes?: string;
 }
 
 interface RecordStockCountItemInput {
@@ -78,6 +86,7 @@ interface AppContextType {
   quebras: Quebra[];
   expenses: Expense[];
   stockCounts: StockCount[];
+  withdrawals: Withdrawal[];
   staffMembers: StaffMember[];
   currencySymbol: string;
   setCurrencySymbol: (symbol: string) => void;
@@ -89,6 +98,8 @@ interface AppContextType {
   addMultipleStockBatches: (items: AddStockParams[]) => Promise<void>;
   addQuebra: (params: AddQuebraParams) => Promise<Quebra>;
   addExpense: (params: AddExpenseParams) => Promise<Expense>;
+  addWithdrawal: (params: AddWithdrawalParams) => Promise<Withdrawal>;
+  deleteWithdrawal: (id: string) => Promise<void>;
   hasInitialStockCount: boolean;
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
@@ -117,6 +128,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
+  const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
 
   const isOwner = userProfile?.role === 'owner';
@@ -154,6 +166,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setQuebras([]);
         setExpenses([]);
         setStockCounts([]);
+        setWithdrawals([]);
         setStaffMembers([]);
         setIsAuthLoading(false);
       }
@@ -192,6 +205,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setQuebras([]);
       setExpenses([]);
       setStockCounts([]);
+      setWithdrawals([]);
       setStaffMembers([]);
       return;
     }
@@ -275,6 +289,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching stock counts:', err)
     );
 
+    // 5c. Withdrawals collection (money the owner has taken out — NOT an expense)
+    const withdrawalsRef = collection(db, 'businesses', businessId, 'withdrawals');
+    const unsubWithdrawals = onSnapshot(
+      withdrawalsRef,
+      (snap) => {
+        const list: Withdrawal[] = [];
+        snap.forEach((doc) => list.push(doc.data() as Withdrawal));
+        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+        setWithdrawals(list);
+      },
+      (err) => console.error('Error fetching withdrawals:', err)
+    );
+
     // 6. Staff collection
     const staffRef = collection(db, 'businesses', businessId, 'staff');
     const unsubStaff = onSnapshot(
@@ -294,6 +321,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubQuebras();
       unsubExpenses();
       unsubStockCounts();
+      unsubWithdrawals();
       unsubStaff();
     };
   }, [userProfile?.businessId]);
@@ -491,6 +519,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await setDoc(doc(db, 'businesses', userProfile.businessId, 'expenses', newExpense.id), newExpense);
     return newExpense;
+  };
+
+  // Owner Withdrawals: money taken by the owner for personal use. This is
+  // NOT an expense — it reduces available business capital directly,
+  // without affecting profit/loss the way an operating expense does.
+  const addWithdrawal = async ({ date, amount, reason, notes }: AddWithdrawalParams) => {
+    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+
+    const newWithdrawal: Withdrawal = {
+      id: 'wd-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      date,
+      amount: Number(amount),
+      reason: reason ? reason.trim() : undefined,
+      notes: notes ? notes.trim() : undefined,
+      createdAt: new Date().toISOString(),
+    };
+
+    await setDoc(doc(db, 'businesses', userProfile.businessId, 'withdrawals', newWithdrawal.id), newWithdrawal);
+    return newWithdrawal;
+  };
+
+  const deleteWithdrawal = async (id: string) => {
+    if (!userProfile?.businessId) return;
+    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'withdrawals', id));
   };
 
   // Records a physical Stock Count. This is NEVER a purchase and NEVER
@@ -691,6 +743,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const s of stockCounts) {
       await deleteDoc(doc(db, 'businesses', businessId, 'stockCounts', s.id));
     }
+    for (const w of withdrawals) {
+      await deleteDoc(doc(db, 'businesses', businessId, 'withdrawals', w.id));
+    }
   };
 
   return (
@@ -707,6 +762,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quebras,
         expenses,
         stockCounts,
+        withdrawals,
         staffMembers,
         currencySymbol,
         setCurrencySymbol,
@@ -718,6 +774,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addMultipleStockBatches,
         addQuebra,
         addExpense,
+        addWithdrawal,
+        deleteWithdrawal,
         hasInitialStockCount,
         initialStockCount,
         initialCapitalValue,
