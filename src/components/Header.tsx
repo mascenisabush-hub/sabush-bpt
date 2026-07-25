@@ -1,7 +1,7 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
-import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User } from 'lucide-react';
+import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 
 export const Header: React.FC = () => {
@@ -20,6 +20,20 @@ export const Header: React.FC = () => {
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsAutoOpenProfileEdit, setSettingsAutoOpenProfileEdit] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
+  const [showProfileMenu, setShowProfileMenu] = useState(false);
+  const profileMenuRef = useRef<HTMLDivElement>(null);
+
+  // Close the profile menu on outside click — same behaviour users already
+  // expect from any dropdown, just applied to the new consolidated menu.
+  useEffect(() => {
+    const handleClickOutside = (e: MouseEvent) => {
+      if (profileMenuRef.current && !profileMenuRef.current.contains(e.target as Node)) {
+        setShowProfileMenu(false);
+      }
+    };
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
 
   // Allows other views (e.g. the "complete your profile" dashboard nudge) to
   // open Settings directly, without needing this state lifted into App.tsx.
@@ -36,90 +50,88 @@ export const Header: React.FC = () => {
 
   return (
     <>
-      <header className="bg-white sticky top-0 z-30 border-b border-gray-200 shadow-md">
-        <div className="max-w-7xl mx-auto px-3 sm:px-6 lg:px-8 h-16 flex items-center justify-between">
-          {/* Logo & Business Name */}
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 sm:w-10 sm:h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shadow-inner shrink-0">
-              <TrendingUp className="w-5 h-5 sm:w-6 sm:h-6" />
-            </div>
-            <div>
-              <h1 className="font-bold text-sm sm:text-base leading-tight tracking-tight text-gray-900 flex items-center gap-2">
-                {business?.name || 'Batch Profit Tracker'}
-              </h1>
-              <p
-                className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[180px] sm:max-w-[280px]"
-                title={business?.contact ? `Contacto: ${business.contact}` : undefined}
-              >
-                <span className="truncate text-blue-600 font-medium">
-                  {businessCategory || 'Negócio Registado'}
-                </span>
-                {business?.location && (
-                  <>
-                    <span className="text-gray-300">·</span>
-                    <span className="truncate text-gray-500">{business.location}</span>
-                  </>
-                )}
-              </p>
-            </div>
+      <header className="bg-white sticky top-0 z-30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 h-16 flex items-center justify-between">
+          {/* Business name — no icon box, no border, just clean type hierarchy */}
+          <div>
+            <h1 className="font-bold text-[15px] sm:text-base leading-tight tracking-tight text-title">
+              {business?.name || 'Batch Profit Tracker'}
+            </h1>
+            <p
+              className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-[320px] mt-0.5"
+              title={business?.contact ? `Contacto: ${business.contact}` : undefined}
+            >
+              <span className="truncate text-blue-600 font-medium">
+                {businessCategory || 'Negócio Registado'}
+              </span>
+              {business?.location && (
+                <>
+                  <span className="text-gray-300">·</span>
+                  <span className="truncate text-gray-500">{business.location}</span>
+                </>
+              )}
+            </p>
           </div>
 
-          {/* Action Tools & Profile */}
-          <div className="flex items-center space-x-1.5 sm:space-x-2">
-            {/* Owner Settings Button */}
-            {isOwner && (
-              <button
-                onClick={() => setShowSettingsModal(true)}
-                className="flex items-center space-x-1.5 px-2.5 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-800 text-xs font-semibold transition"
-                title="Definições do Negócio & Staff"
-              >
-                <Settings className="w-4 h-4 text-blue-600" />
-                <span className="hidden md:inline">Definições</span>
-              </button>
-            )}
-
-            {/* Currency Selector Button (Owner only or viewer) */}
-            {isOwner && (
-              <button
-                onClick={() => setShowCurrencyModal(true)}
-                className="flex items-center space-x-1 px-2.5 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-800 text-xs font-semibold transition"
-                title="Moeda"
-              >
-                <DollarSign className="w-3.5 h-3.5 text-blue-600" />
-                <span>{currencySymbol}</span>
-              </button>
-            )}
-
-            {/* How it Works / Help Modal */}
-            {isOwner && (
-              <button
-                onClick={() => setShowHelpModal(true)}
-                className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-700 transition"
-                title="Ajuda e Conceito"
-              >
-                <HelpCircle className="w-4 h-4" />
-              </button>
-            )}
-
-            {/* User Profile Badge & Logout */}
-            <div className="flex items-center pl-1 sm:pl-2 border-l border-gray-200 space-x-1.5">
-              <div className="hidden sm:flex flex-col text-right">
-                <span className="text-xs font-bold text-gray-800 leading-tight">
+          {/* Single profile control — every prior action still lives here, just consolidated */}
+          <div className="relative" ref={profileMenuRef}>
+            <button
+              onClick={() => setShowProfileMenu(v => !v)}
+              className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-2 rounded-full hover:bg-gray-50 transition"
+            >
+              <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <User className="w-4 h-4" />
+              </div>
+              <div className="hidden sm:flex flex-col text-left">
+                <span className="text-xs font-bold text-title leading-tight">
                   {userProfile?.name || 'Utilizador'}
                 </span>
-                <span className="text-[10px] font-mono uppercase text-gray-500 font-bold">
-                  {isOwner ? '👑 Dono' : '👤 Staff'}
+                <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+                  {isOwner ? 'Dono' : 'Staff'}
                 </span>
               </div>
+              <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
+            </button>
 
-              <button
-                onClick={logout}
-                className="p-2 rounded-xl bg-rose-500/10 hover:bg-rose-500/20 border border-rose-500/30 text-rose-700 transition"
-                title="Sair (Logout)"
-              >
-                <LogOut className="w-4 h-4" />
-              </button>
-            </div>
+            {showProfileMenu && (
+              <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg py-2 z-40">
+                {isOwner && (
+                  <button
+                    onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                  >
+                    <Settings className="w-4 h-4 text-gray-400" />
+                    Definições
+                  </button>
+                )}
+                {isOwner && (
+                  <button
+                    onClick={() => { setShowCurrencyModal(true); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                  >
+                    <DollarSign className="w-4 h-4 text-gray-400" />
+                    Moeda <span className="ml-auto text-gray-400">{currencySymbol}</span>
+                  </button>
+                )}
+                {isOwner && (
+                  <button
+                    onClick={() => { setShowHelpModal(true); setShowProfileMenu(false); }}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                  >
+                    <HelpCircle className="w-4 h-4 text-gray-400" />
+                    Ajuda e Conceito
+                  </button>
+                )}
+                <div className="my-1.5 border-t" style={{ borderColor: 'var(--border)' }} />
+                <button
+                  onClick={logout}
+                  className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition"
+                >
+                  <LogOut className="w-4 h-4" />
+                  Sair
+                </button>
+              </div>
+            )}
           </div>
         </div>
       </header>

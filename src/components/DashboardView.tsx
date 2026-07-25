@@ -69,23 +69,22 @@ const KpiCard: React.FC<KpiCardProps> = ({
     type="button"
     onClick={onClick}
     disabled={!onClick}
-    className={`h-full text-left bg-white border rounded-2xl p-3.5 shadow-sm flex flex-col gap-2 transition ${
-      highlight
-        ? 'border-amber-500/40 bg-amber-50/50 hover:bg-amber-100/60'
-        : 'border-gray-200'
-    } ${onClick ? 'hover:shadow-md hover:border-gray-300 cursor-pointer active:scale-[0.98]' : 'cursor-default'}`}
+    className={`h-full text-left bg-white rounded-xl p-4 flex flex-col gap-3 transition ${
+      highlight ? 'bg-amber-50/40' : ''
+    } ${onClick ? 'hover:bg-gray-50 cursor-pointer active:scale-[0.98]' : 'cursor-default'}`}
+    style={{ boxShadow: highlight ? undefined : '0 1px 2px rgba(11,30,63,0.04)' }}
   >
     <div className="flex items-start justify-between gap-1">
-      <div className={`w-8 h-8 rounded-xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
+      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
         <Icon className="w-4 h-4" />
       </div>
       {badge}
     </div>
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 leading-tight">
+      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 leading-tight">
         {label}
       </p>
-      <p className={`text-base sm:text-lg font-extrabold font-mono mt-0.5 leading-tight truncate ${valueClass || 'text-gray-800'}`}>
+      <p className={`text-lg sm:text-xl font-extrabold font-mono mt-1 leading-tight truncate ${valueClass || 'text-title'}`}>
         {value}
       </p>
     </div>
@@ -452,7 +451,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Wallet className="w-5 h-5 text-blue-600" />
-                <h3 className="text-base font-bold text-gray-900">Lucro Embutido</h3>
+                <h3 className="text-base font-bold text-title">Lucro Embutido</h3>
               </div>
               <button
                 onClick={() => setShowBreakdownModal(false)}
@@ -520,7 +519,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Gem className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-base font-bold text-gray-900">Valor do Negócio</h3>
+                <h3 className="text-base font-bold text-title">Valor do Negócio</h3>
               </div>
               <button
                 onClick={() => setShowWorthModal(false)}

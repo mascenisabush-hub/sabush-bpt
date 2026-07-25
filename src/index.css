@@ -7,6 +7,10 @@
   --background: #FFFFFF;
   --foreground: #111111;
 
+  /* Structured Minimalism: navy for titles/hierarchy, blue as the single accent */
+  --title: #0B1E3D;
+  --title-soft: #1E3A5F;
+
   --primary: #EA580C;
   --primary-hover: #C2410C;
   --primary-foreground: #FFFFFF;
@@ -15,18 +19,29 @@
   --secondary-hover: #1D4ED8;
   --secondary-foreground: #FFFFFF;
 
-  --accent: #EA580C;
+  --accent: #2563EB;
 
   --muted: #F9FAFB;
   --muted-foreground: #6B7280;
 
-  --border: #E5E7EB;
-  --ring: #EA580C;
+  /* Borders are used sparingly now — spacing does the separating work */
+  --border: #EEF0F3;
+  --border-strong: #E5E7EB;
+  --ring: #2563EB;
 
   --success: #059669;
   --warning: #EA580C;
   --info: #2563EB;
   --error: #E11D48;
+
+  /* 8px spacing system */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 16px;
+  --space-4: 24px;
+  --space-5: 32px;
+  --space-6: 48px;
+  --space-7: 64px;
 }
 
 @theme {
@@ -34,4 +49,19 @@
   --color-primary-hover: #C2410C;
   --color-secondary: #2563EB;
   --color-secondary-hover: #1D4ED8;
+  --color-title: #0B1E3D;
+  --color-title-soft: #1E3A5F;
+}
+
+/* Structured Minimalism helpers -------------------------------------- */
+.section-title {
+  color: var(--title);
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+.section-stack > * + * {
+  margin-top: var(--space-4);
+}
+.hairline {
+  border-color: var(--border);
 }

@@ -107,10 +107,12 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
 
   return (
     <>
-      {/* Desktop / Tablet Top Nav Bar */}
-      <nav className="hidden md:block sticky top-16 bg-white/95 backdrop-blur-lg border-b border-gray-200 z-20 px-2 py-1.5 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between py-2.5 gap-2">
+      {/* Desktop / Tablet Icon Action Bar — same tabs, no boxed pills, spacing does
+          the separating instead of borders. Label appears only on hover/active so
+          the bar stays quiet until the person actually looks at it. */}
+      <nav className="hidden md:block sticky top-16 bg-white/95 backdrop-blur-lg z-20">
+        <div className="max-w-7xl mx-auto px-8">
+          <div className="flex items-center justify-center gap-1 py-3">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -119,14 +121,23 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                 <button
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
-                  className={`flex-1 flex items-center justify-center space-x-2 py-3 px-3 rounded-xl text-sm font-semibold transition active:scale-[0.98] ${
-                    isActive
-                      ? 'bg-gray-50 text-blue-600 border border-blue-500/30 shadow-sm'
-                      : 'bg-white/50 hover:bg-gray-100/60 text-gray-500 hover:text-gray-800 border border-transparent'
-                  }`}
+                  title={tab.label}
+                  className="group flex flex-col items-center gap-1 px-3 py-1.5 rounded-lg transition active:scale-[0.97]"
                 >
-                 <Icon className={`w-4 h-4 ${isActive ? 'text-blue-600' : 'text-gray-500'}`} />
-                  <span>{tab.label}</span>
+                  <div
+                    className={`w-9 h-9 rounded-full flex items-center justify-center transition ${
+                      isActive ? 'bg-blue-50 text-blue-600' : 'text-gray-400 group-hover:text-title group-hover:bg-gray-50'
+                    }`}
+                  >
+                    <Icon className="w-[18px] h-[18px]" />
+                  </div>
+                  <span
+                    className={`text-[10px] font-semibold tracking-tight transition-opacity ${
+                      isActive ? 'opacity-100 text-blue-600' : 'opacity-0 group-hover:opacity-100 text-gray-500'
+                    }`}
+                  >
+                    {tab.shortLabel}
+                  </span>
                 </button>
               );
             })}
