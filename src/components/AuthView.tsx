@@ -130,6 +130,8 @@ export const AuthView: React.FC = () => {
             name: name.trim(),
             role: 'owner',
             businessId,
+            businessIds: [businessId],
+            activeBusinessId: businessId,
             createdAt: new Date().toISOString(),
           });
         } catch (err: any) {
@@ -184,6 +186,8 @@ export const AuthView: React.FC = () => {
           name: userName,
           role: 'owner',
           businessId,
+          businessIds: [businessId],
+          activeBusinessId: businessId,
           createdAt: new Date().toISOString(),
         });
 
@@ -249,6 +253,8 @@ export const AuthView: React.FC = () => {
           name: name.trim() || 'Proprietário Demo',
           role: 'owner',
           businessId,
+          businessIds: [businessId],
+          activeBusinessId: businessId,
           createdAt: new Date().toISOString(),
         });
       }

@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
+import { ShopSwitcher } from './ShopSwitcher';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
 
 interface HeaderProps {
@@ -71,9 +72,13 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             {/* Business name — falls back to a quiet placeholder, never a blank/generic app name */}
             {business?.name ? (
               <div className="min-w-0 shrink-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8791A] mb-0.5 italic">
-                  Meu Negócio
-                </p>
+                {isOwner ? (
+                  <ShopSwitcher />
+                ) : (
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8791A] mb-0.5 italic">
+                    Meu Negócio
+                  </p>
+                )}
                 <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#1B3966] truncate italic">
                   {business.name}
                 </h1>

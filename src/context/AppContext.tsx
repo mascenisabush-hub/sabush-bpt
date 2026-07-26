@@ -158,7 +158,15 @@ interface AppContextType {
   deleteProduct: (id: string) => Promise<void>;
   addStaffMember: (name: string, email: string, password: string) => Promise<void>;
   deleteStaffMember: (staffUid: string, reason?: string) => Promise<void>;
-  createBusinessForOwner: (businessName: string, category: string, currencySymbol?: string) => Promise<void>;
+  // Multi-shop support (owners only, up to MAX_SHOPS_PER_OWNER shops).
+  // `activeBusinessId` is the shop currently being viewed/operated on —
+  // every other field/action in this context (business, products,
+  // batches, etc.) is already scoped to it.
+  ownedBusinesses: Business[];
+  activeBusinessId: string | null;
+  maxShopsPerOwner: number;
+  addShop: (businessName: string, category: string, currencySymbol?: string) => Promise<void>;
+  switchShop: (businessId: string) => Promise<void>;
   logout: () => Promise<void>;
   loadSampleData: () => Promise<void>;
   clearAllData: () => Promise<void>;
@@ -185,6 +193,68 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isOwner = userProfile?.role === 'owner';
   const isStaff = userProfile?.role === 'staff';
+
+  const MAX_SHOPS_PER_OWNER = 10;
+
+  // ============================================================
+  // MULTI-SHOP SUPPORT (owners only, up to MAX_SHOPS_PER_OWNER shops).
+  // ============================================================
+  // Staff accounts stay single-shop, always resolved from the legacy
+  // `businessId` field on their profile — unchanged from before.
+  //
+  // Owners: `businessIds` is the real list. Owner accounts created before
+  // this feature existed only have the legacy singular `businessId` field
+  // and no `businessIds` array yet — rather than running a bulk migration,
+  // we derive the list on the fly (falls back to a one-item array built
+  // from `businessId`). The first time such an owner adds a second shop,
+  // `addShop` persists this derived list for real (see below), so the
+  // lazy fallback here only ever matters before that first write.
+  const ownedBusinessIds: string[] = isOwner
+    ? (userProfile?.businessIds?.length ? userProfile.businessIds : (userProfile?.businessId ? [userProfile.businessId] : []))
+    : [];
+
+  // The shop currently being viewed/operated on. For owners this is
+  // `activeBusinessId` (validated against the owned list, since a stale
+  // value could in theory point at a shop no longer in the array) falling
+  // back to the first owned shop. For staff it's simply their one shop.
+  const activeBusinessId: string | null = isOwner
+    ? (userProfile?.activeBusinessId && ownedBusinessIds.includes(userProfile.activeBusinessId)
+        ? userProfile.activeBusinessId
+        : (ownedBusinessIds[0] || null))
+    : (userProfile?.businessId || null);
+
+  const [ownedBusinesses, setOwnedBusinesses] = useState<Business[]>([]);
+
+  // Live-listen to every shop an owner has, so the shop switcher shows
+  // up-to-date names without a separate fetch each time it opens.
+  useEffect(() => {
+    if (!isOwner || ownedBusinessIds.length === 0) {
+      setOwnedBusinesses([]);
+      return;
+    }
+
+    const unsubs = ownedBusinessIds.map((id) =>
+      onSnapshot(
+        doc(db, 'businesses', id),
+        (snap) => {
+          if (!snap.exists()) return;
+          const data = snap.data() as Business;
+          setOwnedBusinesses((prev) => {
+            const next = prev.filter((b) => b.id !== id);
+            next.push(data);
+            // Keep the same order as ownedBusinessIds for a stable menu.
+            return ownedBusinessIds
+              .map((oid) => next.find((b) => b.id === oid))
+              .filter((b): b is Business => !!b);
+          });
+        },
+        (err) => console.error('Error fetching owned business', id, err)
+      )
+    );
+
+    return () => unsubs.forEach((u) => u());
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, JSON.stringify(ownedBusinessIds)]);
 
   const currencySymbol = business?.currencySymbol || 'MT';
   const businessCategory = business?.category || '';
@@ -295,7 +365,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Listen to Business and Subcollections when userProfile and businessId exist
   useEffect(() => {
-    if (!userProfile?.businessId) {
+    if (!activeBusinessId) {
       setBusiness(null);
       setProducts([]);
       setBatches([]);
@@ -310,7 +380,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       return;
     }
 
-    const businessId = userProfile.businessId;
+    const businessId = activeBusinessId;
 
     // 1. Business doc listener
     const businessRef = doc(db, 'businesses', businessId);
@@ -470,26 +540,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStaff();
       unsubTimeline();
     };
-  }, [userProfile?.businessId]);
+  }, [activeBusinessId]);
 
   // Actions
   const setCurrencySymbol = async (symbol: string) => {
-    if (!userProfile?.businessId) return;
-    await updateDoc(doc(db, 'businesses', userProfile.businessId), {
+    if (!activeBusinessId) return;
+    await updateDoc(doc(db, 'businesses', activeBusinessId), {
       currencySymbol: symbol,
     });
   };
 
   const setBusinessCategory = async (category: string) => {
-    if (!userProfile?.businessId) return;
-    await updateDoc(doc(db, 'businesses', userProfile.businessId), {
+    if (!activeBusinessId) return;
+    await updateDoc(doc(db, 'businesses', activeBusinessId), {
       category,
     });
   };
 
   const updateBusinessProfile = async (profile: { name: string; category: string; contact: string; location: string; email: string }) => {
-    if (!userProfile?.businessId) return;
-    await updateDoc(doc(db, 'businesses', userProfile.businessId), {
+    if (!activeBusinessId) return;
+    await updateDoc(doc(db, 'businesses', activeBusinessId), {
       name: profile.name.trim(),
       category: profile.category.trim(),
       contact: profile.contact.trim(),
@@ -512,8 +582,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const createBusinessForOwner = async (businessName: string, category: string, symbol: string = 'MT') => {
-    if (!currentUser) return;
+  // ============================================================
+  // MULTI-SHOP: add a new shop (up to MAX_SHOPS_PER_OWNER) and make it
+  // the active one, or switch which existing shop is active.
+  // ============================================================
+  const addShop = async (businessName: string, category: string, symbol: string = 'MT') => {
+    if (!currentUser || !isOwner) throw new Error('Apenas o dono pode criar uma nova loja.');
+
+    if (ownedBusinessIds.length >= MAX_SHOPS_PER_OWNER) {
+      throw new Error(`Limite de ${MAX_SHOPS_PER_OWNER} lojas por conta atingido.`);
+    }
+
     const businessId = 'bus-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
 
     const newBusiness: Business = {
@@ -525,20 +604,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    // Save business doc
+    // 1. Create the new business doc.
     await setDoc(doc(db, 'businesses', businessId), newBusiness);
 
-    // Update or create user profile with businessId
-    const profile: UserProfile = {
-      uid: currentUser.uid,
-      email: currentUser.email || '',
-      name: currentUser.displayName || currentUser.email?.split('@')[0] || 'Dono do Negócio',
-      role: 'owner',
-      businessId: businessId,
-      createdAt: new Date().toISOString(),
-    };
+    // 2. Append it to this owner's shop list and make it active. We persist
+    // the full derived `ownedBusinessIds` here (not just an arrayUnion of
+    // the new id) so that an owner account still running on the legacy
+    // single `businessId` field gets properly upgraded to the `businessIds`
+    // array the first time they add a second shop.
+    await updateDoc(doc(db, 'users', currentUser.uid), {
+      businessIds: [...ownedBusinessIds, businessId],
+      activeBusinessId: businessId,
+    });
+  };
 
-    await setDoc(doc(db, 'users', currentUser.uid), profile);
+  const switchShop = async (businessId: string) => {
+    if (!currentUser || !isOwner) return;
+    if (!ownedBusinessIds.includes(businessId)) {
+      throw new Error('Essa loja não pertence a esta conta.');
+    }
+    await updateDoc(doc(db, 'users', currentUser.uid), {
+      activeBusinessId: businessId,
+    });
   };
 
   // ============================================================
@@ -562,7 +649,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     batchNumber?: string;
     expenseCategory?: string;
   }) => {
-    if (!userProfile?.businessId) return;
+    if (!activeBusinessId) return;
     const newEvent: TimelineEvent = {
       id: 'tl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
       type: input.type,
@@ -579,7 +666,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       expenseCategory: input.expenseCategory,
     };
     try {
-      await setDoc(doc(db, 'businesses', userProfile.businessId, 'timelineEvents', newEvent.id), newEvent);
+      await setDoc(doc(db, 'businesses', activeBusinessId, 'timelineEvents', newEvent.id), newEvent);
     } catch (err) {
       console.error('Error logging timeline event:', err);
     }
@@ -599,9 +686,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice }: AddStockParams) => {
-    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
-    const businessId = userProfile.businessId;
+    const businessId = activeBusinessId;
     const trimmedName = productName.trim();
 
     let product = products.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
@@ -680,8 +767,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addMultipleStockBatches = async (items: AddStockParams[], supplier?: Supplier, notes?: string) => {
-    if (!userProfile?.businessId || !items.length) return { purchaseBatchId: null };
-    const businessId = userProfile.businessId;
+    if (!activeBusinessId || !items.length) return { purchaseBatchId: null };
+    const businessId = activeBusinessId;
 
     const fsBatch = createFirestoreBatch(db);
 
@@ -820,23 +907,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // simply hides a fully-settled Purchase Batch from the default active
   // ledger view — it does not touch any StockBatch line item or figure.
   const archivePurchaseBatch = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    await updateDoc(doc(db, 'businesses', userProfile.businessId, 'purchaseBatches', id), {
+    if (!activeBusinessId) return;
+    await updateDoc(doc(db, 'businesses', activeBusinessId, 'purchaseBatches', id), {
       archived: true,
       archivedAt: new Date().toISOString(),
     });
   };
 
   const unarchivePurchaseBatch = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    await updateDoc(doc(db, 'businesses', userProfile.businessId, 'purchaseBatches', id), {
+    if (!activeBusinessId) return;
+    await updateDoc(doc(db, 'businesses', activeBusinessId, 'purchaseBatches', id), {
       archived: false,
       archivedAt: null,
     });
   };
 
   const addQuebra = async ({ productId, batchId, date, quantityLost, reason }: AddQuebraParams) => {
-    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const newQuebra: Quebra = {
       id: 'quebra-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -848,7 +935,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', userProfile.businessId, 'quebras', newQuebra.id), newQuebra);
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'quebras', newQuebra.id), newQuebra);
 
     const relatedBatch = batches.find((b) => b.id === batchId);
     const relatedProduct = products.find((p) => p.id === productId);
@@ -873,7 +960,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addExpense = async ({ date, description, amount, category }: AddExpenseParams) => {
-    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const newExpense: Expense = {
       id: 'exp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -884,7 +971,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', userProfile.businessId, 'expenses', newExpense.id), newExpense);
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'expenses', newExpense.id), newExpense);
 
     await logTimelineEvent({
       type: 'expense-recorded',
@@ -907,7 +994,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // NOT an expense — it reduces available business capital directly,
   // without affecting profit/loss the way an operating expense does.
   const addWithdrawal = async ({ date, amount, reason, notes }: AddWithdrawalParams) => {
-    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const newWithdrawal: Withdrawal = {
       id: 'wd-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -918,7 +1005,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', userProfile.businessId, 'withdrawals', newWithdrawal.id), newWithdrawal);
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'withdrawals', newWithdrawal.id), newWithdrawal);
 
     await logTimelineEvent({
       type: 'withdrawal-recorded',
@@ -939,8 +1026,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteWithdrawal = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'withdrawals', id));
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'withdrawals', id));
   };
 
   // Records a physical Stock Count. This is NEVER a purchase and NEVER
@@ -952,14 +1039,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
   const recordStockCount = async ({ type, label, date, items }: RecordStockCountParams) => {
-    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
     if (type === 'initial' && hasInitialStockCount) {
       throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
     }
 
-    const businessId = userProfile.businessId;
+    const businessId = activeBusinessId;
     const fsBatch = createFirestoreBatch(db);
     const tempProducts = [...products];
 
@@ -1064,7 +1151,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Value) at the moment of closing. Closings are never edited — only
   // recorded or deleted (deleting simply re-opens the period).
   const recordClosing = async ({ periodType, periodLabel, startDate, endDate }: RecordClosingParams) => {
-    if (!userProfile?.businessId) throw new Error('Sem negócio associado.');
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     if (isPeriodClosed(periodType, startDate, endDate)) {
       throw new Error('Este período já foi fechado anteriormente.');
@@ -1087,7 +1174,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       closedAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', userProfile.businessId, 'closings', newClosing.id), newClosing);
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'closings', newClosing.id), newClosing);
 
     await logTimelineEvent({
       type: periodType === 'monthly' ? 'monthly-closing' : 'yearly-closing',
@@ -1114,18 +1201,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const deleteClosing = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'closings', id));
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'closings', id));
   };
 
   const deleteQuebra = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'quebras', id));
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'quebras', id));
   };
 
   const deleteExpense = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'expenses', id));
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'expenses', id));
   };
 
   // Edits catalog metadata only (name, category, supplier, sku, barcode,
@@ -1133,16 +1220,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Investment/Market/Profit figure — those are always derived from the
   // StockBatch records themselves, untouched by this function.
   const updateProduct = async (id: string, updates: Partial<Product>) => {
-    if (!userProfile?.businessId) return;
-    const businessId = userProfile.businessId;
+    if (!activeBusinessId) return;
+    const businessId = activeBusinessId;
 
     const payload: Partial<Product> = { ...updates, updatedAt: new Date().toISOString() };
     await updateDoc(doc(db, 'businesses', businessId, 'products', id), payload as any);
   };
 
   const deleteProduct = async (id: string) => {
-    if (!userProfile?.businessId) return;
-    const businessId = userProfile.businessId;
+    if (!activeBusinessId) return;
+    const businessId = activeBusinessId;
 
     await deleteDoc(doc(db, 'businesses', businessId, 'products', id));
 
@@ -1159,9 +1246,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addStaffMember = async (name: string, email: string, password: string) => {
-    if (!userProfile?.businessId || !isOwner) throw new Error('Apenas o dono pode adicionar funcionários.');
+    if (!activeBusinessId || !isOwner) throw new Error('Apenas o dono pode adicionar funcionários.');
 
-    const businessId = userProfile.businessId;
+    const businessId = activeBusinessId;
     const secondaryAppName = `staff-app-${Date.now()}`;
     const secondaryApp = initializeApp(firebaseConfig, secondaryAppName);
     const secondaryAuth = (await import('firebase/auth')).getAuth(secondaryApp);
@@ -1205,7 +1292,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Cloud Functions requires the Blaze billing plan; this runs on the same
   // Railway service that already hosts the app.
   const deleteStaffMember = async (staffUid: string, reason?: string) => {
-    if (!userProfile?.businessId || !isOwner) {
+    if (!activeBusinessId || !isOwner) {
       throw new Error('Apenas o dono pode remover funcionários.');
     }
     if (!currentUser) {
@@ -1224,7 +1311,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         },
         body: JSON.stringify({
           staffUid,
-          businessId: userProfile.businessId,
+          businessId: activeBusinessId,
           reason,
         }),
       });
@@ -1249,8 +1336,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const loadSampleData = async () => {
-    if (!userProfile?.businessId || !isOwner) return;
-    const businessId = userProfile.businessId;
+    if (!activeBusinessId || !isOwner) return;
+    const businessId = activeBusinessId;
 
     const fsBatch = createFirestoreBatch(db);
 
@@ -1274,8 +1361,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const clearAllData = async () => {
-    if (!userProfile?.businessId || !isOwner) return;
-    const businessId = userProfile.businessId;
+    if (!activeBusinessId || !isOwner) return;
+    const businessId = activeBusinessId;
 
     for (const p of products) {
       await deleteDoc(doc(db, 'businesses', businessId, 'products', p.id));
@@ -1364,7 +1451,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteProduct,
         addStaffMember,
         deleteStaffMember,
-        createBusinessForOwner,
+        ownedBusinesses,
+        activeBusinessId,
+        maxShopsPerOwner: MAX_SHOPS_PER_OWNER,
+        addShop,
+        switchShop,
         logout,
         loadSampleData,
         clearAllData,

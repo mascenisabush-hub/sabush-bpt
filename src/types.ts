@@ -5,8 +5,16 @@ export interface UserProfile {
   email: string;
   name: string;
   role: UserRole;
+  // Legacy single-shop field. Still the source of truth for staff (who
+  // always belong to exactly one shop) and for owner accounts created
+  // before multi-shop support existed. Never changes after creation.
   businessId: string;
   createdAt: string;
+  // Multi-shop support (owners only, up to 10 shops per account — see
+  // MAX_SHOPS_PER_OWNER in AppContext). Optional/absent on older owner
+  // profiles and on all staff profiles.
+  businessIds?: string[];
+  activeBusinessId?: string;
 }
 
 export interface Business {
