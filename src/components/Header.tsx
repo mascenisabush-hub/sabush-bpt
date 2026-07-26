@@ -157,7 +157,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               </button>
 
               {showProfileMenu && (
-                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl shadow-lg py-2 z-40">
+                <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl elevation-2 py-2 z-40">
                   {isOwner && (
                     <button
                       onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}
@@ -232,7 +232,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       {/* Currency Modal */}
       {showCurrencyModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6 text-gray-900 shadow-2xl italic">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6 text-gray-900 elevation-3 italic">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
               <h3 className="font-bold text-lg flex items-center gap-2 italic">
                 <DollarSign className="w-5 h-5 text-blue-600 italic" /> Seleccionar Moeda
@@ -284,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       {/* Help Modal */}
       {showHelpModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-lg p-6 text-gray-900 shadow-2xl max-h-[90vh] overflow-y-auto italic">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-lg p-6 text-gray-900 elevation-3 max-h-[90vh] overflow-y-auto italic">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
               <h3 className="font-bold text-lg text-blue-600 flex items-center gap-2 italic">
                 <HelpCircle className="w-5 h-5" /> Como Funciona o Lucro por Lote

@@ -70,8 +70,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
     disabled={!onClick}
     className={`h-full text-left bg-white rounded-2xl p-6 flex flex-col gap-4 transition ${
       highlight ? 'bg-[#B8791A]/[0.04]' : ''
-    } ${onClick ? 'hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(10,28,56,0.14)] cursor-pointer active:scale-[0.98]' : 'cursor-default'} italic`}
-    style={{ boxShadow: '0 1px 3px rgba(10,28,56,0.06), 0 1px 2px rgba(10,28,56,0.04)' }}
+    } ${onClick ? 'hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)] cursor-pointer active:scale-[0.98]' : 'cursor-default'} shadow-[var(--shadow-1)] italic`}
   >
     <div className="flex items-start justify-between gap-1">
       <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
@@ -321,7 +320,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* TOP BAR (single slim row) */}
-      <div className="flex items-center gap-2 bg-white rounded-xl p-2.5 sm:p-3 shadow-sm">
+      <div className="flex items-center gap-2 bg-white rounded-xl p-2.5 sm:p-3 elevation-1">
         {/* Search Bar */}
         <div className="flex-1 relative">
           <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none italic" />
@@ -391,7 +390,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {showSortDropdown && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowSortDropdown(false)} />
-                <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl shadow-2xl p-1 z-20 w-44 space-y-0.5 text-xs text-gray-700 italic">
+                <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl elevation-3 p-1 z-20 w-44 space-y-0.5 text-xs text-gray-700 italic">
                   <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 italic">
                     Ordenar Por
                   </div>
@@ -426,7 +425,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Breakdown Modal */}
       {showBreakdownModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-fadeIn">
+          <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 elevation-3 space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Wallet className="w-5 h-5 text-[#1B3966] italic" />
@@ -494,7 +493,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* Business Worth Modal */}
       {showWorthModal && (
         <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-fadeIn">
+          <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 elevation-3 space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Gem className="w-5 h-5 text-indigo-600 italic" />
@@ -604,7 +603,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* TABLE */}
       {filteredProducts.length === 0 ? (
-        <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 shadow-sm italic">
+        <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 elevation-1 italic">
           <div className="w-12 h-12 rounded-2xl bg-[#B8791A]/10 border border-[#B8791A]/30 flex items-center justify-center text-[#B8791A] mx-auto mb-3 italic">
             <Package className="w-6 h-6" />
           </div>
@@ -624,7 +623,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           )}
         </div>
       ) : (
-        <div className="bg-white rounded-xl overflow-hidden shadow-sm">
+        <div className="bg-white rounded-xl overflow-hidden elevation-1">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-1 px-4 py-3 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-400 italic">
             <div className="col-span-4 sm:col-span-5">Produto</div>
@@ -773,7 +772,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             className="fixed inset-0 z-10"
                             onClick={() => setOpenActionMenuId(null)}
                           />
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl p-1 z-20 w-40 text-xs space-y-0.5 italic">
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl elevation-3 p-1 z-20 w-40 text-xs space-y-0.5 italic">
                             <button
                               type="button"
                               onClick={() => {
