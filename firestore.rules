@@ -22,8 +22,18 @@ service cloud.firestore {
       return myProfile().get('businessIds', []);
     }
 
+    // Set exclusively by the server (server/index.ts, via the Admin SDK,
+    // which bypasses these rules entirely) — never writable by the client
+    // (see the users/{userId} update rule below). Checking it here means a
+    // suspended staff member is denied at the data layer the instant this
+    // field flips, rather than only once their Firebase Auth ID token
+    // naturally expires.
+    function isSuspended() {
+      return myProfile().get('suspended', false) == true;
+    }
+
     function isMemberOf(businessId) {
-      return isSignedIn() && (
+      return isSignedIn() && !isSuspended() && (
         myProfile().businessId == businessId ||
         businessId in ownedBusinessIds()
       );
@@ -64,8 +74,12 @@ service cloud.firestore {
       );
 
       // A user may only update their own profile, and may never change their
-      // own role or legacy business (that would be a privilege-escalation
-      // path). businessIds may only ever grow by exactly one entry per write,
+      // own role, legacy business, or suspension status (each would be a
+      // privilege-escalation path — suspended in particular must only ever
+      // be flipped by the server via suspendStaffMember/reactivateStaffMember,
+      // which use the Admin SDK and bypass these rules; otherwise a suspended
+      // staff member could simply un-suspend themselves with a plain write).
+      // businessIds may only ever grow by exactly one entry per write,
       // and only if that new entry is a /businesses/{id} doc this uid
       // actually owns (checked server-side here, not just trusted from the
       // client) — otherwise anyone could hand themselves read/write access
@@ -74,6 +88,7 @@ service cloud.firestore {
       allow update: if isSignedIn() && request.auth.uid == userId &&
         request.resource.data.role == resource.data.role &&
         request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.get('suspended', false) == resource.data.get('suspended', false) &&
         isValidBusinessIdsChange() &&
         isValidActiveBusinessIdChange();
 

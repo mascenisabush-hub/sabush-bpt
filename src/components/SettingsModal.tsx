@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, Loader2 } from 'lucide-react';
+import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2 } from 'lucide-react';
 import { StaffMember } from '../types';
 import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
@@ -23,6 +23,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     staffMembers,
     addStaffMember,
     deleteStaffMember,
+    suspendStaffMember,
+    reactivateStaffMember,
     loadSampleData,
     clearAllData,
     products,
@@ -45,6 +47,44 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   const [deleteReason, setDeleteReason] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
   const [deleteError, setDeleteError] = useState<string | null>(null);
+
+  // Suspend/reactivate states — suspend goes through the same in-app
+  // confirmation pattern as delete (it's a real access lock, even though
+  // it's reversible); reactivate is safe enough to run directly per-row.
+  const [staffPendingSuspension, setStaffPendingSuspension] = useState<StaffMember | null>(null);
+  const [suspendReason, setSuspendReason] = useState('');
+  const [suspendLoading, setSuspendLoading] = useState(false);
+  const [suspendError, setSuspendError] = useState<string | null>(null);
+  const [reactivatingUid, setReactivatingUid] = useState<string | null>(null);
+
+  const handleConfirmSuspendStaff = async () => {
+    if (!staffPendingSuspension) return;
+    setSuspendLoading(true);
+    setSuspendError(null);
+    try {
+      await suspendStaffMember(staffPendingSuspension.uid, suspendReason.trim() || undefined);
+      setStaffPendingSuspension(null);
+      setSuspendReason('');
+      setStaffSuccess(`Acesso de ${staffPendingSuspension.name} suspenso. Pode reativá-lo a qualquer momento.`);
+    } catch (err: any) {
+      setSuspendError(err?.message || 'Erro ao suspender funcionário. Tente novamente.');
+    } finally {
+      setSuspendLoading(false);
+    }
+  };
+
+  const handleReactivateStaff = async (staff: StaffMember) => {
+    setReactivatingUid(staff.uid);
+    setStaffError(null);
+    try {
+      await reactivateStaffMember(staff.uid);
+      setStaffSuccess(`Acesso de ${staff.name} reativado.`);
+    } catch (err: any) {
+      setStaffError(err?.message || 'Erro ao reativar funcionário. Tente novamente.');
+    } finally {
+      setReactivatingUid(null);
+    }
+  };
 
   const handleConfirmDeleteStaff = async () => {
     if (!staffPendingDeletion) return;
@@ -366,10 +406,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           <span className="font-bold text-gray-800 block">{staff.name}</span>
                           <span className="text-[11px] text-gray-500 font-mono">{staff.email}</span>
                         </div>
-                        <div className="flex items-center gap-3">
-                          <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/30">
-                            Staff
-                          </span>
+                        <div className="flex items-center gap-2">
+                          {staff.suspended ? (
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/30">
+                              Suspenso
+                            </span>
+                          ) : (
+                            <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/30">
+                              Staff
+                            </span>
+                          )}
+
+                          {staff.suspended ? (
+                            <button
+                              type="button"
+                              onClick={() => handleReactivateStaff(staff)}
+                              disabled={reactivatingUid === staff.uid}
+                              className="p-1.5 text-gray-500 hover:text-emerald-600 hover:bg-emerald-500/10 rounded-lg transition disabled:opacity-50"
+                              title="Reativar Funcionário"
+                            >
+                              {reactivatingUid === staff.uid ? (
+                                <Loader2 className="w-4 h-4 animate-spin" />
+                              ) : (
+                                <UserCheck className="w-4 h-4" />
+                              )}
+                            </button>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={() => {
+                                setSuspendError(null);
+                                setSuspendReason('');
+                                setStaffPendingSuspension(staff);
+                              }}
+                              className="p-1.5 text-gray-500 hover:text-orange-600 hover:bg-orange-500/10 rounded-lg transition"
+                              title="Suspender Funcionário"
+                            >
+                              <UserX className="w-4 h-4" />
+                            </button>
+                          )}
+
                           <button
                             type="button"
                             onClick={() => {
@@ -482,6 +558,87 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               >
                 {deleteLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                 {deleteLoading ? 'A remover...' : 'Remover Permanentemente'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {staffPendingSuspension && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-orange-500/10 border border-orange-500/30 flex items-center justify-center shrink-0">
+                <UserX className="w-5 h-5 text-orange-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Suspender Funcionário</h3>
+                <p className="text-[11px] text-gray-500">Bloqueia o acesso imediatamente — pode reativar quando quiser.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-gray-100/60 border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Nome</span>
+                  <span className="font-bold text-gray-900">{staffPendingSuspension.name}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Email</span>
+                  <span className="font-mono text-gray-900">{staffPendingSuspension.email}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Negócio</span>
+                  <span className="font-bold text-gray-900">{business?.name || 'O meu Negócio'}</span>
+                </div>
+              </div>
+
+              <div className="bg-orange-500/10 border border-orange-500/30 rounded-2xl p-3 flex gap-2">
+                <AlertCircle className="w-4 h-4 text-orange-600 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-orange-700 leading-relaxed">
+                  <span className="font-bold">{staffPendingSuspension.name}</span> deixa de conseguir entrar na aplicação de imediato.
+                  Nenhum dado que já registou é apagado — pode reativar o acesso a qualquer momento.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-gray-600 mb-1 block">Motivo (opcional)</label>
+                <input
+                  type="text"
+                  value={suspendReason}
+                  onChange={e => setSuspendReason(e.target.value)}
+                  placeholder="Ex: Férias, investigação em curso"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-orange-500"
+                />
+              </div>
+
+              {suspendError && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {suspendError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setStaffPendingSuspension(null);
+                  setSuspendError(null);
+                }}
+                disabled={suspendLoading}
+                className="px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmSuspendStaff}
+                disabled={suspendLoading}
+                className="px-4 py-2.5 rounded-xl bg-orange-600 hover:bg-orange-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {suspendLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserX className="w-3.5 h-3.5" />}
+                {suspendLoading ? 'A suspender...' : 'Suspender Acesso'}
               </button>
             </div>
           </div>

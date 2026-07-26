@@ -90,6 +90,54 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 }
 
 // ------------------------------------------------------------------
+// Shared permission check for every staff-management action below:
+// the requester must actually be the owner of the business they claim
+// (re-read from Firestore, never trusted from the client), and the
+// target staff member must actually belong to that same business.
+// Returns an error to send back, or null if the check passed.
+// ------------------------------------------------------------------
+async function verifyOwnerActionOnStaff(
+  requesterUid: string,
+  staffUid: string,
+  businessId: string
+): Promise<{ status: number; body: { error: string; message: string } } | null> {
+  if (staffUid === requesterUid) {
+    return { status: 400, body: { error: 'invalid-argument', message: 'Não pode realizar esta ação na sua própria conta.' } };
+  }
+
+  const requesterSnap = await db.collection('users').doc(requesterUid).get();
+  const requesterProfile = requesterSnap.data();
+
+  if (!requesterSnap.exists || !requesterProfile) {
+    return { status: 403, body: { error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' } };
+  }
+  if (requesterProfile.role !== 'owner' || requesterProfile.businessId !== businessId) {
+    return { status: 403, body: { error: 'permission-denied', message: 'Apenas o dono do negócio pode gerir funcionários.' } };
+  }
+
+  const [staffProfileSnap, staffRosterSnap] = await Promise.all([
+    db.collection('users').doc(staffUid).get(),
+    db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
+  ]);
+  const staffProfile = staffProfileSnap.data();
+  const staffRoster = staffRosterSnap.data();
+
+  if (!staffProfileSnap.exists && !staffRosterSnap.exists) {
+    return { status: 404, body: { error: 'not-found', message: 'Funcionário não encontrado.' } };
+  }
+
+  const belongsToBusiness =
+    (staffProfile ? staffProfile.businessId === businessId : true) &&
+    (staffRoster ? staffRoster.businessId === businessId : true);
+
+  if (!belongsToBusiness) {
+    return { status: 403, body: { error: 'permission-denied', message: 'Este funcionário não pertence ao seu negócio.' } };
+  }
+
+  return null;
+}
+
+// ------------------------------------------------------------------
 // POST /api/staff/delete
 // Body: { staffUid: string, businessId: string, reason?: string }
 // ------------------------------------------------------------------
@@ -105,28 +153,17 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
     res.status(400).json({ error: 'invalid-argument', message: 'staffUid e businessId são obrigatórios.' });
     return;
   }
-  if (staffUid === requesterUid) {
-    res.status(400).json({ error: 'invalid-argument', message: 'Não pode remover a sua própria conta por esta via.' });
-    return;
-  }
 
   try {
-    // 1) Requester must be the OWNER of the business they claim — re-read
-    //    from Firestore, never trust the client's claimed role.
-    const requesterSnap = await db.collection('users').doc(requesterUid).get();
-    const requesterProfile = requesterSnap.data();
-
-    if (!requesterSnap.exists || !requesterProfile) {
-      res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
-      return;
-    }
-    if (requesterProfile.role !== 'owner' || requesterProfile.businessId !== businessId) {
+    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    if (permissionError) {
       console.warn('[staff/delete] permission denied', { requesterUid, staffUid, businessId });
-      res.status(403).json({ error: 'permission-denied', message: 'Apenas o dono do negócio pode remover funcionários.' });
+      res.status(permissionError.status).json(permissionError.body);
       return;
     }
 
-    // 2) Target staff must belong to the SAME business.
+    const requesterSnap = await db.collection('users').doc(requesterUid).get();
+    const requesterProfile = requesterSnap.data()!;
     const [staffProfileSnap, staffRosterSnap] = await Promise.all([
       db.collection('users').doc(staffUid).get(),
       db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
@@ -134,25 +171,10 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
     const staffProfile = staffProfileSnap.data();
     const staffRoster = staffRosterSnap.data();
 
-    if (!staffProfileSnap.exists && !staffRosterSnap.exists) {
-      res.status(404).json({ error: 'not-found', message: 'Funcionário não encontrado.' });
-      return;
-    }
-
-    const belongsToBusiness =
-      (staffProfile ? staffProfile.businessId === businessId : true) &&
-      (staffRoster ? staffRoster.businessId === businessId : true);
-
-    if (!belongsToBusiness) {
-      console.warn('[staff/delete] cross-business deletion attempt blocked', { requesterUid, staffUid, businessId });
-      res.status(403).json({ error: 'permission-denied', message: 'Este funcionário não pertence ao seu negócio.' });
-      return;
-    }
-
     const staffName = staffProfile?.name || staffRoster?.name || 'Funcionário';
     const staffEmail = staffProfile?.email || staffRoster?.email || '';
 
-    // 3) Delete the Firebase Authentication account — the whole reason
+    // 1) Delete the Firebase Authentication account — the whole reason
     //    this can't run on the client.
     let authAccountDeleted = true;
     try {
@@ -168,13 +190,13 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
       }
     }
 
-    // 4) Delete Firestore records belonging to this staff member only.
+    // 2) Delete Firestore records belonging to this staff member only.
     const batch = db.batch();
     batch.delete(db.collection('users').doc(staffUid));
     batch.delete(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid));
     await batch.commit();
 
-    // 5) Permanent audit / timeline entry.
+    // 3) Permanent audit / timeline entry.
     const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
@@ -202,6 +224,144 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
   } catch (err) {
     console.error('[staff/delete] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao remover o funcionário. Tente novamente.' });
+  }
+});
+
+// ------------------------------------------------------------------
+// POST /api/staff/suspend
+// Body: { staffUid: string, businessId: string, reason?: string }
+//
+// Reversible, unlike delete: disables the Firebase Auth account (so no
+// new login is possible at all — signInWithEmailAndPassword will fail
+// with 'auth/user-disabled') and revokes any already-issued refresh
+// tokens (so an already-open session on another device stops being able
+// to silently renew its access token). Nothing in Firestore is deleted —
+// all of the staff member's entered data (batches, expenses, etc.,
+// which live under the business, not under their own uid) is untouched.
+// ------------------------------------------------------------------
+expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const startedAt = new Date().toISOString();
+
+  const staffUid = String(req.body?.staffUid || '').trim();
+  const businessId = String(req.body?.businessId || '').trim();
+  const reason = req.body?.reason ? String(req.body.reason).trim().slice(0, 500) : undefined;
+
+  if (!staffUid || !businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'staffUid e businessId são obrigatórios.' });
+    return;
+  }
+
+  try {
+    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    if (permissionError) {
+      console.warn('[staff/suspend] permission denied', { requesterUid, staffUid, businessId });
+      res.status(permissionError.status).json(permissionError.body);
+      return;
+    }
+
+    const requesterSnap = await db.collection('users').doc(requesterUid).get();
+    const requesterProfile = requesterSnap.data()!;
+    const [staffProfileSnap, staffRosterSnap] = await Promise.all([
+      db.collection('users').doc(staffUid).get(),
+      db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
+    ]);
+    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+
+    await auth.updateUser(staffUid, { disabled: true });
+    await auth.revokeRefreshTokens(staffUid);
+
+    const batch = db.batch();
+    batch.update(db.collection('users').doc(staffUid), { suspended: true });
+    batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), { suspended: true });
+    await batch.commit();
+
+    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await db
+      .collection('businesses')
+      .doc(businessId)
+      .collection('timelineEvents')
+      .doc(timelineId)
+      .set({
+        id: timelineId,
+        type: 'staff-suspended',
+        date: startedAt.slice(0, 10),
+        createdAt: startedAt,
+        userName: requesterProfile.name || 'Dono',
+        title: 'Funcionário Suspenso',
+        description: `O acesso de "${staffName}" foi suspenso.`,
+        details: { staffName, suspendedBy: requesterProfile.name || requesterUid, reason: reason || undefined },
+      });
+
+    console.log('[staff/suspend] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
+    res.json({ success: true, staffUid });
+  } catch (err) {
+    console.error('[staff/suspend] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao suspender o funcionário. Tente novamente.' });
+  }
+});
+
+// ------------------------------------------------------------------
+// POST /api/staff/reactivate
+// Body: { staffUid: string, businessId: string }
+// ------------------------------------------------------------------
+expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const startedAt = new Date().toISOString();
+
+  const staffUid = String(req.body?.staffUid || '').trim();
+  const businessId = String(req.body?.businessId || '').trim();
+
+  if (!staffUid || !businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'staffUid e businessId são obrigatórios.' });
+    return;
+  }
+
+  try {
+    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    if (permissionError) {
+      console.warn('[staff/reactivate] permission denied', { requesterUid, staffUid, businessId });
+      res.status(permissionError.status).json(permissionError.body);
+      return;
+    }
+
+    const requesterSnap = await db.collection('users').doc(requesterUid).get();
+    const requesterProfile = requesterSnap.data()!;
+    const [staffProfileSnap, staffRosterSnap] = await Promise.all([
+      db.collection('users').doc(staffUid).get(),
+      db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
+    ]);
+    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+
+    await auth.updateUser(staffUid, { disabled: false });
+
+    const batch = db.batch();
+    batch.update(db.collection('users').doc(staffUid), { suspended: false });
+    batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), { suspended: false });
+    await batch.commit();
+
+    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    await db
+      .collection('businesses')
+      .doc(businessId)
+      .collection('timelineEvents')
+      .doc(timelineId)
+      .set({
+        id: timelineId,
+        type: 'staff-reactivated',
+        date: startedAt.slice(0, 10),
+        createdAt: startedAt,
+        userName: requesterProfile.name || 'Dono',
+        title: 'Funcionário Reativado',
+        description: `O acesso de "${staffName}" foi reativado.`,
+        details: { staffName, reactivatedBy: requesterProfile.name || requesterUid },
+      });
+
+    console.log('[staff/reactivate] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
+    res.json({ success: true, staffUid });
+  } catch (err) {
+    console.error('[staff/reactivate] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao reativar o funcionário. Tente novamente.' });
   }
 });
 

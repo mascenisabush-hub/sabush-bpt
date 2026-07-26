@@ -158,6 +158,10 @@ interface AppContextType {
   deleteProduct: (id: string) => Promise<void>;
   addStaffMember: (name: string, email: string, password: string) => Promise<void>;
   deleteStaffMember: (staffUid: string, reason?: string) => Promise<void>;
+  suspendStaffMember: (staffUid: string, reason?: string) => Promise<void>;
+  reactivateStaffMember: (staffUid: string) => Promise<void>;
+  suspensionNotice: string | null;
+  clearSuspensionNotice: () => void;
   // Multi-shop support (owners only, up to MAX_SHOPS_PER_OWNER shops).
   // `activeBusinessId` is the shop currently being viewed/operated on —
   // every other field/action in this context (business, products,
@@ -177,6 +181,11 @@ const AppContext = createContext<AppContextType | undefined>(undefined);
 export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children }) => {
   const [currentUser, setCurrentUser] = useState<FirebaseUser | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfile | null>(null);
+  // Set only when a staff account gets force-signed-out mid-session because
+  // an owner suspended it (see the profile listener below). Survives the
+  // logout itself (unlike userProfile, which gets cleared) so the login
+  // screen can show *why* they were logged out, then it's cleared once shown.
+  const [suspensionNotice, setSuspensionNotice] = useState<string | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
@@ -350,7 +359,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const unsubscribeUser = onSnapshot(userRef, (docSnap) => {
       if (docSnap.exists()) {
         const profile = docSnap.data() as UserProfile;
-        setUserProfile(profile);
+        // A staff account can be suspended by its owner at any time (see
+        // suspendStaffMember / server/index.ts). Firebase Auth disabling
+        // blocks all *future* logins immediately, but an already-open
+        // session's ID token can otherwise keep working until it naturally
+        // expires. Catching `suspended` here, live, closes that gap —
+        // the moment this doc updates, we sign the session out ourselves.
+        if (profile.role === 'staff' && profile.suspended === true) {
+          setSuspensionNotice('A sua conta foi suspensa pelo dono do negócio. Contacte-o para mais informações.');
+          setUserProfile(null);
+          signOut(auth).catch((err) => console.error('Error signing out suspended staff session:', err));
+        } else {
+          setUserProfile(profile);
+        }
       } else {
         setUserProfile(null);
       }
@@ -1331,6 +1352,63 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  const _staffActionRequest = async (
+    endpoint: 'suspend' | 'reactivate',
+    staffUid: string,
+    reason?: string
+  ) => {
+    if (!activeBusinessId || !isOwner) {
+      throw new Error('Apenas o dono pode gerir funcionários.');
+    }
+    if (!currentUser) {
+      throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/staff/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          staffUid,
+          businessId: activeBusinessId,
+          reason,
+        }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
+
+    if (!response.ok) {
+      let message = endpoint === 'suspend'
+        ? 'Erro ao suspender funcionário. Tente novamente.'
+        : 'Erro ao reativar funcionário. Tente novamente.';
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // response wasn't JSON — keep the generic message
+      }
+      throw new Error(message);
+    }
+  };
+
+  // Reversible alternative to deleteStaffMember: blocks the staff member's
+  // access entirely (Firebase Auth account disabled + refresh tokens
+  // revoked server-side) without touching any data they've entered.
+  const suspendStaffMember = async (staffUid: string, reason?: string) => {
+    await _staffActionRequest('suspend', staffUid, reason);
+  };
+
+  const reactivateStaffMember = async (staffUid: string) => {
+    await _staffActionRequest('reactivate', staffUid);
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
@@ -1451,6 +1529,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteProduct,
         addStaffMember,
         deleteStaffMember,
+        suspendStaffMember,
+        reactivateStaffMember,
+        suspensionNotice,
+        clearSuspensionNotice: () => setSuspensionNotice(null),
         ownedBusinesses,
         activeBusinessId,
         maxShopsPerOwner: MAX_SHOPS_PER_OWNER,

@@ -9,6 +9,8 @@ import {
   Lock,
   FileDown,
   UserMinus,
+  UserX,
+  UserCheck,
 } from 'lucide-react';
 import { TimelineActivityType, TimelineEvent } from '../../types';
 import { isDateInRange } from '../../utils/calculations';
@@ -29,6 +31,8 @@ export const ACTIVITY_ICON: Record<TimelineActivityType, React.ComponentType<{ c
   'yearly-closing': Lock,
   'report-exported': FileDown,
   'staff-removed': UserMinus,
+  'staff-suspended': UserX,
+  'staff-reactivated': UserCheck,
 };
 
 export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
@@ -44,6 +48,8 @@ export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
   'yearly-closing': 'bg-teal-50 text-teal-600 border-teal-200',
   'report-exported': 'bg-gray-100 text-gray-600 border-gray-200',
   'staff-removed': 'bg-slate-100 text-slate-600 border-slate-300',
+  'staff-suspended': 'bg-orange-50 text-orange-600 border-orange-200',
+  'staff-reactivated': 'bg-green-50 text-green-600 border-green-200',
 };
 
 export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
@@ -59,6 +65,8 @@ export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
   'yearly-closing': 'Fecho Anual',
   'report-exported': 'Relatório',
   'staff-removed': 'Funcionário Removido',
+  'staff-suspended': 'Funcionário Suspenso',
+  'staff-reactivated': 'Funcionário Reativado',
 };
 
 export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
@@ -74,6 +82,8 @@ export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
   'business-profile-updated',
   'report-exported',
   'staff-removed',
+  'staff-suspended',
+  'staff-reactivated',
 ];
 
 export function getEventTime(createdAt: string): string {

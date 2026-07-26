@@ -15,6 +15,13 @@ export interface UserProfile {
   // profiles and on all staff profiles.
   businessIds?: string[];
   activeBusinessId?: string;
+  // Staff-only. Set exclusively by the server (server/index.ts, via
+  // Firebase Admin SDK — firestore.rules blocks any client-side write to
+  // this field, even on the user's own profile). Suspending disables the
+  // Firebase Auth account outright (no login possible at all) and this
+  // flag lets the client detect it in real time and force an immediate
+  // sign-out of any session that's already open.
+  suspended?: boolean;
 }
 
 export interface Business {
@@ -35,6 +42,7 @@ export interface StaffMember {
   name: string;
   businessId: string;
   createdAt: string;
+  suspended?: boolean;
 }
 
 export type BatchStatus = 'open' | 'closed';
@@ -289,7 +297,9 @@ export type TimelineActivityType =
   | 'monthly-closing'
   | 'yearly-closing'
   | 'report-exported'
-  | 'staff-removed';
+  | 'staff-removed'
+  | 'staff-suspended'
+  | 'staff-reactivated';
 
 export interface TimelineFinancialImpact {
   label: string; // e.g. "Investimento", "Despesa", "Retirada", "Perda"

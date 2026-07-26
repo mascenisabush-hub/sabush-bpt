@@ -11,8 +11,10 @@ import { doc, getDoc, setDoc } from 'firebase/firestore';
 import { TrendingUp, Store, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCircle, Sparkles, UserCheck, Eye, EyeOff } from 'lucide-react';
 import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
+import { useApp } from '../context/AppContext';
 
 export const AuthView: React.FC = () => {
+  const { suspensionNotice, clearSuspensionNotice } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [roleMode, setRoleMode] = useState<'owner' | 'staff'>('owner');
 
@@ -60,6 +62,8 @@ export const AuthView: React.FC = () => {
           let userMsg = '';
           if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
             userMsg = 'Email ou palavra-passe incorretos.';
+          } else if (err.code === 'auth/user-disabled') {
+            userMsg = 'Esta conta foi suspensa. Contacte o dono do negócio para mais informações.';
           } else if (err.code === 'auth/invalid-email') {
             userMsg = 'Formato de email inválido.';
           } else {
@@ -347,6 +351,26 @@ export const AuthView: React.FC = () => {
               }`}
             >
               Funcionário (Staff)
+            </button>
+          </div>
+        )}
+
+        {/* Suspension notice — shown once, right after a suspended staff
+            session gets force-signed-out mid-use (see AppContext's user
+            profile listener). Distinct from the normal login error banner
+            below since it explains *why* they were logged out, not a
+            failed login attempt. */}
+        {suspensionNotice && (
+          <div className="mb-4 p-3 rounded-xl bg-orange-500/10 border border-orange-500/30 text-orange-700 text-xs flex items-start gap-2">
+            <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+            <span className="flex-1">{suspensionNotice}</span>
+            <button
+              type="button"
+              onClick={clearSuspensionNotice}
+              className="text-orange-600/60 hover:text-orange-700 font-bold shrink-0"
+              aria-label="Fechar"
+            >
+              ×
             </button>
           </div>
         )}
