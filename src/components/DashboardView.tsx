@@ -68,25 +68,25 @@ const KpiCard: React.FC<KpiCardProps> = ({
     type="button"
     onClick={onClick}
     disabled={!onClick}
-    className={`h-full text-left bg-white rounded-2xl p-6 flex flex-col gap-4 transition ${
-      highlight ? 'bg-[#B8791A]/[0.04]' : ''
-    } ${onClick ? 'hover:-translate-y-0.5 hover:shadow-[var(--shadow-2)] cursor-pointer active:scale-[0.98]' : 'cursor-default'} shadow-[var(--shadow-1)] italic`}
+    className={`card-premium h-full text-left p-6 sm:p-7 flex flex-col gap-5 ${
+      highlight ? 'is-highlighted' : ''
+    } ${onClick ? 'is-interactive cursor-pointer active:scale-[0.99]' : 'cursor-default'}`}
   >
-    <div className="flex items-start justify-between gap-1">
-      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
-        <Icon className="w-[18px] h-[18px]" />
+    <div className="flex items-start justify-between gap-2">
+      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
+        <Icon className="w-[19px] h-[19px]" />
       </div>
       {badge}
     </div>
     <div>
-      <p className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 leading-tight italic">
+      <p className="kpi-label leading-tight">
         {label}
       </p>
-      <p className={`text-2xl sm:text-[26px] font-extrabold font-mono mt-1.5 leading-tight truncate ${valueClass || 'text-[#1B3966]'} italic`}>
+      <p className={`kpi-value text-[26px] sm:text-[28px] mt-2 leading-tight truncate ${valueClass || ''}`}>
         {value}
       </p>
     </div>
-    <p className="text-[11px] text-gray-500 leading-snug mt-auto italic">
+    <p className="text-[12px] text-gray-500 leading-snug mt-auto">
       {description}
     </p>
   </button>
@@ -199,11 +199,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
         <KpiCard
           icon={Landmark}
-          iconBgClass={hasInitialStockCount ? 'bg-[#1B3966]/[0.06]' : 'bg-[#B8791A]/10'}
-          iconTextClass={hasInitialStockCount ? 'text-[#1B3966]' : 'text-[#B8791A]'}
+          iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#D4AF37]/10'}
+          iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#D4AF37]'}
           label="Capital Inicial do Negócio"
           value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido'}
-          valueClass={hasInitialStockCount ? 'text-[#1B3966]' : 'text-[#B8791A]'}
+          valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#D4AF37]'}
           description={
             hasInitialStockCount
               ? 'O valor verificado do stock registado quando começou a usar o Sabush.'
@@ -215,21 +215,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Package}
-          iconBgClass="bg-[#1B3966]/[0.06]"
-          iconTextClass="text-[#1B3966]"
+          iconBgClass="bg-[#0B1F3A]/[0.06]"
+          iconTextClass="text-[#0B1F3A]"
           label="Custo do Stock Atual"
           value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
-          valueClass="text-[#1B3966]"
+          valueClass="text-[#0B1F3A]"
           description="O valor investido no stock que ainda resta."
         />
 
         <KpiCard
           icon={Tag}
-          iconBgClass="bg-[#1B3966]/[0.06]"
-          iconTextClass="text-[#1B3966]"
+          iconBgClass="bg-[#0B1F3A]/[0.06]"
+          iconTextClass="text-[#0B1F3A]"
           label="Valor de Mercado do Stock"
           value={formatCurrency(totalMarketValueAllTime, currencySymbol)}
-          valueClass="text-[#1B3966]"
+          valueClass="text-[#0B1F3A]"
           description="O valor estimado de venda do stock que ainda resta."
         />
 
@@ -246,11 +246,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Gem}
-          iconBgClass="bg-[#B8791A]/10"
-          iconTextClass="text-[#B8791A]"
+          iconBgClass="bg-[#D4AF37]/10"
+          iconTextClass="text-[#D4AF37]"
           label="Valor do Negócio"
           value={formatCurrency(businessWorth, currencySymbol)}
-          valueClass="text-[#B8791A]"
+          valueClass="text-[#D4AF37]"
           description="O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados."
           onClick={() => setShowWorthModal(true)}
           badge={
@@ -258,7 +258,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               <span
                 className={`inline-flex items-center gap-0.5 text-[10px] font-bold font-mono ${
                   capitalGrowth > 0 ? 'text-emerald-600' : 'text-rose-600'
-                } italic`}
+                }`}
               >
                 {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
                 {capitalGrowth >= 0 ? '+' : ''}
@@ -282,18 +282,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* SECONDARY METRICS — same existing cards/data (Levantamentos, Quebras,
           Lotes Ativos), nothing removed. Set apart in a very light grey
           section rather than a border, so the primary 6 above keep focus. */}
-      <div className="bg-[#F7F8FA] rounded-2xl p-5 sm:p-6">
-        <p className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 mb-4 px-1 italic">
+      <div className="bg-[#F5F7FA] rounded-2xl p-6 sm:p-7">
+        <p className="kpi-label mb-5 px-1">
           Outros Indicadores
         </p>
         <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
           <KpiCard
             icon={HandCoins}
-            iconBgClass="bg-[#B8791A]/10"
-            iconTextClass="text-[#B8791A]"
+            iconBgClass="bg-[#D4AF37]/10"
+            iconTextClass="text-[#D4AF37]"
             label="Levantamentos do Dono"
             value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
-            valueClass="text-[#B8791A]"
+            valueClass="text-[#D4AF37]"
             description="Dinheiro retirado intencionalmente pelo dono."
           />
 
@@ -309,32 +309,32 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <KpiCard
             icon={Boxes}
-            iconBgClass="bg-[#1B3966]/[0.06]"
-            iconTextClass="text-[#1B3966]"
+            iconBgClass="bg-[#0B1F3A]/[0.06]"
+            iconTextClass="text-[#0B1F3A]"
             label="Lotes Ativos"
             value={String(activeBatchCount)}
-            valueClass="text-[#1B3966]"
+            valueClass="text-[#0B1F3A]"
             description="Número de lotes de stock que contribuem atualmente para o inventário."
           />
         </div>
       </div>
 
       {/* TOP BAR (single slim row) */}
-      <div className="flex items-center gap-2 bg-white rounded-xl p-2.5 sm:p-3 elevation-1">
+      <div className="flex items-center gap-2.5 card-premium rounded-2xl p-3 sm:p-3.5">
         {/* Search Bar */}
         <div className="flex-1 relative">
-          <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-500 pointer-events-none italic" />
+          <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
             placeholder="Pesquisar produtos..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#B8791A] transition font-bold italic"
+            className="w-full bg-[#F5F7FA] border border-transparent rounded-xl pl-10 pr-8 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#D4AF37] transition font-semibold"
           />
           {searchQuery && (
             <button
               onClick={() => setSearchQuery('')}
-              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-0.5 italic"
+              className="absolute right-2.5 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700 p-0.5"
             >
               <X className="w-3.5 h-3.5" />
             </button>
@@ -346,7 +346,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <select
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#B8791A] shrink-0 max-w-[140px] italic"
+            className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#D4AF37] shrink-0 max-w-[140px]"
           >
             <option value="">Todas Categorias</option>
             {categoryOptions.map(c => (
@@ -358,7 +358,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <select
             value={supplierFilter}
             onChange={e => setSupplierFilter(e.target.value)}
-            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#B8791A] shrink-0 max-w-[140px] italic"
+            className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#D4AF37] shrink-0 max-w-[140px]"
           >
             <option value="">Todos Fornecedores</option>
             {supplierOptions.map(s => (
@@ -369,11 +369,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         {/* Right: Product Count & Sort Button */}
         <div className="flex items-center gap-1.5 shrink-0">
-          <span className="text-[11px] font-bold text-gray-500 bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 hidden sm:inline-block italic">
+          <span className="text-[11px] font-bold text-gray-600 bg-[#F5F7FA] px-3 py-2 rounded-xl hidden sm:inline-block">
             {products.length} {products.length === 1 ? 'produto' : 'produtos'}
           </span>
-          <span className="text-[11px] font-bold text-gray-500 bg-white px-2.5 py-1.5 rounded-xl border border-gray-200 hidden sm:inline-flex items-center gap-1 italic">
-            <Boxes className="w-3 h-3 text-amber-600 italic" />
+          <span className="text-[11px] font-bold text-gray-600 bg-[#F5F7FA] px-3 py-2 rounded-xl hidden sm:inline-flex items-center gap-1">
+            <Boxes className="w-3 h-3 text-[#D4AF37]" />
             {activeBatchCount} {activeBatchCount === 1 ? 'lote ativo' : 'lotes ativos'}
           </span>
 
@@ -382,36 +382,36 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               type="button"
               onClick={() => setShowSortDropdown(!showSortDropdown)}
               title="Filtrar / Ordenar"
-              className="p-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-800 transition active:scale-95 flex items-center gap-1 text-xs italic"
+              className="p-2.5 rounded-xl bg-[#F5F7FA] hover:bg-[#EEF0F3] text-gray-600 hover:text-[#0B1F3A] transition active:scale-95 flex items-center gap-1 text-xs"
             >
-              <SlidersHorizontal className="w-4 h-4 text-[#1B3966] italic" />
+              <SlidersHorizontal className="w-4 h-4 text-[#0B1F3A]" />
             </button>
 
             {showSortDropdown && (
               <>
                 <div className="fixed inset-0 z-10" onClick={() => setShowSortDropdown(false)} />
-                <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl elevation-3 p-1 z-20 w-44 space-y-0.5 text-xs text-gray-700 italic">
-                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500 italic">
+                <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl elevation-3 p-1 z-20 w-44 space-y-0.5 text-xs text-gray-700">
+                  <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                     Ordenar Por
                   </div>
                   <button
                     type="button"
                     onClick={() => { setSortBy('name'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-[#B8791A]/10 text-[#B8791A] font-bold' : 'hover:bg-gray-50'} italic`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Nome (A-Z)
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('profit'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-[#B8791A]/10 text-[#B8791A] font-bold' : 'hover:bg-gray-50'} italic`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Maior Lucro
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('cost'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-[#B8791A]/10 text-[#B8791A] font-bold' : 'hover:bg-gray-50'} italic`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Preço Custo
                   </button>
@@ -428,53 +428,53 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 elevation-3 space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
-                <Wallet className="w-5 h-5 text-[#1B3966] italic" />
-                <h3 className="text-base font-bold text-title italic">Lucro Embutido</h3>
+                <Wallet className="w-5 h-5 text-[#0B1F3A]" />
+                <h3 className="text-base font-bold text-title">Lucro Embutido</h3>
               </div>
               <button
                 onClick={() => setShowBreakdownModal(false)}
-                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition italic"
+                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-[11px] text-gray-500 -mt-1 italic">
+            <p className="text-[11px] text-gray-500 -mt-1">
               Lucro Embutido é o lucro potencial marcado no stock — nenhuma venda é registada nesta app, por isso este valor nunca é rendimento realizado.
             </p>
 
-            <div className="space-y-2.5 text-xs italic">
+            <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 italic">Estimado (Lotes Abertos):</span>
-                <span className="font-bold font-mono text-[#9C6613] italic">
+                <span className="text-gray-500">Estimado (Lotes Abertos):</span>
+                <span className="font-bold font-mono text-[#B8962E]">
                   {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 italic">Finalizado (Lotes Fechados):</span>
-                <span className="font-bold font-mono text-[#9C6613] italic">
+                <span className="text-gray-500">Finalizado (Lotes Fechados):</span>
+                <span className="font-bold font-mono text-[#B8962E]">
                   {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-[#B8791A]/10 border border-[#B8791A]/30">
-                <span className="text-gray-800 font-bold italic">Lucro Embutido Total:</span>
-                <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'} italic`}>
+              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30">
+                <span className="text-gray-800 font-bold">Lucro Embutido Total:</span>
+                <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500 italic">Despesas Gerais (até hoje):</span>
-                <span className="font-bold font-mono text-rose-700 italic">
+                <span className="text-gray-500">Despesas Gerais (até hoje):</span>
+                <span className="font-bold font-mono text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500 italic">Levantamentos do Dono (não afeta o lucro):</span>
-                <span className="font-bold font-mono text-slate-600 italic">
+                <span className="text-gray-500">Levantamentos do Dono (não afeta o lucro):</span>
+                <span className="font-bold font-mono text-slate-600">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
@@ -482,7 +482,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => setShowBreakdownModal(false)}
-              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition italic"
+              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
             >
               Fechar
             </button>
@@ -496,69 +496,69 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 elevation-3 space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
-                <Gem className="w-5 h-5 text-indigo-600 italic" />
-                <h3 className="text-base font-bold text-title italic">Valor do Negócio</h3>
+                <Gem className="w-5 h-5 text-indigo-600" />
+                <h3 className="text-base font-bold text-title">Valor do Negócio</h3>
               </div>
               <button
                 onClick={() => setShowWorthModal(false)}
-                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition italic"
+                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <p className="text-[11px] text-gray-500 -mt-1 italic">
+            <p className="text-[11px] text-gray-500 -mt-1">
               Valor do Negócio = Valor de Mercado do Stock − Despesas − Levantamentos. Sem venda registada, não existe um valor de "caixa" real — por isso não inventamos um.
             </p>
 
-            <div className="space-y-2.5 text-xs italic">
+            <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="flex items-center gap-1.5 text-gray-500 italic">
-                  <Boxes className="w-3.5 h-3.5 text-amber-600 italic" /> Valor de Mercado do Stock:
+                <span className="flex items-center gap-1.5 text-gray-500">
+                  <Boxes className="w-3.5 h-3.5 text-amber-600" /> Valor de Mercado do Stock:
                 </span>
-                <span className="font-bold font-mono text-gray-800 italic">
+                <span className="font-bold font-mono text-gray-800">
                   {formatCurrency(totalMarketValueAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500 italic">Custo do Stock (Investimento):</span>
-                <span className="font-bold font-mono text-gray-800 italic">
+                <span className="text-gray-500">Custo do Stock (Investimento):</span>
+                <span className="font-bold font-mono text-gray-800">
                   {formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500 italic">Despesas Gerais:</span>
-                <span className="font-bold font-mono text-rose-700 italic">
+                <span className="text-gray-500">Despesas Gerais:</span>
+                <span className="font-bold font-mono text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500 italic">Levantamentos do Dono:</span>
-                <span className="font-bold font-mono text-rose-700 italic">
+                <span className="text-gray-500">Levantamentos do Dono:</span>
+                <span className="font-bold font-mono text-rose-700">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-indigo-50 border border-indigo-500/30">
-                <span className="text-gray-800 font-bold italic">Valor Total do Negócio:</span>
-                <span className="text-base font-extrabold font-mono text-indigo-700 italic">
+                <span className="text-gray-800 font-bold">Valor Total do Negócio:</span>
+                <span className="text-base font-extrabold font-mono text-indigo-700">
                   {formatCurrency(businessWorth, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500 italic">Contagem Física Mais Recente:</span>
-                <span className="font-bold font-mono text-slate-600 italic">
+                <span className="text-gray-500">Contagem Física Mais Recente:</span>
+                <span className="font-bold font-mono text-slate-600">
                   {formatCurrency(currentInventoryValue, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500 italic">Capital Inicial (ponto de partida):</span>
-                <span className="font-bold font-mono text-slate-600 italic">
+                <span className="text-gray-500">Capital Inicial (ponto de partida):</span>
+                <span className="font-bold font-mono text-slate-600">
                   {formatCurrency(initialCapitalValue, currencySymbol)}
                 </span>
               </div>
@@ -568,15 +568,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   capitalGrowth >= 0 ? 'bg-emerald-50 border-emerald-500/30' : 'bg-rose-50 border-rose-500/30'
                 }`}
               >
-                <span className="flex items-center gap-1.5 font-bold text-gray-700 italic">
+                <span className="flex items-center gap-1.5 font-bold text-gray-700">
                   {capitalGrowth >= 0 ? (
-                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600 italic" />
+                    <TrendingUp className="w-3.5 h-3.5 text-emerald-600" />
                   ) : (
-                    <TrendingDown className="w-3.5 h-3.5 text-rose-600 italic" />
+                    <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
                   )}
                   Crescimento do Capital:
                 </span>
-                <span className={`font-bold font-mono ${capitalGrowth >= 0 ? 'text-emerald-700' : 'text-rose-700'} italic`}>
+                <span className={`font-bold font-mono ${capitalGrowth >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                   {capitalGrowth >= 0 ? '+' : ''}
                   {formatCurrency(capitalGrowth, currencySymbol)} ({capitalGrowthPct >= 0 ? '+' : ''}
                   {capitalGrowthPct.toFixed(1)}%)
@@ -584,7 +584,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
 
               {latestStockCount && (
-                <p className="text-[10px] text-gray-400 text-center pt-1 italic">
+                <p className="text-[10px] text-gray-400 text-center pt-1">
                   Stock atual baseado na contagem de {latestStockCount.date.split('-').reverse().join('/')}
                   {!hasInitialStockCount && ' · Defina o Capital Inicial para medir o crescimento.'}
                 </p>
@@ -593,7 +593,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
             <button
               onClick={() => setShowWorthModal(false)}
-              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition italic"
+              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
             >
               Fechar
             </button>
@@ -603,12 +603,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {/* TABLE */}
       {filteredProducts.length === 0 ? (
-        <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 elevation-1 italic">
-          <div className="w-12 h-12 rounded-2xl bg-[#B8791A]/10 border border-[#B8791A]/30 flex items-center justify-center text-[#B8791A] mx-auto mb-3 italic">
+        <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 elevation-1">
+          <div className="w-12 h-12 rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-[#D4AF37] mx-auto mb-3">
             <Package className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-bold text-gray-800 italic">Nenhum produto encontrado</h3>
-          <p className="text-xs text-gray-500 my-2 italic">
+          <h3 className="text-sm font-bold text-gray-800">Nenhum produto encontrado</h3>
+          <p className="text-xs text-gray-500 my-2">
             {products.length === 0
               ? 'Adicione stock para criar o seu primeiro produto!'
               : 'Nenhum produto corresponde à sua pesquisa.'}
@@ -616,7 +616,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {products.length === 0 && (
             <button
               onClick={() => onNavigateToAddStock()}
-              className="mt-3 px-4 py-2.5 rounded-xl bg-[#1B3966] hover:bg-[#274B82] text-white font-bold text-xs transition shadow-md active:scale-95 italic"
+              className="mt-3 px-4 py-2.5 rounded-xl bg-[#0B1F3A] hover:bg-[#14294A] text-white font-bold text-xs transition shadow-md active:scale-95"
             >
               + Adicionar Primeiro Lote
             </button>
@@ -625,21 +625,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ) : (
         <div className="bg-white rounded-xl overflow-hidden elevation-1">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-1 px-4 py-3 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-400 italic">
+          <div className="grid grid-cols-12 gap-1 px-4 py-3 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
             <div className="col-span-4 sm:col-span-5">Produto</div>
-            <div className="col-span-2 text-right italic">
+            <div className="col-span-2 text-right">
               Compra
-              <span className="block text-[9px] text-gray-500 font-bold lowercase italic">/un</span>
+              <span className="block text-[9px] text-gray-500 font-bold lowercase">/un</span>
             </div>
-            <div className="col-span-2 text-right italic">
+            <div className="col-span-2 text-right">
               Venda
-              <span className="block text-[9px] text-gray-500 font-bold lowercase italic">/un</span>
+              <span className="block text-[9px] text-gray-500 font-bold lowercase">/un</span>
             </div>
-            <div className="col-span-2 sm:col-span-2 text-right italic">
+            <div className="col-span-2 sm:col-span-2 text-right">
               Lucro
-              <span className="block text-[9px] text-gray-500 font-bold lowercase italic">Est. / Final</span>
+              <span className="block text-[9px] text-gray-500 font-bold lowercase">Est. / Final</span>
             </div>
-            <div className="col-span-2 sm:col-span-1 text-center pr-1 italic">Ações</div>
+            <div className="col-span-2 sm:col-span-1 text-center pr-1">Ações</div>
           </div>
 
           {/* Table Body */}
@@ -684,16 +684,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className="col-span-4 sm:col-span-5 pr-1 min-w-0 cursor-pointer"
                   >
                     <div className="flex items-center gap-1">
-                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-[#1B3966] transition truncate italic">
+                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-[#0B1F3A] transition truncate">
                         {product.name}
                       </span>
                       {activeCalc?.hasExceededWarning && (
                         <span title="Aviso: Quebras excedem stock">
-                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 italic" />
+                          <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         </span>
                       )}
                     </div>
-                    <span className="text-[10px] text-gray-500 block truncate font-mono italic">
+                    <span className="text-[10px] text-gray-500 block truncate font-mono">
                       {activeBatch
                         ? 'Lote ativo'
                         : closedBatches.length > 0
@@ -701,7 +701,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         : 'Sem lote'}
                     </span>
                     {(product.category || product.supplier || product.sku) && (
-                      <span className="text-[9px] text-gray-400 block truncate italic">
+                      <span className="text-[9px] text-gray-400 block truncate">
                         {[product.category, product.supplier, product.sku && `SKU: ${product.sku}`]
                           .filter(Boolean)
                           .join(' · ')}
@@ -710,37 +710,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   </div>
 
                   {/* COMPRA */}
-                  <div className="col-span-2 text-right italic">
-                    <span className="text-xs font-bold text-gray-700 font-mono block italic">
+                  <div className="col-span-2 text-right">
+                    <span className="text-xs font-bold text-gray-700 font-mono block">
                       {costPriceText}
                     </span>
                     {displayBatch?.unit && (
-                      <span className="text-[9px] text-gray-500 block font-sans italic">/{displayBatch.unit}</span>
+                      <span className="text-[9px] text-gray-500 block font-sans">/{displayBatch.unit}</span>
                     )}
                   </div>
 
                   {/* VENDA */}
-                  <div className="col-span-2 text-right italic">
-                    <span className="text-xs font-bold text-gray-700 font-mono block italic">
+                  <div className="col-span-2 text-right">
+                    <span className="text-xs font-bold text-gray-700 font-mono block">
                       {sellingPriceText}
                     </span>
                     {displayBatch?.unit && (
-                      <span className="text-[9px] text-gray-500 block font-sans italic">/{displayBatch.unit}</span>
+                      <span className="text-[9px] text-gray-500 block font-sans">/{displayBatch.unit}</span>
                     )}
                   </div>
 
                   {/* LUCRO */}
-                  <div className="col-span-2 sm:col-span-2 text-right italic">
+                  <div className="col-span-2 sm:col-span-2 text-right">
                     <span
                       className={`text-xs font-bold font-mono block ${
                         displayProfit >= 0
                           ? activeBatch ? 'text-emerald-600' : 'text-emerald-700'
                           : 'text-rose-600'
-                      } italic`}
+                      }`}
                     >
                       {formatCurrency(displayProfit, currencySymbol)}
                     </span>
-                    <span className="text-[9px] text-gray-500 block font-mono italic">
+                    <span className="text-[9px] text-gray-500 block font-mono">
                       {activeBatch ? 'Est.' : 'Final'}
                     </span>
                   </div>
@@ -751,7 +751,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       type="button"
                       onClick={() => onNavigateToAddStock(product.name)}
                       title="Adicionar Stock / Editar Lote"
-                      className="p-1.5 text-gray-500 hover:text-[#1B3966] hover:bg-gray-50 rounded-lg transition italic"
+                      className="p-1.5 text-gray-500 hover:text-[#0B1F3A] hover:bg-gray-50 rounded-lg transition"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -761,7 +761,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         type="button"
                         onClick={() => setOpenActionMenuId(isMenuOpen ? null : product.id)}
                         title="Mais opções"
-                        className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition italic"
+                        className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
                       </button>
@@ -772,16 +772,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             className="fixed inset-0 z-10"
                             onClick={() => setOpenActionMenuId(null)}
                           />
-                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl elevation-3 p-1 z-20 w-40 text-xs space-y-0.5 italic">
+                          <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl elevation-3 p-1 z-20 w-40 text-xs space-y-0.5">
                             <button
                               type="button"
                               onClick={() => {
                                 setOpenActionMenuId(null);
                                 onSelectProductDetail(product);
                               }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5 italic"
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Eye className="w-3.5 h-3.5 text-[#1B3966] italic" />
+                              <Eye className="w-3.5 h-3.5 text-[#0B1F3A]" />
                               <span>Ver detalhes</span>
                             </button>
 
@@ -791,9 +791,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 setOpenActionMenuId(null);
                                 onNavigateToAddStock(product.name);
                               }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5 italic"
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Plus className="w-3.5 h-3.5 text-[#1B3966] italic" />
+                              <Plus className="w-3.5 h-3.5 text-[#0B1F3A]" />
                               <span>+ Add Stock</span>
                             </button>
 
@@ -803,9 +803,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 setOpenActionMenuId(null);
                                 onNavigateToAddQuebra(product.id);
                               }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5 italic"
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <AlertTriangle className="w-3.5 h-3.5 text-[#1B3966] italic" />
+                              <AlertTriangle className="w-3.5 h-3.5 text-[#0B1F3A]" />
                               <span>+ Quebra</span>
                             </button>
 
@@ -815,9 +815,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                 setOpenActionMenuId(null);
                                 setEditingProduct(product);
                               }}
-                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5 italic"
+                              className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Tag className="w-3.5 h-3.5 text-[#1B3966] italic" />
+                              <Tag className="w-3.5 h-3.5 text-[#0B1F3A]" />
                               <span>Editar Detalhes</span>
                             </button>
                           </div>

@@ -5,41 +5,42 @@
    ========================================================================== */
 :root {
   --background: #FFFFFF;
-  --foreground: #111111;
+  --foreground: #111827;
 
-  /* Sabush brand system: navy for titles/hierarchy, gold as the premium accent,
-     orange reserved for secondary emphasis. */
-  --title: #1B3966;
-  --title-soft: #1E3A5F;
+  /* Premium Sabush brand system: navy is the structural/primary color,
+     gold is reserved strictly for accents — active states, key numbers,
+     highlights. White is the dominant base (~60-70% of the surface). */
+  --title: #0B1F3A;
+  --title-soft: #14294A;
 
-  --navy: #1B3966;
-  --navy-soft: #274B82;
+  --navy: #0B1F3A;
+  --navy-soft: #14294A;
 
-  --gold: #B8791A;
-  --gold-hover: #9C6613;
+  --gold: #D4AF37;
+  --gold-hover: #B8962E;
 
-  --primary: #EA580C;
-  --primary-hover: #C2410C;
+  --primary: #0B1F3A;
+  --primary-hover: #14294A;
   --primary-foreground: #FFFFFF;
 
-  --secondary: #B8791A;
-  --secondary-hover: #9C6613;
-  --secondary-foreground: #FFFFFF;
+  --secondary: #D4AF37;
+  --secondary-hover: #B8962E;
+  --secondary-foreground: #0B1F3A;
 
-  --accent: #B8791A;
+  --accent: #D4AF37;
 
-  --muted: #F7F8FA;
+  --muted: #F5F7FA;
   --muted-foreground: #6B7280;
 
   /* Borders are used sparingly now — spacing does the separating work */
   --border: #EEF0F3;
   --border-strong: #E5E7EB;
-  --ring: #B8791A;
+  --ring: #D4AF37;
 
   --success: #059669;
-  --warning: #EA580C;
-  --info: #1B3966;
-  --error: #E11D48;
+  --warning: #D97706;
+  --info: #0B1F3A;
+  --error: #DC2626;
 
   /* 8px spacing system */
   --space-1: 4px;
@@ -52,16 +53,16 @@
 }
 
 @theme {
-  --color-primary: #EA580C;
-  --color-primary-hover: #C2410C;
-  --color-secondary: #B8791A;
-  --color-secondary-hover: #9C6613;
-  --color-title: #1B3966;
-  --color-title-soft: #1E3A5F;
-  --color-navy: #1B3966;
-  --color-navy-soft: #274B82;
-  --color-gold: #B8791A;
-  --color-gold-hover: #9C6613;
+  --color-primary: #0B1F3A;
+  --color-primary-hover: #14294A;
+  --color-secondary: #D4AF37;
+  --color-secondary-hover: #B8962E;
+  --color-title: #0B1F3A;
+  --color-title-soft: #14294A;
+  --color-navy: #0B1F3A;
+  --color-navy-soft: #14294A;
+  --color-gold: #D4AF37;
+  --color-gold-hover: #B8962E;
 }
 
 /* ==========================================================================
@@ -73,9 +74,9 @@
    Level 3: modals, popovers above the page
    ========================================================================== */
 :root {
-  --shadow-1: 0 1px 3px rgba(27,57,102,0.06), 0 1px 2px rgba(27,57,102,0.04);
-  --shadow-2: 0 8px 24px -8px rgba(27,57,102,0.14);
-  --shadow-3: 0 20px 48px -12px rgba(27,57,102,0.28);
+  --shadow-1: 0 1px 2px rgba(11,31,58,0.05), 0 1px 3px rgba(11,31,58,0.04);
+  --shadow-2: 0 10px 28px -10px rgba(11,31,58,0.16);
+  --shadow-3: 0 24px 56px -16px rgba(11,31,58,0.30);
 }
 .elevation-1 { box-shadow: var(--shadow-1); }
 .elevation-2 { box-shadow: var(--shadow-2); }
@@ -92,4 +93,45 @@
 }
 .hairline {
   border-color: var(--border);
+}
+
+/* ==========================================================================
+   Premium SaaS card system — shared by KPI cards, panels, and tables so the
+   "fintech" feel (soft depth, white surface, navy structure, gold accents)
+   is consistent everywhere without repeating long class strings.
+   ========================================================================== */
+.card-premium {
+  background: #FFFFFF;
+  border-radius: 16px;
+  box-shadow: var(--shadow-1);
+  transition: box-shadow 180ms ease, transform 180ms ease;
+}
+.card-premium.is-interactive:hover {
+  box-shadow: var(--shadow-2);
+  transform: translateY(-2px);
+}
+.card-premium.is-highlighted {
+  background: linear-gradient(180deg, rgba(212,175,55,0.06) 0%, rgba(212,175,55,0.02) 100%);
+}
+.kpi-value {
+  color: var(--navy);
+  font-weight: 800;
+  letter-spacing: -0.02em;
+  font-variant-numeric: tabular-nums;
+}
+.kpi-value--accent {
+  color: var(--gold);
+}
+.kpi-label {
+  color: #6B7280;
+  font-weight: 600;
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.06em;
+}
+.badge-soft {
+  border-radius: 9999px;
+  font-weight: 700;
+  font-size: 11px;
+  padding: 2px 9px;
 }
