@@ -58,7 +58,7 @@ export const RecentBatchesTable: React.FC = () => {
             <tbody>
               {rows.map(({ pb, summary }) => (
                 <tr key={pb.id} className="border-b border-gray-50 last:border-0 hover:bg-gray-50/60 transition-colors">
-                  <td className="px-5 py-3 font-mono text-xs font-semibold text-[#0B1F3A]">{pb.batchNumber}</td>
+                  <td className="px-5 py-3 font-mono text-xs font-semibold text-[#1B3966]">{pb.batchNumber}</td>
                   <td className="px-5 py-3 text-[#111827]">{pb.supplier.name || '—'}</td>
                   <td className="px-5 py-3 text-gray-500 whitespace-nowrap">{formatDate(pb.date)}</td>
                   <td className="px-5 py-3 text-gray-500">{summary.productCount}</td>
