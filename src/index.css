@@ -9,11 +9,11 @@
 
   /* Sabush brand system: navy for titles/hierarchy, gold as the premium accent,
      orange reserved for secondary emphasis. */
-  --title: #0A1C38;
+  --title: #1B3966;
   --title-soft: #1E3A5F;
 
-  --navy: #0A1C38;
-  --navy-soft: #12294A;
+  --navy: #1B3966;
+  --navy-soft: #274B82;
 
   --gold: #B8791A;
   --gold-hover: #9C6613;
@@ -38,7 +38,7 @@
 
   --success: #059669;
   --warning: #EA580C;
-  --info: #0A1C38;
+  --info: #1B3966;
   --error: #E11D48;
 
   /* 8px spacing system */
@@ -56,10 +56,10 @@
   --color-primary-hover: #C2410C;
   --color-secondary: #B8791A;
   --color-secondary-hover: #9C6613;
-  --color-title: #0A1C38;
+  --color-title: #1B3966;
   --color-title-soft: #1E3A5F;
-  --color-navy: #0A1C38;
-  --color-navy-soft: #12294A;
+  --color-navy: #1B3966;
+  --color-navy-soft: #274B82;
   --color-gold: #B8791A;
   --color-gold-hover: #9C6613;
 }

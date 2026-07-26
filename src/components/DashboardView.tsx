@@ -83,7 +83,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       <p className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 leading-tight">
         {label}
       </p>
-      <p className={`text-2xl sm:text-[26px] font-extrabold font-mono mt-1.5 leading-tight truncate ${valueClass || 'text-[#0A1C38]'}`}>
+      <p className={`text-2xl sm:text-[26px] font-extrabold font-mono mt-1.5 leading-tight truncate ${valueClass || 'text-[#1B3966]'}`}>
         {value}
       </p>
     </div>
@@ -200,11 +200,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
         <KpiCard
           icon={Landmark}
-          iconBgClass={hasInitialStockCount ? 'bg-[#0A1C38]/[0.06]' : 'bg-[#B8791A]/10'}
-          iconTextClass={hasInitialStockCount ? 'text-[#0A1C38]' : 'text-[#B8791A]'}
+          iconBgClass={hasInitialStockCount ? 'bg-[#1B3966]/[0.06]' : 'bg-[#B8791A]/10'}
+          iconTextClass={hasInitialStockCount ? 'text-[#1B3966]' : 'text-[#B8791A]'}
           label="Capital Inicial do Negócio"
           value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido'}
-          valueClass={hasInitialStockCount ? 'text-[#0A1C38]' : 'text-[#B8791A]'}
+          valueClass={hasInitialStockCount ? 'text-[#1B3966]' : 'text-[#B8791A]'}
           description={
             hasInitialStockCount
               ? 'O valor verificado do stock registado quando começou a usar o Sabush.'
@@ -216,21 +216,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Package}
-          iconBgClass="bg-[#0A1C38]/[0.06]"
-          iconTextClass="text-[#0A1C38]"
+          iconBgClass="bg-[#1B3966]/[0.06]"
+          iconTextClass="text-[#1B3966]"
           label="Custo do Stock Atual"
           value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
-          valueClass="text-[#0A1C38]"
+          valueClass="text-[#1B3966]"
           description="O valor investido no stock que ainda resta."
         />
 
         <KpiCard
           icon={Tag}
-          iconBgClass="bg-[#0A1C38]/[0.06]"
-          iconTextClass="text-[#0A1C38]"
+          iconBgClass="bg-[#1B3966]/[0.06]"
+          iconTextClass="text-[#1B3966]"
           label="Valor de Mercado do Stock"
           value={formatCurrency(totalMarketValueAllTime, currencySymbol)}
-          valueClass="text-[#0A1C38]"
+          valueClass="text-[#1B3966]"
           description="O valor estimado de venda do stock que ainda resta."
         />
 
@@ -310,11 +310,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <KpiCard
             icon={Boxes}
-            iconBgClass="bg-[#0A1C38]/[0.06]"
-            iconTextClass="text-[#0A1C38]"
+            iconBgClass="bg-[#1B3966]/[0.06]"
+            iconTextClass="text-[#1B3966]"
             label="Lotes Ativos"
             value={String(activeBatchCount)}
-            valueClass="text-[#0A1C38]"
+            valueClass="text-[#1B3966]"
             description="Número de lotes de stock que contribuem atualmente para o inventário."
           />
         </div>
@@ -385,7 +385,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               title="Filtrar / Ordenar"
               className="p-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-800 transition active:scale-95 flex items-center gap-1 text-xs"
             >
-              <SlidersHorizontal className="w-4 h-4 text-[#0A1C38]" />
+              <SlidersHorizontal className="w-4 h-4 text-[#1B3966]" />
             </button>
 
             {showSortDropdown && (
@@ -429,7 +429,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
-                <Wallet className="w-5 h-5 text-[#0A1C38]" />
+                <Wallet className="w-5 h-5 text-[#1B3966]" />
                 <h3 className="text-base font-bold text-title">Lucro Embutido</h3>
               </div>
               <button
@@ -617,7 +617,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {products.length === 0 && (
             <button
               onClick={() => onNavigateToAddStock()}
-              className="mt-3 px-4 py-2.5 rounded-xl bg-[#0A1C38] hover:bg-[#12294A] text-white font-semibold text-xs transition shadow-md active:scale-95"
+              className="mt-3 px-4 py-2.5 rounded-xl bg-[#1B3966] hover:bg-[#274B82] text-white font-semibold text-xs transition shadow-md active:scale-95"
             >
               + Adicionar Primeiro Lote
             </button>
@@ -685,7 +685,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className="col-span-4 sm:col-span-5 pr-1 min-w-0 cursor-pointer"
                   >
                     <div className="flex items-center gap-1">
-                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-[#0A1C38] transition truncate">
+                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-[#1B3966] transition truncate">
                         {product.name}
                       </span>
                       {activeCalc?.hasExceededWarning && (
@@ -752,7 +752,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       type="button"
                       onClick={() => onNavigateToAddStock(product.name)}
                       title="Adicionar Stock / Editar Lote"
-                      className="p-1.5 text-gray-500 hover:text-[#0A1C38] hover:bg-gray-50 rounded-lg transition"
+                      className="p-1.5 text-gray-500 hover:text-[#1B3966] hover:bg-gray-50 rounded-lg transition"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -782,7 +782,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Eye className="w-3.5 h-3.5 text-[#0A1C38]" />
+                              <Eye className="w-3.5 h-3.5 text-[#1B3966]" />
                               <span>Ver detalhes</span>
                             </button>
 
@@ -794,7 +794,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Plus className="w-3.5 h-3.5 text-[#0A1C38]" />
+                              <Plus className="w-3.5 h-3.5 text-[#1B3966]" />
                               <span>+ Add Stock</span>
                             </button>
 
@@ -806,7 +806,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <AlertTriangle className="w-3.5 h-3.5 text-[#0A1C38]" />
+                              <AlertTriangle className="w-3.5 h-3.5 text-[#1B3966]" />
                               <span>+ Quebra</span>
                             </button>
 
@@ -818,7 +818,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Tag className="w-3.5 h-3.5 text-[#0A1C38]" />
+                              <Tag className="w-3.5 h-3.5 text-[#1B3966]" />
                               <span>Editar Detalhes</span>
                             </button>
                           </div>

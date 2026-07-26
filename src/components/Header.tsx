@@ -3,8 +3,14 @@ import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
+import { NAV_TABS, TabType } from '../data/navigationTabs';
 
-export const Header: React.FC = () => {
+interface HeaderProps {
+  activeTab: TabType;
+  setActiveTab: (tab: TabType) => void;
+}
+
+export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const {
     business,
     userProfile,
@@ -16,6 +22,8 @@ export const Header: React.FC = () => {
     isBusinessProfileComplete,
     logout,
   } = useApp();
+
+  const visibleTabs = isStaff ? NAV_TABS.filter(t => !t.ownerOnly) : NAV_TABS;
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -53,15 +61,20 @@ export const Header: React.FC = () => {
   return (
     <>
       <header className="bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-5">
-          <div className="min-h-14 flex items-center justify-between gap-4">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-5 pb-3">
+          {/* Single unified row: business info (left) · action icons (center) ·
+              profile (right). If the icon row doesn't fit next to the other
+              two on narrower desktop widths, it simply wraps onto its own
+              line below — everything still reads as one header block, no
+              separate grey bar. */}
+          <div className="flex flex-wrap items-start justify-between gap-x-6 gap-y-3">
             {/* Business name — falls back to a quiet placeholder, never a blank/generic app name */}
             {business?.name ? (
-              <div className="min-w-0">
+              <div className="min-w-0 shrink-0">
                 <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8791A] mb-0.5">
                   Meu Negócio
                 </p>
-                <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#0A1C38] truncate">
+                <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#1B3966] truncate">
                   {business.name}
                 </h1>
                 <p
@@ -80,7 +93,7 @@ export const Header: React.FC = () => {
                 </p>
               </div>
             ) : (
-              <div className="flex items-center gap-2.5">
+              <div className="flex items-center gap-2.5 shrink-0">
                 <div className="w-9 h-9 rounded-full bg-[#F7F8FA] text-gray-400 flex items-center justify-center shrink-0">
                   <Store className="w-4 h-4" />
                 </div>
@@ -88,17 +101,52 @@ export const Header: React.FC = () => {
               </div>
             )}
 
+            {/* Action icon row — same 11 buttons as before, now sharing the
+                header's line instead of a separate section below it. */}
+            <nav className="hidden md:flex flex-1 min-w-[280px] items-center justify-center flex-wrap gap-x-2 gap-y-2 order-last lg:order-none">
+              {visibleTabs.map(tab => {
+                const Icon = tab.icon;
+                const isActive = activeTab === tab.id;
+
+                return (
+                  <button
+                    key={tab.id}
+                    onClick={() => setActiveTab(tab.id)}
+                    title={tab.label}
+                    className="group flex flex-col items-center gap-1 px-1.5 py-1 rounded-2xl transition active:scale-[0.96]"
+                  >
+                    <span
+                      className={`flex items-center justify-center w-9 h-9 rounded-2xl transition-all duration-200 shadow-sm ${
+                        isActive
+                          ? 'bg-[#B8791A] shadow-[0_4px_14px_-4px_rgba(184,121,26,0.55)]'
+                          : 'bg-[#1B3966] group-hover:bg-[#B8791A] group-hover:shadow-[0_4px_14px_-4px_rgba(184,121,26,0.45)]'
+                      }`}
+                    >
+                      <Icon className="w-[16px] h-[16px] text-white" strokeWidth={2} />
+                    </span>
+                    <span
+                      className={`text-[10px] font-semibold tracking-tight transition-colors ${
+                        isActive ? 'text-[#B8791A]' : 'text-gray-500 group-hover:text-[#1B3966]'
+                      }`}
+                    >
+                      {tab.shortLabel}
+                    </span>
+                  </button>
+                );
+              })}
+            </nav>
+
             {/* Single profile control — every prior action still lives here, just consolidated */}
             <div className="relative shrink-0" ref={profileMenuRef}>
               <button
                 onClick={() => setShowProfileMenu(v => !v)}
                 className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#B8791A]/10 transition"
               >
-                <div className="w-8 h-8 rounded-full bg-[#0A1C38] text-white flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#1B3966] text-white flex items-center justify-center shrink-0">
                   <User className="w-4 h-4" />
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold text-[#0A1C38] leading-tight">
+                  <span className="text-xs font-bold text-[#1B3966] leading-tight">
                     {userProfile?.name || 'Utilizador'}
                   </span>
                   <span className="text-[10px] uppercase tracking-wide text-[#B8791A] font-bold">
@@ -160,7 +208,7 @@ export const Header: React.FC = () => {
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="group flex items-center gap-1.5 pb-2.5 text-[11.5px] text-[#B8791A] hover:text-[#9C6613] transition"
+              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#B8791A] hover:text-[#9C6613] transition"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span className="font-medium">Complete o perfil do seu negócio</span>
