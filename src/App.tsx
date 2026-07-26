@@ -81,8 +81,8 @@ function MainApp() {
   return (
   <div className="min-h-screen bg-white text-gray-900 font-sans antialiased flex flex-col">
       <div className="sticky top-0 z-30 bg-white">
-        <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
         <Header />
+        <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 pb-24 md:pb-12">

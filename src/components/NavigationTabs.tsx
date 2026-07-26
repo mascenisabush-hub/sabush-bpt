@@ -107,12 +107,14 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
 
   return (
     <>
-      {/* Desktop / Tablet Icon Action Bar — same tabs, no boxed pills, spacing
-          does the separating instead of borders. Icon in blue, small gray
-          label always visible below it, consistent gaps, subtle hover highlight. */}
-      <nav className="hidden md:block bg-white">
+      {/* Desktop / Tablet Icon Action Bar — a premium, evenly spaced row of
+          soft rounded icon buttons. Icon sits in a navy tile that turns gold
+          on hover/active; a minimal label stays visible underneath. Very
+          light grey (bg-[#F7F8FA]) separates the whole row from the white
+          page above/below it instead of a hard border. */}
+      <nav className="hidden md:block bg-[#F7F8FA]">
         <div className="max-w-7xl mx-auto px-8">
-          <div className="flex items-center justify-center flex-wrap gap-x-5 gap-y-2 py-4">
+          <div className="flex items-center justify-center flex-wrap gap-x-3 gap-y-3 py-4">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -122,12 +124,22 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
                   key={tab.id}
                   onClick={() => setActiveTab(tab.id)}
                   title={tab.label}
-                  className={`group flex flex-col items-center gap-1.5 px-3 py-2 rounded-xl transition active:scale-[0.97] ${
-                    isActive ? 'bg-blue-50' : 'hover:bg-gray-50'
-                  }`}
+                  className="group flex flex-col items-center gap-1.5 px-2 py-1.5 rounded-2xl transition active:scale-[0.96]"
                 >
-                  <Icon className={`w-[18px] h-[18px] transition ${isActive ? 'text-blue-600' : 'text-blue-500/80 group-hover:text-blue-600'}`} />
-                  <span className={`text-[10.5px] font-semibold tracking-tight ${isActive ? 'text-blue-600' : 'text-gray-500'}`}>
+                  <span
+                    className={`flex items-center justify-center w-10 h-10 rounded-2xl transition-all duration-200 shadow-sm ${
+                      isActive
+                        ? 'bg-[#B8791A] shadow-[0_4px_14px_-4px_rgba(184,121,26,0.55)]'
+                        : 'bg-[#0A1C38] group-hover:bg-[#B8791A] group-hover:shadow-[0_4px_14px_-4px_rgba(184,121,26,0.45)]'
+                    }`}
+                  >
+                    <Icon className="w-[17px] h-[17px] text-white" strokeWidth={2} />
+                  </span>
+                  <span
+                    className={`text-[10.5px] font-semibold tracking-tight transition-colors ${
+                      isActive ? 'text-[#B8791A]' : 'text-gray-500 group-hover:text-[#0A1C38]'
+                    }`}
+                  >
                     {tab.shortLabel}
                   </span>
                 </button>
@@ -138,8 +150,8 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
       </nav>
 
       {/* Mobile Fixed Bottom Navigation Bar */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-slate-900/95 backdrop-blur-lg border-t border-slate-800 z-40 px-2 py-1.5 shadow-2xl">
-        <div className="flex items-center justify-around">
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#0A1C38] z-40 px-2 py-1.5 shadow-[0_-4px_20px_rgba(10,28,56,0.25)]">
+        <div className="flex items-center justify-around overflow-x-auto">
           {visibleTabs.map(tab => {
             const Icon = tab.icon;
             const isActive = activeTab === tab.id;
@@ -148,13 +160,11 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
               <button
                 key={tab.id}
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex flex-col items-center justify-center min-w-[56px] py-1.5 px-1 rounded-xl text-[10px] font-medium transition active:scale-95 ${
-                  isActive
-                   ? 'text-blue-600 font-bold bg-blue-500/10'
-                    : 'text-gray-500 hover:text-gray-800'
+                className={`flex flex-col items-center justify-center min-w-[52px] py-1.5 px-1 rounded-xl text-[10px] font-medium transition active:scale-95 ${
+                  isActive ? 'text-[#B8791A] font-bold' : 'text-white/60 hover:text-white'
                 }`}
               >
-                <div className={`p-1 rounded-lg ${isActive ? 'bg-blue-500/20 text-blue-600' : ''}`}>
+                <div className={`p-1 rounded-lg ${isActive ? 'bg-[#B8791A]/15' : ''}`}>
                   <Icon className="w-5 h-5" />
                 </div>
                 <span className="mt-0.5 tracking-tight">{tab.shortLabel}</span>

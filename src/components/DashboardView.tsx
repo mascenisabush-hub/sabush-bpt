@@ -68,26 +68,26 @@ const KpiCard: React.FC<KpiCardProps> = ({
     type="button"
     onClick={onClick}
     disabled={!onClick}
-    className={`h-full text-left bg-white rounded-xl p-5 flex flex-col gap-3 transition ${
-      highlight ? 'bg-amber-50/40' : ''
-    } ${onClick ? 'hover:bg-gray-50 cursor-pointer active:scale-[0.98]' : 'cursor-default'}`}
-    style={{ boxShadow: highlight ? undefined : '0 1px 2px rgba(11,30,63,0.04)' }}
+    className={`h-full text-left bg-white rounded-2xl p-6 flex flex-col gap-4 transition ${
+      highlight ? 'bg-[#B8791A]/[0.04]' : ''
+    } ${onClick ? 'hover:-translate-y-0.5 hover:shadow-[0_8px_24px_-8px_rgba(10,28,56,0.14)] cursor-pointer active:scale-[0.98]' : 'cursor-default'}`}
+    style={{ boxShadow: '0 1px 3px rgba(10,28,56,0.06), 0 1px 2px rgba(10,28,56,0.04)' }}
   >
     <div className="flex items-start justify-between gap-1">
-      <div className={`w-8 h-8 rounded-lg flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
-        <Icon className="w-4 h-4" />
+      <div className={`w-10 h-10 rounded-xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
+        <Icon className="w-[18px] h-[18px]" />
       </div>
       {badge}
     </div>
     <div>
-      <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400 leading-tight">
+      <p className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 leading-tight">
         {label}
       </p>
-      <p className={`text-lg sm:text-xl font-extrabold font-mono mt-1 leading-tight truncate ${valueClass || 'text-title'}`}>
+      <p className={`text-2xl sm:text-[26px] font-extrabold font-mono mt-1.5 leading-tight truncate ${valueClass || 'text-[#0A1C38]'}`}>
         {value}
       </p>
     </div>
-    <p className="text-[10.5px] text-gray-500 leading-snug mt-auto">
+    <p className="text-[11px] text-gray-500 leading-snug mt-auto">
       {description}
     </p>
   </button>
@@ -191,18 +191,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           so nothing here competes with the KPI cards for attention. */}
 
 
-      {/* KPI DASHBOARD CARDS — the health of the business at a glance.
+      {/* PRIMARY KPI GRID — the 6 core numbers, 2 rows x 3 columns.
           Every value here reuses the existing calculation engine
           (calculateBatch / calculateInventoryTotals / AppContext);
-          this is presentation only, nothing is recalculated. */}
-      <div className="grid grid-cols-2 lg:grid-cols-3 gap-6">
+          this is presentation only, nothing is recalculated.
+          Color coding: navy = neutral, gold = business worth,
+          green = profit, red = expenses. */}
+      <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
         <KpiCard
           icon={Landmark}
-          iconBgClass="bg-slate-500/10"
-          iconTextClass="text-slate-600"
+          iconBgClass={hasInitialStockCount ? 'bg-[#0A1C38]/[0.06]' : 'bg-[#B8791A]/10'}
+          iconTextClass={hasInitialStockCount ? 'text-[#0A1C38]' : 'text-[#B8791A]'}
           label="Capital Inicial do Negócio"
           value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido'}
-          valueClass={hasInitialStockCount ? 'text-gray-800' : 'text-amber-700'}
+          valueClass={hasInitialStockCount ? 'text-[#0A1C38]' : 'text-[#B8791A]'}
           description={
             hasInitialStockCount
               ? 'O valor verificado do stock registado quando começou a usar o Sabush.'
@@ -214,26 +216,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Package}
-          iconBgClass="bg-amber-500/10"
-          iconTextClass="text-amber-600"
+          iconBgClass="bg-[#0A1C38]/[0.06]"
+          iconTextClass="text-[#0A1C38]"
           label="Custo do Stock Atual"
           value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
+          valueClass="text-[#0A1C38]"
           description="O valor investido no stock que ainda resta."
         />
 
         <KpiCard
           icon={Tag}
-          iconBgClass="bg-sky-500/10"
-          iconTextClass="text-sky-600"
+          iconBgClass="bg-[#0A1C38]/[0.06]"
+          iconTextClass="text-[#0A1C38]"
           label="Valor de Mercado do Stock"
           value={formatCurrency(totalMarketValueAllTime, currencySymbol)}
+          valueClass="text-[#0A1C38]"
           description="O valor estimado de venda do stock que ainda resta."
         />
 
         <KpiCard
           icon={Wallet}
-          iconBgClass="bg-blue-500/10"
-          iconTextClass="text-blue-600"
+          iconBgClass="bg-emerald-500/10"
+          iconTextClass="text-emerald-600"
           label="Lucro Embutido"
           value={formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
           valueClass={totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}
@@ -243,11 +247,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Gem}
-          iconBgClass="bg-indigo-500/10"
-          iconTextClass="text-indigo-600"
+          iconBgClass="bg-[#B8791A]/10"
+          iconTextClass="text-[#B8791A]"
           label="Valor do Negócio"
           value={formatCurrency(businessWorth, currencySymbol)}
-          valueClass="text-indigo-700"
+          valueClass="text-[#B8791A]"
           description="O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados."
           onClick={() => setShowWorthModal(true)}
           badge={
@@ -274,35 +278,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           valueClass="text-rose-700"
           description="Custos operacionais registados pelo negócio."
         />
+      </div>
 
-        <KpiCard
-          icon={HandCoins}
-          iconBgClass="bg-violet-500/10"
-          iconTextClass="text-violet-600"
-          label="Levantamentos do Dono"
-          value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
-          valueClass="text-violet-700"
-          description="Dinheiro retirado intencionalmente pelo dono."
-        />
+      {/* SECONDARY METRICS — same existing cards/data (Levantamentos, Quebras,
+          Lotes Ativos), nothing removed. Set apart in a very light grey
+          section rather than a border, so the primary 6 above keep focus. */}
+      <div className="bg-[#F7F8FA] rounded-2xl p-5 sm:p-6">
+        <p className="text-[10.5px] font-bold uppercase tracking-wider text-gray-400 mb-4 px-1">
+          Outros Indicadores
+        </p>
+        <div className="grid grid-cols-2 lg:grid-cols-3 gap-5 sm:gap-6">
+          <KpiCard
+            icon={HandCoins}
+            iconBgClass="bg-[#B8791A]/10"
+            iconTextClass="text-[#B8791A]"
+            label="Levantamentos do Dono"
+            value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
+            valueClass="text-[#B8791A]"
+            description="Dinheiro retirado intencionalmente pelo dono."
+          />
 
-        <KpiCard
-          icon={AlertTriangle}
-          iconBgClass="bg-red-500/10"
-          iconTextClass="text-red-600"
-          label="Perdas de Stock (Quebras)"
-          value={formatCurrency(totalQuebraValueAllTime, currencySymbol)}
-          valueClass="text-red-700"
-          description="Valor perdido por produtos danificados, expirados ou em falta."
-        />
+          <KpiCard
+            icon={AlertTriangle}
+            iconBgClass="bg-red-500/10"
+            iconTextClass="text-red-600"
+            label="Perdas de Stock (Quebras)"
+            value={formatCurrency(totalQuebraValueAllTime, currencySymbol)}
+            valueClass="text-red-700"
+            description="Valor perdido por produtos danificados, expirados ou em falta."
+          />
 
-        <KpiCard
-          icon={Boxes}
-          iconBgClass="bg-emerald-500/10"
-          iconTextClass="text-emerald-600"
-          label="Lotes Ativos"
-          value={String(activeBatchCount)}
-          description="Número de lotes de stock que contribuem atualmente para o inventário."
-        />
+          <KpiCard
+            icon={Boxes}
+            iconBgClass="bg-[#0A1C38]/[0.06]"
+            iconTextClass="text-[#0A1C38]"
+            label="Lotes Ativos"
+            value={String(activeBatchCount)}
+            valueClass="text-[#0A1C38]"
+            description="Número de lotes de stock que contribuem atualmente para o inventário."
+          />
+        </div>
       </div>
 
       {/* TOP BAR (single slim row) */}
@@ -315,7 +330,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             placeholder="Pesquisar produtos..."
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition font-medium"
+            className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-8 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-[#B8791A] transition font-medium"
           />
           {searchQuery && (
             <button
@@ -332,7 +347,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <select
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-blue-500 shrink-0 max-w-[140px]"
+            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#B8791A] shrink-0 max-w-[140px]"
           >
             <option value="">Todas Categorias</option>
             {categoryOptions.map(c => (
@@ -344,7 +359,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <select
             value={supplierFilter}
             onChange={e => setSupplierFilter(e.target.value)}
-            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-blue-500 shrink-0 max-w-[140px]"
+            className="hidden sm:block bg-white border border-gray-200 rounded-xl px-2 py-1.5 text-xs text-gray-700 focus:outline-none focus:border-[#B8791A] shrink-0 max-w-[140px]"
           >
             <option value="">Todos Fornecedores</option>
             {supplierOptions.map(s => (
@@ -370,7 +385,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               title="Filtrar / Ordenar"
               className="p-2 rounded-xl bg-white border border-gray-200 hover:border-gray-300 text-gray-500 hover:text-gray-800 transition active:scale-95 flex items-center gap-1 text-xs"
             >
-              <SlidersHorizontal className="w-4 h-4 text-blue-600" />
+              <SlidersHorizontal className="w-4 h-4 text-[#0A1C38]" />
             </button>
 
             {showSortDropdown && (
@@ -383,21 +398,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <button
                     type="button"
                     onClick={() => { setSortBy('name'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-[#B8791A]/10 text-[#B8791A] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Nome (A-Z)
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('profit'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-[#B8791A]/10 text-[#B8791A] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Maior Lucro
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('cost'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-blue-50 text-blue-700 font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-[#B8791A]/10 text-[#B8791A] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     Preço Custo
                   </button>
@@ -414,7 +429,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="bg-white border border-gray-200 rounded-3xl max-w-md w-full p-5 shadow-2xl space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
-                <Wallet className="w-5 h-5 text-blue-600" />
+                <Wallet className="w-5 h-5 text-[#0A1C38]" />
                 <h3 className="text-base font-bold text-title">Lucro Embutido</h3>
               </div>
               <button
@@ -432,19 +447,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">Estimado (Lotes Abertos):</span>
-                <span className="font-bold font-mono text-blue-700">
+                <span className="font-bold font-mono text-[#9C6613]">
                   {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">Finalizado (Lotes Fechados):</span>
-                <span className="font-bold font-mono text-blue-700">
+                <span className="font-bold font-mono text-[#9C6613]">
                   {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-blue-50 border border-blue-500/30">
+              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-[#B8791A]/10 border border-[#B8791A]/30">
                 <span className="text-gray-800 font-bold">Lucro Embutido Total:</span>
                 <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
@@ -590,7 +605,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* TABLE */}
       {filteredProducts.length === 0 ? (
         <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 shadow-sm">
-          <div className="w-12 h-12 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 mx-auto mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#B8791A]/10 border border-[#B8791A]/30 flex items-center justify-center text-[#B8791A] mx-auto mb-3">
             <Package className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-bold text-gray-800">Nenhum produto encontrado</h3>
@@ -602,7 +617,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           {products.length === 0 && (
             <button
               onClick={() => onNavigateToAddStock()}
-              className="mt-3 px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-semibold text-xs transition shadow-md active:scale-95"
+              className="mt-3 px-4 py-2.5 rounded-xl bg-[#0A1C38] hover:bg-[#12294A] text-white font-semibold text-xs transition shadow-md active:scale-95"
             >
               + Adicionar Primeiro Lote
             </button>
@@ -670,7 +685,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     className="col-span-4 sm:col-span-5 pr-1 min-w-0 cursor-pointer"
                   >
                     <div className="flex items-center gap-1">
-                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-blue-600 transition truncate">
+                      <span className="font-bold text-xs sm:text-sm text-gray-900 group-hover:text-[#0A1C38] transition truncate">
                         {product.name}
                       </span>
                       {activeCalc?.hasExceededWarning && (
@@ -737,7 +752,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       type="button"
                       onClick={() => onNavigateToAddStock(product.name)}
                       title="Adicionar Stock / Editar Lote"
-                      className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-gray-50 rounded-lg transition"
+                      className="p-1.5 text-gray-500 hover:text-[#0A1C38] hover:bg-gray-50 rounded-lg transition"
                     >
                       <Pencil className="w-3.5 h-3.5" />
                     </button>
@@ -767,7 +782,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Eye className="w-3.5 h-3.5 text-blue-600" />
+                              <Eye className="w-3.5 h-3.5 text-[#0A1C38]" />
                               <span>Ver detalhes</span>
                             </button>
 
@@ -779,7 +794,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Plus className="w-3.5 h-3.5 text-blue-600" />
+                              <Plus className="w-3.5 h-3.5 text-[#0A1C38]" />
                               <span>+ Add Stock</span>
                             </button>
 
@@ -791,7 +806,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <AlertTriangle className="w-3.5 h-3.5 text-blue-600" />
+                              <AlertTriangle className="w-3.5 h-3.5 text-[#0A1C38]" />
                               <span>+ Quebra</span>
                             </button>
 
@@ -803,7 +818,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               }}
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
-                              <Tag className="w-3.5 h-3.5 text-blue-600" />
+                              <Tag className="w-3.5 h-3.5 text-[#0A1C38]" />
                               <span>Editar Detalhes</span>
                             </button>
                           </div>

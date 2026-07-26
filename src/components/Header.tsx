@@ -53,19 +53,22 @@ export const Header: React.FC = () => {
   return (
     <>
       <header className="bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-3">
-          <div className="h-14 flex items-center justify-between">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-5">
+          <div className="min-h-14 flex items-center justify-between gap-4">
             {/* Business name — falls back to a quiet placeholder, never a blank/generic app name */}
             {business?.name ? (
-              <div>
-                <h1 className="font-bold text-[15px] sm:text-base leading-tight tracking-tight text-title">
+              <div className="min-w-0">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8791A] mb-0.5">
+                  Meu Negócio
+                </p>
+                <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#0A1C38] truncate">
                   {business.name}
                 </h1>
                 <p
-                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[220px] sm:max-w-[320px] mt-0.5"
+                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
                   title={business?.contact ? `Contacto: ${business.contact}` : undefined}
                 >
-                  <span className="truncate text-blue-600 font-medium">
+                  <span className="truncate text-gray-600 font-medium">
                     {businessCategory || 'Negócio Registado'}
                   </span>
                   {business?.location && (
@@ -78,7 +81,7 @@ export const Header: React.FC = () => {
               </div>
             ) : (
               <div className="flex items-center gap-2.5">
-                <div className="w-8 h-8 rounded-full bg-gray-50 text-gray-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[#F7F8FA] text-gray-400 flex items-center justify-center shrink-0">
                   <Store className="w-4 h-4" />
                 </div>
                 <span className="text-[13px] font-semibold text-gray-400">Perfil não definido</span>
@@ -86,19 +89,19 @@ export const Header: React.FC = () => {
             )}
 
             {/* Single profile control — every prior action still lives here, just consolidated */}
-            <div className="relative" ref={profileMenuRef}>
+            <div className="relative shrink-0" ref={profileMenuRef}>
               <button
                 onClick={() => setShowProfileMenu(v => !v)}
-                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-2 rounded-full hover:bg-gray-50 transition"
+                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#B8791A]/10 transition"
               >
-                <div className="w-8 h-8 rounded-full bg-blue-50 text-blue-600 flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#0A1C38] text-white flex items-center justify-center shrink-0">
                   <User className="w-4 h-4" />
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold text-title leading-tight">
+                  <span className="text-xs font-bold text-[#0A1C38] leading-tight">
                     {userProfile?.name || 'Utilizador'}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wide text-gray-400 font-semibold">
+                  <span className="text-[10px] uppercase tracking-wide text-[#B8791A] font-bold">
                     {isOwner ? 'Dono' : 'Staff'}
                   </span>
                 </div>
@@ -157,7 +160,7 @@ export const Header: React.FC = () => {
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="group flex items-center gap-1.5 pb-2.5 text-[11.5px] text-blue-600 hover:text-blue-700 transition"
+              className="group flex items-center gap-1.5 pb-2.5 text-[11.5px] text-[#B8791A] hover:text-[#9C6613] transition"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span className="font-medium">Complete o perfil do seu negócio</span>

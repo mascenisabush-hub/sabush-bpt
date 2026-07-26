@@ -7,31 +7,38 @@
   --background: #FFFFFF;
   --foreground: #111111;
 
-  /* Structured Minimalism: navy for titles/hierarchy, blue as the single accent */
-  --title: #0B1E3D;
+  /* Sabush brand system: navy for titles/hierarchy, gold as the premium accent,
+     orange reserved for secondary emphasis. */
+  --title: #0A1C38;
   --title-soft: #1E3A5F;
+
+  --navy: #0A1C38;
+  --navy-soft: #12294A;
+
+  --gold: #B8791A;
+  --gold-hover: #9C6613;
 
   --primary: #EA580C;
   --primary-hover: #C2410C;
   --primary-foreground: #FFFFFF;
 
-  --secondary: #2563EB;
-  --secondary-hover: #1D4ED8;
+  --secondary: #B8791A;
+  --secondary-hover: #9C6613;
   --secondary-foreground: #FFFFFF;
 
-  --accent: #2563EB;
+  --accent: #B8791A;
 
-  --muted: #F9FAFB;
+  --muted: #F7F8FA;
   --muted-foreground: #6B7280;
 
   /* Borders are used sparingly now — spacing does the separating work */
   --border: #EEF0F3;
   --border-strong: #E5E7EB;
-  --ring: #2563EB;
+  --ring: #B8791A;
 
   --success: #059669;
   --warning: #EA580C;
-  --info: #2563EB;
+  --info: #0A1C38;
   --error: #E11D48;
 
   /* 8px spacing system */
@@ -47,10 +54,14 @@
 @theme {
   --color-primary: #EA580C;
   --color-primary-hover: #C2410C;
-  --color-secondary: #2563EB;
-  --color-secondary-hover: #1D4ED8;
-  --color-title: #0B1E3D;
+  --color-secondary: #B8791A;
+  --color-secondary-hover: #9C6613;
+  --color-title: #0A1C38;
   --color-title-soft: #1E3A5F;
+  --color-navy: #0A1C38;
+  --color-navy-soft: #12294A;
+  --color-gold: #B8791A;
+  --color-gold-hover: #9C6613;
 }
 
 /* Structured Minimalism helpers -------------------------------------- */
