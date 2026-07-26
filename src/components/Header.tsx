@@ -71,33 +71,33 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             {/* Business name — falls back to a quiet placeholder, never a blank/generic app name */}
             {business?.name ? (
               <div className="min-w-0 shrink-0">
-                <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8791A] mb-0.5">
+                <p className="text-[10px] font-bold uppercase tracking-wider text-[#B8791A] mb-0.5 italic">
                   Meu Negócio
                 </p>
-                <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#1B3966] truncate">
+                <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#1B3966] truncate italic">
                   {business.name}
                 </h1>
                 <p
-                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
+                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1 italic"
                   title={business?.contact ? `Contacto: ${business.contact}` : undefined}
                 >
-                  <span className="truncate text-gray-600 font-medium">
+                  <span className="truncate text-gray-600 font-bold italic">
                     {businessCategory || 'Negócio Registado'}
                   </span>
                   {business?.location && (
                     <>
-                      <span className="text-gray-300">·</span>
-                      <span className="truncate text-gray-500">{business.location}</span>
+                      <span className="text-gray-300 italic">·</span>
+                      <span className="truncate text-gray-500 italic">{business.location}</span>
                     </>
                   )}
                 </p>
               </div>
             ) : (
               <div className="flex items-center gap-2.5 shrink-0">
-                <div className="w-9 h-9 rounded-full bg-[#F7F8FA] text-gray-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-full bg-[#F7F8FA] text-gray-400 flex items-center justify-center shrink-0 italic">
                   <Store className="w-4 h-4" />
                 </div>
-                <span className="text-[13px] font-semibold text-gray-400">Perfil não definido</span>
+                <span className="text-[13px] font-bold text-gray-400 italic">Perfil não definido</span>
               </div>
             )}
 
@@ -122,12 +122,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                           : 'bg-[#1B3966] group-hover:bg-[#B8791A] group-hover:shadow-[0_4px_14px_-4px_rgba(184,121,26,0.45)]'
                       }`}
                     >
-                      <Icon className="w-[16px] h-[16px] text-white" strokeWidth={2} />
+                      <Icon className="w-[16px] h-[16px] text-white italic" strokeWidth={2} />
                     </span>
                     <span
-                      className={`text-[10px] font-semibold tracking-tight transition-colors ${
+                      className={`text-[10px] font-bold tracking-tight transition-colors ${
                         isActive ? 'text-[#B8791A]' : 'text-gray-500 group-hover:text-[#1B3966]'
-                      }`}
+                      } italic`}
                     >
                       {tab.shortLabel}
                     </span>
@@ -142,18 +142,18 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 onClick={() => setShowProfileMenu(v => !v)}
                 className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#B8791A]/10 transition"
               >
-                <div className="w-8 h-8 rounded-full bg-[#1B3966] text-white flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#1B3966] text-white flex items-center justify-center shrink-0 italic">
                   <User className="w-4 h-4" />
                 </div>
-                <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold text-[#1B3966] leading-tight">
+                <div className="hidden sm:flex flex-col text-left italic">
+                  <span className="text-xs font-bold text-[#1B3966] leading-tight italic">
                     {userProfile?.name || 'Utilizador'}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wide text-[#B8791A] font-bold">
+                  <span className="text-[10px] uppercase tracking-wide text-[#B8791A] font-bold italic">
                     {isOwner ? 'Dono' : 'Staff'}
                   </span>
                 </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''} italic`} />
               </button>
 
               {showProfileMenu && (
@@ -161,34 +161,34 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   {isOwner && (
                     <button
                       onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition italic"
                     >
-                      <Settings className="w-4 h-4 text-gray-400" />
+                      <Settings className="w-4 h-4 text-gray-400 italic" />
                       Definições
                     </button>
                   )}
                   {isOwner && (
                     <button
                       onClick={() => { setShowCurrencyModal(true); setShowProfileMenu(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition italic"
                     >
-                      <DollarSign className="w-4 h-4 text-gray-400" />
-                      Moeda <span className="ml-auto text-gray-400">{currencySymbol}</span>
+                      <DollarSign className="w-4 h-4 text-gray-400 italic" />
+                      Moeda <span className="ml-auto text-gray-400 italic">{currencySymbol}</span>
                     </button>
                   )}
                   {isOwner && (
                     <button
                       onClick={() => { setShowHelpModal(true); setShowProfileMenu(false); }}
-                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
+                      className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition italic"
                     >
-                      <HelpCircle className="w-4 h-4 text-gray-400" />
+                      <HelpCircle className="w-4 h-4 text-gray-400 italic" />
                       Ajuda e Conceito
                     </button>
                   )}
                   <div className="my-1.5 border-t" style={{ borderColor: 'var(--border)' }} />
                   <button
                     onClick={logout}
-                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition"
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition italic"
                   >
                     <LogOut className="w-4 h-4" />
                     Sair
@@ -208,12 +208,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#B8791A] hover:text-[#9C6613] transition"
+              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#B8791A] hover:text-[#9C6613] transition italic"
             >
               <HelpCircle className="w-3.5 h-3.5" />
-              <span className="font-medium">Complete o perfil do seu negócio</span>
+              <span className="font-bold italic">Complete o perfil do seu negócio</span>
               <X
-                className="w-3 h-3 ml-1 text-gray-300 group-hover:text-gray-500"
+                className="w-3 h-3 ml-1 text-gray-300 group-hover:text-gray-500 italic"
                 onClick={(e) => { e.stopPropagation(); setReminderDismissed(true); }}
               />
             </button>
@@ -232,19 +232,19 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       {/* Currency Modal */}
       {showCurrencyModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6 text-gray-900 shadow-2xl">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6 text-gray-900 shadow-2xl italic">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <h3 className="font-bold text-lg flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-blue-600" /> Seleccionar Moeda
+              <h3 className="font-bold text-lg flex items-center gap-2 italic">
+                <DollarSign className="w-5 h-5 text-blue-600 italic" /> Seleccionar Moeda
               </h3>
               <button
                 onClick={() => setShowCurrencyModal(false)}
-                className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-gray-900"
+                className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-gray-900 italic"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
-            <p className="text-xs text-gray-500 my-3">
+            <p className="text-xs text-gray-500 my-3 italic">
               Todos os valores e relatórios serão apresentados com a moeda selecionada.
             </p>
 
@@ -258,14 +258,14 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                       setCurrencySymbol(opt.symbol);
                       setShowCurrencyModal(false);
                     }}
-                    className={`flex items-center justify-between p-3 rounded-xl border text-sm font-medium transition ${
+                    className={`flex items-center justify-between p-3 rounded-xl border text-sm font-bold transition ${
                       isSelected
                         ? 'bg-blue-50 border-blue-500 text-blue-700'
                         : 'bg-gray-100/50 border-gray-200 text-gray-700 hover:bg-gray-50'
-                    }`}
+                    } italic`}
                   >
                     <span>{opt.label}</span>
-                    {isSelected && <Check className="w-4 h-4 text-blue-600" />}
+                    {isSelected && <Check className="w-4 h-4 text-blue-600 italic" />}
                   </button>
                 );
               })}
@@ -273,7 +273,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
             <button
               onClick={() => setShowCurrencyModal(false)}
-              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-medium transition"
+              className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-bold transition italic"
             >
               Concluído
             </button>
@@ -284,47 +284,47 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       {/* Help Modal */}
       {showHelpModal && (
         <div className="fixed inset-0 z-50 bg-black/70 backdrop-blur-xs flex items-center justify-center p-4">
-          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-lg p-6 text-gray-900 shadow-2xl max-h-[90vh] overflow-y-auto">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-lg p-6 text-gray-900 shadow-2xl max-h-[90vh] overflow-y-auto italic">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
-              <h3 className="font-bold text-lg text-blue-600 flex items-center gap-2">
+              <h3 className="font-bold text-lg text-blue-600 flex items-center gap-2 italic">
                 <HelpCircle className="w-5 h-5" /> Como Funciona o Lucro por Lote
               </h3>
               <button
                 onClick={() => setShowHelpModal(false)}
-                className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-gray-900"
+                className="p-1 rounded-lg hover:bg-gray-50 text-gray-500 hover:text-gray-900 italic"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
 
-            <div className="space-y-4 my-4 text-sm text-gray-700 leading-relaxed">
+            <div className="space-y-4 my-4 text-sm text-gray-700 leading-relaxed italic">
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-semibold text-blue-700 block mb-1">1. Sem Necessidade de Registar Vendas Diárias</span>
+                <span className="font-bold text-blue-700 block mb-1 italic">1. Sem Necessidade de Registar Vendas Diárias</span>
                 <p>
                   Não precisa de registar cada venda individual. Em vez disso, ao registar um <strong>novo lote de stock</strong> de um produto, o sistema infere automaticamente que o <strong>lote anterior foi totalmente vendido</strong> (descontando as quebras registadas).
                 </p>
               </div>
 
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-semibold text-blue-700 block mb-1">2. Lotes Fechados = Lucro Finalizado</span>
+                <span className="font-bold text-blue-700 block mb-1 italic">2. Lotes Fechados = Lucro Finalizado</span>
                 <p>
                   Quando um lote é substituído por um novo, o seu lucro é finalizado:
                   <br />
-                  <code className="text-xs bg-white px-2 py-1 rounded text-blue-600 inline-block my-1 font-mono">
+                  <code className="text-xs bg-white px-2 py-1 rounded text-blue-600 inline-block my-1 font-mono italic">
                     Unidades Vendidas = Stock Inicial do Lote − Quebras
                   </code>
                 </p>
               </div>
 
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-semibold text-blue-700 block mb-1">3. Lote Ativo = Estimativa em Curso</span>
+                <span className="font-bold text-blue-700 block mb-1 italic">3. Lote Ativo = Estimativa em Curso</span>
                 <p>
                   Para o stock ativo atual, a aplicação mostra uma <strong>estimativa em curso</strong> do lucro projetado caso as unidades restantes sejam vendidas ao preço definido.
                 </p>
               </div>
 
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-semibold text-blue-700 block mb-1">4. Quebras e Despesas Gerais</span>
+                <span className="font-bold text-blue-700 block mb-1 italic">4. Quebras e Despesas Gerais</span>
                 <p>
                   Registe produtos estragados ou fora de validade em <strong>Quebras</strong>. Custos fixos como renda e eletricidade são registados em <strong>Despesas</strong> para determinar o <strong>Rendimento Líquido</strong> real.
                 </p>
@@ -333,7 +333,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
             <button
               onClick={() => setShowHelpModal(false)}
-              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-semibold transition shadow-md"
+              className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition shadow-md italic"
             >
               Entendido!
             </button>

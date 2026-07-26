@@ -28,9 +28,9 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
             <button
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
-              className={`flex flex-col items-center justify-center min-w-[52px] py-1.5 px-1 rounded-xl text-[10px] font-medium transition active:scale-95 ${
+              className={`flex flex-col items-center justify-center min-w-[52px] py-1.5 px-1 rounded-xl text-[10px] font-bold transition active:scale-95 ${
                 isActive ? 'text-[#B8791A] font-bold' : 'text-white/60 hover:text-white'
-              }`}
+              } italic`}
             >
               <div className={`p-1 rounded-lg ${isActive ? 'bg-[#B8791A]/15' : ''}`}>
                 <Icon className="w-5 h-5" />
