@@ -50,12 +50,13 @@ service cloud.firestore {
         request.resource.data.role == resource.data.role &&
         request.resource.data.businessId == resource.data.businessId;
 
-      // A user can delete their own profile; an owner can remove a staff
-      // member's profile that belongs to their own business.
-      allow delete: if isSignedIn() && (
-        request.auth.uid == userId ||
-        isOwnerOf(resource.data.businessId)
-      );
+      // A user can delete their own profile. Owner-initiated removal of a
+      // STAFF member's profile must go through the deleteStaffMember Cloud
+      // Function (Admin SDK, bypasses these rules) — never directly from
+      // the client — because that function also deletes the corresponding
+      // Firebase Authentication account. A client-side delete here alone
+      // would silently leave an orphaned Auth account behind.
+      allow delete: if isSignedIn() && request.auth.uid == userId;
     }
 
     // ==========================================================
@@ -138,9 +139,14 @@ service cloud.firestore {
         allow read, create, update, delete: if isOwnerOf(businessId);
       }
 
-      // Staff roster management is owner-only.
+      // Staff roster management is owner-only. Deletion is intentionally
+      // NOT allowed from the client (allow delete: if false) — removing a
+      // staff member must go through the deleteStaffMember Cloud Function
+      // so their Firebase Authentication account is deleted in the same
+      // operation, never leaving an orphaned login behind.
       match /staff/{staffId} {
-        allow read, write: if isOwnerOf(businessId);
+        allow read, create, update: if isOwnerOf(businessId);
+        allow delete: if false;
       }
 
       // Business Timeline: an append-only history log written alongside the

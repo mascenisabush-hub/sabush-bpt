@@ -280,7 +280,8 @@ export type TimelineActivityType =
   | 'business-profile-updated'
   | 'monthly-closing'
   | 'yearly-closing'
-  | 'report-exported';
+  | 'report-exported'
+  | 'staff-removed';
 
 export interface TimelineFinancialImpact {
   label: string; // e.g. "Investimento", "Despesa", "Retirada", "Perda"

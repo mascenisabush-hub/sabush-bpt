@@ -157,7 +157,7 @@ interface AppContextType {
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addStaffMember: (name: string, email: string, password: string) => Promise<void>;
-  deleteStaffMember: (staffUid: string) => Promise<void>;
+  deleteStaffMember: (staffUid: string, reason?: string) => Promise<void>;
   createBusinessForOwner: (businessName: string, category: string, currencySymbol?: string) => Promise<void>;
   logout: () => Promise<void>;
   loadSampleData: () => Promise<void>;
@@ -1196,10 +1196,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
-  const deleteStaffMember = async (staffUid: string) => {
-    if (!userProfile?.businessId || !isOwner) return;
-    await deleteDoc(doc(db, 'businesses', userProfile.businessId, 'staff', staffUid));
-    await deleteDoc(doc(db, 'users', staffUid));
+  // Deleting a staff member must fully revoke their access — including
+  // their Firebase Authentication account, which the client SDK has no
+  // permission to delete for anyone but itself. That privileged step (plus
+  // the matching Firestore cleanup and audit entry) happens server-side,
+  // on our own Express/Node server (server/index.ts) authenticated with a
+  // Firebase Admin SDK service account. Deliberately NOT a Cloud Function —
+  // Cloud Functions requires the Blaze billing plan; this runs on the same
+  // Railway service that already hosts the app.
+  const deleteStaffMember = async (staffUid: string, reason?: string) => {
+    if (!userProfile?.businessId || !isOwner) {
+      throw new Error('Apenas o dono pode remover funcionários.');
+    }
+    if (!currentUser) {
+      throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+
+    let response: Response;
+    try {
+      response = await fetch('/api/staff/delete', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          staffUid,
+          businessId: userProfile.businessId,
+          reason,
+        }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
+
+    if (!response.ok) {
+      let message = 'Erro ao remover funcionário. Tente novamente.';
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // response wasn't JSON — keep the generic message
+      }
+      throw new Error(message);
+    }
   };
 
   const logout = async () => {
