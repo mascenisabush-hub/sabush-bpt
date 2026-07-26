@@ -24,6 +24,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     logout,
   } = useApp();
 
+  const visibleTabs = isStaff ? NAV_TABS.filter(t => !t.ownerOnly) : NAV_TABS;
+
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
   const [settingsAutoOpenProfileEdit, setSettingsAutoOpenProfileEdit] = useState(false);
@@ -205,6 +207,38 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               )}
             </div>
           </div>
+
+          {/* Action nav row — same 11 tabs/handlers as before, now back on
+              the top bar as a horizontal pill row instead of a sidebar. */}
+          <nav className="hidden md:flex items-center flex-wrap gap-2 pt-4">
+            {visibleTabs.map(tab => {
+              const Icon = tab.icon;
+              const isActive = activeTab === tab.id;
+
+              return (
+                <button
+                  key={tab.id}
+                  type="button"
+                  onClick={() => setActiveTab(tab.id)}
+                  title={tab.label}
+                  className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold transition active:scale-[0.97] ${
+                    isActive
+                      ? 'bg-[#D4AF37] text-white shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
+                      : 'bg-[#F5F7FA] text-gray-600 hover:bg-[#0B1F3A]/5 hover:text-[#0B1F3A]'
+                  }`}
+                >
+                  <span
+                    className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 ${
+                      isActive ? 'bg-white/20 text-white' : 'bg-white text-[#0B1F3A]'
+                    }`}
+                  >
+                    <Icon className="w-4 h-4" strokeWidth={2} />
+                  </span>
+                  {tab.shortLabel}
+                </button>
+              );
+            })}
+          </nav>
 
           {/* Small inline reminder — replaces the old full-width banner. Same action
               (jumps into Settings → profile edit), just quiet instead of dominant. */}
