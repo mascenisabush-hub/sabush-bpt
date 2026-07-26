@@ -15,13 +15,18 @@ import { ClosingView } from './components/ClosingView';
 import { BusinessTimelineView } from './components/timeline/BusinessTimelineView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
+import { QuickLoginScreen } from './components/QuickLoginScreen';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import { NewSaaSDashboard } from './components/dashboard-v2/NewSaaSDashboard';
 import { Product } from './types';
 
 function MainApp() {
-  const { currentUser, isAuthLoading, isStaff } = useApp();
+  const { currentUser, isAuthLoading, isStaff, pairedDevice } = useApp();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
+  // A paired device defaults to the PIN quick-login screen when logged
+  // out; this lets the owner (or anyone who needs a full email/password
+  // login) drop back to the normal AuthView from there.
+  const [forceOwnerLogin, setForceOwnerLogin] = useState(false);
   
   // Pre-fill parameters when navigating from dashboard cards
   const [stockPrefillProduct, setStockPrefillProduct] = useState<string | undefined>(undefined);
@@ -57,7 +62,10 @@ function MainApp() {
   }
 
   if (!currentUser) {
-    return <AuthView />;
+    if (pairedDevice && !forceOwnerLogin) {
+      return <QuickLoginScreen onUseOwnerLogin={() => setForceOwnerLogin(true)} />;
+    }
+    return <AuthView onBackToQuickLogin={pairedDevice ? () => setForceOwnerLogin(false) : undefined} />;
   }
 
   if (activeTab === 'dashboard-v2') {

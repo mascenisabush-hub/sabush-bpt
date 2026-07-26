@@ -33,6 +33,7 @@ import {
   TimelineEvent,
   TimelineActivityType,
   TimelineFinancialImpact,
+  PairedDevice,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
@@ -160,6 +161,13 @@ interface AppContextType {
   deleteStaffMember: (staffUid: string, reason?: string) => Promise<void>;
   suspendStaffMember: (staffUid: string, reason?: string) => Promise<void>;
   reactivateStaffMember: (staffUid: string) => Promise<void>;
+  resetStaffPin: (staffUid: string, newPin: string) => Promise<void>;
+  // Device pairing for PIN-based quick login (shared shop devices) — see
+  // AppContext's DEVICE PAIRING section for details. null on devices that
+  // have never been paired (e.g. a staff member's personal phone).
+  pairedDevice: PairedDevice | null;
+  pairDevice: () => void;
+  unpairDevice: () => void;
   suspensionNotice: string | null;
   clearSuspensionNotice: () => void;
   // Multi-shop support (owners only, up to MAX_SHOPS_PER_OWNER shops).
@@ -267,6 +275,74 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const currencySymbol = business?.currencySymbol || 'MT';
   const businessCategory = business?.category || '';
+
+  // ============================================================
+  // DEVICE PAIRING for PIN-based quick login (shared shop devices).
+  // ============================================================
+  // Stored ONLY in this browser's localStorage — never synced to
+  // Firestore, never visible to anyone else. It's purely a local cache
+  // of "which shop is this specific device set up for" + that shop's
+  // staff names, so the logged-out screen on a shared device can show a
+  // name-picker + PIN pad instead of asking for a full email each time.
+  // The PIN itself is never cached here — it's the staff member's real
+  // Firebase Auth password, typed fresh at each login.
+  const DEVICE_PAIRING_KEY = 'sabush_device_pairing';
+
+  const [pairedDevice, setPairedDeviceState] = useState<PairedDevice | null>(() => {
+    try {
+      const raw = localStorage.getItem(DEVICE_PAIRING_KEY);
+      return raw ? (JSON.parse(raw) as PairedDevice) : null;
+    } catch {
+      return null;
+    }
+  });
+
+  const persistPairedDevice = (value: PairedDevice | null) => {
+    setPairedDeviceState(value);
+    try {
+      if (value) {
+        localStorage.setItem(DEVICE_PAIRING_KEY, JSON.stringify(value));
+      } else {
+        localStorage.removeItem(DEVICE_PAIRING_KEY);
+      }
+    } catch {
+      // localStorage unavailable (private browsing, etc.) — pairing just
+      // won't persist across reloads; not worth failing the action for.
+    }
+  };
+
+  const pairDevice = () => {
+    if (!isOwner || !activeBusinessId || !business) {
+      throw new Error('Apenas o dono, com uma loja selecionada, pode configurar este dispositivo.');
+    }
+    persistPairedDevice({
+      businessId: activeBusinessId,
+      businessName: business.name,
+      // Suspended/removed staff never appear on the PIN pad — filtered
+      // out here so a device doesn't keep advertising an account that
+      // can't log in anyway.
+      staff: staffMembers.filter((s) => !s.suspended).map((s) => ({ uid: s.uid, name: s.name, email: s.email })),
+      pairedAt: new Date().toISOString(),
+    });
+  };
+
+  const unpairDevice = () => {
+    persistPairedDevice(null);
+  };
+
+  // Keep the cached staff list fresh automatically while the owner is
+  // using this same device for this same shop — so adding/removing/
+  // suspending staff shows up on the PIN pad without a manual re-pair.
+  useEffect(() => {
+    if (!isOwner || !pairedDevice || pairedDevice.businessId !== activeBusinessId) return;
+    const freshStaff = staffMembers.filter((s) => !s.suspended).map((s) => ({ uid: s.uid, name: s.name, email: s.email }));
+    const changed = JSON.stringify(freshStaff) !== JSON.stringify(pairedDevice.staff);
+    const nameChanged = business?.name && business.name !== pairedDevice.businessName;
+    if (changed || nameChanged) {
+      persistPairedDevice({ ...pairedDevice, staff: freshStaff, businessName: business?.name || pairedDevice.businessName });
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isOwner, activeBusinessId, JSON.stringify(staffMembers), business?.name]);
 
   // The one-and-only 'initial' StockCount establishes the permanent
   // Initial Business Capital baseline (see types.ts for the rationale).
@@ -1409,6 +1485,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await _staffActionRequest('reactivate', staffUid);
   };
 
+  const resetStaffPin = async (staffUid: string, newPin: string) => {
+    if (!/^\d{6}$/.test(newPin)) {
+      throw new Error('O PIN deve ter exatamente 6 dígitos numéricos.');
+    }
+    if (!activeBusinessId || !isOwner) {
+      throw new Error('Apenas o dono pode redefinir o PIN de um funcionário.');
+    }
+    if (!currentUser) {
+      throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    let response: Response;
+    try {
+      response = await fetch('/api/staff/reset-pin', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ staffUid, businessId: activeBusinessId, newPin }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
+
+    if (!response.ok) {
+      let message = 'Erro ao redefinir o PIN. Tente novamente.';
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // response wasn't JSON — keep the generic message
+      }
+      throw new Error(message);
+    }
+  };
+
   const logout = async () => {
     await signOut(auth);
   };
@@ -1531,6 +1645,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteStaffMember,
         suspendStaffMember,
         reactivateStaffMember,
+        resetStaffPin,
+        pairedDevice,
+        pairDevice,
+        unpairDevice,
         suspensionNotice,
         clearSuspensionNotice: () => setSuspensionNotice(null),
         ownedBusinesses,

@@ -365,6 +365,67 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
   }
 });
 
+// ------------------------------------------------------------------
+// POST /api/staff/reset-pin
+// Body: { staffUid: string, businessId: string, newPin: string }
+//
+// Lets an owner (re)set a staff member's login PIN — needed both for
+// staff created before the PIN-based quick-login existed (whose real
+// password may not be 6 digits) and as a plain forgot-PIN recovery path.
+// The PIN *is* the Firebase Auth password (quick-login just enters it via
+// a numeric pad instead of a text field), so this reuses updateUser
+// exactly like a password reset.
+// ------------------------------------------------------------------
+expressApp.post('/api/staff/reset-pin', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const startedAt = new Date().toISOString();
+
+  const staffUid = String(req.body?.staffUid || '').trim();
+  const businessId = String(req.body?.businessId || '').trim();
+  const newPin = String(req.body?.newPin || '').trim();
+
+  if (!staffUid || !businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'staffUid e businessId são obrigatórios.' });
+    return;
+  }
+  if (!/^\d{6}$/.test(newPin)) {
+    res.status(400).json({ error: 'invalid-argument', message: 'O PIN deve ter exatamente 6 dígitos numéricos.' });
+    return;
+  }
+
+  try {
+    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    if (permissionError) {
+      console.warn('[staff/reset-pin] permission denied', { requesterUid, staffUid, businessId });
+      res.status(permissionError.status).json(permissionError.body);
+      return;
+    }
+
+    const requesterSnap = await db.collection('users').doc(requesterUid).get();
+    const requesterProfile = requesterSnap.data()!;
+    const [staffProfileSnap, staffRosterSnap] = await Promise.all([
+      db.collection('users').doc(staffUid).get(),
+      db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
+    ]);
+    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+
+    await auth.updateUser(staffUid, { password: newPin });
+    // Force any already-open session to require the new PIN on its next
+    // token refresh, same reasoning as suspend.
+    await auth.revokeRefreshTokens(staffUid);
+
+    // Note: unlike suspend/reactivate, no timeline entry here — the PIN
+    // itself is never logged anywhere, and "PIN was reset" isn't
+    // meaningful business history the way suspension/removal are.
+
+    console.log('[staff/reset-pin] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
+    res.json({ success: true, staffUid });
+  } catch (err) {
+    console.error('[staff/reset-pin] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao redefinir o PIN. Tente novamente.' });
+  }
+});
+
 expressApp.get('/api/health', (_req, res) => res.json({ ok: true }));
 
 // ------------------------------------------------------------------

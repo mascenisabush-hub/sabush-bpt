@@ -13,7 +13,11 @@ import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/busine
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { useApp } from '../context/AppContext';
 
-export const AuthView: React.FC = () => {
+interface AuthViewProps {
+  onBackToQuickLogin?: () => void;
+}
+
+export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
   const { suspensionNotice, clearSuspensionNotice } = useApp();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [roleMode, setRoleMode] = useState<'owner' | 'staff'>('owner');
@@ -279,6 +283,16 @@ export const AuthView: React.FC = () => {
       <div className="w-full max-w-md bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
         {/* Decorative background glow */}
         <div className="absolute -top-12 -right-12 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
+
+        {onBackToQuickLogin && (
+          <button
+            type="button"
+            onClick={onBackToQuickLogin}
+            className="text-xs font-semibold text-gray-400 hover:text-gray-600 mb-4 transition"
+          >
+            ← Voltar ao login rápido
+          </button>
+        )}
 
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-6">

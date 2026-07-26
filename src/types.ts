@@ -45,6 +45,16 @@ export interface StaffMember {
   suspended?: boolean;
 }
 
+// A device-local (never synced to Firestore) cache used by the PIN-based
+// quick-login screen on a shared shop device — see AppContext's
+// pairDevice/unpairDevice and components/QuickLoginScreen.tsx.
+export interface PairedDevice {
+  businessId: string;
+  businessName: string;
+  staff: Array<{ uid: string; name: string; email: string }>;
+  pairedAt: string;
+}
+
 export type BatchStatus = 'open' | 'closed';
 
 export interface Quebra {

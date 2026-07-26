@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2 } from 'lucide-react';
+import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2, KeyRound, Smartphone, RefreshCw } from 'lucide-react';
 import { StaffMember } from '../types';
 import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
@@ -25,6 +25,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     deleteStaffMember,
     suspendStaffMember,
     reactivateStaffMember,
+    resetStaffPin,
+    pairedDevice,
+    pairDevice,
+    unpairDevice,
+    activeBusinessId,
     loadSampleData,
     clearAllData,
     products,
@@ -56,6 +61,36 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   const [suspendLoading, setSuspendLoading] = useState(false);
   const [suspendError, setSuspendError] = useState<string | null>(null);
   const [reactivatingUid, setReactivatingUid] = useState<string | null>(null);
+
+  // PIN reset states — a small confirm modal since a new PIN isn't shown
+  // to the staff member automatically; the owner has to relay it to them.
+  const [staffPendingPinReset, setStaffPendingPinReset] = useState<StaffMember | null>(null);
+  const [newPinValue, setNewPinValue] = useState('');
+  const [pinResetLoading, setPinResetLoading] = useState(false);
+  const [pinResetError, setPinResetError] = useState<string | null>(null);
+
+  // Device pairing states (PIN quick-login on a shared shop device).
+  const [pairError, setPairError] = useState<string | null>(null);
+
+  const handleConfirmResetPin = async () => {
+    if (!staffPendingPinReset) return;
+    if (!/^\d{6}$/.test(newPinValue)) {
+      setPinResetError('O PIN deve ter exatamente 6 dígitos numéricos.');
+      return;
+    }
+    setPinResetLoading(true);
+    setPinResetError(null);
+    try {
+      await resetStaffPin(staffPendingPinReset.uid, newPinValue);
+      setStaffSuccess(`PIN de ${staffPendingPinReset.name} atualizado. Informe-o do novo PIN.`);
+      setStaffPendingPinReset(null);
+      setNewPinValue('');
+    } catch (err: any) {
+      setPinResetError(err?.message || 'Erro ao redefinir o PIN. Tente novamente.');
+    } finally {
+      setPinResetLoading(false);
+    }
+  };
 
   const handleConfirmSuspendStaff = async () => {
     if (!staffPendingSuspension) return;
@@ -112,8 +147,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
       return;
     }
 
-    if (staffPassword.length < 6) {
-      setStaffError('A palavra-passe deve ter pelo menos 6 caracteres.');
+    if (!/^\d{6}$/.test(staffPassword)) {
+      setStaffError('O PIN deve ter exatamente 6 dígitos numéricos.');
       return;
     }
 
@@ -305,6 +340,87 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
 
           {activeSection === 'staff' && isOwner && (
             <div className="space-y-6">
+              {/* Device Pairing — PIN quick-login for a shared shop device */}
+              <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
+                <h3 className="text-xs font-bold text-[#1B3966] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                  <Smartphone className="w-4 h-4" /> Este Dispositivo
+                </h3>
+
+                {!pairedDevice ? (
+                  <>
+                    <p className="text-xs text-gray-500 mb-3 leading-relaxed">
+                      Se este é um telefone ou computador <strong>partilhado por vários funcionários desta loja</strong>, configure-o
+                      para mostrar um ecrã de login rápido: cada funcionário escolhe o seu nome e introduz o seu PIN, sem precisar de
+                      digitar o email. (Se cada funcionário usa o seu próprio telefone, não é necessário configurar nada.)
+                    </p>
+                    {pairError && (
+                      <div className="mb-3 p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs flex items-center gap-2">
+                        <AlertCircle className="w-4 h-4 shrink-0" /> {pairError}
+                      </div>
+                    )}
+                    <button
+                      type="button"
+                      onClick={() => {
+                        try {
+                          setPairError(null);
+                          pairDevice();
+                        } catch (err: any) {
+                          setPairError(err?.message || 'Erro ao configurar este dispositivo.');
+                        }
+                      }}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-[#1B3966] hover:bg-[#152d51] py-2.5 rounded-xl transition"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      Configurar Este Dispositivo para {business?.name || 'esta loja'}
+                    </button>
+                  </>
+                ) : pairedDevice.businessId === activeBusinessId ? (
+                  <>
+                    <div className="flex items-center gap-2 mb-3 text-xs text-emerald-700 bg-emerald-500/10 border border-emerald-500/30 rounded-xl p-2.5">
+                      <Check className="w-4 h-4 shrink-0" />
+                      <span>
+                        Configurado para <strong>{pairedDevice.businessName}</strong> — {pairedDevice.staff.length}{' '}
+                        {pairedDevice.staff.length === 1 ? 'funcionário' : 'funcionários'} no login rápido.
+                      </span>
+                    </div>
+                    <div className="flex gap-2">
+                      <button
+                        type="button"
+                        onClick={() => pairDevice()}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-[#1B3966] bg-white border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl transition"
+                      >
+                        <RefreshCw className="w-3.5 h-3.5" /> Atualizar Lista
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => unpairDevice()}
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-rose-600 bg-white border border-rose-200 hover:bg-rose-50 py-2.5 rounded-xl transition"
+                      >
+                        <X className="w-3.5 h-3.5" /> Remover Configuração
+                      </button>
+                    </div>
+                  </>
+                ) : (
+                  <>
+                    <div className="flex items-start gap-2 mb-3 text-xs text-orange-700 bg-orange-500/10 border border-orange-500/30 rounded-xl p-2.5">
+                      <AlertCircle className="w-4 h-4 shrink-0 mt-0.5" />
+                      <span>
+                        Este dispositivo está configurado para <strong>{pairedDevice.businessName}</strong>, não para a loja atual
+                        ({business?.name}). Reconfigure para mudar o login rápido para esta loja.
+                      </span>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={() => pairDevice()}
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-[#1B3966] hover:bg-[#152d51] py-2.5 rounded-xl transition"
+                    >
+                      <Smartphone className="w-3.5 h-3.5" />
+                      Reconfigurar para {business?.name || 'esta loja'}
+                    </button>
+                  </>
+                )}
+              </div>
+
               {/* Form to Add Staff */}
               <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
                 <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1.5">
@@ -364,17 +480,21 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
 
                     <div>
                       <label className="block text-[11px] font-semibold text-gray-700 mb-1">
-                        Palavra-passe Temporária
+                        PIN de Acesso (6 dígitos)
                       </label>
                       <input
                         type="text"
+                        inputMode="numeric"
                         required
-                        minLength={6}
+                        maxLength={6}
                         value={staffPassword}
-                        onChange={e => setStaffPassword(e.target.value)}
-                        placeholder="Mínimo 6 caracteres"
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono"
+                        onChange={e => setStaffPassword(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                        placeholder="Ex: 483920"
+                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono tracking-widest"
                       />
+                      <p className="text-[10px] text-gray-400 mt-1">
+                        O funcionário usa este PIN para entrar — tanto no login normal como no login rápido de um dispositivo partilhado.
+                      </p>
                     </div>
                   </div>
 
@@ -416,6 +536,19 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                               Staff
                             </span>
                           )}
+
+                          <button
+                            type="button"
+                            onClick={() => {
+                              setPinResetError(null);
+                              setNewPinValue('');
+                              setStaffPendingPinReset(staff);
+                            }}
+                            className="p-1.5 text-gray-500 hover:text-blue-600 hover:bg-blue-500/10 rounded-lg transition"
+                            title="Redefinir PIN"
+                          >
+                            <KeyRound className="w-4 h-4" />
+                          </button>
 
                           {staff.suspended ? (
                             <button
@@ -639,6 +772,71 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               >
                 {suspendLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <UserX className="w-3.5 h-3.5" />}
                 {suspendLoading ? 'A suspender...' : 'Suspender Acesso'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {staffPendingPinReset && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center shrink-0">
+                <KeyRound className="w-5 h-5 text-blue-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Redefinir PIN</h3>
+                <p className="text-[11px] text-gray-500">Para {staffPendingPinReset.name}</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div>
+                <label className="text-[11px] font-bold text-gray-600 mb-1 block">Novo PIN (6 dígitos)</label>
+                <input
+                  type="text"
+                  inputMode="numeric"
+                  autoFocus
+                  maxLength={6}
+                  value={newPinValue}
+                  onChange={e => setNewPinValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
+                  placeholder="Ex: 573920"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono tracking-widest"
+                />
+              </div>
+
+              <p className="text-[11px] text-gray-500 leading-relaxed">
+                O PIN antigo deixa de funcionar de imediato. Informe {staffPendingPinReset.name} do novo PIN diretamente — não é enviado automaticamente.
+              </p>
+
+              {pinResetError && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {pinResetError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setStaffPendingPinReset(null);
+                  setPinResetError(null);
+                }}
+                disabled={pinResetLoading}
+                className="px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmResetPin}
+                disabled={pinResetLoading || newPinValue.length !== 6}
+                className="px-4 py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {pinResetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
+                {pinResetLoading ? 'A guardar...' : 'Redefinir PIN'}
               </button>
             </div>
           </div>
