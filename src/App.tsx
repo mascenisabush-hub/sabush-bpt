@@ -18,6 +18,7 @@ import { AuthView } from './components/AuthView';
 import { QuickLoginScreen } from './components/QuickLoginScreen';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import { NewSaaSDashboard } from './components/dashboard-v2/NewSaaSDashboard';
+import { Sidebar } from './components/Sidebar';
 import { Product } from './types';
 
 function MainApp() {
@@ -87,13 +88,16 @@ function MainApp() {
   };
 
   return (
-  <div className="min-h-screen bg-white text-gray-900 font-sans antialiased flex flex-col">
-      <div className="sticky top-0 z-30 bg-white">
-        <Header activeTab={activeTab} setActiveTab={setActiveTab} />
-      </div>
-      <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+  <div className="min-h-screen bg-white text-gray-900 font-sans antialiased flex">
+      <Sidebar activeTab={activeTab} setActiveTab={setActiveTab} />
 
-      <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 pb-24 md:pb-12">
+      <div className="flex-1 min-w-0 flex flex-col">
+        <div className="sticky top-0 z-30 bg-white">
+          <Header activeTab={activeTab} setActiveTab={setActiveTab} />
+        </div>
+        <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+
+        <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 pb-24 md:pb-12">
         {!isStaff && activeTab === 'dashboard' && (
           <DashboardView
             onNavigateToAddStock={handleNavigateToAddStock}
@@ -157,17 +161,18 @@ function MainApp() {
         {!isStaff && activeTab === 'reports' && <ReportsView />}
 
         {!isStaff && activeTab === 'timeline' && <BusinessTimelineView />}
-      </main>
+        </main>
 
-      {/* Product Detail Modal */}
-      {!isStaff && selectedDetailProduct && (
-        <ProductDetailModal
-          product={selectedDetailProduct}
-          onClose={() => setSelectedDetailProduct(null)}
-          onNavigateToAddStock={handleNavigateToAddStock}
-          onNavigateToAddQuebra={handleNavigateToAddQuebra}
-        />
-      )}
+        {/* Product Detail Modal */}
+        {!isStaff && selectedDetailProduct && (
+          <ProductDetailModal
+            product={selectedDetailProduct}
+            onClose={() => setSelectedDetailProduct(null)}
+            onNavigateToAddStock={handleNavigateToAddStock}
+            onNavigateToAddQuebra={handleNavigateToAddQuebra}
+          />
+        )}
+      </div>
     </div>
   );
 }

@@ -50,6 +50,10 @@ interface KpiCardProps {
   onClick?: () => void;
   badge?: React.ReactNode;
   highlight?: boolean;
+  /** 'dark' renders the premium navy hero-card treatment used to make a
+   *  metric stand out (e.g. Lucro Embutido, Valor do Negócio). Same data,
+   *  same click behaviour — only the surface changes. */
+  variant?: 'light' | 'dark';
 }
 
 const KpiCard: React.FC<KpiCardProps> = ({
@@ -63,34 +67,48 @@ const KpiCard: React.FC<KpiCardProps> = ({
   onClick,
   badge,
   highlight,
-}) => (
-  <button
-    type="button"
-    onClick={onClick}
-    disabled={!onClick}
-    className={`card-premium h-full text-left p-6 sm:p-7 flex flex-col gap-5 ${
-      highlight ? 'is-highlighted' : ''
-    } ${onClick ? 'is-interactive cursor-pointer active:scale-[0.99]' : 'cursor-default'}`}
-  >
-    <div className="flex items-start justify-between gap-2">
-      <div className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${iconBgClass} ${iconTextClass}`}>
-        <Icon className="w-[19px] h-[19px]" />
+  variant = 'light',
+}) => {
+  const isDark = variant === 'dark';
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={!onClick}
+      className={`h-full text-left p-6 sm:p-7 flex flex-col gap-5 rounded-2xl transition ${
+        isDark
+          ? 'bg-[#0B1F3A] shadow-[var(--shadow-2)]'
+          : `card-premium ${highlight ? 'is-highlighted' : ''}`
+      } ${onClick ? (isDark ? 'hover:-translate-y-0.5 cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
+    >
+      <div className="flex items-start justify-between gap-2">
+        <div
+          className={`w-11 h-11 rounded-2xl flex items-center justify-center shrink-0 ${
+            isDark ? 'bg-white/10 text-[#D4AF37]' : `${iconBgClass} ${iconTextClass}`
+          }`}
+        >
+          <Icon className="w-[19px] h-[19px]" />
+        </div>
+        {badge}
       </div>
-      {badge}
-    </div>
-    <div>
-      <p className="kpi-label leading-tight">
-        {label}
+      <div>
+        <p className={`kpi-label leading-tight ${isDark ? 'text-white/50' : ''}`}>
+          {label}
+        </p>
+        <p
+          className={`text-[26px] sm:text-[28px] font-extrabold mt-2 leading-tight truncate tabular-nums tracking-tight ${
+            isDark ? (valueClass || 'text-[#D4AF37]') : `kpi-value ${valueClass || ''}`
+          }`}
+        >
+          {value}
+        </p>
+      </div>
+      <p className={`text-[12px] leading-snug mt-auto ${isDark ? 'text-white/40' : 'text-gray-500'}`}>
+        {description}
       </p>
-      <p className={`kpi-value text-[26px] sm:text-[28px] mt-2 leading-tight truncate ${valueClass || ''}`}>
-        {value}
-      </p>
-    </div>
-    <p className="text-[12px] text-gray-500 leading-snug mt-auto">
-      {description}
-    </p>
-  </button>
-);
+    </button>
+  );
+};
 
 export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToAddStock,
@@ -239,9 +257,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           iconTextClass="text-emerald-600"
           label="Lucro Embutido"
           value={formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
-          valueClass={totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}
+          valueClass={totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-400' : 'text-rose-400'}
           description="O lucro potencial contido no stock que ainda resta."
           onClick={() => setShowBreakdownModal(true)}
+          variant="dark"
         />
 
         <KpiCard
@@ -253,11 +272,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           valueClass="text-[#D4AF37]"
           description="O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados."
           onClick={() => setShowWorthModal(true)}
+          variant="dark"
           badge={
             hasInitialStockCount && capitalGrowth !== 0 ? (
               <span
                 className={`inline-flex items-center gap-0.5 text-[10px] font-bold font-mono ${
-                  capitalGrowth > 0 ? 'text-emerald-600' : 'text-rose-600'
+                  capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
                 {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
