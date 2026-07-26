@@ -267,11 +267,15 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
             <div className="space-y-6">
               {/* Form to Add Staff */}
               <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
-                <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-3 flex items-center gap-1.5">
+                <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4" /> Adicionar Novo Funcionário (Staff)
                 </h3>
+                <p className="text-xs font-semibold text-gray-700 mb-2 flex items-center gap-1.5">
+                  <Store className="w-3.5 h-3.5 text-blue-600 shrink-0" />
+                  Loja: <span className="text-blue-700">{business?.name || '—'}</span>
+                </p>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                  Os funcionários usam estas credenciais para entrar na aplicação. Eles têm acesso <strong>apenas aos formulários de introdução</strong> (Stock, Quebra, Despesa) e <strong>não conseguem ver preços, custos, margens nem relatórios</strong>.
+                  Os funcionários usam estas credenciais para entrar na aplicação. Eles têm acesso <strong>apenas aos formulários de introdução</strong> (Stock, Quebra, Despesa) e <strong>não conseguem ver preços, custos, margens nem relatórios</strong>. Este funcionário terá acesso <strong>apenas a esta loja</strong> — para adicionar funcionários a outra loja, mude de loja primeiro em "Meu Negócio".
                 </p>
 
                 {staffError && (
