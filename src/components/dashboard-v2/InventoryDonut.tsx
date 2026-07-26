@@ -9,7 +9,7 @@ const CIRCUMFERENCE = 2 * Math.PI * RADIUS;
 
 // Same palette used elsewhere in the app for this design (navy/gold/orange),
 // cycled for however many distinct categories exist in the real catalog.
-const PALETTE = ['#0B1F3A', '#D4AF37', '#F59E0B', '#94A3B8', '#0EA5E9', '#7C3AED'];
+const PALETTE = ['#1B3966', '#B8791A', '#F59E0B', '#94A3B8', '#0EA5E9', '#7C3AED'];
 
 // ============================================================
 // REAL DATA ONLY — composition is derived from the existing Product

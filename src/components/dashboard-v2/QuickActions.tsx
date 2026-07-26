@@ -33,9 +33,9 @@ export const QuickActions: React.FC = () => {
             <button
               key={action.label}
               onClick={() => navigateTo(action.tab)}
-              className="flex flex-col items-center justify-center gap-2 rounded-xl border border-gray-200 py-4 px-2 text-center hover:border-[#D4AF37] hover:bg-[#D4AF37]/5 transition-colors group"
+              className="flex flex-col items-center justify-center gap-2 rounded-xl border border-gray-200 py-4 px-2 text-center hover:border-[#B8791A] hover:bg-[#B8791A]/5 transition-colors group"
             >
-              <div className="w-9 h-9 rounded-xl bg-[#0B1F3A] flex items-center justify-center group-hover:bg-[#D4AF37] transition-colors">
+              <div className="w-9 h-9 rounded-xl bg-[#1B3966] flex items-center justify-center group-hover:bg-[#B8791A] transition-colors">
                 <Icon className="w-4 h-4 text-white" />
               </div>
               <span className="text-xs font-semibold text-[#111827] leading-tight">{action.label}</span>

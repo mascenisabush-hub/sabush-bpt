@@ -49,8 +49,8 @@ export const ProfitLineChart: React.FC = () => {
       <svg viewBox={`0 0 ${WIDTH} ${HEIGHT}`} className="w-full h-56" preserveAspectRatio="none">
         <defs>
           <linearGradient id="profitFill" x1="0" y1="0" x2="0" y2="1">
-            <stop offset="0%" stopColor="#D4AF37" stopOpacity="0.25" />
-            <stop offset="100%" stopColor="#D4AF37" stopOpacity="0" />
+            <stop offset="0%" stopColor="#B8791A" stopOpacity="0.25" />
+            <stop offset="100%" stopColor="#B8791A" stopOpacity="0" />
           </linearGradient>
         </defs>
 
@@ -68,11 +68,11 @@ export const ProfitLineChart: React.FC = () => {
         ))}
 
         <path d={areaPath} fill="url(#profitFill)" />
-        <path d={linePath} fill="none" stroke="#0B1F3A" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
+        <path d={linePath} fill="none" stroke="#1B3966" strokeWidth={2.5} strokeLinecap="round" strokeLinejoin="round" />
 
         {points.map((p, i) => (
           <g key={i}>
-            <circle cx={p.x} cy={p.y} r={4} fill="#D4AF37" stroke="#0B1F3A" strokeWidth={1.5} />
+            <circle cx={p.x} cy={p.y} r={4} fill="#B8791A" stroke="#1B3966" strokeWidth={1.5} />
             <text x={p.x} y={HEIGHT - 6} textAnchor="middle" className="fill-gray-400" fontSize="11">
               {p.label}
             </text>

@@ -23,49 +23,39 @@ export const NewSaaSDashboard: React.FC<NewSaaSDashboardProps> = ({ onExit }) =>
         <div className="px-4 sm:px-6 lg:px-8 pt-3">
           <button
             onClick={onExit}
-            className="text-xs font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors"
+            className="text-xs font-semibold text-gray-400 hover:text-[#1B3966] transition-colors"
           >
             ← Voltar à app principal
           </button>
         </div>
       )}
 
+      {/* Inventory/Reports never render here — TopNavbar navigates away
+          from this view the instant either is selected (see TopNavbar's
+          handleSelect), so this is always the Dashboard section. */}
       <main className="w-full px-4 sm:px-6 lg:px-8 py-6 space-y-6">
-        {section === 'Dashboard' && (
-          <>
-            <SummaryCards />
+        <SummaryCards />
 
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <ProfitLineChart />
-              </div>
-              <div>
-                <InventoryDonut />
-              </div>
-            </div>
-
-            <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-              <div className="lg:col-span-2">
-                <RecentBatchesTable />
-              </div>
-              <div>
-                <ActivityTimeline />
-              </div>
-            </div>
-
-            <AlertsPanel />
-            <QuickActions />
-          </>
-        )}
-
-        {/* Inventory/Reports briefly render this while the real tab takes
-            over (both trigger an immediate 'navigate-tab' switch away
-            from this view — see TopNavbar.tsx). */}
-        {section !== 'Dashboard' && (
-          <div className="flex flex-col items-center justify-center py-24 text-center">
-            <p className="text-sm text-gray-400">A abrir {section}…</p>
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <ProfitLineChart />
           </div>
-        )}
+          <div>
+            <InventoryDonut />
+          </div>
+        </div>
+
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+          <div className="lg:col-span-2">
+            <RecentBatchesTable />
+          </div>
+          <div>
+            <ActivityTimeline />
+          </div>
+        </div>
+
+        <AlertsPanel />
+        <QuickActions />
       </main>
     </div>
   );

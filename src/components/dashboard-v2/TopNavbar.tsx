@@ -64,8 +64,15 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSelectSec
   const [profileOpen, setProfileOpen] = useState(false);
 
   const handleSelect = (link: { section: NavSection; tab?: TabType }) => {
-    onSelectSection(link.section);
-    if (link.tab) navigateTo(link.tab);
+    // Inventory/Reports leave this view entirely (see navigateTo below,
+    // which switches App.tsx's activeTab away from 'dashboard-v2' and
+    // unmounts this component) — there's nothing here to hold section
+    // state for, so only Dashboard ever updates local state.
+    if (link.tab) {
+      navigateTo(link.tab);
+    } else {
+      onSelectSection(link.section);
+    }
   };
 
   return (
@@ -74,12 +81,12 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSelectSec
         <div className="flex items-center justify-between h-16 gap-4">
           {/* Left: Logo */}
           <div className="flex items-center gap-2 shrink-0 min-w-0">
-            <div className="w-8 h-8 rounded-xl bg-[#0B1F3A] flex items-center justify-center shrink-0">
-              <span className="text-[#D4AF37] font-bold text-sm">
+            <div className="w-8 h-8 rounded-xl bg-[#1B3966] flex items-center justify-center shrink-0">
+              <span className="text-[#B8791A] font-bold text-sm">
                 {(business?.name || 'S').charAt(0).toUpperCase()}
               </span>
             </div>
-            <span className="font-bold text-[#0B1F3A] tracking-tight text-base sm:text-lg whitespace-nowrap truncate">
+            <span className="font-bold text-[#1B3966] tracking-tight text-base sm:text-lg whitespace-nowrap truncate">
               {business?.name || 'Sabush'}
             </span>
           </div>
@@ -94,8 +101,8 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSelectSec
                   onClick={() => handleSelect(link)}
                   className={`px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
                     isActive
-                      ? 'bg-[#0B1F3A] text-white'
-                      : 'text-[#111827]/70 hover:text-[#0B1F3A] hover:bg-gray-50'
+                      ? 'bg-[#1B3966] text-white'
+                      : 'text-[#111827]/70 hover:text-[#1B3966] hover:bg-gray-50'
                   }`}
                 >
                   {link.section}
@@ -111,7 +118,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSelectSec
                 onClick={() => setProfileOpen(v => !v)}
                 className="flex items-center gap-2 pl-1 pr-2 py-1 rounded-xl hover:bg-gray-50 transition-colors"
               >
-                <div className="w-8 h-8 rounded-full bg-[#0B1F3A] flex items-center justify-center text-white text-xs font-bold">
+                <div className="w-8 h-8 rounded-full bg-[#1B3966] flex items-center justify-center text-white text-xs font-bold">
                   {getInitials(userProfile?.name)}
                 </div>
                 <ChevronDown className="w-4 h-4 text-gray-400 hidden sm:block" />
@@ -151,7 +158,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSelectSec
               onClick={() => setMobileOpen(v => !v)}
               aria-label="Menu"
             >
-              {mobileOpen ? <X className="w-5 h-5 text-[#0B1F3A]" /> : <Menu className="w-5 h-5 text-[#0B1F3A]" />}
+              {mobileOpen ? <X className="w-5 h-5 text-[#1B3966]" /> : <Menu className="w-5 h-5 text-[#1B3966]" />}
             </button>
           </div>
         </div>
@@ -169,7 +176,7 @@ export const TopNavbar: React.FC<TopNavbarProps> = ({ activeSection, onSelectSec
                     setMobileOpen(false);
                   }}
                   className={`whitespace-nowrap px-4 py-2 rounded-xl text-sm font-semibold transition-colors ${
-                    isActive ? 'bg-[#0B1F3A] text-white' : 'bg-gray-50 text-[#111827]/70'
+                    isActive ? 'bg-[#1B3966] text-white' : 'bg-gray-50 text-[#111827]/70'
                   }`}
                 >
                   {link.section}
