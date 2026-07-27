@@ -6,6 +6,7 @@ import { SettingsModal } from './SettingsModal';
 import { ShopSwitcher } from './ShopSwitcher';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { useLanguage } from '../context/LanguageContext';
 
 interface HeaderProps {
   activeTab: TabType;
@@ -25,7 +26,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     logout,
   } = useApp();
 
-  const visibleTabs = isStaff ? NAV_TABS.filter(t => !t.ownerOnly) : NAV_TABS;
+  const { t } = useLanguage();
+  const visibleTabs = isStaff ? NAV_TABS.filter(tab => !tab.ownerOnly) : NAV_TABS;
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
@@ -82,7 +84,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   <ShopSwitcher />
                 ) : (
                   <p className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] mb-0.5">
-                    Meu Negócio
+                    {t('header.myBusiness')}
                   </p>
                 )}
                 <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#0B1F3A] truncate">
@@ -90,10 +92,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 </h1>
                 <p
                   className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
-                  title={business?.contact ? `Contacto: ${business.contact}` : undefined}
+                  title={business?.contact ? t('header.contactTitle', { contact: business.contact }) : undefined}
                 >
                   <span className="truncate text-gray-600 font-bold">
-                    {businessCategory || 'Negócio Registado'}
+                    {businessCategory || t('header.registeredBusiness')}
                   </span>
                   {business?.location && (
                     <>
@@ -108,7 +110,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 <div className="w-9 h-9 rounded-full bg-[#F7F8FA] text-gray-400 flex items-center justify-center shrink-0">
                   <Store className="w-4 h-4" />
                 </div>
-                <span className="text-[13px] font-bold text-gray-400">Perfil não definido</span>
+                <span className="text-[13px] font-bold text-gray-400">{t('header.profileNotSet')}</span>
               </div>
             )}
 
@@ -122,7 +124,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 <input
                   type="text"
                   disabled
-                  placeholder="Pesquisar no sistema..."
+                  placeholder={t('header.searchPlaceholder')}
                   className="w-full bg-[#F5F7FA] border border-transparent rounded-xl pl-10 pr-16 py-2.5 text-sm text-gray-500 placeholder-gray-400 cursor-default"
                 />
                 <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 bg-white border border-gray-200 rounded-md px-1.5 py-0.5">
@@ -139,14 +141,14 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <div className="relative shrink-0" ref={notificationsRef}>
               <button
                 onClick={() => setShowNotifications(v => !v)}
-                title="Notificações"
+                title={t('header.notifications')}
                 className="w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#2563EB]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
               >
                 <Bell className="w-4 h-4" />
               </button>
               {showNotifications && (
                 <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl elevation-2 p-4 z-40 text-center">
-                  <p className="text-xs text-gray-500">Sem notificações novas.</p>
+                  <p className="text-xs text-gray-500">{t('header.noNotifications')}</p>
                 </div>
               )}
             </div>
@@ -162,10 +164,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
                   <span className="text-xs font-bold text-[#0B1F3A] leading-tight">
-                    {userProfile?.name || 'Utilizador'}
+                    {userProfile?.name || t('header.userFallback')}
                   </span>
                   <span className="text-[10px] uppercase tracking-wide text-[#2563EB] font-bold">
-                    {isOwner ? 'Dono' : 'Staff'}
+                    {isOwner ? t('header.roleOwner') : t('header.roleStaff')}
                   </span>
                 </div>
                 <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
@@ -179,7 +181,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
                     >
                       <Settings className="w-4 h-4 text-gray-400" />
-                      Definições
+                      {t('header.settings')}
                     </button>
                   )}
                   {isOwner && (
@@ -188,7 +190,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
                     >
                       <DollarSign className="w-4 h-4 text-gray-400" />
-                      Moeda <span className="ml-auto text-gray-400">{currencySymbol}</span>
+                      {t('header.currency')} <span className="ml-auto text-gray-400">{currencySymbol}</span>
                     </button>
                   )}
                   {isOwner && (
@@ -197,7 +199,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                       className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition"
                     >
                       <HelpCircle className="w-4 h-4 text-gray-400" />
-                      Ajuda e Conceito
+                      {t('header.helpAndConcept')}
                     </button>
                   )}
                   <div className="my-1.5 border-t" style={{ borderColor: 'var(--border)' }} />
@@ -206,7 +208,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                     className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-rose-600 hover:bg-rose-50 transition"
                   >
                     <LogOut className="w-4 h-4" />
-                    Sair
+                    {t('header.logout')}
                   </button>
                 </div>
               )}
@@ -225,7 +227,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   key={tab.id}
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
-                  title={tab.label}
+                  title={t(tab.labelKey)}
                   className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold transition active:scale-[0.97] ${
                     isActive
                       ? 'bg-[#2563EB] text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.55)]'
@@ -239,7 +241,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   >
                     <Icon className="w-4 h-4" strokeWidth={2} />
                   </span>
-                  {tab.shortLabel}
+                  {t(tab.shortLabelKey)}
                 </button>
               );
             })}
@@ -258,7 +260,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#2563EB] hover:text-[#1D4ED8] transition"
             >
               <HelpCircle className="w-3.5 h-3.5" />
-              <span className="font-bold">Complete o perfil do seu negócio</span>
+              <span className="font-bold">{t('header.completeProfile')}</span>
               <X
                 className="w-3 h-3 ml-1 text-gray-300 group-hover:text-gray-500"
                 onClick={(e) => { e.stopPropagation(); setReminderDismissed(true); }}
@@ -282,7 +284,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-md p-6 text-gray-900 elevation-3">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
               <h3 className="font-bold text-lg flex items-center gap-2">
-                <DollarSign className="w-5 h-5 text-blue-600" /> Seleccionar Moeda
+                <DollarSign className="w-5 h-5 text-blue-600" /> {t('header.currencyModal.title')}
               </h3>
               <button
                 onClick={() => setShowCurrencyModal(false)}
@@ -292,7 +294,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               </button>
             </div>
             <p className="text-xs text-gray-500 my-3">
-              Todos os valores e relatórios serão apresentados com a moeda selecionada.
+              {t('header.currencyModal.description')}
             </p>
 
             <div className="grid grid-cols-2 gap-2 my-4 max-h-60 overflow-y-auto pr-1">
@@ -322,7 +324,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               onClick={() => setShowCurrencyModal(false)}
               className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-bold transition"
             >
-              Concluído
+              {t('header.currencyModal.done')}
             </button>
           </div>
         </div>
@@ -334,7 +336,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-lg p-6 text-gray-900 elevation-3 max-h-[90vh] overflow-y-auto">
             <div className="flex items-center justify-between pb-4 border-b border-gray-200">
               <h3 className="font-bold text-lg text-blue-600 flex items-center gap-2">
-                <HelpCircle className="w-5 h-5" /> Como Funciona o Lucro por Lote
+                <HelpCircle className="w-5 h-5" /> {t('header.helpModal.title')}
               </h3>
               <button
                 onClick={() => setShowHelpModal(false)}
@@ -346,35 +348,29 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
             <div className="space-y-4 my-4 text-sm text-gray-700 leading-relaxed">
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-bold text-blue-700 block mb-1">1. Sem Necessidade de Registar Vendas Diárias</span>
-                <p>
-                  Não precisa de registar cada venda individual. Em vez disso, ao registar um <strong>novo lote de stock</strong> de um produto, o sistema infere automaticamente que o <strong>lote anterior foi totalmente vendido</strong> (descontando as quebras registadas).
-                </p>
+                <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section1Title')}</span>
+                <p dangerouslySetInnerHTML={{ __html: t('header.helpModal.section1Body') }} />
               </div>
 
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-bold text-blue-700 block mb-1">2. Lotes Fechados = Lucro Finalizado</span>
+                <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section2Title')}</span>
                 <p>
-                  Quando um lote é substituído por um novo, o seu lucro é finalizado:
+                  {t('header.helpModal.section2Body')}
                   <br />
                   <code className="text-xs bg-white px-2 py-1 rounded text-blue-600 inline-block my-1 font-mono">
-                    Unidades Vendidas = Stock Inicial do Lote − Quebras
+                    {t('header.helpModal.section2Formula')}
                   </code>
                 </p>
               </div>
 
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-bold text-blue-700 block mb-1">3. Lote Ativo = Estimativa em Curso</span>
-                <p>
-                  Para o stock ativo atual, a aplicação mostra uma <strong>estimativa em curso</strong> do lucro projetado caso as unidades restantes sejam vendidas ao preço definido.
-                </p>
+                <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section3Title')}</span>
+                <p dangerouslySetInnerHTML={{ __html: t('header.helpModal.section3Body') }} />
               </div>
 
               <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
-                <span className="font-bold text-blue-700 block mb-1">4. Quebras e Despesas Gerais</span>
-                <p>
-                  Registe produtos estragados ou fora de validade em <strong>Quebras</strong>. Custos fixos como renda e eletricidade são registados em <strong>Despesas</strong> para determinar o <strong>Rendimento Líquido</strong> real.
-                </p>
+                <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section4Title')}</span>
+                <p dangerouslySetInnerHTML={{ __html: t('header.helpModal.section4Body') }} />
               </div>
             </div>
 
@@ -382,7 +378,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               onClick={() => setShowHelpModal(false)}
               className="w-full py-2.5 rounded-xl bg-blue-600 hover:bg-blue-500 text-white text-sm font-bold transition shadow-md"
             >
-              Entendido!
+              {t('header.helpModal.gotIt')}
             </button>
           </div>
         </div>

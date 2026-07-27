@@ -160,6 +160,56 @@ export interface TranslationDict {
       editDetails: string;
     };
   };
+  nav: {
+    tabs: {
+      dashboard: { label: string; shortLabel: string };
+      stocks: { label: string; shortLabel: string };
+      addStock: { label: string; shortLabel: string };
+      stockCount: { label: string; shortLabel: string };
+      addQuebra: { label: string; shortLabel: string };
+      addExpense: { label: string; shortLabel: string };
+      addWithdrawal: { label: string; shortLabel: string };
+      closing: { label: string; shortLabel: string };
+      reports: { label: string; shortLabel: string };
+      timeline: { label: string; shortLabel: string };
+      dashboardV2: { label: string; shortLabel: string };
+    };
+  };
+  header: {
+    myBusiness: string;
+    profileNotSet: string;
+    registeredBusiness: string;
+    contactTitle: string;
+    searchPlaceholder: string;
+    notifications: string;
+    noNotifications: string;
+    userFallback: string;
+    roleOwner: string;
+    roleStaff: string;
+    settings: string;
+    currency: string;
+    helpAndConcept: string;
+    logout: string;
+    completeProfile: string;
+    currencyModal: {
+      title: string;
+      description: string;
+      done: string;
+    };
+    helpModal: {
+      title: string;
+      section1Title: string;
+      section1Body: string;
+      section2Title: string;
+      section2Body: string;
+      section2Formula: string;
+      section3Title: string;
+      section3Body: string;
+      section4Title: string;
+      section4Body: string;
+      gotIt: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -354,6 +404,56 @@ export const pt: TranslationDict = {
       addStock: '+ Add Stock',
       addQuebra: '+ Quebra',
       editDetails: 'Editar Detalhes',
+    },
+  },
+  nav: {
+    tabs: {
+      dashboard: { label: 'Produtos', shortLabel: 'Produtos' },
+      stocks: { label: 'Stocks', shortLabel: 'Stocks' },
+      addStock: { label: 'Adicionar Stock', shortLabel: '+ Stock' },
+      stockCount: { label: 'Contagem de Stock', shortLabel: 'Contagem' },
+      addQuebra: { label: 'Adicionar Quebra', shortLabel: '+ Quebra' },
+      addExpense: { label: 'Adicionar Despesa', shortLabel: '+ Despesa' },
+      addWithdrawal: { label: 'Registar Levantamento', shortLabel: '+ Levant.' },
+      closing: { label: 'Fecho Mensal/Anual', shortLabel: 'Fecho' },
+      reports: { label: 'Relatórios', shortLabel: 'Relatórios' },
+      timeline: { label: 'Linha do Tempo', shortLabel: 'Histórico' },
+      dashboardV2: { label: 'Dashboard (Novo)', shortLabel: 'Novo' },
+    },
+  },
+  header: {
+    myBusiness: 'Meu Negócio',
+    profileNotSet: 'Perfil não definido',
+    registeredBusiness: 'Negócio Registado',
+    contactTitle: 'Contacto: {{contact}}',
+    searchPlaceholder: 'Pesquisar no sistema...',
+    notifications: 'Notificações',
+    noNotifications: 'Sem notificações novas.',
+    userFallback: 'Utilizador',
+    roleOwner: 'Dono',
+    roleStaff: 'Staff',
+    settings: 'Definições',
+    currency: 'Moeda',
+    helpAndConcept: 'Ajuda e Conceito',
+    logout: 'Sair',
+    completeProfile: 'Complete o perfil do seu negócio',
+    currencyModal: {
+      title: 'Seleccionar Moeda',
+      description: 'Todos os valores e relatórios serão apresentados com a moeda selecionada.',
+      done: 'Concluído',
+    },
+    helpModal: {
+      title: 'Como Funciona o Lucro por Lote',
+      section1Title: '1. Sem Necessidade de Registar Vendas Diárias',
+      section1Body: 'Não precisa de registar cada venda individual. Em vez disso, ao registar um <strong>novo lote de stock</strong> de um produto, o sistema infere automaticamente que o <strong>lote anterior foi totalmente vendido</strong> (descontando as quebras registadas).',
+      section2Title: '2. Lotes Fechados = Lucro Finalizado',
+      section2Body: 'Quando um lote é substituído por um novo, o seu lucro é finalizado:',
+      section2Formula: 'Unidades Vendidas = Stock Inicial do Lote − Quebras',
+      section3Title: '3. Lote Ativo = Estimativa em Curso',
+      section3Body: 'Para o stock ativo atual, a aplicação mostra uma <strong>estimativa em curso</strong> do lucro projetado caso as unidades restantes sejam vendidas ao preço definido.',
+      section4Title: '4. Quebras e Despesas Gerais',
+      section4Body: 'Registe produtos estragados ou fora de validade em <strong>Quebras</strong>. Custos fixos como renda e eletricidade são registados em <strong>Despesas</strong> para determinar o <strong>Rendimento Líquido</strong> real.',
+      gotIt: 'Entendido!',
     },
   },
 };

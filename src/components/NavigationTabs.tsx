@@ -1,5 +1,6 @@
 import React from 'react';
 import { useApp } from '../context/AppContext';
+import { useLanguage } from '../context/LanguageContext';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
 
 export type { TabType };
@@ -15,7 +16,8 @@ interface NavigationTabsProps {
 // (src/data/navigationTabs.ts) as the header row.
 export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setActiveTab }) => {
   const { isStaff } = useApp();
-  const visibleTabs = isStaff ? NAV_TABS.filter(t => !t.ownerOnly) : NAV_TABS;
+  const { t } = useLanguage();
+  const visibleTabs = isStaff ? NAV_TABS.filter(tab => !tab.ownerOnly) : NAV_TABS;
 
   return (
     <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-[#1B3966] z-40 px-2 py-1.5 shadow-[0_-4px_20px_rgba(10,28,56,0.25)]">
@@ -35,7 +37,7 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
               <div className={`p-1 rounded-lg ${isActive ? 'bg-[#B8791A]/15' : ''}`}>
                 <Icon className="w-5 h-5" />
               </div>
-              <span className="mt-0.5 tracking-tight">{tab.shortLabel}</span>
+              <span className="mt-0.5 tracking-tight">{t(tab.shortLabelKey)}</span>
             </button>
           );
         })}

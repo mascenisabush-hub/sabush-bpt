@@ -4,25 +4,29 @@ export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add
 
 export interface NavTabDefinition {
   id: TabType;
-  label: string;
-  shortLabel: string;
+  /** i18n key under `nav.tabs.<key>.label` — resolved via t() at render time. */
+  labelKey: string;
+  /** i18n key under `nav.tabs.<key>.shortLabel` — resolved via t() at render time. */
+  shortLabelKey: string;
   icon: React.ComponentType<{ className?: string; strokeWidth?: number }>;
   color: string;
   ownerOnly: boolean;
 }
 
 // Single source of truth for the app's action buttons — same 11 tabs used by
-// both the header action row (desktop) and the bottom bar (mobile).
+// both the header action row (desktop) and the bottom bar (mobile). Labels
+// are i18n keys, not literal text — consumers must call t(tab.labelKey) /
+// t(tab.shortLabelKey) to resolve them in the active language.
 export const NAV_TABS: NavTabDefinition[] = [
-  { id: 'dashboard', label: 'Produtos', shortLabel: 'Produtos', icon: LayoutDashboard, color: 'emerald', ownerOnly: true },
-  { id: 'stocks', label: 'Stocks', shortLabel: 'Stocks', icon: Boxes, color: 'amber', ownerOnly: true },
-  { id: 'add-stock', label: 'Adicionar Stock', shortLabel: '+ Stock', icon: PackagePlus, color: 'emerald', ownerOnly: false },
-  { id: 'stock-count', label: 'Contagem de Stock', shortLabel: 'Contagem', icon: ClipboardList, color: 'indigo', ownerOnly: true },
-  { id: 'add-quebra', label: 'Adicionar Quebra', shortLabel: '+ Quebra', icon: AlertTriangle, color: 'rose', ownerOnly: false },
-  { id: 'add-expense', label: 'Adicionar Despesa', shortLabel: '+ Despesa', icon: Receipt, color: 'purple', ownerOnly: false },
-  { id: 'add-withdrawal', label: 'Registar Levantamento', shortLabel: '+ Levant.', icon: HandCoins, color: 'orange', ownerOnly: true },
-  { id: 'closing', label: 'Fecho Mensal/Anual', shortLabel: 'Fecho', icon: Lock, color: 'teal', ownerOnly: true },
-  { id: 'reports', label: 'Relatórios', shortLabel: 'Relatórios', icon: BarChart3, color: 'indigo', ownerOnly: true },
-  { id: 'timeline', label: 'Linha do Tempo', shortLabel: 'Histórico', icon: History, color: 'blue', ownerOnly: true },
-  { id: 'dashboard-v2', label: 'Dashboard (Novo)', shortLabel: 'Novo', icon: Sparkles, color: 'gold', ownerOnly: true },
+  { id: 'dashboard', labelKey: 'nav.tabs.dashboard.label', shortLabelKey: 'nav.tabs.dashboard.shortLabel', icon: LayoutDashboard, color: 'emerald', ownerOnly: true },
+  { id: 'stocks', labelKey: 'nav.tabs.stocks.label', shortLabelKey: 'nav.tabs.stocks.shortLabel', icon: Boxes, color: 'amber', ownerOnly: true },
+  { id: 'add-stock', labelKey: 'nav.tabs.addStock.label', shortLabelKey: 'nav.tabs.addStock.shortLabel', icon: PackagePlus, color: 'emerald', ownerOnly: false },
+  { id: 'stock-count', labelKey: 'nav.tabs.stockCount.label', shortLabelKey: 'nav.tabs.stockCount.shortLabel', icon: ClipboardList, color: 'indigo', ownerOnly: true },
+  { id: 'add-quebra', labelKey: 'nav.tabs.addQuebra.label', shortLabelKey: 'nav.tabs.addQuebra.shortLabel', icon: AlertTriangle, color: 'rose', ownerOnly: false },
+  { id: 'add-expense', labelKey: 'nav.tabs.addExpense.label', shortLabelKey: 'nav.tabs.addExpense.shortLabel', icon: Receipt, color: 'purple', ownerOnly: false },
+  { id: 'add-withdrawal', labelKey: 'nav.tabs.addWithdrawal.label', shortLabelKey: 'nav.tabs.addWithdrawal.shortLabel', icon: HandCoins, color: 'orange', ownerOnly: true },
+  { id: 'closing', labelKey: 'nav.tabs.closing.label', shortLabelKey: 'nav.tabs.closing.shortLabel', icon: Lock, color: 'teal', ownerOnly: true },
+  { id: 'reports', labelKey: 'nav.tabs.reports.label', shortLabelKey: 'nav.tabs.reports.shortLabel', icon: BarChart3, color: 'indigo', ownerOnly: true },
+  { id: 'timeline', labelKey: 'nav.tabs.timeline.label', shortLabelKey: 'nav.tabs.timeline.shortLabel', icon: History, color: 'blue', ownerOnly: true },
+  { id: 'dashboard-v2', labelKey: 'nav.tabs.dashboardV2.label', shortLabelKey: 'nav.tabs.dashboardV2.shortLabel', icon: Sparkles, color: 'gold', ownerOnly: true },
 ];
