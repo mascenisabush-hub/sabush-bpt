@@ -64,7 +64,7 @@ export default function AppLoadingScreen({ message = 'A carregar o sistema...' }
           background: conic-gradient(
             from 0deg,
             #D69B25 0deg, #f5e9c8 55deg, #f5c877 130deg, #eaf2ff 165deg,
-            #D69B25 200deg, #B8791A 260deg, #D69B25 320deg, #D69B25 360deg
+            #D69B25 200deg, #D4AF37 260deg, #D69B25 320deg, #D69B25 360deg
           );
           filter: blur(90px) saturate(150%);
           opacity: 0.32;

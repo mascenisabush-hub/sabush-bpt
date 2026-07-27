@@ -9,28 +9,32 @@
 
   /* Premium Sabush brand system: navy is the structural/primary color,
      gold is reserved strictly for accents — active states, key numbers,
-     highlights. White is the dominant base (~60-70% of the surface). */
+     highlights. White is the dominant base (~60-70% of the surface).
+     Orange is a secondary accent for calls-to-action / highlights that
+     need to stand apart from gold (e.g. secondary CTAs, "new" badges). */
   --title: #0B1F3A;
   --title-soft: #14294A;
 
   --navy: #0B1F3A;
   --navy-soft: #14294A;
 
-  /* Accent tokens — historically "gold", now the blue accent per the
-     latest palette swap. Names kept as-is to avoid a much larger diff
-     across every component that references them. */
-  --gold: #2563EB;
-  --gold-hover: #1D4ED8;
+  /* Accent tokens — restored to true gold per brand spec. */
+  --gold: #D4AF37;
+  --gold-hover: #B8952F;
+  --gold-soft: #F6EFD9;
+
+  --orange: #FF8C42;
+  --orange-hover: #E9752B;
 
   --primary: #0B1F3A;
   --primary-hover: #14294A;
   --primary-foreground: #FFFFFF;
 
-  --secondary: #2563EB;
-  --secondary-hover: #1D4ED8;
+  --secondary: #D4AF37;
+  --secondary-hover: #B8952F;
   --secondary-foreground: #0B1F3A;
 
-  --accent: #2563EB;
+  --accent: #D4AF37;
 
   --muted: #F5F7FA;
   --muted-foreground: #6B7280;
@@ -38,7 +42,7 @@
   /* Borders are used sparingly now — spacing does the separating work */
   --border: #EEF0F3;
   --border-strong: #E5E7EB;
-  --ring: #2563EB;
+  --ring: #D4AF37;
 
   --success: #059669;
   --warning: #D97706;
@@ -58,14 +62,17 @@
 @theme {
   --color-primary: #0B1F3A;
   --color-primary-hover: #14294A;
-  --color-secondary: #2563EB;
-  --color-secondary-hover: #1D4ED8;
+  --color-secondary: #D4AF37;
+  --color-secondary-hover: #B8952F;
   --color-title: #0B1F3A;
   --color-title-soft: #14294A;
   --color-navy: #0B1F3A;
   --color-navy-soft: #14294A;
-  --color-gold: #2563EB;
-  --color-gold-hover: #1D4ED8;
+  --color-gold: #D4AF37;
+  --color-gold-hover: #B8952F;
+  --color-gold-soft: #F6EFD9;
+  --color-orange: #FF8C42;
+  --color-orange-hover: #E9752B;
 }
 
 /* ==========================================================================
@@ -114,7 +121,7 @@
   transform: translateY(-2px);
 }
 .card-premium.is-highlighted {
-  background: linear-gradient(180deg, rgba(37,99,235,0.06) 0%, rgba(37,99,235,0.02) 100%);
+  background: linear-gradient(180deg, rgba(212,175,55,0.06) 0%, rgba(212,175,55,0.02) 100%);
 }
 .kpi-value {
   color: var(--navy);

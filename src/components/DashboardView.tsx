@@ -85,7 +85,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       <div className="flex items-start justify-between gap-2">
         <div
           className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-            isDark ? 'bg-white/10 text-[#2563EB]' : `${iconBgClass} ${iconTextClass}`
+            isDark ? 'bg-white/10 text-[#D4AF37]' : `${iconBgClass} ${iconTextClass}`
           }`}
         >
           <Icon className="w-[16px] h-[16px]" />
@@ -98,7 +98,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
         </p>
         <p
           className={`text-[20px] sm:text-[22px] font-black mt-1.5 leading-tight truncate tabular-nums tracking-tight ${
-            isDark ? (valueClass || 'text-[#2563EB]') : `kpi-value ${valueClass || ''}`
+            isDark ? (valueClass || 'text-[#D4AF37]') : `kpi-value ${valueClass || ''}`
           }`}
         >
           {value}
@@ -219,11 +219,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5 sm:gap-4">
         <KpiCard
           icon={Landmark}
-          iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#2563EB]/10'}
-          iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#2563EB]'}
+          iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#D4AF37]/10'}
+          iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#D4AF37]'}
           label={t('dashboard.kpi.initialCapital.label')}
           value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('dashboard.kpi.initialCapital.notSet')}
-          valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#2563EB]'}
+          valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#D4AF37]'}
           description={
             hasInitialStockCount
               ? t('dashboard.kpi.initialCapital.descSet')
@@ -267,11 +267,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
         <KpiCard
           icon={Gem}
-          iconBgClass="bg-[#2563EB]/10"
-          iconTextClass="text-[#2563EB]"
+          iconBgClass="bg-[#D4AF37]/10"
+          iconTextClass="text-[#D4AF37]"
           label={t('dashboard.kpi.businessWorth.label')}
           value={formatCurrency(businessWorth, currencySymbol)}
-          valueClass="text-[#2563EB]"
+          valueClass="text-[#D4AF37]"
           description={t('dashboard.kpi.businessWorth.desc')}
           onClick={() => setShowWorthModal(true)}
           variant="dark"
@@ -311,11 +311,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5 sm:gap-4">
           <KpiCard
             icon={HandCoins}
-            iconBgClass="bg-[#2563EB]/10"
-            iconTextClass="text-[#2563EB]"
+            iconBgClass="bg-[#D4AF37]/10"
+            iconTextClass="text-[#D4AF37]"
             label={t('dashboard.kpi.withdrawals.label')}
             value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
-            valueClass="text-[#2563EB]"
+            valueClass="text-[#D4AF37]"
             description={t('dashboard.kpi.withdrawals.desc')}
           />
 
@@ -351,7 +351,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             placeholder={t('dashboard.toolbar.searchPlaceholder')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
-            className="w-full bg-[#F5F7FA] border border-transparent rounded-xl pl-10 pr-8 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#2563EB] transition font-semibold"
+            className="w-full bg-[#F5F7FA] border border-transparent rounded-xl pl-10 pr-8 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#D4AF37] transition font-semibold"
           />
           {searchQuery && (
             <button
@@ -368,7 +368,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <select
             value={categoryFilter}
             onChange={e => setCategoryFilter(e.target.value)}
-            className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#2563EB] shrink-0 max-w-[140px]"
+            className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#D4AF37] shrink-0 max-w-[140px]"
           >
             <option value="">{t('dashboard.toolbar.allCategories')}</option>
             {categoryOptions.map(c => (
@@ -380,7 +380,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <select
             value={supplierFilter}
             onChange={e => setSupplierFilter(e.target.value)}
-            className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#2563EB] shrink-0 max-w-[140px]"
+            className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#D4AF37] shrink-0 max-w-[140px]"
           >
             <option value="">{t('dashboard.toolbar.allSuppliers')}</option>
             {supplierOptions.map(s => (
@@ -395,7 +395,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             {t(products.length === 1 ? 'dashboard.toolbar.productCountOne' : 'dashboard.toolbar.productCountOther', { count: products.length })}
           </span>
           <span className="text-[11px] font-bold text-gray-600 bg-[#F5F7FA] px-3 py-2 rounded-xl hidden sm:inline-flex items-center gap-1">
-            <Boxes className="w-3 h-3 text-[#2563EB]" />
+            <Boxes className="w-3 h-3 text-[#D4AF37]" />
             {t(activeBatchCount === 1 ? 'dashboard.toolbar.activeBatchOne' : 'dashboard.toolbar.activeBatchOther', { count: activeBatchCount })}
           </span>
 
@@ -419,21 +419,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   <button
                     type="button"
                     onClick={() => { setSortBy('name'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-[#2563EB]/10 text-[#2563EB] font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     {t('dashboard.toolbar.sortName')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('profit'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-[#2563EB]/10 text-[#2563EB] font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     {t('dashboard.toolbar.sortProfit')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('cost'); setShowSortDropdown(false); }}
-                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-[#2563EB]/10 text-[#2563EB] font-bold' : 'hover:bg-gray-50'}`}
+                    className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-[#D4AF37]/10 text-[#D4AF37] font-bold' : 'hover:bg-gray-50'}`}
                   >
                     {t('dashboard.toolbar.sortCost')}
                   </button>
@@ -468,19 +468,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">{t('dashboard.breakdownModal.estimatedOpen')}</span>
-                <span className="font-bold font-mono text-[#1D4ED8]">
+                <span className="font-bold font-mono text-[#B8952F]">
                   {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">{t('dashboard.breakdownModal.finalizedClosed')}</span>
-                <span className="font-bold font-mono text-[#1D4ED8]">
+                <span className="font-bold font-mono text-[#B8952F]">
                   {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-[#2563EB]/10 border border-[#2563EB]/30">
+              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-[#D4AF37]/10 border border-[#D4AF37]/30">
                 <span className="text-gray-800 font-bold">{t('dashboard.breakdownModal.totalLabel')}</span>
                 <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
@@ -626,7 +626,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* TABLE */}
       {filteredProducts.length === 0 ? (
         <div className="bg-white rounded-xl p-8 text-center max-w-lg mx-auto my-6 elevation-1">
-          <div className="w-12 h-12 rounded-2xl bg-[#2563EB]/10 border border-[#2563EB]/30 flex items-center justify-center text-[#2563EB] mx-auto mb-3">
+          <div className="w-12 h-12 rounded-2xl bg-[#D4AF37]/10 border border-[#D4AF37]/30 flex items-center justify-center text-[#D4AF37] mx-auto mb-3">
             <Package className="w-6 h-6" />
           </div>
           <h3 className="text-sm font-bold text-gray-800">{t('dashboard.table.emptyTitle')}</h3>

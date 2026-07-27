@@ -673,17 +673,17 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         }
         .av-orb-1 {
           width: 620px; height: 620px; top: -220px; left: -200px;
-          background: radial-gradient(circle, rgba(37,99,235,0.38), transparent 65%);
+          background: radial-gradient(circle, rgba(212,175,55,0.38), transparent 65%);
           animation: av-drift-1 15s ease-in-out infinite alternate;
         }
         .av-orb-2 {
           width: 560px; height: 560px; bottom: -240px; right: -200px;
-          background: radial-gradient(circle, rgba(99,102,241,0.32), transparent 65%);
+          background: radial-gradient(circle, rgba(11,31,58,0.32), transparent 65%);
           animation: av-drift-2 19s ease-in-out infinite alternate;
         }
         .av-orb-3 {
           width: 420px; height: 420px; top: 12%; right: 4%;
-          background: radial-gradient(circle, rgba(56,189,248,0.24), transparent 65%);
+          background: radial-gradient(circle, rgba(255,140,66,0.24), transparent 65%);
           animation: av-drift-3 12s ease-in-out infinite alternate;
         }
         @keyframes av-drift-1 { from { transform: translate(0,0) scale(1); } to { transform: translate(45px,35px) scale(1.15); } }
@@ -696,7 +696,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           top: 50%; left: 50%;
           width: 1000px; height: 1000px;
           transform: translate(-50%, -50%);
-          background: repeating-conic-gradient(from 0deg, rgba(96,165,250,0.10) 0deg 2deg, transparent 2deg 18deg);
+          background: repeating-conic-gradient(from 0deg, rgba(212,175,55,0.10) 0deg 2deg, transparent 2deg 18deg);
           mix-blend-mode: screen;
           opacity: 0.55;
           animation: av-spin-slow 46s linear infinite reverse;
@@ -709,8 +709,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           width: 1300px; height: 1300px;
           transform: translate(-50%, -50%);
           background: conic-gradient(from 0deg,
-            rgba(37,99,235,0) 0deg, rgba(56,189,248,0.16) 70deg, rgba(99,102,241,0.14) 150deg,
-            rgba(37,99,235,0) 230deg, rgba(56,189,248,0.10) 300deg, rgba(37,99,235,0) 360deg);
+            rgba(212,175,55,0) 0deg, rgba(255,140,66,0.16) 70deg, rgba(11,31,58,0.14) 150deg,
+            rgba(212,175,55,0) 230deg, rgba(255,140,66,0.10) 300deg, rgba(212,175,55,0) 360deg);
           filter: blur(60px);
           mix-blend-mode: screen;
           opacity: 0.7;
@@ -731,8 +731,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           width: 420px; height: 420px;
           transform: translate(-50%, -50%);
           background: conic-gradient(from 0deg,
-            rgba(37,99,235,0) 0deg, rgba(56,189,248,0.55) 55deg, rgba(99,102,241,0.5) 130deg,
-            rgba(37,99,235,0) 210deg, rgba(56,189,248,0.4) 290deg, rgba(37,99,235,0) 360deg);
+            rgba(212,175,55,0) 0deg, rgba(255,140,66,0.55) 55deg, rgba(11,31,58,0.5) 130deg,
+            rgba(212,175,55,0) 210deg, rgba(255,140,66,0.4) 290deg, rgba(212,175,55,0) 360deg);
           filter: blur(38px);
           mix-blend-mode: screen;
           opacity: 0.85;
