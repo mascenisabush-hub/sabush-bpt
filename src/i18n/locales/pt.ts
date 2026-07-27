@@ -332,6 +332,33 @@ export interface TranslationDict {
       invalidAmount: string;
     };
   };
+  addWithdrawal: {
+    title: string;
+    subtitle: string;
+    registeredTitle: string;
+    successMessage: string;
+    infoNote: string;
+    withdrawalDate: string;
+    amountLabel: string;
+    reasonLabel: string;
+    reasonPlaceholder: string;
+    quickSuggestions: string;
+    reasons: {
+      personalUse: string;
+      salary: string;
+      family: string;
+      emergency: string;
+      home: string;
+      vehicle: string;
+      other: string;
+    };
+    notesLabel: string;
+    notesPlaceholder: string;
+    submitButton: string;
+    errors: {
+      invalidAmount: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -697,6 +724,33 @@ export const pt: TranslationDict = {
     submitButton: 'Registar Despesa',
     errors: {
       missingDescription: 'Por favor descreva a despesa (ex.: Renda da loja, Conta de luz...).',
+      invalidAmount: 'Por favor introduza um valor válido superior a 0.',
+    },
+  },
+  addWithdrawal: {
+    title: 'Registar Levantamento do Dono',
+    subtitle: 'Dinheiro retirado do negócio para uso pessoal, salário, família, ou outra necessidade.',
+    registeredTitle: 'Levantamento Registado!',
+    successMessage: 'Levantamento de {{amount}} registado.',
+    infoNote: 'Um levantamento <strong>não é uma despesa</strong> do negócio — é capital que sai do negócio para o dono. Reduz o Capital Disponível, mas não afeta o cálculo de lucro operacional.',
+    withdrawalDate: 'Data do Levantamento',
+    amountLabel: 'Valor ({{symbol}})',
+    reasonLabel: 'Motivo (opcional)',
+    reasonPlaceholder: 'ex.: Uso Pessoal, Salário, Família...',
+    quickSuggestions: 'Sugestões Rápidas:',
+    reasons: {
+      personalUse: 'Uso Pessoal',
+      salary: 'Salário',
+      family: 'Família',
+      emergency: 'Emergência',
+      home: 'Casa',
+      vehicle: 'Veículo',
+      other: 'Outro',
+    },
+    notesLabel: 'Notas (opcional)',
+    notesPlaceholder: 'Detalhes adicionais sobre este levantamento...',
+    submitButton: 'Registar Levantamento',
+    errors: {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
     },
   },
