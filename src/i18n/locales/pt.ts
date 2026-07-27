@@ -210,6 +210,63 @@ export interface TranslationDict {
       gotIt: string;
     };
   };
+  addStock: {
+    title: string;
+    subtitle: string;
+    successTitle: string;
+    successMessageSingle: string;
+    successMessageMultiple: string;
+    supplier: {
+      sectionTitle: string;
+      nameLabel: string;
+      namePlaceholder: string;
+      phoneLabel: string;
+      phonePlaceholder: string;
+      notesLabel: string;
+      notesPlaceholder: string;
+      unspecifiedHint: string;
+    };
+    table: {
+      batch: string;
+      product: string;
+      dateEntered: string;
+      quantity: string;
+      unit: string;
+      buyPrice: string;
+      sellPrice: string;
+      estProfit: string;
+      action: string;
+    };
+    productSearchPlaceholder: string;
+    existingTag: string;
+    createNew: string;
+    createNewShort: string;
+    unitSuggestionsTitle: string;
+    unitSuggestionsLabel: string;
+    totalProfitTitle: string;
+    estProfitMobile: string;
+    removeBatch: string;
+    addAnotherProduct: string;
+    summary: {
+      titleOne: string;
+      titleOther: string;
+      totalInvestment: string;
+      marketValue: string;
+      embeddedProfit: string;
+    };
+    autoCloseNotice: string;
+    submitOne: string;
+    submitMultiple: string;
+    fields: {
+      costPrice: string;
+      sellPrice: string;
+    };
+    errors: {
+      missingName: string;
+      invalidQty: string;
+      invalidPrice: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -454,6 +511,63 @@ export const pt: TranslationDict = {
       section4Title: '4. Quebras e Despesas Gerais',
       section4Body: 'Registe produtos estragados ou fora de validade em <strong>Quebras</strong>. Custos fixos como renda e eletricidade são registados em <strong>Despesas</strong> para determinar o <strong>Rendimento Líquido</strong> real.',
       gotIt: 'Entendido!',
+    },
+  },
+  addStock: {
+    title: 'Entrada Rápida de Stock',
+    subtitle: 'Registe vários produtos numa única sessão. Os lotes anteriores serão fechados automaticamente.',
+    successTitle: 'Stock Guardado com Sucesso!',
+    successMessageSingle: 'Lote de stock para "{{product}}" adicionado com sucesso!',
+    successMessageMultiple: '{{count}} lotes de stock adicionados com sucesso!',
+    supplier: {
+      sectionTitle: 'Fornecedor deste Lote',
+      nameLabel: 'Nome do Fornecedor',
+      namePlaceholder: 'Ex.: Distribuidora Central',
+      phoneLabel: 'Telefone (opcional)',
+      phonePlaceholder: 'Ex.: 84 000 0000',
+      notesLabel: 'Notas do Lote (opcional)',
+      notesPlaceholder: 'Ex.: Compra à vista, entrega parcial...',
+      unspecifiedHint: 'Se não indicar um fornecedor, este lote será guardado como "Fornecedor Não Especificado".',
+    },
+    table: {
+      batch: 'Lote',
+      product: 'Produto',
+      dateEntered: 'Data Entrada',
+      quantity: 'Qtd',
+      unit: 'Unid',
+      buyPrice: 'Compra',
+      sellPrice: 'Venda',
+      estProfit: 'Lucro Est.',
+      action: 'Ação',
+    },
+    productSearchPlaceholder: 'Pesquisar/criar produto...',
+    existingTag: 'Existente',
+    createNew: '+ Criar novo produto "{{name}}"',
+    createNewShort: '+ Criar "{{name}}"',
+    unitSuggestionsTitle: 'Sugestões de unidades',
+    unitSuggestionsLabel: 'Unidades:',
+    totalProfitTitle: 'Lucro Total: {{value}}',
+    estProfitMobile: 'Lucro Est: {{value}}',
+    removeBatch: 'Remover este lote',
+    addAnotherProduct: '+ Adicionar outro produto',
+    summary: {
+      titleOne: 'Resumo ({{count}} lote)',
+      titleOther: 'Resumo ({{count}} lotes)',
+      totalInvestment: 'Investimento Total:',
+      marketValue: 'Valor de Mercado:',
+      embeddedProfit: 'Lucro Embutido:',
+    },
+    autoCloseNotice: 'Ao guardar, o lote ativo anterior de cada produto selecionado será automaticamente fechado.',
+    submitOne: 'Guardar Lote e Ativar Stock',
+    submitMultiple: 'Guardar {{count}} Lotes e Ativar Stock',
+    fields: {
+      costPrice: 'Custo ({{symbol}})',
+      sellPrice: 'Venda ({{symbol}})',
+    },
+    errors: {
+      missingName: 'Por favor introduza o nome do produto no Lote #{{n}}.',
+      invalidQty: 'Por favor introduza uma quantidade maior que zero no Lote #{{n}} ({{name}}).',
+      invalidPrice: 'Por favor introduza preços válidos no Lote #{{n}} ({{name}}).',
     },
   },
 };

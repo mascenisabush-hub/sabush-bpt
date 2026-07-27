@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
@@ -23,6 +24,7 @@ interface StockRowItem {
 
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
   const { products, batches, addMultipleStockBatches, currencySymbol, businessCategory, isStaff } = useApp();
+  const { t } = useLanguage();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
   const createEmptyRow = (productName: string = ''): StockRowItem => {
@@ -135,17 +137,17 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       const numSell = parseFloat(row.sellingPrice) || 0;
 
       if (!trimmedName) {
-        alert(`Por favor introduza o nome do produto no Lote #${i + 1}.`);
+        alert(t('addStock.errors.missingName', { n: i + 1 }));
         return;
       }
 
       if (numQty <= 0) {
-        alert(`Por favor introduza uma quantidade maior que zero no Lote #${i + 1} (${trimmedName}).`);
+        alert(t('addStock.errors.invalidQty', { n: i + 1, name: trimmedName }));
         return;
       }
 
       if (numCost < 0 || numSell < 0) {
-        alert(`Por favor introduza preços válidos no Lote #${i + 1} (${trimmedName}).`);
+        alert(t('addStock.errors.invalidPrice', { n: i + 1, name: trimmedName }));
         return;
       }
 
@@ -169,8 +171,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
     const messageText =
       itemsToSave.length === 1
-        ? `Lote de stock para "${itemsToSave[0].productName}" adicionado com sucesso!`
-        : `${itemsToSave.length} lotes de stock adicionados com sucesso!`;
+        ? t('addStock.successMessageSingle', { product: itemsToSave[0].productName })
+        : t('addStock.successMessageMultiple', { count: itemsToSave.length });
 
     setSubmittedMessage(messageText);
     setSupplierName('');
@@ -209,9 +211,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               <PackagePlus className="w-5 h-5" />
             </div>
             <div>
-              <h2 className="font-bold text-base text-gray-900">Entrada Rápida de Stock</h2>
+              <h2 className="font-bold text-base text-gray-900">{t('addStock.title')}</h2>
               <p className="text-[11px] text-gray-500">
-                Registe vários produtos numa única sessão. Os lotes anteriores serão fechados automaticamente.
+                {t('addStock.subtitle')}
               </p>
             </div>
           </div>
@@ -222,7 +224,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <div className="w-14 h-14 rounded-full bg-blue-500/20 text-blue-600 flex items-center justify-center mx-auto animate-bounce">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">Stock Guardado com Sucesso!</h3>
+            <h3 className="text-lg font-bold text-gray-900">{t('addStock.successTitle')}</h3>
             <p className="text-sm text-blue-700 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : (
@@ -231,16 +233,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2.5">
               <div className="flex items-center space-x-2">
                 <Truck className="w-4 h-4 text-blue-600 shrink-0" />
-                <span className="text-xs font-bold text-gray-800">Fornecedor deste Lote</span>
+                <span className="text-xs font-bold text-gray-800">{t('addStock.supplier.sectionTitle')}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="sm:col-span-2">
                   <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                    Nome do Fornecedor
+                    {t('addStock.supplier.nameLabel')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex.: Distribuidora Central"
+                    placeholder={t('addStock.supplier.namePlaceholder')}
                     value={supplierName}
                     onChange={e => setSupplierName(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
@@ -248,11 +250,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 </div>
                 <div>
                   <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                    Telefone (opcional)
+                    {t('addStock.supplier.phoneLabel')}
                   </label>
                   <input
                     type="text"
-                    placeholder="Ex.: 84 000 0000"
+                    placeholder={t('addStock.supplier.phonePlaceholder')}
                     value={supplierPhone}
                     onChange={e => setSupplierPhone(e.target.value)}
                     className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
@@ -261,18 +263,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               </div>
               <div>
                 <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                  Notas do Lote (opcional)
+                  {t('addStock.supplier.notesLabel')}
                 </label>
                 <input
                   type="text"
-                  placeholder="Ex.: Compra à vista, entrega parcial..."
+                  placeholder={t('addStock.supplier.notesPlaceholder')}
                   value={batchNotes}
                   onChange={e => setBatchNotes(e.target.value)}
                   className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
                 />
               </div>
               <p className="text-[10px] text-gray-500">
-                Se não indicar um fornecedor, este lote será guardado como "Fornecedor Não Especificado".
+                {t('addStock.supplier.unspecifiedHint')}
               </p>
             </div>
 
@@ -280,17 +282,17 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
               {/* Table Header (Desktop) */}
               <div className="hidden md:grid grid-cols-12 gap-1.5 items-center px-3 py-2 bg-white border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                <div className="col-span-1 text-center">Lote</div>
-                <div className="col-span-3">Produto</div>
-                <div className="col-span-2">Data Entrada</div>
-                <div className="col-span-1 text-right">Qtd</div>
-                <div className="col-span-1 text-center">Unid</div>
-                <div className="col-span-1.5 text-right">Compra</div>
-                <div className="col-span-1.5 text-right">Venda</div>
+                <div className="col-span-1 text-center">{t('addStock.table.batch')}</div>
+                <div className="col-span-3">{t('addStock.table.product')}</div>
+                <div className="col-span-2">{t('addStock.table.dateEntered')}</div>
+                <div className="col-span-1 text-right">{t('addStock.table.quantity')}</div>
+                <div className="col-span-1 text-center">{t('addStock.table.unit')}</div>
+                <div className="col-span-1.5 text-right">{t('addStock.table.buyPrice')}</div>
+                <div className="col-span-1.5 text-right">{t('addStock.table.sellPrice')}</div>
                 {!isStaff ? (
-                  <div className="col-span-1 text-right">Lucro Est.</div>
+                  <div className="col-span-1 text-right">{t('addStock.table.estProfit')}</div>
                 ) : (
-                  <div className="col-span-1 text-right">Ação</div>
+                  <div className="col-span-1 text-right">{t('addStock.table.action')}</div>
                 )}
               </div>
 
@@ -335,7 +337,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             <input
                               type="text"
                               required
-                              placeholder="Pesquisar/criar produto..."
+                              placeholder={t('addStock.productSearchPlaceholder')}
                               value={row.productName}
                               onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
                               onChange={e =>
@@ -366,7 +368,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   >
                                     <span className="font-semibold">{p.name}</span>
                                     <span className="text-[10px] text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
-                                      Existente
+                                      {t('addStock.existingTag')}
                                     </span>
                                   </button>
                                 ))}
@@ -383,7 +385,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                     className="w-full text-left px-3 py-2 hover:bg-blue-50 transition flex items-center space-x-2 text-xs text-blue-600 font-semibold"
                                   >
                                     <Sparkles className="w-3.5 h-3.5" />
-                                    <span>+ Criar novo produto "{row.productName.trim()}"</span>
+                                    <span>{t('addStock.createNew', { name: row.productName.trim() })}</span>
                                   </button>
                                 )}
                               </div>
@@ -430,7 +432,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               onClick={() =>
                                 updateRow(row.id, { isUnitPopoverOpen: !row.isUnitPopoverOpen })
                               }
-                              title="Sugestões de unidades"
+                              title={t('addStock.unitSuggestionsTitle')}
                               className="p-1 text-gray-500 hover:text-blue-600 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition shrink-0"
                             >
                               <Tag className="w-3 h-3" />
@@ -446,7 +448,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               />
                               <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-xl p-2 z-30 w-36 space-y-1">
                                 <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">
-                                  Unidades:
+                                  {t('addStock.unitSuggestionsLabel')}
                                 </div>
                                 <div className="flex flex-wrap gap-1">
                                   {suggestedUnits.map(u => (
@@ -507,7 +509,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               className={`font-mono font-bold text-xs ${
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                               }`}
-                              title={`Lucro Total: ${formatCurrency(rowProfit, currencySymbol)}`}
+                              title={t('addStock.totalProfitTitle', { value: formatCurrency(rowProfit, currencySymbol) })}
                             >
                               {formatCurrency(rowProfit, currencySymbol)}
                             </span>
@@ -518,7 +520,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               type="button"
                               onClick={() => handleRemoveRow(row.id)}
                               className="p-1 text-gray-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-md transition"
-                              title="Remover este lote"
+                              title={t('addStock.removeBatch')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -530,7 +532,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       <div className="md:hidden space-y-2 text-xs">
                         <div className="flex items-center justify-between border-b border-gray-200/60 pb-1.5">
                           <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-500/30 px-1.5 py-0.5 rounded-md">
-                            Lote #{index + 1}
+                            {t('addStock.table.batch')} #{index + 1}
                           </span>
                           <div className="flex items-center space-x-2">
                             <span
@@ -538,7 +540,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
-                              Lucro Est: {formatCurrency(rowProfit, currencySymbol)}
+                              {t('addStock.estProfitMobile', { value: formatCurrency(rowProfit, currencySymbol) })}
                             </span>
                             {rows.length > 1 && (
                               <button
@@ -555,12 +557,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         <div className="grid grid-cols-2 gap-2">
                           <div className="col-span-2 relative">
                             <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Produto
+                              {t('addStock.table.product')}
                             </label>
                             <input
                               type="text"
                               required
-                              placeholder="Pesquisar/criar produto..."
+                              placeholder={t('addStock.productSearchPlaceholder')}
                               value={row.productName}
                               onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
                               onChange={e =>
@@ -599,7 +601,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                       }
                                       className="w-full text-left px-3 py-1.5 text-xs text-blue-600 font-semibold"
                                     >
-                                      + Criar "{row.productName.trim()}"
+                                      {t('addStock.createNewShort', { name: row.productName.trim() })}
                                     </button>
                                   )}
                                 </div>
@@ -609,7 +611,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                           <div>
                             <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Data Entrada
+                              {t('addStock.table.dateEntered')}
                             </label>
                             <input
                               type="date"
@@ -623,7 +625,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           <div className="flex gap-1">
                             <div className="flex-1">
                               <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                                Qtd
+                                {t('addStock.table.quantity')}
                               </label>
                               <input
                                 type="number"
@@ -636,7 +638,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             </div>
                             <div className="w-16">
                               <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                                Unid
+                                {t('addStock.table.unit')}
                               </label>
                               <input
                                 type="text"
@@ -650,7 +652,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                           <div>
                             <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Custo ({currencySymbol})
+                              {t('addStock.fields.costPrice', { symbol: currencySymbol })}
                             </label>
                             <input
                               type="number"
@@ -665,7 +667,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                           <div>
                             <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                              Venda ({currencySymbol})
+                              {t('addStock.fields.sellPrice', { symbol: currencySymbol })}
                             </label>
                             <input
                               type="number"
@@ -692,7 +694,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-blue-500/60 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
             >
               <Plus className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
-              <span>+ Adicionar outro produto</span>
+              <span>{t('addStock.addAnotherProduct')}</span>
             </button>
 
             {/* Combined Total Summary Bar */}
@@ -701,27 +703,29 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <div className="flex items-center space-x-2">
                   <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
                   <span className="font-bold text-gray-800 font-sans">
-                    Resumo ({rows.length} {rows.length === 1 ? 'lote' : 'lotes'})
+                    {rows.length === 1
+                      ? t('addStock.summary.titleOne', { count: rows.length })
+                      : t('addStock.summary.titleOther', { count: rows.length })}
                   </span>
                 </div>
 
                 <div className="flex items-center space-x-4 sm:space-x-6 text-[11px]">
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Investimento Total:</span>
+                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">{t('addStock.summary.totalInvestment')}</span>
                     <span className="font-bold text-gray-800">
                       {formatCurrency(totals.totalInvestmentValue, currencySymbol)}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Valor de Mercado:</span>
+                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">{t('addStock.summary.marketValue')}</span>
                     <span className="font-bold text-gray-800">
                       {formatCurrency(totals.totalMarketValue, currencySymbol)}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">Lucro Embutido:</span>
+                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">{t('addStock.summary.embeddedProfit')}</span>
                     <span
                       className={`font-bold ${
                         totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
@@ -738,7 +742,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-2.5 flex items-start space-x-2 text-[11px] text-gray-700">
               <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
               <p>
-                Ao guardar, o lote ativo anterior de cada produto selecionado será automaticamente fechado.
+                {t('addStock.autoCloseNotice')}
               </p>
             </div>
 
@@ -748,7 +752,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
             >
               <span>
-                Guardar {rows.length > 1 ? `${rows.length} Lotes` : 'Lote'} e Ativar Stock
+                {rows.length > 1
+                  ? t('addStock.submitMultiple', { count: rows.length })
+                  : t('addStock.submitOne')}
               </span>
               <ArrowRight className="w-4 h-4" />
             </button>
