@@ -4,6 +4,7 @@ import { auth } from '../lib/firebase';
 import { useApp } from '../context/AppContext';
 import { Store, User, ArrowLeft, Delete, ShieldCheck, Loader2, KeyRound, Info } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface QuickLoginScreenProps {
   onUseOwnerLogin: () => void;
@@ -77,6 +78,10 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
           boxShadow: '0 20px 60px rgba(0,0,0,0.08)',
         }}
       >
+        <div className="flex justify-end mb-3">
+          <LanguageSwitcher />
+        </div>
+
         <div className="flex flex-col items-center text-center">
           <div
             className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0"

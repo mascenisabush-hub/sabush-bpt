@@ -5,6 +5,7 @@ import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, 
 import { SettingsModal } from './SettingsModal';
 import { ShopSwitcher } from './ShopSwitcher';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface HeaderProps {
   activeTab: TabType;
@@ -129,6 +130,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 </span>
               </div>
             </div>
+
+            {/* Language — same switcher as the login/quick-login screens, so
+                changing it here is the same global setting everywhere. */}
+            <LanguageSwitcher className="hidden sm:inline-flex shrink-0" />
 
             {/* Notifications */}
             <div className="relative shrink-0" ref={notificationsRef}>
