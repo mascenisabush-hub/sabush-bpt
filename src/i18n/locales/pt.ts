@@ -578,6 +578,39 @@ export interface TranslationDict {
       insightTopBatch: string;
       insightExcludesInitialCapital: string;
     };
+    capitalGrowth: {
+      title: string;
+      description: string;
+      evolutionSince: string;
+      kpiInitialCapital: string;
+      kpiCurrentCapital: string;
+      kpiCurrentCapitalFull: string;
+      kpiIncrease: string;
+      kpiGrowthPct: string;
+      timelineInitialCapitalLabel: string;
+      timelineTodayLabel: string;
+      timelineTitlePdf: string;
+      timelineTitleExcel: string;
+      colDate: string;
+      colPeriod: string;
+      colBusinessWorth: string;
+      monthlyGrowthLabel: string;
+      yearlyGrowthLabel: string;
+      businessWorthTimelineTitle: string;
+      noTimelineData: string;
+      closingsHistoryTitle: string;
+      noClosings: string;
+      colClosingDate: string;
+      colEmbeddedProfit: string;
+      colExpenses: string;
+      colWithdrawals: string;
+      insightNoInitialCount: string;
+      insightGrew: string;
+      insightShrank: string;
+      insightNoClosings: string;
+      insightLastMonthlyChangeUp: string;
+      insightLastMonthlyChangeDown: string;
+    };
   };
 }
 
@@ -1216,6 +1249,39 @@ export const pt: TranslationDict = {
       allBatches: 'Todos os Lotes',
       insightTopBatch: '{{batch}} ({{date}}, {{supplier}}) tem o maior lucro embutido restante: {{value}}.',
       insightExcludesInitialCapital: 'Este total refere-se apenas a lotes de stock comprados no período selecionado — o Capital Inicial fica de fora e nunca entra nesta soma.',
+    },
+    capitalGrowth: {
+      title: 'Crescimento de Capital',
+      description: 'Como o negócio evoluiu desde o capital inicial.',
+      evolutionSince: 'Evolução desde o capital inicial',
+      kpiInitialCapital: 'Capital Inicial',
+      kpiCurrentCapital: 'Capital Atual',
+      kpiCurrentCapitalFull: 'Capital Atual (Valor do Negócio)',
+      kpiIncrease: 'Aumento',
+      kpiGrowthPct: 'Crescimento %',
+      timelineInitialCapitalLabel: 'Capital Inicial',
+      timelineTodayLabel: 'Hoje',
+      timelineTitlePdf: 'Linha do Tempo (Fechos de Período)',
+      timelineTitleExcel: 'Linha do Tempo',
+      colDate: 'Data',
+      colPeriod: 'Período',
+      colBusinessWorth: 'Valor do Negócio',
+      monthlyGrowthLabel: 'Crescimento Mensal ({{period}})',
+      yearlyGrowthLabel: 'Crescimento Anual ({{period}})',
+      businessWorthTimelineTitle: 'Linha do Tempo do Valor do Negócio',
+      noTimelineData: 'Registe a Contagem Inicial de Stock e feche pelo menos um período para ver a linha do tempo.',
+      closingsHistoryTitle: 'Histórico de Fechos',
+      noClosings: 'Nenhum período fechado ainda.',
+      colClosingDate: 'Data de Fecho',
+      colEmbeddedProfit: 'Lucro Embutido',
+      colExpenses: 'Despesas',
+      colWithdrawals: 'Retiradas',
+      insightNoInitialCount: 'Registe uma Contagem Inicial de Stock para começar a medir o crescimento de capital.',
+      insightGrew: 'O negócio cresceu de forma constante: {{amount}} ({{pct}}%) desde o início.',
+      insightShrank: 'O valor do negócio está {{amount}} ({{pct}}%) abaixo do capital inicial.',
+      insightNoClosings: 'Ainda não foram registados fechos mensais ou anuais — feche um período para acompanhar a evolução ao longo do tempo.',
+      insightLastMonthlyChangeUp: 'No fecho mais recente ({{period}}), o Valor do Negócio aumentou {{pct}}%.',
+      insightLastMonthlyChangeDown: 'No fecho mais recente ({{period}}), o Valor do Negócio diminuiu {{pct}}%.',
     },
   },
 };

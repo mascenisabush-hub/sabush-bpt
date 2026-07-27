@@ -1,5 +1,6 @@
 import React, { useMemo } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { ReportHeader, ReportSection, ReportKpiCard, InsightBanner, ReportEmptyState } from './shared/ReportUI';
 import { exportReportPdf, exportReportExcel, printCurrentReport } from './shared/reportExport';
@@ -11,6 +12,7 @@ interface Props {
 }
 
 export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
+  const { t } = useLanguage();
   const {
     business, currencySymbol, closings,
     hasInitialStockCount, initialCapitalValue, initialStockCount,
@@ -20,16 +22,16 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
   const timeline = useMemo(() => {
     const points: { date: string; label: string; value: number }[] = [];
     if (hasInitialStockCount && initialStockCount) {
-      points.push({ date: initialStockCount.date, label: 'Capital Inicial', value: initialCapitalValue });
+      points.push({ date: initialStockCount.date, label: t('reports.capitalGrowth.timelineInitialCapitalLabel'), value: initialCapitalValue });
     }
     [...closings]
       .sort((a, b) => a.endDate.localeCompare(b.endDate))
       .forEach(c => {
         points.push({ date: c.endDate, label: c.periodLabel, value: c.businessWorthAtClose });
       });
-    points.push({ date: new Date().toISOString().slice(0, 10), label: 'Hoje', value: businessWorth });
+    points.push({ date: new Date().toISOString().slice(0, 10), label: t('reports.capitalGrowth.timelineTodayLabel'), value: businessWorth });
     return points;
-  }, [hasInitialStockCount, initialStockCount, initialCapitalValue, closings, businessWorth]);
+  }, [hasInitialStockCount, initialStockCount, initialCapitalValue, closings, businessWorth, t]);
 
   const monthlyClosings = useMemo(
     () => [...closings].filter(c => c.periodType === 'monthly').sort((a, b) => a.endDate.localeCompare(b.endDate)),
@@ -57,38 +59,42 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
   const insights = useMemo(() => {
     const lines: string[] = [];
     if (!hasInitialStockCount) {
-      lines.push('Registe uma Contagem Inicial de Stock para começar a medir o crescimento de capital.');
+      lines.push(t('reports.capitalGrowth.insightNoInitialCount'));
       return lines;
     }
     lines.push(
       capitalGrowth >= 0
-        ? `O negócio cresceu de forma constante: ${formatCurrency(capitalGrowth, currencySymbol)} (${capitalGrowthPct.toFixed(1)}%) desde o início.`
-        : `O valor do negócio está ${formatCurrency(Math.abs(capitalGrowth), currencySymbol)} (${capitalGrowthPct.toFixed(1)}%) abaixo do capital inicial.`
+        ? t('reports.capitalGrowth.insightGrew', { amount: formatCurrency(capitalGrowth, currencySymbol), pct: capitalGrowthPct.toFixed(1) })
+        : t('reports.capitalGrowth.insightShrank', { amount: formatCurrency(Math.abs(capitalGrowth), currencySymbol), pct: capitalGrowthPct.toFixed(1) })
     );
     if (closings.length === 0) {
-      lines.push('Ainda não foram registados fechos mensais ou anuais — feche um período para acompanhar a evolução ao longo do tempo.');
+      lines.push(t('reports.capitalGrowth.insightNoClosings'));
     } else if (lastMonthlyGrowth) {
       const change = lastMonthlyGrowth.previous ? ((lastMonthlyGrowth.current - lastMonthlyGrowth.previous) / Math.abs(lastMonthlyGrowth.previous)) * 100 : 0;
-      lines.push(`No fecho mais recente (${lastMonthlyGrowth.label}), o Valor do Negócio ${change >= 0 ? 'aumentou' : 'diminuiu'} ${Math.abs(change).toFixed(1)}%.`);
+      lines.push(
+        change >= 0
+          ? t('reports.capitalGrowth.insightLastMonthlyChangeUp', { period: lastMonthlyGrowth.label, pct: Math.abs(change).toFixed(1) })
+          : t('reports.capitalGrowth.insightLastMonthlyChangeDown', { period: lastMonthlyGrowth.label, pct: Math.abs(change).toFixed(1) })
+      );
     }
     return lines;
-  }, [hasInitialStockCount, capitalGrowth, capitalGrowthPct, currencySymbol, closings, lastMonthlyGrowth]);
+  }, [hasInitialStockCount, capitalGrowth, capitalGrowthPct, currencySymbol, closings, lastMonthlyGrowth, t]);
 
   const handleExportPdf = () => {
     exportReportPdf(
-      'Crescimento de Capital',
+      t('reports.capitalGrowth.title'),
       business?.name || 'Sabush',
-      'Evolução desde o capital inicial',
+      t('reports.capitalGrowth.evolutionSince'),
       [
-        { label: 'Capital Inicial', value: hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido' },
-        { label: 'Capital Atual (Valor do Negócio)', value: formatCurrency(businessWorth, currencySymbol) },
-        { label: 'Aumento', value: formatCurrency(capitalGrowth, currencySymbol) },
-        { label: 'Crescimento (%)', value: `${capitalGrowthPct.toFixed(1)}%` },
+        { label: t('reports.capitalGrowth.kpiInitialCapital'), value: hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('reports.common.notDefined') },
+        { label: t('reports.capitalGrowth.kpiCurrentCapitalFull'), value: formatCurrency(businessWorth, currencySymbol) },
+        { label: t('reports.capitalGrowth.kpiIncrease'), value: formatCurrency(capitalGrowth, currencySymbol) },
+        { label: t('reports.capitalGrowth.kpiGrowthPct'), value: `${capitalGrowthPct.toFixed(1)}%` },
       ],
       [
         {
-          title: 'Linha do Tempo (Fechos de Período)',
-          columns: ['Data', 'Período', 'Valor do Negócio'],
+          title: t('reports.capitalGrowth.timelineTitlePdf'),
+          columns: [t('reports.capitalGrowth.colDate'), t('reports.capitalGrowth.colPeriod'), t('reports.capitalGrowth.colBusinessWorth')],
           rows: timeline.map(p => [formatDate(p.date), p.label, formatCurrency(p.value, currencySymbol)]),
         },
       ]
@@ -97,28 +103,34 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
 
   const handleExportExcel = () => {
     exportReportExcel(
-      'Crescimento de Capital',
+      t('reports.capitalGrowth.title'),
       [
-        { label: 'Capital Inicial', value: hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido' },
-        { label: 'Capital Atual', value: formatCurrency(businessWorth, currencySymbol) },
-        { label: 'Aumento', value: formatCurrency(capitalGrowth, currencySymbol) },
-        { label: 'Crescimento (%)', value: `${capitalGrowthPct.toFixed(1)}%` },
+        { label: t('reports.capitalGrowth.kpiInitialCapital'), value: hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('reports.common.notDefined') },
+        { label: t('reports.capitalGrowth.kpiCurrentCapital'), value: formatCurrency(businessWorth, currencySymbol) },
+        { label: t('reports.capitalGrowth.kpiIncrease'), value: formatCurrency(capitalGrowth, currencySymbol) },
+        { label: t('reports.capitalGrowth.kpiGrowthPct'), value: `${capitalGrowthPct.toFixed(1)}%` },
       ],
       [
         {
-          title: 'Linha do Tempo',
-          columns: ['Data', 'Período', 'Valor do Negócio'],
+          title: t('reports.capitalGrowth.timelineTitleExcel'),
+          columns: [t('reports.capitalGrowth.colDate'), t('reports.capitalGrowth.colPeriod'), t('reports.capitalGrowth.colBusinessWorth')],
           rows: timeline.map(p => [p.date, p.label, p.value]),
         },
-      ]
+      ],
+      {
+        indicator: t('reports.common.indicator'),
+        value: t('reports.common.value'),
+        summary: t('reports.common.summary'),
+        tableFallback: t('reports.common.tableFallback'),
+      }
     );
   };
 
   return (
     <div className="space-y-4 pb-12 report-print-area">
       <ReportHeader
-        title="Crescimento de Capital"
-        description="Como o negócio evoluiu desde o capital inicial."
+        title={t('reports.capitalGrowth.title')}
+        description={t('reports.capitalGrowth.description')}
         onBack={onBack}
         onExportPdf={handleExportPdf}
         onExportExcel={handleExportExcel}
@@ -128,24 +140,24 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
       <InsightBanner insights={insights} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <ReportKpiCard icon={Landmark} label="Capital Inicial" value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : '—'} />
-        <ReportKpiCard icon={Gem} label="Capital Atual" value={formatCurrency(businessWorth, currencySymbol)} tone="accent" />
-        <ReportKpiCard icon={capitalGrowth >= 0 ? TrendingUp : TrendingDown} label="Aumento" value={formatCurrency(capitalGrowth, currencySymbol)} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
-        <ReportKpiCard icon={History} label="Crescimento %" value={`${capitalGrowthPct >= 0 ? '+' : ''}${capitalGrowthPct.toFixed(1)}%`} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
+        <ReportKpiCard icon={Landmark} label={t('reports.capitalGrowth.kpiInitialCapital')} value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : '—'} />
+        <ReportKpiCard icon={Gem} label={t('reports.capitalGrowth.kpiCurrentCapital')} value={formatCurrency(businessWorth, currencySymbol)} tone="accent" />
+        <ReportKpiCard icon={capitalGrowth >= 0 ? TrendingUp : TrendingDown} label={t('reports.capitalGrowth.kpiIncrease')} value={formatCurrency(capitalGrowth, currencySymbol)} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
+        <ReportKpiCard icon={History} label={t('reports.capitalGrowth.kpiGrowthPct')} value={`${capitalGrowthPct >= 0 ? '+' : ''}${capitalGrowthPct.toFixed(1)}%`} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
       </div>
 
       {lastMonthlyGrowth && (
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
           <ReportKpiCard
             icon={TrendingUp}
-            label={`Crescimento Mensal (${lastMonthlyGrowth.label})`}
+            label={t('reports.capitalGrowth.monthlyGrowthLabel', { period: lastMonthlyGrowth.label })}
             value={formatCurrency(lastMonthlyGrowth.current - lastMonthlyGrowth.previous, currencySymbol)}
             tone={lastMonthlyGrowth.current - lastMonthlyGrowth.previous >= 0 ? 'positive' : 'negative'}
           />
           {lastYearlyGrowth && (
             <ReportKpiCard
               icon={TrendingUp}
-              label={`Crescimento Anual (${lastYearlyGrowth.label})`}
+              label={t('reports.capitalGrowth.yearlyGrowthLabel', { period: lastYearlyGrowth.label })}
               value={formatCurrency(lastYearlyGrowth.current - lastYearlyGrowth.previous, currencySymbol)}
               tone={lastYearlyGrowth.current - lastYearlyGrowth.previous >= 0 ? 'positive' : 'negative'}
             />
@@ -153,28 +165,28 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
         </div>
       )}
 
-      <ReportSection title="Linha do Tempo do Valor do Negócio" icon={History}>
+      <ReportSection title={t('reports.capitalGrowth.businessWorthTimelineTitle')} icon={History}>
         {timeline.length < 2 ? (
-          <ReportEmptyState message="Registe a Contagem Inicial de Stock e feche pelo menos um período para ver a linha do tempo." />
+          <ReportEmptyState message={t('reports.capitalGrowth.noTimelineData')} />
         ) : (
           <LineChartSimple currencySymbol={currencySymbol} data={timeline.map(p => ({ label: p.label, value: p.value }))} />
         )}
       </ReportSection>
 
-      <ReportSection title="Histórico de Fechos" icon={Landmark}>
+      <ReportSection title={t('reports.capitalGrowth.closingsHistoryTitle')} icon={Landmark}>
         {closings.length === 0 ? (
-          <ReportEmptyState message="Nenhum período fechado ainda." />
+          <ReportEmptyState message={t('reports.capitalGrowth.noClosings')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
-                  <th className="py-2 pr-2 font-semibold">Período</th>
-                  <th className="py-2 pr-2 font-semibold">Data de Fecho</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Lucro Embutido</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Despesas</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Retiradas</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Valor do Negócio</th>
+                  <th className="py-2 pr-2 font-semibold">{t('reports.capitalGrowth.colPeriod')}</th>
+                  <th className="py-2 pr-2 font-semibold">{t('reports.capitalGrowth.colClosingDate')}</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.capitalGrowth.colEmbeddedProfit')}</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.capitalGrowth.colExpenses')}</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.capitalGrowth.colWithdrawals')}</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.capitalGrowth.colBusinessWorth')}</th>
                 </tr>
               </thead>
               <tbody>
