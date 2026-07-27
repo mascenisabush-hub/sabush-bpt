@@ -267,6 +267,45 @@ export interface TranslationDict {
       invalidPrice: string;
     };
   };
+  addQuebra: {
+    title: string;
+    subtitle: string;
+    registeredTitle: string;
+    successMessageOne: string;
+    successMessageOther: string;
+    emptyState: string;
+    selectProduct: string;
+    selectBatch: string;
+    noBatchesForProduct: string;
+    qtyLabel: string;
+    batchStatusOpen: string;
+    batchStatusClosed: string;
+    lossDate: string;
+    lossQuantity: string;
+    warningTitle: string;
+    warningBody: string;
+    currentBatchStock: string;
+    stockAfterLoss: string;
+    lostCostValue: string;
+    unitsValue: string;
+    reasonLabel: string;
+    reasonPlaceholder: string;
+    quickSuggestions: string;
+    reasons: {
+      expired: string;
+      broken: string;
+      packagingDamaged: string;
+      transportLoss: string;
+      spoiledMold: string;
+      customerSample: string;
+    };
+    submitButton: string;
+    errors: {
+      selectProductBatch: string;
+      invalidQuantity: string;
+      missingReason: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -568,6 +607,45 @@ export const pt: TranslationDict = {
       missingName: 'Por favor introduza o nome do produto no Lote #{{n}}.',
       invalidQty: 'Por favor introduza uma quantidade maior que zero no Lote #{{n}} ({{name}}).',
       invalidPrice: 'Por favor introduza preços válidos no Lote #{{n}} ({{name}}).',
+    },
+  },
+  addQuebra: {
+    title: 'Registar Perda de Stock (Quebra)',
+    subtitle: 'Registe produtos estragados, partidos ou fora de validade associados a um lote de stock.',
+    registeredTitle: 'Quebra Registada!',
+    successMessageOne: 'Registada perda de {{count}} unidade no lote.',
+    successMessageOther: 'Registada perda de {{count}} unidades no lote.',
+    emptyState: 'Nenhum produto cadastrado. Adicione primeiro um lote de stock antes de registar quebras.',
+    selectProduct: 'Selecionar Produto',
+    selectBatch: 'Selecionar Lote',
+    noBatchesForProduct: 'Nenhum lote de stock registado para este produto.',
+    qtyLabel: 'Qtd',
+    batchStatusOpen: '🟢 Lote Aberto Ativo',
+    batchStatusClosed: '🔒 Lote Fechado',
+    lossDate: 'Data da Perda',
+    lossQuantity: 'Quantidade Perdida (Unidades)',
+    warningTitle: '⚠️ AVISO: Perda Excessiva',
+    warningBody: 'A quantidade de perda de <strong>{{qty}} unidades</strong> excede o stock restante deste lote (<strong>{{remaining}} unidades</strong>). Pode registar esta entrada, mas um aviso será assinalado nos relatórios.',
+    currentBatchStock: 'Stock Atual do Lote',
+    stockAfterLoss: 'Stock Após Perda',
+    lostCostValue: 'Valor do Custo Perdido',
+    unitsValue: '{{qty}} unidades',
+    reasonLabel: 'Motivo da Perda',
+    reasonPlaceholder: 'ex.: Fora do prazo, embalagem danificada, caiu no transporte...',
+    quickSuggestions: 'Sugestões Rápidas:',
+    reasons: {
+      expired: 'Fora do prazo',
+      broken: 'Partida / Danificada',
+      packagingDamaged: 'Embalagem estragada / Fuga',
+      transportLoss: 'Perda no transporte',
+      spoiledMold: 'Produto estragado / Mofo',
+      customerSample: 'Amostra / Oferta ao cliente',
+    },
+    submitButton: 'Registar Entrada de Quebra',
+    errors: {
+      selectProductBatch: 'Por favor selecione um produto e um lote.',
+      invalidQuantity: 'Por favor introduza uma quantidade de perda válida superior a 0.',
+      missingReason: 'Por favor indique um motivo para a perda (ex.: Fora do prazo, Danificada, etc.).',
     },
   },
 };

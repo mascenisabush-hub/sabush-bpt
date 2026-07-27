@@ -1,5 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
+import { useLanguage } from '../context/LanguageContext';
 import { calculateBatch, isQuebraExceedingWarning } from '../utils/calculations';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
@@ -9,17 +10,21 @@ interface AddQuebraViewProps {
   onComplete: () => void;
 }
 
-const COMMON_REASONS = [
-  'Fora do prazo',
-  'Partida / Danificada',
-  'Embalagem estragada / Fuga',
-  'Perda no transporte',
-  'Produto estragado / Mofo',
-  'Amostra / Oferta ao cliente',
+// Quick-suggestion chips for the reason field — i18n keys, not literal text.
+// Clicking a chip still fills the (free-text, unlocalized) reason field with
+// the translated label in the active language.
+const COMMON_REASON_KEYS = [
+  'addQuebra.reasons.expired',
+  'addQuebra.reasons.broken',
+  'addQuebra.reasons.packagingDamaged',
+  'addQuebra.reasons.transportLoss',
+  'addQuebra.reasons.spoiledMold',
+  'addQuebra.reasons.customerSample',
 ];
 
 export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, onComplete }) => {
   const { products, batches, quebras, addQuebra, currencySymbol } = useApp();
+  const { t } = useLanguage();
 
   const [selectedProductId, setSelectedProductId] = useState<string>('');
   const [selectedBatchId, setSelectedBatchId] = useState<string>('');
@@ -75,18 +80,18 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
     e.preventDefault();
 
     if (!selectedProductId || !selectedBatchId) {
-      alert('Por favor selecione um produto e um lote.');
+      alert(t('addQuebra.errors.selectProductBatch'));
       return;
     }
 
     const numLoss = parseFloat(quantityLost);
     if (!numLoss || numLoss <= 0) {
-      alert('Por favor introduza uma quantidade de perda válida superior a 0.');
+      alert(t('addQuebra.errors.invalidQuantity'));
       return;
     }
 
     if (!reason.trim()) {
-      alert('Por favor indique um motivo para a perda (ex.: Fora do prazo, Danificada, etc.).');
+      alert(t('addQuebra.errors.missingReason'));
       return;
     }
 
@@ -98,7 +103,11 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
       reason: reason.trim(),
     });
 
-    setSubmittedMessage(`Registada perda de ${numLoss} ${numLoss === 1 ? 'unidade' : 'unidades'} no lote.`);
+    setSubmittedMessage(
+      numLoss === 1
+        ? t('addQuebra.successMessageOne', { count: numLoss })
+        : t('addQuebra.successMessageOther', { count: numLoss })
+    );
 
     setTimeout(() => {
       onComplete();
@@ -114,9 +123,9 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             <AlertTriangle className="w-6 h-6" />
           </div>
           <div>
-            <h2 className="font-bold text-lg text-gray-900">Registar Perda de Stock (Quebra)</h2>
+            <h2 className="font-bold text-lg text-gray-900">{t('addQuebra.title')}</h2>
             <p className="text-xs text-gray-500">
-              Registe produtos estragados, partidos ou fora de validade associados a um lote de stock.
+              {t('addQuebra.subtitle')}
             </p>
           </div>
         </div>
@@ -126,19 +135,19 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-600 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-8 h-8" />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">Quebra Registada!</h3>
+            <h3 className="text-lg font-bold text-gray-900">{t('addQuebra.registeredTitle')}</h3>
             <p className="text-sm text-rose-700 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : products.length === 0 ? (
           <div className="py-8 text-center text-gray-500 text-sm">
-            Nenhum produto cadastrado. Adicione primeiro um lote de stock antes de registar quebras.
+            {t('addQuebra.emptyState')}
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5 my-5">
             {/* Product Selector */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Selecionar Produto
+                {t('addQuebra.selectProduct')}
               </label>
               <select
                 value={selectedProductId}
@@ -156,11 +165,11 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             {/* Batch Selector */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Selecionar Lote
+                {t('addQuebra.selectBatch')}
               </label>
               {availableBatches.length === 0 ? (
                 <div className="text-xs text-rose-600 bg-rose-50 border border-rose-300 p-3 rounded-xl">
-                  Nenhum lote de stock registado para este produto.
+                  {t('addQuebra.noBatchesForProduct')}
                 </div>
               ) : (
                 <select
@@ -169,10 +178,10 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                   className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500 font-mono"
                 >
                   {availableBatches.map(b => {
-                    const statusText = b.status === 'open' ? '🟢 Lote Aberto Ativo' : '🔒 Lote Fechado';
+                    const statusText = b.status === 'open' ? t('addQuebra.batchStatusOpen') : t('addQuebra.batchStatusClosed');
                     return (
                       <option key={b.id} value={b.id}>
-                        {formatDate(b.dateEntered)} — Qtd: {b.quantity} {b.unit || 'un'} @ {formatCurrency(b.costPrice, currencySymbol)} ({statusText})
+                        {formatDate(b.dateEntered)} — {t('addQuebra.qtyLabel')}: {b.quantity} {b.unit || 'un'} @ {formatCurrency(b.costPrice, currencySymbol)} ({statusText})
                       </option>
                     );
                   })}
@@ -184,7 +193,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Data da Perda
+                  {t('addQuebra.lossDate')}
                 </label>
                 <input
                   type="date"
@@ -197,7 +206,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                  Quantidade Perdida (Unidades)
+                  {t('addQuebra.lossQuantity')}
                 </label>
                 <input
                   type="number"
@@ -215,10 +224,8 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
               <div className="bg-rose-50 border border-rose-500/50 rounded-xl p-3.5 flex items-start space-x-3 text-xs text-rose-300 animate-pulse">
                 <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
                 <div>
-                  <span className="font-bold text-rose-700 block mb-0.5">⚠️ AVISO: Perda Excessiva</span>
-                  <p>
-                    A quantidade de perda de <strong>{quantityLost} unidades</strong> excede o stock restante deste lote (<strong>{batchCalc?.remainingQuantity} unidades</strong>). Pode registar esta entrada, mas um aviso será assinalado nos relatórios.
-                  </p>
+                  <span className="font-bold text-rose-700 block mb-0.5">{t('addQuebra.warningTitle')}</span>
+                  <p dangerouslySetInnerHTML={{ __html: t('addQuebra.warningBody', { qty: quantityLost, remaining: batchCalc?.remainingQuantity ?? 0 }) }} />
                 </div>
               </div>
             )}
@@ -227,18 +234,18 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             {targetBatch && batchCalc && (
               <div className="bg-white rounded-xl p-3.5 border border-gray-200 flex items-center justify-between text-xs">
                 <div>
-                  <span className="text-gray-500 block text-[10px]">Stock Atual do Lote</span>
-                  <span className="font-bold text-gray-800">{batchCalc.remainingQuantity} unidades</span>
+                  <span className="text-gray-500 block text-[10px]">{t('addQuebra.currentBatchStock')}</span>
+                  <span className="font-bold text-gray-800">{t('addQuebra.unitsValue', { qty: batchCalc.remainingQuantity })}</span>
                 </div>
                 <ArrowRight className="w-4 h-4 text-gray-400" />
                 <div>
-                  <span className="text-gray-500 block text-[10px]">Stock Após Perda</span>
+                  <span className="text-gray-500 block text-[10px]">{t('addQuebra.stockAfterLoss')}</span>
                   <span className={`font-bold ${remainingAfterLoss < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
-                    {remainingAfterLoss} unidades
+                    {t('addQuebra.unitsValue', { qty: remainingAfterLoss })}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500 block text-[10px]">Valor do Custo Perdido</span>
+                  <span className="text-gray-500 block text-[10px]">{t('addQuebra.lostCostValue')}</span>
                   <span className="font-bold text-rose-600">
                     {formatCurrency((parseFloat(quantityLost) || 0) * targetBatch.costPrice, currencySymbol)}
                   </span>
@@ -249,12 +256,12 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             {/* Reason Free Text & Suggestion Chips */}
             <div>
               <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
-                Motivo da Perda
+                {t('addQuebra.reasonLabel')}
               </label>
               <input
                 type="text"
                 required
-                placeholder="ex.: Fora do prazo, embalagem danificada, caiu no transporte..."
+                placeholder={t('addQuebra.reasonPlaceholder')}
                 value={reason}
                 onChange={e => setReason(e.target.value)}
                 className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-rose-500 mb-2"
@@ -262,15 +269,15 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
               {/* Suggestions */}
               <div className="flex flex-wrap gap-2 mt-2">
-                <span className="text-[11px] text-gray-500 self-center mr-1">Sugestões Rápidas:</span>
-                {COMMON_REASONS.map(chip => (
+                <span className="text-[11px] text-gray-500 self-center mr-1">{t('addQuebra.quickSuggestions')}</span>
+                {COMMON_REASON_KEYS.map(key => (
                   <button
-                    key={chip}
+                    key={key}
                     type="button"
-                    onClick={() => setReason(chip)}
+                    onClick={() => setReason(t(key))}
                     className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-medium transition border border-gray-300/60 active:scale-95"
                   >
-                    {chip}
+                    {t(key)}
                   </button>
                 ))}
               </div>
@@ -283,7 +290,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                 disabled={!selectedBatchId}
                 className="flex-1 min-h-[56px] py-3.5 px-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base transition shadow-lg shadow-rose-50 flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-[0.98]"
               >
-                <span>Registar Entrada de Quebra</span>
+                <span>{t('addQuebra.submitButton')}</span>
                 <ArrowRight className="w-5 h-5" />
               </button>
             </div>
