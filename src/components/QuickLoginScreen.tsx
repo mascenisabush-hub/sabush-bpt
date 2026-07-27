@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useApp } from '../context/AppContext';
-import { Store, User, ArrowLeft, Delete, ShieldCheck, Loader2, KeyRound } from 'lucide-react';
+import { Store, User, ArrowLeft, Delete, ShieldCheck, Loader2, KeyRound, Info } from 'lucide-react';
 
 interface QuickLoginScreenProps {
   onUseOwnerLogin: () => void;
@@ -54,16 +54,41 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
   };
 
   return (
-    <div className="min-h-screen bg-white text-gray-900 flex flex-col justify-center items-center p-4 sm:p-6 font-sans">
-      <div className="w-full max-w-sm bg-white border border-gray-200 rounded-3xl p-6 sm:p-8 shadow-2xl relative overflow-hidden">
-        <div className="absolute -top-12 -right-12 w-40 h-40 bg-[#1B3966]/5 rounded-full blur-3xl pointer-events-none"></div>
+    <div className="min-h-screen relative flex flex-col justify-center items-center p-4 sm:p-6 font-sans overflow-hidden">
+      {/* Layered background — pure white base + a very soft navy radial glow
+          top-right, so the screen reads as alive/premium instead of flat. */}
+      <div className="absolute inset-0 bg-white" />
+      <div
+        className="absolute inset-0 pointer-events-none"
+        style={{
+          background: 'radial-gradient(ellipse 900px 700px at 88% 8%, rgba(11,31,58,0.07), transparent 60%)',
+        }}
+      />
 
-        <div className="flex flex-col items-center text-center mb-6">
-          <div className="w-12 h-12 rounded-2xl bg-[#1B3966]/5 border border-[#1B3966]/20 flex items-center justify-center text-[#1B3966] mb-3">
+      <div
+        className="w-full max-w-[440px] rounded-[20px] p-8 sm:p-9 relative animate-[quicklogin-in_0.4s_ease]"
+        style={{
+          background: 'rgba(255,255,255,0.75)',
+          backdropFilter: 'blur(16px)',
+          WebkitBackdropFilter: 'blur(16px)',
+          border: '1px solid rgba(0,0,0,0.05)',
+          boxShadow: '0 20px 60px rgba(0,0,0,0.08)',
+        }}
+      >
+        <div className="flex flex-col items-center text-center">
+          <div
+            className="w-14 h-14 rounded-2xl flex items-center justify-center text-white shrink-0"
+            style={{
+              background: 'linear-gradient(135deg, #0B1F3A, #1E3A5F)',
+              boxShadow: '0 8px 20px rgba(11,31,58,0.25)',
+            }}
+          >
             <Store className="w-6 h-6" />
           </div>
-          <h1 className="text-lg font-bold tracking-tight text-gray-900">{pairedDevice.businessName}</h1>
-          <p className="text-xs text-gray-500 mt-1">
+          <h1 className="text-[21px] font-semibold tracking-[0.3px] text-[#111827] mt-4">
+            {pairedDevice.businessName}
+          </h1>
+          <p className="text-sm text-[#6B7280] mt-1.5">
             {selected ? 'Introduza o seu PIN' : 'Quem está a usar este dispositivo?'}
           </p>
         </div>
@@ -71,11 +96,12 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
         {!selected ? (
           <>
             {pairedDevice.staff.length === 0 ? (
-              <p className="text-xs text-gray-500 italic bg-gray-100/60 p-3 rounded-xl border border-gray-200 text-center mb-4">
+              <p className="text-[13px] text-[#6B7280] bg-[#F9FAFB] p-3.5 rounded-xl border border-dashed border-[#E5E7EB] text-center mt-5 flex items-center justify-center gap-1.5">
+                <Info className="w-3.5 h-3.5 text-gray-400 shrink-0" />
                 Ainda não há funcionários configurados para este dispositivo.
               </p>
             ) : (
-              <div className="space-y-2 mb-4 max-h-72 overflow-y-auto">
+              <div className="space-y-2 mt-5 mb-5 max-h-72 overflow-y-auto">
                 {pairedDevice.staff.map((s) => (
                   <button
                     key={s.uid}
@@ -84,10 +110,10 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                       setPin('');
                       setError(null);
                     }}
-                    className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl border border-gray-200 hover:border-[#1B3966]/30 hover:bg-[#1B3966]/5 transition text-left"
+                    className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl border border-[#0B1F3A]/[0.06] bg-white/60 hover:border-[#D4AF37]/40 hover:bg-white transition text-left"
                   >
-                    <div className="w-9 h-9 rounded-xl bg-[#1B3966]/5 flex items-center justify-center shrink-0">
-                      <User className="w-4 h-4 text-[#1B3966]" />
+                    <div className="w-9 h-9 rounded-xl bg-[#0B1F3A]/5 flex items-center justify-center shrink-0">
+                      <User className="w-4 h-4 text-[#0B1F3A]" />
                     </div>
                     <span className="text-sm font-semibold text-gray-800">{s.name}</span>
                   </button>
@@ -98,9 +124,15 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             <button
               type="button"
               onClick={onUseOwnerLogin}
-              className="w-full flex items-center justify-center gap-1.5 text-xs font-semibold text-[#B8791A] hover:text-[#9C6613] py-2.5 transition"
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[#111] font-medium mt-5 transition-all hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]/50"
+              style={{
+                background: 'linear-gradient(135deg, #D4AF37, #B8962E)',
+                boxShadow: '0 8px 20px rgba(212,175,55,0.25)',
+              }}
+              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 12px 25px rgba(212,175,55,0.35)')}
+              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 8px 20px rgba(212,175,55,0.25)')}
             >
-              <ShieldCheck className="w-3.5 h-3.5" />
+              <ShieldCheck className="w-4 h-4" />
               Entrar como Dono
             </button>
           </>
@@ -113,7 +145,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                 setPin('');
                 setError(null);
               }}
-              className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 mb-4 transition"
+              className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 mt-6 mb-4 transition"
             >
               <ArrowLeft className="w-3.5 h-3.5" /> Voltar
             </button>
@@ -123,13 +155,13 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             {/* PIN dots */}
             <div className="flex items-center justify-center gap-2.5 mb-2 h-8">
               {loading ? (
-                <Loader2 className="w-6 h-6 text-[#1B3966] animate-spin" />
+                <Loader2 className="w-6 h-6 text-[#0B1F3A] animate-spin" />
               ) : (
                 Array.from({ length: 6 }).map((_, i) => (
                   <div
                     key={i}
                     className={`w-3 h-3 rounded-full border-2 transition-colors ${
-                      i < pin.length ? 'bg-[#1B3966] border-[#1B3966]' : 'border-gray-300'
+                      i < pin.length ? 'bg-[#0B1F3A] border-[#0B1F3A]' : 'border-gray-300'
                     }`}
                   />
                 ))
@@ -148,7 +180,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                   type="button"
                   onClick={() => handleDigit(d)}
                   disabled={loading}
-                  className="py-3.5 rounded-2xl bg-gray-100/70 hover:bg-gray-100 text-lg font-bold text-gray-800 transition disabled:opacity-40"
+                  className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] text-lg font-bold text-gray-800 transition disabled:opacity-40"
                 >
                   {d}
                 </button>
@@ -158,7 +190,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                 type="button"
                 onClick={() => handleDigit('0')}
                 disabled={loading}
-                className="py-3.5 rounded-2xl bg-gray-100/70 hover:bg-gray-100 text-lg font-bold text-gray-800 transition disabled:opacity-40"
+                className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] text-lg font-bold text-gray-800 transition disabled:opacity-40"
               >
                 0
               </button>
@@ -166,7 +198,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                 type="button"
                 onClick={handleBackspace}
                 disabled={loading}
-                className="py-3.5 rounded-2xl bg-gray-100/70 hover:bg-gray-100 flex items-center justify-center text-gray-600 transition disabled:opacity-40"
+                className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] flex items-center justify-center text-gray-600 transition disabled:opacity-40"
               >
                 <Delete className="w-5 h-5" />
               </button>
@@ -178,6 +210,13 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
           </>
         )}
       </div>
+
+      <style>{`
+        @keyframes quicklogin-in {
+          from { opacity: 0; transform: translateY(10px); }
+          to { opacity: 1; transform: translateY(0); }
+        }
+      `}</style>
     </div>
   );
 };
