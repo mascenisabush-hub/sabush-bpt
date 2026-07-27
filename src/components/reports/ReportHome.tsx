@@ -39,7 +39,7 @@ const CATEGORIES: ReportCategoryDef[] = [
     key: 'batch-performance',
     icon: Layers,
     title: 'Desempenho de Lotes',
-    description: 'Que lotes de compra geraram mais lucro embutido, ordenados por rentabilidade ou investimento.',
+    description: 'Lucro do stock comprado em cada período (ex: últimos 30 dias) — e procure qualquer lote ou produto a qualquer momento.',
     colorClass: 'bg-purple-50 text-purple-600',
   },
   {

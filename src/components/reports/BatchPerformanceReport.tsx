@@ -21,18 +21,38 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
   const [sortMode, setSortMode] = useState<SortMode>('profit');
   const [range, { setStartDate, setEndDate, applyPreset }] = useDateRange();
   const [supplierFilter, setSupplierFilter] = useState<string>('all');
+  const [searchQuery, setSearchQuery] = useState<string>('');
 
   const suppliers = useMemo(
     () => Array.from(new Set(purchaseBatches.map(pb => pb.supplier.name).filter(Boolean))).sort(),
     [purchaseBatches]
   );
 
+  // Full, period-filtered summaries — drive the KPIs above. Independent of
+  // the search box below, so "profit in the last 30 days" always reflects
+  // the whole period, not just whatever the owner is currently looking up.
   const summaries = useMemo(() => {
     return purchaseBatches
       .filter(pb => isDateInRange(pb.date, range.startDate, range.endDate))
       .filter(pb => supplierFilter === 'all' || pb.supplier.name === supplierFilter)
       .map(pb => calculatePurchaseBatchSummary(pb, batches.filter(b => b.purchaseBatchId === pb.id), quebras, products));
   }, [purchaseBatches, batches, quebras, products, range, supplierFilter]);
+
+  // Lets the owner look up any single stock entry at any time — by batch
+  // number, supplier, or a product name inside that batch — regardless of
+  // the date range or supplier filter above.
+  const searchResults = useMemo(() => {
+    const q = searchQuery.trim().toLowerCase();
+    if (!q) return null;
+    return purchaseBatches
+      .map(pb => calculatePurchaseBatchSummary(pb, batches.filter(b => b.purchaseBatchId === pb.id), quebras, products))
+      .filter(s =>
+        s.purchaseBatch.batchNumber.toLowerCase().includes(q) ||
+        s.purchaseBatch.supplier.name.toLowerCase().includes(q) ||
+        s.lineItems.some(li => li.product?.name.toLowerCase().includes(q))
+      )
+      .sort((a, b) => b.purchaseBatch.date.localeCompare(a.purchaseBatch.date));
+  }, [searchQuery, purchaseBatches, batches, quebras, products]);
 
   const sorted = useMemo(() => {
     const copy = [...summaries];
@@ -55,6 +75,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
       const top = sorted[0];
       lines.push(`${top.purchaseBatch.batchNumber} (${formatDate(top.purchaseBatch.date)}, ${top.purchaseBatch.supplier.name}) tem o maior lucro embutido restante: ${formatCurrency(top.remainingEmbeddedProfit, currencySymbol)}.`);
     }
+    lines.push('Este total refere-se apenas a lotes de stock comprados no período selecionado — o Capital Inicial fica de fora e nunca entra nesta soma.');
     return lines;
   }, [summaries, totalRemainingProfit, sorted, currencySymbol]);
 
@@ -121,7 +142,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
     <div className="space-y-4 pb-12 report-print-area">
       <ReportHeader
         title="Desempenho de Lotes"
-        description="Que lotes de compra geraram mais lucro embutido."
+        description="Lucro gerado pelo stock comprado em cada período — e o histórico completo de cada lote, para consultar quando quiser."
         onBack={onBack}
         onExportPdf={handleExportPdf}
         onExportExcel={handleExportExcel}
@@ -129,6 +150,56 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
       />
 
       <InsightBanner insights={insights} />
+
+      <ReportSection title="Procurar um Lote ou Produto" icon={Layers}>
+        <input
+          type="text"
+          value={searchQuery}
+          onChange={e => setSearchQuery(e.target.value)}
+          placeholder="Nº do lote, fornecedor ou nome do produto (ex: BAT-000004, Arroz)"
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
+        />
+        <p className="text-[10.5px] text-gray-500 mt-1.5">
+          Pesquisa em todos os lotes de sempre, independentemente do período abaixo — para consultar qualquer entrada de stock a qualquer momento.
+        </p>
+
+        {searchResults !== null && (
+          searchResults.length === 0 ? (
+            <ReportEmptyState message="Nenhum lote encontrado para essa pesquisa." />
+          ) : (
+            <div className="overflow-x-auto mt-3">
+              <table className="w-full text-xs">
+                <thead>
+                  <tr className="text-left text-gray-500 border-b border-gray-200">
+                    <th className="py-2 pr-2 font-semibold">Lote</th>
+                    <th className="py-2 pr-2 font-semibold">Data</th>
+                    <th className="py-2 pr-2 font-semibold">Fornecedor</th>
+                    <th className="py-2 pr-2 font-semibold">Produtos</th>
+                    <th className="py-2 pr-2 font-semibold text-right">Investimento</th>
+                    <th className="py-2 pr-2 font-semibold text-right">Lucro Restante</th>
+                    <th className="py-2 pr-2 font-semibold">Estado</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {searchResults.map(s => (
+                    <tr key={s.purchaseBatch.id} className="border-b border-gray-100">
+                      <td className="py-2 pr-2 font-bold text-gray-900">{s.purchaseBatch.batchNumber}</td>
+                      <td className="py-2 pr-2 text-gray-600">{formatDate(s.purchaseBatch.date)}</td>
+                      <td className="py-2 pr-2 text-gray-600">{s.purchaseBatch.supplier.name}</td>
+                      <td className="py-2 pr-2 text-gray-600">{s.lineItems.map(li => li.product?.name).filter(Boolean).join(', ')}</td>
+                      <td className="py-2 pr-2 text-right font-mono text-gray-700">{formatCurrency(s.totalInvestmentValue, currencySymbol)}</td>
+                      <td className={`py-2 pr-2 text-right font-mono font-bold ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}</td>
+                      <td className="py-2 pr-2">
+                        <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-semibold">{PURCHASE_BATCH_STATUS_LABELS[s.status]}</span>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          )
+        )}
+      </ReportSection>
 
       <ReportFilterBar
         range={range}
