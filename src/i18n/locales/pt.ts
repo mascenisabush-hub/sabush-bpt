@@ -1,6 +1,16 @@
 export interface TranslationDict {
   common: {
     close: string;
+    purchaseBatchStatus: {
+      active: string;
+      partially_remaining: string;
+      fully_consumed: string;
+      archived: string;
+    };
+    batchStatus: {
+      open: string;
+      closed: string;
+    };
   };
   auth: {
     subtitle: string;
@@ -359,6 +369,53 @@ export interface TranslationDict {
       invalidAmount: string;
     };
   };
+  stocksView: {
+    title: string;
+    subtitle: string;
+    legacySupplierName: string;
+    remainingInvestment: string;
+    marketValue: string;
+    remainingEmbeddedProfit: string;
+    searchPlaceholder: string;
+    allSuppliers: string;
+    allStatuses: string;
+    showArchived: string;
+    emptyState: string;
+    legacyBadge: string;
+    productCountOne: string;
+    productCountOther: string;
+    invested: string;
+    market: string;
+    embeddedProfit: string;
+    modal: {
+      supplier: string;
+      createdBy: string;
+      notes: string;
+      totalInvestment: string;
+      marketValue: string;
+      embeddedProfit: string;
+      remainingInvestment: string;
+      remainingMarket: string;
+      remainingProfit: string;
+      inventoryLostWarning: string;
+      productsHeading: string;
+      table: {
+        product: string;
+        qtyRemaining: string;
+        costSell: string;
+        remainingInvestment: string;
+        embeddedProfit: string;
+        statusPrefix: string;
+      };
+      productRemoved: string;
+      timelineHeading: string;
+      reactivateBatch: string;
+      archiveBatch: string;
+      generatingPdf: string;
+      exportPdf: string;
+      close: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -368,6 +425,16 @@ export interface TranslationDict {
 export const pt: TranslationDict = {
   common: {
     close: 'Fechar',
+    purchaseBatchStatus: {
+      active: 'Ativo',
+      partially_remaining: 'Parcialmente Restante',
+      fully_consumed: 'Totalmente Consumido',
+      archived: 'Arquivado',
+    },
+    batchStatus: {
+      open: '🟢 Ativo',
+      closed: '🔒 Fechado',
+    },
   },
   auth: {
     subtitle: 'Gestão inteligente e controlo de lucro por lote para o seu negócio',
@@ -752,6 +819,53 @@ export const pt: TranslationDict = {
     submitButton: 'Registar Levantamento',
     errors: {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
+    },
+  },
+  stocksView: {
+    title: 'Histórico de Lotes — Registo de Investimento',
+    subtitle: 'Cada compra de stock é um investimento. Reveja cada lote, o seu fornecedor, valor investido e lucro embutido.',
+    legacySupplierName: 'Histórico (Pré-Atualização)',
+    remainingInvestment: 'Investimento Restante',
+    marketValue: 'Valor de Mercado',
+    remainingEmbeddedProfit: 'Lucro Embutido Restante',
+    searchPlaceholder: 'Pesquisar por nº de lote, fornecedor ou produto...',
+    allSuppliers: 'Todos os Fornecedores',
+    allStatuses: 'Todos os Estados',
+    showArchived: 'Mostrar lotes arquivados',
+    emptyState: 'Nenhum lote encontrado com os filtros atuais.',
+    legacyBadge: 'Legado',
+    productCountOne: '{{count}} produto',
+    productCountOther: '{{count}} produtos',
+    invested: 'Investido',
+    market: 'Mercado',
+    embeddedProfit: 'Lucro Embutido',
+    modal: {
+      supplier: 'Fornecedor',
+      createdBy: 'Criado Por',
+      notes: 'Notas',
+      totalInvestment: 'Investimento Total',
+      marketValue: 'Valor de Mercado',
+      embeddedProfit: 'Lucro Embutido',
+      remainingInvestment: 'Invest. Restante',
+      remainingMarket: 'Mercado Restante',
+      remainingProfit: 'Lucro Restante',
+      inventoryLostWarning: 'Inventário perdido (quebras) neste lote: {{value}}',
+      productsHeading: 'Produtos',
+      table: {
+        product: 'Produto',
+        qtyRemaining: 'Qtd (Rest.)',
+        costSell: 'Custo / Venda',
+        remainingInvestment: 'Invest. Restante',
+        embeddedProfit: 'Lucro Embutido',
+        statusPrefix: 'Status:',
+      },
+      productRemoved: 'Produto Removido',
+      timelineHeading: 'Linha do Tempo',
+      reactivateBatch: 'Reativar Lote',
+      archiveBatch: 'Arquivar Lote',
+      generatingPdf: 'A gerar PDF...',
+      exportPdf: 'Exportar PDF',
+      close: 'Fechar',
     },
   },
 };

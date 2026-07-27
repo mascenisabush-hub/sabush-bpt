@@ -1,9 +1,9 @@
 import React, { useState, useMemo } from 'react';
 import { useApp } from '../context/AppContext';
+import { useLanguage } from '../context/LanguageContext';
 import {
   calculatePurchaseBatchSummary,
   buildPurchaseBatchTimeline,
-  PURCHASE_BATCH_STATUS_LABELS,
   PurchaseBatchSummary,
 } from '../utils/purchaseBatchCalculations';
 import { exportPurchaseBatchToPdf } from '../utils/batchPdfExport';
@@ -44,6 +44,9 @@ export const StocksView: React.FC = () => {
     archivePurchaseBatch,
     unarchivePurchaseBatch,
   } = useApp();
+  const { t } = useLanguage();
+
+  const statusLabel = (status: PurchaseBatchStatus) => t(`common.purchaseBatchStatus.${status}`);
 
   const [searchQuery, setSearchQuery] = useState('');
   const [selectedDate, setSelectedDate] = useState('');
@@ -90,7 +93,7 @@ export const StocksView: React.FC = () => {
         batchNumber: 'LEGADO',
         batchSeq: -1 - idx,
         date,
-        supplier: { name: 'Histórico (Pré-Atualização)' },
+        supplier: { name: t('stocksView.legacySupplierName') },
         createdAt: lineItems[0]?.createdAt || date,
       };
       summaries.push(calculatePurchaseBatchSummary(syntheticBatch, lineItems, quebras, products));
@@ -172,27 +175,27 @@ export const StocksView: React.FC = () => {
           </div>
           <div>
             <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
-              Histórico de Lotes — Registo de Investimento
+              {t('stocksView.title')}
             </h1>
             <p className="text-xs text-gray-500">
-              Cada compra de stock é um investimento. Reveja cada lote, o seu fornecedor, valor investido e lucro embutido.
+              {t('stocksView.subtitle')}
             </p>
           </div>
         </div>
 
         <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2.5 px-3.5 text-xs font-mono shrink-0">
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Investimento Restante</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">{t('stocksView.remainingInvestment')}</span>
             <span className="text-gray-800 font-bold">{formatCurrency(summaryTotals.investment, currencySymbol)}</span>
           </div>
           <div className="h-6 w-px bg-gray-50 mx-1"></div>
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Valor de Mercado</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">{t('stocksView.marketValue')}</span>
             <span className="text-gray-700 font-bold">{formatCurrency(summaryTotals.market, currencySymbol)}</span>
           </div>
           <div className="h-6 w-px bg-gray-50 mx-1"></div>
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">Lucro Embutido Restante</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">{t('stocksView.remainingEmbeddedProfit')}</span>
             <span className={`font-bold ${summaryTotals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(summaryTotals.profit, currencySymbol)}
             </span>
@@ -207,7 +210,7 @@ export const StocksView: React.FC = () => {
             <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
-              placeholder="Pesquisar por nº de lote, fornecedor ou produto..."
+              placeholder={t('stocksView.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
@@ -228,7 +231,7 @@ export const StocksView: React.FC = () => {
               onChange={(e) => setSupplierFilter(e.target.value)}
               className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
             >
-              <option value="">Todos os Fornecedores</option>
+              <option value="">{t('stocksView.allSuppliers')}</option>
               {supplierOptions.map((name) => (
                 <option key={name} value={name}>
                   {name}
@@ -243,11 +246,11 @@ export const StocksView: React.FC = () => {
               onChange={(e) => setStatusFilter(e.target.value as any)}
               className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
             >
-              <option value="all">Todos os Estados</option>
-              <option value="active">Ativo</option>
-              <option value="partially_remaining">Parcialmente Restante</option>
-              <option value="fully_consumed">Totalmente Consumido</option>
-              <option value="archived">Arquivado</option>
+              <option value="all">{t('stocksView.allStatuses')}</option>
+              <option value="active">{t('common.purchaseBatchStatus.active')}</option>
+              <option value="partially_remaining">{t('common.purchaseBatchStatus.partially_remaining')}</option>
+              <option value="fully_consumed">{t('common.purchaseBatchStatus.fully_consumed')}</option>
+              <option value="archived">{t('common.purchaseBatchStatus.archived')}</option>
             </select>
           </div>
 
@@ -276,7 +279,7 @@ export const StocksView: React.FC = () => {
             onChange={(e) => setShowArchived(e.target.checked)}
             className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
           />
-          Mostrar lotes arquivados
+          {t('stocksView.showArchived')}
         </label>
       </div>
 
@@ -284,7 +287,7 @@ export const StocksView: React.FC = () => {
       {filteredSummaries.length === 0 ? (
         <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
           <Boxes className="w-8 h-8 text-gray-500 mx-auto mb-2" />
-          <p className="text-sm text-gray-500">Nenhum lote encontrado com os filtros atuais.</p>
+          <p className="text-sm text-gray-500">{t('stocksView.emptyState')}</p>
         </div>
       ) : (
         <div className="space-y-2.5">
@@ -305,11 +308,11 @@ export const StocksView: React.FC = () => {
                         {s.purchaseBatch.batchNumber}
                       </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
-                        {PURCHASE_BATCH_STATUS_LABELS[s.status]}
+                        {statusLabel(s.status)}
                       </span>
                       {isLegacy(s) && (
                         <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300">
-                          Legado
+                          {t('stocksView.legacyBadge')}
                         </span>
                       )}
                     </div>
@@ -321,7 +324,10 @@ export const StocksView: React.FC = () => {
                         <Truck className="w-3 h-3 shrink-0" /> {s.purchaseBatch.supplier.name}
                       </span>
                       <span className="flex items-center gap-1">
-                        <Package className="w-3 h-3" /> {s.productCount} {s.productCount === 1 ? 'produto' : 'produtos'}
+                        <Package className="w-3 h-3" />{' '}
+                        {s.productCount === 1
+                          ? t('stocksView.productCountOne', { count: s.productCount })
+                          : t('stocksView.productCountOther', { count: s.productCount })}
                       </span>
                     </div>
                   </div>
@@ -329,19 +335,19 @@ export const StocksView: React.FC = () => {
 
                 <div className="flex items-center gap-4 text-right font-mono">
                   <div>
-                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">Investido</span>
+                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
                     <span className="text-xs font-bold text-gray-800">
                       {formatCurrency(s.remainingInvestmentValue, currencySymbol)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">Mercado</span>
+                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
                     <span className="text-xs font-semibold text-gray-700">
                       {formatCurrency(s.remainingMarketValue, currencySymbol)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">Lucro Embutido</span>
+                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
                     <span className={`text-xs font-bold ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}
                     </span>
@@ -369,7 +375,7 @@ export const StocksView: React.FC = () => {
                   <h2 className="font-bold text-base text-gray-900 flex items-center gap-2 font-mono truncate">
                     {selectedSummary.purchaseBatch.batchNumber}
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[selectedSummary.status]}`}>
-                      {PURCHASE_BATCH_STATUS_LABELS[selectedSummary.status]}
+                      {statusLabel(selectedSummary.status)}
                     </span>
                   </h2>
                   <p className="text-xs text-gray-500">
@@ -391,7 +397,7 @@ export const StocksView: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <Truck className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">Fornecedor</span>
+                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">{t('stocksView.modal.supplier')}</span>
                     <span className="text-gray-800 font-semibold">{selectedSummary.purchaseBatch.supplier.name}</span>
                     {selectedSummary.purchaseBatch.supplier.phone && (
                       <span className="text-gray-500 block">{selectedSummary.purchaseBatch.supplier.phone}</span>
@@ -401,7 +407,7 @@ export const StocksView: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <User className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">Criado Por</span>
+                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">{t('stocksView.modal.createdBy')}</span>
                     <span className="text-gray-800 font-semibold">{selectedSummary.purchaseBatch.createdByName || '—'}</span>
                   </div>
                 </div>
@@ -409,7 +415,7 @@ export const StocksView: React.FC = () => {
                   <div className="sm:col-span-2 flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
                     <div>
-                      <span className="text-gray-500 block text-[10px] uppercase font-semibold">Notas</span>
+                      <span className="text-gray-500 block text-[10px] uppercase font-semibold">{t('stocksView.modal.notes')}</span>
                       <span className="text-gray-800">{selectedSummary.purchaseBatch.notes}</span>
                     </div>
                   </div>
@@ -419,37 +425,37 @@ export const StocksView: React.FC = () => {
               {/* Investment Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Investimento Total</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.totalInvestment')}</span>
                   <span className="text-sm font-bold text-gray-800 font-mono">
                     {formatCurrency(selectedSummary.totalInvestmentValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Valor de Mercado</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.marketValue')}</span>
                   <span className="text-sm font-bold text-gray-700 font-mono">
                     {formatCurrency(selectedSummary.totalMarketValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block">Lucro Embutido</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.embeddedProfit')}</span>
                   <span className={`text-sm font-bold font-mono ${selectedSummary.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.totalEmbeddedProfit, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-blue-700 uppercase font-bold block">Invest. Restante</span>
+                  <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingInvestment')}</span>
                   <span className="text-sm font-bold text-blue-700 font-mono">
                     {formatCurrency(selectedSummary.remainingInvestmentValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-blue-700 uppercase font-bold block">Mercado Restante</span>
+                  <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingMarket')}</span>
                   <span className="text-sm font-bold text-blue-700 font-mono">
                     {formatCurrency(selectedSummary.remainingMarketValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-blue-700 uppercase font-bold block">Lucro Restante</span>
+                  <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingProfit')}</span>
                   <span className={`text-sm font-bold font-mono ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.remainingEmbeddedProfit, currencySymbol)}
                   </span>
@@ -460,7 +466,7 @@ export const StocksView: React.FC = () => {
                 <div className="bg-rose-50 border border-rose-500/20 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
                   <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
                   <span>
-                    Inventário perdido (quebras) neste lote: {formatCurrency(selectedSummary.inventoryLostValue, currencySymbol)}
+                    {t('stocksView.modal.inventoryLostWarning', { value: formatCurrency(selectedSummary.inventoryLostValue, currencySymbol) })}
                   </span>
                 </div>
               )}
@@ -468,26 +474,26 @@ export const StocksView: React.FC = () => {
               {/* Product Table */}
               <div>
                 <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5 text-blue-600" /> Produtos
+                  <Package className="w-3.5 h-3.5 text-blue-600" /> {t('stocksView.modal.productsHeading')}
                 </h3>
                 <div className="border border-gray-200 rounded-2xl bg-gray-100/60 p-2 overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[560px]">
                     <thead>
                       <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                        <th className="py-2 px-2.5">Produto</th>
-                        <th className="py-2 px-2.5 text-right">Qtd (Rest.)</th>
-                        <th className="py-2 px-2.5 text-right">Custo / Venda</th>
-                        <th className="py-2 px-2.5 text-right">Invest. Restante</th>
-                        <th className="py-2 px-2.5 text-right">Lucro Embutido</th>
+                        <th className="py-2 px-2.5">{t('stocksView.modal.table.product')}</th>
+                        <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.qtyRemaining')}</th>
+                        <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.costSell')}</th>
+                        <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.remainingInvestment')}</th>
+                        <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.embeddedProfit')}</th>
                       </tr>
                     </thead>
                     <tbody className="divide-y divide-gray-200/50">
                       {selectedSummary.lineItems.map((li) => (
                         <tr key={li.batch.id} className="hover:bg-white/60 transition">
                           <td className="py-2.5 px-2.5 font-semibold text-gray-900">
-                            <span className="block font-bold">{li.product?.name || 'Produto Removido'}</span>
+                            <span className="block font-bold">{li.product?.name || t('stocksView.modal.productRemoved')}</span>
                             <span className="text-[10px] font-normal text-gray-500 font-mono">
-                              Status: {li.batch.status === 'open' ? '🟢 Ativo' : '🔒 Fechado'}
+                              {t('stocksView.modal.table.statusPrefix')} {li.batch.status === 'open' ? t('common.batchStatus.open') : t('common.batchStatus.closed')}
                             </span>
                           </td>
                           <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-800">
@@ -515,7 +521,7 @@ export const StocksView: React.FC = () => {
               {/* Timeline */}
               <div>
                 <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-blue-600" /> Linha do Tempo
+                  <Clock className="w-3.5 h-3.5 text-blue-600" /> {t('stocksView.modal.timelineHeading')}
                 </h3>
                 <div className="space-y-2">
                   {selectedTimeline.map((ev, idx) => (
@@ -549,7 +555,7 @@ export const StocksView: React.FC = () => {
                       }}
                       className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5"
                     >
-                      <ArchiveRestore className="w-3.5 h-3.5" /> Reativar Lote
+                      <ArchiveRestore className="w-3.5 h-3.5" /> {t('stocksView.modal.reactivateBatch')}
                     </button>
                   ) : (
                     <button
@@ -560,7 +566,7 @@ export const StocksView: React.FC = () => {
                       }}
                       className="px-3.5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-bold transition flex items-center gap-1.5"
                     >
-                      <Archive className="w-3.5 h-3.5" /> Arquivar Lote
+                      <Archive className="w-3.5 h-3.5" /> {t('stocksView.modal.archiveBatch')}
                     </button>
                   )
                 )}
@@ -570,7 +576,7 @@ export const StocksView: React.FC = () => {
                   disabled={isExportingPdf}
                   className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5"
                 >
-                  <Download className="w-3.5 h-3.5" /> {isExportingPdf ? 'A gerar PDF...' : 'Exportar PDF'}
+                  <Download className="w-3.5 h-3.5" /> {isExportingPdf ? t('stocksView.modal.generatingPdf') : t('stocksView.modal.exportPdf')}
                 </button>
               </div>
               <button
@@ -578,7 +584,7 @@ export const StocksView: React.FC = () => {
                 onClick={() => setSelectedSummary(null)}
                 className="px-5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition"
               >
-                Fechar
+                {t('stocksView.modal.close')}
               </button>
             </div>
           </div>
