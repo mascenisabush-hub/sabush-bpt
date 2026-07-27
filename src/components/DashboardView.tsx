@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import { EditProductModal } from './EditProductModal';
+import { useLanguage } from '../context/LanguageContext';
 
 interface DashboardViewProps {
   onNavigateToAddStock: (productName?: string) => void;
@@ -124,6 +125,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     activeBatchCount, totalExpensesAllTime, totalWithdrawalsAllTime,
     businessWorth, capitalGrowth, capitalGrowthPct,
   } = useApp();
+  const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [showWorthModal, setShowWorthModal] = useState(false);
@@ -219,13 +221,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           icon={Landmark}
           iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#2563EB]/10'}
           iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#2563EB]'}
-          label="Capital Inicial do Negócio"
-          value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : 'Não definido'}
+          label={t('dashboard.kpi.initialCapital.label')}
+          value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('dashboard.kpi.initialCapital.notSet')}
           valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#2563EB]'}
           description={
             hasInitialStockCount
-              ? 'O valor verificado do stock registado quando começou a usar o Sabush.'
-              : 'Toque para registar o stock que já possui e definir o ponto de partida.'
+              ? t('dashboard.kpi.initialCapital.descSet')
+              : t('dashboard.kpi.initialCapital.descUnset')
           }
           onClick={!hasInitialStockCount ? onNavigateToInitialStockCount : undefined}
           highlight={!hasInitialStockCount}
@@ -235,30 +237,30 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           icon={Package}
           iconBgClass="bg-[#0B1F3A]/[0.06]"
           iconTextClass="text-[#0B1F3A]"
-          label="Custo do Stock Atual"
+          label={t('dashboard.kpi.stockCost.label')}
           value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
           valueClass="text-[#0B1F3A]"
-          description="O valor investido no stock que ainda resta."
+          description={t('dashboard.kpi.stockCost.desc')}
         />
 
         <KpiCard
           icon={Tag}
           iconBgClass="bg-[#0B1F3A]/[0.06]"
           iconTextClass="text-[#0B1F3A]"
-          label="Valor de Mercado do Stock"
+          label={t('dashboard.kpi.marketValue.label')}
           value={formatCurrency(totalMarketValueAllTime, currencySymbol)}
           valueClass="text-[#0B1F3A]"
-          description="O valor estimado de venda do stock que ainda resta."
+          description={t('dashboard.kpi.marketValue.desc')}
         />
 
         <KpiCard
           icon={Wallet}
           iconBgClass="bg-emerald-500/10"
           iconTextClass="text-emerald-600"
-          label="Lucro Embutido"
+          label={t('dashboard.kpi.embeddedProfit.label')}
           value={formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
           valueClass={totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-400' : 'text-rose-400'}
-          description="O lucro potencial contido no stock que ainda resta."
+          description={t('dashboard.kpi.embeddedProfit.desc')}
           onClick={() => setShowBreakdownModal(true)}
           variant="dark"
         />
@@ -267,10 +269,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           icon={Gem}
           iconBgClass="bg-[#2563EB]/10"
           iconTextClass="text-[#2563EB]"
-          label="Valor do Negócio"
+          label={t('dashboard.kpi.businessWorth.label')}
           value={formatCurrency(businessWorth, currencySymbol)}
           valueClass="text-[#2563EB]"
-          description="O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados."
+          description={t('dashboard.kpi.businessWorth.desc')}
           onClick={() => setShowWorthModal(true)}
           variant="dark"
           badge={
@@ -292,10 +294,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           icon={Receipt}
           iconBgClass="bg-rose-500/10"
           iconTextClass="text-rose-600"
-          label="Despesas Gerais"
+          label={t('dashboard.kpi.expenses.label')}
           value={formatCurrency(totalExpensesAllTime, currencySymbol)}
           valueClass="text-rose-700"
-          description="Custos operacionais registados pelo negócio."
+          description={t('dashboard.kpi.expenses.desc')}
         />
       </div>
 
@@ -304,37 +306,37 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           section rather than a border, so the primary 6 above keep focus. */}
       <div className="bg-[#F5F7FA] rounded-2xl p-6 sm:p-7">
         <p className="kpi-label mb-5 px-1">
-          Outros Indicadores
+          {t('dashboard.otherIndicators')}
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5 sm:gap-4">
           <KpiCard
             icon={HandCoins}
             iconBgClass="bg-[#2563EB]/10"
             iconTextClass="text-[#2563EB]"
-            label="Levantamentos do Dono"
+            label={t('dashboard.kpi.withdrawals.label')}
             value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
             valueClass="text-[#2563EB]"
-            description="Dinheiro retirado intencionalmente pelo dono."
+            description={t('dashboard.kpi.withdrawals.desc')}
           />
 
           <KpiCard
             icon={AlertTriangle}
             iconBgClass="bg-red-500/10"
             iconTextClass="text-red-600"
-            label="Perdas de Stock (Quebras)"
+            label={t('dashboard.kpi.quebraLoss.label')}
             value={formatCurrency(totalQuebraValueAllTime, currencySymbol)}
             valueClass="text-red-700"
-            description="Valor perdido por produtos danificados, expirados ou em falta."
+            description={t('dashboard.kpi.quebraLoss.desc')}
           />
 
           <KpiCard
             icon={Boxes}
             iconBgClass="bg-[#0B1F3A]/[0.06]"
             iconTextClass="text-[#0B1F3A]"
-            label="Lotes Ativos"
+            label={t('dashboard.kpi.activeBatches.label')}
             value={String(activeBatchCount)}
             valueClass="text-[#0B1F3A]"
-            description="Número de lotes de stock que contribuem atualmente para o inventário."
+            description={t('dashboard.kpi.activeBatches.desc')}
           />
         </div>
       </div>
@@ -346,7 +348,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <Search className="w-3.5 h-3.5 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
           <input
             type="text"
-            placeholder="Pesquisar produtos..."
+            placeholder={t('dashboard.toolbar.searchPlaceholder')}
             value={searchQuery}
             onChange={e => setSearchQuery(e.target.value)}
             className="w-full bg-[#F5F7FA] border border-transparent rounded-xl pl-10 pr-8 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:bg-white focus:border-[#2563EB] transition font-semibold"
@@ -368,7 +370,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onChange={e => setCategoryFilter(e.target.value)}
             className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#2563EB] shrink-0 max-w-[140px]"
           >
-            <option value="">Todas Categorias</option>
+            <option value="">{t('dashboard.toolbar.allCategories')}</option>
             {categoryOptions.map(c => (
               <option key={c} value={c}>{c}</option>
             ))}
@@ -380,7 +382,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             onChange={e => setSupplierFilter(e.target.value)}
             className="hidden sm:block bg-[#F5F7FA] border border-transparent rounded-xl px-2.5 py-2 text-xs font-semibold text-gray-700 focus:outline-none focus:bg-white focus:border-[#2563EB] shrink-0 max-w-[140px]"
           >
-            <option value="">Todos Fornecedores</option>
+            <option value="">{t('dashboard.toolbar.allSuppliers')}</option>
             {supplierOptions.map(s => (
               <option key={s} value={s}>{s}</option>
             ))}
@@ -390,18 +392,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         {/* Right: Product Count & Sort Button */}
         <div className="flex items-center gap-1.5 shrink-0">
           <span className="text-[11px] font-bold text-gray-600 bg-[#F5F7FA] px-3 py-2 rounded-xl hidden sm:inline-block">
-            {products.length} {products.length === 1 ? 'produto' : 'produtos'}
+            {t(products.length === 1 ? 'dashboard.toolbar.productCountOne' : 'dashboard.toolbar.productCountOther', { count: products.length })}
           </span>
           <span className="text-[11px] font-bold text-gray-600 bg-[#F5F7FA] px-3 py-2 rounded-xl hidden sm:inline-flex items-center gap-1">
             <Boxes className="w-3 h-3 text-[#2563EB]" />
-            {activeBatchCount} {activeBatchCount === 1 ? 'lote ativo' : 'lotes ativos'}
+            {t(activeBatchCount === 1 ? 'dashboard.toolbar.activeBatchOne' : 'dashboard.toolbar.activeBatchOther', { count: activeBatchCount })}
           </span>
 
           <div className="relative">
             <button
               type="button"
               onClick={() => setShowSortDropdown(!showSortDropdown)}
-              title="Filtrar / Ordenar"
+              title={t('dashboard.toolbar.filterSort')}
               className="p-2.5 rounded-xl bg-[#F5F7FA] hover:bg-[#EEF0F3] text-gray-600 hover:text-[#0B1F3A] transition active:scale-95 flex items-center gap-1 text-xs"
             >
               <SlidersHorizontal className="w-4 h-4 text-[#0B1F3A]" />
@@ -412,28 +414,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <div className="fixed inset-0 z-10" onClick={() => setShowSortDropdown(false)} />
                 <div className="absolute right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-xl elevation-3 p-1 z-20 w-44 space-y-0.5 text-xs text-gray-700">
                   <div className="px-2 py-1 text-[10px] font-bold uppercase tracking-wider text-gray-500">
-                    Ordenar Por
+                    {t('dashboard.toolbar.sortBy')}
                   </div>
                   <button
                     type="button"
                     onClick={() => { setSortBy('name'); setShowSortDropdown(false); }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'name' ? 'bg-[#2563EB]/10 text-[#2563EB] font-bold' : 'hover:bg-gray-50'}`}
                   >
-                    Nome (A-Z)
+                    {t('dashboard.toolbar.sortName')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('profit'); setShowSortDropdown(false); }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'profit' ? 'bg-[#2563EB]/10 text-[#2563EB] font-bold' : 'hover:bg-gray-50'}`}
                   >
-                    Maior Lucro
+                    {t('dashboard.toolbar.sortProfit')}
                   </button>
                   <button
                     type="button"
                     onClick={() => { setSortBy('cost'); setShowSortDropdown(false); }}
                     className={`w-full text-left px-2.5 py-1.5 rounded-lg transition ${sortBy === 'cost' ? 'bg-[#2563EB]/10 text-[#2563EB] font-bold' : 'hover:bg-gray-50'}`}
                   >
-                    Preço Custo
+                    {t('dashboard.toolbar.sortCost')}
                   </button>
                 </div>
               </>
@@ -449,7 +451,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Wallet className="w-5 h-5 text-[#0B1F3A]" />
-                <h3 className="text-base font-bold text-title">Lucro Embutido</h3>
+                <h3 className="text-base font-bold text-title">{t('dashboard.breakdownModal.title')}</h3>
               </div>
               <button
                 onClick={() => setShowBreakdownModal(false)}
@@ -460,40 +462,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <p className="text-[11px] text-gray-500 -mt-1">
-              Lucro Embutido é o lucro potencial marcado no stock — nenhuma venda é registada nesta app, por isso este valor nunca é rendimento realizado.
+              {t('dashboard.breakdownModal.explanation')}
             </p>
 
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500">Estimado (Lotes Abertos):</span>
+                <span className="text-gray-500">{t('dashboard.breakdownModal.estimatedOpen')}</span>
                 <span className="font-bold font-mono text-[#1D4ED8]">
                   {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500">Finalizado (Lotes Fechados):</span>
+                <span className="text-gray-500">{t('dashboard.breakdownModal.finalizedClosed')}</span>
                 <span className="font-bold font-mono text-[#1D4ED8]">
                   {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-[#2563EB]/10 border border-[#2563EB]/30">
-                <span className="text-gray-800 font-bold">Lucro Embutido Total:</span>
+                <span className="text-gray-800 font-bold">{t('dashboard.breakdownModal.totalLabel')}</span>
                 <span className={`text-base font-extrabold font-mono ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                   {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500">Despesas Gerais (até hoje):</span>
+                <span className="text-gray-500">{t('dashboard.breakdownModal.expensesLabel')}</span>
                 <span className="font-bold font-mono text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500">Levantamentos do Dono (não afeta o lucro):</span>
+                <span className="text-gray-500">{t('dashboard.breakdownModal.withdrawalsLabel')}</span>
                 <span className="font-bold font-mono text-slate-600">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
@@ -504,7 +506,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => setShowBreakdownModal(false)}
               className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
             >
-              Fechar
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -517,7 +519,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="flex items-center justify-between border-b border-gray-200 pb-3">
               <div className="flex items-center space-x-2">
                 <Gem className="w-5 h-5 text-indigo-600" />
-                <h3 className="text-base font-bold text-title">Valor do Negócio</h3>
+                <h3 className="text-base font-bold text-title">{t('dashboard.worthModal.title')}</h3>
               </div>
               <button
                 onClick={() => setShowWorthModal(false)}
@@ -528,13 +530,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             </div>
 
             <p className="text-[11px] text-gray-500 -mt-1">
-              Valor do Negócio = Valor de Mercado do Stock − Despesas − Levantamentos. Sem venda registada, não existe um valor de "caixa" real — por isso não inventamos um.
+              {t('dashboard.worthModal.explanation')}
             </p>
 
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="flex items-center gap-1.5 text-gray-500">
-                  <Boxes className="w-3.5 h-3.5 text-amber-600" /> Valor de Mercado do Stock:
+                  <Boxes className="w-3.5 h-3.5 text-amber-600" /> {t('dashboard.worthModal.marketValue')}
                 </span>
                 <span className="font-bold font-mono text-gray-800">
                   {formatCurrency(totalMarketValueAllTime, currencySymbol)}
@@ -542,42 +544,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
-                <span className="text-gray-500">Custo do Stock (Investimento):</span>
+                <span className="text-gray-500">{t('dashboard.worthModal.stockCost')}</span>
                 <span className="font-bold font-mono text-gray-800">
                   {formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500">Despesas Gerais:</span>
+                <span className="text-gray-500">{t('dashboard.worthModal.expenses')}</span>
                 <span className="font-bold font-mono text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500">Levantamentos do Dono:</span>
+                <span className="text-gray-500">{t('dashboard.worthModal.withdrawals')}</span>
                 <span className="font-bold font-mono text-rose-700">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-3 rounded-xl bg-indigo-50 border border-indigo-500/30">
-                <span className="text-gray-800 font-bold">Valor Total do Negócio:</span>
+                <span className="text-gray-800 font-bold">{t('dashboard.worthModal.totalLabel')}</span>
                 <span className="text-base font-extrabold font-mono text-indigo-700">
                   {formatCurrency(businessWorth, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500">Contagem Física Mais Recente:</span>
+                <span className="text-gray-500">{t('dashboard.worthModal.latestCount')}</span>
                 <span className="font-bold font-mono text-slate-600">
                   {formatCurrency(currentInventoryValue, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
-                <span className="text-gray-500">Capital Inicial (ponto de partida):</span>
+                <span className="text-gray-500">{t('dashboard.worthModal.initialCapital')}</span>
                 <span className="font-bold font-mono text-slate-600">
                   {formatCurrency(initialCapitalValue, currencySymbol)}
                 </span>
@@ -594,7 +596,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   ) : (
                     <TrendingDown className="w-3.5 h-3.5 text-rose-600" />
                   )}
-                  Crescimento do Capital:
+                  {t('dashboard.worthModal.growth')}
                 </span>
                 <span className={`font-bold font-mono ${capitalGrowth >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                   {capitalGrowth >= 0 ? '+' : ''}
@@ -605,8 +607,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               {latestStockCount && (
                 <p className="text-[10px] text-gray-400 text-center pt-1">
-                  Stock atual baseado na contagem de {latestStockCount.date.split('-').reverse().join('/')}
-                  {!hasInitialStockCount && ' · Defina o Capital Inicial para medir o crescimento.'}
+                  {t('dashboard.worthModal.basedOnCount', { date: latestStockCount.date.split('-').reverse().join('/') })}
+                  {!hasInitialStockCount && t('dashboard.worthModal.defineInitialCapital')}
                 </p>
               )}
             </div>
@@ -615,7 +617,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               onClick={() => setShowWorthModal(false)}
               className="w-full py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
             >
-              Fechar
+              {t('common.close')}
             </button>
           </div>
         </div>
@@ -627,18 +629,18 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="w-12 h-12 rounded-2xl bg-[#2563EB]/10 border border-[#2563EB]/30 flex items-center justify-center text-[#2563EB] mx-auto mb-3">
             <Package className="w-6 h-6" />
           </div>
-          <h3 className="text-sm font-bold text-gray-800">Nenhum produto encontrado</h3>
+          <h3 className="text-sm font-bold text-gray-800">{t('dashboard.table.emptyTitle')}</h3>
           <p className="text-xs text-gray-500 my-2">
             {products.length === 0
-              ? 'Adicione stock para criar o seu primeiro produto!'
-              : 'Nenhum produto corresponde à sua pesquisa.'}
+              ? t('dashboard.table.emptyNoProducts')
+              : t('dashboard.table.emptyNoMatch')}
           </p>
           {products.length === 0 && (
             <button
               onClick={() => onNavigateToAddStock()}
               className="mt-3 px-4 py-2.5 rounded-xl bg-[#0B1F3A] hover:bg-[#14294A] text-white font-bold text-xs transition shadow-md active:scale-95"
             >
-              + Adicionar Primeiro Lote
+              {t('dashboard.table.addFirstBatch')}
             </button>
           )}
         </div>
@@ -646,20 +648,20 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <div className="bg-white rounded-xl overflow-hidden elevation-1">
           {/* Table Header */}
           <div className="grid grid-cols-12 gap-1 px-4 py-3 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
-            <div className="col-span-4 sm:col-span-5">Produto</div>
+            <div className="col-span-4 sm:col-span-5">{t('dashboard.table.headerProduct')}</div>
             <div className="col-span-2 text-right">
-              Compra
-              <span className="block text-[9px] text-gray-500 font-bold lowercase">/un</span>
+              {t('dashboard.table.headerBuy')}
+              <span className="block text-[9px] text-gray-500 font-bold lowercase">{t('dashboard.table.perUnit')}</span>
             </div>
             <div className="col-span-2 text-right">
-              Venda
-              <span className="block text-[9px] text-gray-500 font-bold lowercase">/un</span>
+              {t('dashboard.table.headerSell')}
+              <span className="block text-[9px] text-gray-500 font-bold lowercase">{t('dashboard.table.perUnit')}</span>
             </div>
             <div className="col-span-2 sm:col-span-2 text-right">
-              Lucro
-              <span className="block text-[9px] text-gray-500 font-bold lowercase">Est. / Final</span>
+              {t('dashboard.table.headerProfit')}
+              <span className="block text-[9px] text-gray-500 font-bold lowercase">{t('dashboard.table.estFinal')}</span>
             </div>
-            <div className="col-span-2 sm:col-span-1 text-center pr-1">Ações</div>
+            <div className="col-span-2 sm:col-span-1 text-center pr-1">{t('dashboard.table.headerActions')}</div>
           </div>
 
           {/* Table Body */}
@@ -708,21 +710,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         {product.name}
                       </span>
                       {activeCalc?.hasExceededWarning && (
-                        <span title="Aviso: Quebras excedem stock">
+                        <span title={t('dashboard.table.exceededWarning')}>
                           <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0" />
                         </span>
                       )}
                     </div>
                     <span className="text-[10px] text-gray-500 block truncate font-mono">
                       {activeBatch
-                        ? 'Lote ativo'
+                        ? t('dashboard.table.activeBatch')
                         : closedBatches.length > 0
-                        ? `${closedBatches.length} ${closedBatches.length === 1 ? 'lote fechado' : 'lotes fechados'}`
-                        : 'Sem lote'}
+                        ? t(closedBatches.length === 1 ? 'dashboard.table.closedBatchOne' : 'dashboard.table.closedBatchOther', { count: closedBatches.length })
+                        : t('dashboard.table.noBatch')}
                     </span>
                     {(product.category || product.supplier || product.sku) && (
                       <span className="text-[9px] text-gray-400 block truncate">
-                        {[product.category, product.supplier, product.sku && `SKU: ${product.sku}`]
+                        {[product.category, product.supplier, product.sku && t('dashboard.table.skuLabel', { sku: product.sku })]
                           .filter(Boolean)
                           .join(' · ')}
                       </span>
@@ -761,7 +763,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       {formatCurrency(displayProfit, currencySymbol)}
                     </span>
                     <span className="text-[9px] text-gray-500 block font-mono">
-                      {activeBatch ? 'Est.' : 'Final'}
+                      {activeBatch ? t('dashboard.table.est') : t('dashboard.table.final')}
                     </span>
                   </div>
 
@@ -770,7 +772,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <button
                       type="button"
                       onClick={() => onNavigateToAddStock(product.name)}
-                      title="Adicionar Stock / Editar Lote"
+                      title={t('dashboard.table.editStock')}
                       className="p-1.5 text-gray-500 hover:text-[#0B1F3A] hover:bg-gray-50 rounded-lg transition"
                     >
                       <Pencil className="w-3.5 h-3.5" />
@@ -780,7 +782,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                       <button
                         type="button"
                         onClick={() => setOpenActionMenuId(isMenuOpen ? null : product.id)}
-                        title="Mais opções"
+                        title={t('dashboard.table.moreOptions')}
                         className="p-1.5 text-gray-500 hover:text-gray-800 hover:bg-gray-50 rounded-lg transition"
                       >
                         <MoreVertical className="w-3.5 h-3.5" />
@@ -802,7 +804,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
                               <Eye className="w-3.5 h-3.5 text-[#0B1F3A]" />
-                              <span>Ver detalhes</span>
+                              <span>{t('dashboard.table.viewDetails')}</span>
                             </button>
 
                             <button
@@ -814,7 +816,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
                               <Plus className="w-3.5 h-3.5 text-[#0B1F3A]" />
-                              <span>+ Add Stock</span>
+                              <span>{t('dashboard.table.addStock')}</span>
                             </button>
 
                             <button
@@ -826,7 +828,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
                               <AlertTriangle className="w-3.5 h-3.5 text-[#0B1F3A]" />
-                              <span>+ Quebra</span>
+                              <span>{t('dashboard.table.addQuebra')}</span>
                             </button>
 
                             <button
@@ -838,7 +840,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                               className="w-full text-left px-2.5 py-1.5 rounded-lg hover:bg-gray-50 text-gray-800 transition flex items-center space-x-1.5"
                             >
                               <Tag className="w-3.5 h-3.5 text-[#0B1F3A]" />
-                              <span>Editar Detalhes</span>
+                              <span>{t('dashboard.table.editDetails')}</span>
                             </button>
                           </div>
                         </>

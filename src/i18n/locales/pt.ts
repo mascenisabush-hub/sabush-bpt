@@ -77,6 +77,89 @@ export interface TranslationDict {
       wrongPin: string;
     };
   };
+  dashboard: {
+    kpi: {
+      initialCapital: {
+        label: string;
+        notSet: string;
+        descSet: string;
+        descUnset: string;
+      };
+      stockCost: { label: string; desc: string };
+      marketValue: { label: string; desc: string };
+      embeddedProfit: { label: string; desc: string };
+      businessWorth: { label: string; desc: string };
+      expenses: { label: string; desc: string };
+      withdrawals: { label: string; desc: string };
+      quebraLoss: { label: string; desc: string };
+      activeBatches: { label: string; desc: string };
+    };
+    otherIndicators: string;
+    toolbar: {
+      searchPlaceholder: string;
+      allCategories: string;
+      allSuppliers: string;
+      productCountOne: string;
+      productCountOther: string;
+      activeBatchOne: string;
+      activeBatchOther: string;
+      filterSort: string;
+      sortBy: string;
+      sortName: string;
+      sortProfit: string;
+      sortCost: string;
+    };
+    breakdownModal: {
+      title: string;
+      explanation: string;
+      estimatedOpen: string;
+      finalizedClosed: string;
+      totalLabel: string;
+      expensesLabel: string;
+      withdrawalsLabel: string;
+    };
+    worthModal: {
+      title: string;
+      explanation: string;
+      marketValue: string;
+      stockCost: string;
+      expenses: string;
+      withdrawals: string;
+      totalLabel: string;
+      latestCount: string;
+      initialCapital: string;
+      growth: string;
+      basedOnCount: string;
+      defineInitialCapital: string;
+    };
+    table: {
+      emptyTitle: string;
+      emptyNoProducts: string;
+      emptyNoMatch: string;
+      addFirstBatch: string;
+      headerProduct: string;
+      headerBuy: string;
+      headerSell: string;
+      headerProfit: string;
+      headerActions: string;
+      perUnit: string;
+      estFinal: string;
+      activeBatch: string;
+      closedBatchOne: string;
+      closedBatchOther: string;
+      noBatch: string;
+      skuLabel: string;
+      est: string;
+      final: string;
+      exceededWarning: string;
+      editStock: string;
+      moreOptions: string;
+      viewDetails: string;
+      addStock: string;
+      addQuebra: string;
+      editDetails: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -162,6 +245,115 @@ export const pt: TranslationDict = {
       suspended: 'Esta conta foi suspensa. Contacte o dono do negócio.',
       tooManyAttempts: 'Demasiadas tentativas. Aguarde um momento e tente novamente.',
       wrongPin: 'PIN incorreto. Tente novamente.',
+    },
+  },
+  dashboard: {
+    kpi: {
+      initialCapital: {
+        label: 'Capital Inicial do Negócio',
+        notSet: 'Não definido',
+        descSet: 'O valor verificado do stock registado quando começou a usar o Sabush.',
+        descUnset: 'Toque para registar o stock que já possui e definir o ponto de partida.',
+      },
+      stockCost: {
+        label: 'Custo do Stock Atual',
+        desc: 'O valor investido no stock que ainda resta.',
+      },
+      marketValue: {
+        label: 'Valor de Mercado do Stock',
+        desc: 'O valor estimado de venda do stock que ainda resta.',
+      },
+      embeddedProfit: {
+        label: 'Lucro Embutido',
+        desc: 'O lucro potencial contido no stock que ainda resta.',
+      },
+      businessWorth: {
+        label: 'Valor do Negócio',
+        desc: 'O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados.',
+      },
+      expenses: {
+        label: 'Despesas Gerais',
+        desc: 'Custos operacionais registados pelo negócio.',
+      },
+      withdrawals: {
+        label: 'Levantamentos do Dono',
+        desc: 'Dinheiro retirado intencionalmente pelo dono.',
+      },
+      quebraLoss: {
+        label: 'Perdas de Stock (Quebras)',
+        desc: 'Valor perdido por produtos danificados, expirados ou em falta.',
+      },
+      activeBatches: {
+        label: 'Lotes Ativos',
+        desc: 'Número de lotes de stock que contribuem atualmente para o inventário.',
+      },
+    },
+    otherIndicators: 'Outros Indicadores',
+    toolbar: {
+      searchPlaceholder: 'Pesquisar produtos...',
+      allCategories: 'Todas Categorias',
+      allSuppliers: 'Todos Fornecedores',
+      productCountOne: '{{count}} produto',
+      productCountOther: '{{count}} produtos',
+      activeBatchOne: '{{count}} lote ativo',
+      activeBatchOther: '{{count}} lotes ativos',
+      filterSort: 'Filtrar / Ordenar',
+      sortBy: 'Ordenar Por',
+      sortName: 'Nome (A-Z)',
+      sortProfit: 'Maior Lucro',
+      sortCost: 'Preço Custo',
+    },
+    breakdownModal: {
+      title: 'Lucro Embutido',
+      explanation:
+        'Lucro Embutido é o lucro potencial marcado no stock — nenhuma venda é registada nesta app, por isso este valor nunca é rendimento realizado.',
+      estimatedOpen: 'Estimado (Lotes Abertos):',
+      finalizedClosed: 'Finalizado (Lotes Fechados):',
+      totalLabel: 'Lucro Embutido Total:',
+      expensesLabel: 'Despesas Gerais (até hoje):',
+      withdrawalsLabel: 'Levantamentos do Dono (não afeta o lucro):',
+    },
+    worthModal: {
+      title: 'Valor do Negócio',
+      explanation:
+        'Valor do Negócio = Valor de Mercado do Stock − Despesas − Levantamentos. Sem venda registada, não existe um valor de "caixa" real — por isso não inventamos um.',
+      marketValue: 'Valor de Mercado do Stock:',
+      stockCost: 'Custo do Stock (Investimento):',
+      expenses: 'Despesas Gerais:',
+      withdrawals: 'Levantamentos do Dono:',
+      totalLabel: 'Valor Total do Negócio:',
+      latestCount: 'Contagem Física Mais Recente:',
+      initialCapital: 'Capital Inicial (ponto de partida):',
+      growth: 'Crescimento do Capital:',
+      basedOnCount: 'Stock atual baseado na contagem de {{date}}',
+      defineInitialCapital: ' · Defina o Capital Inicial para medir o crescimento.',
+    },
+    table: {
+      emptyTitle: 'Nenhum produto encontrado',
+      emptyNoProducts: 'Adicione stock para criar o seu primeiro produto!',
+      emptyNoMatch: 'Nenhum produto corresponde à sua pesquisa.',
+      addFirstBatch: '+ Adicionar Primeiro Lote',
+      headerProduct: 'Produto',
+      headerBuy: 'Compra',
+      headerSell: 'Venda',
+      headerProfit: 'Lucro',
+      headerActions: 'Ações',
+      perUnit: '/un',
+      estFinal: 'Est. / Final',
+      activeBatch: 'Lote ativo',
+      closedBatchOne: '{{count}} lote fechado',
+      closedBatchOther: '{{count}} lotes fechados',
+      noBatch: 'Sem lote',
+      skuLabel: 'SKU: {{sku}}',
+      est: 'Est.',
+      final: 'Final',
+      exceededWarning: 'Aviso: Quebras excedem stock',
+      editStock: 'Adicionar Stock / Editar Lote',
+      moreOptions: 'Mais opções',
+      viewDetails: 'Ver detalhes',
+      addStock: '+ Add Stock',
+      addQuebra: '+ Quebra',
+      editDetails: 'Editar Detalhes',
     },
   },
 };
