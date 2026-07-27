@@ -500,6 +500,46 @@ export interface TranslationDict {
       insightEmbeddedProfitShare: string;
       insightLossesCost: string;
     };
+    inventoryValuation: {
+      title: string;
+      description: string;
+      groupedBy: string;
+      kpiInventoryCost: string;
+      kpiInventoryCostFull: string;
+      kpiMarketValue: string;
+      kpiMarketValueFull: string;
+      kpiEmbeddedProfit: string;
+      kpiAvgMargin: string;
+      kpiAvgMarginFull: string;
+      kpiNumProducts: string;
+      kpiNumProductsFull: string;
+      kpiActiveBatches: string;
+      kpiActiveBatchesFull: string;
+      kpiHighestValueProduct: string;
+      kpiHighestValueProductFull: string;
+      kpiLowestValueProduct: string;
+      kpiLowestValueProductFull: string;
+      inventoryByGroup: string;
+      byGroup: string;
+      detail: string;
+      noInventory: string;
+      noDataToShow: string;
+      colInvestment: string;
+      colMarket: string;
+      colEmbeddedProfit: string;
+      groupSupplier: string;
+      groupBatch: string;
+      groupBatchFull: string;
+      groupProduct: string;
+      entitySuppliersPlural: string;
+      entityBatchesPlural: string;
+      entityProductsPlural: string;
+      removedProduct: string;
+      unspecifiedSupplier: string;
+      noPurchaseBatch: string;
+      insightHighestValue: string;
+      insightAvgMargin: string;
+    };
   };
 }
 
@@ -1060,6 +1100,46 @@ export const pt: TranslationDict = {
     insightNoInitialCount: 'Ainda não foi registada uma Contagem Inicial de Stock, por isso o crescimento de capital não pode ser medido.',
     insightEmbeddedProfitShare: '{{pct}}% do valor de mercado do inventário atual é lucro embutido ainda não realizado.',
     insightLossesCost: 'As quebras já custaram {{amount}}, cerca de {{pct}}% do valor investido em stock.',
+    },
+    inventoryValuation: {
+      title: 'Avaliação de Inventário',
+      description: 'Quanto inventário existe hoje e o que vale.',
+      groupedBy: 'Agrupado por {{group}}',
+      kpiInventoryCost: 'Custo do Inventário',
+      kpiInventoryCostFull: 'Custo do Inventário Atual',
+      kpiMarketValue: 'Valor de Mercado',
+      kpiMarketValueFull: 'Valor de Mercado Atual',
+      kpiEmbeddedProfit: 'Lucro Embutido',
+      kpiAvgMargin: 'Margem Média',
+      kpiAvgMarginFull: 'Margem Média Ponderada',
+      kpiNumProducts: 'Número de Produtos',
+      kpiNumProductsFull: 'Número de Produtos',
+      kpiActiveBatches: 'Lotes Ativos',
+      kpiActiveBatchesFull: 'Lotes Ativos',
+      kpiHighestValueProduct: 'Produto de Maior Valor',
+      kpiHighestValueProductFull: 'Produto de Maior Valor',
+      kpiLowestValueProduct: 'Produto de Menor Valor',
+      kpiLowestValueProductFull: 'Produto de Menor Valor',
+      inventoryByGroup: 'Inventário por {{group}}',
+      byGroup: 'Por {{group}}',
+      detail: 'Detalhe',
+      noInventory: 'Sem inventário registado ainda.',
+      noDataToShow: 'Sem dados para mostrar.',
+      colInvestment: 'Valor de Investimento',
+      colMarket: 'Valor de Mercado',
+      colEmbeddedProfit: 'Lucro Embutido',
+      groupSupplier: 'Fornecedor',
+      groupBatch: 'Lote',
+      groupBatchFull: 'Lote de Compra',
+      groupProduct: 'Produto',
+      entitySuppliersPlural: 'fornecedores',
+      entityBatchesPlural: 'lotes',
+      entityProductsPlural: 'produtos',
+      removedProduct: 'Produto Removido',
+      unspecifiedSupplier: 'Fornecedor Não Especificado',
+      noPurchaseBatch: 'Sem Lote ({{date}})',
+      insightHighestValue: '{{name}} é o produto de maior valor em stock, com {{value}} em valor de mercado.',
+      insightAvgMargin: 'A margem média ponderada do inventário atual é de {{pct}}%.',
     },
   },
 };

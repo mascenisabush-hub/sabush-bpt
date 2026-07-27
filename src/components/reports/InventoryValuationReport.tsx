@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { calculateBatch } from '../../utils/calculations';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { ReportHeader, ReportSection, ReportKpiCard, InsightBanner, PillToggle, ReportEmptyState } from './shared/ReportUI';
@@ -15,6 +16,7 @@ interface Props {
 type GroupBy = 'supplier' | 'batch' | 'product';
 
 export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
+  const { t } = useLanguage();
   const { business, currencySymbol, products, batches, purchaseBatches, quebras, activeBatchCount } = useApp();
   const [groupBy, setGroupBy] = useState<GroupBy>('supplier');
 
@@ -43,7 +45,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
     const map = new Map<string, { productId: string; name: string; investment: number; market: number; profit: number }>();
     perBatchCalcs.forEach(({ batch, calc }) => {
       const p = productMap.get(batch.productId);
-      const name = p?.name || 'Produto Removido';
+      const name = p?.name || t('reports.inventoryValuation.removedProduct');
       const existing = map.get(batch.productId) || { productId: batch.productId, name, investment: 0, market: 0, profit: 0 };
       existing.investment += calc.investmentValue;
       existing.market += calc.marketValue;
@@ -51,7 +53,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
       map.set(batch.productId, existing);
     });
     return Array.from(map.values()).filter(p => p.market !== 0 || p.investment !== 0);
-  }, [perBatchCalcs, productMap]);
+  }, [perBatchCalcs, productMap, t]);
 
   const highestValueProduct = perProduct.length ? [...perProduct].sort((a, b) => b.market - a.market)[0] : null;
   const lowestValueProduct = perProduct.length ? [...perProduct].sort((a, b) => a.market - b.market)[0] : null;
@@ -67,7 +69,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
         const pbId = purchaseBatchByLineId.get(batch.id);
         const pb = pbId ? purchaseBatchMap.get(pbId) : undefined;
         const key = pb?.id || `sem-lote-${batch.dateEntered}`;
-        const label = pb ? `${pb.batchNumber} — ${formatDate(pb.date)}` : `Sem Lote (${formatDate(batch.dateEntered)})`;
+        const label = pb ? `${pb.batchNumber} — ${formatDate(pb.date)}` : t('reports.inventoryValuation.noPurchaseBatch', { date: formatDate(batch.dateEntered) });
         const existing = map.get(key) || { key, label, investment: 0, market: 0, profit: 0 };
         existing.investment += calc.investmentValue;
         existing.market += calc.marketValue;
@@ -81,7 +83,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
     perBatchCalcs.forEach(({ batch, calc }) => {
       const pbId = purchaseBatchByLineId.get(batch.id);
       const pb = pbId ? purchaseBatchMap.get(pbId) : undefined;
-      const key = pb?.supplier.name || 'Fornecedor Não Especificado';
+      const key = pb?.supplier.name || t('reports.inventoryValuation.unspecifiedSupplier');
       const existing = map.get(key) || { key, label: key, investment: 0, market: 0, profit: 0 };
       existing.investment += calc.investmentValue;
       existing.market += calc.marketValue;
@@ -89,45 +91,56 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
       map.set(key, existing);
     });
     return Array.from(map.values());
-  }, [groupBy, perProduct, perBatchCalcs, purchaseBatchByLineId, purchaseBatchMap]);
+  }, [groupBy, perProduct, perBatchCalcs, purchaseBatchByLineId, purchaseBatchMap, t]);
 
   const groupedSorted = [...grouped].filter(g => g.market !== 0 || g.investment !== 0).sort((a, b) => b.market - a.market);
 
   const insights = useMemo(() => {
     const lines: string[] = [];
-    const concEntity = groupBy === 'supplier' ? 'fornecedores' : groupBy === 'batch' ? 'lotes' : 'produtos';
-    const c = concentrationInsight(concEntity, groupedSorted.map(g => ({ label: g.label, value: g.market })), totalMarketValue);
+    const concEntity = groupBy === 'supplier'
+      ? t('reports.inventoryValuation.entitySuppliersPlural')
+      : groupBy === 'batch'
+        ? t('reports.inventoryValuation.entityBatchesPlural')
+        : t('reports.inventoryValuation.entityProductsPlural');
+    const c = concentrationInsight(t, concEntity, groupedSorted.map(g => ({ label: g.label, value: g.market })), totalMarketValue);
     if (c) lines.push(c);
     if (highestValueProduct) {
-      lines.push(`${highestValueProduct.name} é o produto de maior valor em stock, com ${formatCurrency(highestValueProduct.market, currencySymbol)} em valor de mercado.`);
+      lines.push(t('reports.inventoryValuation.insightHighestValue', {
+        name: highestValueProduct.name,
+        value: formatCurrency(highestValueProduct.market, currencySymbol),
+      }));
     }
     if (avgMargin !== 0) {
-      lines.push(`A margem média ponderada do inventário atual é de ${avgMargin.toFixed(1)}%.`);
+      lines.push(t('reports.inventoryValuation.insightAvgMargin', { pct: avgMargin.toFixed(1) }));
     }
     return lines;
-  }, [groupBy, groupedSorted, totalMarketValue, highestValueProduct, currencySymbol, avgMargin]);
+  }, [groupBy, groupedSorted, totalMarketValue, highestValueProduct, currencySymbol, avgMargin, t]);
 
-  const groupLabel = groupBy === 'supplier' ? 'Fornecedor' : groupBy === 'batch' ? 'Lote de Compra' : 'Produto';
+  const groupLabel = groupBy === 'supplier'
+    ? t('reports.inventoryValuation.groupSupplier')
+    : groupBy === 'batch'
+      ? t('reports.inventoryValuation.groupBatchFull')
+      : t('reports.inventoryValuation.groupProduct');
 
   const handleExportPdf = () => {
     exportReportPdf(
-      'Avaliação de Inventário',
+      t('reports.inventoryValuation.title'),
       business?.name || 'Sabush',
-      `Agrupado por ${groupLabel}`,
+      t('reports.inventoryValuation.groupedBy', { group: groupLabel }),
       [
-        { label: 'Custo do Inventário Atual', value: formatCurrency(totalInvestmentValue, currencySymbol) },
-        { label: 'Valor de Mercado Atual', value: formatCurrency(totalMarketValue, currencySymbol) },
-        { label: 'Lucro Embutido', value: formatCurrency(totalEmbeddedProfit, currencySymbol) },
-        { label: 'Número de Produtos', value: String(perProduct.length) },
-        { label: 'Lotes Ativos', value: String(activeBatchCount) },
-        { label: 'Margem Média Ponderada', value: `${avgMargin.toFixed(1)}%` },
-        { label: 'Produto de Maior Valor', value: highestValueProduct ? `${highestValueProduct.name} (${formatCurrency(highestValueProduct.market, currencySymbol)})` : '—' },
-        { label: 'Produto de Menor Valor', value: lowestValueProduct ? `${lowestValueProduct.name} (${formatCurrency(lowestValueProduct.market, currencySymbol)})` : '—' },
+        { label: t('reports.inventoryValuation.kpiInventoryCostFull'), value: formatCurrency(totalInvestmentValue, currencySymbol) },
+        { label: t('reports.inventoryValuation.kpiMarketValueFull'), value: formatCurrency(totalMarketValue, currencySymbol) },
+        { label: t('reports.inventoryValuation.kpiEmbeddedProfit'), value: formatCurrency(totalEmbeddedProfit, currencySymbol) },
+        { label: t('reports.inventoryValuation.kpiNumProductsFull'), value: String(perProduct.length) },
+        { label: t('reports.inventoryValuation.kpiActiveBatchesFull'), value: String(activeBatchCount) },
+        { label: t('reports.inventoryValuation.kpiAvgMarginFull'), value: `${avgMargin.toFixed(1)}%` },
+        { label: t('reports.inventoryValuation.kpiHighestValueProductFull'), value: highestValueProduct ? `${highestValueProduct.name} (${formatCurrency(highestValueProduct.market, currencySymbol)})` : '—' },
+        { label: t('reports.inventoryValuation.kpiLowestValueProductFull'), value: lowestValueProduct ? `${lowestValueProduct.name} (${formatCurrency(lowestValueProduct.market, currencySymbol)})` : '—' },
       ],
       [
         {
-          title: `Inventário por ${groupLabel}`,
-          columns: [groupLabel, 'Valor de Investimento', 'Valor de Mercado', 'Lucro Embutido'],
+          title: t('reports.inventoryValuation.inventoryByGroup', { group: groupLabel }),
+          columns: [groupLabel, t('reports.inventoryValuation.colInvestment'), t('reports.inventoryValuation.colMarket'), t('reports.inventoryValuation.colEmbeddedProfit')],
           rows: groupedSorted.map(g => [g.label, formatCurrency(g.investment, currencySymbol), formatCurrency(g.market, currencySymbol), formatCurrency(g.profit, currencySymbol)]),
         },
       ]
@@ -136,30 +149,36 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
 
   const handleExportExcel = () => {
     exportReportExcel(
-      'Avaliação de Inventário',
+      t('reports.inventoryValuation.title'),
       [
-        { label: 'Custo do Inventário Atual', value: formatCurrency(totalInvestmentValue, currencySymbol) },
-        { label: 'Valor de Mercado Atual', value: formatCurrency(totalMarketValue, currencySymbol) },
-        { label: 'Lucro Embutido', value: formatCurrency(totalEmbeddedProfit, currencySymbol) },
-        { label: 'Número de Produtos', value: String(perProduct.length) },
-        { label: 'Lotes Ativos', value: String(activeBatchCount) },
-        { label: 'Margem Média Ponderada', value: `${avgMargin.toFixed(1)}%` },
+        { label: t('reports.inventoryValuation.kpiInventoryCostFull'), value: formatCurrency(totalInvestmentValue, currencySymbol) },
+        { label: t('reports.inventoryValuation.kpiMarketValueFull'), value: formatCurrency(totalMarketValue, currencySymbol) },
+        { label: t('reports.inventoryValuation.kpiEmbeddedProfit'), value: formatCurrency(totalEmbeddedProfit, currencySymbol) },
+        { label: t('reports.inventoryValuation.kpiNumProductsFull'), value: String(perProduct.length) },
+        { label: t('reports.inventoryValuation.kpiActiveBatchesFull'), value: String(activeBatchCount) },
+        { label: t('reports.inventoryValuation.kpiAvgMarginFull'), value: `${avgMargin.toFixed(1)}%` },
       ],
       [
         {
-          title: `Por ${groupLabel}`,
-          columns: [groupLabel, 'Investimento', 'Mercado', 'Lucro Embutido'],
+          title: t('reports.inventoryValuation.byGroup', { group: groupLabel }),
+          columns: [groupLabel, t('reports.inventoryValuation.colInvestment'), t('reports.inventoryValuation.colMarket'), t('reports.inventoryValuation.colEmbeddedProfit')],
           rows: groupedSorted.map(g => [g.label, g.investment, g.market, g.profit]),
         },
-      ]
+      ],
+      {
+        indicator: t('reports.common.indicator'),
+        value: t('reports.common.value'),
+        summary: t('reports.common.summary'),
+        tableFallback: t('reports.common.tableFallback'),
+      }
     );
   };
 
   return (
     <div className="space-y-4 pb-12 report-print-area">
       <ReportHeader
-        title="Avaliação de Inventário"
-        description="Quanto inventário existe hoje e o que vale."
+        title={t('reports.inventoryValuation.title')}
+        description={t('reports.inventoryValuation.description')}
         onBack={onBack}
         onExportPdf={handleExportPdf}
         onExportExcel={handleExportExcel}
@@ -169,50 +188,50 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
       <InsightBanner insights={insights} />
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-        <ReportKpiCard icon={Boxes} label="Custo do Inventário" value={formatCurrency(totalInvestmentValue, currencySymbol)} />
-        <ReportKpiCard icon={Gem} label="Valor de Mercado" value={formatCurrency(totalMarketValue, currencySymbol)} tone="accent" />
-        <ReportKpiCard icon={TrendingUp} label="Lucro Embutido" value={formatCurrency(totalEmbeddedProfit, currencySymbol)} tone={totalEmbeddedProfit >= 0 ? 'positive' : 'negative'} />
-        <ReportKpiCard icon={Percent} label="Margem Média" value={`${avgMargin.toFixed(1)}%`} />
-        <ReportKpiCard icon={Package} label="Número de Produtos" value={String(perProduct.length)} />
-        <ReportKpiCard icon={Layers} label="Lotes Ativos" value={String(activeBatchCount)} />
-        <ReportKpiCard icon={ArrowUp} label="Produto de Maior Valor" value={highestValueProduct ? formatCurrency(highestValueProduct.market, currencySymbol) : '—'} sub={highestValueProduct?.name} tone="positive" />
-        <ReportKpiCard icon={ArrowDown} label="Produto de Menor Valor" value={lowestValueProduct ? formatCurrency(lowestValueProduct.market, currencySymbol) : '—'} sub={lowestValueProduct?.name} />
+        <ReportKpiCard icon={Boxes} label={t('reports.inventoryValuation.kpiInventoryCost')} value={formatCurrency(totalInvestmentValue, currencySymbol)} />
+        <ReportKpiCard icon={Gem} label={t('reports.inventoryValuation.kpiMarketValue')} value={formatCurrency(totalMarketValue, currencySymbol)} tone="accent" />
+        <ReportKpiCard icon={TrendingUp} label={t('reports.inventoryValuation.kpiEmbeddedProfit')} value={formatCurrency(totalEmbeddedProfit, currencySymbol)} tone={totalEmbeddedProfit >= 0 ? 'positive' : 'negative'} />
+        <ReportKpiCard icon={Percent} label={t('reports.inventoryValuation.kpiAvgMargin')} value={`${avgMargin.toFixed(1)}%`} />
+        <ReportKpiCard icon={Package} label={t('reports.inventoryValuation.kpiNumProducts')} value={String(perProduct.length)} />
+        <ReportKpiCard icon={Layers} label={t('reports.inventoryValuation.kpiActiveBatches')} value={String(activeBatchCount)} />
+        <ReportKpiCard icon={ArrowUp} label={t('reports.inventoryValuation.kpiHighestValueProduct')} value={highestValueProduct ? formatCurrency(highestValueProduct.market, currencySymbol) : '—'} sub={highestValueProduct?.name} tone="positive" />
+        <ReportKpiCard icon={ArrowDown} label={t('reports.inventoryValuation.kpiLowestValueProduct')} value={lowestValueProduct ? formatCurrency(lowestValueProduct.market, currencySymbol) : '—'} sub={lowestValueProduct?.name} />
       </div>
 
       <ReportSection
-        title={`Inventário por ${groupLabel}`}
+        title={t('reports.inventoryValuation.inventoryByGroup', { group: groupLabel })}
         icon={Layers}
         right={
           <PillToggle
             value={groupBy}
             onChange={v => setGroupBy(v as GroupBy)}
             options={[
-              { value: 'supplier', label: 'Fornecedor' },
-              { value: 'batch', label: 'Lote' },
-              { value: 'product', label: 'Produto' },
+              { value: 'supplier', label: t('reports.inventoryValuation.groupSupplier') },
+              { value: 'batch', label: t('reports.inventoryValuation.groupBatch') },
+              { value: 'product', label: t('reports.inventoryValuation.groupProduct') },
             ]}
           />
         }
       >
         {groupedSorted.length === 0 ? (
-          <ReportEmptyState message="Sem inventário registado ainda." />
+          <ReportEmptyState message={t('reports.inventoryValuation.noInventory')} />
         ) : (
           <BarChartHorizontal currencySymbol={currencySymbol} data={groupedSorted.slice(0, 12).map(g => ({ label: g.label, value: g.market }))} />
         )}
       </ReportSection>
 
-      <ReportSection title="Detalhe" icon={Boxes}>
+      <ReportSection title={t('reports.inventoryValuation.detail')} icon={Boxes}>
         {groupedSorted.length === 0 ? (
-          <ReportEmptyState message="Sem dados para mostrar." />
+          <ReportEmptyState message={t('reports.inventoryValuation.noDataToShow')} />
         ) : (
           <div className="overflow-x-auto">
             <table className="w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-2 font-semibold">{groupLabel}</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Investimento</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Mercado</th>
-                  <th className="py-2 pr-2 font-semibold text-right">Lucro Embutido</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.inventoryValuation.colInvestment')}</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.inventoryValuation.colMarket')}</th>
+                  <th className="py-2 pr-2 font-semibold text-right">{t('reports.inventoryValuation.colEmbeddedProfit')}</th>
                 </tr>
               </thead>
               <tbody>
