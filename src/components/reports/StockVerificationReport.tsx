@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { ReportHeader, ReportSection, ReportKpiCard, InsightBanner, ReportEmptyState, ExpandChevron } from './shared/ReportUI';
 import { exportReportPdf, exportReportExcel, printCurrentReport } from './shared/reportExport';
@@ -9,15 +10,6 @@ import { StockCount, StockCountType } from '../../types';
 interface Props {
   onBack: () => void;
 }
-
-const TYPE_LABELS: Record<StockCountType, string> = {
-  initial: 'Inicial',
-  weekly: 'Semanal',
-  monthly: 'Mensal',
-  quarterly: 'Trimestral',
-  yearly: 'Anual',
-  custom: 'Personalizada',
-};
 
 interface ProductDiff {
   productId: string;
@@ -51,8 +43,18 @@ function buildDiff(current: StockCount, previous: StockCount): ProductDiff[] {
 }
 
 export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
+  const { t } = useLanguage();
   const { business, currencySymbol, stockCounts } = useApp();
   const [expandedId, setExpandedId] = useState<string | null>(null);
+
+  const TYPE_LABELS: Record<StockCountType, string> = {
+    initial: t('reports.stockVerification.typeInitial'),
+    weekly: t('reports.stockVerification.typeWeekly'),
+    monthly: t('reports.stockVerification.typeMonthly'),
+    quarterly: t('reports.stockVerification.typeQuarterly'),
+    yearly: t('reports.stockVerification.typeYearly'),
+    custom: t('reports.stockVerification.typeCustom'),
+  };
 
   const sortedCounts = useMemo(() => [...stockCounts].sort((a, b) => a.date.localeCompare(b.date) || a.createdAt.localeCompare(b.createdAt)), [stockCounts]);
 
@@ -71,45 +73,53 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
   const insights = useMemo(() => {
     const lines: string[] = [];
     if (stockCounts.length === 0) {
-      lines.push('Ainda não foi registada nenhuma contagem de stock.');
+      lines.push(t('reports.stockVerification.insightNoCounts'));
       return lines;
     }
     if (stockCounts.length === 1) {
-      lines.push('Apenas a Contagem Inicial foi registada. Faça uma nova recontagem para ver comparações.');
+      lines.push(t('reports.stockVerification.insightOnlyInitial'));
       return lines;
     }
     if (latest) {
       lines.push(
-        `Na verificação mais recente (${formatDate(latest.count.date)}), ${latest.productsAdjusted} de ${latest.count.items.length} produtos tiveram a quantidade ajustada.`
+        t('reports.stockVerification.insightLatestAdjusted', {
+          date: formatDate(latest.count.date),
+          adjusted: latest.productsAdjusted,
+          total: latest.count.items.length,
+        })
       );
       lines.push(
         latest.financialImpact >= 0
-          ? `O valor do inventário aumentou ${formatCurrency(latest.financialImpact, currencySymbol)} desde a contagem anterior.`
-          : `O valor do inventário diminuiu ${formatCurrency(Math.abs(latest.financialImpact), currencySymbol)} desde a contagem anterior.`
+          ? t('reports.stockVerification.insightValueUp', { amount: formatCurrency(latest.financialImpact, currencySymbol) })
+          : t('reports.stockVerification.insightValueDown', { amount: formatCurrency(Math.abs(latest.financialImpact), currencySymbol) })
       );
     }
     return lines;
-  }, [stockCounts, latest, currencySymbol]);
+  }, [stockCounts, latest, currencySymbol, t]);
 
   const handleExportPdf = () => {
     exportReportPdf(
-      'Verificação de Stock',
+      t('reports.stockVerification.title'),
       business?.name || 'Sabush',
-      latest ? `Última verificação: ${formatDate(latest.count.date)}` : '',
+      latest ? `${t('reports.stockVerification.colDate')}: ${formatDate(latest.count.date)}` : '',
       latest
         ? [
-            { label: 'Data', value: formatDate(latest.count.date) },
-            { label: 'Produtos Contados', value: String(latest.count.items.length) },
-            { label: 'Produtos Ajustados', value: String(latest.productsAdjusted) },
-            { label: 'Inventário Antes', value: formatCurrency(latest.previous.totalValue, currencySymbol) },
-            { label: 'Inventário Depois', value: formatCurrency(latest.count.totalValue, currencySymbol) },
-            { label: 'Impacto Financeiro', value: formatCurrency(latest.financialImpact, currencySymbol) },
+            { label: t('reports.stockVerification.colDate'), value: formatDate(latest.count.date) },
+            { label: t('reports.stockVerification.colProductsCounted'), value: String(latest.count.items.length) },
+            { label: t('reports.stockVerification.colProductsAdjusted'), value: String(latest.productsAdjusted) },
+            { label: t('reports.stockVerification.kpiBefore'), value: formatCurrency(latest.previous.totalValue, currencySymbol) },
+            { label: t('reports.stockVerification.kpiAfter'), value: formatCurrency(latest.count.totalValue, currencySymbol) },
+            { label: t('reports.stockVerification.kpiFinancialImpact'), value: formatCurrency(latest.financialImpact, currencySymbol) },
           ]
         : [],
       [
         {
-          title: 'Histórico de Verificações',
-          columns: ['Data', 'Tipo', 'Produtos Contados', 'Produtos Ajustados', 'Antes', 'Depois', 'Impacto'],
+          title: t('reports.stockVerification.historyTitle', { count: verifications.length }),
+          columns: [
+            t('reports.stockVerification.colDate'), t('reports.stockVerification.colType'),
+            t('reports.stockVerification.colProductsCounted'), t('reports.stockVerification.colProductsAdjusted'),
+            t('reports.stockVerification.colBefore'), t('reports.stockVerification.colAfter'), t('reports.stockVerification.colImpact'),
+          ],
           rows: verifications.map(v => [
             formatDate(v.count.date),
             TYPE_LABELS[v.count.type],
@@ -123,8 +133,11 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
         ...(latest
           ? [
               {
-                title: `Diferenças por Produto — ${formatDate(latest.count.date)}`,
-                columns: ['Produto', 'Antes', 'Depois', 'Diferença (Qtd)', 'Diferença (Valor)'],
+                title: t('reports.stockVerification.diffTableTitle', { date: formatDate(latest.count.date) }),
+                columns: [
+                  t('reports.stockVerification.colProduct'), t('reports.stockVerification.colBefore'),
+                  t('reports.stockVerification.colAfter'), t('reports.stockVerification.colDiffQty'), t('reports.stockVerification.colDiffValue'),
+                ],
                 rows: latest.diffs.map(d => [d.productName, d.before, d.after, d.diffQty, formatCurrency(d.diffValue, currencySymbol)]),
               },
             ]
@@ -135,28 +148,38 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
 
   const handleExportExcel = () => {
     exportReportExcel(
-      'Verificação de Stock',
+      t('reports.stockVerification.title'),
       latest
         ? [
-            { label: 'Produtos Ajustados', value: String(latest.productsAdjusted) },
-            { label: 'Impacto Financeiro', value: formatCurrency(latest.financialImpact, currencySymbol) },
+            { label: t('reports.stockVerification.colProductsAdjusted'), value: String(latest.productsAdjusted) },
+            { label: t('reports.stockVerification.kpiFinancialImpact'), value: formatCurrency(latest.financialImpact, currencySymbol) },
           ]
         : [],
       [
         {
-          title: 'Histórico de Verificações',
-          columns: ['Data', 'Tipo', 'Produtos Contados', 'Produtos Ajustados', 'Antes', 'Depois', 'Impacto'],
+          title: t('reports.stockVerification.historyTitle', { count: verifications.length }),
+          columns: [
+            t('reports.stockVerification.colDate'), t('reports.stockVerification.colType'),
+            t('reports.stockVerification.colProductsCounted'), t('reports.stockVerification.colProductsAdjusted'),
+            t('reports.stockVerification.colBefore'), t('reports.stockVerification.colAfter'), t('reports.stockVerification.colImpact'),
+          ],
           rows: verifications.map(v => [formatDate(v.count.date), TYPE_LABELS[v.count.type], v.count.items.length, v.productsAdjusted, v.previous.totalValue, v.count.totalValue, v.financialImpact]),
         },
-      ]
+      ],
+      {
+        indicator: t('reports.common.indicator'),
+        value: t('reports.common.value'),
+        summary: t('reports.common.summary'),
+        tableFallback: t('reports.common.tableFallback'),
+      }
     );
   };
 
   return (
     <div className="space-y-4 pb-12 report-print-area">
       <ReportHeader
-        title="Verificação de Stock"
-        description="O que mudou entre cada recontagem física e a anterior."
+        title={t('reports.stockVerification.title')}
+        description={t('reports.stockVerification.description')}
         onBack={onBack}
         onExportPdf={verifications.length ? handleExportPdf : undefined}
         onExportExcel={verifications.length ? handleExportExcel : undefined}
@@ -167,21 +190,21 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
 
       {latest && (
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
-          <ReportKpiCard icon={Boxes} label="Inventário Antes" value={formatCurrency(latest.previous.totalValue, currencySymbol)} />
-          <ReportKpiCard icon={Boxes} label="Inventário Depois" value={formatCurrency(latest.count.totalValue, currencySymbol)} tone="accent" />
+          <ReportKpiCard icon={Boxes} label={t('reports.stockVerification.kpiBefore')} value={formatCurrency(latest.previous.totalValue, currencySymbol)} />
+          <ReportKpiCard icon={Boxes} label={t('reports.stockVerification.kpiAfter')} value={formatCurrency(latest.count.totalValue, currencySymbol)} tone="accent" />
           <ReportKpiCard
             icon={latest.financialImpact >= 0 ? TrendingUp : TrendingDown}
-            label="Impacto Financeiro"
+            label={t('reports.stockVerification.kpiFinancialImpact')}
             value={formatCurrency(latest.financialImpact, currencySymbol)}
             tone={latest.financialImpact >= 0 ? 'positive' : 'negative'}
           />
-          <ReportKpiCard icon={ClipboardCheck} label="Produtos Ajustados" value={`${latest.productsAdjusted} / ${latest.count.items.length}`} />
+          <ReportKpiCard icon={ClipboardCheck} label={t('reports.stockVerification.kpiProductsAdjusted')} value={`${latest.productsAdjusted} / ${latest.count.items.length}`} />
         </div>
       )}
 
-      <ReportSection title={`Histórico de Verificações (${verifications.length})`} icon={ClipboardCheck}>
+      <ReportSection title={t('reports.stockVerification.historyTitle', { count: verifications.length })} icon={ClipboardCheck}>
         {verifications.length === 0 ? (
-          <ReportEmptyState message={stockCounts.length === 0 ? 'Nenhuma contagem de stock registada ainda.' : 'Registe uma nova recontagem para comparar com a Contagem Inicial.'} />
+          <ReportEmptyState message={stockCounts.length === 0 ? t('reports.stockVerification.noStockCountsMessage') : t('reports.stockVerification.noComparisonMessage')} />
         ) : (
           <div className="space-y-3">
             {verifications.map(v => {
@@ -194,7 +217,7 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
                         {v.count.label || TYPE_LABELS[v.count.type]} — {formatDate(v.count.date)}
                       </span>
                       <span className="text-[11px] text-gray-500">
-                        {v.count.items.length} produtos contados · {v.productsAdjusted} ajustados
+                        {t('reports.stockVerification.itemsCountedLabel', { items: v.count.items.length, adjusted: v.productsAdjusted })}
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
@@ -210,11 +233,11 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
                       <table className="w-full text-xs">
                         <thead>
                           <tr className="text-left text-gray-500 border-b border-gray-200">
-                            <th className="py-2 pr-2 font-semibold">Produto</th>
-                            <th className="py-2 pr-2 font-semibold text-right">Antes</th>
-                            <th className="py-2 pr-2 font-semibold text-right">Depois</th>
-                            <th className="py-2 pr-2 font-semibold text-right">Dif. Qtd</th>
-                            <th className="py-2 pr-2 font-semibold text-right">Dif. Valor</th>
+                            <th className="py-2 pr-2 font-semibold">{t('reports.stockVerification.colProduct')}</th>
+                            <th className="py-2 pr-2 font-semibold text-right">{t('reports.stockVerification.colBefore')}</th>
+                            <th className="py-2 pr-2 font-semibold text-right">{t('reports.stockVerification.colAfter')}</th>
+                            <th className="py-2 pr-2 font-semibold text-right">{t('reports.stockVerification.colDiffQty')}</th>
+                            <th className="py-2 pr-2 font-semibold text-right">{t('reports.stockVerification.colDiffValue')}</th>
                           </tr>
                         </thead>
                         <tbody>
