@@ -463,6 +463,10 @@ export interface TranslationDict {
       concentrationSingle: string;
       concentrationMultiple: string;
       shareOf: string;
+      statusActive: string;
+      statusPartiallyRemaining: string;
+      statusFullyConsumed: string;
+      statusArchived: string;
     };
     businessWorth: {
       title: string;
@@ -539,6 +543,40 @@ export interface TranslationDict {
       noPurchaseBatch: string;
       insightHighestValue: string;
       insightAvgMargin: string;
+    };
+    batchPerformance: {
+      title: string;
+      description: string;
+      periodRange: string;
+      kpiBatchesInPeriod: string;
+      kpiTotalInvestment: string;
+      kpiRemainingInventory: string;
+      kpiRemainingProfit: string;
+      searchTitle: string;
+      searchPlaceholder: string;
+      searchHint: string;
+      searchNoResults: string;
+      colBatch: string;
+      colDate: string;
+      colSupplier: string;
+      colProducts: string;
+      colInvestment: string;
+      colMarketValue: string;
+      colEmbeddedProfit: string;
+      colRemainingInventory: string;
+      colRemainingProfit: string;
+      colStatus: string;
+      supplierLabel: string;
+      allSuppliers: string;
+      remainingProfitByBatch: string;
+      sortHighestProfit: string;
+      sortHighestInvestment: string;
+      sortNewest: string;
+      sortOldest: string;
+      noBatchesInPeriod: string;
+      allBatches: string;
+      insightTopBatch: string;
+      insightExcludesInitialCapital: string;
     };
   };
 }
@@ -1064,6 +1102,10 @@ export const pt: TranslationDict = {
       concentrationSingle: '{{label}} representa {{pct}}% do total.',
       concentrationMultiple: '{{count}} {{entityLabelPlural}} representam {{pct}}% do total.',
       shareOf: '{{part}} corresponde a {{pct}}% de {{whole}}.',
+      statusActive: 'Ativo',
+      statusPartiallyRemaining: 'Parcialmente Restante',
+      statusFullyConsumed: 'Totalmente Consumido',
+      statusArchived: 'Arquivado',
     },
     businessWorth: {
     title: 'Valor do Negócio',
@@ -1140,6 +1182,40 @@ export const pt: TranslationDict = {
       noPurchaseBatch: 'Sem Lote ({{date}})',
       insightHighestValue: '{{name}} é o produto de maior valor em stock, com {{value}} em valor de mercado.',
       insightAvgMargin: 'A margem média ponderada do inventário atual é de {{pct}}%.',
+    },
+    batchPerformance: {
+      title: 'Desempenho de Lotes',
+      description: 'Lucro gerado pelo stock comprado em cada período — e o histórico completo de cada lote, para consultar quando quiser.',
+      periodRange: '{{start}} — {{end}}',
+      kpiBatchesInPeriod: 'Lotes no Período',
+      kpiTotalInvestment: 'Investimento Total',
+      kpiRemainingInventory: 'Inventário Restante',
+      kpiRemainingProfit: 'Lucro Embutido Restante',
+      searchTitle: 'Procurar um Lote ou Produto',
+      searchPlaceholder: 'Nº do lote, fornecedor ou nome do produto (ex: BAT-000004, Arroz)',
+      searchHint: 'Pesquisa em todos os lotes de sempre, independentemente do período abaixo — para consultar qualquer entrada de stock a qualquer momento.',
+      searchNoResults: 'Nenhum lote encontrado para essa pesquisa.',
+      colBatch: 'Lote',
+      colDate: 'Data',
+      colSupplier: 'Fornecedor',
+      colProducts: 'Produtos',
+      colInvestment: 'Investimento',
+      colMarketValue: 'Valor de Mercado',
+      colEmbeddedProfit: 'Lucro Embutido',
+      colRemainingInventory: 'Inventário Restante',
+      colRemainingProfit: 'Lucro Restante',
+      colStatus: 'Estado',
+      supplierLabel: 'Fornecedor',
+      allSuppliers: 'Todos',
+      remainingProfitByBatch: 'Lucro Embutido Restante por Lote',
+      sortHighestProfit: 'Maior Lucro',
+      sortHighestInvestment: 'Maior Investimento',
+      sortNewest: 'Mais Recente',
+      sortOldest: 'Mais Antigo',
+      noBatchesInPeriod: 'Nenhum lote de compra neste período.',
+      allBatches: 'Todos os Lotes',
+      insightTopBatch: '{{batch}} ({{date}}, {{supplier}}) tem o maior lucro embutido restante: {{value}}.',
+      insightExcludesInitialCapital: 'Este total refere-se apenas a lotes de stock comprados no período selecionado — o Capital Inicial fica de fora e nunca entra nesta soma.',
     },
   },
 };
