@@ -1,6 +1,72 @@
 @import "tailwindcss";
 
 /* ==========================================================================
+   Type system — Inter carries every label, table, button and number
+   (tabular figures, built for dense data). Fraunces is used in exactly two
+   places: the business name and hero KPI figures — the one deliberate
+   flourish that keeps this from reading as a generic admin template.
+   ========================================================================== */
+:root {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
+
+  /* Shared motion language — one easing curve, three durations, used
+     instead of ad-hoc "transition-all duration-200" scattered per file. */
+  --ease-premium: cubic-bezier(0.22, 1, 0.36, 1);
+  --duration-fast: 140ms;
+  --duration-base: 220ms;
+  --duration-slow: 420ms;
+}
+
+html {
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+  text-rendering: optimizeLegibility;
+}
+body {
+  font-family: var(--font-sans);
+  font-feature-settings: 'cv11' 1, 'ss01' 1, 'tnum' 0;
+}
+.font-display {
+  font-family: var(--font-display);
+  font-feature-settings: 'tnum' 1;
+  font-variant-numeric: tabular-nums;
+}
+
+/* Selection + scrollbar are small details, but their absence is exactly
+   what makes a product feel unfinished next to a $100M one. */
+::selection {
+  background: rgba(212,175,55,0.22);
+  color: #0B1F3A;
+}
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: #D9DEE6;
+  border-radius: 999px;
+  border: 2.5px solid #FFFFFF;
+}
+::-webkit-scrollbar-thumb:hover { background: #C3CAD6; }
+* { scrollbar-width: thin; scrollbar-color: #D9DEE6 transparent; }
+
+/* Visible, on-brand focus ring everywhere — never a browser default blue
+   outline slipping through on a keyboard-only pass. */
+:focus-visible {
+  outline: 2px solid var(--gold, #D4AF37);
+  outline-offset: 2px;
+  border-radius: 4px;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.01ms !important;
+    scroll-behavior: auto !important;
+  }
+}
+
+/* ==========================================================================
    SabushTech Brand Design Tokens
    ========================================================================== */
 :root {
@@ -60,6 +126,8 @@
 }
 
 @theme {
+  --font-sans: 'Inter', ui-sans-serif, system-ui, -apple-system, 'Segoe UI', sans-serif;
+  --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --color-primary: #0B1F3A;
   --color-primary-hover: #14294A;
   --color-secondary: #D4AF37;
@@ -111,37 +179,78 @@
    is consistent everywhere without repeating long class strings.
    ========================================================================== */
 .card-premium {
+  position: relative;
   background: #FFFFFF;
+  border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow-1);
-  transition: box-shadow 180ms ease, transform 180ms ease;
+  transition: box-shadow var(--duration-base) var(--ease-premium),
+              transform var(--duration-base) var(--ease-premium),
+              border-color var(--duration-base) var(--ease-premium);
 }
 .card-premium.is-interactive:hover {
   box-shadow: var(--shadow-2);
-  transform: translateY(-2px);
+  transform: translateY(-3px);
+  border-color: rgba(212,175,55,0.35);
 }
 .card-premium.is-highlighted {
-  background: linear-gradient(180deg, rgba(212,175,55,0.06) 0%, rgba(212,175,55,0.02) 100%);
+  background: linear-gradient(180deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.015) 100%);
+  border-color: rgba(212,175,55,0.22);
 }
 .kpi-value {
   color: var(--navy);
   font-weight: 800;
-  letter-spacing: -0.02em;
+  letter-spacing: -0.03em;
   font-variant-numeric: tabular-nums;
 }
 .kpi-value--accent {
-  color: var(--gold);
+  color: var(--gold-hover);
 }
 .kpi-label {
   color: #6B7280;
-  font-weight: 800;
-  font-size: 11px;
+  font-weight: 700;
+  font-size: 10.5px;
   text-transform: uppercase;
-  letter-spacing: 0.06em;
+  letter-spacing: 0.08em;
 }
 .badge-soft {
   border-radius: 9999px;
   font-weight: 700;
   font-size: 11px;
   padding: 2px 9px;
+  letter-spacing: 0.01em;
 }
+
+/* Buttons — one definitive primary treatment instead of ad-hoc
+   bg-[#D4AF37] strings repeated per file. */
+.btn-primary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: var(--gold);
+  color: #0B1F3A;
+  box-shadow: 0 8px 20px -8px rgba(212,175,55,0.55);
+  transition: background var(--duration-fast) var(--ease-premium),
+              transform var(--duration-fast) var(--ease-premium),
+              box-shadow var(--duration-fast) var(--ease-premium);
+}
+.btn-primary:hover { background: var(--gold-hover); box-shadow: 0 10px 24px -8px rgba(212,175,55,0.65); }
+.btn-primary:active { transform: scale(0.97); }
+
+.btn-dark {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  font-weight: 700;
+  border-radius: 12px;
+  background: var(--navy);
+  color: #FFFFFF;
+  transition: background var(--duration-fast) var(--ease-premium),
+              transform var(--duration-fast) var(--ease-premium);
+}
+.btn-dark:hover { background: var(--navy-soft); }
+.btn-dark:active { transform: scale(0.97); }

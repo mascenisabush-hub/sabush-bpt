@@ -342,7 +342,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
             <div className="space-y-6">
               {/* Device Pairing — PIN quick-login for a shared shop device */}
               <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
-                <h3 className="text-xs font-bold text-[#1B3966] uppercase tracking-wider mb-1 flex items-center gap-1.5">
+                <h3 className="text-xs font-bold text-[#0B1F3A] uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4" /> Este Dispositivo
                 </h3>
 
@@ -368,7 +368,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                           setPairError(err?.message || 'Erro ao configurar este dispositivo.');
                         }
                       }}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-[#1B3966] hover:bg-[#152d51] py-2.5 rounded-xl transition"
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-[#0B1F3A] hover:bg-[#152d51] py-2.5 rounded-xl transition"
                     >
                       <Smartphone className="w-3.5 h-3.5" />
                       Configurar Este Dispositivo para {business?.name || 'esta loja'}
@@ -387,7 +387,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                       <button
                         type="button"
                         onClick={() => pairDevice()}
-                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-[#1B3966] bg-white border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl transition"
+                        className="flex-1 flex items-center justify-center gap-1.5 text-xs font-bold text-[#0B1F3A] bg-white border border-gray-200 hover:bg-gray-50 py-2.5 rounded-xl transition"
                       >
                         <RefreshCw className="w-3.5 h-3.5" /> Atualizar Lista
                       </button>
@@ -412,7 +412,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                     <button
                       type="button"
                       onClick={() => pairDevice()}
-                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-[#1B3966] hover:bg-[#152d51] py-2.5 rounded-xl transition"
+                      className="w-full flex items-center justify-center gap-1.5 text-xs font-bold text-white bg-[#0B1F3A] hover:bg-[#152d51] py-2.5 rounded-xl transition"
                     >
                       <Smartphone className="w-3.5 h-3.5" />
                       Reconfigurar para {business?.name || 'esta loja'}

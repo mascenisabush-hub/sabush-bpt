@@ -76,13 +76,19 @@ const KpiCard: React.FC<KpiCardProps> = ({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`h-full text-left p-4 sm:p-5 flex flex-col gap-3.5 rounded-2xl transition ${
+      className={`group h-full text-left p-4 sm:p-5 flex flex-col gap-3.5 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isDark
-          ? 'bg-[#0B1F3A] shadow-[var(--shadow-2)]'
+          ? 'relative overflow-hidden bg-[#0B1F3A] shadow-[var(--shadow-2)]'
           : `card-premium ${highlight ? 'is-highlighted' : ''}`
-      } ${onClick ? (isDark ? 'hover:-translate-y-0.5 cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
+      } ${onClick ? (isDark ? 'hover:-translate-y-[3px] cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
     >
-      <div className="flex items-start justify-between gap-2">
+      {isDark && (
+        <div
+          aria-hidden="true"
+          className="pointer-events-none absolute -right-8 -top-10 w-32 h-32 rounded-full bg-[#D4AF37]/[0.07] blur-2xl opacity-70 transition-opacity duration-300 group-hover:opacity-100"
+        />
+      )}
+      <div className="relative flex items-start justify-between gap-2">
         <div
           className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
             isDark ? 'bg-white/10 text-[#D4AF37]' : `${iconBgClass} ${iconTextClass}`
@@ -92,19 +98,21 @@ const KpiCard: React.FC<KpiCardProps> = ({
         </div>
         {badge}
       </div>
-      <div>
-        <p className={`kpi-label leading-tight font-extrabold ${isDark ? 'text-white/50' : ''}`}>
+      <div className="relative">
+        <p className={`kpi-label leading-tight ${isDark ? 'text-white/45' : ''}`}>
           {label}
         </p>
         <p
-          className={`text-[20px] sm:text-[22px] font-black mt-1.5 leading-tight truncate tabular-nums tracking-tight ${
-            isDark ? (valueClass || 'text-[#D4AF37]') : `kpi-value ${valueClass || ''}`
+          className={`mt-1.5 leading-[1.1] truncate tabular-nums ${
+            isDark
+              ? `font-display font-semibold text-[24px] sm:text-[27px] tracking-[-0.01em] ${valueClass || 'text-[#D4AF37]'}`
+              : `text-[20px] sm:text-[22px] tracking-tight kpi-value ${valueClass || ''}`
           }`}
         >
           {value}
         </p>
       </div>
-      <p className={`text-[11px] leading-snug mt-auto font-semibold ${isDark ? 'text-white/40' : 'text-gray-500'}`}>
+      <p className={`relative text-[11px] leading-snug mt-auto font-medium ${isDark ? 'text-white/35' : 'text-gray-500'}`}>
         {description}
       </p>
     </button>

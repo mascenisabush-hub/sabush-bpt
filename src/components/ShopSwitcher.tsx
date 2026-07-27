@@ -89,8 +89,8 @@ export const ShopSwitcher: React.FC = () => {
                     onClick={() => handleSwitch(b.id)}
                     className="w-full flex items-center gap-2.5 px-3.5 py-2.5 hover:bg-[#F7F8FA] transition-colors text-left"
                   >
-                    <div className="w-7 h-7 rounded-lg bg-[#1B3966]/5 flex items-center justify-center shrink-0">
-                      <Store className="w-3.5 h-3.5 text-[#1B3966]" />
+                    <div className="w-7 h-7 rounded-lg bg-[#0B1F3A]/5 flex items-center justify-center shrink-0">
+                      <Store className="w-3.5 h-3.5 text-[#0B1F3A]" />
                     </div>
                     <div className="min-w-0 flex-1">
                       <p className="text-[13px] font-semibold text-gray-800 truncate">{b.name}</p>
@@ -107,7 +107,7 @@ export const ShopSwitcher: React.FC = () => {
                 <button
                   onClick={() => { setError(null); setShowAddForm(true); }}
                   disabled={atLimit}
-                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-bold text-[#1B3966] disabled:text-gray-300 py-2 rounded-lg hover:bg-[#F7F8FA] disabled:hover:bg-transparent transition-colors"
+                  className="w-full flex items-center justify-center gap-1.5 text-[12px] font-bold text-[#0B1F3A] disabled:text-gray-300 py-2 rounded-lg hover:bg-[#F7F8FA] disabled:hover:bg-transparent transition-colors"
                 >
                   <Plus className="w-3.5 h-3.5" />
                   {atLimit ? `Limite de ${maxShopsPerOwner} lojas atingido` : `Adicionar Loja (${ownedBusinesses.length}/${maxShopsPerOwner})`}
@@ -117,7 +117,7 @@ export const ShopSwitcher: React.FC = () => {
           ) : (
             <form onSubmit={handleAddShop} className="p-3.5 space-y-2.5">
               <div className="flex items-center justify-between mb-1">
-                <p className="text-[12px] font-bold text-[#1B3966]">Nova Loja</p>
+                <p className="text-[12px] font-bold text-[#0B1F3A]">Nova Loja</p>
                 <button type="button" onClick={() => setShowAddForm(false)} className="text-gray-400 hover:text-gray-600">
                   <X className="w-4 h-4" />
                 </button>
@@ -136,13 +136,13 @@ export const ShopSwitcher: React.FC = () => {
                 placeholder="Nome da loja"
                 required
                 autoFocus
-                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#1B3966] focus:outline-none"
+                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#0B1F3A] focus:outline-none"
               />
 
               <select
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
-                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#1B3966] focus:outline-none bg-white"
+                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#0B1F3A] focus:outline-none bg-white"
               >
                 <option value="">Categoria (opcional)</option>
                 {BUSINESS_CATEGORY_GROUPS.map((group) => (
@@ -157,7 +157,7 @@ export const ShopSwitcher: React.FC = () => {
               <select
                 value={newCurrency}
                 onChange={(e) => setNewCurrency(e.target.value)}
-                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#1B3966] focus:outline-none bg-white"
+                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#0B1F3A] focus:outline-none bg-white"
               >
                 {CURRENCY_OPTIONS.map((c) => (
                   <option key={c.code} value={c.symbol}>{c.label}</option>
@@ -169,7 +169,7 @@ export const ShopSwitcher: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSaving || !newName.trim()}
-                className="w-full text-[13px] font-bold text-white bg-[#1B3966] disabled:bg-gray-300 py-2 rounded-lg hover:bg-[#152d51] transition-colors"
+                className="w-full text-[13px] font-bold text-white bg-[#0B1F3A] disabled:bg-gray-300 py-2 rounded-lg hover:bg-[#152d51] transition-colors"
               >
                 {isSaving ? 'A criar...' : 'Criar Loja'}
               </button>

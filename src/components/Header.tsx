@@ -83,15 +83,15 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 {isOwner ? (
                   <ShopSwitcher />
                 ) : (
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37] mb-0.5">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#D4AF37] mb-1">
                     {t('header.myBusiness')}
                   </p>
                 )}
-                <h1 className="font-extrabold text-xl sm:text-2xl leading-tight tracking-tight text-[#0B1F3A] truncate">
+                <h1 className="font-display font-semibold text-[26px] sm:text-[30px] leading-[1.08] tracking-tight text-[#0B1F3A] truncate">
                   {business.name}
                 </h1>
                 <p
-                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
+                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1.5"
                   title={business?.contact ? t('header.contactTitle', { contact: business.contact }) : undefined}
                 >
                   <span className="truncate text-gray-600 font-bold">
@@ -114,22 +114,19 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               </div>
             )}
 
-            {/* Global search — visual home for a "Ctrl+K"-style search,
-                matching the new premium shell. Product-level search/filtering
-                still lives in the Dashboard's own toolbar; this is
-                presentational until a real system-wide search is wired up. */}
-            <div className="hidden md:flex flex-1 max-w-md mx-auto order-last lg:order-none">
+            {/* Global search — kept quiet and honest: product-level search
+                still lives in the Dashboard's own toolbar, so this reads as
+                a calm label rather than a fake shortcut promising more
+                than it does. */}
+            <div
+              className="hidden md:flex flex-1 max-w-md mx-auto order-last lg:order-none select-none"
+              aria-hidden="true"
+            >
               <div className="relative w-full">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400 pointer-events-none" />
-                <input
-                  type="text"
-                  disabled
-                  placeholder={t('header.searchPlaceholder')}
-                  className="w-full bg-[#F5F7FA] border border-transparent rounded-xl pl-10 pr-16 py-2.5 text-sm text-gray-500 placeholder-gray-400 cursor-default"
-                />
-                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-[10px] font-bold text-gray-400 bg-white border border-gray-200 rounded-md px-1.5 py-0.5">
-                  Ctrl+K
-                </span>
+                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div className="w-full bg-[#F5F7FA]/70 border border-transparent rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-400 font-medium">
+                  {t('header.searchPlaceholder')}
+                </div>
               </div>
             </div>
 
@@ -228,18 +225,18 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   title={t(tab.labelKey)}
-                  className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold transition active:scale-[0.97] ${
+                  className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
                     isActive
-                      ? 'bg-[#D4AF37] text-white shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
-                      : 'bg-[#F5F7FA] text-gray-600 hover:bg-[#0B1F3A]/5 hover:text-[#0B1F3A]'
+                      ? 'bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
+                      : 'bg-[#F5F7FA] text-gray-600 hover:bg-[#0B1F3A]/[0.06] hover:text-[#0B1F3A]'
                   }`}
                 >
                   <span
-                    className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 ${
-                      isActive ? 'bg-white/20 text-white' : 'bg-white text-[#0B1F3A]'
+                    className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 transition-colors duration-150 ${
+                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-white text-[#0B1F3A]'
                     }`}
                   >
-                    <Icon className="w-4 h-4" strokeWidth={2} />
+                    <Icon className="w-4 h-4" strokeWidth={2.25} />
                   </span>
                   {t(tab.shortLabelKey)}
                 </button>
