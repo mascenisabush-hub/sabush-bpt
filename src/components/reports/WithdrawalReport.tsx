@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import { useApp } from '../../context/AppContext';
+import { useLanguage } from '../../context/LanguageContext';
 import { formatCurrency, formatDate } from '../../utils/formatters';
 import { isDateInRange } from '../../utils/calculations';
 import { ReportHeader, ReportSection, ReportKpiCard, InsightBanner, PillToggle, ReportEmptyState } from './shared/ReportUI';
@@ -15,16 +16,23 @@ interface Props {
 
 type GroupBy = 'month' | 'reason';
 
-function monthLabel(dateStr: string): string {
-  const [y, m] = dateStr.split('-');
-  const names = ['Jan', 'Fev', 'Mar', 'Abr', 'Mai', 'Jun', 'Jul', 'Ago', 'Set', 'Out', 'Nov', 'Dez'];
-  return `${names[parseInt(m, 10) - 1]} ${y}`;
-}
-
 export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
+  const { t } = useLanguage();
   const { business, currencySymbol, withdrawals, deleteWithdrawal } = useApp();
   const [groupBy, setGroupBy] = useState<GroupBy>('month');
   const [range, { setStartDate, setEndDate, applyPreset }] = useDateRange();
+
+  const monthLabel = (dateStr: string): string => {
+    const [y, m] = dateStr.split('-');
+    const names = [
+      t('common.months.jan'), t('common.months.feb'), t('common.months.mar'), t('common.months.apr'),
+      t('common.months.may'), t('common.months.jun'), t('common.months.jul'), t('common.months.aug'),
+      t('common.months.sep'), t('common.months.oct'), t('common.months.nov'), t('common.months.dec'),
+    ];
+    return `${names[parseInt(m, 10) - 1]} ${y}`;
+  };
+
+  const unspecified = t('reports.common.unspecified');
 
   const filtered = useMemo(() => withdrawals.filter(w => isDateInRange(w.date, range.startDate, range.endDate)), [withdrawals, range]);
   const total = filtered.reduce((s, w) => s + Number(w.amount || 0), 0);
@@ -32,69 +40,75 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
   const grouped = useMemo(() => {
     const map = new Map<string, number>();
     filtered.forEach(w => {
-      const key = groupBy === 'reason' ? (w.reason || 'Não Especificado') : w.date.slice(0, 7);
+      const key = groupBy === 'reason' ? (w.reason || unspecified) : w.date.slice(0, 7);
       map.set(key, (map.get(key) || 0) + Number(w.amount || 0));
     });
     return Array.from(map.entries())
       .map(([key, value]) => ({ key, label: groupBy === 'month' ? monthLabel(key + '-01') : key, value }))
       .sort((a, b) => (groupBy === 'reason' ? b.value - a.value : a.key.localeCompare(b.key)));
-  }, [filtered, groupBy]);
+  }, [filtered, groupBy, unspecified]);
 
   const topReason = useMemo(() => {
     const map = new Map<string, number>();
     filtered.forEach(w => {
-      const key = w.reason || 'Não Especificado';
+      const key = w.reason || unspecified;
       map.set(key, (map.get(key) || 0) + Number(w.amount || 0));
     });
     const arr = Array.from(map.entries()).sort((a, b) => b[1] - a[1]);
     return arr.length ? { label: arr[0][0], value: arr[0][1] } : null;
-  }, [filtered]);
+  }, [filtered, unspecified]);
 
   const insights = useMemo(() => {
     const lines: string[] = [];
     if (topReason && total > 0) {
-      lines.push(`"${topReason.label}" é o motivo mais comum de retirada, representando ${((topReason.value / total) * 100).toFixed(0)}% do total retirado.`);
+      lines.push(t('reports.withdrawals.insightTopReason', { label: topReason.label, pct: ((topReason.value / total) * 100).toFixed(0) }));
     }
-    const c = concentrationInsight('motivos', grouped.map(g => ({ label: g.label, value: g.value })), total);
+    const c = concentrationInsight(t, t('reports.withdrawals.groupReason').toLowerCase(), grouped.map(g => ({ label: g.label, value: g.value })), total);
     if (groupBy === 'reason' && c) lines.push(c);
     return lines;
-  }, [topReason, total, grouped, groupBy]);
+  }, [topReason, total, grouped, groupBy, t]);
 
-  const groupLabel = groupBy === 'month' ? 'Mês' : 'Motivo';
+  const groupLabel = groupBy === 'month' ? t('reports.withdrawals.groupMonth') : t('reports.withdrawals.groupReason');
 
   const handleExportPdf = () => {
     exportReportPdf(
-      'Retiradas do Proprietário',
+      t('reports.withdrawals.title'),
       business?.name || 'Sabush',
       `${formatDate(range.startDate)} — ${formatDate(range.endDate)}`,
       [
-        { label: 'Retiradas Totais', value: formatCurrency(total, currencySymbol) },
-        { label: 'Motivo Mais Comum', value: topReason ? `${topReason.label} (${formatCurrency(topReason.value, currencySymbol)})` : '—' },
-        { label: 'Número de Retiradas', value: String(filtered.length) },
+        { label: t('reports.withdrawals.kpiTotalFull'), value: formatCurrency(total, currencySymbol) },
+        { label: t('reports.withdrawals.kpiTopReason'), value: topReason ? `${topReason.label} (${formatCurrency(topReason.value, currencySymbol)})` : '—' },
+        { label: t('reports.withdrawals.kpiCountFull'), value: String(filtered.length) },
       ],
       [
-        { title: `Por ${groupLabel}`, columns: [groupLabel, 'Valor'], rows: grouped.map(g => [g.label, formatCurrency(g.value, currencySymbol)]) },
-        { title: 'Todas as Retiradas', columns: ['Data', 'Motivo', 'Valor'], rows: filtered.map(w => [formatDate(w.date), w.reason || 'Não Especificado', formatCurrency(w.amount, currencySymbol)]) },
+        { title: t('reports.withdrawals.sectionByGroupTitle', { group: groupLabel }), columns: [groupLabel, t('reports.common.value')], rows: grouped.map(g => [g.label, formatCurrency(g.value, currencySymbol)]) },
+        { title: t('reports.withdrawals.allWithdrawalsTitle'), columns: [t('reports.common.dateCol'), t('reports.common.reasonCol'), t('reports.common.value')], rows: filtered.map(w => [formatDate(w.date), w.reason || unspecified, formatCurrency(w.amount, currencySymbol)]) },
       ]
     );
   };
 
   const handleExportExcel = () => {
     exportReportExcel(
-      'Retiradas do Proprietário',
-      [{ label: 'Retiradas Totais', value: formatCurrency(total, currencySymbol) }],
+      t('reports.withdrawals.title'),
+      [{ label: t('reports.withdrawals.kpiTotalFull'), value: formatCurrency(total, currencySymbol) }],
       [
-        { title: `Por ${groupLabel}`, columns: [groupLabel, 'Valor'], rows: grouped.map(g => [g.label, g.value]) },
-        { title: 'Todas as Retiradas', columns: ['Data', 'Motivo', 'Valor'], rows: filtered.map(w => [w.date, w.reason || 'Não Especificado', w.amount]) },
-      ]
+        { title: t('reports.withdrawals.sectionByGroupTitle', { group: groupLabel }), columns: [groupLabel, t('reports.common.value')], rows: grouped.map(g => [g.label, g.value]) },
+        { title: t('reports.withdrawals.allWithdrawalsTitle'), columns: [t('reports.common.dateCol'), t('reports.common.reasonCol'), t('reports.common.value')], rows: filtered.map(w => [w.date, w.reason || unspecified, w.amount]) },
+      ],
+      {
+        indicator: t('reports.common.indicator'),
+        value: t('reports.common.value'),
+        summary: t('reports.common.summary'),
+        tableFallback: t('reports.common.tableFallback'),
+      }
     );
   };
 
   return (
     <div className="space-y-4 pb-12 report-print-area">
       <ReportHeader
-        title="Retiradas do Proprietário"
-        description="Quanto o proprietário retirou do negócio e para quê."
+        title={t('reports.withdrawals.title')}
+        description={t('reports.withdrawals.description')}
         onBack={onBack}
         onExportPdf={handleExportPdf}
         onExportExcel={handleExportExcel}
@@ -106,27 +120,27 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
       <ReportFilterBar range={range} onStartDate={setStartDate} onEndDate={setEndDate} onPreset={applyPreset} />
 
       <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
-        <ReportKpiCard icon={HandCoins} label="Retiradas Totais" value={formatCurrency(total, currencySymbol)} tone="negative" />
-        <ReportKpiCard icon={Tag} label="Motivo Mais Comum" value={topReason ? formatCurrency(topReason.value, currencySymbol) : '—'} sub={topReason?.label} />
-        <ReportKpiCard icon={CalendarDays} label="Nº de Retiradas" value={String(filtered.length)} />
+        <ReportKpiCard icon={HandCoins} label={t('reports.withdrawals.kpiTotal')} value={formatCurrency(total, currencySymbol)} tone="negative" />
+        <ReportKpiCard icon={Tag} label={t('reports.withdrawals.kpiTopReason')} value={topReason ? formatCurrency(topReason.value, currencySymbol) : '—'} sub={topReason?.label} />
+        <ReportKpiCard icon={CalendarDays} label={t('reports.withdrawals.kpiCount')} value={String(filtered.length)} />
       </div>
 
       <ReportSection
-        title={`Retiradas por ${groupLabel}`}
+        title={t('reports.withdrawals.sectionByGroupTitle', { group: groupLabel })}
         icon={Tag}
         right={
           <PillToggle
             value={groupBy}
             onChange={v => setGroupBy(v as GroupBy)}
             options={[
-              { value: 'month', label: 'Mês' },
-              { value: 'reason', label: 'Motivo' },
+              { value: 'month', label: t('reports.withdrawals.groupMonth') },
+              { value: 'reason', label: t('reports.withdrawals.groupReason') },
             ]}
           />
         }
       >
         {grouped.length === 0 ? (
-          <ReportEmptyState message="Nenhuma retirada registada neste período." />
+          <ReportEmptyState message={t('reports.withdrawals.emptyMessage')} />
         ) : groupBy === 'reason' ? (
           <DonutChart currencySymbol={currencySymbol} data={grouped.map(g => ({ label: g.label, value: g.value }))} />
         ) : (
@@ -134,21 +148,21 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
         )}
       </ReportSection>
 
-      <ReportSection title={`Linha do Tempo (${filtered.length})`} icon={CalendarDays}>
+      <ReportSection title={t('reports.withdrawals.timelineTitle', { count: filtered.length })} icon={CalendarDays}>
         {filtered.length === 0 ? (
-          <ReportEmptyState message="Nenhuma retirada registada neste período." />
+          <ReportEmptyState message={t('reports.withdrawals.emptyMessage')} />
         ) : (
           <div className="space-y-2">
             {[...filtered].sort((a, b) => b.date.localeCompare(a.date)).map(w => (
               <div key={w.id} className="bg-gray-50 border border-gray-200 rounded-2xl p-3.5 flex items-center justify-between text-xs">
                 <div>
-                  <span className="font-bold text-gray-900 text-sm block">{w.reason || 'Não Especificado'}</span>
+                  <span className="font-bold text-gray-900 text-sm block">{w.reason || unspecified}</span>
                   <span className="text-[11px] text-gray-500">{formatDate(w.date)}{w.notes ? ` · ${w.notes}` : ''}</span>
                 </div>
                 <div className="flex items-center gap-3 report-no-print">
                   <span className="font-mono font-bold text-rose-600 text-sm">{formatCurrency(w.amount, currencySymbol)}</span>
                   <button onClick={() => deleteWithdrawal(w.id)} className="text-[10px] text-gray-400 hover:text-rose-600 transition">
-                    Eliminar
+                    {t('reports.common.delete')}
                   </button>
                 </div>
                 <span className="font-mono font-bold text-rose-600 text-sm hidden report-print-only">{formatCurrency(w.amount, currencySymbol)}</span>
