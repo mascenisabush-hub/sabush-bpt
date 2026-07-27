@@ -1,5 +1,6 @@
 import React from 'react';
 import { formatCurrency } from '../../../utils/formatters';
+import { useLanguage } from '../../../context/LanguageContext';
 
 // ============================================================
 // Dependency-free SVG chart primitives for the Reports BI center.
@@ -65,10 +66,11 @@ interface LineChartProps {
 }
 
 export const LineChartSimple: React.FC<LineChartProps> = ({ data, currencySymbol, color = '#EA580C' }) => {
+  const { t } = useLanguage();
   if (data.length < 2) {
     return (
       <div className="text-[11px] text-gray-400 text-center py-8">
-        É necessário mais do que um ponto no tempo para desenhar uma tendência.
+        {t('reports.common.insufficientTrendData')}
       </div>
     );
   }
@@ -127,10 +129,11 @@ interface DonutChartProps {
 }
 
 export const DonutChart: React.FC<DonutChartProps> = ({ data, currencySymbol }) => {
+  const { t } = useLanguage();
   const filtered = data.filter(d => d.value > 0);
   const total = filtered.reduce((s, d) => s + d.value, 0);
   if (!filtered.length || total <= 0) {
-    return <div className="text-[11px] text-gray-400 text-center py-8">Sem dados suficientes para este gráfico.</div>;
+    return <div className="text-[11px] text-gray-400 text-center py-8">{t('reports.common.insufficientChartData')}</div>;
   }
 
   const R = 60;

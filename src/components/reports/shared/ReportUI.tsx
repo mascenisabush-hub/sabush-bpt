@@ -1,6 +1,7 @@
 import React from 'react';
 import { formatCurrency } from '../../../utils/formatters';
 import { useApp } from '../../../context/AppContext';
+import { useLanguage } from '../../../context/LanguageContext';
 import { ArrowLeft, Lightbulb, FileDown, Sheet, Printer, ChevronDown, ChevronUp } from 'lucide-react';
 
 // ============================================================
@@ -78,6 +79,7 @@ interface ReportHeaderProps {
 
 export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, onBack, onExportPdf, onExportExcel, onPrint }) => {
   const { logReportExport } = useApp();
+  const { t } = useLanguage();
 
   const handleExportPdf = onExportPdf
     ? () => {
@@ -106,7 +108,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, 
       <button
         onClick={onBack}
         className="w-9 h-9 shrink-0 rounded-xl bg-white border border-gray-200 flex items-center justify-center text-gray-600 hover:bg-gray-50 active:scale-95 transition shadow-sm"
-        title="Voltar aos Relatórios"
+        title={t('reports.common.backTooltip')}
       >
         <ArrowLeft className="w-4 h-4" />
       </button>
@@ -123,7 +125,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, 
             onClick={handleExportPdf}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 transition min-h-[36px]"
           >
-            <FileDown className="w-3.5 h-3.5" /> PDF
+            <FileDown className="w-3.5 h-3.5" /> {t('reports.common.pdf')}
           </button>
         )}
         {handleExportExcel && (
@@ -131,7 +133,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, 
             onClick={handleExportExcel}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 transition min-h-[36px]"
           >
-            <Sheet className="w-3.5 h-3.5" /> Excel
+            <Sheet className="w-3.5 h-3.5" /> {t('reports.common.excel')}
           </button>
         )}
         {handlePrint && (
@@ -139,7 +141,7 @@ export const ReportHeader: React.FC<ReportHeaderProps> = ({ title, description, 
             onClick={handlePrint}
             className="flex items-center gap-1.5 px-3 py-2 rounded-xl text-xs font-semibold bg-white border border-gray-300 text-gray-700 hover:bg-gray-50 active:scale-95 transition min-h-[36px]"
           >
-            <Printer className="w-3.5 h-3.5" /> Imprimir
+            <Printer className="w-3.5 h-3.5" /> {t('reports.common.print')}
           </button>
         )}
       </div>

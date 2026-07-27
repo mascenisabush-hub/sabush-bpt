@@ -416,6 +416,91 @@ export interface TranslationDict {
       close: string;
     };
   };
+  reports: {
+    home: {
+      title: string;
+      subtitle: string;
+    };
+    categories: {
+      businessWorth: { title: string; description: string };
+      inventoryValuation: { title: string; description: string };
+      batchPerformance: { title: string; description: string };
+      capitalGrowth: { title: string; description: string };
+      expenses: { title: string; description: string };
+      withdrawals: { title: string; description: string };
+      inventoryLosses: { title: string; description: string };
+      stockVerification: { title: string; description: string };
+    };
+    common: {
+      backTooltip: string;
+      pdf: string;
+      excel: string;
+      print: string;
+      filters: string;
+      thisWeek: string;
+      thisMonth: string;
+      last30Days: string;
+      allTime: string;
+      startDate: string;
+      endDate: string;
+      indicator: string;
+      value: string;
+      summary: string;
+      tableFallback: string;
+      dateCol: string;
+      descriptionCol: string;
+      categoryCol: string;
+      reasonCol: string;
+      totalCol: string;
+      generalCategory: string;
+      unspecified: string;
+      notDefined: string;
+      insufficientTrendData: string;
+      insufficientChartData: string;
+      trendIncreased: string;
+      trendDecreased: string;
+      trendSentence: string;
+      concentrationSingle: string;
+      concentrationMultiple: string;
+      shareOf: string;
+    };
+    businessWorth: {
+      title: string;
+      description: string;
+      snapshotAt: string;
+      kpiInitialCapitalFull: string;
+      kpiInitialCapital: string;
+      kpiInventoryCostFull: string;
+      kpiInventoryCost: string;
+      kpiMarketValueFull: string;
+      kpiMarketValue: string;
+      kpiEmbeddedProfit: string;
+      kpiInventoryLossesFull: string;
+      kpiInventoryLossesExcel: string;
+      kpiInventoryLosses: string;
+      kpiTotalExpenses: string;
+      kpiTotalWithdrawalsFull: string;
+      kpiTotalWithdrawals: string;
+      kpiBusinessWorth: string;
+      kpiCapitalGrowth: string;
+      heroLabel: string;
+      heroSinceInitial: string;
+      heroNoInitialCount: string;
+      compositionTitle: string;
+      compositionNote: string;
+      expensesInPeriod: string;
+      expensesInPeriodRange: string;
+      noExpensesInPeriod: string;
+      withdrawalsInPeriod: string;
+      withdrawalsInPeriodRange: string;
+      noWithdrawalsInPeriod: string;
+      insightGrew: string;
+      insightShrank: string;
+      insightNoInitialCount: string;
+      insightEmbeddedProfitShare: string;
+      insightLossesCost: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -866,6 +951,115 @@ export const pt: TranslationDict = {
       generatingPdf: 'A gerar PDF...',
       exportPdf: 'Exportar PDF',
       close: 'Fechar',
+    },
+  },
+  reports: {
+    home: {
+      title: 'Centro de Inteligência de Negócio',
+      subtitle: 'Escolha uma categoria para entender melhor o seu negócio — não apenas números, mas o que eles significam.',
+    },
+    categories: {
+      businessWorth: {
+        title: 'Valor do Negócio',
+        description: 'Quanto vale o negócio hoje: capital, inventário, lucro embutido, despesas e retiradas.',
+      },
+      inventoryValuation: {
+        title: 'Inventário',
+        description: 'Quanto inventário existe, o seu valor de custo e de mercado, agrupado por fornecedor, lote ou produto.',
+      },
+      batchPerformance: {
+        title: 'Desempenho de Lotes',
+        description: 'Lucro do stock comprado em cada período (ex: últimos 30 dias) — e procure qualquer lote ou produto a qualquer momento.',
+      },
+      capitalGrowth: {
+        title: 'Crescimento de Capital',
+        description: 'Como o capital do negócio evoluiu desde o capital inicial até hoje.',
+      },
+      expenses: {
+        title: 'Despesas',
+        description: 'Para onde vai o dinheiro: despesas agrupadas por categoria, mês e ano.',
+      },
+      withdrawals: {
+        title: 'Retiradas do Proprietário',
+        description: 'Quanto o proprietário retirou do negócio, quando e para quê.',
+      },
+      inventoryLosses: {
+        title: 'Perdas de Inventário',
+        description: 'Onde o negócio está a perder dinheiro: quebras por produto, motivo e período.',
+      },
+      stockVerification: {
+        title: 'Contagens de Stock',
+        description: 'Cada recontagem física de stock: o que mudou entre uma contagem e a seguinte.',
+      },
+    },
+    common: {
+      backTooltip: 'Voltar aos Relatórios',
+      pdf: 'PDF',
+      excel: 'Excel',
+      print: 'Imprimir',
+      filters: 'Filtros',
+      thisWeek: 'Esta Semana',
+      thisMonth: 'Este Mês',
+      last30Days: 'Últimos 30 Dias',
+      allTime: 'Desde Sempre',
+      startDate: 'Data Inicial',
+      endDate: 'Data Final',
+      indicator: 'Indicador',
+      value: 'Valor',
+      summary: 'Resumo',
+      tableFallback: 'Tabela {{n}}',
+      dateCol: 'Data',
+      descriptionCol: 'Descrição',
+      categoryCol: 'Categoria',
+      reasonCol: 'Motivo',
+      totalCol: 'Total',
+      generalCategory: 'Geral',
+      unspecified: 'Não especificado',
+      notDefined: 'Não definido',
+      insufficientTrendData: 'É necessário mais do que um ponto no tempo para desenhar uma tendência.',
+      insufficientChartData: 'Sem dados suficientes para este gráfico.',
+      trendIncreased: 'aumentou',
+      trendDecreased: 'diminuiu',
+      trendSentence: '{{label}} {{direction}} {{pct}}% em relação ao período anterior ({{previous}} → {{current}}).',
+      concentrationSingle: '{{label}} representa {{pct}}% do total.',
+      concentrationMultiple: '{{count}} {{entityLabelPlural}} representam {{pct}}% do total.',
+      shareOf: '{{part}} corresponde a {{pct}}% de {{whole}}.',
+    },
+    businessWorth: {
+    title: 'Valor do Negócio',
+    description: 'Uma fotografia honesta do que o negócio vale hoje.',
+    snapshotAt: 'Instantâneo a {{date}}',
+    kpiInitialCapitalFull: 'Capital Inicial do Negócio',
+    kpiInitialCapital: 'Capital Inicial',
+    kpiInventoryCostFull: 'Custo do Inventário Atual',
+    kpiInventoryCost: 'Custo do Inventário',
+    kpiMarketValueFull: 'Valor de Mercado do Inventário Atual',
+    kpiMarketValue: 'Valor de Mercado',
+    kpiEmbeddedProfit: 'Lucro Embutido',
+    kpiInventoryLossesFull: 'Perdas de Inventário (Quebras, a custo)',
+    kpiInventoryLossesExcel: 'Perdas de Inventário (a custo)',
+    kpiInventoryLosses: 'Perdas de Inventário',
+    kpiTotalExpenses: 'Despesas Totais',
+    kpiTotalWithdrawalsFull: 'Retiradas Totais do Proprietário',
+    kpiTotalWithdrawals: 'Retiradas Totais',
+    kpiBusinessWorth: 'Valor do Negócio',
+    kpiCapitalGrowth: 'Crescimento de Capital',
+    heroLabel: 'Valor do Negócio Hoje',
+    heroSinceInitial: 'desde o capital inicial',
+    heroNoInitialCount: 'Registe uma Contagem Inicial de Stock para medir o crescimento.',
+    compositionTitle: 'Como o Valor do Negócio é Composto',
+    compositionNote: 'Valor de Mercado do Inventário = Custo + Lucro Embutido. Despesas e retiradas já reduzem o Valor do Negócio, mas não fazem parte do inventário em si.',
+    expensesInPeriod: 'Despesas no Período',
+    expensesInPeriodRange: 'Despesas no Período ({{start}} — {{end}})',
+    noExpensesInPeriod: 'Nenhuma despesa registada neste período.',
+    withdrawalsInPeriod: 'Retiradas no Período',
+    withdrawalsInPeriodRange: 'Retiradas no Período ({{start}} — {{end}})',
+    noWithdrawalsInPeriod: 'Nenhuma retirada registada neste período.',
+    insightGrew: 'O negócio cresceu {{amount}} ({{pct}}%) desde o capital inicial.',
+    insightShrank: 'O negócio reduziu {{amount}} ({{pct}}%) desde o capital inicial.',
+    insightNoInitialCount: 'Ainda não foi registada uma Contagem Inicial de Stock, por isso o crescimento de capital não pode ser medido.',
+    insightEmbeddedProfitShare: '{{pct}}% do valor de mercado do inventário atual é lucro embutido ainda não realizado.',
+    insightLossesCost: 'As quebras já custaram {{amount}}, cerca de {{pct}}% do valor investido em stock.',
     },
   },
 };

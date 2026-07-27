@@ -115,7 +115,14 @@ export async function exportReportPdf(
  * KPIs, plus one sheet per table. SheetJS is loaded dynamically for the
  * same reason as jsPDF above.
  */
-export async function exportReportExcel(reportTitle: string, kpis: ExportKpi[], tables: ExportTable[]) {
+export interface ExportLabels {
+  indicator: string;
+  value: string;
+  summary: string;
+  tableFallback: string; // e.g. 'Table {{n}}' — {{n}} is replaced manually here
+}
+
+export async function exportReportExcel(reportTitle: string, kpis: ExportKpi[], tables: ExportTable[], labels: ExportLabels) {
   const XLSX = await import('xlsx');
 
   const wb = XLSX.utils.book_new();
@@ -124,18 +131,19 @@ export async function exportReportExcel(reportTitle: string, kpis: ExportKpi[], 
     const summarySheet = XLSX.utils.aoa_to_sheet([
       [reportTitle],
       [],
-      ['Indicador', 'Valor'],
+      [labels.indicator, labels.value],
       ...kpis.map(k => [k.label, k.value]),
     ]);
     summarySheet['!cols'] = [{ wch: 36 }, { wch: 24 }];
-    XLSX.utils.book_append_sheet(wb, summarySheet, 'Resumo');
+    XLSX.utils.book_append_sheet(wb, summarySheet, labels.summary);
   }
 
   tables.forEach((table, idx) => {
     if (!table.rows.length) return;
     const sheet = XLSX.utils.aoa_to_sheet([table.columns, ...table.rows]);
     sheet['!cols'] = table.columns.map(() => ({ wch: 20 }));
-    const safeName = table.title.replace(/[\\/*?:[\]]/g, '').slice(0, 28) || `Tabela ${idx + 1}`;
+    const fallbackName = labels.tableFallback.replace('{{n}}', String(idx + 1));
+    const safeName = table.title.replace(/[\\/*?:[\]]/g, '').slice(0, 28) || fallbackName;
     XLSX.utils.book_append_sheet(wb, sheet, safeName);
   });
 

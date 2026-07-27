@@ -1,5 +1,6 @@
 import React from 'react';
 import { getTodayDateString } from '../../../utils/formatters';
+import { useLanguage } from '../../../context/LanguageContext';
 import { CalendarRange } from 'lucide-react';
 
 export type DatePreset = 'this-month' | 'this-week' | 'last-30' | 'all-time' | 'custom';
@@ -58,18 +59,19 @@ interface ReportFilterBarProps {
 }
 
 export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStartDate, onEndDate, onPreset, extraFilters }) => {
+  const { t } = useLanguage();
   const presets: { key: Exclude<DatePreset, 'custom'>; label: string }[] = [
-    { key: 'this-week', label: 'Esta Semana' },
-    { key: 'this-month', label: 'Este Mês' },
-    { key: 'last-30', label: 'Últimos 30 Dias' },
-    { key: 'all-time', label: 'Desde Sempre' },
+    { key: 'this-week', label: t('reports.common.thisWeek') },
+    { key: 'this-month', label: t('reports.common.thisMonth') },
+    { key: 'last-30', label: t('reports.common.last30Days') },
+    { key: 'all-time', label: t('reports.common.allTime') },
   ];
 
   return (
     <div className="bg-white border border-gray-200 rounded-3xl p-4 sm:p-5 shadow-sm space-y-3 report-no-print">
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
         <div className="flex items-center gap-2 text-xs font-bold text-gray-500 uppercase tracking-wider">
-          <CalendarRange className="w-4 h-4 text-blue-600" /> Filtros
+          <CalendarRange className="w-4 h-4 text-blue-600" /> {t('reports.common.filters')}
         </div>
         <div className="flex flex-wrap gap-1.5 text-xs">
           {presets.map(p => (
@@ -90,7 +92,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStart
 
       <div className="grid grid-cols-2 gap-3 pt-2 border-t border-gray-200">
         <div>
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Data Inicial</label>
+          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t('reports.common.startDate')}</label>
           <input
             type="date"
             value={range.startDate}
@@ -99,7 +101,7 @@ export const ReportFilterBar: React.FC<ReportFilterBarProps> = ({ range, onStart
           />
         </div>
         <div>
-          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">Data Final</label>
+          <label className="block text-[10px] font-bold text-gray-500 uppercase tracking-wider mb-1">{t('reports.common.endDate')}</label>
           <input
             type="date"
             value={range.endDate}

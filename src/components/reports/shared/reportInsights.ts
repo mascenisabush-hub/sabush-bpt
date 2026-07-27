@@ -5,21 +5,41 @@ import { formatCurrency } from '../../../utils/formatters';
  * existing calculation engine) into a plain-language sentence. Nothing is
  * inferred beyond arithmetic on those numbers — no assumptions about why a
  * number moved.
+ *
+ * A `t` translate function (from useLanguage()) is threaded through so the
+ * generated sentences come out in the active language — only the fixed
+ * connective words/phrases are translated; labels and numbers passed in by
+ * the caller are used as-is.
  */
+
+export type TFunc = (key: string, params?: Record<string, string | number>) => string;
 
 export function pctChange(current: number, previous: number): number | null {
   if (!previous) return null;
   return ((current - previous) / Math.abs(previous)) * 100;
 }
 
-export function trendInsight(label: string, current: number, previous: number, currencySymbol: string): string | null {
+export function trendInsight(
+  t: TFunc,
+  label: string,
+  current: number,
+  previous: number,
+  currencySymbol: string
+): string | null {
   const change = pctChange(current, previous);
   if (change === null) return null;
-  const direction = change >= 0 ? 'aumentou' : 'diminuiu';
-  return `${label} ${direction} ${Math.abs(change).toFixed(1)}% em relação ao período anterior (${formatCurrency(previous, currencySymbol)} → ${formatCurrency(current, currencySymbol)}).`;
+  const direction = change >= 0 ? t('reports.common.trendIncreased') : t('reports.common.trendDecreased');
+  return t('reports.common.trendSentence', {
+    label,
+    direction,
+    pct: Math.abs(change).toFixed(1),
+    previous: formatCurrency(previous, currencySymbol),
+    current: formatCurrency(current, currencySymbol),
+  });
 }
 
 export function concentrationInsight(
+  t: TFunc,
   entityLabelPlural: string,
   items: { label: string; value: number }[],
   totalValue: number,
@@ -30,11 +50,18 @@ export function concentrationInsight(
   const sum = sorted.reduce((s, i) => s + i.value, 0);
   const pct = (sum / totalValue) * 100;
   if (pct < 40) return null;
-  return `${sorted.length === 1 ? sorted[0].label : `${sorted.length} ${entityLabelPlural}`} representa${sorted.length === 1 ? '' : 'm'} ${pct.toFixed(0)}% do total.`;
+  if (sorted.length === 1) {
+    return t('reports.common.concentrationSingle', { label: sorted[0].label, pct: pct.toFixed(0) });
+  }
+  return t('reports.common.concentrationMultiple', {
+    count: sorted.length,
+    entityLabelPlural,
+    pct: pct.toFixed(0),
+  });
 }
 
-export function shareInsight(part: string, partValue: number, whole: string, wholeValue: number): string | null {
+export function shareInsight(t: TFunc, part: string, partValue: number, whole: string, wholeValue: number): string | null {
   if (wholeValue <= 0) return null;
   const pct = (partValue / wholeValue) * 100;
-  return `${part} corresponde a ${pct.toFixed(0)}% de ${whole}.`;
+  return t('reports.common.shareOf', { part, pct: pct.toFixed(0), whole });
 }
