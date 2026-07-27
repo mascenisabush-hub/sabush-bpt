@@ -12,6 +12,8 @@ import { TrendingUp, Store, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCirc
 import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { useApp } from '../context/AppContext';
+import { useLanguage } from '../context/LanguageContext';
+import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface AuthViewProps {
   onBackToQuickLogin?: () => void;
@@ -19,6 +21,7 @@ interface AuthViewProps {
 
 export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
   const { suspensionNotice, clearSuspensionNotice } = useApp();
+  const { t } = useLanguage();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [roleMode, setRoleMode] = useState<'owner' | 'staff'>('owner');
 
@@ -65,13 +68,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           console.error('[Login Auth Error]:', err);
           let userMsg = '';
           if (err.code === 'auth/user-not-found' || err.code === 'auth/wrong-password' || err.code === 'auth/invalid-credential') {
-            userMsg = 'Email ou palavra-passe incorretos.';
+            userMsg = t('auth.errors.wrongCredentials');
           } else if (err.code === 'auth/user-disabled') {
-            userMsg = 'Esta conta foi suspensa. Contacte o dono do negócio para mais informações.';
+            userMsg = t('auth.errors.accountSuspended');
           } else if (err.code === 'auth/invalid-email') {
-            userMsg = 'Formato de email inválido.';
+            userMsg = t('auth.errors.invalidEmail');
           } else {
-            userMsg = err.message || 'Erro de autenticação.';
+            userMsg = err.message || t('auth.errors.genericAuth');
           }
           throw new Error(`[Login Auth | Code: ${err.code || 'N/A'}] ${userMsg}`);
         }
@@ -79,31 +82,31 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         try {
           const userDoc = await getDoc(doc(db, 'users', userCred.user.uid));
           if (!userDoc.exists()) {
-            setError('Perfil de utilizador não encontrado no Firestore.');
+            setError(t('auth.errors.profileNotFound'));
           }
         } catch (err: any) {
           console.error('[Login Firestore Error]:', err);
-          throw new Error(`[Login Firestore | Code: ${err.code || 'N/A'}] ${err.message || 'Falha ao consultar perfil no banco de dados'}`);
+          throw new Error(`[Login Firestore | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.profileFetchFailed')}`);
         }
       } else {
         // Register Owner
         if (!name.trim()) {
-          setError('Por favor insira o seu nome.');
+          setError(t('auth.errors.enterName'));
           setLoading(false);
           return;
         }
         if (!businessName.trim()) {
-          setError('Por favor insira o nome do seu negócio.');
+          setError(t('auth.errors.enterBusinessName'));
           setLoading(false);
           return;
         }
         if (!category) {
-          setError('Por favor selecione o ramo do seu negócio.');
+          setError(t('auth.errors.selectCategory'));
           setLoading(false);
           return;
         }
         if (password !== confirmPassword) {
-          setError('As palavras-passe não coincidem. Por favor, verifique e tente novamente.');
+          setError(t('auth.errors.passwordMismatch'));
           setLoading(false);
           return;
         }
@@ -116,13 +119,13 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           console.error('[Registar Step 1 - Auth Error]:', err);
           let userMsg = '';
           if (err.code === 'auth/email-already-in-use') {
-            userMsg = 'Este email já está registado na plataforma. Tente fazer login.';
+            userMsg = t('auth.errors.emailInUse');
           } else if (err.code === 'auth/weak-password') {
-            userMsg = 'A palavra-passe deve ter pelo menos 6 caracteres.';
+            userMsg = t('auth.errors.weakPassword');
           } else if (err.code === 'auth/invalid-email') {
-            userMsg = 'O formato do email é inválido.';
+            userMsg = t('auth.errors.invalidEmailFormat');
           } else {
-            userMsg = err.message || 'Falha ao criar conta de autenticação.';
+            userMsg = err.message || t('auth.errors.createAccountFailed');
           }
           throw new Error(`[Passo 1 (Auth) | Code: ${err.code || 'N/A'}] ${userMsg}`);
         }
@@ -144,7 +147,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           });
         } catch (err: any) {
           console.error('[Registar Step 2 - User Document Firestore Error]:', err);
-          throw new Error(`[Passo 2 (Perfil Firestore) | Code: ${err.code || 'N/A'}] ${err.message || 'Erro ao guardar dados do perfil'}`);
+          throw new Error(`[Passo 2 (Perfil Firestore) | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.saveProfileFailed')}`);
         }
 
         // Step 3: Create Business Document in Firestore
@@ -159,12 +162,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           });
         } catch (err: any) {
           console.error('[Registar Step 3 - Business Document Firestore Error]:', err);
-          throw new Error(`[Passo 3 (Negócio Firestore) | Code: ${err.code || 'N/A'}] ${err.message || 'Erro ao guardar dados do negócio'}`);
+          throw new Error(`[Passo 3 (Negócio Firestore) | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.saveBusinessFailed')}`);
         }
       }
     } catch (err: any) {
       console.error('Full Auth Flow Error:', err);
-      setError(err.message || 'Ocorreu um erro ao processar o seu pedido.');
+      setError(err.message || t('auth.errors.genericRequest'));
     } finally {
       setLoading(false);
     }
@@ -179,12 +182,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
       const userCred = await signInWithPopup(auth, provider);
       const uid = userCred.user.uid;
       const userEmail = userCred.user.email || '';
-      const userName = userCred.user.displayName || name || 'Proprietário';
+      const userName = userCred.user.displayName || name || t('auth.defaults.ownerFallback');
 
       // Check if user doc exists in Firestore
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (!userDoc.exists()) {
-        const bName = businessName.trim() || 'Meu Negócio';
+        const bName = businessName.trim() || t('auth.defaults.businessNameFallback');
         const businessId = 'bus-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
 
         // Step 1: Create User doc
@@ -219,12 +222,16 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
     } catch (err: any) {
       console.error('[Google Auth Error]:', err);
       if (err.code === 'auth/popup-closed-by-user') {
-        setError('A janela de autenticação foi fechada antes de concluir.');
+        setError(t('auth.errors.googlePopupClosed'));
       } else if (err.code === 'auth/unauthorized-domain') {
         const domain = typeof window !== 'undefined' ? window.location.hostname : '';
-        setError(`[Google Auth | Code: auth/unauthorized-domain] O domínio (${domain}) não está autorizado no Firebase (${firebaseConfig.projectId}). Adicione este domínio na Consola do Firebase (Authentication -> Definições -> Domínios autorizados) ou crie conta com Email e Palavra-passe acima.`);
+        const unauthorizedDomainMsg = t('auth.errors.unauthorizedDomain', {
+          domain,
+          project: firebaseConfig.projectId,
+        });
+        setError(`[Google Auth | Code: auth/unauthorized-domain] ${unauthorizedDomainMsg}`);
       } else {
-        setError(`[Google Auth | Code: ${err.code || 'N/A'}] ${err.message || 'Erro ao entrar com Google.'}`);
+        setError(`[Google Auth | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.googleGenericError')}`);
       }
     } finally {
       setLoading(false);
@@ -245,7 +252,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
       if (!userDoc.exists()) {
         // See note above: never hardcode a fallback category — it would
         // block auto-detection later in BusinessProfileSetupModal.
-        const demoBName = businessName.trim() || 'Negócio de Demonstração';
+        const demoBName = businessName.trim() || t('auth.defaults.demoBusinessNameFallback');
         await setDoc(doc(db, 'businesses', businessId), {
           id: businessId,
           name: demoBName,
@@ -258,7 +265,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         await setDoc(doc(db, 'users', uid), {
           uid,
           email: 'demo@batchprofittracker.local',
-          name: name.trim() || 'Proprietário Demo',
+          name: name.trim() || t('auth.defaults.demoOwnerFallback'),
           role: 'owner',
           businessId,
           businessIds: [businessId],
@@ -269,7 +276,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
     } catch (err: any) {
       console.error('Anonymous Auth Error:', err);
       if (err.code === 'auth/operation-not-allowed') {
-        setError('[Modo Demo | Code: auth/operation-not-allowed] O login Anónimo está desativado na consola do Firebase. Utilize a opção "Entrar com Google".');
+        setError(`[Modo Demo | Code: auth/operation-not-allowed] ${t('auth.errors.demoOperationNotAllowed')}`);
       } else {
         setError('[Modo Demo | Code: ' + (err.code || 'N/A') + '] ' + (err.message || String(err)));
       }
@@ -284,15 +291,20 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         {/* Decorative background glow */}
         <div className="absolute -top-12 -right-12 w-40 h-40 bg-blue-500/10 rounded-full blur-3xl pointer-events-none"></div>
 
-        {onBackToQuickLogin && (
-          <button
-            type="button"
-            onClick={onBackToQuickLogin}
-            className="text-xs font-semibold text-gray-400 hover:text-gray-600 mb-4 transition"
-          >
-            ← Voltar ao login rápido
-          </button>
-        )}
+        <div className="flex items-center justify-between mb-4">
+          {onBackToQuickLogin ? (
+            <button
+              type="button"
+              onClick={onBackToQuickLogin}
+              className="text-xs font-semibold text-gray-400 hover:text-gray-600 transition"
+            >
+              ← {t('auth.backToQuickLogin')}
+            </button>
+          ) : (
+            <span />
+          )}
+          <LanguageSwitcher />
+        </div>
 
         {/* Brand Header */}
         <div className="flex flex-col items-center text-center mb-6">
@@ -303,7 +315,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             Batch Profit Tracker
           </h1>
           <p className="text-xs text-gray-500 mt-1">
-            Gestão inteligente e controlo de lucro por lote para o seu negócio
+            {t('auth.subtitle')}
           </p>
         </div>
 
@@ -323,7 +335,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 : 'text-gray-500 hover:text-gray-800'
             }`}
           >
-            Entrar
+            {t('auth.tabs.login')}
           </button>
           <button
             type="button"
@@ -340,14 +352,14 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 : 'text-gray-500 hover:text-gray-800'
             }`}
           >
-            Registar Negócio
+            {t('auth.tabs.register')}
           </button>
         </div>
 
         {/* Role Selector hint on Login */}
         {mode === 'login' && (
           <div className="flex items-center justify-center gap-2 mb-4 bg-gray-100/40 p-1.5 rounded-xl border border-gray-200/60 text-xs">
-            <span className="text-gray-500">Entrar como:</span>
+            <span className="text-gray-500">{t('auth.loginAs')}</span>
             <button
               type="button"
               onClick={() => setRoleMode('owner')}
@@ -355,7 +367,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 roleMode === 'owner' ? 'bg-gray-50 text-blue-600 border border-blue-500/30' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Dono (Proprietário)
+              {t('auth.roleOwner')}
             </button>
             <button
               type="button"
@@ -364,7 +376,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 roleMode === 'staff' ? 'bg-gray-50 text-blue-600 border border-blue-500/30' : 'text-gray-500 hover:text-gray-700'
               }`}
             >
-              Funcionário (Staff)
+              {t('auth.roleStaff')}
             </button>
           </div>
         )}
@@ -382,7 +394,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
               type="button"
               onClick={clearSuspensionNotice}
               className="text-orange-600/60 hover:text-orange-700 font-bold shrink-0"
-              aria-label="Fechar"
+              aria-label={t('common.close')}
             >
               ×
             </button>
@@ -403,7 +415,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             <>
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  O seu Nome
+                  {t('auth.form.yourName')}
                 </label>
                 <div className="relative">
                   <User className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
@@ -412,7 +424,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                     required
                     value={name}
                     onChange={e => setName(e.target.value)}
-                    placeholder="Ex: João Silva"
+                    placeholder={t('auth.form.namePlaceholder')}
                     className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -420,7 +432,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
 
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1">
-                  Nome do Negócio / Empresa
+                  {t('auth.form.businessName')}
                 </label>
                 <div className="relative">
                   <Store className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
@@ -429,7 +441,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                     required
                     value={businessName}
                     onChange={e => setBusinessName(e.target.value)}
-                    placeholder="Ex: Mercearia Esperança"
+                    placeholder={t('auth.form.businessNamePlaceholder')}
                     className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
                   />
                 </div>
@@ -438,10 +450,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1 flex items-center gap-1">
-                    Ramo de Negócio
+                    {t('auth.form.category')}
                     {category && !categoryTouchedManually && (
                       <span className="flex items-center gap-0.5 text-[9px] font-bold text-blue-600 normal-case">
-                        <Sparkles className="w-2.5 h-2.5" /> auto
+                        <Sparkles className="w-2.5 h-2.5" /> {t('auth.form.categoryAuto')}
                       </span>
                     )}
                   </label>
@@ -455,7 +467,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                   >
                     {!category && (
                       <option value="" disabled>
-                        Selecione uma categoria...
+                        {t('auth.form.selectCategory')}
                       </option>
                     )}
                     {BUSINESS_CATEGORY_GROUPS.map(group => (
@@ -472,7 +484,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
 
                 <div>
                   <label className="block text-xs font-semibold text-gray-700 mb-1">
-                    Moeda Principal
+                    {t('auth.form.currency')}
                   </label>
                   <select
                     value={currency}
@@ -492,7 +504,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Email
+              {t('auth.form.email')}
             </label>
             <div className="relative">
               <Mail className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
@@ -501,7 +513,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 required
                 value={email}
                 onChange={e => setEmail(e.target.value)}
-                placeholder="seuemail@exemplo.com"
+                placeholder={t('auth.form.emailPlaceholder')}
                 className="w-full bg-white border border-gray-200 rounded-xl pl-9 pr-3 py-2.5 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 transition"
               />
             </div>
@@ -509,7 +521,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
 
           <div>
             <label className="block text-xs font-semibold text-gray-700 mb-1">
-              Palavra-passe
+              {t('auth.form.password')}
             </label>
             <div className="relative">
               <Lock className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
@@ -526,7 +538,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 type="button"
                 onClick={() => setShowPassword(!showPassword)}
                 className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700 transition p-0.5"
-                title={showPassword ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
+                title={showPassword ? t('auth.form.hidePassword') : t('auth.form.showPassword')}
               >
                 {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
               </button>
@@ -536,7 +548,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           {mode === 'register' && (
             <div>
               <label className="block text-xs font-semibold text-gray-700 mb-1">
-                Confirmar Palavra-passe
+                {t('auth.form.confirmPassword')}
               </label>
               <div className="relative">
                 <Lock className="w-4 h-4 absolute left-3 top-3 text-gray-500" />
@@ -553,7 +565,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                   type="button"
                   onClick={() => setShowConfirmPassword(!showConfirmPassword)}
                   className="absolute right-3 top-2.5 text-gray-500 hover:text-gray-700 transition p-0.5"
-                  title={showConfirmPassword ? 'Ocultar palavra-passe' : 'Mostrar palavra-passe'}
+                  title={showConfirmPassword ? t('auth.form.hidePassword') : t('auth.form.showPassword')}
                 >
                   {showConfirmPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                 </button>
@@ -567,10 +579,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-lg disabled:opacity-50"
           >
             {loading ? (
-              <span className="animate-pulse">A processar...</span>
+              <span className="animate-pulse">{t('auth.submitting')}</span>
             ) : (
               <>
-                <span>{mode === 'login' ? 'Entrar no Sistema' : 'Criar Conta e Negócio'}</span>
+                <span>{mode === 'login' ? t('auth.submitLogin') : t('auth.submitRegister')}</span>
                 <ArrowRight className="w-4 h-4" />
               </>
             )}
@@ -602,7 +614,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
               />
             </svg>
-            <span>Entrar com Conta Google</span>
+            <span>{t('auth.googleLogin')}</span>
           </button>
 
           <button
@@ -612,12 +624,12 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             className="w-full py-2.5 px-3 bg-gray-100/80 hover:bg-gray-50 border border-gray-300/80 text-blue-600 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2"
           >
             <UserCheck className="w-4 h-4" />
-            <span>Entrar em Modo Demonstração (Sem Email)</span>
+            <span>{t('auth.demoLogin')}</span>
           </button>
         </div>
 
         <div className="mt-4 text-center text-[11px] text-gray-500">
-          🔒 Acesso seguro com isolamento total de dados por empresa.
+          {t('auth.secureFooter')}
         </div>
       </div>
     </div>

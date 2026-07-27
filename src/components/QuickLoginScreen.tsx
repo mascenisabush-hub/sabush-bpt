@@ -3,6 +3,7 @@ import { signInWithEmailAndPassword } from 'firebase/auth';
 import { auth } from '../lib/firebase';
 import { useApp } from '../context/AppContext';
 import { Store, User, ArrowLeft, Delete, ShieldCheck, Loader2, KeyRound, Info } from 'lucide-react';
+import { useLanguage } from '../context/LanguageContext';
 
 interface QuickLoginScreenProps {
   onUseOwnerLogin: () => void;
@@ -15,6 +16,7 @@ interface QuickLoginScreenProps {
 // under the hood.
 export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLogin }) => {
   const { pairedDevice } = useApp();
+  const { t } = useLanguage();
   const [selected, setSelected] = useState<{ uid: string; name: string; email: string } | null>(null);
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);
@@ -35,11 +37,11 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
         // Success — onAuthStateChanged in AppContext takes over from here.
       } catch (err: any) {
         if (err.code === 'auth/user-disabled') {
-          setError('Esta conta foi suspensa. Contacte o dono do negócio.');
+          setError(t('quickLogin.errors.suspended'));
         } else if (err.code === 'auth/too-many-requests') {
-          setError('Demasiadas tentativas. Aguarde um momento e tente novamente.');
+          setError(t('quickLogin.errors.tooManyAttempts'));
         } else {
-          setError('PIN incorreto. Tente novamente.');
+          setError(t('quickLogin.errors.wrongPin'));
         }
         setPin('');
         setLoading(false);
@@ -89,7 +91,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             {pairedDevice.businessName}
           </h1>
           <p className="text-sm text-[#6B7280] mt-1.5">
-            {selected ? 'Introduza o seu PIN' : 'Quem está a usar este dispositivo?'}
+            {selected ? t('quickLogin.enterPin') : t('quickLogin.whoIsUsing')}
           </p>
         </div>
 
@@ -98,7 +100,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             {pairedDevice.staff.length === 0 ? (
               <p className="text-[13px] text-[#6B7280] bg-[#F9FAFB] p-3.5 rounded-xl border border-dashed border-[#E5E7EB] text-center mt-5 flex items-center justify-center gap-1.5">
                 <Info className="w-3.5 h-3.5 text-gray-400 shrink-0" />
-                Ainda não há funcionários configurados para este dispositivo.
+                {t('quickLogin.noStaffConfigured')}
               </p>
             ) : (
               <div className="space-y-2 mt-5 mb-5 max-h-72 overflow-y-auto">
@@ -133,7 +135,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
               onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 8px 20px rgba(212,175,55,0.25)')}
             >
               <ShieldCheck className="w-4 h-4" />
-              Entrar como Dono
+              {t('quickLogin.loginAsOwner')}
             </button>
           </>
         ) : (
@@ -147,7 +149,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
               }}
               className="flex items-center gap-1 text-xs font-semibold text-gray-500 hover:text-gray-700 mt-6 mb-4 transition"
             >
-              <ArrowLeft className="w-3.5 h-3.5" /> Voltar
+              <ArrowLeft className="w-3.5 h-3.5" /> {t('quickLogin.back')}
             </button>
 
             <p className="text-center text-sm font-bold text-gray-800 mb-4">{selected.name}</p>
@@ -205,7 +207,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             </div>
 
             <p className="flex items-center justify-center gap-1 text-[10px] text-gray-400 mt-5">
-              <KeyRound className="w-3 h-3" /> PIN de 6 dígitos
+              <KeyRound className="w-3 h-3" /> {t('quickLogin.pinDigits')}
             </p>
           </>
         )}

@@ -1,0 +1,86 @@
+import type { TranslationDict } from './pt';
+
+// English locale. Keep this file's shape identical to pt.ts (the
+// canonical/fallback locale) — the same keys, same nesting.
+export const en: TranslationDict = {
+  common: {
+    close: 'Close',
+  },
+  auth: {
+    subtitle: 'Smart batch profit management and control for your business',
+    backToQuickLogin: 'Back to quick login',
+    tabs: {
+      login: 'Sign In',
+      register: 'Register Business',
+    },
+    loginAs: 'Sign in as:',
+    roleOwner: 'Owner',
+    roleStaff: 'Staff',
+    form: {
+      yourName: 'Your Name',
+      namePlaceholder: 'e.g. John Smith',
+      businessName: 'Business Name',
+      businessNamePlaceholder: 'e.g. Hope Grocery Store',
+      category: 'Business Category',
+      categoryAuto: 'auto',
+      selectCategory: 'Select a category...',
+      currency: 'Main Currency',
+      email: 'Email',
+      emailPlaceholder: 'youremail@example.com',
+      password: 'Password',
+      confirmPassword: 'Confirm Password',
+      showPassword: 'Show password',
+      hidePassword: 'Hide password',
+    },
+    defaults: {
+      ownerFallback: 'Owner',
+      businessNameFallback: 'My Business',
+      demoBusinessNameFallback: 'Demo Business',
+      demoOwnerFallback: 'Demo Owner',
+    },
+    submitting: 'Processing...',
+    submitLogin: 'Sign In',
+    submitRegister: 'Create Account & Business',
+    googleLogin: 'Sign in with Google',
+    demoLogin: 'Enter Demo Mode (No Email)',
+    secureFooter: '🔒 Secure access with full data isolation per business.',
+    errors: {
+      wrongCredentials: 'Incorrect email or password.',
+      accountSuspended: 'This account has been suspended. Contact the business owner for more information.',
+      invalidEmail: 'Invalid email format.',
+      genericAuth: 'Authentication error.',
+      profileNotFound: 'User profile not found in Firestore.',
+      profileFetchFailed: 'Failed to fetch profile from the database',
+      enterName: 'Please enter your name.',
+      enterBusinessName: 'Please enter your business name.',
+      selectCategory: 'Please select your business category.',
+      passwordMismatch: 'Passwords do not match. Please check and try again.',
+      emailInUse: 'This email is already registered on the platform. Try signing in.',
+      weakPassword: 'Password must be at least 6 characters long.',
+      invalidEmailFormat: 'Email format is invalid.',
+      createAccountFailed: 'Failed to create authentication account.',
+      saveProfileFailed: 'Error saving profile data',
+      saveBusinessFailed: 'Error saving business data',
+      genericRequest: 'An error occurred while processing your request.',
+      googlePopupClosed: 'The authentication window was closed before completing.',
+      unauthorizedDomain:
+        'The domain ({{domain}}) is not authorized in Firebase ({{project}}). Add this domain in the Firebase Console (Authentication -> Settings -> Authorized domains) or create an account with Email and Password above.',
+      googleGenericError: 'Error signing in with Google.',
+      demoOperationNotAllowed:
+        'Anonymous login is disabled in the Firebase console. Use the "Sign in with Google" option.',
+    },
+  },
+  quickLogin: {
+    enterPin: 'Enter your PIN',
+    whoIsUsing: "Who's using this device?",
+    noStaffConfigured: 'No staff configured for this device yet.',
+    loginAsOwner: 'Sign in as Owner',
+    back: 'Back',
+    pinDigits: '6-digit PIN',
+    errors: {
+      suspended: 'This account has been suspended. Contact the business owner.',
+      tooManyAttempts: 'Too many attempts. Wait a moment and try again.',
+      wrongPin: 'Incorrect PIN. Try again.',
+    },
+  },
+};

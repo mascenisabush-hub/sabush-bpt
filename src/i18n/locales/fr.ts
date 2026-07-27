@@ -1,0 +1,86 @@
+import type { TranslationDict } from './pt';
+
+// French locale. Keep this file's shape identical to pt.ts (the
+// canonical/fallback locale) — the same keys, same nesting.
+export const fr: TranslationDict = {
+  common: {
+    close: 'Fermer',
+  },
+  auth: {
+    subtitle: "Gestion intelligente et contrôle du profit par lot pour votre entreprise",
+    backToQuickLogin: 'Retour à la connexion rapide',
+    tabs: {
+      login: 'Connexion',
+      register: "Enregistrer l'entreprise",
+    },
+    loginAs: 'Se connecter en tant que :',
+    roleOwner: 'Propriétaire',
+    roleStaff: 'Employé',
+    form: {
+      yourName: 'Votre nom',
+      namePlaceholder: 'Ex : Jean Dupont',
+      businessName: "Nom de l'entreprise",
+      businessNamePlaceholder: 'Ex : Épicerie Espérance',
+      category: "Secteur d'activité",
+      categoryAuto: 'auto',
+      selectCategory: 'Sélectionnez une catégorie...',
+      currency: 'Devise principale',
+      email: 'E-mail',
+      emailPlaceholder: 'votreemail@exemple.com',
+      password: 'Mot de passe',
+      confirmPassword: 'Confirmer le mot de passe',
+      showPassword: 'Afficher le mot de passe',
+      hidePassword: 'Masquer le mot de passe',
+    },
+    defaults: {
+      ownerFallback: 'Propriétaire',
+      businessNameFallback: 'Mon entreprise',
+      demoBusinessNameFallback: 'Entreprise de démonstration',
+      demoOwnerFallback: 'Propriétaire démo',
+    },
+    submitting: 'Traitement...',
+    submitLogin: 'Se connecter',
+    submitRegister: "Créer le compte et l'entreprise",
+    googleLogin: 'Se connecter avec Google',
+    demoLogin: 'Mode démo (sans e-mail)',
+    secureFooter: '🔒 Accès sécurisé avec isolation totale des données par entreprise.',
+    errors: {
+      wrongCredentials: 'E-mail ou mot de passe incorrect.',
+      accountSuspended: "Ce compte a été suspendu. Contactez le propriétaire de l'entreprise pour plus d'informations.",
+      invalidEmail: "Format d'e-mail invalide.",
+      genericAuth: "Erreur d'authentification.",
+      profileNotFound: 'Profil utilisateur introuvable dans Firestore.',
+      profileFetchFailed: 'Échec de la récupération du profil dans la base de données',
+      enterName: 'Veuillez saisir votre nom.',
+      enterBusinessName: 'Veuillez saisir le nom de votre entreprise.',
+      selectCategory: 'Veuillez sélectionner le secteur de votre entreprise.',
+      passwordMismatch: 'Les mots de passe ne correspondent pas. Veuillez vérifier et réessayer.',
+      emailInUse: 'Cet e-mail est déjà enregistré sur la plateforme. Essayez de vous connecter.',
+      weakPassword: 'Le mot de passe doit contenir au moins 6 caractères.',
+      invalidEmailFormat: "Le format de l'e-mail est invalide.",
+      createAccountFailed: "Échec de la création du compte d'authentification.",
+      saveProfileFailed: "Erreur lors de l'enregistrement des données du profil",
+      saveBusinessFailed: "Erreur lors de l'enregistrement des données de l'entreprise",
+      genericRequest: "Une erreur s'est produite lors du traitement de votre demande.",
+      googlePopupClosed: "La fenêtre d'authentification a été fermée avant la fin.",
+      unauthorizedDomain:
+        "Le domaine ({{domain}}) n'est pas autorisé dans Firebase ({{project}}). Ajoutez ce domaine dans la console Firebase (Authentication -> Paramètres -> Domaines autorisés) ou créez un compte avec e-mail et mot de passe ci-dessus.",
+      googleGenericError: 'Erreur lors de la connexion avec Google.',
+      demoOperationNotAllowed:
+        'La connexion anonyme est désactivée dans la console Firebase. Utilisez l\'option « Se connecter avec Google ».',
+    },
+  },
+  quickLogin: {
+    enterPin: 'Entrez votre code PIN',
+    whoIsUsing: 'Qui utilise cet appareil ?',
+    noStaffConfigured: 'Aucun employé configuré pour cet appareil pour le moment.',
+    loginAsOwner: 'Se connecter en tant que propriétaire',
+    back: 'Retour',
+    pinDigits: 'Code PIN à 6 chiffres',
+    errors: {
+      suspended: "Ce compte a été suspendu. Contactez le propriétaire de l'entreprise.",
+      tooManyAttempts: 'Trop de tentatives. Attendez un moment et réessayez.',
+      wrongPin: 'Code PIN incorrect. Réessayez.',
+    },
+  },
+};
