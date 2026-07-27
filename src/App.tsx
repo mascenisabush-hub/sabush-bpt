@@ -18,7 +18,6 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
 import { QuickLoginScreen } from './components/QuickLoginScreen';
 import AppLoadingScreen from './components/AppLoadingScreen';
-import { NewSaaSDashboard } from './components/dashboard-v2/NewSaaSDashboard';
 import { Product } from './types';
 
 function MainApp() {
@@ -67,10 +66,6 @@ function MainApp() {
       return <QuickLoginScreen onUseOwnerLogin={() => setForceOwnerLogin(true)} />;
     }
     return <AuthView onBackToQuickLogin={pairedDevice ? () => setForceOwnerLogin(false) : undefined} />;
-  }
-
-  if (activeTab === 'dashboard-v2') {
-    return <NewSaaSDashboard onExit={() => setActiveTab('dashboard')} />;
   }
 
   const handleNavigateToAddStock = (productName?: string) => {

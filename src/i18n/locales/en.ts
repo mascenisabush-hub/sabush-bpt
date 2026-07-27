@@ -218,7 +218,6 @@ export const en: TranslationDict = {
       closing: { label: 'Monthly/Yearly Closing', shortLabel: 'Closing' },
       reports: { label: 'Reports', shortLabel: 'Reports' },
       timeline: { label: 'Timeline', shortLabel: 'History' },
-      dashboardV2: { label: 'Dashboard (New)', shortLabel: 'New' },
     },
   },
   header: {

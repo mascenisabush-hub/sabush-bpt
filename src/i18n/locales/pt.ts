@@ -186,7 +186,6 @@ export interface TranslationDict {
       closing: { label: string; shortLabel: string };
       reports: { label: string; shortLabel: string };
       timeline: { label: string; shortLabel: string };
-      dashboardV2: { label: string; shortLabel: string };
     };
   };
   header: {
@@ -928,7 +927,6 @@ export const pt: TranslationDict = {
       closing: { label: 'Fecho Mensal/Anual', shortLabel: 'Fecho' },
       reports: { label: 'Relatórios', shortLabel: 'Relatórios' },
       timeline: { label: 'Linha do Tempo', shortLabel: 'Histórico' },
-      dashboardV2: { label: 'Dashboard (Novo)', shortLabel: 'Novo' },
     },
   },
   header: {
