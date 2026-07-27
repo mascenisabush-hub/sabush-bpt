@@ -306,6 +306,32 @@ export interface TranslationDict {
       missingReason: string;
     };
   };
+  addExpense: {
+    title: string;
+    subtitle: string;
+    registeredTitle: string;
+    successMessage: string;
+    descriptionLabel: string;
+    descriptionPlaceholder: string;
+    expenseDate: string;
+    amountLabel: string;
+    categoryLabel: string;
+    categoryPlaceholder: string;
+    quickSuggestions: string;
+    categories: {
+      rent: string;
+      utilities: string;
+      transport: string;
+      salaries: string;
+      maintenance: string;
+      other: string;
+    };
+    submitButton: string;
+    errors: {
+      missingDescription: string;
+      invalidAmount: string;
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -646,6 +672,32 @@ export const pt: TranslationDict = {
       selectProductBatch: 'Por favor selecione um produto e um lote.',
       invalidQuantity: 'Por favor introduza uma quantidade de perda válida superior a 0.',
       missingReason: 'Por favor indique um motivo para a perda (ex.: Fora do prazo, Danificada, etc.).',
+    },
+  },
+  addExpense: {
+    title: 'Registar Despesa',
+    subtitle: 'Registe custos do negócio como renda, água/luz, transporte ou outras despesas operacionais.',
+    registeredTitle: 'Despesa Registada!',
+    successMessage: 'Registada despesa de {{amount}}.',
+    descriptionLabel: 'Descrição da Despesa',
+    descriptionPlaceholder: 'ex.: Renda da loja, Conta de luz, Combustível...',
+    expenseDate: 'Data da Despesa',
+    amountLabel: 'Valor ({{symbol}})',
+    categoryLabel: 'Categoria (opcional)',
+    categoryPlaceholder: 'ex.: Renda, Água/Luz, Transporte...',
+    quickSuggestions: 'Sugestões Rápidas:',
+    categories: {
+      rent: 'Renda',
+      utilities: 'Água / Luz',
+      transport: 'Transporte',
+      salaries: 'Salários',
+      maintenance: 'Manutenção',
+      other: 'Outro',
+    },
+    submitButton: 'Registar Despesa',
+    errors: {
+      missingDescription: 'Por favor descreva a despesa (ex.: Renda da loja, Conta de luz...).',
+      invalidAmount: 'Por favor introduza um valor válido superior a 0.',
     },
   },
 };
