@@ -80,7 +80,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 {isOwner ? (
                   <ShopSwitcher />
                 ) : (
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#D4AF37] mb-0.5">
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-[#2563EB] mb-0.5">
                     Meu Negócio
                   </p>
                 )}
@@ -135,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <button
                 onClick={() => setShowNotifications(v => !v)}
                 title="Notificações"
-                className="w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#D4AF37]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
+                className="w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#2563EB]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
               >
                 <Bell className="w-4 h-4" />
               </button>
@@ -150,7 +150,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <div className="relative shrink-0" ref={profileMenuRef}>
               <button
                 onClick={() => setShowProfileMenu(v => !v)}
-                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#D4AF37]/10 transition"
+                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#2563EB]/10 transition"
               >
                 <div className="w-8 h-8 rounded-full bg-[#0B1F3A] text-white flex items-center justify-center shrink-0">
                   <User className="w-4 h-4" />
@@ -159,7 +159,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   <span className="text-xs font-bold text-[#0B1F3A] leading-tight">
                     {userProfile?.name || 'Utilizador'}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wide text-[#D4AF37] font-bold">
+                  <span className="text-[10px] uppercase tracking-wide text-[#2563EB] font-bold">
                     {isOwner ? 'Dono' : 'Staff'}
                   </span>
                 </div>
@@ -223,7 +223,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   title={tab.label}
                   className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold transition active:scale-[0.97] ${
                     isActive
-                      ? 'bg-[#D4AF37] text-white shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
+                      ? 'bg-[#2563EB] text-white shadow-[0_4px_14px_-4px_rgba(37,99,235,0.55)]'
                       : 'bg-[#F5F7FA] text-gray-600 hover:bg-[#0B1F3A]/5 hover:text-[#0B1F3A]'
                   }`}
                 >
@@ -250,7 +250,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#D4AF37] hover:text-[#B8962E] transition"
+              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#2563EB] hover:text-[#1D4ED8] transition"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span className="font-bold">Complete o perfil do seu negócio</span>

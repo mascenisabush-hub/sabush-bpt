@@ -16,18 +16,21 @@
   --navy: #0B1F3A;
   --navy-soft: #14294A;
 
-  --gold: #D4AF37;
-  --gold-hover: #B8962E;
+  /* Accent tokens — historically "gold", now the blue accent per the
+     latest palette swap. Names kept as-is to avoid a much larger diff
+     across every component that references them. */
+  --gold: #2563EB;
+  --gold-hover: #1D4ED8;
 
   --primary: #0B1F3A;
   --primary-hover: #14294A;
   --primary-foreground: #FFFFFF;
 
-  --secondary: #D4AF37;
-  --secondary-hover: #B8962E;
+  --secondary: #2563EB;
+  --secondary-hover: #1D4ED8;
   --secondary-foreground: #0B1F3A;
 
-  --accent: #D4AF37;
+  --accent: #2563EB;
 
   --muted: #F5F7FA;
   --muted-foreground: #6B7280;
@@ -35,7 +38,7 @@
   /* Borders are used sparingly now — spacing does the separating work */
   --border: #EEF0F3;
   --border-strong: #E5E7EB;
-  --ring: #D4AF37;
+  --ring: #2563EB;
 
   --success: #059669;
   --warning: #D97706;
@@ -55,14 +58,14 @@
 @theme {
   --color-primary: #0B1F3A;
   --color-primary-hover: #14294A;
-  --color-secondary: #D4AF37;
-  --color-secondary-hover: #B8962E;
+  --color-secondary: #2563EB;
+  --color-secondary-hover: #1D4ED8;
   --color-title: #0B1F3A;
   --color-title-soft: #14294A;
   --color-navy: #0B1F3A;
   --color-navy-soft: #14294A;
-  --color-gold: #D4AF37;
-  --color-gold-hover: #B8962E;
+  --color-gold: #2563EB;
+  --color-gold-hover: #1D4ED8;
 }
 
 /* ==========================================================================
@@ -111,7 +114,7 @@
   transform: translateY(-2px);
 }
 .card-premium.is-highlighted {
-  background: linear-gradient(180deg, rgba(212,175,55,0.06) 0%, rgba(212,175,55,0.02) 100%);
+  background: linear-gradient(180deg, rgba(37,99,235,0.06) 0%, rgba(37,99,235,0.02) 100%);
 }
 .kpi-value {
   color: var(--navy);
@@ -124,7 +127,7 @@
 }
 .kpi-label {
   color: #6B7280;
-  font-weight: 600;
+  font-weight: 800;
   font-size: 11px;
   text-transform: uppercase;
   letter-spacing: 0.06em;

@@ -185,7 +185,7 @@ export default function AppLoadingScreen({ message = 'A carregar o sistema...' }
           justify-content: center;
           background: linear-gradient(160deg, #0d1e3a, #071224);
           color: var(--node-c, #f5c877);
-          filter: drop-shadow(0 0 8px var(--node-glow, rgba(184,121,26,0.6)));
+          filter: drop-shadow(0 0 8px var(--node-glow, rgba(29,78,216,0.6)));
           animation: als-orbit 16s linear infinite;
         }
         .als-orbit-node::before {

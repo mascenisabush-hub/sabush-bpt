@@ -20,7 +20,7 @@ import { formatCurrency } from '../../utils/formatters';
 // The remaining five stay in a supporting grid underneath. Same data,
 // same source, just weighted to match how the numbers actually relate.
 // Colors now read from the brand tokens in index.css (--navy, --gold)
-// instead of the older #0B1F3A/#D4AF37 hex that had drifted from them.
+// instead of the older #0B1F3A/#2563EB hex that had drifted from them.
 // ============================================================
 export const SummaryCards: React.FC = () => {
   const {
