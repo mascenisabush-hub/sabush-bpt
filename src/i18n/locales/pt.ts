@@ -11,6 +11,10 @@ export interface TranslationDict {
       open: string;
       closed: string;
     };
+    months: {
+      jan: string; feb: string; mar: string; apr: string; may: string; jun: string;
+      jul: string; aug: string; sep: string; oct: string; nov: string; dec: string;
+    };
   };
   auth: {
     subtitle: string;
@@ -467,6 +471,7 @@ export interface TranslationDict {
       statusPartiallyRemaining: string;
       statusFullyConsumed: string;
       statusArchived: string;
+      delete: string;
     };
     businessWorth: {
       title: string;
@@ -611,6 +616,95 @@ export interface TranslationDict {
       insightLastMonthlyChangeUp: string;
       insightLastMonthlyChangeDown: string;
     };
+    expenses: {
+      title: string;
+      description: string;
+      kpiTotal: string;
+      kpiTotalFull: string;
+      kpiAvgMonthly: string;
+      kpiLargestCategory: string;
+      kpiCount: string;
+      kpiCountFull: string;
+      groupCategory: string;
+      groupMonth: string;
+      groupYear: string;
+      sectionByGroupTitle: string;
+      allExpensesTitle: string;
+      allExpensesCount: string;
+      emptyMessage: string;
+      insightTopCategory: string;
+      insightMonthlyChangeUp: string;
+      insightMonthlyChangeDown: string;
+    };
+    withdrawals: {
+      title: string;
+      description: string;
+      kpiTotal: string;
+      kpiTotalFull: string;
+      kpiTopReason: string;
+      kpiCount: string;
+      kpiCountFull: string;
+      groupMonth: string;
+      groupReason: string;
+      sectionByGroupTitle: string;
+      allWithdrawalsTitle: string;
+      timelineTitle: string;
+      emptyMessage: string;
+      insightTopReason: string;
+    };
+    inventoryLosses: {
+      title: string;
+      description: string;
+      kpiTotalLost: string;
+      kpiUnitsLost: string;
+      kpiProductsAffected: string;
+      kpiLargestLoss: string;
+      groupProduct: string;
+      groupReason: string;
+      groupMonth: string;
+      sectionByGroupTitle: string;
+      allLossesTitle: string;
+      allLossesCount: string;
+      emptyMessage: string;
+      productRemoved: string;
+      unitsSuffix: string;
+      colQuantity: string;
+      colValueLost: string;
+      insightLargestLoss: string;
+    };
+    stockVerification: {
+      title: string;
+      description: string;
+      typeInitial: string;
+      typeWeekly: string;
+      typeMonthly: string;
+      typeQuarterly: string;
+      typeYearly: string;
+      typeCustom: string;
+      kpiBefore: string;
+      kpiAfter: string;
+      kpiFinancialImpact: string;
+      kpiProductsAdjusted: string;
+      historyTitle: string;
+      colType: string;
+      colProductsCounted: string;
+      colProductsAdjusted: string;
+      colBefore: string;
+      colAfter: string;
+      colImpact: string;
+      diffTableTitle: string;
+      colProduct: string;
+      colDiffQty: string;
+      colDiffValue: string;
+      itemsCountedLabel: string;
+      noStockCountsMessage: string;
+      noComparisonMessage: string;
+      insightNoCounts: string;
+      insightOnlyInitial: string;
+      insightLatestAdjusted: string;
+      insightValueUp: string;
+      insightValueDown: string;
+    };
   };
 }
 
@@ -630,6 +724,10 @@ export const pt: TranslationDict = {
     batchStatus: {
       open: '🟢 Ativo',
       closed: '🔒 Fechado',
+    },
+    months: {
+      jan: 'Jan', feb: 'Fev', mar: 'Mar', apr: 'Abr', may: 'Mai', jun: 'Jun',
+      jul: 'Jul', aug: 'Ago', sep: 'Set', oct: 'Out', nov: 'Nov', dec: 'Dez',
     },
   },
   auth: {
@@ -1139,6 +1237,7 @@ export const pt: TranslationDict = {
       statusPartiallyRemaining: 'Parcialmente Restante',
       statusFullyConsumed: 'Totalmente Consumido',
       statusArchived: 'Arquivado',
+      delete: 'Eliminar',
     },
     businessWorth: {
     title: 'Valor do Negócio',
@@ -1282,6 +1381,95 @@ export const pt: TranslationDict = {
       insightNoClosings: 'Ainda não foram registados fechos mensais ou anuais — feche um período para acompanhar a evolução ao longo do tempo.',
       insightLastMonthlyChangeUp: 'No fecho mais recente ({{period}}), o Valor do Negócio aumentou {{pct}}%.',
       insightLastMonthlyChangeDown: 'No fecho mais recente ({{period}}), o Valor do Negócio diminuiu {{pct}}%.',
+    },
+    expenses: {
+      title: 'Relatório de Despesas',
+      description: 'Para onde vai o dinheiro do negócio.',
+      kpiTotal: 'Despesas Totais',
+      kpiTotalFull: 'Despesas Totais',
+      kpiAvgMonthly: 'Média Mensal',
+      kpiLargestCategory: 'Maior Categoria',
+      kpiCount: 'Nº de Despesas',
+      kpiCountFull: 'Número de Despesas',
+      groupCategory: 'Categoria',
+      groupMonth: 'Mês',
+      groupYear: 'Ano',
+      sectionByGroupTitle: 'Despesas por {{group}}',
+      allExpensesTitle: 'Todas as Despesas',
+      allExpensesCount: 'Todas as Despesas ({{count}})',
+      emptyMessage: 'Nenhuma despesa registada neste período.',
+      insightTopCategory: '"{{label}}" é a maior categoria de despesa, representando {{pct}}% do total.',
+      insightMonthlyChangeUp: 'As despesas em {{month}} aumentaram {{pct}}% em relação a {{prevMonth}}.',
+      insightMonthlyChangeDown: 'As despesas em {{month}} diminuíram {{pct}}% em relação a {{prevMonth}}.',
+    },
+    withdrawals: {
+      title: 'Retiradas do Proprietário',
+      description: 'Quanto o proprietário retirou do negócio e para quê.',
+      kpiTotal: 'Retiradas Totais',
+      kpiTotalFull: 'Retiradas Totais',
+      kpiTopReason: 'Motivo Mais Comum',
+      kpiCount: 'Nº de Retiradas',
+      kpiCountFull: 'Número de Retiradas',
+      groupMonth: 'Mês',
+      groupReason: 'Motivo',
+      sectionByGroupTitle: 'Retiradas por {{group}}',
+      allWithdrawalsTitle: 'Todas as Retiradas',
+      timelineTitle: 'Linha do Tempo ({{count}})',
+      emptyMessage: 'Nenhuma retirada registada neste período.',
+      insightTopReason: '"{{label}}" é o motivo mais comum de retirada, representando {{pct}}% do total retirado.',
+    },
+    inventoryLosses: {
+      title: 'Perdas de Inventário',
+      description: 'Onde o negócio está a perder dinheiro em stock.',
+      kpiTotalLost: 'Valor Total Perdido',
+      kpiUnitsLost: 'Unidades Perdidas',
+      kpiProductsAffected: 'Produtos Afetados',
+      kpiLargestLoss: 'Maior Perda Individual',
+      groupProduct: 'Produto',
+      groupReason: 'Motivo',
+      groupMonth: 'Mês',
+      sectionByGroupTitle: 'Perdas por {{group}}',
+      allLossesTitle: 'Todas as Perdas',
+      allLossesCount: 'Todas as Perdas ({{count}})',
+      emptyMessage: 'Nenhuma perda registada neste período.',
+      productRemoved: 'Produto Removido',
+      unitsSuffix: 'unidades',
+      colQuantity: 'Quantidade',
+      colValueLost: 'Valor Perdido',
+      insightLargestLoss: 'A maior perda individual foi {{amount}} em {{product}} ({{date}}).',
+    },
+    stockVerification: {
+      title: 'Verificação de Stock',
+      description: 'O que mudou entre cada recontagem física e a anterior.',
+      typeInitial: 'Inicial',
+      typeWeekly: 'Semanal',
+      typeMonthly: 'Mensal',
+      typeQuarterly: 'Trimestral',
+      typeYearly: 'Anual',
+      typeCustom: 'Personalizada',
+      kpiBefore: 'Inventário Antes',
+      kpiAfter: 'Inventário Depois',
+      kpiFinancialImpact: 'Impacto Financeiro',
+      kpiProductsAdjusted: 'Produtos Ajustados',
+      historyTitle: 'Histórico de Verificações ({{count}})',
+      colType: 'Tipo',
+      colProductsCounted: 'Produtos Contados',
+      colProductsAdjusted: 'Produtos Ajustados',
+      colBefore: 'Antes',
+      colAfter: 'Depois',
+      colImpact: 'Impacto',
+      diffTableTitle: 'Diferenças por Produto — {{date}}',
+      colProduct: 'Produto',
+      colDiffQty: 'Diferença (Qtd)',
+      colDiffValue: 'Diferença (Valor)',
+      itemsCountedLabel: '{{items}} produtos contados · {{adjusted}} ajustados',
+      noStockCountsMessage: 'Nenhuma contagem de stock registada ainda.',
+      noComparisonMessage: 'Registe uma nova recontagem para comparar com a Contagem Inicial.',
+      insightNoCounts: 'Ainda não foi registada nenhuma contagem de stock.',
+      insightOnlyInitial: 'Apenas a Contagem Inicial foi registada. Faça uma nova recontagem para ver comparações.',
+      insightLatestAdjusted: 'Na verificação mais recente ({{date}}), {{adjusted}} de {{total}} produtos tiveram a quantidade ajustada.',
+      insightValueUp: 'O valor do inventário aumentou {{amount}} desde a contagem anterior.',
+      insightValueDown: 'O valor do inventário diminuiu {{amount}} desde a contagem anterior.',
     },
   },
 };
