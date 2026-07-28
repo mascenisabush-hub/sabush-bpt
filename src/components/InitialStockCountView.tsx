@@ -151,7 +151,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         </div>
 
         {/* Info box — informs quietly, never dominates */}
-        <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
+        <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
           <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
           <p className="text-[12px] leading-relaxed text-gray-600">
             Esta contagem estabelece o seu <strong className="text-[#111827] font-semibold">Capital Inicial do Negócio</strong> — o
