@@ -149,7 +149,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <select
               value={periodType}
               onChange={(e) => setPeriodType(e.target.value as ClosingPeriodType)}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-semibold transition-all duration-150 focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/[0.12]"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-semibold transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
             >
               <option value="monthly">Mensal</option>
               <option value="yearly">Anual</option>
@@ -162,7 +162,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
               <select
                 value={month}
                 onChange={(e) => setMonth(Number(e.target.value))}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/[0.12]"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
               >
                 {MONTH_NAMES.map((m, idx) => (
                   <option key={m} value={idx}>{m}</option>
@@ -176,7 +176,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-mono transition-all duration-150 focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/[0.12]"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -218,7 +218,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
               <p className="text-[10px] text-gray-500">Levantamentos</p>
               <p className="type-number text-sm text-[#0B1F3A] tabular-nums">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
             </div>
-            <div className="bg-[#2563EB]/[0.06] border border-[#2563EB]/25 rounded-lg p-2.5">
+            <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Valor de Mercado do Stock</p>
               <p className="font-display font-semibold text-sm text-[#0B1F3A] tabular-nums">
                 {formatCurrency(totalMarketValueAllTime, currencySymbol)}
@@ -253,7 +253,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <span>Fechar {periodLabel}</span>
           </button>
         ) : (
-          <div className="bg-[#0B1F3A]/[0.03] border border-[#2563EB]/30 rounded-xl p-4 space-y-3">
+          <div className="bg-[#0B1F3A]/[0.03] border border-[#D4AF37]/30 rounded-xl p-4 space-y-3">
             <p className="text-xs text-[#111827] font-semibold leading-relaxed">
               Tem a certeza? Depois de fechado, este período fica permanentemente bloqueado e não pode ser editado.
             </p>
@@ -299,11 +299,11 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                 const prev = sortedClosings[idx + 1];
                 const diff = prev ? c.businessWorthAtClose - prev.businessWorthAtClose : null;
                 return (
-                  <div key={c.id} className="group bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-3.5 space-y-2 transition-colors duration-150 hover:border-[#2563EB]/25">
+                  <div key={c.id} className="group bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-3.5 space-y-2 transition-colors duration-150 hover:border-[#D4AF37]/25">
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-bold text-[#111827] flex items-center gap-1.5">
-                          <Lock className="w-3 h-3 text-[#1D4ED8]" strokeWidth={2.25} />
+                          <Lock className="w-3 h-3 text-[#B8952F]" strokeWidth={2.25} />
                           {c.periodLabel}
                           <span className="text-[10px] font-normal text-gray-400">
                             ({c.periodType === 'monthly' ? 'Mensal' : 'Anual'})
@@ -337,7 +337,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                           {formatCurrency(c.totalWithdrawals, currencySymbol)}
                         </p>
                       </div>
-                      <div className="bg-[#2563EB]/[0.06] border border-[#2563EB]/25 rounded-lg p-1.5">
+                      <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Valor Negócio</p>
                         <p className="type-number text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.businessWorthAtClose, currencySymbol)}

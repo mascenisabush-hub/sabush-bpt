@@ -9,7 +9,7 @@ import { useLanguage } from '../../../context/LanguageContext';
 // derive or invent data themselves.
 // ============================================================
 
-const PALETTE = ['#EA580C', '#2563EB', '#059669', '#7C3AED', '#DB2777', '#D97706', '#0891B2', '#65A30D'];
+const PALETTE = ['#EA580C', '#D4AF37', '#059669', '#7C3AED', '#DB2777', '#D97706', '#0891B2', '#65A30D'];
 
 export interface BarDatum {
   label: string;

@@ -36,7 +36,7 @@ body {
 /* Selection + scrollbar are small details, but their absence is exactly
    what makes a product feel unfinished next to a $100M one. */
 ::selection {
-  background: rgba(37,99,235,0.22);
+  background: rgba(212,175,55,0.22);
   color: #0B1F3A;
 }
 ::-webkit-scrollbar { width: 10px; height: 10px; }
@@ -52,7 +52,7 @@ body {
 /* Visible, on-brand focus ring everywhere — never a browser default blue
    outline slipping through on a keyboard-only pass. */
 :focus-visible {
-  outline: 2px solid var(--gold, #2563EB);
+  outline: 2px solid var(--gold, #D4AF37);
   outline-offset: 2px;
   border-radius: 4px;
 }
@@ -73,25 +73,20 @@ body {
   --background: #FFFFFF;
   --foreground: #111827;
 
-  /* Premium Sabush brand system: navy is the structural/primary color,
-     blue is reserved strictly for accents — active states, key numbers,
-     highlights. White is the dominant base (~60-70% of the surface).
-     Orange is a secondary accent for calls-to-action / highlights that
-     need to stand apart from the primary accent (e.g. secondary CTAs,
-     "new" badges). */
+  /* SABUSH DESIGN SYSTEM v1.0 — Navy is structure (headers, emphasis).
+     Gold is the accent for money/actions (buttons, key actions). Orange
+     is the secondary accent for alerts/attention. White is the base UI.
+     Gray is support only. Each color has one job — don't mix them in. */
   --title: #0B1F3A;
   --title-soft: #14294A;
 
   --navy: #0B1F3A;
   --navy-soft: #14294A;
 
-  /* Accent tokens — blue per explicit product direction. Named --gold*
-     for historical reasons (avoids a much larger rename diff across
-     every component that references them) but hold blue values. */
-  --gold: #2563EB;
-  --gold-hover: #1D4ED8;
-  --gold-bright: #3B82F6;
-  --gold-soft: #EFF6FF;
+  --gold: #D4AF37;
+  --gold-hover: #B8952F;
+  --gold-bright: #E8C65C;
+  --gold-soft: #F6EFD9;
 
   --orange: #FF8C42;
   --orange-hover: #E9752B;
@@ -100,19 +95,19 @@ body {
   --primary-hover: #14294A;
   --primary-foreground: #FFFFFF;
 
-  --secondary: #2563EB;
-  --secondary-hover: #1D4ED8;
+  --secondary: #D4AF37;
+  --secondary-hover: #B8952F;
   --secondary-foreground: #0B1F3A;
 
-  --accent: #2563EB;
+  --accent: #D4AF37;
 
   --muted: #F5F7FA;
   --muted-foreground: #6B7280;
 
-  /* Borders are used sparingly now — spacing does the separating work */
-  --border: #F1F5F9;
+  /* Borders per design system v1.0 spec (#E5E7EB) */
+  --border: #E5E7EB;
   --border-strong: #E5E7EB;
-  --ring: #2563EB;
+  --ring: #D4AF37;
 
   --success: #059669;
   --warning: #D97706;
@@ -134,15 +129,15 @@ body {
   --font-display: 'Fraunces', ui-serif, Georgia, serif;
   --color-primary: #0B1F3A;
   --color-primary-hover: #14294A;
-  --color-secondary: #2563EB;
-  --color-secondary-hover: #1D4ED8;
+  --color-secondary: #D4AF37;
+  --color-secondary-hover: #B8952F;
   --color-title: #0B1F3A;
   --color-title-soft: #14294A;
   --color-navy: #0B1F3A;
   --color-navy-soft: #14294A;
-  --color-gold: #2563EB;
-  --color-gold-hover: #1D4ED8;
-  --color-gold-soft: #EFF6FF;
+  --color-gold: #D4AF37;
+  --color-gold-hover: #B8952F;
+  --color-gold-soft: #F6EFD9;
   --color-orange: #FF8C42;
   --color-orange-hover: #E9752B;
 }
@@ -193,11 +188,11 @@ body {
 .card-premium.is-interactive:hover {
   box-shadow: var(--shadow-2);
   transform: translateY(-1px);
-  border-color: rgba(37,99,235,0.35);
+  border-color: rgba(212,175,55,0.35);
 }
 .card-premium.is-highlighted {
-  background: linear-gradient(180deg, rgba(37,99,235,0.07) 0%, rgba(37,99,235,0.015) 100%);
-  border-color: rgba(37,99,235,0.22);
+  background: linear-gradient(180deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.015) 100%);
+  border-color: rgba(212,175,55,0.22);
 }
 /* Dark metric-card surface — a gradient instead of a flat fill so the
    hero KPI cards (Business Worth, Embedded Profit, etc.) read as premium
@@ -258,7 +253,7 @@ body {
 }
 
 /* Buttons — one definitive primary treatment instead of ad-hoc
-   bg-[#2563EB] strings repeated per file. */
+   bg-[#D4AF37] strings repeated per file. */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -269,10 +264,10 @@ body {
   background: var(--gold);
   color: #0B1F3A;
   cursor: pointer;
-  box-shadow: 0 8px 20px -8px rgba(37,99,235,0.55);
+  box-shadow: 0 8px 20px -8px rgba(212,175,55,0.55);
   transition: all 0.2s ease;
 }
-.btn-primary:hover { background: var(--gold-bright); box-shadow: 0 10px 24px -8px rgba(37,99,235,0.65); }
+.btn-primary:hover { background: var(--gold-bright); box-shadow: 0 10px 24px -8px rgba(212,175,55,0.65); }
 .btn-primary:active { transform: scale(0.97); }
 
 .btn-dark {

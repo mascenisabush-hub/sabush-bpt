@@ -83,7 +83,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 {isOwner ? (
                   <ShopSwitcher />
                 ) : (
-                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#2563EB] mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#D4AF37] mb-1">
                     {t('header.myBusiness')}
                   </p>
                 )}
@@ -139,7 +139,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <button
                 onClick={() => setShowNotifications(v => !v)}
                 title={t('header.notifications')}
-                className="w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#2563EB]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
+                className="w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#D4AF37]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
               >
                 <Bell className="w-4 h-4" />
               </button>
@@ -154,7 +154,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <div className="relative shrink-0" ref={profileMenuRef}>
               <button
                 onClick={() => setShowProfileMenu(v => !v)}
-                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#2563EB]/10 transition"
+                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#D4AF37]/10 transition"
               >
                 <div className="w-8 h-8 rounded-full bg-[#0B1F3A] text-white flex items-center justify-center shrink-0">
                   <User className="w-4 h-4" />
@@ -163,7 +163,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   <span className="text-xs font-bold text-[#0B1F3A] leading-tight">
                     {userProfile?.name || t('header.userFallback')}
                   </span>
-                  <span className="text-[10px] uppercase tracking-wide text-[#2563EB] font-bold">
+                  <span className="text-[10px] uppercase tracking-wide text-[#D4AF37] font-bold">
                     {isOwner ? t('header.roleOwner') : t('header.roleStaff')}
                   </span>
                 </div>
@@ -227,13 +227,13 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   title={t(tab.labelKey)}
                   className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
                     isActive
-                      ? 'bg-[#2563EB] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(37,99,235,0.55)]'
+                      ? 'bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
                       : 'bg-transparent text-gray-600 hover:bg-[#0B1F3A]/[0.05] hover:text-[#0B1F3A]'
                   }`}
                 >
                   <span
                     className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 transition-colors duration-150 ${
-                      isActive ? 'bg-[#0B1F3A] text-[#2563EB]' : 'bg-[#F5F7FA] text-[#0B1F3A]'
+                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-[#F5F7FA] text-[#0B1F3A]'
                     }`}
                   >
                     <Icon className="w-4 h-4" strokeWidth={2.25} />
@@ -254,7 +254,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#2563EB] hover:text-[#1D4ED8] transition"
+              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#D4AF37] hover:text-[#B8952F] transition"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span className="font-bold">{t('header.completeProfile')}</span>

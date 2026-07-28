@@ -31,10 +31,10 @@ export const NavigationTabs: React.FC<NavigationTabsProps> = ({ activeTab, setAc
               key={tab.id}
               onClick={() => setActiveTab(tab.id)}
               className={`flex flex-col items-center justify-center min-w-[52px] py-1.5 px-1 rounded-xl text-[10px] font-bold tracking-tight transition-all duration-150 active:scale-95 ${
-                isActive ? 'text-[#2563EB]' : 'text-white/55 hover:text-white/85'
+                isActive ? 'text-[#D4AF37]' : 'text-white/55 hover:text-white/85'
               }`}
             >
-              <div className={`p-1 rounded-lg transition-colors duration-150 ${isActive ? 'bg-[#2563EB]/15' : ''}`}>
+              <div className={`p-1 rounded-lg transition-colors duration-150 ${isActive ? 'bg-[#D4AF37]/15' : ''}`}>
                 <Icon className="w-5 h-5" strokeWidth={isActive ? 2.25 : 2} />
               </div>
               <span className="mt-0.5">{t(tab.shortLabelKey)}</span>

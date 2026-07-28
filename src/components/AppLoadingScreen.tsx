@@ -64,7 +64,7 @@ export default function AppLoadingScreen({ message = 'A carregar o sistema...' }
           background: conic-gradient(
             from 0deg,
             #D69B25 0deg, #f5e9c8 55deg, #f5c877 130deg, #eaf2ff 165deg,
-            #D69B25 200deg, #2563EB 260deg, #D69B25 320deg, #D69B25 360deg
+            #D69B25 200deg, #D4AF37 260deg, #D69B25 320deg, #D69B25 360deg
           );
           filter: blur(90px) saturate(150%);
           opacity: 0.32;
@@ -185,7 +185,7 @@ export default function AppLoadingScreen({ message = 'A carregar o sistema...' }
           justify-content: center;
           background: linear-gradient(160deg, #0d1e3a, #071224);
           color: var(--node-c, #f5c877);
-          filter: drop-shadow(0 0 8px var(--node-glow, rgba(29,78,216,0.6)));
+          filter: drop-shadow(0 0 8px var(--node-glow, rgba(184,121,26,0.6)));
           animation: als-orbit 16s linear infinite;
         }
         .als-orbit-node::before {
