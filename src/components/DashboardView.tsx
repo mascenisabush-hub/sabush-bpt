@@ -76,7 +76,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`group h-full text-left p-4 sm:p-5 flex flex-col gap-3 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`group h-full text-left p-6 flex flex-col gap-2.5 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isDark
           ? 'relative overflow-hidden card-dark-gradient shadow-[var(--shadow-2)]'
           : `card-premium ${highlight ? 'is-highlighted' : ''}`
@@ -230,7 +230,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           this is presentation only, nothing is recalculated.
           Color coding: navy = neutral, blue = business worth,
           green = profit, red = expenses. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5 sm:gap-4">
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
         <KpiCard
           icon={Landmark}
           iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#D4AF37]/10'}
@@ -322,7 +322,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <p className="kpi-label mb-5 px-1">
           {t('dashboard.otherIndicators')}
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-3.5 sm:gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
           <KpiCard
             icon={HandCoins}
             iconBgClass="bg-[#D4AF37]/10"

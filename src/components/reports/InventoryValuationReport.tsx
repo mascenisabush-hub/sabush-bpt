@@ -187,7 +187,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
 
       <InsightBanner insights={insights} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={Boxes} label={t('reports.inventoryValuation.kpiInventoryCost')} value={formatCurrency(totalInvestmentValue, currencySymbol)} />
         <ReportKpiCard icon={Gem} label={t('reports.inventoryValuation.kpiMarketValue')} value={formatCurrency(totalMarketValue, currencySymbol)} tone="accent" />
         <ReportKpiCard icon={TrendingUp} label={t('reports.inventoryValuation.kpiEmbeddedProfit')} value={formatCurrency(totalEmbeddedProfit, currencySymbol)} tone={totalEmbeddedProfit >= 0 ? 'positive' : 'negative'} />

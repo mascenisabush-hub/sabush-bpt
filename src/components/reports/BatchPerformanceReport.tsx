@@ -252,7 +252,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
         }
       />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={Layers} label={t('reports.batchPerformance.kpiBatchesInPeriod')} value={String(summaries.length)} />
         <ReportKpiCard icon={Boxes} label={t('reports.batchPerformance.kpiTotalInvestment')} value={formatCurrency(totalInvestment, currencySymbol)} />
         <ReportKpiCard icon={Gem} label={t('reports.batchPerformance.kpiRemainingInventory')} value={formatCurrency(totalRemainingInventory, currencySymbol)} />

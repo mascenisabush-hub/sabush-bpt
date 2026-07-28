@@ -165,7 +165,7 @@ export const ExpenseReport: React.FC<Props> = ({ onBack }) => {
 
       <ReportFilterBar range={range} onStartDate={setStartDate} onEndDate={setEndDate} onPreset={applyPreset} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={Receipt} label={t('reports.expenses.kpiTotal')} value={formatCurrency(total, currencySymbol)} tone="negative" />
         <ReportKpiCard icon={CalendarDays} label={t('reports.expenses.kpiAvgMonthly')} value={formatCurrency(avgMonthly, currencySymbol)} />
         <ReportKpiCard icon={Tag} label={t('reports.expenses.kpiLargestCategory')} value={largestCategory ? formatCurrency(largestCategory.value, currencySymbol) : '—'} sub={largestCategory?.label} />

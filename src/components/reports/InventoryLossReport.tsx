@@ -144,7 +144,7 @@ export const InventoryLossReport: React.FC<Props> = ({ onBack }) => {
 
       <ReportFilterBar range={range} onStartDate={setStartDate} onEndDate={setEndDate} onPreset={applyPreset} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={AlertTriangle} label={t('reports.inventoryLosses.kpiTotalLost')} value={formatCurrency(totalValueLost, currencySymbol)} tone="negative" />
         <ReportKpiCard icon={TrendingDown} label={t('reports.inventoryLosses.kpiUnitsLost')} value={String(totalUnitsLost)} tone="negative" />
         <ReportKpiCard icon={Package} label={t('reports.inventoryLosses.kpiProductsAffected')} value={String(productsLostCount)} />

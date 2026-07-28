@@ -139,7 +139,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
 
       <InsightBanner insights={insights} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={Landmark} label={t('reports.capitalGrowth.kpiInitialCapital')} value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : '—'} />
         <ReportKpiCard icon={Gem} label={t('reports.capitalGrowth.kpiCurrentCapital')} value={formatCurrency(businessWorth, currencySymbol)} tone="accent" />
         <ReportKpiCard icon={capitalGrowth >= 0 ? TrendingUp : TrendingDown} label={t('reports.capitalGrowth.kpiIncrease')} value={formatCurrency(capitalGrowth, currencySymbol)} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
@@ -147,7 +147,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
       </div>
 
       {lastMonthlyGrowth && (
-        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
           <ReportKpiCard
             icon={TrendingUp}
             label={t('reports.capitalGrowth.monthlyGrowthLabel', { period: lastMonthlyGrowth.label })}

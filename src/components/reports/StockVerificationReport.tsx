@@ -189,7 +189,7 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
       <InsightBanner insights={insights} />
 
       {latest && (
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
           <ReportKpiCard icon={Boxes} label={t('reports.stockVerification.kpiBefore')} value={formatCurrency(latest.previous.totalValue, currencySymbol)} />
           <ReportKpiCard icon={Boxes} label={t('reports.stockVerification.kpiAfter')} value={formatCurrency(latest.count.totalValue, currencySymbol)} tone="accent" />
           <ReportKpiCard

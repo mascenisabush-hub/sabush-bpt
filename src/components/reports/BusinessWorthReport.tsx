@@ -163,7 +163,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
       </div>
 
       {/* KPI grid */}
-      <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={Landmark} label={t('businessWorth.kpiInitialCapital')} value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : '—'} />
         <ReportKpiCard icon={Boxes} label={t('businessWorth.kpiInventoryCost')} value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)} />
         <ReportKpiCard icon={Gem} label={t('businessWorth.kpiMarketValue')} value={formatCurrency(totalMarketValueAllTime, currencySymbol)} tone="accent" />

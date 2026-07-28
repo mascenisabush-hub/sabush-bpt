@@ -119,7 +119,7 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
 
       <ReportFilterBar range={range} onStartDate={setStartDate} onEndDate={setEndDate} onPreset={applyPreset} />
 
-      <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+      <div className="grid grid-cols-2 sm:grid-cols-3 gap-6">
         <ReportKpiCard icon={HandCoins} label={t('reports.withdrawals.kpiTotal')} value={formatCurrency(total, currencySymbol)} tone="negative" />
         <ReportKpiCard icon={Tag} label={t('reports.withdrawals.kpiTopReason')} value={topReason ? formatCurrency(topReason.value, currencySymbol) : '—'} sub={topReason?.label} />
         <ReportKpiCard icon={CalendarDays} label={t('reports.withdrawals.kpiCount')} value={String(filtered.length)} />

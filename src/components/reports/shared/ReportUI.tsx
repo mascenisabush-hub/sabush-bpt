@@ -31,7 +31,7 @@ const TONE_ICON_BG: Record<string, string> = {
 };
 
 export const ReportKpiCard: React.FC<ReportKpiProps> = ({ icon: Icon, label, value, tone = 'default', sub }) => (
-  <div className="bg-white border border-gray-200 rounded-2xl p-4 shadow-sm flex flex-col gap-2">
+  <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-sm flex flex-col gap-2.5">
     <div className={`w-9 h-9 rounded-full flex items-center justify-center ${TONE_ICON_BG[tone]}`}>
       <Icon className="w-4 h-4" />
     </div>
