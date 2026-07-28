@@ -285,10 +285,10 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
               <div className="av-halo-breathe" />
               <div className="relative av-logo-wrap">
                 <img
-                  src="/branding/sabush-tech-logo.webp"
+                  src="/branding/sabush-tech-full-logo.png"
                   alt="Sabush Tech"
                   draggable={false}
-                  className="relative w-full max-w-[260px] sm:max-w-[300px] h-auto select-none av-logo-img"
+                  className="relative w-full max-w-[280px] sm:max-w-[320px] h-auto select-none av-logo-img"
                 />
                 <div className="av-sweep" />
               </div>
