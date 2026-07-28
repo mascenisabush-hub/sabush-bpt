@@ -37,7 +37,7 @@ export const BarChartHorizontal: React.FC<BarChartProps> = ({ data, currencySymb
           <div key={i} style={{ minHeight: rowH }}>
             <div className="flex items-center justify-between text-[11px] mb-1">
               <span className="font-semibold text-gray-700 truncate pr-2">{d.label}</span>
-              <span className={`font-mono font-bold shrink-0 ${isNeg ? 'text-rose-600' : 'text-gray-800'}`}>
+              <span className={`type-number shrink-0 ${isNeg ? 'text-rose-600' : 'text-gray-800'}`}>
                 {formatCurrency(d.value, currencySymbol)}
               </span>
             </div>
@@ -110,7 +110,7 @@ export const LineChartSimple: React.FC<LineChartProps> = ({ data, currencySymbol
         {points.map((p, i) => (
           <div key={i} className="text-[9px] text-gray-500 text-center" style={{ width: `${100 / points.length}%` }}>
             <div className="truncate">{p.label}</div>
-            <div className="font-mono font-bold text-gray-700">{formatCurrency(p.value, currencySymbol)}</div>
+            <div className="type-number text-gray-700">{formatCurrency(p.value, currencySymbol)}</div>
           </div>
         ))}
       </div>
@@ -174,7 +174,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ data, currencySymbol }) 
               <span className="w-2.5 h-2.5 rounded-full shrink-0" style={{ backgroundColor: PALETTE[i % PALETTE.length] }} />
               <span className="font-semibold text-gray-700 truncate">{d.label}</span>
             </span>
-            <span className="font-mono font-bold text-gray-800 shrink-0">
+            <span className="type-number text-gray-800 shrink-0">
               {formatCurrency(d.value, currencySymbol)} <span className="text-gray-400 font-normal">({((d.value / total) * 100).toFixed(0)}%)</span>
             </span>
           </div>

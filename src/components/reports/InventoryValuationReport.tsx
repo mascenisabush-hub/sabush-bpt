@@ -239,8 +239,8 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
                   <tr key={g.key} className="border-b border-gray-100">
                     <td className="py-2 pr-2 font-semibold text-gray-800">{g.label}</td>
                     <td className="py-2 pr-2 text-right font-mono text-gray-700">{formatCurrency(g.investment, currencySymbol)}</td>
-                    <td className="py-2 pr-2 text-right font-mono font-bold text-gray-900">{formatCurrency(g.market, currencySymbol)}</td>
-                    <td className={`py-2 pr-2 text-right font-mono font-bold ${g.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(g.profit, currencySymbol)}</td>
+                    <td className="py-2 pr-2 text-right type-number text-gray-900">{formatCurrency(g.market, currencySymbol)}</td>
+                    <td className={`py-2 pr-2 text-right type-number ${g.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(g.profit, currencySymbol)}</td>
                   </tr>
                 ))}
               </tbody>

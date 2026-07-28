@@ -124,7 +124,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             <AlertTriangle className="w-5 h-5" strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">{t('addQuebra.title')}</h2>
+            <h2 className="type-title">{t('addQuebra.title')}</h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               {t('addQuebra.subtitle')}
             </p>
@@ -147,7 +147,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
           <form onSubmit={handleSubmit} className="space-y-5">
             {/* Product Selector */}
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
+              <label className="block type-label mb-1.5">
                 {t('addQuebra.selectProduct')}
               </label>
               <select
@@ -165,7 +165,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
             {/* Batch Selector */}
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
+              <label className="block type-label mb-1.5">
                 {t('addQuebra.selectBatch')}
               </label>
               {availableBatches.length === 0 ? (
@@ -193,7 +193,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             {/* Date & Quantity Lost */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
+                <label className="block type-label mb-1.5">
                   {t('addQuebra.lossDate')}
                 </label>
                 <input
@@ -206,7 +206,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
               </div>
 
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
+                <label className="block type-label mb-1.5">
                   {t('addQuebra.lossQuantity')}
                 </label>
                 <input
@@ -241,7 +241,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                 <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
                 <div>
                   <span className="text-gray-500 block text-[10px] font-semibold uppercase tracking-wide">{t('addQuebra.stockAfterLoss')}</span>
-                  <span className={`font-bold font-mono tabular-nums ${remainingAfterLoss < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  <span className={`type-number tabular-nums ${remainingAfterLoss < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                     {t('addQuebra.unitsValue', { qty: remainingAfterLoss })}
                   </span>
                 </div>
@@ -256,7 +256,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
             {/* Reason Free Text & Suggestion Chips */}
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
+              <label className="block type-label mb-1.5">
                 {t('addQuebra.reasonLabel')}
               </label>
               <input

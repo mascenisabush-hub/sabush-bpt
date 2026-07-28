@@ -120,7 +120,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
         <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
           <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
         </div>
-        <h2 className="text-lg font-bold text-[#111827]">{savedMessage}</h2>
+        <h2 className="type-title">{savedMessage}</h2>
         <p className="text-sm text-gray-500">O período fica permanentemente registado no histórico.</p>
       </div>
     );
@@ -135,7 +135,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <Lock className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">Fecho Mensal/Anual</h2>
+            <h2 className="type-title">Fecho Mensal/Anual</h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               Feche um período para bloquear os seus resultados permanentemente no histórico.
             </p>
@@ -145,7 +145,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
         {/* Period selector */}
         <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">Tipo</label>
+            <label className="block type-label mb-1">Tipo</label>
             <select
               value={periodType}
               onChange={(e) => setPeriodType(e.target.value as ClosingPeriodType)}
@@ -158,7 +158,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
           {periodType === 'monthly' && (
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">Mês</label>
+              <label className="block type-label mb-1">Mês</label>
               <select
                 value={month}
                 onChange={(e) => setMonth(Number(e.target.value))}
@@ -172,7 +172,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
           )}
 
           <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">Ano</label>
+            <label className="block type-label mb-1">Ano</label>
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
@@ -208,15 +208,15 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Lucro Embutido</p>
-              <p className="font-mono font-bold text-sm text-[#111827] tabular-nums">{formatCurrency(preview.totalEmbeddedProfit, currencySymbol)}</p>
+              <p className="type-number text-sm text-[#111827] tabular-nums">{formatCurrency(preview.totalEmbeddedProfit, currencySymbol)}</p>
             </div>
             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Despesas</p>
-              <p className="font-mono font-bold text-sm text-rose-600 tabular-nums">{formatCurrency(preview.totalExpenses, currencySymbol)}</p>
+              <p className="type-number text-sm text-rose-600 tabular-nums">{formatCurrency(preview.totalExpenses, currencySymbol)}</p>
             </div>
             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Levantamentos</p>
-              <p className="font-mono font-bold text-sm text-[#0B1F3A] tabular-nums">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
+              <p className="type-number text-sm text-[#0B1F3A] tabular-nums">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
             </div>
             <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Valor de Mercado do Stock</p>
@@ -228,7 +228,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
           <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#E5E7EB] text-xs">
             <span className="text-gray-500 flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" strokeWidth={2.25} /> Valor do Negócio (agora)</span>
-            <span className="font-mono font-bold text-[#111827] tabular-nums">{formatCurrency(businessWorth, currencySymbol)}</span>
+            <span className="type-number text-[#111827] tabular-nums">{formatCurrency(businessWorth, currencySymbol)}</span>
           </div>
           <p className="text-[10.5px] leading-relaxed text-gray-400">
             Este é o valor que fica gravado como fotografia (snapshot) ao fechar o período — Valor de Mercado do Stock {formatCurrency(totalMarketValueAllTime, currencySymbol)} − Despesas − Levantamentos. Nenhuma venda é registada nesta app, por isso este número nunca representa dinheiro em caixa.
@@ -327,19 +327,19 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                     <div className="grid grid-cols-3 gap-1.5 text-center pt-1">
                       <div className="bg-white border border-[#E5E7EB] rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Lucro Embutido</p>
-                        <p className={`font-mono font-bold text-[11px] tabular-nums ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <p className={`type-number text-[11px] tabular-nums ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {formatCurrency(c.totalEmbeddedProfit, currencySymbol)}
                         </p>
                       </div>
                       <div className="bg-white border border-[#E5E7EB] rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Levantado</p>
-                        <p className="font-mono font-bold text-[11px] text-[#0B1F3A] tabular-nums">
+                        <p className="type-number text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.totalWithdrawals, currencySymbol)}
                         </p>
                       </div>
                       <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Valor Negócio</p>
-                        <p className="font-mono font-bold text-[11px] text-[#0B1F3A] tabular-nums">
+                        <p className="type-number text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.businessWorthAtClose, currencySymbol)}
                         </p>
                       </div>

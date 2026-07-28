@@ -197,7 +197,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
                     <td className={`py-2 pr-2 text-right font-mono ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(c.totalEmbeddedProfit, currencySymbol)}</td>
                     <td className="py-2 pr-2 text-right font-mono text-rose-600">{formatCurrency(c.totalExpenses, currencySymbol)}</td>
                     <td className="py-2 pr-2 text-right font-mono text-rose-600">{formatCurrency(c.totalWithdrawals, currencySymbol)}</td>
-                    <td className="py-2 pr-2 text-right font-mono font-bold text-gray-900">{formatCurrency(c.businessWorthAtClose, currencySymbol)}</td>
+                    <td className="py-2 pr-2 text-right type-number text-gray-900">{formatCurrency(c.businessWorthAtClose, currencySymbol)}</td>
                   </tr>
                 ))}
               </tbody>

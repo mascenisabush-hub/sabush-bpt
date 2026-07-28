@@ -304,7 +304,7 @@ export const StocksView: React.FC = () => {
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="font-mono font-bold text-sm text-gray-900 group-hover:text-blue-600 transition">
+                      <span className="type-number text-sm text-gray-900 group-hover:text-blue-600 transition">
                         {s.purchaseBatch.batchNumber}
                       </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
@@ -438,7 +438,7 @@ export const StocksView: React.FC = () => {
                 </div>
                 <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
                   <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.embeddedProfit')}</span>
-                  <span className={`text-sm font-bold font-mono ${selectedSummary.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                  <span className={`text-sm type-number ${selectedSummary.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.totalEmbeddedProfit, currencySymbol)}
                   </span>
                 </div>
@@ -456,7 +456,7 @@ export const StocksView: React.FC = () => {
                 </div>
                 <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
                   <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingProfit')}</span>
-                  <span className={`text-sm font-bold font-mono ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
+                  <span className={`text-sm type-number ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.remainingEmbeddedProfit, currencySymbol)}
                   </span>
                 </div>
@@ -496,7 +496,7 @@ export const StocksView: React.FC = () => {
                               {t('stocksView.modal.table.statusPrefix')} {li.batch.status === 'open' ? t('common.batchStatus.open') : t('common.batchStatus.closed')}
                             </span>
                           </td>
-                          <td className="py-2.5 px-2.5 text-right font-mono font-bold text-gray-800">
+                          <td className="py-2.5 px-2.5 text-right type-number text-gray-800">
                             {li.batch.quantity} → {li.remainingQuantity}{' '}
                             <span className="text-[10px] font-sans font-normal text-gray-500">{li.batch.unit || 'un'}</span>
                           </td>
@@ -506,7 +506,7 @@ export const StocksView: React.FC = () => {
                           <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
                             {formatCurrency(li.investmentValue, currencySymbol)}
                           </td>
-                          <td className="py-2.5 px-2.5 text-right font-mono font-bold">
+                          <td className="py-2.5 px-2.5 text-right type-number">
                             <span className={li.embeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}>
                               {formatCurrency(li.embeddedProfit, currencySymbol)}
                             </span>

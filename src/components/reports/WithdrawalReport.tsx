@@ -160,12 +160,12 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
                   <span className="text-[11px] text-gray-500">{formatDate(w.date)}{w.notes ? ` · ${w.notes}` : ''}</span>
                 </div>
                 <div className="flex items-center gap-3 report-no-print">
-                  <span className="font-mono font-bold text-rose-600 text-sm">{formatCurrency(w.amount, currencySymbol)}</span>
+                  <span className="type-number text-rose-600 text-sm">{formatCurrency(w.amount, currencySymbol)}</span>
                   <button onClick={() => deleteWithdrawal(w.id)} className="text-[10px] text-gray-400 hover:text-rose-600 transition">
                     {t('reports.common.delete')}
                   </button>
                 </div>
-                <span className="font-mono font-bold text-rose-600 text-sm hidden report-print-only">{formatCurrency(w.amount, currencySymbol)}</span>
+                <span className="type-number text-rose-600 text-sm hidden report-print-only">{formatCurrency(w.amount, currencySymbol)}</span>
               </div>
             ))}
           </div>

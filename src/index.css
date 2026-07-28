@@ -209,6 +209,43 @@ body {
   text-transform: uppercase;
   letter-spacing: 0.07em;
 }
+
+/* ==========================================================================
+   Typography hierarchy — Inter everywhere; three tiers used consistently
+   instead of hand-rolled text-lg/font-bold combos repeated per file.
+     .type-title    → section/card/modal headings: bold, comfortably large
+     .type-title-lg → screen-level headings: extra bold, larger still
+     .type-number   → any data figure (KPIs, table cells, totals): extra
+                      bold + tabular figures so digits never jitter width
+     .type-label    → captions/field labels: small, muted, uppercase
+   ========================================================================== */
+.type-title {
+  color: var(--title);
+  font-weight: 700;
+  font-size: 1.0625rem; /* 17px */
+  line-height: 1.3;
+  letter-spacing: -0.01em;
+}
+.type-title-lg {
+  color: var(--title);
+  font-weight: 800;
+  font-size: 1.375rem; /* 22px */
+  line-height: 1.25;
+  letter-spacing: -0.015em;
+}
+.type-number {
+  font-weight: 800;
+  font-variant-numeric: tabular-nums;
+  font-feature-settings: 'tnum' 1;
+  letter-spacing: -0.01em;
+}
+.type-label {
+  color: #6B7280;
+  font-weight: 600;
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.07em;
+}
 .badge-soft {
   border-radius: 9999px;
   font-weight: 700;

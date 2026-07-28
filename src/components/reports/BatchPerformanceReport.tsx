@@ -220,7 +220,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
                       <td className="py-2 pr-2 text-gray-600">{s.purchaseBatch.supplier.name}</td>
                       <td className="py-2 pr-2 text-gray-600">{s.lineItems.map(li => li.product?.name).filter(Boolean).join(', ')}</td>
                       <td className="py-2 pr-2 text-right font-mono text-gray-700">{formatCurrency(s.totalInvestmentValue, currencySymbol)}</td>
-                      <td className={`py-2 pr-2 text-right font-mono font-bold ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}</td>
+                      <td className={`py-2 pr-2 text-right type-number ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}</td>
                       <td className="py-2 pr-2">
                         <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-semibold">{statusLabel(s.status)}</span>
                       </td>
@@ -310,7 +310,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
                     <td className="py-2 pr-2 text-gray-600">{s.purchaseBatch.supplier.name}</td>
                     <td className="py-2 pr-2 text-right font-mono text-gray-700">{formatCurrency(s.totalInvestmentValue, currencySymbol)}</td>
                     <td className="py-2 pr-2 text-right font-mono text-gray-700">{formatCurrency(s.remainingInvestmentValue, currencySymbol)}</td>
-                    <td className={`py-2 pr-2 text-right font-mono font-bold ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}</td>
+                    <td className={`py-2 pr-2 text-right type-number ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}</td>
                     <td className="py-2 pr-2">
                       <span className="px-2 py-0.5 rounded-md bg-gray-100 text-gray-700 text-[10px] font-semibold">{statusLabel(s.status)}</span>
                     </td>

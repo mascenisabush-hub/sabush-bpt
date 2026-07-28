@@ -147,7 +147,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                             {batch.status === 'open' ? 'Lucro Embutido (Est.)' : 'Lucro Embutido (Final)'}
                           </span>
                           <span
-                            className={`text-sm font-bold font-mono tabular-nums ${
+                            className={`text-sm type-number tabular-nums ${
                               calc.embeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                             }`}
                           >
@@ -172,7 +172,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         </div>
                         <div className="bg-[var(--muted)] p-2.5 rounded-lg border border-[#E5E7EB]">
                           <span className="text-gray-500 block text-[9.5px] font-semibold uppercase tracking-wide">Quebras</span>
-                          <span className={`font-bold font-mono tabular-nums ${calc.totalQuebraQuantity > 0 ? 'text-rose-600' : 'text-gray-500'}`}>
+                          <span className={`type-number tabular-nums ${calc.totalQuebraQuantity > 0 ? 'text-rose-600' : 'text-gray-500'}`}>
                             {calc.totalQuebraQuantity} {batch.unit || 'un'} ({formatCurrency(calc.quebraValue, currencySymbol)})
                           </span>
                         </div>

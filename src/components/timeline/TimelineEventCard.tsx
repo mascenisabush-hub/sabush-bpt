@@ -56,7 +56,7 @@ export const TimelineEventCard: React.FC<TimelineEventCardProps> = ({ event, cur
           {event.financialImpact.map((fi, i) => (
             <div key={i} className={align === 'right' ? 'sm:text-right' : ''}>
               <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{fi.label}</p>
-              <p className={`text-sm font-mono font-bold ${IMPACT_TONE_CLASSES[fi.tone]}`}>
+              <p className={`text-sm type-number ${IMPACT_TONE_CLASSES[fi.tone]}`}>
                 {fi.amount < 0 ? '−' : ''}{formatCurrency(Math.abs(fi.amount), currencySymbol)}
               </p>
             </div>

@@ -191,12 +191,12 @@ export const InventoryLossReport: React.FC<Props> = ({ onBack }) => {
                   </span>
                 </div>
                 <div className="flex items-center gap-3 report-no-print">
-                  <span className="font-mono font-bold text-rose-600 text-sm">{formatCurrency(value, currencySymbol)}</span>
+                  <span className="type-number text-rose-600 text-sm">{formatCurrency(value, currencySymbol)}</span>
                   <button onClick={() => deleteQuebra(quebra.id)} className="text-[10px] text-gray-400 hover:text-rose-600 transition">
                     {t('reports.common.delete')}
                   </button>
                 </div>
-                <span className="font-mono font-bold text-rose-600 text-sm hidden report-print-only">{formatCurrency(value, currencySymbol)}</span>
+                <span className="type-number text-rose-600 text-sm hidden report-print-only">{formatCurrency(value, currencySymbol)}</span>
               </div>
             ))}
           </div>

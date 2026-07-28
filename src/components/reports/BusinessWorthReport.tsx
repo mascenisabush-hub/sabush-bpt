@@ -211,7 +211,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
                     <td className="py-2 pr-2 text-gray-600">{formatDate(e.date)}</td>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{e.description}</td>
                     <td className="py-2 pr-2 text-gray-500">{e.category || t('reports.common.generalCategory')}</td>
-                    <td className="py-2 pr-2 text-right font-mono font-bold text-rose-600">{formatCurrency(e.amount, currencySymbol)}</td>
+                    <td className="py-2 pr-2 text-right type-number text-rose-600">{formatCurrency(e.amount, currencySymbol)}</td>
                   </tr>
                 ))}
               </tbody>
@@ -244,7 +244,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
                   <tr key={w.id} className="border-b border-gray-100">
                     <td className="py-2 pr-2 text-gray-600">{formatDate(w.date)}</td>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{w.reason || t('reports.common.unspecified')}</td>
-                    <td className="py-2 pr-2 text-right font-mono font-bold text-rose-600">{formatCurrency(w.amount, currencySymbol)}</td>
+                    <td className="py-2 pr-2 text-right type-number text-rose-600">{formatCurrency(w.amount, currencySymbol)}</td>
                   </tr>
                 ))}
               </tbody>

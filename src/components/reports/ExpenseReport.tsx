@@ -213,12 +213,12 @@ export const ExpenseReport: React.FC<Props> = ({ onBack }) => {
                   <span className="text-[11px] text-gray-500 block">{formatDate(exp.date)}</span>
                 </div>
                 <div className="flex items-center gap-3 report-no-print">
-                  <span className="font-mono font-bold text-rose-600 text-sm">{formatCurrency(exp.amount, currencySymbol)}</span>
+                  <span className="type-number text-rose-600 text-sm">{formatCurrency(exp.amount, currencySymbol)}</span>
                   <button onClick={() => deleteExpense(exp.id)} className="text-[10px] text-gray-400 hover:text-rose-600 transition">
                     {t('reports.common.delete')}
                   </button>
                 </div>
-                <span className="font-mono font-bold text-rose-600 text-sm hidden report-print-only">{formatCurrency(exp.amount, currencySymbol)}</span>
+                <span className="type-number text-rose-600 text-sm hidden report-print-only">{formatCurrency(exp.amount, currencySymbol)}</span>
               </div>
             ))}
           </div>

@@ -68,7 +68,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
             <Receipt className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">{t('addExpense.title')}</h2>
+            <h2 className="type-title">{t('addExpense.title')}</h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               {t('addExpense.subtitle')}
             </p>

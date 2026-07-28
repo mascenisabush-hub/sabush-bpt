@@ -110,7 +110,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
           <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
         </div>
-        <h2 className="text-lg font-bold text-[#111827]">{savedMessage}</h2>
+        <h2 className="type-title">{savedMessage}</h2>
         <p className="text-sm text-gray-500">
           Capital Inicial:{' '}
           <span className="font-display font-semibold text-[#0B1F3A] tabular-nums">
@@ -127,7 +127,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   const fieldClass =
     'w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
     'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]';
-  const fieldLabelClass = 'block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1';
+  const fieldLabelClass = 'block type-label mb-1';
   // Column widths: Nome gets the most room, numeric fields stay tight,
   // last column is just wide enough for the hover-revealed delete icon.
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
@@ -141,7 +141,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             <Wallet className="w-5 h-5" strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">
+            <h2 className="type-title">
               Contagem de Stock Inicial <span className="text-gray-400 font-semibold">(Capital Inicial)</span>
             </h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
@@ -245,7 +245,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                   <div className="flex items-end gap-1.5">
                     <div className="flex-1 min-w-0">
                       <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
-                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] font-mono font-bold tabular-nums truncate">
+                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
                         {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
                       </div>
                     </div>

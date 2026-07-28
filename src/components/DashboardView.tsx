@@ -292,7 +292,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           badge={
             hasInitialStockCount && capitalGrowth !== 0 ? (
               <span
-                className={`inline-flex items-center gap-0.5 text-[10px] font-bold font-mono ${
+                className={`inline-flex items-center gap-0.5 text-[10px] type-number ${
                   capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
                 }`}
               >
@@ -483,14 +483,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             <div className="space-y-2.5 text-xs">
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">{t('dashboard.breakdownModal.estimatedOpen')}</span>
-                <span className="font-bold font-mono text-[#B8952F]">
+                <span className="type-number text-[#B8952F]">
                   {formatCurrency(estimatedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">{t('dashboard.breakdownModal.finalizedClosed')}</span>
-                <span className="font-bold font-mono text-[#B8952F]">
+                <span className="type-number text-[#B8952F]">
                   {formatCurrency(finalizedEmbeddedProfit, currencySymbol)}
                 </span>
               </div>
@@ -504,14 +504,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">{t('dashboard.breakdownModal.expensesLabel')}</span>
-                <span className="font-bold font-mono text-rose-700">
+                <span className="type-number text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">{t('dashboard.breakdownModal.withdrawalsLabel')}</span>
-                <span className="font-bold font-mono text-slate-600">
+                <span className="type-number text-slate-600">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
@@ -553,28 +553,28 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 <span className="flex items-center gap-1.5 text-gray-500">
                   <Boxes className="w-3.5 h-3.5 text-amber-600" /> {t('dashboard.worthModal.marketValue')}
                 </span>
-                <span className="font-bold font-mono text-gray-800">
+                <span className="type-number text-gray-800">
                   {formatCurrency(totalMarketValueAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200">
                 <span className="text-gray-500">{t('dashboard.worthModal.stockCost')}</span>
-                <span className="font-bold font-mono text-gray-800">
+                <span className="type-number text-gray-800">
                   {formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">{t('dashboard.worthModal.expenses')}</span>
-                <span className="font-bold font-mono text-rose-700">
+                <span className="type-number text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">{t('dashboard.worthModal.withdrawals')}</span>
-                <span className="font-bold font-mono text-rose-700">
+                <span className="type-number text-rose-700">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
@@ -588,14 +588,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">{t('dashboard.worthModal.latestCount')}</span>
-                <span className="font-bold font-mono text-slate-600">
+                <span className="type-number text-slate-600">
                   {formatCurrency(currentInventoryValue, currencySymbol)}
                 </span>
               </div>
 
               <div className="flex items-center justify-between p-3 rounded-xl bg-white border border-gray-200 border-dashed">
                 <span className="text-gray-500">{t('dashboard.worthModal.initialCapital')}</span>
-                <span className="font-bold font-mono text-slate-600">
+                <span className="type-number text-slate-600">
                   {formatCurrency(initialCapitalValue, currencySymbol)}
                 </span>
               </div>
@@ -613,7 +613,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   )}
                   {t('dashboard.worthModal.growth')}
                 </span>
-                <span className={`font-bold font-mono ${capitalGrowth >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
+                <span className={`type-number ${capitalGrowth >= 0 ? 'text-emerald-700' : 'text-rose-700'}`}>
                   {capitalGrowth >= 0 ? '+' : ''}
                   {formatCurrency(capitalGrowth, currencySymbol)} ({capitalGrowthPct >= 0 ? '+' : ''}
                   {capitalGrowthPct.toFixed(1)}%)
@@ -769,7 +769,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                   {/* LUCRO */}
                   <div className="col-span-2 sm:col-span-2 text-right">
                     <span
-                      className={`text-xs font-bold font-mono block ${
+                      className={`text-xs type-number block ${
                         displayProfit >= 0
                           ? activeBatch ? 'text-emerald-600' : 'text-emerald-700'
                           : 'text-rose-600'

@@ -168,7 +168,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
           <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
         </div>
-        <h2 className="text-lg font-bold text-[#111827]">{savedMessage}</h2>
+        <h2 className="type-title">{savedMessage}</h2>
         <p className="text-sm text-gray-500">
           Valor da Contagem:{' '}
           <span className="font-display font-semibold text-[#0B1F3A] tabular-nums">
@@ -184,7 +184,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const fieldClass =
     'w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
     'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]';
-  const fieldLabelClass = 'block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1';
+  const fieldLabelClass = 'block type-label mb-1';
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
   return (
@@ -196,7 +196,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <ClipboardList className="w-5 h-5" strokeWidth={2} />
           </div>
           <div className="min-w-0">
-            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">Contagem de Stock Periódica</h2>
+            <h2 className="type-title">Contagem de Stock Periódica</h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               Registe uma nova contagem física para acompanhar a evolução do seu capital.
             </p>
@@ -335,7 +335,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   <div className="flex items-end gap-1.5">
                     <div className="flex-1 min-w-0">
                       <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
-                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] font-mono font-bold tabular-nums truncate">
+                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
                         {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
                       </div>
                     </div>
@@ -380,7 +380,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   vs. {mostRecentCount ? `última contagem (${formatDate(mostRecentCount.date)})` : 'Capital Inicial'}
                 </span>
                 <span
-                  className={`font-bold font-mono tabular-nums flex items-center gap-1 ${
+                  className={`type-number tabular-nums flex items-center gap-1 ${
                     diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-white/50'
                   }`}
                 >
@@ -432,7 +432,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     </p>
                     <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(count.date)} · {count.items.length} produtos</p>
                   </div>
-                  <span className="font-mono font-bold text-sm text-[#111827] tabular-nums">
+                  <span className="type-number text-sm text-[#111827] tabular-nums">
                     {formatCurrency(count.totalValue, currencySymbol)}
                   </span>
                 </div>

@@ -221,7 +221,7 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
                       </span>
                     </div>
                     <div className="flex items-center gap-2 shrink-0">
-                      <span className={`font-mono font-bold text-sm ${v.financialImpact >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                      <span className={`type-number text-sm ${v.financialImpact >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {formatCurrency(v.financialImpact, currencySymbol)}
                       </span>
                       <ExpandChevron expanded={isExpanded} />
@@ -246,10 +246,10 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
                               <td className="py-2 pr-2 font-semibold text-gray-800">{d.productName}</td>
                               <td className="py-2 pr-2 text-right font-mono text-gray-600">{d.before}</td>
                               <td className="py-2 pr-2 text-right font-mono text-gray-600">{d.after}</td>
-                              <td className={`py-2 pr-2 text-right font-mono font-bold ${d.diffQty === 0 ? 'text-gray-400' : d.diffQty > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              <td className={`py-2 pr-2 text-right type-number ${d.diffQty === 0 ? 'text-gray-400' : d.diffQty > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {d.diffQty > 0 ? '+' : ''}{d.diffQty}
                               </td>
-                              <td className={`py-2 pr-2 text-right font-mono font-bold ${d.diffValue === 0 ? 'text-gray-400' : d.diffValue > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              <td className={`py-2 pr-2 text-right type-number ${d.diffValue === 0 ? 'text-gray-400' : d.diffValue > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {formatCurrency(d.diffValue, currencySymbol)}
                               </td>
                             </tr>

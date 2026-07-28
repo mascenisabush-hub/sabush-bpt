@@ -210,7 +210,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <PackagePlus className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">{t('addStock.title')}</h2>
+            <h2 className="type-title">{t('addStock.title')}</h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               {t('addStock.subtitle')}
             </p>
@@ -235,7 +235,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="sm:col-span-2">
-                  <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                  <label className="block type-label mb-1">
                     {t('addStock.supplier.nameLabel')}
                   </label>
                   <input
@@ -247,7 +247,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                  <label className="block type-label mb-1">
                     {t('addStock.supplier.phoneLabel')}
                   </label>
                   <input
@@ -260,7 +260,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                <label className="block type-label mb-1">
                   {t('addStock.supplier.notesLabel')}
                 </label>
                 <input
@@ -324,7 +324,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       <div className="hidden md:grid grid-cols-12 gap-2 items-center text-xs">
                         {/* Lote # */}
                         <div className="col-span-1 text-center">
-                          <span className="text-[10px] font-mono font-bold text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[10px] type-number text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
                             #{index + 1}
                           </span>
                         </div>
@@ -504,7 +504,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         <div className="col-span-1 flex items-center justify-end gap-1.5">
                           {!isStaff && (
                             <span
-                              className={`font-mono font-bold text-xs tabular-nums ${
+                              className={`type-number text-xs tabular-nums ${
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                               title={t('addStock.totalProfitTitle', { value: formatCurrency(rowProfit, currencySymbol) })}
@@ -529,12 +529,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       {/* Mobile Compact Card/Row Layout (below md breakpoint) */}
                       <div className="md:hidden space-y-2 text-xs">
                         <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
-                          <span className="text-[10px] font-mono font-bold text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[10px] type-number text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
                             {t('addStock.table.batch')} #{index + 1}
                           </span>
                           <div className="flex items-center gap-2">
                             <span
-                              className={`font-mono font-bold text-xs tabular-nums ${
+                              className={`type-number text-xs tabular-nums ${
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
@@ -554,7 +554,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                         <div className="grid grid-cols-2 gap-2.5">
                           <div className="col-span-2 relative">
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                            <label className="block type-label mb-1">
                               {t('addStock.table.product')}
                             </label>
                             <input
@@ -608,7 +608,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
 
                           <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                            <label className="block type-label mb-1">
                               {t('addStock.table.dateEntered')}
                             </label>
                             <input
@@ -622,7 +622,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                           <div className="flex gap-1.5">
                             <div className="flex-1">
-                              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                              <label className="block type-label mb-1">
                                 {t('addStock.table.quantity')}
                               </label>
                               <input
@@ -635,7 +635,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               />
                             </div>
                             <div className="w-16">
-                              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                              <label className="block type-label mb-1">
                                 {t('addStock.table.unit')}
                               </label>
                               <input
@@ -649,7 +649,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
 
                           <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                            <label className="block type-label mb-1">
                               {t('addStock.fields.costPrice', { symbol: currencySymbol })}
                             </label>
                             <input
@@ -664,7 +664,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
 
                           <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
+                            <label className="block type-label mb-1">
                               {t('addStock.fields.sellPrice', { symbol: currencySymbol })}
                             </label>
                             <input
@@ -725,7 +725,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   <div>
                     <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.embeddedProfit')}</span>
                     <span
-                      className={`font-bold font-mono tabular-nums ${
+                      className={`type-number tabular-nums ${
                         totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                       }`}
                     >
