@@ -87,6 +87,7 @@ body {
   /* Accent tokens — restored to true gold per brand spec. */
   --gold: #D4AF37;
   --gold-hover: #B8952F;
+  --gold-bright: #E8C65C;
   --gold-soft: #F6EFD9;
 
   --orange: #FF8C42;
@@ -184,13 +185,11 @@ body {
   border: 1px solid var(--border);
   border-radius: 16px;
   box-shadow: var(--shadow-1);
-  transition: box-shadow var(--duration-base) var(--ease-premium),
-              transform var(--duration-base) var(--ease-premium),
-              border-color var(--duration-base) var(--ease-premium);
+  transition: all 0.2s ease;
 }
 .card-premium.is-interactive:hover {
   box-shadow: var(--shadow-2);
-  transform: translateY(-3px);
+  transform: translateY(-2px);
   border-color: rgba(212,175,55,0.35);
 }
 .card-premium.is-highlighted {
@@ -229,12 +228,11 @@ body {
   border-radius: 12px;
   background: var(--gold);
   color: #0B1F3A;
+  cursor: pointer;
   box-shadow: 0 8px 20px -8px rgba(212,175,55,0.55);
-  transition: background var(--duration-fast) var(--ease-premium),
-              transform var(--duration-fast) var(--ease-premium),
-              box-shadow var(--duration-fast) var(--ease-premium);
+  transition: all 0.2s ease;
 }
-.btn-primary:hover { background: var(--gold-hover); box-shadow: 0 10px 24px -8px rgba(212,175,55,0.65); }
+.btn-primary:hover { background: var(--gold-bright); box-shadow: 0 10px 24px -8px rgba(212,175,55,0.65); }
 .btn-primary:active { transform: scale(0.97); }
 
 .btn-dark {
@@ -246,8 +244,8 @@ body {
   border-radius: 12px;
   background: var(--navy);
   color: #FFFFFF;
-  transition: background var(--duration-fast) var(--ease-premium),
-              transform var(--duration-fast) var(--ease-premium);
+  cursor: pointer;
+  transition: all 0.2s ease;
 }
 .btn-dark:hover { background: var(--navy-soft); }
 .btn-dark:active { transform: scale(0.97); }

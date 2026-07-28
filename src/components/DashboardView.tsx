@@ -76,11 +76,11 @@ const KpiCard: React.FC<KpiCardProps> = ({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`group h-full text-left p-6 flex flex-col gap-2.5 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`group h-full text-left p-6 flex flex-col gap-2.5 rounded-2xl transition-all duration-200 ease-out ${
         isDark
           ? 'relative overflow-hidden card-dark-gradient shadow-[var(--shadow-2)]'
           : `card-premium ${highlight ? 'is-highlighted' : ''}`
-      } ${onClick ? (isDark ? 'hover:-translate-y-[3px] cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
+      } ${onClick ? (isDark ? 'hover:-translate-y-[2px] cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
     >
       {isDark && (
         <div
