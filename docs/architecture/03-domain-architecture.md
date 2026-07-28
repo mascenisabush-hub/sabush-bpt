@@ -1,6 +1,6 @@
 # Section 3 — Domain Architecture
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Section 1 (Product Vision) — approved · Section 2 (Core Product Principles) — approved
 **Purpose:** Enumerate every domain in Sabush BPT — existing and future — and describe each one's purpose, responsibilities, relationships, and dependencies, so Sections 4 onward (System Architecture, Data Architecture, Module Architecture) have a single, agreed map to build against.
 
