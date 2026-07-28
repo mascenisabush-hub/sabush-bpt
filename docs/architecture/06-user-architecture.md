@@ -1,6 +1,6 @@
 # Section 6 — User Architecture
 
-**Status:** ✅ Approved
+**Status:** ✅ Approved (amended — see 6.5 Support Session, and 7.4/7.5 for the platform-operator identity fix)
 **Depends on:** Section 1 (Product Vision) — approved · Section 2 (Core Product Principles) — approved · Section 3 (Domain Architecture) — approved · Section 4 (System Architecture) — approved · Section 5 (Business Lifecycle) — approved
 **Purpose:** Define every user type in Sabush BPT — Admin, Manager, Staff, Support, Developer, SuperAdmin — their responsibilities, permissions, relationships, and how the model extends without rework, building on the Auth/session model already fixed in Section 4.6 and the role-gated actions already scattered through the codebase.
 
@@ -38,6 +38,8 @@ This section does not pretend a richer permission model already exists. It defin
 
 **Relationships:** A Manager is still, structurally, a `staff`-role account for every existing Security Rule and Auth pattern — it inherits everything Section 6.4 (Staff) already has, plus the additions above. This is what makes the tier additive rather than a parallel system.
 
+**Security Rules mechanism — Amendment:** Being additive at the `UserRole` level does not make Manager free at the Security Rules level. Collections this tier needs to unlock — `closings`, `withdrawals`, `staff` — are gated today by `isOwnerOf(businessId)` alone; an admin-only check with no notion of a delegated staff member. Granting Manager access to these requires a genuinely new rule function, not a reinterpretation of the existing one: something in the shape of `isOwnerOrGrantedManager(businessId, permission)`, which reads the caller's `users/{uid}` document (7.3) and passes only if either `isOwnerOf(businessId)` is true, or `staffTier == 'manager' AND businessId == <caller's businessId> AND managerPermissions[permission] == true`. The per-permission map (`managerPermissions: { closings: bool, staffManagement: bool }`) is what makes "if granted" (6.3, 6.8) a real, checkable field rather than a documented intention — Section 7.3 fixes exactly where this field lives.
+
 **Worth-First scope test:** Passes — Manager exists to let a growing business (Section 5.9's Business Growth) delegate Worth-relevant operational work (Closings, Stock oversight) without diluting the admin-only actions (Business Growth itself, Subscription changes) that carry real financial/commercial consequence.
 
 ---
@@ -58,7 +60,9 @@ This section does not pretend a richer permission model already exists. It defin
 
 **Responsibilities:** Sabush company employees who assist admins directly — investigating a reported issue, viewing (never editing) a business's data for troubleshooting, initiating a time-boxed impersonation session (Section 4.6) when an admin explicitly needs hands-on help.
 
-**Permissions:** Read-only access to tenant data via the SuperAdmin app (4.13) and its aggregation-layer/audited-access boundary (4.10) — never a direct Firestore read against a business's raw collections, per Principle 2.8. Can initiate impersonation (4.6) but every such session is server-issued, time-boxed, and logged to the platform Audit Log (3.14) — Support cannot act as an admin silently.
+**Permissions — Amendment, closing a gap the self-audit found:** The aggregation layer (4.10) contains only already-anonymized, cross-tenant figures — it structurally cannot serve "look at this one business's raw records," which is what troubleshooting actually requires. Support's read access is therefore **not** the aggregation layer. It is a third, distinct access pattern, separate from both 4.10 (anonymized/aggregate) and impersonation (4.6, full session-as-admin):
+
+**Support Session** — a server-issued (privileged server, 4.4), time-boxed, single-`businessId`-scoped, **read-only** credential. Requesting one requires stating which business and (for the audit trail) why; the privileged server verifies the requester actually holds Support/Developer/SuperAdmin standing (7.4) before issuing it, exactly as it re-verifies any privileged action (Principle 2.9). While active, it grants read access to that one business's raw collections (7.2) — and only that one — through the SuperAdmin app; it grants no write access at all, which is what distinguishes it from impersonation (4.6, which is a full read/write session acting *as* the admin). Every Support Session's issuance, scope, and expiry is logged to the platform Audit Log (3.14), the same as impersonation. Full session-token mechanics remain Section 9's job; this section fixes that it exists as its own access pattern with its own shape, so Section 9 isn't left to invent the concept from scratch.
 
 **Relationships:** Exists only inside the SuperAdmin app (4.13), never the tenant SPA. Reports to / is a subset of the SuperAdmin role for permission purposes (6.7) — Support is the most restricted tier of platform-operator access, not a separate system.
 

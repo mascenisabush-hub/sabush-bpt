@@ -13,9 +13,9 @@ This document is built section by section. Each section is only written once the
 | 1 | [Product Vision](./01-product-vision.md) | ✅ Approved |
 | 2 | [Core Product Principles](./02-core-product-principles.md) | ✅ Approved |
 | 3 | [Domain Architecture](./03-domain-architecture.md) | ✅ Approved |
-| 4 | [System Architecture](./04-system-architecture.md) | ✅ Approved |
+| 4 | [System Architecture](./04-system-architecture.md) | ✅ Approved (amended) |
 | 5 | [Business Lifecycle](./05-business-lifecycle.md) | ✅ Approved |
-| 6 | [User Architecture](./06-user-architecture.md) | ✅ Approved |
+| 6 | [User Architecture](./06-user-architecture.md) | ✅ Approved (amended) |
 | 7 | [Data Architecture](./07-data-architecture.md) | Drafted — awaiting approval |
 | 8 | Module Architecture | Not started |
 | 9 | SuperAdmin Architecture | Not started |

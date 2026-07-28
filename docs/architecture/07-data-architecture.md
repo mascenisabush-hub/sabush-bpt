@@ -10,6 +10,8 @@
 
 Firestore is a document database, and the existing schema (audit-confirmed) already follows the one pattern that matters most at this Mission's scale: **every operational entity is a document, tenant-scoped by nesting under its owning Business, never by a shared table with a `businessId` foreign key a query might forget to filter by.** This is stricter than a relational foreign-key model — it makes an un-scoped cross-tenant read structurally awkward to even attempt, which is exactly what Principle 2.8 (Tenant Isolation Is Non-Negotiable) demands. Section 7 preserves this pattern for every existing entity and extends it, not around it, for every new one.
 
+**Currency-change integrity — Amendment, closing a gap the self-audit found:** No Stock Batch, Closing, Withdrawal, Expense, or Stock Count record stores which currency it was recorded in — they hold bare numbers. If `currencySymbol` (7.2) changed freely after financial history exists, every historical figure would silently be misrepresented under the new symbol, with no conversion — a direct violation of Principle 2.4 (Data Integrity Over Convenience). The fix follows Section 7.1's own "live source wins, and immutability is the default protection" logic rather than adding a currency-snapshot field to every entity (which would touch every row in 7.2 for a rare event): **`currencySymbol` is mutable only until the Business's first financial record exists** (its first Stock Batch, Expense, Withdrawal, or Stock Count — whichever comes first) — the same "immutable once it starts being measured against" shape 7.6 already applies to Closings and the initial Stock Count. After that point, the Security Rule governing `businesses/{businessId}` denies any write that changes `currencySymbol`, structurally, not just by product-level convention. A business that genuinely needs to change currency (e.g., a market/registration change) is out of scope for this document series to solve by mutation — it is handled as a new Business, which is consistent with Principle 2.10's general stance that historical integrity outranks convenience.
+
 A second existing pattern worth naming explicitly because Section 8 and beyond will rely on it: **calculated figures are never trusted from a denormalized field where the source record still exists.** A Product's reference price is metadata, not a calculation input (Section 3.4); a Stock Batch's own `costPrice`/`sellingPrice` is the only source of truth for Investment Value, Market Value, and Embedded Profit. Section 7 states this as a general data-architecture rule, not a one-off Product quirk: **wherever a figure could be computed two ways (from a live source record, or from a cached/reference value), the live source record wins, always** — this is Principle 2.4 (Data Integrity Over Convenience) expressed as a data-modeling rule.
 
 ---
@@ -20,7 +22,7 @@ Every entity below lives at `businesses/{businessId}/{collection}/{id}` — nest
 
 | Entity | Collection | Key fields (architecture-relevant only) | Immutable? |
 |---|---|---|---|
-| Business | `businesses/{businessId}` | `ownerUid`, `currencySymbol`, `category` | Mutable (Admin-editable profile fields) |
+| Business | `businesses/{businessId}` | `ownerUid`, `currencySymbol`, `category` | Mutable (Admin-editable profile fields) **except `currencySymbol` — see amendment below** |
 | Product | `.../products/{id}` | reference `costPrice`/`sellingPrice` (never a calculation source, 3.4) | Mutable (catalog metadata only) |
 | Purchase Batch | `.../purchaseBatches/{id}` | `batchNumber` (permanent, human-readable), `supplier`, `archived` | `batchNumber` immutable; `archived` reversible |
 | Stock Batch | `.../batches/{id}` (collection name predates the "Stock Batch" terminology — kept as-is, no rename, per Principle 2.6: a cosmetic rename of a working collection has a real migration cost and zero Worth-related benefit) | `costPrice`, `sellingPrice` **at time of purchase**, `status: open/closed`, optional `purchaseBatchId` link | Price fields immutable once written; `status` transitions `open → closed` |
@@ -40,7 +42,7 @@ Every entity below lives at `businesses/{businessId}/{collection}/{id}` — nest
 
 `users/{uid}` is the **one** source of truth for identity, role, and business membership — not a business-scoped entity itself, since a user (particularly a multi-shop Admin) can outlive or span multiple Businesses. Every Security Rule that decides tenant access (`isMemberOf`, `isOwnerOf`, `isSuspended`) reads this document, never a client-asserted claim — this is Principle 2.9 applied at the data layer, and it's what makes every other collection's Security Rule short and auditable (each one delegates the real membership check to this single document rather than re-implementing it).
 
-**Section 6's Manager tier lands here, structurally:** the proposed `staffTier` field (Section 6.3) belongs on `users/{uid}` — the same document Security Rules already treat as authoritative — not on the business-scoped `staff/{id}` mirror. This keeps the pattern in 7.2's Staff row consistent: `users/{uid}` is authoritative, `staff/{id}` is a display mirror, exactly as it already is for `suspended`. A Manager-granted capability (e.g., "can suspend other Staff," per Section 6.3) is therefore checked the same way `isOwnerOf` is checked today: read `users/{uid}`, never trust the client.
+**Section 6's Manager tier lands here, structurally:** the proposed `staffTier` field (Section 6.3) belongs on `users/{uid}` — the same document Security Rules already treat as authoritative — not on the business-scoped `staff/{id}` mirror. This keeps the pattern in 7.2's Staff row consistent: `users/{uid}` is authoritative, `staff/{id}` is a display mirror, exactly as it already is for `suspended`. Alongside `staffTier`, `users/{uid}` also carries `managerPermissions: { closings: bool, staffManagement: bool }` (optional, defaulting to all-false for every existing account) — this is the concrete field Section 6.3's amended `isOwnerOrGrantedManager(businessId, permission)` rule function reads, turning "if granted" from a documented intention into a real, checkable value.
 
 ---
 
@@ -48,8 +50,11 @@ Every entity below lives at `businesses/{businessId}/{collection}/{id}` — nest
 
 These live outside any single `businesses/{businessId}` tree, per Section 4.5's fix that platform-level domains are top-level collections, readable-by-default only through the privileged server or the shared aggregation layer (4.10) — never a direct client read/write except where explicitly noted.
 
+**Platform-operator identity — Amendment, closing a gap the self-audit found:** Section 6 defines Support/Developer/SuperAdmin permissions, but `users/{uid}` (7.3) is scoped to `role: 'owner' | 'staff'` plus `businessId`/`businessIds` — a shape that has no meaning for someone who isn't a member of any tenant business at all. Conflating platform operators into the tenant `users/{uid}` collection would mean every tenant-facing Security Rule that reads that document now has to also account for a case that has nothing to do with tenant data — a modeling error, not just an inconvenience. The fix: a separate top-level collection, `platform_operators/{uid}`, keyed by the same Firebase Auth `uid` but populated only for Sabush employees (provisioned by an existing SuperAdmin, 6.7 — never self-service signup). Its only architecture-relevant field is `platformRole: 'support' | 'developer' | 'superadmin'`. The SuperAdmin app's own auth check (4.13) reads *this* document, never `users/{uid}` — the two identity spaces are structurally separate, which is what makes it impossible for a tenant account to accidentally gain platform authority (or vice versa) through a shared document. Full account-provisioning workflow is Section 9's job; this fixes only where the record lives.
+
 | Entity | Collection | Purpose (Section 3 domain) | Write path |
 |---|---|---|---|
+| Platform Operator | `platform_operators/{uid}` | 6.5–6.7 (Support/Developer/SuperAdmin identity) | Privileged server only, provisioned by an existing SuperAdmin (6.7) |
 | Subscription | `subscriptions/{id}` | 3.13 | Privileged server only (webhook handler, 4.12; SuperAdmin billing actions, 6.7) |
 | Notification | `notifications/{id}` | 3.12 | Background Worker (4.8) and privileged server (4.4); client reads its own feed |
 | Platform Aggregate | `platform_aggregates/{period}` | Shared aggregation layer (4.10), feeding 3.14/3.15/3.16 | Background Worker only; read-only for SuperAdmin app and AI's cross-tenant path |
@@ -85,10 +90,11 @@ businesses/{businessId}  ◄── staff/{id} (mirror only)
    └── timelineEvents/{id} (append-only, written alongside every action above)
 
 Platform level (no nesting under any single business):
+platform_operators/{uid} ──platformRole: support|developer|superadmin (separate identity space from users/{uid})
 subscriptions/{id} ──keyed by uid or businessId (Section 9 decision)
 notifications/{id} ──recipientId (uid or businessId)
 platform_aggregates/{period} ──derived from all businesses/*, via Background Worker only
-platform_audit_log/{id} ──written by privileged server on every platform-operator action
+platform_audit_log/{id} ──written by privileged server on every platform-operator action, incl. Support Session issuance (6.5) and impersonation (4.6)
 ```
 
 ---
@@ -125,6 +131,18 @@ Section 7 fixes only the *shape* that makes Section 11's later, concrete thresho
 - **Subcollection nesting keeps every business's data physically separate at the storage layer**, which is what allows Firestore to serve 100,000+ tenants' worth of `batches`/`timelineEvents`/etc. without any tenant's growing dataset affecting another's query performance — a direct structural benefit of 7.1's pattern, not an added feature.
 - **`platform_aggregates` is deliberately the only place cross-tenant computation happens**, and it happens on a schedule (4.8), never live on a dashboard request — this is what keeps SuperAdmin/Analytics dashboards fast regardless of tenant count, since they never scan raw per-business collections directly.
 - **Every collection introduced in this section must be queried with pagination and a documented index**, per Principle 2.5 — the audit's central finding (unbounded listeners) is a query-pattern problem Section 11 will fully specify, but the collection *shapes* fixed here don't themselves foreclose fixing it, which is the property Principle 2.12 actually requires at this stage.
+
+---
+
+## 7.9 Data Retention and Deletion — New, Closing a Gap the Self-Audit Found
+
+**The gap:** the current, audit-confirmed rule is `allow delete: if false` on `businesses/{businessId}` — permanent, by design, today. Nothing before this section addressed what happens when a business genuinely closes, or a legal deletion request arrives at the Mission's 100,000-tenant scale. Silently inheriting "delete is impossible forever" is not a decision, it's an omission, and Principle 2.10 (Historical Data Is Sacred) does not actually require literal non-deletion — it requires that a record's history isn't secretly rewritten while it exists.
+
+**Decision — two distinct paths, not one:**
+1. **Business closure (the common case).** A closed business is never hard-deleted. It transitions to a `status: 'closed'` flag on `businesses/{businessId}` (an addition to the mutable profile fields in 7.2), set only via the privileged server (4.4), consistent with how `suspended` already works for staff (6.4). Every subcollection (7.2) is retained as-is — this preserves Principle 2.10 exactly, costs nothing extra structurally (nesting already isolates it, 7.1/7.8), and keeps the Admin's own historical Worth data available if they reopen. Security Rules deny new writes to a closed business's subcollections but keep reads available to its own Admin.
+2. **Legal/compliance deletion request (the rare, hard case).** Firestore does not cascade-delete subcollections automatically, so honoring a genuine deletion request is a **documented manual procedure**, not a rule change: a privileged-server, SuperAdmin-only endpoint (`/api/superadmin/business/purge`, per the 4.4/6.7 pattern) that (a) verifies the legal basis is logged to the platform Audit Log (7.4) *before* acting — the one case where the audit log records a deletion's justification, not just its occurrence — then (b) walks and deletes every subcollection under that `businessId`, then the business document itself. This is deliberately a slow, explicit, logged, SuperAdmin-only path — never a client-reachable delete — which is the correct trade-off between Principle 2.10 (historical integrity) and real legal deletion obligations neither Section can pretend don't exist.
+
+**What this section deliberately does not do:** specify the exact legal bases that trigger path 2, or a data-export format for a closing business — those are product/legal decisions, not data-architecture ones, and are named here only so Section 12 (Security Architecture) and Section 13 (Development Strategy) inherit an explicit hook rather than a silent gap.
 
 ---
 
