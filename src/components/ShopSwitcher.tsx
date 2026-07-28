@@ -72,7 +72,7 @@ export const ShopSwitcher: React.FC = () => {
     <div className="relative" ref={menuRef}>
       <button
         onClick={() => setIsOpen((v) => !v)}
-        className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#D4AF37] mb-0.5 hover:text-[#9C6613] transition-colors"
+        className="flex items-center gap-1 text-[10px] font-bold uppercase tracking-wider text-[#2563EB] mb-0.5 hover:text-[#9C6613] transition-colors"
       >
         Meu Negócio
         {ownedBusinesses.length > 1 && <ChevronDown className="w-3 h-3" />}
@@ -96,7 +96,7 @@ export const ShopSwitcher: React.FC = () => {
                       <p className="text-[13px] font-semibold text-gray-800 truncate">{b.name}</p>
                       {b.category && <p className="text-[11px] text-gray-400 truncate">{b.category}</p>}
                     </div>
-                    {b.id === activeBusinessId && <Check className="w-4 h-4 text-[#D4AF37] shrink-0" />}
+                    {b.id === activeBusinessId && <Check className="w-4 h-4 text-[#2563EB] shrink-0" />}
                   </button>
                 ))}
               </div>

@@ -117,7 +117,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                       setPin('');
                       setError(null);
                     }}
-                    className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl border border-[#0B1F3A]/[0.06] bg-white/60 hover:border-[#D4AF37]/40 hover:bg-white transition text-left"
+                    className="w-full flex items-center gap-3 px-3.5 py-3 rounded-2xl border border-[#0B1F3A]/[0.06] bg-white/60 hover:border-[#2563EB]/40 hover:bg-white transition text-left"
                   >
                     <div className="w-9 h-9 rounded-xl bg-[#0B1F3A]/5 flex items-center justify-center shrink-0">
                       <User className="w-4 h-4 text-[#0B1F3A]" />
@@ -131,13 +131,13 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             <button
               type="button"
               onClick={onUseOwnerLogin}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[#111] font-medium mt-5 transition-all hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]/50"
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[#111] font-medium mt-5 transition-all hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#2563EB]/50"
               style={{
-                background: 'linear-gradient(135deg, #D4AF37, #B8952F)',
-                boxShadow: '0 8px 20px rgba(212,175,55,0.25)',
+                background: 'linear-gradient(135deg, #2563EB, #1D4ED8)',
+                boxShadow: '0 8px 20px rgba(37,99,235,0.25)',
               }}
-              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 12px 25px rgba(212,175,55,0.35)')}
-              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 8px 20px rgba(212,175,55,0.25)')}
+              onMouseEnter={(e) => (e.currentTarget.style.boxShadow = '0 12px 25px rgba(37,99,235,0.35)')}
+              onMouseLeave={(e) => (e.currentTarget.style.boxShadow = '0 8px 20px rgba(37,99,235,0.25)')}
             >
               <ShieldCheck className="w-4 h-4" />
               {t('quickLogin.loginAsOwner')}

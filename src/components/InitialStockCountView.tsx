@@ -126,7 +126,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // consistent system instead of per-field styling.
   const fieldClass =
     'w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
-    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]';
+    'transition-all duration-150 focus:outline-none focus:border-[#2563EB] focus:ring-4 focus:ring-[#2563EB]/[0.12]';
   const fieldLabelClass = 'block type-label mb-1';
   // Column widths: Nome gets the most room, numeric fields stay tight,
   // last column is just wide enough for the hover-revealed delete icon.
@@ -270,9 +270,9 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           <button
             type="button"
             onClick={handleAddRow}
-            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
+            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#2563EB]/50 hover:bg-[#2563EB]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
           >
-            <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
+            <Plus className="w-3.5 h-3.5 text-[#2563EB] group-hover:scale-110 transition-transform duration-150" />
             <span>Adicionar outro produto</span>
           </button>
 
@@ -280,10 +280,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               the same quiet serif treatment as hero figures elsewhere. */}
           <div className="card-dark-gradient rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
-              <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0" strokeWidth={2.25} />
+              <ShieldCheck className="w-4 h-4 text-[#2563EB] shrink-0" strokeWidth={2.25} />
               <span className="font-semibold text-white/70 text-[13px]">Capital Inicial Total</span>
             </div>
-            <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#D4AF37] tabular-nums leading-none">
+            <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#2563EB] tabular-nums leading-none">
               {formatCurrency(totalCapital, currencySymbol)}
             </span>
           </div>

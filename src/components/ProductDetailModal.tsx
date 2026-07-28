@@ -83,7 +83,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   onClose();
                   onNavigateToAddStock(product.name);
                 }}
-                className="px-3.5 py-2 rounded-lg bg-[#D4AF37] hover:bg-[#c19d2e] text-[#0B1F3A] text-xs font-bold transition-colors duration-150"
+                className="px-3.5 py-2 rounded-lg bg-[#2563EB] hover:bg-[#c19d2e] text-[#0B1F3A] text-xs font-bold transition-colors duration-150"
               >
                 + Adicionar Lote
               </button>
