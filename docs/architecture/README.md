@@ -23,7 +23,7 @@ This document is built section by section. Each section is only written once the
 | 11 | [Scalability Strategy](./11-scalability-strategy.md) | ✅ Approved |
 | 12 | [Security Architecture](./12-security-architecture.md) | ✅ Approved |
 | 13 | [Development Strategy](./13-development-strategy.md) | ✅ Approved |
-| 14 | [Future Roadmap](./14-future-roadmap.md) | Drafted — awaiting approval |
-| 15 | Architecture Validation | Not started |
+| 14 | [Future Roadmap](./14-future-roadmap.md) | ✅ Approved |
+| 15 | [Architecture Validation](./15-architecture-validation.md) | Drafted — awaiting approval |
 
 Each section file will be updated to ✅ **Approved** once confirmed, with the approval date and any amendments noted at the top of that file.

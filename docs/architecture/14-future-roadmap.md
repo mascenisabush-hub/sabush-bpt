@@ -1,6 +1,6 @@
 # Section 14 — Future Roadmap
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Sections 1–13 — all approved.
 **Purpose:** Show how Sabush BPT evolves over five years without losing focus (per the brief). This section does not introduce a new planning framework — it extends Section 13's phase structure (Phase 0 → 1 → 2 → 3, plus the standing Phase 4 scale-triggered policy) past its own horizon, using Section 11's scale tiers (100 / 1,000 / 10,000 / 100,000+) as the year-over-year backbone, since those tiers are already the Mission's own stated scale target, not a roadmap invention.
 
