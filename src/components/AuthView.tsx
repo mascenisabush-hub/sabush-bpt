@@ -2,13 +2,12 @@ import React, { useState, useEffect } from 'react';
 import {
   signInWithEmailAndPassword,
   createUserWithEmailAndPassword,
-  signInAnonymously,
   GoogleAuthProvider,
   signInWithPopup,
 } from 'firebase/auth';
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
-import { Store, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCircle, Sparkles, UserCheck, Eye, EyeOff } from 'lucide-react';
+import { Store, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCircle, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { useApp } from '../context/AppContext';
@@ -232,53 +231,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         setError(`[Google Auth | Code: auth/unauthorized-domain] ${unauthorizedDomainMsg}`);
       } else {
         setError(`[Google Auth | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.googleGenericError')}`);
-      }
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  const handleAnonymousAuth = async () => {
-    setError(null);
-    setLoading(true);
-
-    try {
-      const userCred = await signInAnonymously(auth);
-      const uid = userCred.user.uid;
-      const businessId = 'bus-demo-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-
-      // Check if user doc exists
-      const userDoc = await getDoc(doc(db, 'users', uid));
-      if (!userDoc.exists()) {
-        // See note above: never hardcode a fallback category — it would
-        // block auto-detection later in BusinessProfileSetupModal.
-        const demoBName = businessName.trim() || t('auth.defaults.demoBusinessNameFallback');
-        await setDoc(doc(db, 'businesses', businessId), {
-          id: businessId,
-          name: demoBName,
-          ownerUid: uid,
-          category: category || detectCategoryFromName(demoBName) || '',
-          currencySymbol: currency || 'MT',
-          createdAt: new Date().toISOString(),
-        });
-
-        await setDoc(doc(db, 'users', uid), {
-          uid,
-          email: 'demo@batchprofittracker.local',
-          name: name.trim() || t('auth.defaults.demoOwnerFallback'),
-          role: 'owner',
-          businessId,
-          businessIds: [businessId],
-          activeBusinessId: businessId,
-          createdAt: new Date().toISOString(),
-        });
-      }
-    } catch (err: any) {
-      console.error('Anonymous Auth Error:', err);
-      if (err.code === 'auth/operation-not-allowed') {
-        setError(`[Modo Demo | Code: auth/operation-not-allowed] ${t('auth.errors.demoOperationNotAllowed')}`);
-      } else {
-        setError('[Modo Demo | Code: ' + (err.code || 'N/A') + '] ' + (err.message || String(err)));
       }
     } finally {
       setLoading(false);
@@ -645,16 +597,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
                 />
               </svg>
               <span>{t('auth.googleLogin')}</span>
-            </button>
-
-            <button
-              type="button"
-              onClick={handleAnonymousAuth}
-              disabled={loading}
-              className="w-full py-2.5 px-3 bg-white/5 hover:bg-white/10 border border-white/10 text-blue-300 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2"
-            >
-              <UserCheck className="w-4 h-4" />
-              <span>{t('auth.demoLogin')}</span>
             </button>
           </div>
 
