@@ -1,6 +1,6 @@
 # Section 6 — User Architecture
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Section 1 (Product Vision) — approved · Section 2 (Core Product Principles) — approved · Section 3 (Domain Architecture) — approved · Section 4 (System Architecture) — approved · Section 5 (Business Lifecycle) — approved
 **Purpose:** Define every user type in Sabush BPT — Admin, Manager, Staff, Support, Developer, SuperAdmin — their responsibilities, permissions, relationships, and how the model extends without rework, building on the Auth/session model already fixed in Section 4.6 and the role-gated actions already scattered through the codebase.
 
