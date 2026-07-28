@@ -1,6 +1,6 @@
 # Section 15 — Architecture Validation
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Sections 1–14 — all approved. This is the final section of the document series.
 **Purpose:** For every major architectural decision across Sections 1–14, answer the brief's three questions directly: **Why is this needed? What problem does it solve? What happens if we don't implement it?** This section does not re-derive any decision — nearly every prior section already answered these questions inline for its own decisions (Section 2's principles are the clearest example, each one already carrying a "Why" and a "What happens if this principle is dropped"). Section 15's job is to assemble that reasoning into one final, checkable pass across the *whole* series, at the level of decisions consequential enough that getting them wrong would be expensive to undo — not every micro-detail already covered exhaustively in its own section.
 
@@ -149,7 +149,6 @@ Per the README's own stated status ("Living document, built and approved one sec
 
 | # | Section | Status |
 |---|---|---|
-| 1–14 | Product Vision → Future Roadmap | ✅ Approved |
-| 15 | Architecture Validation | Drafted — awaiting approval |
+| 1–15 | Product Vision → Architecture Validation | ✅ Approved |
 
-**This is the final section of the Sabush BPT Product Architecture Document. Once approved, Sections 1–15 together form the permanent, living reference this entire series was commissioned to produce.**
+**This is the final section of the Sabush BPT Product Architecture Document. Sections 1–15 together now form the permanent, living reference this entire series was commissioned to produce.**
