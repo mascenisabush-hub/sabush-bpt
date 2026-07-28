@@ -226,7 +226,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
           {activeSection === 'general' && (
             <>
               {/* Business Profile Card */}
-              <div className="p-4 bg-gray-100/60 border border-gray-200 rounded-2xl space-y-2">
+              <div className="p-4 bg-white border border-gray-200 rounded-2xl space-y-2">
                 <div className="flex items-center justify-between">
                   <h4 className="text-xs font-bold text-gray-700 flex items-center gap-1.5">
                     <Store className="w-3.5 h-3.5 text-blue-600" /> Perfil do Negócio
@@ -341,7 +341,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
           {activeSection === 'staff' && isOwner && (
             <div className="space-y-6">
               {/* Device Pairing — PIN quick-login for a shared shop device */}
-              <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
+              <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <h3 className="text-xs font-bold text-[#0B1F3A] uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <Smartphone className="w-4 h-4" /> Este Dispositivo
                 </h3>
@@ -422,7 +422,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               </div>
 
               {/* Form to Add Staff */}
-              <div className="bg-gray-100/80 border border-gray-200 rounded-2xl p-4">
+              <div className="bg-white border border-gray-200 rounded-2xl p-4">
                 <h3 className="text-xs font-bold text-blue-600 uppercase tracking-wider mb-1 flex items-center gap-1.5">
                   <UserPlus className="w-4 h-4" /> Adicionar Novo Funcionário (Staff)
                 </h3>
@@ -515,11 +515,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                 </h3>
 
                 {staffMembers.length === 0 ? (
-                  <p className="text-xs text-gray-500 italic bg-gray-100/40 p-3 rounded-xl border border-gray-200/60">
+                  <p className="text-xs text-gray-500 italic bg-white p-3 rounded-xl border border-gray-200">
                     Ainda não registou nenhum funcionário.
                   </p>
                 ) : (
-                  <div className="divide-y divide-gray-200/60 border border-gray-200 rounded-2xl overflow-hidden bg-gray-100/60">
+                  <div className="divide-y divide-gray-200/60 border border-gray-200 rounded-2xl overflow-hidden bg-white">
                     {staffMembers.map(staff => (
                       <div key={staff.uid} className="p-3 flex items-center justify-between text-xs hover:bg-white/60 transition">
                         <div>
@@ -626,7 +626,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="bg-gray-100/60 border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
+              <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Nome</span>
                   <span className="font-bold text-gray-900">{staffPendingDeletion.name}</span>
@@ -711,7 +711,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
             </div>
 
             <div className="p-5 space-y-4">
-              <div className="bg-gray-100/60 border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
+              <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
                 <div className="flex justify-between">
                   <span className="text-gray-500">Nome</span>
                   <span className="font-bold text-gray-900">{staffPendingSuspension.name}</span>

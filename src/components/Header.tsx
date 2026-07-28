@@ -344,12 +344,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             </div>
 
             <div className="space-y-4 my-4 text-sm text-gray-700 leading-relaxed">
-              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200">
                 <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section1Title')}</span>
                 <p dangerouslySetInnerHTML={{ __html: t('header.helpModal.section1Body') }} />
               </div>
 
-              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200">
                 <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section2Title')}</span>
                 <p>
                   {t('header.helpModal.section2Body')}
@@ -360,12 +360,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 </p>
               </div>
 
-              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200">
                 <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section3Title')}</span>
                 <p dangerouslySetInnerHTML={{ __html: t('header.helpModal.section3Body') }} />
               </div>
 
-              <div className="bg-gray-100/60 p-3.5 rounded-xl border border-gray-300/60">
+              <div className="bg-white p-3.5 rounded-xl border border-gray-200">
                 <span className="font-bold text-blue-700 block mb-1">{t('header.helpModal.section4Title')}</span>
                 <p dangerouslySetInnerHTML={{ __html: t('header.helpModal.section4Body') }} />
               </div>

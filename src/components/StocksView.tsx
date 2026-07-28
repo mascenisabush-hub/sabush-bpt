@@ -393,7 +393,7 @@ export const StocksView: React.FC = () => {
 
             <div className="overflow-y-auto flex-1 space-y-4 pr-1">
               {/* Batch info */}
-              <div className="bg-gray-100/60 border border-gray-200 rounded-2xl p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div className="bg-white border border-gray-200 rounded-2xl p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
                 <div className="flex items-start gap-2">
                   <Truck className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
                   <div>
@@ -476,7 +476,7 @@ export const StocksView: React.FC = () => {
                 <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
                   <Package className="w-3.5 h-3.5 text-blue-600" /> {t('stocksView.modal.productsHeading')}
                 </h3>
-                <div className="border border-gray-200 rounded-2xl bg-gray-100/60 p-2 overflow-x-auto">
+                <div className="border border-gray-200 rounded-2xl bg-white p-2 overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[560px]">
                     <thead>
                       <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">

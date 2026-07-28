@@ -316,9 +316,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       </div>
 
       {/* SECONDARY METRICS — same existing cards/data (Levantamentos, Quebras,
-          Lotes Ativos), nothing removed. Set apart in a very light grey
-          section rather than a border, so the primary 6 above keep focus. */}
-      <div className="bg-[#F5F7FA] rounded-2xl p-6 sm:p-7">
+          Lotes Ativos), nothing removed. Set apart with a border on a white
+          surface (not a gray fill) so the primary 6 above keep focus while
+          the page stays on the white/navy/gold palette. */}
+      <div className="bg-white border border-[var(--border)] rounded-2xl p-6 sm:p-7">
         <p className="kpi-label mb-5 px-1">
           {t('dashboard.otherIndicators')}
         </p>
