@@ -78,7 +78,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       disabled={!onClick}
       className={`group h-full text-left p-4 sm:p-5 flex flex-col gap-3 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isDark
-          ? 'relative overflow-hidden bg-[#0B1F3A] shadow-[var(--shadow-2)]'
+          ? 'relative overflow-hidden card-dark-gradient shadow-[var(--shadow-2)]'
           : `card-premium ${highlight ? 'is-highlighted' : ''}`
       } ${onClick ? (isDark ? 'hover:-translate-y-[3px] cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
     >

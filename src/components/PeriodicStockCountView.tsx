@@ -366,7 +366,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
           {/* Total + comparison — hero serif figure, comparison line below a
               thin divider so both fit within the same navy surface. */}
-          <div className="bg-[#0B1F3A] rounded-2xl px-5 py-4 space-y-3">
+          <div className="card-dark-gradient rounded-2xl px-5 py-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className="font-semibold text-white/70 text-[13px]">Valor Total da Contagem</span>
               <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#D4AF37] tabular-nums leading-none">

@@ -278,7 +278,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
           {/* Total — the one number this screen exists to produce, given
               the same quiet serif treatment as hero figures elsewhere. */}
-          <div className="bg-[#0B1F3A] rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
+          <div className="card-dark-gradient rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0" strokeWidth={2.25} />
               <span className="font-semibold text-white/70 text-[13px]">Capital Inicial Total</span>
