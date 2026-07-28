@@ -117,8 +117,10 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
   if (savedMessage) {
     return (
       <div className="max-w-2xl mx-auto py-16 flex flex-col items-center text-center space-y-3">
-        <CheckCircle2 className="w-14 h-14 text-emerald-600" />
-        <h2 className="text-lg font-bold text-gray-900">{savedMessage}</h2>
+        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
+          <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
+        </div>
+        <h2 className="text-lg font-bold text-[#111827]">{savedMessage}</h2>
         <p className="text-sm text-gray-500">O período fica permanentemente registado no histórico.</p>
       </div>
     );
@@ -126,30 +128,28 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-4">
-      <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-xl space-y-4">
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-5">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200 flex-wrap gap-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-teal-500/10 border border-teal-500/30 flex items-center justify-center text-teal-600 shrink-0">
-              <Lock className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-bold text-base text-gray-900">Fecho Mensal/Anual</h2>
-              <p className="text-[11px] text-gray-500">
-                Feche um período para bloquear os seus resultados permanentemente no histórico.
-              </p>
-            </div>
+        <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
+          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+            <Lock className="w-5 h-5" strokeWidth={2} />
+          </div>
+          <div>
+            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">Fecho Mensal/Anual</h2>
+            <p className="text-[12px] text-gray-500 mt-0.5">
+              Feche um período para bloquear os seus resultados permanentemente no histórico.
+            </p>
           </div>
         </div>
 
         {/* Period selector */}
-        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-2.5">
           <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Tipo</label>
+            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">Tipo</label>
             <select
               value={periodType}
               onChange={(e) => setPeriodType(e.target.value as ClosingPeriodType)}
-              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 text-xs font-semibold"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-semibold transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
             >
               <option value="monthly">Mensal</option>
               <option value="yearly">Anual</option>
@@ -158,11 +158,11 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
           {periodType === 'monthly' && (
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Mês</label>
+              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">Mês</label>
               <select
                 value={month}
                 onChange={(e) => setMonth(Number(e.target.value))}
-                className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 text-xs"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
               >
                 {MONTH_NAMES.map((m, idx) => (
                   <option key={m} value={idx}>{m}</option>
@@ -172,11 +172,11 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
           )}
 
           <div>
-            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Ano</label>
+            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">Ano</label>
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
-              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 text-xs font-mono"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -185,7 +185,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
           </div>
 
           <div className="col-span-2 sm:col-span-1 flex items-end">
-            <div className="w-full bg-slate-50 border border-gray-100 rounded-lg px-2.5 py-1.5 flex items-center gap-1.5 text-[11px] text-gray-600">
+            <div className="w-full bg-[#FAFBFC] border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 flex items-center gap-1.5 text-[11px] text-gray-600">
               <CalendarRange className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               <span>{formatDate(startDate)} — {formatDate(endDate)}</span>
             </div>
@@ -193,8 +193,8 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
         </div>
 
         {alreadyClosed && (
-          <div className="bg-amber-50 border border-amber-500/30 rounded-xl p-3 flex items-start space-x-2 text-xs text-gray-700">
-            <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3 flex items-start gap-2.5 text-xs text-gray-700">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2.25} />
             <p>
               O período <strong>{periodLabel}</strong> já foi fechado. Consulte o histórico abaixo ou escolha outro período.
             </p>
@@ -202,42 +202,42 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
         )}
 
         {/* Preview */}
-        <div className="bg-slate-50 border border-gray-100 rounded-xl p-3 sm:p-4 space-y-2">
-          <p className="text-[10px] font-bold text-gray-400 uppercase">Pré-visualização de {periodLabel}</p>
+        <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4 sm:p-5 space-y-3">
+          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Pré-visualização de {periodLabel}</p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
-            <div className="bg-white border border-gray-100 rounded-lg p-2">
+            <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Lucro Embutido</p>
-              <p className="font-mono font-bold text-sm text-gray-800">{formatCurrency(preview.totalEmbeddedProfit, currencySymbol)}</p>
+              <p className="font-mono font-bold text-sm text-[#111827] tabular-nums">{formatCurrency(preview.totalEmbeddedProfit, currencySymbol)}</p>
             </div>
-            <div className="bg-white border border-gray-100 rounded-lg p-2">
+            <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Despesas</p>
-              <p className="font-mono font-bold text-sm text-rose-600">{formatCurrency(preview.totalExpenses, currencySymbol)}</p>
+              <p className="font-mono font-bold text-sm text-rose-600 tabular-nums">{formatCurrency(preview.totalExpenses, currencySymbol)}</p>
             </div>
-            <div className="bg-white border border-gray-100 rounded-lg p-2">
+            <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Levantamentos</p>
-              <p className="font-mono font-bold text-sm text-blue-600">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
+              <p className="font-mono font-bold text-sm text-[#0B1F3A] tabular-nums">{formatCurrency(totalWithdrawalsInRange, currencySymbol)}</p>
             </div>
-            <div className="bg-white border-2 border-teal-500/30 rounded-lg p-2">
+            <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-2.5">
               <p className="text-[10px] text-gray-500">Valor de Mercado do Stock</p>
-              <p className="font-mono font-black text-sm text-gray-800">
+              <p className="font-display font-semibold text-sm text-[#0B1F3A] tabular-nums">
                 {formatCurrency(totalMarketValueAllTime, currencySymbol)}
               </p>
             </div>
           </div>
 
-          <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-200 text-xs">
-            <span className="text-gray-500 flex items-center gap-1"><Wallet className="w-3.5 h-3.5" /> Valor do Negócio (agora)</span>
-            <span className="font-mono font-bold text-gray-800">{formatCurrency(businessWorth, currencySymbol)}</span>
+          <div className="flex items-center justify-between gap-2 pt-3 border-t border-[#E5E7EB] text-xs">
+            <span className="text-gray-500 flex items-center gap-1.5"><Wallet className="w-3.5 h-3.5" strokeWidth={2.25} /> Valor do Negócio (agora)</span>
+            <span className="font-mono font-bold text-[#111827] tabular-nums">{formatCurrency(businessWorth, currencySymbol)}</span>
           </div>
-          <p className="text-[10px] text-gray-400">
+          <p className="text-[10.5px] leading-relaxed text-gray-400">
             Este é o valor que fica gravado como fotografia (snapshot) ao fechar o período — Valor de Mercado do Stock {formatCurrency(totalMarketValueAllTime, currencySymbol)} − Despesas − Levantamentos. Nenhuma venda é registada nesta app, por isso este número nunca representa dinheiro em caixa.
           </p>
         </div>
 
         {error && (
-          <div className="bg-rose-50 border border-rose-500/30 rounded-xl p-3 text-xs text-rose-700 flex items-start space-x-2">
-            <AlertTriangle className="w-4 h-4 shrink-0 mt-0.5" />
+          <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3 text-xs text-rose-700 flex items-start gap-2.5">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-0.5" strokeWidth={2.25} />
             <p>{error}</p>
           </div>
         )}
@@ -247,21 +247,21 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             type="button"
             disabled={alreadyClosed}
             onClick={() => setConfirming(true)}
-            className="w-full py-3 px-4 rounded-xl bg-teal-600 hover:bg-teal-500 disabled:opacity-40 disabled:cursor-not-allowed text-white font-bold text-sm transition shadow-lg shadow-teal-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+            className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-40 disabled:cursor-not-allowed disabled:shadow-none"
           >
-            <Lock className="w-4 h-4" />
+            <Lock className="w-4 h-4" strokeWidth={2.25} />
             <span>Fechar {periodLabel}</span>
           </button>
         ) : (
-          <div className="bg-white border-2 border-teal-500/40 rounded-xl p-3 space-y-2">
-            <p className="text-xs text-gray-700 font-semibold">
+          <div className="bg-[#0B1F3A]/[0.03] border border-[#D4AF37]/30 rounded-xl p-4 space-y-3">
+            <p className="text-xs text-[#111827] font-semibold leading-relaxed">
               Tem a certeza? Depois de fechado, este período fica permanentemente bloqueado e não pode ser editado.
             </p>
-            <div className="flex gap-2">
+            <div className="flex gap-2.5">
               <button
                 type="button"
                 onClick={() => setConfirming(false)}
-                className="flex-1 py-2.5 px-3 rounded-lg border border-gray-200 text-gray-600 font-semibold text-xs hover:bg-gray-50 transition"
+                className="flex-1 py-2.5 px-3 rounded-lg border border-[#E5E7EB] text-gray-600 font-semibold text-xs hover:bg-gray-50 hover:border-gray-300 transition-all duration-150"
               >
                 Cancelar
               </button>
@@ -269,7 +269,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                 type="button"
                 disabled={isSaving}
                 onClick={handleClose}
-                className="flex-1 py-2.5 px-3 rounded-lg bg-teal-600 hover:bg-teal-500 disabled:opacity-60 text-white font-bold text-xs transition"
+                className="btn-primary flex-1 py-2.5 px-3 text-xs disabled:opacity-60"
               >
                 {isSaving ? 'A fechar...' : 'Sim, fechar período'}
               </button>
@@ -280,36 +280,36 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
       {/* History */}
       {sortedClosings.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-xl">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8">
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
             className="w-full flex items-center justify-between"
           >
-            <div className="flex items-center space-x-2">
-              <History className="w-4 h-4 text-gray-500" />
-              <span className="font-bold text-sm text-gray-800">Histórico de Fechos ({sortedClosings.length})</span>
+            <div className="flex items-center gap-2">
+              <History className="w-4 h-4 text-gray-400" strokeWidth={2.25} />
+              <span className="font-bold text-sm text-[#111827]">Histórico de Fechos ({sortedClosings.length})</span>
             </div>
             {showHistory ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
 
           {showHistory && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-2">
               {sortedClosings.map((c, idx) => {
                 const prev = sortedClosings[idx + 1];
                 const diff = prev ? c.businessWorthAtClose - prev.businessWorthAtClose : null;
                 return (
-                  <div key={c.id} className="bg-slate-50 border border-gray-100 rounded-xl p-3 space-y-1.5">
+                  <div key={c.id} className="group bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-3.5 space-y-2 transition-colors duration-150 hover:border-[#D4AF37]/25">
                     <div className="flex items-center justify-between gap-2">
                       <div>
-                        <p className="text-xs font-bold text-gray-800 flex items-center gap-1.5">
-                          <Lock className="w-3 h-3 text-teal-600" />
+                        <p className="text-xs font-bold text-[#111827] flex items-center gap-1.5">
+                          <Lock className="w-3 h-3 text-[#B8952F]" strokeWidth={2.25} />
                           {c.periodLabel}
                           <span className="text-[10px] font-normal text-gray-400">
                             ({c.periodType === 'monthly' ? 'Mensal' : 'Anual'})
                           </span>
                         </p>
-                        <p className="text-[10px] text-gray-500">
+                        <p className="text-[10px] text-gray-500 mt-0.5">
                           {formatDate(c.startDate)} — {formatDate(c.endDate)}
                         </p>
                       </div>
@@ -318,28 +318,28 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                         disabled={deletingId === c.id}
                         onClick={() => handleDelete(c.id)}
                         title="Eliminar fecho (reabre o período)"
-                        className="p-1.5 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition disabled:opacity-50"
+                        className="p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-150 disabled:opacity-50"
                       >
                         <Trash2 className="w-3.5 h-3.5" />
                       </button>
                     </div>
 
                     <div className="grid grid-cols-3 gap-1.5 text-center pt-1">
-                      <div className="bg-white border border-gray-100 rounded-lg p-1.5">
+                      <div className="bg-white border border-[#E5E7EB] rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Lucro Embutido</p>
-                        <p className={`font-mono font-bold text-[11px] ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        <p className={`font-mono font-bold text-[11px] tabular-nums ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {formatCurrency(c.totalEmbeddedProfit, currencySymbol)}
                         </p>
                       </div>
-                      <div className="bg-white border border-gray-100 rounded-lg p-1.5">
+                      <div className="bg-white border border-[#E5E7EB] rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Levantado</p>
-                        <p className="font-mono font-bold text-[11px] text-blue-600">
+                        <p className="font-mono font-bold text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.totalWithdrawals, currencySymbol)}
                         </p>
                       </div>
-                      <div className="bg-white border border-teal-500/30 rounded-lg p-1.5">
+                      <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-1.5">
                         <p className="text-[9px] text-gray-500">Valor Negócio</p>
-                        <p className="font-mono font-bold text-[11px] text-teal-700">
+                        <p className="font-mono font-bold text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.businessWorthAtClose, currencySymbol)}
                         </p>
                       </div>
