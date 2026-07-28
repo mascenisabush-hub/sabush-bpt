@@ -17,8 +17,8 @@ This document is built section by section. Each section is only written once the
 | 5 | [Business Lifecycle](./05-business-lifecycle.md) | ✅ Approved |
 | 6 | [User Architecture](./06-user-architecture.md) | ✅ Approved (amended) |
 | 7 | [Data Architecture](./07-data-architecture.md) | ✅ Approved |
-| 8 | [Module Architecture](./08-module-architecture.md) | Drafted — awaiting approval |
-| 9 | SuperAdmin Architecture | Not started |
+| 8 | [Module Architecture](./08-module-architecture.md) | ✅ Approved |
+| 9 | [SuperAdmin Architecture](./09-superadmin-architecture.md) | Drafted — awaiting approval |
 | 10 | AI Architecture | Not started |
 | 11 | Scalability Strategy | Not started |
 | 12 | Security Architecture | Not started |
