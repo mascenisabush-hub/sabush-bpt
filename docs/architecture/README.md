@@ -21,8 +21,8 @@ This document is built section by section. Each section is only written once the
 | 9 | [SuperAdmin Architecture](./09-superadmin-architecture.md) | ✅ Approved |
 | 10 | [AI Architecture](./10-ai-architecture.md) | ✅ Approved |
 | 11 | [Scalability Strategy](./11-scalability-strategy.md) | ✅ Approved |
-| 12 | [Security Architecture](./12-security-architecture.md) | Drafted — awaiting approval |
-| 13 | Development Strategy | Not started |
+| 12 | [Security Architecture](./12-security-architecture.md) | ✅ Approved |
+| 13 | [Development Strategy](./13-development-strategy.md) | Drafted — awaiting approval |
 | 14 | Future Roadmap | Not started |
 | 15 | Architecture Validation | Not started |
 

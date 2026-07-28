@@ -1,6 +1,6 @@
 # Section 11 — Scalability Strategy
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Sections 1–10 — all approved
 **Purpose:** Give the concrete thresholds every prior section deferred here — Section 4.8 named an "explicit ceiling" for the Background Worker without stating it, Section 7.8 fixed the *shape* that makes pagination/indexing achievable without specifying the numbers, Section 8.3 flagged Purchase Batch numbering as fine "at this business's current scale" without saying when that stops being true. Section 11 is where every one of those becomes a measurable number, at each of the Mission's four named scale tiers: 100, 1,000, 10,000, 100,000 businesses.
 

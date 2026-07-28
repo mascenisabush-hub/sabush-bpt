@@ -1,6 +1,6 @@
 # Section 12 — Security Architecture
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Sections 1–11 — all approved
 **Purpose:** Formalize every security control this document series has already named but deferred here — Authentication, Authorization, Permissions, Audit Logs, Business Isolation, Encryption, Backups, Disaster Recovery, Session Management. Section 12 does not invent new mechanisms where a prior section already fixed one; it states each as an explicit, checkable control and closes the specific gaps prior sections flagged as "Section 12's job."
 
