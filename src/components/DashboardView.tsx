@@ -50,9 +50,13 @@ interface KpiCardProps {
   description: string;
   onClick?: () => void;
   badge?: React.ReactNode;
-  highlight?: boolean;
-  /** 'dark' renders the premium navy hero-card treatment used to make a
-   *  metric stand out (e.g. Lucro Embutido, Valor do Negócio). Same data,
+  /** Renders the gold-tint "Action Card" treatment (.card-premium.is-action)
+   *  for drawing attention to an important action, e.g. "set your Initial
+   *  Capital". Not to be confused with the dark navy "Highlight Card"
+   *  (variant='dark' below) — different variant, different job. */
+  action?: boolean;
+  /** 'dark' renders the premium navy "Highlight Card" treatment used to make
+   *  a metric stand out (e.g. Lucro Embutido, Valor do Negócio). Same data,
    *  same click behaviour — only the surface changes. */
   variant?: 'light' | 'dark';
 }
@@ -67,7 +71,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
   description,
   onClick,
   badge,
-  highlight,
+  action,
   variant = 'light',
 }) => {
   const isDark = variant === 'dark';
@@ -79,7 +83,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       className={`group h-full text-left p-6 flex flex-col gap-4 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isDark
           ? 'relative overflow-hidden card-dark-gradient shadow-[var(--shadow-2)]'
-          : `card-premium ${highlight ? 'is-highlighted' : ''}`
+          : `card-premium ${action ? 'is-action' : ''}`
       } ${onClick ? (isDark ? 'hover:-translate-y-px cursor-pointer active:scale-[0.99]' : 'is-interactive cursor-pointer active:scale-[0.99]') : 'cursor-default'}`}
     >
       {isDark && (
@@ -244,7 +248,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               : t('dashboard.kpi.initialCapital.descUnset')
           }
           onClick={!hasInitialStockCount ? onNavigateToInitialStockCount : undefined}
-          highlight={!hasInitialStockCount}
+          action={!hasInitialStockCount}
         />
 
         <KpiCard

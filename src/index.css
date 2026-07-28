@@ -148,9 +148,11 @@ body {
    exact same depth language. Per SABUSH DESIGN SYSTEM v1.0:
    Level 1: resting/light cards (KPI cards, list rows)
    Level 2: hover/raised state, dropdowns
-   Level 3: highlight cards (drawing deliberate attention) — also used
-            for modals/popovers floating above the page, which need the
-            same strong separation from the backdrop.
+   Level 3: action cards (gold-tint, drawing deliberate attention to an
+            important action) and highlight cards (navy gradient hero
+            metrics, .card-dark-gradient) — also used for modals/popovers
+            floating above the page, which need the same strong
+            separation from the backdrop.
    ========================================================================== */
 :root {
   --shadow-1: 0 4px 12px rgba(0,0,0,0.04);
@@ -178,6 +180,15 @@ body {
    Premium SaaS card system — shared by KPI cards, panels, and tables so the
    "fintech" feel (soft depth, white surface, navy structure, gold accents)
    is consistent everywhere without repeating long class strings.
+
+   Variants (SABUSH DESIGN SYSTEM v1.0):
+   - Default:     .card-premium — white bg, soft shadow, light border
+   - Interactive: .card-premium.is-interactive — hover lift + gold border tint
+   - Action:      .card-premium.is-action — light gold tint bg, used for
+                  important actions the user needs to notice
+   - Highlight:   .card-dark-gradient — navy gradient, white text, gold
+                  value, strong shadow; reserved for the single flagship
+                  metric on a screen (Business Worth, Embedded Profit)
    ========================================================================== */
 .card-premium {
   position: relative;
@@ -192,14 +203,15 @@ body {
   transform: translateY(-1px);
   border-color: rgba(212,175,55,0.35);
 }
-.card-premium.is-highlighted {
+.card-premium.is-action {
   background: linear-gradient(180deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.015) 100%);
   border-color: rgba(212,175,55,0.22);
   box-shadow: var(--shadow-3);
 }
 /* Dark metric-card surface — a gradient instead of a flat fill so the
    hero KPI cards (Business Worth, Embedded Profit, etc.) read as premium
-   rather than a plain color swatch. */
+   rather than a plain color swatch. This is the "Highlight" card variant:
+   navy gradient, white text, gold value, strong shadow. */
 .card-dark-gradient {
   background: linear-gradient(135deg, #0B1F3A 0%, #132A4A 100%);
 }
