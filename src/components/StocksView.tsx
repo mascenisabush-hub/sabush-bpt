@@ -168,35 +168,35 @@ export const StocksView: React.FC = () => {
   return (
     <div className="space-y-4 pb-12">
       {/* Header Title */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-gray-200 rounded-3xl p-5 shadow-sm">
-        <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
-            <Boxes className="w-5 h-5" />
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3 bg-white border border-[#E5E7EB] rounded-2xl p-5 shadow-[0_1px_2px_rgba(11,31,58,0.04),0_8px_24px_-14px_rgba(11,31,58,0.1)]">
+        <div className="flex items-center gap-3">
+          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+            <Boxes className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h1 className="text-lg font-bold text-gray-900 flex items-center gap-2">
+            <h1 className="type-title-lg flex items-center gap-2">
               {t('stocksView.title')}
             </h1>
-            <p className="text-xs text-gray-500">
+            <p className="text-[12px] text-gray-500 mt-0.5">
               {t('stocksView.subtitle')}
             </p>
           </div>
         </div>
 
-        <div className="flex items-center gap-2 bg-white border border-gray-200 rounded-2xl p-2.5 px-3.5 text-xs font-mono shrink-0">
+        <div className="flex items-center gap-3 bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-2.5 px-4 text-xs shrink-0">
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">{t('stocksView.remainingInvestment')}</span>
-            <span className="text-gray-800 font-bold">{formatCurrency(summaryTotals.investment, currencySymbol)}</span>
+            <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wide">{t('stocksView.remainingInvestment')}</span>
+            <span className="type-number text-[#111827]">{formatCurrency(summaryTotals.investment, currencySymbol)}</span>
           </div>
-          <div className="h-6 w-px bg-gray-50 mx-1"></div>
+          <div className="h-6 w-px bg-[#E5E7EB]"></div>
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">{t('stocksView.marketValue')}</span>
-            <span className="text-gray-700 font-bold">{formatCurrency(summaryTotals.market, currencySymbol)}</span>
+            <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wide">{t('stocksView.marketValue')}</span>
+            <span className="type-number text-gray-700">{formatCurrency(summaryTotals.market, currencySymbol)}</span>
           </div>
-          <div className="h-6 w-px bg-gray-50 mx-1"></div>
+          <div className="h-6 w-px bg-[#E5E7EB]"></div>
           <div>
-            <span className="text-[10px] text-gray-500 block uppercase font-sans font-bold">{t('stocksView.remainingEmbeddedProfit')}</span>
-            <span className={`font-bold ${summaryTotals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+            <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wide">{t('stocksView.remainingEmbeddedProfit')}</span>
+            <span className={`type-number ${summaryTotals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(summaryTotals.profit, currencySymbol)}
             </span>
           </div>
@@ -204,21 +204,21 @@ export const StocksView: React.FC = () => {
       </div>
 
       {/* Filters */}
-      <div className="bg-white border border-gray-200 rounded-2xl p-3.5 space-y-3">
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl p-4 space-y-3">
         <div className="grid grid-cols-1 sm:grid-cols-12 gap-2.5">
           <div className="sm:col-span-5 relative">
-            <Search className="w-4 h-4 text-gray-500 absolute left-3.5 top-1/2 -translate-y-1/2" />
+            <Search className="w-4 h-4 text-gray-400 absolute left-3.5 top-1/2 -translate-y-1/2" />
             <input
               type="text"
               placeholder={t('stocksView.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-9 py-2 text-xs text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
             {searchQuery && (
               <button
                 onClick={() => setSearchQuery('')}
-                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-500 hover:text-gray-700"
+                className="absolute right-3 top-1/2 -translate-y-1/2 text-gray-400 hover:text-gray-600 transition-colors duration-150"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -229,7 +229,7 @@ export const StocksView: React.FC = () => {
             <select
               value={supplierFilter}
               onChange={(e) => setSupplierFilter(e.target.value)}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-gray-800 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-[#111827] transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             >
               <option value="">{t('stocksView.allSuppliers')}</option>
               {supplierOptions.map((name) => (
@@ -244,7 +244,7 @@ export const StocksView: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-gray-800 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-[#111827] transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             >
               <option value="all">{t('stocksView.allStatuses')}</option>
               <option value="active">{t('common.purchaseBatchStatus.active')}</option>
@@ -259,12 +259,12 @@ export const StocksView: React.FC = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex-1 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-gray-800 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              className="flex-1 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-[#111827] font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
             {selectedDate && (
               <button
                 onClick={() => setSelectedDate('')}
-                className="p-2 text-gray-500 hover:text-gray-700 border border-gray-200 rounded-xl"
+                className="p-2 text-gray-400 hover:text-gray-600 border border-[#E5E7EB] rounded-[10px] transition-colors duration-150"
               >
                 <X className="w-3.5 h-3.5" />
               </button>
@@ -285,8 +285,8 @@ export const StocksView: React.FC = () => {
 
       {/* Batch List */}
       {filteredSummaries.length === 0 ? (
-        <div className="bg-white border border-gray-200 rounded-2xl p-10 text-center">
-          <Boxes className="w-8 h-8 text-gray-500 mx-auto mb-2" />
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl p-10 text-center">
+          <Boxes className="w-8 h-8 text-gray-300 mx-auto mb-2" strokeWidth={1.75} />
           <p className="text-sm text-gray-500">{t('stocksView.emptyState')}</p>
         </div>
       ) : (
@@ -295,16 +295,16 @@ export const StocksView: React.FC = () => {
             <button
               key={s.purchaseBatch.id}
               onClick={() => setSelectedSummary(s)}
-              className="w-full text-left bg-white border border-gray-200 rounded-2xl p-4 shadow-sm hover:border-blue-500/50 hover:shadow-md transition group"
+              className="w-full text-left bg-white border border-[#E5E7EB] rounded-2xl p-4 transition-all duration-150 hover:border-[#D4AF37]/40 hover:shadow-[0_8px_24px_-14px_rgba(11,31,58,0.18)] group"
             >
               <div className="flex flex-wrap items-start justify-between gap-3">
                 <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
-                    <Package className="w-5 h-5" />
+                  <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+                    <Package className="w-5 h-5" strokeWidth={2} />
                   </div>
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 flex-wrap">
-                      <span className="type-number text-sm text-gray-900 group-hover:text-blue-600 transition">
+                      <span className="type-number text-sm text-[#111827] group-hover:text-[#B8952F] transition-colors duration-150">
                         {s.purchaseBatch.batchNumber}
                       </span>
                       <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
@@ -335,20 +335,20 @@ export const StocksView: React.FC = () => {
 
                 <div className="flex items-center gap-4 text-right font-mono">
                   <div>
-                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
-                    <span className="text-xs font-bold text-gray-800">
+                    <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
+                    <span className="text-xs type-number text-[#111827]">
                       {formatCurrency(s.remainingInvestmentValue, currencySymbol)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
-                    <span className="text-xs font-semibold text-gray-700">
+                    <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
+                    <span className="text-xs type-number text-gray-700">
                       {formatCurrency(s.remainingMarketValue, currencySymbol)}
                     </span>
                   </div>
                   <div>
-                    <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
-                    <span className={`text-xs font-bold ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                    <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
+                    <span className={`text-xs type-number ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                       {formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}
                     </span>
                   </div>
@@ -363,29 +363,29 @@ export const StocksView: React.FC = () => {
       {/* BATCH DETAIL MODAL — full Investment Ledger detail page       */}
       {/* ============================================================ */}
       {selectedSummary && (
-        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
-          <div className="bg-white border border-gray-200 rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-2xl max-h-[92vh] flex flex-col space-y-4 overflow-hidden">
+        <div className="fixed inset-0 z-50 bg-[#0B1F3A]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
+          <div className="bg-white border border-[#E5E7EB] rounded-3xl p-5 sm:p-6 max-w-3xl w-full shadow-[0_24px_64px_-16px_rgba(11,31,58,0.35)] max-h-[92vh] flex flex-col space-y-4 overflow-hidden">
             {/* Modal Header */}
-            <div className="flex items-start justify-between pb-3 border-b border-gray-200 shrink-0">
-              <div className="flex items-center space-x-3 min-w-0">
-                <div className="w-10 h-10 rounded-2xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
-                  <Package className="w-5 h-5" />
+            <div className="flex items-start justify-between pb-4 border-b border-[#E5E7EB] shrink-0">
+              <div className="flex items-center gap-3 min-w-0">
+                <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+                  <Package className="w-5 h-5" strokeWidth={2} />
                 </div>
                 <div className="min-w-0">
-                  <h2 className="font-bold text-base text-gray-900 flex items-center gap-2 font-mono truncate">
+                  <h2 className="font-bold text-base text-[#111827] flex items-center gap-2 font-mono truncate">
                     {selectedSummary.purchaseBatch.batchNumber}
                     <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[selectedSummary.status]}`}>
                       {statusLabel(selectedSummary.status)}
                     </span>
                   </h2>
-                  <p className="text-xs text-gray-500">
+                  <p className="text-xs text-gray-500 mt-0.5">
                     {formatDate(selectedSummary.purchaseBatch.date)} · {selectedSummary.purchaseBatch.supplier.name}
                   </p>
                 </div>
               </div>
               <button
                 onClick={() => setSelectedSummary(null)}
-                className="p-2 text-gray-500 hover:text-gray-900 hover:bg-gray-50 rounded-xl transition shrink-0"
+                className="p-2 text-gray-400 hover:text-[#111827] hover:bg-gray-50 rounded-xl transition-colors duration-150 shrink-0"
               >
                 <X className="w-5 h-5" />
               </button>
@@ -393,30 +393,30 @@ export const StocksView: React.FC = () => {
 
             <div className="overflow-y-auto flex-1 space-y-4 pr-1">
               {/* Batch info */}
-              <div className="bg-white border border-gray-200 rounded-2xl p-3.5 grid grid-cols-1 sm:grid-cols-2 gap-2.5 text-xs">
+              <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-2xl p-4 grid grid-cols-1 sm:grid-cols-2 gap-3 text-xs">
                 <div className="flex items-start gap-2">
-                  <Truck className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
+                  <Truck className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">{t('stocksView.modal.supplier')}</span>
-                    <span className="text-gray-800 font-semibold">{selectedSummary.purchaseBatch.supplier.name}</span>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.supplier')}</span>
+                    <span className="text-[#111827] font-semibold">{selectedSummary.purchaseBatch.supplier.name}</span>
                     {selectedSummary.purchaseBatch.supplier.phone && (
                       <span className="text-gray-500 block">{selectedSummary.purchaseBatch.supplier.phone}</span>
                     )}
                   </div>
                 </div>
                 <div className="flex items-start gap-2">
-                  <User className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
+                  <User className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-gray-500 block text-[10px] uppercase font-semibold">{t('stocksView.modal.createdBy')}</span>
-                    <span className="text-gray-800 font-semibold">{selectedSummary.purchaseBatch.createdByName || '—'}</span>
+                    <span className="text-gray-400 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.createdBy')}</span>
+                    <span className="text-[#111827] font-semibold">{selectedSummary.purchaseBatch.createdByName || '—'}</span>
                   </div>
                 </div>
                 {selectedSummary.purchaseBatch.notes && (
                   <div className="sm:col-span-2 flex items-start gap-2">
-                    <FileText className="w-3.5 h-3.5 text-gray-500 mt-0.5 shrink-0" />
+                    <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                     <div>
-                      <span className="text-gray-500 block text-[10px] uppercase font-semibold">{t('stocksView.modal.notes')}</span>
-                      <span className="text-gray-800">{selectedSummary.purchaseBatch.notes}</span>
+                      <span className="text-gray-400 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.notes')}</span>
+                      <span className="text-[#111827]">{selectedSummary.purchaseBatch.notes}</span>
                     </div>
                   </div>
                 )}
@@ -424,38 +424,38 @@ export const StocksView: React.FC = () => {
 
               {/* Investment Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
-                <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.totalInvestment')}</span>
-                  <span className="text-sm font-bold text-gray-800 font-mono">
+                <div className="bg-white border border-[#E5E7EB] rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold block tracking-wide">{t('stocksView.modal.totalInvestment')}</span>
+                  <span className="text-sm type-number text-[#111827]">
                     {formatCurrency(selectedSummary.totalInvestmentValue, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.marketValue')}</span>
-                  <span className="text-sm font-bold text-gray-700 font-mono">
+                <div className="bg-white border border-[#E5E7EB] rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold block tracking-wide">{t('stocksView.modal.marketValue')}</span>
+                  <span className="text-sm type-number text-gray-700">
                     {formatCurrency(selectedSummary.totalMarketValue, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-white border border-gray-200 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-500 uppercase font-bold block">{t('stocksView.modal.embeddedProfit')}</span>
+                <div className="bg-white border border-[#E5E7EB] rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-gray-400 uppercase font-bold block tracking-wide">{t('stocksView.modal.embeddedProfit')}</span>
                   <span className={`text-sm type-number ${selectedSummary.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.totalEmbeddedProfit, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingInvestment')}</span>
-                  <span className="text-sm font-bold text-blue-700 font-mono">
+                <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-[#0B1F3A]/60 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingInvestment')}</span>
+                  <span className="text-sm type-number text-[#0B1F3A]">
                     {formatCurrency(selectedSummary.remainingInvestmentValue, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingMarket')}</span>
-                  <span className="text-sm font-bold text-blue-700 font-mono">
+                <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-[#0B1F3A]/60 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingMarket')}</span>
+                  <span className="text-sm type-number text-[#0B1F3A]">
                     {formatCurrency(selectedSummary.remainingMarketValue, currencySymbol)}
                   </span>
                 </div>
-                <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-blue-700 uppercase font-bold block">{t('stocksView.modal.remainingProfit')}</span>
+                <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-xl p-3 text-center">
+                  <span className="text-[10px] text-[#0B1F3A]/60 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingProfit')}</span>
                   <span className={`text-sm type-number ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.remainingEmbeddedProfit, currencySymbol)}
                   </span>
@@ -463,8 +463,8 @@ export const StocksView: React.FC = () => {
               </div>
 
               {selectedSummary.inventoryLostValue > 0 && (
-                <div className="bg-rose-50 border border-rose-500/20 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
-                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" />
+                <div className="bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                  <AlertTriangle className="w-3.5 h-3.5 shrink-0" strokeWidth={2.25} />
                   <span>
                     {t('stocksView.modal.inventoryLostWarning', { value: formatCurrency(selectedSummary.inventoryLostValue, currencySymbol) })}
                   </span>
@@ -473,13 +473,13 @@ export const StocksView: React.FC = () => {
 
               {/* Product Table */}
               <div>
-                <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <Package className="w-3.5 h-3.5 text-blue-600" /> {t('stocksView.modal.productsHeading')}
+                <h3 className="text-xs font-bold text-[#111827] mb-2 flex items-center gap-1.5">
+                  <Package className="w-3.5 h-3.5 text-[#B8952F]" strokeWidth={2.25} /> {t('stocksView.modal.productsHeading')}
                 </h3>
-                <div className="border border-gray-200 rounded-2xl bg-white p-2 overflow-x-auto">
-                  <table className="table-clean w-full text-left text-xs min-w-[560px]">
+                <div className="border border-[#E5E7EB] rounded-2xl bg-[#FAFBFC] p-2 overflow-x-auto">
+                  <table className="w-full text-left text-xs min-w-[560px]">
                     <thead>
-                      <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+                      <tr className="border-b border-[#E5E7EB] text-[10px] font-bold uppercase tracking-wide text-gray-400">
                         <th className="py-2 px-2.5">{t('stocksView.modal.table.product')}</th>
                         <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.qtyRemaining')}</th>
                         <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.costSell')}</th>
@@ -487,23 +487,23 @@ export const StocksView: React.FC = () => {
                         <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.embeddedProfit')}</th>
                       </tr>
                     </thead>
-                    <tbody className="divide-y divide-gray-200/50">
+                    <tbody className="divide-y divide-[#E5E7EB]/60">
                       {selectedSummary.lineItems.map((li) => (
-                        <tr key={li.batch.id} className="hover:bg-white/60 transition">
-                          <td className="py-2.5 px-2.5 font-semibold text-gray-900">
+                        <tr key={li.batch.id} className="hover:bg-white transition-colors duration-150">
+                          <td className="py-2.5 px-2.5 font-semibold text-[#111827]">
                             <span className="block font-bold">{li.product?.name || t('stocksView.modal.productRemoved')}</span>
                             <span className="text-[10px] font-normal text-gray-500 font-mono">
                               {t('stocksView.modal.table.statusPrefix')} {li.batch.status === 'open' ? t('common.batchStatus.open') : t('common.batchStatus.closed')}
                             </span>
                           </td>
-                          <td className="py-2.5 px-2.5 text-right type-number text-gray-800">
+                          <td className="py-2.5 px-2.5 text-right type-number text-[#111827]">
                             {li.batch.quantity} → {li.remainingQuantity}{' '}
                             <span className="text-[10px] font-sans font-normal text-gray-500">{li.batch.unit || 'un'}</span>
                           </td>
-                          <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
+                          <td className="py-2.5 px-2.5 text-right font-mono text-gray-700 tabular-nums">
                             {formatCurrency(li.batch.costPrice, currencySymbol)} / {formatCurrency(li.batch.sellingPrice, currencySymbol)}
                           </td>
-                          <td className="py-2.5 px-2.5 text-right font-mono text-gray-700">
+                          <td className="py-2.5 px-2.5 text-right font-mono text-gray-700 tabular-nums">
                             {formatCurrency(li.investmentValue, currencySymbol)}
                           </td>
                           <td className="py-2.5 px-2.5 text-right type-number">
@@ -520,13 +520,13 @@ export const StocksView: React.FC = () => {
 
               {/* Timeline */}
               <div>
-                <h3 className="text-xs font-bold text-gray-800 mb-2 flex items-center gap-1.5">
-                  <Clock className="w-3.5 h-3.5 text-blue-600" /> {t('stocksView.modal.timelineHeading')}
+                <h3 className="text-xs font-bold text-[#111827] mb-2 flex items-center gap-1.5">
+                  <Clock className="w-3.5 h-3.5 text-[#B8952F]" strokeWidth={2.25} /> {t('stocksView.modal.timelineHeading')}
                 </h3>
                 <div className="space-y-2">
                   {selectedTimeline.map((ev, idx) => (
-                    <div key={idx} className="flex items-start gap-2.5 bg-white border border-gray-200 rounded-xl p-2.5">
-                      <div className="w-1.5 h-1.5 rounded-full bg-blue-500 mt-1.5 shrink-0" />
+                    <div key={idx} className="flex items-start gap-2.5 bg-white border border-[#E5E7EB] rounded-xl p-2.5">
+                      <div className="w-1.5 h-1.5 rounded-full bg-[#D4AF37] mt-1.5 shrink-0" />
                       <div className="min-w-0 flex-1">
                         <div className="flex items-center justify-between gap-2">
                           <span className="text-xs font-bold text-gray-800">{ev.label}</span>
@@ -543,7 +543,7 @@ export const StocksView: React.FC = () => {
             </div>
 
             {/* Modal Footer Actions */}
-            <div className="pt-3 border-t border-gray-200 flex flex-wrap justify-between items-center gap-2 shrink-0">
+            <div className="pt-4 border-t border-[#E5E7EB] flex flex-wrap justify-between items-center gap-2 shrink-0">
               <div className="flex items-center gap-2">
                 {isOwner && !isLegacy(selectedSummary) && (
                   selectedSummary.status === 'archived' ? (
@@ -553,7 +553,7 @@ export const StocksView: React.FC = () => {
                         await unarchivePurchaseBatch(selectedSummary.purchaseBatch.id);
                         setSelectedSummary(null);
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition flex items-center gap-1.5"
+                      className="px-3.5 py-2 rounded-xl bg-emerald-50 hover:bg-emerald-100 text-emerald-700 text-xs font-bold transition-colors duration-150 flex items-center gap-1.5"
                     >
                       <ArchiveRestore className="w-3.5 h-3.5" /> {t('stocksView.modal.reactivateBatch')}
                     </button>
@@ -564,7 +564,7 @@ export const StocksView: React.FC = () => {
                         await archivePurchaseBatch(selectedSummary.purchaseBatch.id);
                         setSelectedSummary(null);
                       }}
-                      className="px-3.5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-xs font-bold transition flex items-center gap-1.5"
+                      className="px-3.5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-600 text-xs font-bold transition-colors duration-150 flex items-center gap-1.5"
                     >
                       <Archive className="w-3.5 h-3.5" /> {t('stocksView.modal.archiveBatch')}
                     </button>
@@ -574,7 +574,7 @@ export const StocksView: React.FC = () => {
                   type="button"
                   onClick={handleExportPdf}
                   disabled={isExportingPdf}
-                  className="px-3.5 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-xs font-bold transition flex items-center gap-1.5"
+                  className="btn-primary px-3.5 py-2 text-xs disabled:opacity-60"
                 >
                   <Download className="w-3.5 h-3.5" /> {isExportingPdf ? t('stocksView.modal.generatingPdf') : t('stocksView.modal.exportPdf')}
                 </button>
@@ -582,7 +582,7 @@ export const StocksView: React.FC = () => {
               <button
                 type="button"
                 onClick={() => setSelectedSummary(null)}
-                className="px-5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition"
+                className="px-5 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-[#111827] text-xs font-bold transition-colors duration-150"
               >
                 {t('stocksView.modal.close')}
               </button>

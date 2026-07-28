@@ -455,6 +455,10 @@ export const fr: TranslationDict = {
     home: {
       title: 'Centre de Renseignement d\'Affaires',
       subtitle: 'Choisissez une catégorie pour mieux comprendre votre entreprise — pas seulement des chiffres, mais ce qu\'ils signifient.',
+      embeddedProfitLabel: 'Profit Intégré',
+      embeddedProfitHint: 'Profit déjà présent dans le stock non vendu — la différence entre la valeur de marché et le coût.',
+      embeddedProfitDescription: 'Profit du stock acheté dans chaque période (ex : 30 derniers jours)',
+      footerNote: 'Ces rapports aident à prendre de meilleures décisions et à croître en toute sécurité. Les données sont mises à jour en temps réel selon vos opérations.',
     },
     categories: {
       businessWorth: {

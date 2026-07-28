@@ -455,6 +455,10 @@ export const en: TranslationDict = {
     home: {
       title: 'Business Intelligence Center',
       subtitle: 'Choose a category to better understand your business — not just numbers, but what they mean.',
+      embeddedProfitLabel: 'Embedded Profit',
+      embeddedProfitHint: 'Profit already sitting inside unsold stock — the difference between market value and what it cost.',
+      embeddedProfitDescription: 'Profit on stock purchased in each period (e.g. last 30 days)',
+      footerNote: 'These reports help you make better decisions and grow safely. Data updates in real time based on your operations.',
     },
     categories: {
       businessWorth: {

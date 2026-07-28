@@ -423,6 +423,10 @@ export interface TranslationDict {
     home: {
       title: string;
       subtitle: string;
+      embeddedProfitLabel: string;
+      embeddedProfitHint: string;
+      embeddedProfitDescription: string;
+      footerNote: string;
     };
     categories: {
       businessWorth: { title: string; description: string };
@@ -1164,6 +1168,10 @@ export const pt: TranslationDict = {
     home: {
       title: 'Centro de Inteligência de Negócio',
       subtitle: 'Escolha uma categoria para entender melhor o seu negócio — não apenas números, mas o que eles significam.',
+      embeddedProfitLabel: 'Lucro Embutido',
+      embeddedProfitHint: 'Lucro que já está dentro do stock que ainda não vendeu — a diferença entre o valor de mercado e o que custou.',
+      embeddedProfitDescription: 'Lucro do stock comprado em cada período (ex: últimos 30 dias)',
+      footerNote: 'Estes relatórios ajudam a tomar decisões melhores e a crescer com segurança. Dados atualizados em tempo real com base nas suas operações.',
     },
     categories: {
       businessWorth: {
