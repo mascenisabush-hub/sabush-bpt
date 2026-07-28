@@ -305,8 +305,12 @@ export default function AppLoadingScreen({ message = 'A carregar o sistema...' }
         </div>
 
         <div className="text-center">
-          <div className="als-word-main">SABUSH</div>
-          <div className="als-word-tech">TECH</div>
+          <img
+            src="/branding/sabush-tech-full-logo.png"
+            alt="Sabush Tech"
+            className="mx-auto"
+            style={{ width: 'clamp(180px, 42vmin, 260px)', height: 'auto' }}
+          />
           <p className="mt-3 text-xs font-semibold text-gray-500 animate-pulse">{message}</p>
         </div>
 
