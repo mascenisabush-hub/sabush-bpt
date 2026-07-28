@@ -260,7 +260,7 @@ body {
   justify-content: center;
   gap: 8px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--gold);
   color: #0B1F3A;
   cursor: pointer;
@@ -276,7 +276,7 @@ body {
   justify-content: center;
   gap: 8px;
   font-weight: 700;
-  border-radius: 12px;
+  border-radius: 10px;
   background: var(--navy);
   color: #FFFFFF;
   cursor: pointer;
