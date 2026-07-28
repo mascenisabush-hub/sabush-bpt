@@ -145,15 +145,17 @@ body {
 /* ==========================================================================
    Elevation system — 3 tiers, used everywhere instead of hand-written
    per-component box-shadow values, so every card/dropdown/modal shares the
-   exact same depth language.
-   Level 1: resting cards (KPI cards, list rows)
+   exact same depth language. Per SABUSH DESIGN SYSTEM v1.0:
+   Level 1: resting/light cards (KPI cards, list rows)
    Level 2: hover/raised state, dropdowns
-   Level 3: modals, popovers above the page
+   Level 3: highlight cards (drawing deliberate attention) — also used
+            for modals/popovers floating above the page, which need the
+            same strong separation from the backdrop.
    ========================================================================== */
 :root {
   --shadow-1: 0 4px 12px rgba(0,0,0,0.04);
-  --shadow-2: 0 10px 28px -10px rgba(11,31,58,0.16);
-  --shadow-3: 0 24px 56px -16px rgba(11,31,58,0.30);
+  --shadow-2: 0 8px 20px rgba(0,0,0,0.08);
+  --shadow-3: 0 10px 30px rgba(0,0,0,0.12);
 }
 .elevation-1 { box-shadow: var(--shadow-1); }
 .elevation-2 { box-shadow: var(--shadow-2); }
@@ -193,6 +195,7 @@ body {
 .card-premium.is-highlighted {
   background: linear-gradient(180deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.015) 100%);
   border-color: rgba(212,175,55,0.22);
+  box-shadow: var(--shadow-3);
 }
 /* Dark metric-card surface — a gradient instead of a flat fill so the
    hero KPI cards (Business Worth, Embedded Profit, etc.) read as premium
