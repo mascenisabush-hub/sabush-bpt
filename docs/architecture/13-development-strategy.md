@@ -1,6 +1,6 @@
 # Section 13 — Development Strategy
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Sections 1–12 — all approved.
 **Purpose:** Every prior section named something and explicitly handed it to Section 13 rather than deciding it itself — an implementation rename (6.1), a context split (8.13), a data-maturity gate (10.10), a trigger condition instead of a date (11.7), a control rollout order (12.8). Section 13's job is not to invent new work — it is to take every one of those named-but-deferred items and put them in the one order that lets each phase supply what the next phase needs, per the brief's instruction that **each phase must prepare the next**.
 
