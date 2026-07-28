@@ -1,6 +1,6 @@
 # Section 8 — Module Architecture
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved (amended — see 8.12/8.14 `businessCode` display)
 **Depends on:** Sections 1–7 — all approved (Section 7 approved per go-ahead to begin Section 8)
 **Purpose:** For every module — Purpose, Inputs, Outputs, Dependencies, Business Rules, Future Extensions — grounded in what's actually built (audit-confirmed, and re-confirmed directly against `src/` for this section) rather than a hypothetical redesign. Per the brief: **do not redesign modules already working well.** Section 8's job is to document the working modules precisely enough that Sections 9–13 can build against them without re-deriving their rules, and to resolve the two structural gaps Section 4 named but deferred here: the `AppContext` decomposition (4.3) and the Storage upload flow (4.7).
 
@@ -235,13 +235,13 @@ Everything below documents these as they exist. Notifications, Subscriptions, Su
 
 **Purpose:** The at-a-glance summary view — the first thing an Admin sees, aggregating the same figures Reports (8.9) computes in detail.
 
-**Inputs:** The same entity set every Report reads, via `AppContext` (8.13).
+**Inputs:** The same entity set every Report reads, via `AppContext` (8.13), plus the current business's `businessCode` (7.2's amendment).
 
 **Outputs:** Summary cards (Business Worth, Capital Invested, Embedded Profit, Stock Value) — computed via `calculateInventoryTotals` (8.2), never a separate implementation of the same math.
 
 **Dependencies:** Calculation Engine (8.2), `AppContext` (8.13).
 
-**Business rules:** Must never show a figure that could disagree with the same figure on a Report (8.9) or a Closing snapshot (8.8) for the same data — all three read the identical calculation functions by design, not by convention alone.
+**Business rules — amendment:** The current business's `businessCode` (e.g. `BPT-000042`) is displayed directly under the business/Admin name at the top of this view — always visible, no extra navigation required — since this is precisely the identifier a support call needs the Admin to read out, and 9.3's search bar is built to resolve it instantly. For a multi-shop Admin (`ShopSwitcher`, 8.12), the code shown always matches whichever business is currently selected, never a stale or ambiguous value. Must never show a figure that could disagree with the same figure on a Report (8.9) or a Closing snapshot (8.8) for the same data — all three read the identical calculation functions by design, not by convention alone.
 
 **Future extensions:** The natural home for a future AI insight summary (Section 10) or a Subscription-status banner (3.13) once those domains ship — both additive cards, not a restructure of this view.
 
