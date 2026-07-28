@@ -49,6 +49,10 @@ body {
 ::-webkit-scrollbar-thumb:hover { background: #C3CAD6; }
 * { scrollbar-width: thin; scrollbar-color: #D9DEE6 transparent; }
 
+button, a, [role="button"], input[type="checkbox"], input[type="radio"], select {
+  -webkit-tap-highlight-color: transparent;
+}
+
 /* Visible, on-brand focus ring everywhere — never a browser default blue
    outline slipping through on a keyboard-only pass. */
 :focus-visible {
@@ -200,8 +204,13 @@ body {
 }
 .card-premium.is-interactive:hover {
   box-shadow: var(--shadow-2);
-  transform: translateY(-1px);
+  transform: translateY(-2px);
   border-color: rgba(212,175,55,0.35);
+}
+.card-premium.is-interactive:active {
+  transform: translateY(0) scale(0.99);
+  box-shadow: var(--shadow-1);
+  transition-duration: 80ms;
 }
 .card-premium.is-action {
   background: linear-gradient(180deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.015) 100%);
@@ -268,8 +277,31 @@ body {
 }
 
 /* ==========================================================================
+   Interaction system — SABUSH DESIGN SYSTEM v1.0. What makes the product
+   feel expensive rather than static: every clickable surface lifts
+   slightly on hover (weight/depth, like it's floating just off the page)
+   and presses down instantly on click (real, physical feedback — no lag).
+   Hover uses the shared 0.2s ease curve; the press state overrides with
+   an 80ms transition so it never feels like it's catching up to the
+   click. Built into .btn-*/.card-premium below — use .lift directly on
+   anything else (icon buttons, nav pills, list rows) that needs the same
+   language without adopting a full button/card variant.
+   ========================================================================== */
+.lift {
+  transition: transform 0.2s ease, box-shadow 0.2s ease, background-color 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+.lift:hover {
+  transform: translateY(-2px);
+}
+.lift:active {
+  transform: translateY(0) scale(0.97);
+  transition-duration: 80ms;
+}
+
+/* ==========================================================================
    Button system — SABUSH DESIGN SYSTEM v1.0. One definitive treatment per
-   variant instead of ad-hoc strings repeated per file.
+   variant instead of ad-hoc strings repeated per file. Every variant
+   shares the .lift language: hover lifts, click presses instantly.
      .btn-primary   → most important action: gold bg, dark (navy) text,
                       brighter gold on hover
      .btn-dark      → navy alternative to primary (rare; used sparingly
@@ -288,10 +320,10 @@ body {
   color: #0B1F3A;
   cursor: pointer;
   box-shadow: 0 8px 20px -8px rgba(212,175,55,0.55);
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
-.btn-primary:hover { background: var(--gold-bright); box-shadow: 0 10px 24px -8px rgba(212,175,55,0.65); }
-.btn-primary:active { transform: scale(0.97); }
+.btn-primary:hover { background: var(--gold-bright); box-shadow: 0 12px 26px -8px rgba(212,175,55,0.7); transform: translateY(-2px); }
+.btn-primary:active { transform: translateY(0) scale(0.97); box-shadow: 0 4px 10px -6px rgba(212,175,55,0.5); transition-duration: 80ms; }
 
 .btn-dark {
   display: inline-flex;
@@ -303,10 +335,11 @@ body {
   background: var(--navy);
   color: #FFFFFF;
   cursor: pointer;
-  transition: all 0.2s ease;
+  box-shadow: 0 8px 20px -8px rgba(11,31,58,0.45);
+  transition: transform 0.2s ease, background-color 0.2s ease, box-shadow 0.2s ease;
 }
-.btn-dark:hover { background: var(--navy-soft); }
-.btn-dark:active { transform: scale(0.97); }
+.btn-dark:hover { background: var(--navy-soft); box-shadow: 0 12px 26px -8px rgba(11,31,58,0.55); transform: translateY(-2px); }
+.btn-dark:active { transform: translateY(0) scale(0.97); box-shadow: 0 4px 10px -6px rgba(11,31,58,0.4); transition-duration: 80ms; }
 
 .btn-secondary {
   display: inline-flex;
@@ -319,10 +352,10 @@ body {
   border: 1px solid #D1D5DB;
   color: #374151;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, background-color 0.2s ease, border-color 0.2s ease;
 }
-.btn-secondary:hover { background: #F9FAFB; }
-.btn-secondary:active { transform: scale(0.97); }
+.btn-secondary:hover { background: #F9FAFB; border-color: #C3CAD6; transform: translateY(-2px); }
+.btn-secondary:active { transform: translateY(0) scale(0.97); transition-duration: 80ms; }
 
 .btn-ghost {
   display: inline-flex;
@@ -335,10 +368,10 @@ body {
   border: none;
   color: #6B7280;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: transform 0.2s ease, background-color 0.2s ease, color 0.2s ease;
 }
-.btn-ghost:hover { background: rgba(11,31,58,0.05); color: #0B1F3A; }
-.btn-ghost:active { transform: scale(0.97); }
+.btn-ghost:hover { background: rgba(11,31,58,0.05); color: #0B1F3A; transform: translateY(-2px); }
+.btn-ghost:active { transform: translateY(0) scale(0.97); transition-duration: 80ms; }
 
 /* ==========================================================================
    Input system — SABUSH DESIGN SYSTEM v1.0.

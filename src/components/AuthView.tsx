@@ -552,7 +552,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             <button
               type="submit"
               disabled={loading}
-              className="w-full py-3 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs sm:text-sm transition flex items-center justify-center space-x-2 shadow-[0_0_30px_-6px_rgba(232,198,92,0.7)] disabled:opacity-50"
+              className="btn-primary w-full py-3 px-4 text-xs sm:text-sm disabled:opacity-50"
             >
               {loading ? (
                 <span className="animate-pulse">{t('auth.submitting')}</span>

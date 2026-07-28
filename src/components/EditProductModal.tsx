@@ -182,7 +182,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
           <button
             type="submit"
             disabled={isSaving}
-            className="px-4 py-2 rounded-xl bg-blue-600 hover:bg-blue-500 disabled:opacity-60 text-white text-sm font-bold transition flex items-center gap-1.5"
+            className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
           >
             <Save className="w-4 h-4" />
             {isSaving ? 'A guardar...' : 'Guardar'}

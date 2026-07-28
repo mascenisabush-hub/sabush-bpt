@@ -324,7 +324,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           <button
             type="button"
             onClick={handleSave}
-            className="py-2.5 px-6 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+            className="btn-primary py-2.5 px-6 text-sm"
           >
             <span>{isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
           </button>

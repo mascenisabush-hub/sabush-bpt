@@ -131,7 +131,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
             <button
               type="button"
               onClick={onUseOwnerLogin}
-              className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[#111] font-medium mt-5 transition-all hover:-translate-y-px focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]/50"
+              className="w-full flex items-center justify-center gap-2 h-11 rounded-xl text-[#111] font-medium mt-5 transition-all duration-200 hover:-translate-y-0.5 active:translate-y-0 active:scale-[0.97] active:duration-75 focus:outline-none focus-visible:ring-2 focus-visible:ring-[#D4AF37]/50"
               style={{
                 background: 'linear-gradient(135deg, #D4AF37, #B8952F)',
                 boxShadow: '0 8px 20px rgba(212,175,55,0.25)',
@@ -187,7 +187,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                   type="button"
                   onClick={() => handleDigit(d)}
                   disabled={loading}
-                  className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] text-lg font-bold text-gray-800 transition disabled:opacity-40"
+                  className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] active:bg-[#0B1F3A]/[0.1] active:scale-90 text-lg font-bold text-gray-800 transition-all duration-150 active:duration-75 disabled:opacity-40"
                 >
                   {d}
                 </button>
@@ -197,7 +197,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                 type="button"
                 onClick={() => handleDigit('0')}
                 disabled={loading}
-                className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] text-lg font-bold text-gray-800 transition disabled:opacity-40"
+                className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] active:bg-[#0B1F3A]/[0.1] active:scale-90 text-lg font-bold text-gray-800 transition-all duration-150 active:duration-75 disabled:opacity-40"
               >
                 0
               </button>
@@ -205,7 +205,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
                 type="button"
                 onClick={handleBackspace}
                 disabled={loading}
-                className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] flex items-center justify-center text-gray-600 transition disabled:opacity-40"
+                className="py-3.5 rounded-2xl bg-[#F5F7FA] hover:bg-[#0B1F3A]/[0.06] active:bg-[#0B1F3A]/[0.1] active:scale-90 flex items-center justify-center text-gray-600 transition-all duration-150 active:duration-75 disabled:opacity-40"
               >
                 <Delete className="w-5 h-5" />
               </button>

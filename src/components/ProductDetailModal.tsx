@@ -83,7 +83,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   onClose();
                   onNavigateToAddStock(product.name);
                 }}
-                className="px-3.5 py-2 rounded-lg bg-[#D4AF37] hover:bg-[#c19d2e] text-[#0B1F3A] text-xs font-bold transition-colors duration-150"
+                className="lift px-3.5 py-2 rounded-lg bg-[#D4AF37] hover:bg-[#c19d2e] text-[#0B1F3A] text-xs font-bold transition-colors duration-150"
               >
                 + Adicionar Lote
               </button>
@@ -92,7 +92,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                   onClose();
                   onNavigateToAddQuebra(product.id);
                 }}
-                className="px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors duration-150"
+                className="lift px-3.5 py-2 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition-colors duration-150"
               >
                 + Registar Perda
               </button>

@@ -501,7 +501,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                   <button
                     type="submit"
                     disabled={staffLoading}
-                    className="w-full py-2.5 px-4 bg-blue-600 hover:bg-blue-500 text-white font-bold rounded-xl text-xs transition flex items-center justify-center gap-1.5 shadow-md disabled:opacity-50"
+                    className="btn-primary w-full py-2.5 px-4 text-xs disabled:opacity-50"
                   >
                     {staffLoading ? 'A registar...' : 'Criar Conta de Funcionário'}
                   </button>

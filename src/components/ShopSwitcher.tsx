@@ -169,7 +169,7 @@ export const ShopSwitcher: React.FC = () => {
               <button
                 type="submit"
                 disabled={isSaving || !newName.trim()}
-                className="w-full text-[13px] font-bold text-white bg-[#0B1F3A] disabled:bg-gray-300 py-2 rounded-lg hover:bg-[#152d51] transition-colors"
+                className="btn-dark w-full text-[13px] py-2 disabled:opacity-50 disabled:pointer-events-none"
               >
                 {isSaving ? 'A criar...' : 'Criar Loja'}
               </button>
