@@ -96,7 +96,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                 placeholder={t('addExpense.descriptionPlaceholder')}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
 
@@ -111,7 +111,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   required
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
                 />
               </div>
 
@@ -127,7 +127,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   placeholder="0.00"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                 />
               </div>
             </div>
@@ -142,7 +142,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                 placeholder={t('addExpense.categoryPlaceholder')}
                 value={category}
                 onChange={e => setCategory(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] mb-2.5"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 mb-2.5"
               />
 
               {/* Suggestions */}

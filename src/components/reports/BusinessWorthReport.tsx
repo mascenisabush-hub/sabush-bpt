@@ -196,7 +196,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
           <p className="text-xs text-gray-400 text-center py-4">{t('businessWorth.noExpensesInPeriod')}</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table-clean w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-2 font-semibold">{t('reports.common.dateCol')}</th>
@@ -207,7 +207,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
               </thead>
               <tbody>
                 {periodExpenses.map(e => (
-                  <tr key={e.id} className="border-b border-gray-100">
+                  <tr key={e.id}>
                     <td className="py-2 pr-2 text-gray-600">{formatDate(e.date)}</td>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{e.description}</td>
                     <td className="py-2 pr-2 text-gray-500">{e.category || t('reports.common.generalCategory')}</td>
@@ -231,7 +231,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
           <p className="text-xs text-gray-400 text-center py-4">{t('businessWorth.noWithdrawalsInPeriod')}</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table-clean w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-2 font-semibold">{t('reports.common.dateCol')}</th>
@@ -241,7 +241,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
               </thead>
               <tbody>
                 {periodWithdrawals.map(w => (
-                  <tr key={w.id} className="border-b border-gray-100">
+                  <tr key={w.id}>
                     <td className="py-2 pr-2 text-gray-600">{formatDate(w.date)}</td>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{w.reason || t('reports.common.unspecified')}</td>
                     <td className="py-2 pr-2 text-right type-number text-rose-600">{formatCurrency(w.amount, currencySymbol)}</td>

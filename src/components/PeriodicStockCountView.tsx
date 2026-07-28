@@ -182,8 +182,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // Shared field treatment — identical to Initial Stock Count so the two
   // counting screens read as one consistent system.
   const fieldClass =
-    'w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
-    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]';
+    'w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
+    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20';
   const fieldLabelClass = 'block type-label mb-1';
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
@@ -335,7 +335,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   <div className="flex items-end gap-1.5">
                     <div className="flex-1 min-w-0">
                       <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
-                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
+                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
                         {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
                       </div>
                     </div>

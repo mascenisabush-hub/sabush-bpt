@@ -149,7 +149,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <select
               value={periodType}
               onChange={(e) => setPeriodType(e.target.value as ClosingPeriodType)}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-semibold transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs font-semibold transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             >
               <option value="monthly">Mensal</option>
               <option value="yearly">Anual</option>
@@ -162,7 +162,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
               <select
                 value={month}
                 onChange={(e) => setMonth(Number(e.target.value))}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               >
                 {MONTH_NAMES.map((m, idx) => (
                   <option key={m} value={idx}>{m}</option>
@@ -176,7 +176,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
             <select
               value={year}
               onChange={(e) => setYear(Number(e.target.value))}
-              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             >
               {yearOptions.map((y) => (
                 <option key={y} value={y}>{y}</option>
@@ -185,7 +185,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
           </div>
 
           <div className="col-span-2 sm:col-span-1 flex items-end">
-            <div className="w-full bg-[#FAFBFC] border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 flex items-center gap-1.5 text-[11px] text-gray-600">
+            <div className="w-full bg-[#FAFBFC] border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 flex items-center gap-1.5 text-[11px] text-gray-600">
               <CalendarRange className="w-3.5 h-3.5 text-gray-400 shrink-0" />
               <span>{formatDate(startDate)} — {formatDate(endDate)}</span>
             </div>

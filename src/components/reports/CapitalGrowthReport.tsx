@@ -178,7 +178,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
           <ReportEmptyState message={t('reports.capitalGrowth.noClosings')} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table-clean w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-2 font-semibold">{t('reports.capitalGrowth.colPeriod')}</th>
@@ -191,7 +191,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
               </thead>
               <tbody>
                 {[...closings].sort((a, b) => b.endDate.localeCompare(a.endDate)).map(c => (
-                  <tr key={c.id} className="border-b border-gray-100">
+                  <tr key={c.id}>
                     <td className="py-2 pr-2 font-bold text-gray-900">{c.periodLabel}</td>
                     <td className="py-2 pr-2 text-gray-600">{formatDate(c.endDate)}</td>
                     <td className={`py-2 pr-2 text-right font-mono ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>{formatCurrency(c.totalEmbeddedProfit, currencySymbol)}</td>

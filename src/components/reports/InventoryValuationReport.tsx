@@ -225,7 +225,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
           <ReportEmptyState message={t('reports.inventoryValuation.noDataToShow')} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table-clean w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-2 font-semibold">{groupLabel}</th>
@@ -236,7 +236,7 @@ export const InventoryValuationReport: React.FC<Props> = ({ onBack }) => {
               </thead>
               <tbody>
                 {groupedSorted.map(g => (
-                  <tr key={g.key} className="border-b border-gray-100">
+                  <tr key={g.key}>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{g.label}</td>
                     <td className="py-2 pr-2 text-right font-mono text-gray-700">{formatCurrency(g.investment, currencySymbol)}</td>
                     <td className="py-2 pr-2 text-right type-number text-gray-900">{formatCurrency(g.market, currencySymbol)}</td>

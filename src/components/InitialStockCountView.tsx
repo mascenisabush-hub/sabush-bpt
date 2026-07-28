@@ -125,8 +125,8 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // every field in the product grid so the whole table reads as one
   // consistent system instead of per-field styling.
   const fieldClass =
-    'w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
-    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]';
+    'w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
+    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20';
   const fieldLabelClass = 'block type-label mb-1';
   // Column widths: Nome gets the most room, numeric fields stay tight,
   // last column is just wide enough for the hover-revealed delete icon.
@@ -245,7 +245,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                   <div className="flex items-end gap-1.5">
                     <div className="flex-1 min-w-0">
                       <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
-                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
+                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
                         {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
                       </div>
                     </div>

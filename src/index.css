@@ -339,3 +339,36 @@ body {
 }
 .btn-ghost:hover { background: rgba(11,31,58,0.05); color: #0B1F3A; }
 .btn-ghost:active { transform: scale(0.97); }
+
+/* ==========================================================================
+   Input system — SABUSH DESIGN SYSTEM v1.0.
+   Light gray border, 10px radius, gold focus ring — the canonical
+   treatment behind every text/number/date input and select across the app.
+   ========================================================================== */
+.input-base {
+  border: 1px solid #E5E7EB;
+  border-radius: 10px;
+  background: #FFFFFF;
+  transition: border-color 150ms ease, box-shadow 150ms ease;
+}
+.input-base:focus {
+  outline: none;
+  border-color: #D4AF37;
+  box-shadow: 0 0 0 2px rgba(212,175,55,0.2);
+}
+
+/* ==========================================================================
+   Table system — SABUSH DESIGN SYSTEM v1.0.
+   No heavy borders: only a hairline under the header row to separate it
+   from data. Row separation comes from padding/spacing, not per-row
+   borders. Rows get a light background tint on hover for scannability.
+   ========================================================================== */
+.table-clean thead tr {
+  border-bottom: 1px solid var(--border);
+}
+.table-clean tbody tr {
+  transition: background-color 150ms ease;
+}
+.table-clean tbody tr:hover {
+  background-color: rgba(11,31,58,0.03);
+}

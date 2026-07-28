@@ -200,7 +200,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
             <ReportEmptyState message={t('reports.batchPerformance.searchNoResults')} />
           ) : (
             <div className="overflow-x-auto mt-3">
-              <table className="w-full text-xs">
+              <table className="table-clean w-full text-xs">
                 <thead>
                   <tr className="text-left text-gray-500 border-b border-gray-200">
                     <th className="py-2 pr-2 font-semibold">{t('reports.batchPerformance.colBatch')}</th>
@@ -214,7 +214,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
                 </thead>
                 <tbody>
                   {searchResults.map(s => (
-                    <tr key={s.purchaseBatch.id} className="border-b border-gray-100">
+                    <tr key={s.purchaseBatch.id}>
                       <td className="py-2 pr-2 font-bold text-gray-900">{s.purchaseBatch.batchNumber}</td>
                       <td className="py-2 pr-2 text-gray-600">{formatDate(s.purchaseBatch.date)}</td>
                       <td className="py-2 pr-2 text-gray-600">{s.purchaseBatch.supplier.name}</td>
@@ -290,7 +290,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
           <ReportEmptyState message={t('reports.batchPerformance.noBatchesInPeriod')} />
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-xs">
+            <table className="table-clean w-full text-xs">
               <thead>
                 <tr className="text-left text-gray-500 border-b border-gray-200">
                   <th className="py-2 pr-2 font-semibold">{t('reports.batchPerformance.colBatch')}</th>
@@ -304,7 +304,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
               </thead>
               <tbody>
                 {sorted.map(s => (
-                  <tr key={s.purchaseBatch.id} className="border-b border-gray-100">
+                  <tr key={s.purchaseBatch.id}>
                     <td className="py-2 pr-2 font-bold text-gray-900">{s.purchaseBatch.batchNumber}</td>
                     <td className="py-2 pr-2 text-gray-600">{formatDate(s.purchaseBatch.date)}</td>
                     <td className="py-2 pr-2 text-gray-600">{s.purchaseBatch.supplier.name}</td>

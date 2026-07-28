@@ -477,7 +477,7 @@ export const StocksView: React.FC = () => {
                   <Package className="w-3.5 h-3.5 text-blue-600" /> {t('stocksView.modal.productsHeading')}
                 </h3>
                 <div className="border border-gray-200 rounded-2xl bg-white p-2 overflow-x-auto">
-                  <table className="w-full text-left text-xs min-w-[560px]">
+                  <table className="table-clean w-full text-left text-xs min-w-[560px]">
                     <thead>
                       <tr className="border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
                         <th className="py-2 px-2.5">{t('stocksView.modal.table.product')}</th>

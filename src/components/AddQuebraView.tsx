@@ -153,7 +153,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
               <select
                 value={selectedProductId}
                 onChange={e => setSelectedProductId(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               >
                 {products.map(p => (
                   <option key={p.id} value={p.id}>
@@ -176,7 +176,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                 <select
                   value={selectedBatchId}
                   onChange={e => setSelectedBatchId(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
                 >
                   {availableBatches.map(b => {
                     const statusText = b.status === 'open' ? t('addQuebra.batchStatusOpen') : t('addQuebra.batchStatusClosed');
@@ -201,7 +201,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                   required
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
               </div>
 
@@ -215,7 +215,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                   required
                   value={quantityLost}
                   onChange={e => setQuantityLost(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
               </div>
             </div>
@@ -265,7 +265,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                 placeholder={t('addQuebra.reasonPlaceholder')}
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] mb-2.5"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 mb-2.5"
               />
 
               {/* Suggestions */}

@@ -230,7 +230,7 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
 
                   {isExpanded && (
                     <div className="overflow-x-auto pt-2 border-t border-gray-200">
-                      <table className="w-full text-xs">
+                      <table className="table-clean w-full text-xs">
                         <thead>
                           <tr className="text-left text-gray-500 border-b border-gray-200">
                             <th className="py-2 pr-2 font-semibold">{t('reports.stockVerification.colProduct')}</th>
@@ -242,7 +242,7 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
                         </thead>
                         <tbody>
                           {v.diffs.map(d => (
-                            <tr key={d.productId} className="border-b border-gray-100">
+                            <tr key={d.productId}>
                               <td className="py-2 pr-2 font-semibold text-gray-800">{d.productName}</td>
                               <td className="py-2 pr-2 text-right font-mono text-gray-600">{d.before}</td>
                               <td className="py-2 pr-2 text-right font-mono text-gray-600">{d.after}</td>

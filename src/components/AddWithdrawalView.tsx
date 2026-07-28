@@ -97,7 +97,7 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
                   required
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
                 />
               </div>
 
@@ -113,7 +113,7 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
                   placeholder="0.00"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                 />
               </div>
             </div>
@@ -128,7 +128,7 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
                 placeholder={t('addWithdrawal.reasonPlaceholder')}
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] mb-2.5"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 mb-2.5"
               />
 
               <div className="flex flex-wrap gap-1.5 mt-2 items-center">
@@ -159,7 +159,7 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
                 placeholder={t('addWithdrawal.notesPlaceholder')}
                 value={notes}
                 onChange={e => setNotes(e.target.value)}
-                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] resize-none"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 resize-none"
               />
             </div>
 
