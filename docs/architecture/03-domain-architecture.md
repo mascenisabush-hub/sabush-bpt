@@ -47,7 +47,7 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 - Is the unit a subscription (Section 9) is ultimately billed against.
 
 **Relationships:**
-- One **Owner** (User) owns one or more Businesses (multi-shop, currently capped at 10 — see 3.12 User/Staff below).
+- One **Admin** (User) owns one or more Businesses (multi-shop, currently capped at 10 — see 3.12 User/Staff below).
 - Every operational domain (Inventory, Financial, Timeline, Reports, Staff) belongs to exactly one Business.
 - **Subscriptions** attach to a Business (or to the owning User across all their Businesses — a decision Section 9 must make explicitly).
 
@@ -57,7 +57,7 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 
 ## 3.3 INVENTORY *(Existing — grouping domain)*
 
-**Purpose:** The umbrella for everything that establishes what a business owns and what that ownership is worth. This is not a separate data domain on its own — it's the conceptual grouping of Products, Stock Batches, Purchase Batches, and Breakages below, called out because "Inventory" is how the *owner* thinks about this group, even though the system implements it as four related domains.
+**Purpose:** The umbrella for everything that establishes what a business owns and what that ownership is worth. This is not a separate data domain on its own — it's the conceptual grouping of Products, Stock Batches, Purchase Batches, and Breakages below, called out because "Inventory" is how the *admin* thinks about this group, even though the system implements it as four related domains.
 
 **Responsibilities:** Frames the four sub-domains below as one coherent story for UI and reporting purposes (e.g., the Dashboard's KPI grid draws from all four as a single "inventory" narrative).
 
@@ -150,10 +150,10 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 **Dependencies:** Business (3.2).
 
 ### 3.8.2 Withdrawals
-**Purpose:** Capital taken out by the owner for personal use — deliberately never merged with Expenses (Principle 2.4).
+**Purpose:** Capital taken out by the admin for personal use — deliberately never merged with Expenses (Principle 2.4).
 **Responsibilities:** Date, amount, reason taxonomy, notes.
 **Relationships:** Feeds Reports (Withdrawal Report), Timeline, Dashboard KPIs; reduces Business Worth without being an operating cost.
-**Dependencies:** Business (3.2). Owner-only, per existing Security Rules.
+**Dependencies:** Business (3.2). Admin-only, per existing Security Rules.
 
 ### 3.8.3 Stock Counts
 **Purpose:** Establishes and periodically verifies the capital baseline via physical counting; the very first count (`initial`) is the permanent, immutable capital baseline (Principle 2.10).
@@ -195,13 +195,13 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 
 **Dependencies:** Business (3.2). Conceptually depends on every domain that writes to it, but has no dependency back onto them (write-only relationship, no reads required by other domains).
 
-**Forward note:** Section 9 will define a separate, platform-level **Audit Log** for SuperAdmin actions — distinct from this business-facing Timeline, per the reasoning in the audit (a platform action shouldn't silently appear as if the owner did it).
+**Forward note:** Section 9 will define a separate, platform-level **Audit Log** for SuperAdmin actions — distinct from this business-facing Timeline, per the reasoning in the audit (a platform action shouldn't silently appear as if the admin did it).
 
 ---
 
 ## 3.11 STAFF *(Existing)*
 
-**Purpose:** Represents the people (beyond the owner) who act within a business.
+**Purpose:** Represents the people (beyond the admin) who act within a business.
 
 **Responsibilities:**
 - Identity, business scoping (currently one shop per staff member), suspension state.
@@ -215,7 +215,7 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 
 ## 3.12 NOTIFICATIONS *(New — proposed)*
 
-**Purpose:** Deliver time-sensitive or important information to an owner or staff member outside of the app being open — overdue closings, low-stock/high-quebra alerts (Dashboard's "needs attention" concept), subscription/billing events, platform announcements.
+**Purpose:** Deliver time-sensitive or important information to an admin or staff member outside of the app being open — overdue closings, low-stock/high-quebra alerts (Dashboard's "needs attention" concept), subscription/billing events, platform announcements.
 
 **Responsibilities:**
 - Channel-agnostic delivery abstraction (in-app, email, and — per Section 1.4's target market and the audit's own recommendation — WhatsApp, given the platform's PT/FR localization and target region).
@@ -224,7 +224,7 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 
 **Relationships:**
 - Triggered by events from Financial (3.8), Inventory (3.3–3.7), Subscriptions (3.13), and SuperAdmin (3.14).
-- Consumed by Staff/Owner (3.11) and, separately, by SuperAdmin's own alerting (3.14).
+- Consumed by Staff/Admin (3.11) and, separately, by SuperAdmin's own alerting (3.14).
 
 **Dependencies:** Business (3.2) for business-scoped notifications; platform-level event sources (3.13, 3.14) for platform notifications.
 
@@ -234,21 +234,21 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 
 ## 3.13 SUBSCRIPTIONS *(New — proposed)*
 
-**Purpose:** Represents the commercial relationship between a Business (or owner) and the Sabush BPT platform — plan, billing state, trial status, feature entitlements.
+**Purpose:** Represents the commercial relationship between a Business (or admin) and the Sabush BPT platform — plan, billing state, trial status, feature entitlements.
 
 **Responsibilities:**
 - Plan tier, status (trial/active/past-due/canceled), renewal date, payment history reference.
 - Source of truth for **feature gating** (which plan tier unlocks which capability — e.g., number of shops beyond a free tier's limit, access to AI features in Section 10).
 
 **Relationships:**
-- Attaches to a Business or owning User (exact binding is a Section 9 design decision, since multi-shop owners need a clear answer to "is this one subscription for all my shops, or one per shop").
+- Attaches to a Business or owning User (exact binding is a Section 9 design decision, since multi-shop admins need a clear answer to "is this one subscription for all my shops, or one per shop").
 - Read by **SuperAdmin** (3.14) for billing operations.
 - Read by **Notifications** (3.12) for billing/renewal alerts.
-- Read by every operational domain that needs to check a feature-gate (e.g., Business domain checking "can this owner add an 11th shop").
+- Read by every operational domain that needs to check a feature-gate (e.g., Business domain checking "can this admin add an 11th shop").
 
 **Dependencies:** Business (3.2), a payment processor integration (external, Section 4).
 
-**Worth-First scope test:** Passes — this domain doesn't touch how worth is calculated; it governs commercial access to the platform that calculates it. Kept strictly separate from the financial domains in 3.8 so subscription billing is never confused with the business's own financial data (an important trust boundary — an owner's Sabush subscription invoice is not part of their business's Expenses).
+**Worth-First scope test:** Passes — this domain doesn't touch how worth is calculated; it governs commercial access to the platform that calculates it. Kept strictly separate from the financial domains in 3.8 so subscription billing is never confused with the business's own financial data (an important trust boundary — an admin's Sabush subscription invoice is not part of their business's Expenses).
 
 ---
 
@@ -321,7 +321,7 @@ The **Business** domain is the tenant root every operational domain hangs beneat
 | Reports | All Inventory + Financial domains | (leaf — nothing depends on it) |
 | Timeline | Business (written by all) | (leaf for reads — nothing depends on it structurally) |
 | Staff | Business, Auth | Timeline |
-| Notifications | Business, Financial, Subscriptions, SuperAdmin | Staff/Owner |
+| Notifications | Business, Financial, Subscriptions, SuperAdmin | Staff/Admin |
 | Subscriptions | Business | SuperAdmin, Notifications, feature-gating checks platform-wide |
 | SuperAdmin | Business, Subscriptions, Staff (read via aggregation) | Analytics feeds Dashboard |
 | AI | Inventory, Financial, Timeline (read-only, per-tenant) | Reports, Notifications |
