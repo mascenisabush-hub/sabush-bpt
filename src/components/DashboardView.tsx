@@ -340,11 +340,11 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
           <KpiCard
             icon={AlertTriangle}
-            iconBgClass="bg-red-500/10"
-            iconTextClass="text-red-600"
+            iconBgClass="bg-rose-500/10"
+            iconTextClass="text-rose-600"
             label={t('dashboard.kpi.quebraLoss.label')}
             value={formatCurrency(totalQuebraValueAllTime, currencySymbol)}
-            valueClass="text-red-700"
+            valueClass="text-rose-700"
             description={t('dashboard.kpi.quebraLoss.desc')}
           />
 
@@ -537,7 +537,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           <div className="bg-white border border-gray-200 rounded-2xl max-w-md w-full p-6 elevation-3 space-y-4 animate-fadeIn">
             <div className="flex items-center justify-between border-b border-gray-200 pb-4">
               <div className="flex items-center space-x-2">
-                <Gem className="w-5 h-5 text-indigo-600" />
+                <Gem className="w-5 h-5 text-[#D4AF37]" />
                 <h3 className="text-base font-bold text-title">{t('dashboard.worthModal.title')}</h3>
               </div>
               <button
@@ -552,8 +552,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {t('dashboard.worthModal.explanation')}
             </p>
 
-            <div className="space-y-2 text-xs">
-              <div className="flex items-center justify-between p-4 rounded-[10px] bg-white border border-gray-200">
+            <div className="space-y-1 text-xs">
+              <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="flex items-center gap-2 text-gray-500">
                   <Boxes className="w-3.5 h-3.5 text-amber-600" /> {t('dashboard.worthModal.marketValue')}
                 </span>
@@ -562,42 +562,42 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-[10px] bg-white border border-gray-200">
+              <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="text-gray-500">{t('dashboard.worthModal.stockCost')}</span>
                 <span className="type-number text-gray-800">
                   {formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-[10px] bg-white border border-gray-200 border-dashed">
+              <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="text-gray-500">{t('dashboard.worthModal.expenses')}</span>
                 <span className="type-number text-rose-700">
                   − {formatCurrency(totalExpensesAllTime, currencySymbol)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-[10px] bg-white border border-gray-200 border-dashed">
+              <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="text-gray-500">{t('dashboard.worthModal.withdrawals')}</span>
                 <span className="type-number text-rose-700">
                   − {formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
                 </span>
               </div>
 
-              <div className="pt-2 border-t border-gray-200 flex items-center justify-between p-4 rounded-[10px] bg-indigo-50 border border-indigo-500/30">
+              <div className="mt-1 flex items-center justify-between px-4 py-3.5 rounded-[10px] bg-[#D4AF37]/10 border border-[#D4AF37]/30">
                 <span className="text-gray-800 font-bold">{t('dashboard.worthModal.totalLabel')}</span>
-                <span className="text-base font-extrabold font-mono text-indigo-700">
+                <span className="text-base font-extrabold font-mono text-[#8A6D1F]">
                   {formatCurrency(businessWorth, currencySymbol)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-[10px] bg-white border border-gray-200 border-dashed">
+              <div className="flex items-center justify-between px-4 py-2.5 mt-1">
                 <span className="text-gray-500">{t('dashboard.worthModal.latestCount')}</span>
                 <span className="type-number text-slate-600">
                   {formatCurrency(currentInventoryValue, currencySymbol)}
                 </span>
               </div>
 
-              <div className="flex items-center justify-between p-4 rounded-[10px] bg-white border border-gray-200 border-dashed">
+              <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="text-gray-500">{t('dashboard.worthModal.initialCapital')}</span>
                 <span className="type-number text-slate-600">
                   {formatCurrency(initialCapitalValue, currencySymbol)}
