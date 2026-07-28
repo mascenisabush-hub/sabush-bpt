@@ -203,41 +203,39 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
   return (
     <div className="max-w-5xl mx-auto pb-12">
-      <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-xl space-y-4">
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-5">
         {/* Title Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600 shrink-0">
-              <PackagePlus className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-bold text-base text-gray-900">{t('addStock.title')}</h2>
-              <p className="text-[11px] text-gray-500">
-                {t('addStock.subtitle')}
-              </p>
-            </div>
+        <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
+          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+            <PackagePlus className="w-5 h-5" strokeWidth={2} />
+          </div>
+          <div>
+            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">{t('addStock.title')}</h2>
+            <p className="text-[12px] text-gray-500 mt-0.5">
+              {t('addStock.subtitle')}
+            </p>
           </div>
         </div>
 
         {submittedMessage ? (
           <div className="py-10 text-center space-y-3">
-            <div className="w-14 h-14 rounded-full bg-blue-500/20 text-blue-600 flex items-center justify-center mx-auto animate-bounce">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-7 h-7" strokeWidth={2.25} />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">{t('addStock.successTitle')}</h3>
-            <p className="text-sm text-blue-700 max-w-md mx-auto">{submittedMessage}</p>
+            <h3 className="text-lg font-bold text-[#111827]">{t('addStock.successTitle')}</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* SUPPLIER (applies to this whole purchase / batch) */}
-            <div className="bg-white border border-gray-200 rounded-xl p-3 space-y-2.5">
-              <div className="flex items-center space-x-2">
-                <Truck className="w-4 h-4 text-blue-600 shrink-0" />
-                <span className="text-xs font-bold text-gray-800">{t('addStock.supplier.sectionTitle')}</span>
+            <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4 space-y-3">
+              <div className="flex items-center gap-2">
+                <Truck className="w-4 h-4 text-[#0B1F3A]/60 shrink-0" strokeWidth={2.25} />
+                <span className="text-[12.5px] font-bold text-[#111827]">{t('addStock.supplier.sectionTitle')}</span>
               </div>
-              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="sm:col-span-2">
-                  <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                  <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                     {t('addStock.supplier.nameLabel')}
                   </label>
                   <input
@@ -245,11 +243,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     placeholder={t('addStock.supplier.namePlaceholder')}
                     value={supplierName}
                     onChange={e => setSupplierName(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
                   />
                 </div>
                 <div>
-                  <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                  <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                     {t('addStock.supplier.phoneLabel')}
                   </label>
                   <input
@@ -257,12 +255,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     placeholder={t('addStock.supplier.phonePlaceholder')}
                     value={supplierPhone}
                     onChange={e => setSupplierPhone(e.target.value)}
-                    className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                    className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
                   />
                 </div>
               </div>
               <div>
-                <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                   {t('addStock.supplier.notesLabel')}
                 </label>
                 <input
@@ -270,18 +268,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   placeholder={t('addStock.supplier.notesPlaceholder')}
                   value={batchNotes}
                   onChange={e => setBatchNotes(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
                 />
               </div>
-              <p className="text-[10px] text-gray-500">
+              <p className="text-[10.5px] text-gray-400">
                 {t('addStock.supplier.unspecifiedHint')}
               </p>
             </div>
 
             {/* COMPACT TABLE */}
-            <div className="bg-white border border-gray-200 rounded-xl overflow-hidden shadow-sm">
+            <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
               {/* Table Header (Desktop) */}
-              <div className="hidden md:grid grid-cols-12 gap-1.5 items-center px-3 py-2 bg-white border-b border-gray-200 text-[10px] font-bold uppercase tracking-wider text-gray-500">
+              <div className="hidden md:grid grid-cols-12 gap-1.5 items-center px-3 py-2.5 bg-[#FAFBFC] border-b border-[#E5E7EB] text-[10px] font-bold uppercase tracking-wide text-gray-400">
                 <div className="col-span-1 text-center">{t('addStock.table.batch')}</div>
                 <div className="col-span-3">{t('addStock.table.product')}</div>
                 <div className="col-span-2">{t('addStock.table.dateEntered')}</div>
@@ -318,15 +316,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   return (
                     <div
                       key={row.id}
-                      className={`p-1.5 sm:p-2 transition group ${
-                        index % 2 === 1 ? 'bg-white/40' : 'bg-transparent'
-                      } hover:bg-gray-100/60`}
+                      className={`p-2 sm:p-2.5 transition-colors duration-150 group ${
+                        index % 2 === 1 ? 'bg-[#FAFBFC]/60' : 'bg-transparent'
+                      } hover:bg-[#D4AF37]/[0.04]`}
                     >
                       {/* Desktop Grid Layout */}
                       <div className="hidden md:grid grid-cols-12 gap-2 items-center text-xs">
                         {/* Lote # */}
                         <div className="col-span-1 text-center">
-                          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-500/30 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[10px] font-mono font-bold text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
                             #{index + 1}
                           </span>
                         </div>
@@ -346,9 +344,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   isDropdownOpen: true,
                                 })
                               }
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs placeholder-gray-400 focus:outline-none focus:border-blue-500 font-medium pr-7"
+                              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-medium pr-7"
                             />
-                            <Search className="w-3 h-3 text-gray-500 absolute right-2 top-1/2 -translate-y-1/2 pointer-events-none" />
+                            <Search className="w-3 h-3 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
 
                           {/* Autocomplete Dropdown Popup */}
@@ -358,16 +356,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 className="fixed inset-0 z-10"
                                 onClick={() => updateRow(row.id, { isDropdownOpen: false })}
                               />
-                              <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-48 overflow-y-auto z-30 divide-y divide-gray-200">
+                              <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#E5E7EB] rounded-xl shadow-[0_16px_40px_-12px_rgba(11,31,58,0.22)] max-h-48 overflow-y-auto z-30 divide-y divide-[#F1F3F6]">
                                 {filteredProducts.map(p => (
                                   <button
                                     key={p.id}
                                     type="button"
                                     onClick={() => handleSelectProductForTool(row.id, p.name)}
-                                    className="w-full text-left px-3 py-2 hover:bg-gray-50 transition flex items-center justify-between text-xs text-gray-800"
+                                    className="w-full text-left px-3 py-2 hover:bg-[#FAFBFC] transition-colors duration-150 flex items-center justify-between text-xs text-[#111827]"
                                   >
                                     <span className="font-semibold">{p.name}</span>
-                                    <span className="text-[10px] text-gray-500 bg-white px-2 py-0.5 rounded border border-gray-200">
+                                    <span className="text-[10px] text-gray-400 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
                                       {t('addStock.existingTag')}
                                     </span>
                                   </button>
@@ -382,7 +380,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                         isDropdownOpen: false,
                                       })
                                     }
-                                    className="w-full text-left px-3 py-2 hover:bg-blue-50 transition flex items-center space-x-2 text-xs text-blue-600 font-semibold"
+                                    className="w-full text-left px-3 py-2 hover:bg-[#D4AF37]/[0.06] transition-colors duration-150 flex items-center gap-2 text-xs text-[#B8952F] font-semibold"
                                   >
                                     <Sparkles className="w-3.5 h-3.5" />
                                     <span>{t('addStock.createNew', { name: row.productName.trim() })}</span>
@@ -400,7 +398,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.dateEntered}
                             onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs focus:outline-none focus:border-blue-500 font-mono"
+                            className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
                           />
                         </div>
 
@@ -412,7 +410,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.quantity}
                             onChange={e => updateRow(row.id, { quantity: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-blue-500 font-mono"
+                            className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                           />
                         </div>
 
@@ -425,7 +423,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               placeholder="un"
                               value={row.unit}
                               onChange={e => updateRow(row.id, { unit: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-1.5 py-1.5 text-gray-800 text-xs text-center focus:outline-none focus:border-blue-500 font-mono"
+                              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-1.5 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
                             />
                             <button
                               type="button"
@@ -433,7 +431,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 updateRow(row.id, { isUnitPopoverOpen: !row.isUnitPopoverOpen })
                               }
                               title={t('addStock.unitSuggestionsTitle')}
-                              className="p-1 text-gray-500 hover:text-blue-600 bg-white border border-gray-200 rounded-md hover:border-gray-300 transition shrink-0"
+                              className="p-1.5 text-gray-400 hover:text-[#0B1F3A] bg-white border border-[#E5E7EB] rounded-[8px] hover:border-gray-300 transition-colors duration-150 shrink-0"
                             >
                               <Tag className="w-3 h-3" />
                             </button>
@@ -446,8 +444,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 className="fixed inset-0 z-10"
                                 onClick={() => updateRow(row.id, { isUnitPopoverOpen: false })}
                               />
-                              <div className="absolute right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-xl p-2 z-30 w-36 space-y-1">
-                                <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wider mb-1">
+                              <div className="absolute right-0 top-full mt-1.5 bg-white border border-[#E5E7EB] rounded-xl shadow-[0_16px_40px_-12px_rgba(11,31,58,0.22)] p-2.5 z-30 w-36 space-y-1.5">
+                                <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">
                                   {t('addStock.unitSuggestionsLabel')}
                                 </div>
                                 <div className="flex flex-wrap gap-1">
@@ -461,10 +459,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                           isUnitPopoverOpen: false,
                                         })
                                       }
-                                      className={`text-[10px] px-2 py-1 rounded border font-mono transition ${
+                                      className={`text-[10px] px-2 py-1 rounded-md border font-mono transition-colors duration-150 ${
                                         row.unit.toLowerCase() === u.toLowerCase()
-                                          ? 'bg-blue-50 border-blue-500 text-blue-700 font-bold'
-                                          : 'bg-white border-gray-200 text-gray-500 hover:text-gray-800'
+                                          ? 'bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#B8952F] font-bold'
+                                          : 'bg-white border-[#E5E7EB] text-gray-500 hover:text-[#111827] hover:border-gray-300'
                                       }`}
                                     >
                                       {u}
@@ -485,7 +483,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.costPrice}
                             onChange={e => updateRow(row.id, { costPrice: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-blue-500 font-mono"
+                            className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                           />
                         </div>
 
@@ -498,15 +496,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.sellingPrice}
                             onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
-                            className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1.5 text-gray-800 text-xs text-right focus:outline-none focus:border-blue-500 font-mono"
+                            className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                           />
                         </div>
 
                         {/* Lucro Estimado & Delete Button */}
-                        <div className="col-span-1 flex items-center justify-end space-x-1.5">
+                        <div className="col-span-1 flex items-center justify-end gap-1.5">
                           {!isStaff && (
                             <span
-                              className={`font-mono font-bold text-xs ${
+                              className={`font-mono font-bold text-xs tabular-nums ${
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                               title={t('addStock.totalProfitTitle', { value: formatCurrency(rowProfit, currencySymbol) })}
@@ -519,7 +517,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             <button
                               type="button"
                               onClick={() => handleRemoveRow(row.id)}
-                              className="p-1 text-gray-500 hover:text-rose-600 hover:bg-rose-500/10 rounded-md transition"
+                              className="p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all duration-150"
                               title={t('addStock.removeBatch')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />
@@ -530,13 +528,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                       {/* Mobile Compact Card/Row Layout (below md breakpoint) */}
                       <div className="md:hidden space-y-2 text-xs">
-                        <div className="flex items-center justify-between border-b border-gray-200/60 pb-1.5">
-                          <span className="text-[10px] font-mono font-bold text-blue-600 bg-blue-50 border border-blue-500/30 px-1.5 py-0.5 rounded-md">
+                        <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
+                          <span className="text-[10px] font-mono font-bold text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
                             {t('addStock.table.batch')} #{index + 1}
                           </span>
-                          <div className="flex items-center space-x-2">
+                          <div className="flex items-center gap-2">
                             <span
-                              className={`font-mono font-bold text-xs ${
+                              className={`font-mono font-bold text-xs tabular-nums ${
                                 rowProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                               }`}
                             >
@@ -546,7 +544,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               <button
                                 type="button"
                                 onClick={() => handleRemoveRow(row.id)}
-                                className="p-1 text-gray-500 hover:text-rose-600 rounded-md"
+                                className="p-1 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-colors duration-150"
                               >
                                 <Trash2 className="w-3.5 h-3.5" />
                               </button>
@@ -554,9 +552,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
                         </div>
 
-                        <div className="grid grid-cols-2 gap-2">
+                        <div className="grid grid-cols-2 gap-2.5">
                           <div className="col-span-2 relative">
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                               {t('addStock.table.product')}
                             </label>
                             <input
@@ -571,7 +569,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   isDropdownOpen: true,
                                 })
                               }
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs"
+                              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
                             />
                             {row.isDropdownOpen && (
                               <>
@@ -579,13 +577,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   className="fixed inset-0 z-10"
                                   onClick={() => updateRow(row.id, { isDropdownOpen: false })}
                                 />
-                                <div className="absolute left-0 right-0 top-full mt-1 bg-white border border-gray-300 rounded-xl shadow-2xl max-h-40 overflow-y-auto z-30 divide-y divide-gray-200">
+                                <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#E5E7EB] rounded-xl shadow-[0_16px_40px_-12px_rgba(11,31,58,0.22)] max-h-40 overflow-y-auto z-30 divide-y divide-[#F1F3F6]">
                                   {filteredProducts.map(p => (
                                     <button
                                       key={p.id}
                                       type="button"
                                       onClick={() => handleSelectProductForTool(row.id, p.name)}
-                                      className="w-full text-left px-3 py-1.5 text-xs text-gray-800"
+                                      className="w-full text-left px-3 py-2 text-xs text-[#111827] hover:bg-[#FAFBFC] transition-colors duration-150"
                                     >
                                       {p.name}
                                     </button>
@@ -599,7 +597,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                           isDropdownOpen: false,
                                         })
                                       }
-                                      className="w-full text-left px-3 py-1.5 text-xs text-blue-600 font-semibold"
+                                      className="w-full text-left px-3 py-2 text-xs text-[#B8952F] font-semibold hover:bg-[#D4AF37]/[0.06] transition-colors duration-150"
                                     >
                                       {t('addStock.createNewShort', { name: row.productName.trim() })}
                                     </button>
@@ -610,7 +608,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
 
                           <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                               {t('addStock.table.dateEntered')}
                             </label>
                             <input
@@ -618,13 +616,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               value={row.dateEntered}
                               onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
+                              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
                             />
                           </div>
 
-                          <div className="flex gap-1">
+                          <div className="flex gap-1.5">
                             <div className="flex-1">
-                              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                                 {t('addStock.table.quantity')}
                               </label>
                               <input
@@ -633,11 +631,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 required
                                 value={row.quantity}
                                 onChange={e => updateRow(row.id, { quantity: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
+                                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                               />
                             </div>
                             <div className="w-16">
-                              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                                 {t('addStock.table.unit')}
                               </label>
                               <input
@@ -645,13 +643,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 required
                                 value={row.unit}
                                 onChange={e => updateRow(row.id, { unit: e.target.value })}
-                                className="w-full bg-white border border-gray-200 rounded-lg px-1 py-1 text-gray-800 text-xs text-center font-mono"
+                                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-1 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
                               />
                             </div>
                           </div>
 
                           <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                               {t('addStock.fields.costPrice', { symbol: currencySymbol })}
                             </label>
                             <input
@@ -661,12 +659,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               value={row.costPrice}
                               onChange={e => updateRow(row.id, { costPrice: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
+                              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                             />
                           </div>
 
                           <div>
-                            <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
+                            <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                               {t('addStock.fields.sellPrice', { symbol: currencySymbol })}
                             </label>
                             <input
@@ -676,7 +674,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               value={row.sellingPrice}
                               onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
-                              className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
+                              className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                             />
                           </div>
                         </div>
@@ -691,43 +689,43 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <button
               type="button"
               onClick={handleAddRow}
-              className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-blue-500/60 hover:bg-blue-50 text-gray-700 hover:text-blue-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
+              className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
             >
-              <Plus className="w-4 h-4 text-blue-600 group-hover:scale-110 transition-transform" />
+              <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
               <span>{t('addStock.addAnotherProduct')}</span>
             </button>
 
             {/* Combined Total Summary Bar */}
             {!isStaff && (
-              <div className="bg-white border border-gray-200 rounded-xl px-3 py-2.5 flex flex-wrap items-center justify-between gap-2 text-xs font-mono">
-                <div className="flex items-center space-x-2">
-                  <Sparkles className="w-4 h-4 text-blue-600 shrink-0" />
-                  <span className="font-bold text-gray-800 font-sans">
+              <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                <div className="flex items-center gap-2">
+                  <Sparkles className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />
+                  <span className="font-bold text-[#111827] text-[12.5px]">
                     {rows.length === 1
                       ? t('addStock.summary.titleOne', { count: rows.length })
                       : t('addStock.summary.titleOther', { count: rows.length })}
                   </span>
                 </div>
 
-                <div className="flex items-center space-x-4 sm:space-x-6 text-[11px]">
+                <div className="flex items-center gap-4 sm:gap-6 text-[11px]">
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">{t('addStock.summary.totalInvestment')}</span>
-                    <span className="font-bold text-gray-800">
+                    <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.totalInvestment')}</span>
+                    <span className="font-bold text-[#111827] font-mono tabular-nums">
                       {formatCurrency(totals.totalInvestmentValue, currencySymbol)}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">{t('addStock.summary.marketValue')}</span>
-                    <span className="font-bold text-gray-800">
+                    <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.marketValue')}</span>
+                    <span className="font-bold text-[#111827] font-mono tabular-nums">
                       {formatCurrency(totals.totalMarketValue, currencySymbol)}
                     </span>
                   </div>
 
                   <div>
-                    <span className="text-gray-500 font-sans uppercase text-[10px] mr-1">{t('addStock.summary.embeddedProfit')}</span>
+                    <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.embeddedProfit')}</span>
                     <span
-                      className={`font-bold ${
+                      className={`font-bold font-mono tabular-nums ${
                         totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
                       }`}
                     >
@@ -739,9 +737,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             )}
 
             {/* Batch Auto-closing Notice */}
-            <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-2.5 flex items-start space-x-2 text-[11px] text-gray-700">
-              <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-              <p>
+            <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3 flex items-start gap-2.5">
+              <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
+              <p className="text-[11.5px] leading-relaxed text-gray-600">
                 {t('addStock.autoCloseNotice')}
               </p>
             </div>
@@ -749,14 +747,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             {/* Submit Button */}
             <button
               type="submit"
-              className="w-full py-3 px-4 rounded-xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-sm transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+              className="btn-primary w-full py-3 px-4 text-sm"
             >
               <span>
                 {rows.length > 1
                   ? t('addStock.submitMultiple', { count: rows.length })
                   : t('addStock.submitOne')}
               </span>
-              <ArrowRight className="w-4 h-4" />
+              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
             </button>
           </form>
         )}
