@@ -136,13 +136,13 @@ export const ShopSwitcher: React.FC = () => {
                 placeholder="Nome da loja"
                 required
                 autoFocus
-                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#0B1F3A] focus:outline-none"
+                className="w-full text-[13px] px-3 py-2 rounded-[10px] border border-[#E5E7EB] transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
 
               <select
                 value={newCategory}
                 onChange={(e) => setNewCategory(e.target.value)}
-                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#0B1F3A] focus:outline-none bg-white"
+                className="w-full text-[13px] px-3 py-2 rounded-[10px] border border-[#E5E7EB] transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 bg-white"
               >
                 <option value="">Categoria (opcional)</option>
                 {BUSINESS_CATEGORY_GROUPS.map((group) => (
@@ -157,7 +157,7 @@ export const ShopSwitcher: React.FC = () => {
               <select
                 value={newCurrency}
                 onChange={(e) => setNewCurrency(e.target.value)}
-                className="w-full text-[13px] px-3 py-2 rounded-lg border border-gray-200 focus:border-[#0B1F3A] focus:outline-none bg-white"
+                className="w-full text-[13px] px-3 py-2 rounded-[10px] border border-[#E5E7EB] transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 bg-white"
               >
                 {CURRENCY_OPTIONS.map((c) => (
                   <option key={c.code} value={c.symbol}>{c.label}</option>

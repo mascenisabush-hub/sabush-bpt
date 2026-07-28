@@ -459,7 +459,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                       value={staffName}
                       onChange={e => setStaffName(e.target.value)}
                       placeholder="Ex: Carlos Mambo"
-                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                      className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-xs text-gray-900 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                     />
                   </div>
 
@@ -474,7 +474,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         value={staffEmail}
                         onChange={e => setStaffEmail(e.target.value)}
                         placeholder="carlos@negocio.com"
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                        className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-xs text-gray-900 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                       />
                     </div>
 
@@ -490,7 +490,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         value={staffPassword}
                         onChange={e => setStaffPassword(e.target.value.replace(/\D/g, '').slice(0, 6))}
                         placeholder="Ex: 483920"
-                        className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono tracking-widest"
+                        className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-xs text-gray-900 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tracking-widest"
                       />
                       <p className="text-[10px] text-gray-400 mt-1">
                         O funcionário usa este PIN para entrar — tanto no login normal como no login rápido de um dispositivo partilhado.
@@ -802,7 +802,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                   value={newPinValue}
                   onChange={e => setNewPinValue(e.target.value.replace(/\D/g, '').slice(0, 6))}
                   placeholder="Ex: 573920"
-                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 placeholder-gray-400 focus:outline-none focus:border-blue-500 font-mono tracking-widest"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tracking-widest"
                 />
               </div>
 

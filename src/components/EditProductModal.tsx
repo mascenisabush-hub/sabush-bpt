@@ -85,7 +85,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
               required
               value={name}
               onChange={(e) => setName(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
           </div>
 
@@ -97,7 +97,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 value={category}
                 onChange={(e) => setCategory(e.target.value)}
                 placeholder="Ex: Bebidas"
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
             <div>
@@ -107,7 +107,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 value={supplier}
                 onChange={(e) => setSupplier(e.target.value)}
                 placeholder="Ex: Distribuidora XYZ"
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
           </div>
@@ -119,7 +119,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 type="text"
                 value={sku}
                 onChange={(e) => setSku(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
             <div>
@@ -128,7 +128,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 type="text"
                 value={barcode}
                 onChange={(e) => setBarcode(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
           </div>
@@ -144,7 +144,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 min="0"
                 value={costPrice}
                 onChange={(e) => setCostPrice(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
             <div>
@@ -157,7 +157,7 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 min="0"
                 value={sellingPrice}
                 onChange={(e) => setSellingPrice(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-sm text-gray-900 font-mono focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
           </div>

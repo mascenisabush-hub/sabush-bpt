@@ -148,7 +148,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
               placeholder="ex.: Mercearia Central"
               value={name}
               onChange={e => setName(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-[#E5E7EB] rounded-[10px] text-gray-800 text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
           </div>
 
@@ -163,7 +163,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                 placeholder="ex.: 84 123 4567"
                 value={contact}
                 onChange={e => setContact(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2.5 bg-white border border-[#E5E7EB] rounded-[10px] text-gray-800 text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
             <div className="space-y-1.5">
@@ -175,7 +175,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                 placeholder="ex.: Maputo, Bairro Central"
                 value={location}
                 onChange={e => setLocation(e.target.value)}
-                className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                className="w-full px-4 py-2.5 bg-white border border-[#E5E7EB] rounded-[10px] text-gray-800 text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>
           </div>
@@ -190,7 +190,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
               placeholder="ex.: contacto@negocio.co.mz"
               value={email}
               onChange={e => setEmail(e.target.value)}
-              className="w-full px-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full px-4 py-2.5 bg-white border border-[#E5E7EB] rounded-[10px] text-gray-800 text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
           </div>
 
@@ -243,7 +243,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                     placeholder="Pesquisar categoria (ex.: Mercearia, Talho, Roupa...)"
                     value={searchTerm}
                     onChange={e => setSearchTerm(e.target.value)}
-                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-gray-200 rounded-xl text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                    className="w-full pl-10 pr-4 py-2.5 bg-white border border-[#E5E7EB] rounded-[10px] text-gray-800 text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                   />
                 </div>
 
@@ -309,7 +309,7 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
                       placeholder="ex.: Loja de Molduras, Marcenaria..."
                       value={customText}
                       onChange={e => setCustomText(e.target.value)}
-                      className="w-full px-4 py-2.5 bg-white border border-gray-300 rounded-xl text-gray-800 text-sm focus:outline-none focus:border-blue-500"
+                      className="w-full px-4 py-2.5 bg-white border border-[#E5E7EB] rounded-[10px] text-gray-800 text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                       autoFocus
                     />
                   </div>

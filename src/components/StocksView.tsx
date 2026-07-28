@@ -213,7 +213,7 @@ export const StocksView: React.FC = () => {
               placeholder={t('stocksView.searchPlaceholder')}
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-xl pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 focus:outline-none focus:border-blue-500"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] pl-10 pr-9 py-2 text-xs text-gray-800 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
             {searchQuery && (
               <button
@@ -229,7 +229,7 @@ export const StocksView: React.FC = () => {
             <select
               value={supplierFilter}
               onChange={(e) => setSupplierFilter(e.target.value)}
-              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-gray-800 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             >
               <option value="">{t('stocksView.allSuppliers')}</option>
               {supplierOptions.map((name) => (
@@ -244,7 +244,7 @@ export const StocksView: React.FC = () => {
             <select
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value as any)}
-              className="w-full bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-gray-800 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             >
               <option value="all">{t('stocksView.allStatuses')}</option>
               <option value="active">{t('common.purchaseBatchStatus.active')}</option>
@@ -259,7 +259,7 @@ export const StocksView: React.FC = () => {
               type="date"
               value={selectedDate}
               onChange={(e) => setSelectedDate(e.target.value)}
-              className="flex-1 bg-white border border-gray-200 rounded-xl px-2.5 py-2 text-xs text-gray-800 font-mono focus:outline-none focus:border-blue-500"
+              className="flex-1 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-xs text-gray-800 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
             {selectedDate && (
               <button
@@ -277,7 +277,7 @@ export const StocksView: React.FC = () => {
             type="checkbox"
             checked={showArchived}
             onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-gray-300 text-blue-600 focus:ring-blue-500"
+            className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
           />
           {t('stocksView.showArchived')}
         </label>
