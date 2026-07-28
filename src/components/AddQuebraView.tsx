@@ -116,15 +116,16 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
   return (
     <div className="max-w-2xl mx-auto pb-12">
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xl">
-        {/* Title */}
-        <div className="flex items-center space-x-3 pb-5 border-b border-gray-200">
-          <div className="w-10 h-10 rounded-xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center text-rose-600">
-            <AlertTriangle className="w-6 h-6" />
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-6">
+        {/* Header — compact, single line, danger-tinted icon chip since this
+            screen registers a loss (not a neutral action). */}
+        <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
+          <div className="w-10 h-10 rounded-xl bg-rose-500/10 flex items-center justify-center text-rose-600 shrink-0">
+            <AlertTriangle className="w-5 h-5" strokeWidth={2} />
           </div>
-          <div>
-            <h2 className="font-bold text-lg text-gray-900">{t('addQuebra.title')}</h2>
-            <p className="text-xs text-gray-500">
+          <div className="min-w-0">
+            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">{t('addQuebra.title')}</h2>
+            <p className="text-[12px] text-gray-500 mt-0.5">
               {t('addQuebra.subtitle')}
             </p>
           </div>
@@ -132,27 +133,27 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
         {submittedMessage ? (
           <div className="py-8 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-rose-500/20 text-rose-600 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className="w-14 h-14 rounded-full bg-rose-50 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-7 h-7 text-rose-600" strokeWidth={2.25} />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">{t('addQuebra.registeredTitle')}</h3>
-            <p className="text-sm text-rose-700 max-w-md mx-auto">{submittedMessage}</p>
+            <h3 className="text-lg font-bold text-[#111827]">{t('addQuebra.registeredTitle')}</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : products.length === 0 ? (
           <div className="py-8 text-center text-gray-500 text-sm">
             {t('addQuebra.emptyState')}
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5 my-5">
+          <form onSubmit={handleSubmit} className="space-y-5">
             {/* Product Selector */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
                 {t('addQuebra.selectProduct')}
               </label>
               <select
                 value={selectedProductId}
                 onChange={e => setSelectedProductId(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
               >
                 {products.map(p => (
                   <option key={p.id} value={p.id}>
@@ -164,18 +165,18 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
             {/* Batch Selector */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
                 {t('addQuebra.selectBatch')}
               </label>
               {availableBatches.length === 0 ? (
-                <div className="text-xs text-rose-600 bg-rose-50 border border-rose-300 p-3 rounded-xl">
+                <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 p-3 rounded-xl">
                   {t('addQuebra.noBatchesForProduct')}
                 </div>
               ) : (
                 <select
                   value={selectedBatchId}
                   onChange={e => setSelectedBatchId(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500 font-mono"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
                 >
                   {availableBatches.map(b => {
                     const statusText = b.status === 'open' ? t('addQuebra.batchStatusOpen') : t('addQuebra.batchStatusClosed');
@@ -192,7 +193,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             {/* Date & Quantity Lost */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
                   {t('addQuebra.lossDate')}
                 </label>
                 <input
@@ -200,12 +201,12 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                   required
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
                   {t('addQuebra.lossQuantity')}
                 </label>
                 <input
@@ -214,15 +215,15 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                   required
                   value={quantityLost}
                   onChange={e => setQuantityLost(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-rose-500 font-mono"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
                 />
               </div>
             </div>
 
             {/* Warning Banner if Loss > Remaining Quantity */}
             {isWarning && (
-              <div className="bg-rose-50 border border-rose-500/50 rounded-xl p-3.5 flex items-start space-x-3 text-xs text-rose-300 animate-pulse">
-                <AlertTriangle className="w-5 h-5 text-rose-600 shrink-0 mt-0.5" />
+              <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5 text-xs text-rose-700">
+                <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" strokeWidth={2.25} />
                 <div>
                   <span className="font-bold text-rose-700 block mb-0.5">{t('addQuebra.warningTitle')}</span>
                   <p dangerouslySetInnerHTML={{ __html: t('addQuebra.warningBody', { qty: quantityLost, remaining: batchCalc?.remainingQuantity ?? 0 }) }} />
@@ -232,21 +233,21 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
             {/* Remaining Stock Preview */}
             {targetBatch && batchCalc && (
-              <div className="bg-white rounded-xl p-3.5 border border-gray-200 flex items-center justify-between text-xs">
+              <div className="bg-[var(--muted)] rounded-xl px-4 py-3.5 border border-[#E5E7EB] flex items-center justify-between gap-2 text-xs">
                 <div>
-                  <span className="text-gray-500 block text-[10px]">{t('addQuebra.currentBatchStock')}</span>
-                  <span className="font-bold text-gray-800">{t('addQuebra.unitsValue', { qty: batchCalc.remainingQuantity })}</span>
+                  <span className="text-gray-500 block text-[10px] font-semibold uppercase tracking-wide">{t('addQuebra.currentBatchStock')}</span>
+                  <span className="font-bold text-[#111827] font-mono tabular-nums">{t('addQuebra.unitsValue', { qty: batchCalc.remainingQuantity })}</span>
                 </div>
-                <ArrowRight className="w-4 h-4 text-gray-400" />
+                <ArrowRight className="w-4 h-4 text-gray-300 shrink-0" />
                 <div>
-                  <span className="text-gray-500 block text-[10px]">{t('addQuebra.stockAfterLoss')}</span>
-                  <span className={`font-bold ${remainingAfterLoss < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
+                  <span className="text-gray-500 block text-[10px] font-semibold uppercase tracking-wide">{t('addQuebra.stockAfterLoss')}</span>
+                  <span className={`font-bold font-mono tabular-nums ${remainingAfterLoss < 0 ? 'text-rose-600' : 'text-emerald-600'}`}>
                     {t('addQuebra.unitsValue', { qty: remainingAfterLoss })}
                   </span>
                 </div>
                 <div>
-                  <span className="text-gray-500 block text-[10px]">{t('addQuebra.lostCostValue')}</span>
-                  <span className="font-bold text-rose-600">
+                  <span className="text-gray-500 block text-[10px] font-semibold uppercase tracking-wide">{t('addQuebra.lostCostValue')}</span>
+                  <span className="font-bold text-rose-600 font-mono tabular-nums">
                     {formatCurrency((parseFloat(quantityLost) || 0) * targetBatch.costPrice, currencySymbol)}
                   </span>
                 </div>
@@ -255,7 +256,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
             {/* Reason Free Text & Suggestion Chips */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1.5">
                 {t('addQuebra.reasonLabel')}
               </label>
               <input
@@ -264,18 +265,18 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                 placeholder={t('addQuebra.reasonPlaceholder')}
                 value={reason}
                 onChange={e => setReason(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-rose-500 mb-2"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[9px] px-3.5 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] mb-2.5"
               />
 
               {/* Suggestions */}
-              <div className="flex flex-wrap gap-2 mt-2">
-                <span className="text-[11px] text-gray-500 self-center mr-1">{t('addQuebra.quickSuggestions')}</span>
+              <div className="flex flex-wrap gap-2 items-center">
+                <span className="text-[11px] text-gray-500 mr-0.5">{t('addQuebra.quickSuggestions')}</span>
                 {COMMON_REASON_KEYS.map(key => (
                   <button
                     key={key}
                     type="button"
                     onClick={() => setReason(t(key))}
-                    className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-medium transition border border-gray-300/60 active:scale-95"
+                    className="px-3 py-1.5 rounded-lg bg-[var(--muted)] hover:bg-[#D4AF37]/[0.08] hover:text-[#0B1F3A] text-gray-600 text-xs font-semibold border border-[#E5E7EB] hover:border-[#D4AF37]/40 transition-all duration-150 active:scale-95"
                   >
                     {t(key)}
                   </button>
@@ -283,15 +284,17 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
               </div>
             </div>
 
-            {/* Submit Button */}
-            <div className="flex items-center space-x-3 pt-2">
+            {/* Submit Button — kept rose (not gold) since this action
+                registers a loss; matches the rose/danger semantics used
+                for negative figures and errors elsewhere in the app. */}
+            <div className="flex items-center pt-1">
               <button
                 type="submit"
                 disabled={!selectedBatchId}
-                className="flex-1 min-h-[56px] py-3.5 px-5 rounded-2xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-base transition shadow-lg shadow-rose-50 flex items-center justify-center space-x-2 disabled:opacity-50 active:scale-[0.98]"
+                className="w-full min-h-[52px] py-3.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm transition-all duration-150 shadow-[0_10px_24px_-8px_rgba(225,29,72,0.35)] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
               >
                 <span>{t('addQuebra.submitButton')}</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
               </button>
             </div>
           </form>
