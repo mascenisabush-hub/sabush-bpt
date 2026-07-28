@@ -10,8 +10,8 @@ This document is built section by section. Each section is only written once the
 
 | # | Section | Status |
 |---|---|---|
-| 1 | [Product Vision](./01-product-vision.md) | ✅ Drafted — awaiting approval |
-| 2 | Core Product Principles | Not started |
+| 1 | [Product Vision](./01-product-vision.md) | ✅ Approved |
+| 2 | [Core Product Principles](./02-core-product-principles.md) | ✅ Drafted — awaiting approval |
 | 3 | Domain Architecture | Not started |
 | 4 | System Architecture | Not started |
 | 5 | Business Lifecycle | Not started |
