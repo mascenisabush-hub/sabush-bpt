@@ -76,7 +76,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`group h-full text-left p-4 sm:p-5 flex flex-col gap-3.5 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`group h-full text-left p-4 sm:p-5 flex flex-col gap-3 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
         isDark
           ? 'relative overflow-hidden bg-[#0B1F3A] shadow-[var(--shadow-2)]'
           : `card-premium ${highlight ? 'is-highlighted' : ''}`
@@ -88,30 +88,36 @@ const KpiCard: React.FC<KpiCardProps> = ({
           className="pointer-events-none absolute -right-8 -top-10 w-32 h-32 rounded-full bg-[#D4AF37]/[0.07] blur-2xl opacity-70 transition-opacity duration-300 group-hover:opacity-100"
         />
       )}
-      <div className="relative flex items-start justify-between gap-2">
-        <div
-          className={`w-9 h-9 rounded-xl flex items-center justify-center shrink-0 ${
-            isDark ? 'bg-white/10 text-[#D4AF37]' : `${iconBgClass} ${iconTextClass}`
-          }`}
-        >
-          <Icon className="w-[16px] h-[16px]" />
+      {/* Icon + label share one quiet row — the label is a caption for
+          the icon, not a headline. Badge (if any) floats to the far end. */}
+      <div className="relative flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2 min-w-0">
+          <div
+            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+              isDark ? 'bg-white/10 text-[#D4AF37]' : `${iconBgClass} ${iconTextClass}`
+            }`}
+          >
+            <Icon className="w-[14px] h-[14px]" />
+          </div>
+          <p className={`kpi-label leading-tight truncate ${isDark ? 'text-white/40' : ''}`}>
+            {label}
+          </p>
         </div>
         {badge}
       </div>
-      <div className="relative">
-        <p className={`kpi-label leading-tight ${isDark ? 'text-white/45' : ''}`}>
-          {label}
-        </p>
-        <p
-          className={`mt-1.5 leading-[1.1] truncate tabular-nums ${
-            isDark
-              ? `font-display font-semibold text-[24px] sm:text-[27px] tracking-[-0.01em] ${valueClass || 'text-[#D4AF37]'}`
-              : `text-[20px] sm:text-[22px] tracking-tight kpi-value ${valueClass || ''}`
-          }`}
-        >
-          {value}
-        </p>
-      </div>
+
+      {/* The number is the entire reason this card exists — it should
+          read before anything else on the page. */}
+      <p
+        className={`relative leading-[1.05] truncate tabular-nums ${
+          isDark
+            ? `font-display font-bold text-[30px] sm:text-[34px] tracking-[-0.02em] ${valueClass || 'text-[#D4AF37]'}`
+            : `text-[26px] sm:text-[28px] font-extrabold tracking-[-0.03em] ${valueClass || 'text-[#0B1F3A]'}`
+        }`}
+      >
+        {value}
+      </p>
+
       <p className={`relative text-[11px] leading-snug mt-auto font-medium ${isDark ? 'text-white/35' : 'text-gray-500'}`}>
         {description}
       </p>

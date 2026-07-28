@@ -197,21 +197,12 @@ body {
   background: linear-gradient(180deg, rgba(212,175,55,0.07) 0%, rgba(212,175,55,0.015) 100%);
   border-color: rgba(212,175,55,0.22);
 }
-.kpi-value {
-  color: var(--navy);
-  font-weight: 800;
-  letter-spacing: -0.03em;
-  font-variant-numeric: tabular-nums;
-}
-.kpi-value--accent {
-  color: var(--gold-hover);
-}
 .kpi-label {
   color: #6B7280;
-  font-weight: 700;
-  font-size: 10.5px;
+  font-weight: 600;
+  font-size: 10px;
   text-transform: uppercase;
-  letter-spacing: 0.08em;
+  letter-spacing: 0.07em;
 }
 .badge-soft {
   border-radius: 9999px;
