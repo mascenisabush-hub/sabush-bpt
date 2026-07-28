@@ -93,11 +93,11 @@ const KpiCard: React.FC<KpiCardProps> = ({
       <div className="relative flex items-center justify-between gap-2">
         <div className="flex items-center gap-2 min-w-0">
           <div
-            className={`w-7 h-7 rounded-lg flex items-center justify-center shrink-0 ${
+            className={`w-9 h-9 rounded-full flex items-center justify-center shrink-0 ${
               isDark ? 'bg-white/10 text-[#D4AF37]' : `${iconBgClass} ${iconTextClass}`
             }`}
           >
-            <Icon className="w-[14px] h-[14px]" />
+            <Icon className="w-4 h-4" />
           </div>
           <p className={`kpi-label leading-tight truncate ${isDark ? 'text-white/40' : ''}`}>
             {label}
