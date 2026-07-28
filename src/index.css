@@ -267,8 +267,16 @@ body {
   letter-spacing: 0.01em;
 }
 
-/* Buttons — one definitive primary treatment instead of ad-hoc
-   bg-[#D4AF37] strings repeated per file. */
+/* ==========================================================================
+   Button system — SABUSH DESIGN SYSTEM v1.0. One definitive treatment per
+   variant instead of ad-hoc strings repeated per file.
+     .btn-primary   → most important action: gold bg, dark (navy) text,
+                      brighter gold on hover
+     .btn-dark      → navy alternative to primary (rare; used sparingly
+                      where gold would compete with an adjacent primary)
+     .btn-secondary → outline: gray border, hover fills with a light bg
+     .btn-ghost     → no border, minimal — top nav / low-emphasis actions
+   ========================================================================== */
 .btn-primary {
   display: inline-flex;
   align-items: center;
@@ -299,3 +307,35 @@ body {
 }
 .btn-dark:hover { background: var(--navy-soft); }
 .btn-dark:active { transform: scale(0.97); }
+
+.btn-secondary {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 600;
+  border-radius: 10px;
+  background: #FFFFFF;
+  border: 1px solid #D1D5DB;
+  color: #374151;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-secondary:hover { background: #F9FAFB; }
+.btn-secondary:active { transform: scale(0.97); }
+
+.btn-ghost {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+  font-weight: 600;
+  border-radius: 10px;
+  background: transparent;
+  border: none;
+  color: #6B7280;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+.btn-ghost:hover { background: rgba(11,31,58,0.05); color: #0B1F3A; }
+.btn-ghost:active { transform: scale(0.97); }
