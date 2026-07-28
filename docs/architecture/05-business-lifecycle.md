@@ -1,6 +1,6 @@
 # Section 5 — Business Lifecycle
 
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Depends on:** Section 1 (Product Vision) — approved · Section 2 (Core Product Principles) — approved · Section 3 (Domain Architecture) — approved · Section 4 (System Architecture) — approved
 **Purpose:** Describe the complete lifecycle of a business inside Sabush BPT, stage by stage, in terms of the actual domains (Section 3) and system components (Section 4) involved at each stage — so Section 6 (User Architecture) can attach the right permissions to each stage, and Section 8 (Module Architecture) can design each stage's module against a lifecycle everyone has already agreed on.
 
