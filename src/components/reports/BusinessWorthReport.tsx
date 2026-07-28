@@ -146,7 +146,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
 
       {/* Hero Business Worth card */}
       <div className={`border rounded-3xl p-5 sm:p-6 shadow-md ${
-        businessWorth >= 0 ? 'bg-gradient-to-br from-blue-50 to-white border-blue-300' : 'bg-gradient-to-br from-rose-50 to-white border-rose-300'
+        businessWorth >= 0 ? 'bg-gradient-to-br from-[#F6EFD9] to-white border-[#D4AF37]/40' : 'bg-gradient-to-br from-rose-50 to-white border-rose-300'
       }`}>
         <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{t('businessWorth.heroLabel')}</span>
         <div className="text-3xl sm:text-4xl font-black text-gray-900 mt-1">

@@ -189,7 +189,7 @@ export const BatchPerformanceReport: React.FC<Props> = ({ onBack }) => {
           value={searchQuery}
           onChange={e => setSearchQuery(e.target.value)}
           placeholder={t('reports.batchPerformance.searchPlaceholder')}
-          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-blue-500"
+          className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-800 focus:outline-none focus:border-[#D4AF37]"
         />
         <p className="text-[10.5px] text-gray-500 mt-1.5">
           {t('reports.batchPerformance.searchHint')}

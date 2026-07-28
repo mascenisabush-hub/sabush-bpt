@@ -27,14 +27,14 @@ const CATEGORIES: ReportCategoryDef[] = [
     icon: Gem,
     titleKey: 'reports.categories.businessWorth.title',
     descriptionKey: 'reports.categories.businessWorth.description',
-    colorClass: 'bg-blue-50 text-blue-600',
+    colorClass: 'bg-[#0B1F3A]/[0.06] text-[#0B1F3A]',
   },
   {
     key: 'inventory-valuation',
     icon: Boxes,
     titleKey: 'reports.categories.inventoryValuation.title',
     descriptionKey: 'reports.categories.inventoryValuation.description',
-    colorClass: 'bg-blue-50 text-blue-600',
+    colorClass: 'bg-[#0B1F3A]/[0.06] text-[#0B1F3A]',
   },
   {
     key: 'batch-performance',
