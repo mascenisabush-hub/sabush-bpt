@@ -61,15 +61,15 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
 
   return (
     <div className="max-w-2xl mx-auto pb-12">
-      <div className="bg-white border border-gray-200 rounded-2xl p-6 shadow-xl">
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8">
         {/* Title */}
-        <div className="flex items-center space-x-3 pb-5 border-b border-gray-200">
-          <div className="w-10 h-10 rounded-xl bg-blue-500/10 border border-blue-500/30 flex items-center justify-center text-blue-600">
-            <Receipt className="w-6 h-6" />
+        <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
+          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+            <Receipt className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="font-bold text-lg text-gray-900">{t('addExpense.title')}</h2>
-            <p className="text-xs text-gray-500">
+            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">{t('addExpense.title')}</h2>
+            <p className="text-[12px] text-gray-500 mt-0.5">
               {t('addExpense.subtitle')}
             </p>
           </div>
@@ -77,17 +77,17 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
 
         {submittedMessage ? (
           <div className="py-8 text-center space-y-3">
-            <div className="w-12 h-12 rounded-full bg-blue-500/20 text-blue-600 flex items-center justify-center mx-auto">
-              <CheckCircle2 className="w-8 h-8" />
+            <div className="w-12 h-12 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
+              <CheckCircle2 className="w-6 h-6" strokeWidth={2.25} />
             </div>
-            <h3 className="text-lg font-bold text-gray-900">{t('addExpense.registeredTitle')}</h3>
-            <p className="text-sm text-blue-700 max-w-md mx-auto">{submittedMessage}</p>
+            <h3 className="text-lg font-bold text-[#111827]">{t('addExpense.registeredTitle')}</h3>
+            <p className="text-sm text-gray-500 max-w-md mx-auto">{submittedMessage}</p>
           </div>
         ) : (
-          <form onSubmit={handleSubmit} className="space-y-5 my-5">
+          <form onSubmit={handleSubmit} className="space-y-5 mt-5">
             {/* Description */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                 {t('addExpense.descriptionLabel')}
               </label>
               <input
@@ -96,14 +96,14 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                 placeholder={t('addExpense.descriptionPlaceholder')}
                 value={description}
                 onChange={e => setDescription(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]"
               />
             </div>
 
             {/* Date & Amount */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                   {t('addExpense.expenseDate')}
                 </label>
                 <input
@@ -111,12 +111,12 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   required
                   value={date}
                   onChange={e => setDate(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-blue-500"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono"
                 />
               </div>
 
               <div>
-                <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+                <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                   {t('addExpense.amountLabel', { symbol: currencySymbol })}
                 </label>
                 <input
@@ -127,14 +127,14 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   placeholder="0.00"
                   value={amount}
                   onChange={e => setAmount(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm focus:outline-none focus:border-blue-500 font-mono"
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] font-mono tabular-nums"
                 />
               </div>
             </div>
 
             {/* Category Free Text & Suggestion Chips */}
             <div>
-              <label className="block text-xs font-semibold text-gray-700 uppercase tracking-wider mb-1.5">
+              <label className="block text-[10px] font-semibold text-gray-500 uppercase tracking-wide mb-1.5">
                 {t('addExpense.categoryLabel')}
               </label>
               <input
@@ -142,12 +142,12 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                 placeholder={t('addExpense.categoryPlaceholder')}
                 value={category}
                 onChange={e => setCategory(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-xl px-4 py-2.5 text-gray-800 text-sm placeholder-gray-400 focus:outline-none focus:border-blue-500 mb-2"
+                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12] mb-2.5"
               />
 
               {/* Suggestions */}
-              <div className="flex flex-wrap gap-2 mt-2">
-                <span className="text-[11px] text-gray-500 self-center mr-1">{t('addExpense.quickSuggestions')}</span>
+              <div className="flex flex-wrap gap-1.5 mt-2 items-center">
+                <span className="text-[11px] text-gray-400 mr-1">{t('addExpense.quickSuggestions')}</span>
                 {COMMON_CATEGORY_KEYS.map(key => {
                   const label = t(key);
                   return (
@@ -155,7 +155,7 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                       key={key}
                       type="button"
                       onClick={() => setCategory(label)}
-                      className="px-3 py-1.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-medium transition border border-gray-300/60 active:scale-95"
+                      className="px-3 py-1.5 rounded-lg bg-[#FAFBFC] hover:bg-[#D4AF37]/[0.08] text-gray-600 hover:text-[#0B1F3A] text-xs font-semibold transition-all duration-150 border border-[#E5E7EB] hover:border-[#D4AF37]/30 active:scale-95"
                     >
                       {label}
                     </button>
@@ -165,13 +165,13 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
             </div>
 
             {/* Submit Button */}
-            <div className="flex items-center space-x-3 pt-2">
+            <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
-                className="flex-1 min-h-[56px] py-3.5 px-5 rounded-2xl bg-blue-600 hover:bg-blue-500 text-white font-bold text-base transition shadow-lg shadow-blue-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+                className="btn-primary flex-1 min-h-[52px] py-3.5 px-5 text-[15px] rounded-2xl"
               >
                 <span>{t('addExpense.submitButton')}</span>
-                <ArrowRight className="w-5 h-5" />
+                <ArrowRight className="w-5 h-5" strokeWidth={2.25} />
               </button>
             </div>
           </form>
