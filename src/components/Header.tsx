@@ -123,8 +123,8 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               aria-hidden="true"
             >
               <div className="relative w-full">
-                <Search className="w-4 h-4 absolute left-3.5 top-1/2 -translate-y-1/2 text-gray-400" />
-                <div className="w-full bg-[#F5F7FA]/70 border border-transparent rounded-xl pl-10 pr-4 py-2.5 text-sm text-gray-400 font-medium">
+                <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
+                <div className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3.5 py-1.5 text-[13px] text-gray-400 font-medium">
                   {t('header.searchPlaceholder')}
                 </div>
               </div>
@@ -228,12 +228,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
                     isActive
                       ? 'bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
-                      : 'bg-[#F5F7FA] text-gray-600 hover:bg-[#0B1F3A]/[0.06] hover:text-[#0B1F3A]'
+                      : 'bg-transparent text-gray-600 hover:bg-[#0B1F3A]/[0.05] hover:text-[#0B1F3A]'
                   }`}
                 >
                   <span
                     className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 transition-colors duration-150 ${
-                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-white text-[#0B1F3A]'
+                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-[#F5F7FA] text-[#0B1F3A]'
                     }`}
                   >
                     <Icon className="w-4 h-4" strokeWidth={2.25} />
