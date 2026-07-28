@@ -274,26 +274,20 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             <LanguageSwitcher />
           </div>
 
-          {/* Brand Header — cinematic logo reveal: a slow-rotating blue
-              conic halo and a soft breathing glow sit behind the logo, a
-              light sweep glare passes across it periodically, and the logo
-              itself settles into place with a one-time entrance animation
-              on mount. */}
+          {/* Brand Header — the banner ships with its own near-black navy
+              background (matches this screen's own bg almost exactly), so
+              it's shown as a clean framed image rather than composited
+              with the old halo/glow treatment built for a transparent icon
+              — that combination made the artwork read as busy/hard to
+              read. A subtle border + shadow keeps it crisp instead. */}
           <div className="flex flex-col items-center text-center mb-5 relative z-10">
-            <div className="relative w-full flex items-center justify-center av-logo-stage" style={{ perspective: '900px' }}>
-              <div className="av-halo" />
-              <div className="av-halo-breathe" />
-              <div className="relative av-logo-wrap">
-                <img
-                  src="/branding/sabush-tech-full-logo.png"
-                  alt="Sabush Tech"
-                  draggable={false}
-                  className="relative w-full max-w-[280px] sm:max-w-[320px] h-auto select-none av-logo-img"
-                />
-                <div className="av-sweep" />
-              </div>
-            </div>
-            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white mt-1">
+            <img
+              src="/branding/sabush-tech-banner.png"
+              alt="Sabush Tech"
+              draggable={false}
+              className="w-full max-w-[300px] sm:max-w-[340px] h-auto select-none rounded-2xl border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.5)]"
+            />
+            <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white mt-4">
               Batch Profit Tracker
             </h1>
             <p className="text-xs text-slate-400 mt-1 max-w-[280px]">
@@ -666,74 +660,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           background: radial-gradient(ellipse 90% 80% at 50% 45%, transparent 40%, rgba(0,2,15,0.55) 100%);
         }
 
-        /* ---- Logo halo: rotating ring + separate breathing glow ---- */
-        .av-logo-stage { min-height: 168px; }
-        .av-halo {
-          position: absolute; top: 50%; left: 50%;
-          width: 420px; height: 420px;
-          transform: translate(-50%, -50%);
-          background: conic-gradient(from 0deg,
-            rgba(212,175,55,0) 0deg, rgba(255,140,66,0.55) 55deg, rgba(11,31,58,0.5) 130deg,
-            rgba(212,175,55,0) 210deg, rgba(255,140,66,0.4) 290deg, rgba(212,175,55,0) 360deg);
-          filter: blur(38px);
-          mix-blend-mode: screen;
-          opacity: 0.85;
-          animation: av-halo-spin 16s linear infinite;
-          z-index: 0;
-        }
-        @keyframes av-halo-spin { from { transform: translate(-50%,-50%) rotate(0deg); } to { transform: translate(-50%,-50%) rotate(360deg); } }
-        .av-halo-breathe {
-          position: absolute; top: 50%; left: 50%;
-          width: 260px; height: 260px;
-          transform: translate(-50%, -50%) scale(1);
-          border-radius: 9999px;
-          background: radial-gradient(circle, rgba(59,130,246,0.45), transparent 70%);
-          filter: blur(22px);
-          animation: av-breathe 4.5s ease-in-out infinite;
-          z-index: 0;
-        }
-        @keyframes av-breathe {
-          0%, 100% { opacity: 0.5; transform: translate(-50%,-50%) scale(1); }
-          50% { opacity: 0.9; transform: translate(-50%,-50%) scale(1.12); }
-        }
-
-        /* ---- Logo entrance: fades/settles into place once on mount ---- */
-        .av-logo-wrap { z-index: 1; }
-        .av-logo-img {
-          animation: av-logo-in 1.1s cubic-bezier(0.16, 1, 0.3, 1) both;
-          filter: drop-shadow(0 0 24px rgba(59,130,246,0.35));
-        }
-        @keyframes av-logo-in {
-          0% { opacity: 0; transform: scale(0.82) rotateX(14deg) translateY(16px); filter: blur(6px) drop-shadow(0 0 0 rgba(59,130,246,0)); }
-          65% { opacity: 1; filter: blur(0px) drop-shadow(0 0 24px rgba(59,130,246,0.35)); }
-          100% { opacity: 1; transform: scale(1) rotateX(0deg) translateY(0); filter: blur(0px) drop-shadow(0 0 24px rgba(59,130,246,0.35)); }
-        }
-
-        /* ---- Periodic light sweep glare across the logo ---- */
-        .av-sweep {
-          position: absolute; inset: 0;
-          overflow: hidden;
-          pointer-events: none;
-          z-index: 2;
-        }
-        .av-sweep::before {
-          content: '';
-          position: absolute;
-          top: -60%; left: -60%;
-          width: 35%; height: 220%;
-          background: linear-gradient(75deg, transparent, rgba(255,255,255,0.30), rgba(147,197,253,0.22), transparent);
-          transform: rotate(8deg);
-          animation: av-sweep-move 7s ease-in-out infinite;
-          animation-delay: 1.4s;
-        }
-        @keyframes av-sweep-move {
-          0% { left: -60%; opacity: 0; }
-          6% { opacity: 1; }
-          20% { left: 130%; opacity: 1; }
-          26% { opacity: 0; }
-          100% { left: 130%; opacity: 0; }
-        }
-
         /* ---- Glass card ---- */
         .av-card {
           background: rgba(255,255,255,0.045);
@@ -744,7 +670,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         }
 
         @media (prefers-reduced-motion: reduce) {
-          .av-orb, .av-rays, .av-conic, .av-halo, .av-halo-breathe, .av-logo-img, .av-sweep::before {
+          .av-orb, .av-rays, .av-conic {
             animation: none !important;
           }
         }
