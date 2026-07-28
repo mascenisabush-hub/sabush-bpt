@@ -165,46 +165,57 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   if (savedMessage) {
     return (
       <div className="max-w-2xl mx-auto py-16 flex flex-col items-center text-center space-y-3">
-        <CheckCircle2 className="w-14 h-14 text-emerald-600" />
-        <h2 className="text-lg font-bold text-gray-900">{savedMessage}</h2>
+        <div className="w-14 h-14 rounded-full bg-emerald-50 flex items-center justify-center">
+          <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
+        </div>
+        <h2 className="text-lg font-bold text-[#111827]">{savedMessage}</h2>
         <p className="text-sm text-gray-500">
-          Valor da Contagem: <span className="font-bold text-gray-800">{formatCurrency(savedTotal, currencySymbol)}</span>
+          Valor da Contagem:{' '}
+          <span className="font-display font-semibold text-[#0B1F3A] tabular-nums">
+            {formatCurrency(savedTotal, currencySymbol)}
+          </span>
         </p>
       </div>
     );
   }
 
+  // Shared field treatment — identical to Initial Stock Count so the two
+  // counting screens read as one consistent system.
+  const fieldClass =
+    'w-full bg-white border border-[#E5E7EB] rounded-[9px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
+    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-4 focus:ring-[#D4AF37]/[0.12]';
+  const fieldLabelClass = 'block text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1';
+  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
+
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-4">
-      <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-xl space-y-4">
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-6">
         {/* Header */}
-        <div className="flex items-center justify-between pb-3 border-b border-gray-200 flex-wrap gap-2">
-          <div className="flex items-center space-x-3">
-            <div className="w-9 h-9 rounded-xl bg-indigo-500/10 border border-indigo-500/30 flex items-center justify-center text-indigo-600 shrink-0">
-              <ClipboardList className="w-5 h-5" />
-            </div>
-            <div>
-              <h2 className="font-bold text-base text-gray-900">Contagem de Stock Periódica</h2>
-              <p className="text-[11px] text-gray-500">
-                Registe uma nova contagem física para acompanhar a evolução do seu capital.
-              </p>
-            </div>
+        <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
+          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+            <ClipboardList className="w-5 h-5" strokeWidth={2} />
+          </div>
+          <div className="min-w-0">
+            <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight">Contagem de Stock Periódica</h2>
+            <p className="text-[12px] text-gray-500 mt-0.5">
+              Registe uma nova contagem física para acompanhar a evolução do seu capital.
+            </p>
           </div>
         </div>
 
         {!hasInitialStockCount && (
-          <div className="bg-amber-50 border border-amber-500/30 rounded-xl p-3 flex items-start space-x-2 text-xs text-gray-700">
-            <Info className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
-            <p>
-              Ainda não definiu o <strong>Capital Inicial</strong>. Esta contagem será guardada, mas recomendamos
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5 text-xs text-gray-700">
+            <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+            <p className="leading-relaxed">
+              Ainda não definiu o <strong className="text-[#111827] font-semibold">Capital Inicial</strong>. Esta contagem será guardada, mas recomendamos
               registar primeiro o Capital Inicial no Painel para poder comparar corretamente o crescimento do negócio.
             </p>
           </div>
         )}
 
-        <div className="bg-indigo-50 border border-indigo-500/20 rounded-xl p-3 flex items-start space-x-2 text-xs text-gray-700">
-          <Info className="w-4 h-4 text-indigo-600 shrink-0 mt-0.5" />
-          <p>
+        <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
+          <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
+          <p className="text-[12px] leading-relaxed text-gray-600">
             Esta contagem regista o que existe fisicamente em stock agora. Será comparada com{' '}
             {mostRecentCount ? 'a contagem mais recente' : 'o Capital Inicial'} para mostrar se o valor do seu
             inventário cresceu ou diminuiu.
@@ -212,21 +223,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         </div>
 
         {error && (
-          <div className="p-2.5 rounded-xl bg-rose-500/10 border border-rose-500/30 text-rose-700 text-xs">
+          <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12.5px] font-medium">
             {error}
           </div>
         )}
 
-        <form onSubmit={handleSubmit} className="space-y-4">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 max-w-2xl">
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                Tipo de Contagem
-              </label>
+              <label className={fieldLabelClass}>Tipo de Contagem</label>
               <select
                 value={type}
                 onChange={(e) => setType(e.target.value as StockCountType)}
-                className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 text-xs font-semibold"
+                className={`${fieldClass} font-semibold`}
               >
                 {TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -237,135 +246,142 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
 
             <div>
-              <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                Data da Contagem
-              </label>
+              <label className={fieldLabelClass}>Data da Contagem</label>
               <input
                 type="date"
                 required
                 value={date}
                 onChange={(e) => setDate(e.target.value)}
-                className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-800 text-xs font-mono"
+                className={`${fieldClass} font-mono tabular-nums`}
               />
             </div>
 
             {type === 'custom' && (
               <div className="col-span-2 sm:col-span-1">
-                <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                  Nome da Contagem
-                </label>
+                <label className={fieldLabelClass}>Nome da Contagem</label>
                 <input
                   type="text"
                   placeholder="Ex: Antes do Natal"
                   value={label}
                   onChange={(e) => setLabel(e.target.value)}
-                  className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs"
+                  className={fieldClass}
                 />
               </div>
             )}
           </div>
 
-          <div className="space-y-2">
-            {rows.map((row, idx) => (
-              <div key={row.id} className="bg-slate-50 border border-gray-100 rounded-xl p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <span className="text-[10px] font-bold text-gray-400 uppercase">Produto #{idx + 1}</span>
-                  {rows.length > 1 && (
-                    <button
-                      type="button"
-                      onClick={() => handleRemoveRow(row.id)}
-                      className="p-1 text-rose-500 hover:text-rose-700 hover:bg-rose-50 rounded-lg transition"
-                    >
-                      <Trash2 className="w-3.5 h-3.5" />
-                    </button>
-                  )}
-                </div>
+          {/* Product grid — same column-aligned system as Initial Stock Count */}
+          <div>
+            <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 border-b border-[#E5E7EB]`}>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Nome</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Qtd</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Unid</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Custo/Un</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Valor Total</span>
+              <span />
+            </div>
 
-                <div className="grid grid-cols-2 sm:grid-cols-4 gap-2">
+            <div className="space-y-1">
+              {rows.map((row, idx) => (
+                <div
+                  key={row.id}
+                  className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
+                >
                   <div className="col-span-2 sm:col-span-1">
-                    <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Nome</label>
+                    <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
                     <input
                       type="text"
                       placeholder="Ex: Arroz"
                       value={row.productName}
                       onChange={(e) => updateRow(row.id, { productName: e.target.value })}
-                      className="w-full bg-white border border-gray-200 rounded-lg px-2.5 py-1.5 text-gray-900 text-xs"
+                      className={fieldClass}
                     />
                   </div>
 
-                  <div className="flex gap-1">
-                    <div className="flex-1">
-                      <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Qtd</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={row.quantity}
-                        onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
-                      />
-                    </div>
-                    <div className="w-16">
-                      <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Unid</label>
-                      <input
-                        type="text"
-                        value={row.unit}
-                        onChange={(e) => updateRow(row.id, { unit: e.target.value })}
-                        className="w-full bg-white border border-gray-200 rounded-lg px-1 py-1 text-gray-800 text-xs text-center font-mono"
-                      />
-                    </div>
+                  <div>
+                    <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.quantity}
+                      onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+                      className={`${fieldClass} font-mono tabular-nums`}
+                    />
                   </div>
 
                   <div>
-                    <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">
-                      Custo/Un ({currencySymbol})
-                    </label>
+                    <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
+                    <input
+                      type="text"
+                      value={row.unit}
+                      onChange={(e) => updateRow(row.id, { unit: e.target.value })}
+                      className={`${fieldClass} font-mono text-center`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`${fieldLabelClass} sm:hidden`}>Custo/Un ({currencySymbol})</label>
                     <input
                       type="number"
                       min="0"
                       step="0.01"
                       value={row.costPrice}
                       onChange={(e) => updateRow(row.id, { costPrice: e.target.value })}
-                      className="w-full bg-white border border-gray-200 rounded-lg px-2 py-1 text-gray-800 text-xs font-mono"
+                      className={`${fieldClass} font-mono tabular-nums`}
                     />
                   </div>
 
-                  <div>
-                    <label className="block text-[10px] text-gray-500 font-semibold uppercase mb-0.5">Valor Total</label>
-                    <div className="w-full bg-gray-100 border border-gray-200 rounded-lg px-2 py-1.5 text-gray-700 text-xs font-mono font-bold">
-                      {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
+                  <div className="flex items-end gap-1.5">
+                    <div className="flex-1 min-w-0">
+                      <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
+                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[9px] px-2.5 py-2 text-[#0B1F3A] text-[13px] font-mono font-bold tabular-nums truncate">
+                        {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
+                      </div>
                     </div>
+                    {rows.length > 1 && (
+                      <button
+                        type="button"
+                        onClick={() => handleRemoveRow(row.id)}
+                        aria-label={`Remover produto ${idx + 1}`}
+                        className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                      >
+                        <Trash2 className="w-3.5 h-3.5" />
+                      </button>
+                    )}
                   </div>
                 </div>
-              </div>
-            ))}
+              ))}
+            </div>
           </div>
 
           <button
             type="button"
             onClick={handleAddRow}
-            className="w-full py-2 px-3 rounded-xl border border-dashed border-gray-200 hover:border-indigo-500/60 hover:bg-indigo-50 text-gray-700 hover:text-indigo-700 font-bold text-xs transition flex items-center justify-center space-x-2 group"
+            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
           >
-            <Plus className="w-4 h-4 text-indigo-600 group-hover:scale-110 transition-transform" />
-            <span>+ Adicionar outro produto</span>
+            <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
+            <span>Adicionar outro produto</span>
           </button>
 
-          <div className="bg-white border-2 border-indigo-500/30 rounded-xl px-4 py-3 space-y-2">
-            <div className="flex items-center justify-between gap-2">
-              <span className="font-bold text-gray-800 text-sm">Valor Total da Contagem</span>
-              <span className="font-black text-lg text-indigo-700 font-mono">
+          {/* Total + comparison — hero serif figure, comparison line below a
+              thin divider so both fit within the same navy surface. */}
+          <div className="bg-[#0B1F3A] rounded-2xl px-5 py-4 space-y-3">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-semibold text-white/70 text-[13px]">Valor Total da Contagem</span>
+              <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#D4AF37] tabular-nums leading-none">
                 {formatCurrency(totalValue, currencySymbol)}
               </span>
             </div>
 
             {(hasInitialStockCount || mostRecentCount) && (
-              <div className="flex items-center justify-between gap-2 pt-2 border-t border-gray-100 text-xs">
-                <span className="text-gray-500">
+              <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/10 text-xs">
+                <span className="text-white/50">
                   vs. {mostRecentCount ? `última contagem (${formatDate(mostRecentCount.date)})` : 'Capital Inicial'}
                 </span>
                 <span
-                  className={`font-bold font-mono flex items-center gap-1 ${
-                    diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-500'
+                  className={`font-bold font-mono tabular-nums flex items-center gap-1 ${
+                    diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-white/50'
                   }`}
                 >
                   {diff > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : diff < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
@@ -380,43 +396,43 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           <button
             type="submit"
             disabled={isSaving}
-            className="w-full py-3 px-4 rounded-xl bg-indigo-600 hover:bg-indigo-500 disabled:opacity-60 text-white font-bold text-sm transition shadow-lg shadow-indigo-50 flex items-center justify-center space-x-2 active:scale-[0.98]"
+            className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span>{isSaving ? 'A guardar...' : `Confirmar Contagem ${TYPE_LABELS[type]}`}</span>
-            <ArrowRight className="w-4 h-4" />
+            <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
           </button>
         </form>
       </div>
 
       {/* History */}
       {pastCounts.length > 0 && (
-        <div className="bg-white border border-gray-200 rounded-2xl p-3 sm:p-5 shadow-xl">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-6">
           <button
             type="button"
             onClick={() => setShowHistory((v) => !v)}
             className="w-full flex items-center justify-between"
           >
-            <div className="flex items-center space-x-2">
-              <History className="w-4 h-4 text-gray-500" />
-              <span className="font-bold text-sm text-gray-800">Histórico de Contagens ({pastCounts.length})</span>
+            <div className="flex items-center gap-2.5">
+              <History className="w-4 h-4 text-gray-400" strokeWidth={2.25} />
+              <span className="font-bold text-sm text-[#111827]">Histórico de Contagens ({pastCounts.length})</span>
             </div>
             {showHistory ? <ChevronUp className="w-4 h-4 text-gray-400" /> : <ChevronDown className="w-4 h-4 text-gray-400" />}
           </button>
 
           {showHistory && (
-            <div className="mt-3 space-y-2">
+            <div className="mt-4 space-y-1">
               {pastCounts.map((count) => (
                 <div
                   key={count.id}
-                  className="flex items-center justify-between gap-2 bg-slate-50 border border-gray-100 rounded-xl px-3 py-2"
+                  className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]"
                 >
                   <div>
-                    <p className="text-xs font-bold text-gray-800">
+                    <p className="text-xs font-bold text-[#111827]">
                       {count.label || TYPE_LABELS[count.type]}
                     </p>
-                    <p className="text-[10px] text-gray-500">{formatDate(count.date)} · {count.items.length} produtos</p>
+                    <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(count.date)} · {count.items.length} produtos</p>
                   </div>
-                  <span className="font-mono font-bold text-sm text-gray-700">
+                  <span className="font-mono font-bold text-sm text-[#111827] tabular-nums">
                     {formatCurrency(count.totalValue, currencySymbol)}
                   </span>
                 </div>
