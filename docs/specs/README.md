@@ -80,7 +80,7 @@ intelligence), then build the platform capabilities around that.
 |---|---|---|
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Multi-Shop](./17-multi-shop.md) | Drafted — awaiting approval |
-| 18 | SuperAdmin | Not started |
+| 18 | [SuperAdmin](./18-superadmin.md) | Drafted — awaiting approval |
 | 19 | Subscriptions | Not started |
 | 20 | Notifications | Not started |
 

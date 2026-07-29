@@ -12,7 +12,8 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Spec drafted, awaiting approval. No implementation started.
+**Status:** Two specs drafted, awaiting approval. No implementation
+started on either.
 
 **Last completed:** Module #16 (Staff & Roles) — spec approved and fully
 implemented (types, firestore.rules, server/index.ts, AppContext.tsx,
@@ -25,12 +26,34 @@ already-implemented state (`ShopSwitcher.tsx`, `addShop`/`switchShop` in
 `AppContext.tsx`, `firestore.rules` enforcement) plus one flagged gap
 (no shop-removal/archival flow) and one real i18n gap (`ShopSwitcher`'s
 hardcoded Portuguese strings). Awaiting explicit approval before any
-implementation begins. Module #15 (AI Intelligence) remains drafted but
-deliberately not implemented — blocked on Background Worker,
-SuperAdmin Feature Flags, Subscriptions, and Notifications, none of
-which exist yet. Confirmed build order: #17 → #18 (SuperAdmin) → #19
-(Subscriptions) → #20 (Notifications) → #15 (AI) last, once its real
-prerequisites exist.
+implementation begins.
+
+Module #18 (SuperAdmin) — BDS spec now drafted (`docs/specs/18-superadmin.md`),
+grounded in `docs/architecture/09-superadmin-architecture.md`. This is
+genuinely greenfield — confirmed by search, zero SuperAdmin/platform-
+scoped code exists anywhere in `src/`, `server/`, or `firestore.rules`.
+**Awaiting architectural approval before any implementation begins** —
+per explicit instruction, no code, Firestore Rules, or schema was
+touched while drafting this spec.
+
+**Flagged discrepancy (needs a PM decision, not an engineering one):**
+a prior version of this file stated a "confirmed build order" of
+`#17 → #18 (SuperAdmin) → #19 (Subscriptions) → #20 (Notifications)`.
+That order directly contradicts Architecture Development Strategy
+13.2 (rule 1) and 13.6, both of which state Phase 2 (SuperAdmin)
+is *blocked on* Phase 1 (Subscriptions, Notifications) already holding
+real data — specifically because SuperAdmin's own Subscriptions &
+Billing (9.4) and platform-side Notifications (9.9) screens are
+designed to read those collections, not mock them. The spec for #18 is
+drafted regardless, since drafting a design document has no such
+dependency — but **Phase 2 implementation of #18 should not begin
+before #19 and #20 have real data**, regardless of numbering order.
+This is noted in `docs/specs/18-superadmin.md` itself and repeated here
+so it isn't missed in a quick read.
+
+Module #15 (AI Intelligence) remains drafted but deliberately not
+implemented — blocked on Background Worker, SuperAdmin Feature Flags,
+Subscriptions, and Notifications, none of which exist yet.
 
 **Anything mid-flight / blocked:** Nothing. No open PRs, no half-finished
 edits, no pending decisions waiting on the PM.
