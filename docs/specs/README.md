@@ -33,8 +33,8 @@ intelligence), then build the platform capabilities around that.
 |---|---|---|
 | 1 | [Dashboard](./01-dashboard.md) | ✅ Approved |
 | 2 | [Business Worth Engine](./02-business-worth-engine.md) | ✅ Approved |
-| 3 | [Products](./03-products.md) | Drafted — awaiting approval |
-| 4 | Purchase Batches | Not started |
+| 3 | [Products](./03-products.md) | ✅ Approved |
+| 4 | [Purchase Batches](./04-purchase-batches.md) | Drafted — awaiting approval |
 | 5 | Stock Batches | Not started |
 | 6 | Embedded Profit Engine | Not started |
 
