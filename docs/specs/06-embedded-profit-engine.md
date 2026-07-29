@@ -3,7 +3,7 @@ Business Domain Specification
 # Embedded Profit Engine
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #6 of 20 — Phase 1: Core Business Intelligence**
 **Architecture references:** [Section 1](../architecture/01-product-vision.md)
 (Embedded Profit as a named Mission scale target), [Section 3.6](../architecture/03-domain-architecture.md)

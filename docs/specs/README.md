@@ -36,13 +36,13 @@ intelligence), then build the platform capabilities around that.
 | 3 | [Products](./03-products.md) | ✅ Approved |
 | 4 | [Purchase Batches](./04-purchase-batches.md) | ✅ Approved |
 | 5 | [Stock Batches](./05-stock-batches.md) | ✅ Approved |
-| 6 | [Embedded Profit Engine](./06-embedded-profit-engine.md) | Drafted — awaiting approval |
+| 6 | [Embedded Profit Engine](./06-embedded-profit-engine.md) | ✅ Approved |
 
 ## Phase 2 — Capital Protection
 
 | # | Module | Status |
 |---|---|---|
-| 7 | Breakages (Quebras) | Not started |
+| 7 | [Breakages (Quebras)](./07-breakages.md) | Drafted — awaiting approval |
 | 8 | Expenses | Not started |
 | 9 | Withdrawals | Not started |
 | 10 | Stock Counts | Not started |
