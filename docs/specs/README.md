@@ -35,8 +35,8 @@ intelligence), then build the platform capabilities around that.
 | 2 | [Business Worth Engine](./02-business-worth-engine.md) | ✅ Approved |
 | 3 | [Products](./03-products.md) | ✅ Approved |
 | 4 | [Purchase Batches](./04-purchase-batches.md) | ✅ Approved |
-| 5 | [Stock Batches](./05-stock-batches.md) | Drafted — awaiting approval |
-| 6 | Embedded Profit Engine | Not started |
+| 5 | [Stock Batches](./05-stock-batches.md) | ✅ Approved |
+| 6 | [Embedded Profit Engine](./06-embedded-profit-engine.md) | Drafted — awaiting approval |
 
 ## Phase 2 — Capital Protection
 

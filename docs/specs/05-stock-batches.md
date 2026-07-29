@@ -3,7 +3,7 @@ Business Domain Specification
 # Stock Batches
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #5 of 20 — Phase 1: Core Business Intelligence**
 **Architecture references:** [Section 3.6](../architecture/03-domain-architecture.md)
 (Stock Batches domain), [Section 2.4 & 7.1](../architecture/02-core-product-principles.md)
