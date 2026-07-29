@@ -46,13 +46,13 @@ intelligence), then build the platform capabilities around that.
 | 8 | [Expenses](./08-expenses.md) | ✅ Approved |
 | 9 | [Withdrawals](./09-withdrawals.md) | ✅ Approved |
 | 10 | [Stock Counts](./10-stock-counts.md) | ✅ Approved |
-| 11 | [Monthly Closings](./11-monthly-closings.md) | Drafted — awaiting approval |
+| 11 | [Monthly Closings](./11-monthly-closings.md) | ✅ Approved |
 
 ## Phase 3 — Insight & Decision Support
 
 | # | Module | Status |
 |---|---|---|
-| 12 | Reports | Not started |
+| 12 | [Reports](./12-reports.md) | Drafted — awaiting approval |
 | 13 | Business Timeline | Not started |
 | 14 | Analytics | Not started |
 | 15 | AI Intelligence | Not started |

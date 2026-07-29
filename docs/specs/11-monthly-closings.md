@@ -3,7 +3,7 @@ Business Domain Specification
 # Monthly Closings
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #11 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.8.4](../architecture/03-domain-architecture.md)
 (Closings domain — "Permanently locks a month or year's figures and
