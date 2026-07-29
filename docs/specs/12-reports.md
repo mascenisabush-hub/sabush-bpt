@@ -3,7 +3,7 @@ Business Domain Specification
 # Reports
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #12 of 20 — Phase 3: Insight & Decision Support**
 **Architecture references:** [Section 3.9](../architecture/03-domain-architecture.md)
 (Reports domain — "Derived, read-only views... Aggregation and

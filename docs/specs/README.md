@@ -52,8 +52,8 @@ intelligence), then build the platform capabilities around that.
 
 | # | Module | Status |
 |---|---|---|
-| 12 | [Reports](./12-reports.md) | Drafted — awaiting approval |
-| 13 | Business Timeline | Not started |
+| 12 | [Reports](./12-reports.md) | ✅ Approved |
+| 13 | [Business Timeline](./13-business-timeline.md) | Drafted — awaiting approval |
 | 14 | Analytics | Not started |
 | 15 | AI Intelligence | Not started |
 
