@@ -3,7 +3,7 @@ Business Domain Specification
 # Withdrawals
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #9 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.8.2](../architecture/03-domain-architecture.md)
 (Withdrawals domain), [Section 6.1, 6.3 & 6.8](../architecture/06-user-architecture.md)
