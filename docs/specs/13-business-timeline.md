@@ -3,7 +3,7 @@ Business Domain Specification
 # Business Timeline
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #13 of 20 — Phase 3: Insight & Decision Support**
 **Architecture references:** [Section 3.10](../architecture/03-domain-architecture.md)
 (Timeline domain — "append-only, chronological narrative of every

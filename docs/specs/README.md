@@ -53,9 +53,26 @@ intelligence), then build the platform capabilities around that.
 | # | Module | Status |
 |---|---|---|
 | 12 | [Reports](./12-reports.md) | ✅ Approved |
-| 13 | [Business Timeline](./13-business-timeline.md) | Drafted — awaiting approval |
-| 14 | Analytics | Not started |
-| 15 | AI Intelligence | Not started |
+| 13 | [Business Timeline](./13-business-timeline.md) | ✅ Approved |
+| 14 | Analytics | ⚠️ Deferred — see note below |
+| 15 | [AI Intelligence](./15-ai-intelligence.md) | Drafted — awaiting approval |
+
+> **Note on module 14 (Analytics):** Architecture [Section 3.16](../architecture/03-domain-architecture.md)
+> defines Analytics as a *platform-wide* domain ("aggregate measurement —
+> adoption, growth, churn signals, feature usage — for Sabush's own
+> product and business decisions"), explicitly distinct from AI (3.15,
+> tenant insight) and Reports (3.9, single-business insight). [Section
+> 8](../architecture/08-module-architecture.md) confirms Analytics "has
+> no module yet" and is out of scope until Sections 9/10/13 schedule its
+> build; [Section 9.8](../architecture/09-superadmin-architecture.md)
+> designs it as "Platform Analytics" inside the SuperAdmin application,
+> reading only from `platform_aggregates`; and
+> [Section 13](../architecture/13-development-strategy.md)'s own phase
+> table places it in **Phase 2 — SuperAdmin**, not Phase 3. There is no
+> tenant-facing Analytics module for this series to spec — writing one
+> would invent scope Architecture never described. Its BDS belongs
+> alongside module #18 (SuperAdmin) when that application is built as a
+> coherent unit. Deferred, not skipped silently.
 
 ## Phase 4 — Platform
 
