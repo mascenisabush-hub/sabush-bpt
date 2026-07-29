@@ -3,7 +3,7 @@ Business Domain Specification
 # Breakages (Quebras)
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #7 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.7](../architecture/03-domain-architecture.md)
 (Breakages/Quebras domain), [Section 6.8](../architecture/06-user-architecture.md)

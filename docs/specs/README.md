@@ -42,8 +42,8 @@ intelligence), then build the platform capabilities around that.
 
 | # | Module | Status |
 |---|---|---|
-| 7 | [Breakages (Quebras)](./07-breakages.md) | Drafted — awaiting approval |
-| 8 | Expenses | Not started |
+| 7 | [Breakages (Quebras)](./07-breakages.md) | ✅ Approved |
+| 8 | [Expenses](./08-expenses.md) | Drafted — awaiting approval |
 | 9 | Withdrawals | Not started |
 | 10 | Stock Counts | Not started |
 | 11 | Monthly Closings | Not started |
