@@ -3,7 +3,7 @@ Business Domain Specification
 # Purchase Batches
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #4 of 20 — Phase 1: Core Business Intelligence**
 **Architecture references:** [Section 3.5](../architecture/03-domain-architecture.md)
 (Purchase Batches domain), [Section 2.6](../architecture/02-core-product-principles.md)
