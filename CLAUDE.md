@@ -1,9 +1,19 @@
 # CLAUDE.md — Read this first, every session
 
 This file exists so no session starts from zero. Read it, then read
-`docs/specs/README.md` for current module status (that file, not this
+**`HANDOFF.md`** for exactly what's in progress right now (mid-task
+state, blockers, what the last session stopped on), then read
+`docs/specs/README.md` for full module status (that file, not this
 one, is the source of truth for what's approved/implemented — this file
 just tells you *how* to work, not *where things stand today*).
+
+If multiple people/accounts work this repo: `HANDOFF.md` is the actual
+hand-off mechanism between sessions and between engineers — it's
+overwritten (not appended) each session, so it never requires reading
+old chat history to know where things stand. Chat memory does not
+transfer between separate Claude accounts or even between separate
+Projects/chats for the same account; the repo is the only thing that
+reliably does.
 
 ## Who you are here
 
@@ -97,15 +107,20 @@ deliberately deferred to the SuperAdmin phase per Architecture 3.16/8/9.8.)
 ## Session start checklist
 
 1. `git pull` — repo state, not chat memory, is ground truth.
-2. Read `docs/specs/README.md` for current status.
-3. If picking up a module: read its spec in `docs/specs/`, confirm the
+2. Read `HANDOFF.md` — is anything mid-flight? Any blockers left for you?
+3. Read `docs/specs/README.md` for full module status.
+4. If picking up a module: read its spec in `docs/specs/`, confirm the
    relevant files against the actual current code (don't assume from a
    past session's summary — code may have changed).
-4. Follow Rule 8 before touching anything.
-5. Typecheck (`npx tsc --noEmit -p .`) and build (`npm run build`)
+5. Follow Rule 8 before touching anything.
+6. Typecheck (`npx tsc --noEmit -p .`) and build (`npm run build`)
    before committing. Don't commit red.
-6. Commit with a message that names the spec/module and summarizes what
-   changed; push; report using the format above; stop.
+7. Commit with a message that names the spec/module and summarizes what
+   changed; push.
+8. **Update `HANDOFF.md`** with the current "right now" state — this is
+   not optional, it's the thing that makes the next session (yours or
+   someone else's) fast instead of expensive.
+9. Report using the format above; stop.
 
 ## Security note
 
