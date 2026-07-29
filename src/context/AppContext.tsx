@@ -34,6 +34,8 @@ import {
   TimelineActivityType,
   TimelineFinancialImpact,
   PairedDevice,
+  StaffTier,
+  ManagerPermissions,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
@@ -99,6 +101,14 @@ interface AppContextType {
   isAuthLoading: boolean;
   isOwner: boolean;
   isStaff: boolean;
+  // BDS #16 — Manager is a Staff account with staffTier === 'manager'.
+  // isManager is true regardless of which permissions are granted; the
+  // two derived booleans below reflect the actual per-permission grants
+  // (both false for every plain Staff account and for a Manager with
+  // nothing granted yet).
+  isManager: boolean;
+  canManagerCloseBooks: boolean;
+  canManagerManageStaff: boolean;
   products: Product[];
   batches: StockBatch[];
   purchaseBatches: PurchaseBatch[];
@@ -162,6 +172,11 @@ interface AppContextType {
   suspendStaffMember: (staffUid: string, reason?: string) => Promise<void>;
   reactivateStaffMember: (staffUid: string) => Promise<void>;
   resetStaffPin: (staffUid: string, newPin: string) => Promise<void>;
+  // BDS #16 — Admin-only. Promotes/demotes a Staff member's tier and, for
+  // 'manager', sets which permissions are granted. Passing 'staff'
+  // always clears both permissions server-side, regardless of what's
+  // passed in managerPermissions.
+  setStaffTier: (staffUid: string, staffTier: StaffTier, managerPermissions?: Partial<ManagerPermissions>) => Promise<void>;
   // Device pairing for PIN-based quick login (shared shop devices) — see
   // AppContext's DEVICE PAIRING section for details. null on devices that
   // have never been paired (e.g. a staff member's personal phone).
@@ -210,6 +225,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const isOwner = userProfile?.role === 'owner';
   const isStaff = userProfile?.role === 'staff';
+  // BDS #16 — additive on top of isStaff, never a replacement for it.
+  // Every existing `isStaff` check in the app is unaffected; these three
+  // are new, narrower checks used only where Manager delegation applies.
+  const isManager = isStaff && userProfile?.staffTier === 'manager';
+  const canManagerCloseBooks = isManager && userProfile?.managerPermissions?.closings === true;
+  const canManagerManageStaff = isManager && userProfile?.managerPermissions?.staffManagement === true;
 
   const MAX_SHOPS_PER_OWNER = 10;
 
@@ -1343,7 +1364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
 
   const addStaffMember = async (name: string, email: string, password: string) => {
-    if (!activeBusinessId || !isOwner) throw new Error('Apenas o dono pode adicionar funcionários.');
+    if (!activeBusinessId || (!isOwner && !canManagerManageStaff)) throw new Error('Apenas o dono ou um gestor autorizado pode adicionar funcionários.');
 
     const businessId = activeBusinessId;
     const secondaryAppName = `staff-app-${Date.now()}`;
@@ -1389,8 +1410,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Cloud Functions requires the Blaze billing plan; this runs on the same
   // Railway service that already hosts the app.
   const deleteStaffMember = async (staffUid: string, reason?: string) => {
-    if (!activeBusinessId || !isOwner) {
-      throw new Error('Apenas o dono pode remover funcionários.');
+    if (!activeBusinessId || (!isOwner && !canManagerManageStaff)) {
+      throw new Error('Apenas o dono ou um gestor autorizado pode remover funcionários.');
     }
     if (!currentUser) {
       throw new Error('A sua sessão expirou. Inicie sessão novamente.');
@@ -1433,8 +1454,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     staffUid: string,
     reason?: string
   ) => {
-    if (!activeBusinessId || !isOwner) {
-      throw new Error('Apenas o dono pode gerir funcionários.');
+    if (!activeBusinessId || (!isOwner && !canManagerManageStaff)) {
+      throw new Error('Apenas o dono ou um gestor autorizado pode gerir funcionários.');
     }
     if (!currentUser) {
       throw new Error('A sua sessão expirou. Inicie sessão novamente.');
@@ -1483,6 +1504,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   const reactivateStaffMember = async (staffUid: string) => {
     await _staffActionRequest('reactivate', staffUid);
+  };
+
+  // BDS #16 — Admin-only. Promotes/demotes staffTier and sets which
+  // Manager permissions are granted. Deliberately not routed through
+  // _staffActionRequest: that helper allows a granted Manager, and tier/
+  // permission changes must never be delegable, even to a Manager with
+  // staffManagement granted.
+  const setStaffTier = async (
+    staffUid: string,
+    staffTier: StaffTier,
+    managerPermissions?: Partial<ManagerPermissions>
+  ) => {
+    if (!activeBusinessId || !isOwner) {
+      throw new Error('Apenas o dono pode alterar o nível de um funcionário.');
+    }
+    if (!currentUser) {
+      throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+    let response: Response;
+    try {
+      response = await fetch('/api/staff/set-tier', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          staffUid,
+          businessId: activeBusinessId,
+          staffTier,
+          managerPermissions,
+        }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
+
+    if (!response.ok) {
+      let message = 'Erro ao atualizar o nível do funcionário. Tente novamente.';
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // response wasn't JSON — keep the generic message
+      }
+      throw new Error(message);
+    }
   };
 
   const resetStaffPin = async (staffUid: string, newPin: string) => {
@@ -1594,6 +1664,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         isAuthLoading,
         isOwner,
         isStaff,
+        isManager,
+        canManagerCloseBooks,
+        canManagerManageStaff,
         products,
         batches,
         purchaseBatches,
@@ -1646,6 +1719,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         suspendStaffMember,
         reactivateStaffMember,
         resetStaffPin,
+        setStaffTier,
         pairedDevice,
         pairDevice,
         unpairDevice,

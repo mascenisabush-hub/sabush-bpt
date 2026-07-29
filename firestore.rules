@@ -43,6 +43,25 @@ service cloud.firestore {
       return isMemberOf(businessId) && myProfile().role == 'owner';
     }
 
+    // BDS #16 (Staff & Roles) / Architecture 6.3 amendment. Manager is not
+    // a new role — it's a permission-tier field on the same staff account.
+    // Passes if the caller is the Admin (unchanged from isOwnerOf), OR the
+    // caller is a Staff account promoted to 'manager', scoped to this exact
+    // businessId (a Manager never has multi-shop reach, same as any Staff),
+    // AND has been explicitly granted this specific permission — staffTier
+    // alone grants nothing. staffTier/managerPermissions are themselves
+    // writable only by the privileged server (server/index.ts), never by
+    // the client, same guarantee as `suspended`.
+    function isOwnerOrGrantedManager(businessId, permission) {
+      return isOwnerOf(businessId) || (
+        isMemberOf(businessId) &&
+        myProfile().role == 'staff' &&
+        myProfile().get('staffTier', 'staff') == 'manager' &&
+        myProfile().businessId == businessId &&
+        myProfile().get('managerPermissions', {}).get(permission, false) == true
+      );
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -62,14 +81,20 @@ service cloud.firestore {
 
       // Creating a profile happens in two flows:
       //  1) Self-registration - a brand new owner creating their own profile.
-      //  2) An owner provisioning a staff account (created via a secondary
-      //     Firebase Auth app, then written here under the owner's session).
+      //  2) An owner (or a Staff account granted the 'staffManagement'
+      //     Manager permission, BDS #16) provisioning a staff account
+      //     (created via a secondary Firebase Auth app, then written here
+      //     under the creator's session). A Manager can only ever create a
+      //     plain 'staff' profile here — never one with staffTier set to
+      //     'manager' — promoting to Manager is a separate, Admin-only
+      //     action (see the update rule below).
       allow create: if isSignedIn() && (
         (request.auth.uid == userId && request.resource.data.role == 'owner') ||
         (
           request.auth.uid != userId &&
           request.resource.data.role == 'staff' &&
-          isOwnerOf(request.resource.data.businessId)
+          request.resource.data.get('staffTier', 'staff') == 'staff' &&
+          isOwnerOrGrantedManager(request.resource.data.businessId, 'staffManagement')
         )
       );
 
@@ -79,6 +104,10 @@ service cloud.firestore {
       // be flipped by the server via suspendStaffMember/reactivateStaffMember,
       // which use the Admin SDK and bypass these rules; otherwise a suspended
       // staff member could simply un-suspend themselves with a plain write).
+      // staffTier and managerPermissions (BDS #16) get the identical
+      // guarantee — set only by the server's set-tier endpoint, never by a
+      // plain client write, otherwise a staff member could self-grant
+      // Manager tier and every permission it unlocks in one write.
       // businessIds may only ever grow by exactly one entry per write,
       // and only if that new entry is a /businesses/{id} doc this uid
       // actually owns (checked server-side here, not just trusted from the
@@ -89,6 +118,8 @@ service cloud.firestore {
         request.resource.data.role == resource.data.role &&
         request.resource.data.businessId == resource.data.businessId &&
         request.resource.data.get('suspended', false) == resource.data.get('suspended', false) &&
+        request.resource.data.get('staffTier', 'staff') == resource.data.get('staffTier', 'staff') &&
+        request.resource.data.get('managerPermissions', {}) == resource.data.get('managerPermissions', {}) &&
         isValidBusinessIdsChange() &&
         isValidActiveBusinessIdChange();
 
@@ -192,19 +223,30 @@ service cloud.firestore {
         allow read, create, update, delete: if isOwnerOf(businessId);
       }
 
-      // Monthly/Yearly Closings: permanently lock a period's figures. Only
-      // the owner may record or remove these — staff never handle this.
+      // Monthly/Yearly Closings: permanently lock a period's figures. The
+      // Admin can always do this; a Staff account promoted to Manager can
+      // too, but only if explicitly granted the 'closings' permission
+      // (BDS #16 / Architecture 6.3) — staffTier === 'manager' alone is
+      // not enough. A plain Staff member never handles this, same as today.
       match /closings/{closingId} {
-        allow read, create, update, delete: if isOwnerOf(businessId);
+        allow read, create, update, delete: if isOwnerOrGrantedManager(businessId, 'closings');
       }
 
-      // Staff roster management is owner-only. Deletion is intentionally
-      // NOT allowed from the client (allow delete: if false) — removing a
-      // staff member must go through the deleteStaffMember Cloud Function
-      // so their Firebase Authentication account is deleted in the same
-      // operation, never leaving an orphaned login behind.
+      // Staff roster management: the Admin can always do this. A Staff
+      // account promoted to Manager can too, but only with the
+      // 'staffManagement' permission explicitly granted (BDS #16). A
+      // Manager can never touch another Manager's or the Admin's record —
+      // that guard lives server-side (server/index.ts), since it depends
+      // on the *target's* tier, which a rule reading only the caller's
+      // profile can't safely evaluate without an extra read per write.
+      // Deletion is intentionally NOT allowed from the client for anyone
+      // (allow delete: if false) — removing a staff member must go through
+      // the deleteStaffMember server endpoint so their Firebase
+      // Authentication account is deleted in the same operation, never
+      // leaving an orphaned login behind. That endpoint enforces the
+      // Admin-or-granted-Manager check itself.
       match /staff/{staffId} {
-        allow read, create, update: if isOwnerOf(businessId);
+        allow read, create, update: if isOwnerOrGrantedManager(businessId, 'staffManagement');
         allow delete: if false;
       }
 

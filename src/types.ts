@@ -1,5 +1,22 @@
 export type UserRole = 'owner' | 'staff';
 
+// Additive Staff tier (BDS #16). NOT a new UserRole value — a Manager is
+// still, structurally, role: 'staff' for every existing Auth pattern and
+// Security Rule not explicitly amended for this tier. Optional/absent is
+// equivalent to 'staff' for every account created before this module.
+export type StaffTier = 'staff' | 'manager';
+
+// Per-permission grants for a Manager-tier staff account (BDS #16).
+// Optional; every key defaults to false, including immediately after a
+// promotion to 'manager' — promoting and granting are two separate,
+// explicit Admin actions. Only the Admin may write this field (enforced
+// server-side, never client-writable — see server/index.ts set-tier
+// endpoint and firestore.rules).
+export interface ManagerPermissions {
+  closings: boolean;
+  staffManagement: boolean;
+}
+
 export interface UserProfile {
   uid: string;
   email: string;
@@ -22,6 +39,13 @@ export interface UserProfile {
   // flag lets the client detect it in real time and force an immediate
   // sign-out of any session that's already open.
   suspended?: boolean;
+  // Staff-only (BDS #16). Absent or 'staff' behaves identically to today.
+  // Set exclusively by the server, same as `suspended` — never
+  // client-writable, including by the staff member whose access it gates.
+  staffTier?: StaffTier;
+  // Staff-only (BDS #16). Only meaningful when staffTier === 'manager';
+  // ignored otherwise. Set exclusively by the server, same as staffTier.
+  managerPermissions?: ManagerPermissions;
 }
 
 export interface Business {
@@ -43,6 +67,12 @@ export interface StaffMember {
   businessId: string;
   createdAt: string;
   suspended?: boolean;
+  // Mirror of users/{uid}.staffTier (BDS #16) — users/{uid} remains the
+  // authoritative document Security Rules check; this copy exists only
+  // so the Staff list UI doesn't need a second read per row. Server keeps
+  // both in sync in the same batch write (see server/index.ts set-tier).
+  staffTier?: StaffTier;
+  managerPermissions?: ManagerPermissions;
 }
 
 // A device-local (never synced to Firestore) cache used by the PIN-based

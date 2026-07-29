@@ -90,16 +90,22 @@ async function requireAuth(req: AuthedRequest, res: Response, next: NextFunction
 }
 
 // ------------------------------------------------------------------
-// Shared permission check for every staff-management action below:
-// the requester must actually be the owner of the business they claim
-// (re-read from Firestore, never trusted from the client), and the
-// target staff member must actually belong to that same business.
-// Returns an error to send back, or null if the check passed.
+// Shared permission check for staff-management actions (BDS #16 widens
+// this from Admin-only to Admin-or-granted-Manager). The requester must
+// actually hold the claimed standing (re-read from Firestore, never
+// trusted from the client), and the target staff member must actually
+// belong to that same business. A Manager — even one granted
+// 'staffManagement' — can never act on another Manager or on the Admin;
+// that check depends on the *target's* tier, so it lives here rather
+// than in firestore.rules (a rule reading only the caller's profile can't
+// safely evaluate it without an extra read per write). Returns an error
+// to send back, or null if the check passed.
 // ------------------------------------------------------------------
-async function verifyOwnerActionOnStaff(
+async function verifyStaffManagementAction(
   requesterUid: string,
   staffUid: string,
-  businessId: string
+  businessId: string,
+  options: { adminOnly?: boolean } = {}
 ): Promise<{ status: number; body: { error: string; message: string } } | null> {
   if (staffUid === requesterUid) {
     return { status: 400, body: { error: 'invalid-argument', message: 'Não pode realizar esta ação na sua própria conta.' } };
@@ -111,8 +117,20 @@ async function verifyOwnerActionOnStaff(
   if (!requesterSnap.exists || !requesterProfile) {
     return { status: 403, body: { error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' } };
   }
-  if (requesterProfile.role !== 'owner' || requesterProfile.businessId !== businessId) {
-    return { status: 403, body: { error: 'permission-denied', message: 'Apenas o dono do negócio pode gerir funcionários.' } };
+
+  const isAdmin = requesterProfile.role === 'owner' && requesterProfile.businessId === businessId;
+  const isGrantedManager =
+    !options.adminOnly &&
+    requesterProfile.role === 'staff' &&
+    requesterProfile.staffTier === 'manager' &&
+    requesterProfile.businessId === businessId &&
+    requesterProfile.managerPermissions?.staffManagement === true;
+
+  if (!isAdmin && !isGrantedManager) {
+    const message = options.adminOnly
+      ? 'Apenas o dono pode realizar esta ação.'
+      : 'Apenas o dono ou um gestor autorizado pode gerir funcionários.';
+    return { status: 403, body: { error: 'permission-denied', message } };
   }
 
   const [staffProfileSnap, staffRosterSnap] = await Promise.all([
@@ -132,6 +150,13 @@ async function verifyOwnerActionOnStaff(
 
   if (!belongsToBusiness) {
     return { status: 403, body: { error: 'permission-denied', message: 'Este funcionário não pertence ao seu negócio.' } };
+  }
+
+  // A Manager (not the Admin) may never act on another Manager or on the
+  // Admin — this is the one guard that has to live here rather than in
+  // firestore.rules, since it depends on the target's own tier.
+  if (isGrantedManager && staffProfile?.staffTier === 'manager') {
+    return { status: 403, body: { error: 'permission-denied', message: 'Um gestor não pode gerir outro gestor. Apenas o dono pode fazê-lo.' } };
   }
 
   return null;
@@ -155,7 +180,7 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
   }
 
   try {
-    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId);
     if (permissionError) {
       console.warn('[staff/delete] permission denied', { requesterUid, staffUid, businessId });
       res.status(permissionError.status).json(permissionError.body);
@@ -253,7 +278,7 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
   }
 
   try {
-    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId);
     if (permissionError) {
       console.warn('[staff/suspend] permission denied', { requesterUid, staffUid, businessId });
       res.status(permissionError.status).json(permissionError.body);
@@ -318,7 +343,7 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
   }
 
   try {
-    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId);
     if (permissionError) {
       console.warn('[staff/reactivate] permission denied', { requesterUid, staffUid, businessId });
       res.status(permissionError.status).json(permissionError.body);
@@ -394,7 +419,7 @@ expressApp.post('/api/staff/reset-pin', requireAuth, async (req: AuthedRequest, 
   }
 
   try {
-    const permissionError = await verifyOwnerActionOnStaff(requesterUid, staffUid, businessId);
+    const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId, { adminOnly: true });
     if (permissionError) {
       console.warn('[staff/reset-pin] permission denied', { requesterUid, staffUid, businessId });
       res.status(permissionError.status).json(permissionError.body);
@@ -427,6 +452,104 @@ expressApp.post('/api/staff/reset-pin', requireAuth, async (req: AuthedRequest, 
 });
 
 expressApp.get('/api/health', (_req, res) => res.json({ ok: true }));
+
+// ------------------------------------------------------------------
+// POST /api/staff/set-tier   (BDS #16 — Staff & Roles)
+// Body: { staffUid: string, businessId: string, staffTier: 'staff' | 'manager',
+//         managerPermissions?: { closings?: boolean, staffManagement?: boolean } }
+//
+// Admin-only, deliberately — promoting/demoting a Manager and granting
+// or revoking either permission is never delegable to a Manager
+// themselves (BDS #16 Business Rules: "Only the Admin can change
+// staffTier or managerPermissions for any account"). Writes both the
+// authoritative users/{uid} document and its staff/{id} display mirror
+// in the same batch, same pattern as suspend/reactivate. Demoting to
+// 'staff' always clears managerPermissions back to all-false — a
+// permission left dangling on a demoted account, even if it later gets
+// re-promoted, would be a stale-grant hole.
+// ------------------------------------------------------------------
+expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const startedAt = new Date().toISOString();
+
+  const staffUid = String(req.body?.staffUid || '').trim();
+  const businessId = String(req.body?.businessId || '').trim();
+  const requestedTier = req.body?.staffTier === 'manager' ? 'manager' : 'staff';
+  const requestedPermissions = requestedTier === 'manager'
+    ? {
+        closings: req.body?.managerPermissions?.closings === true,
+        staffManagement: req.body?.managerPermissions?.staffManagement === true,
+      }
+    : { closings: false, staffManagement: false };
+
+  if (!staffUid || !businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'staffUid e businessId são obrigatórios.' });
+    return;
+  }
+
+  try {
+    // Admin-only — this is the one staff-management action a Manager can
+    // never perform on anyone, including themselves.
+    const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId, { adminOnly: true });
+    if (permissionError) {
+      console.warn('[staff/set-tier] permission denied', { requesterUid, staffUid, businessId });
+      res.status(permissionError.status).json(permissionError.body);
+      return;
+    }
+
+    const requesterSnap = await db.collection('users').doc(requesterUid).get();
+    const requesterProfile = requesterSnap.data()!;
+    const [staffProfileSnap, staffRosterSnap] = await Promise.all([
+      db.collection('users').doc(staffUid).get(),
+      db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
+    ]);
+    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+    const previousTier = staffProfileSnap.data()?.staffTier === 'manager' ? 'manager' : 'staff';
+
+    const batch = db.batch();
+    batch.update(db.collection('users').doc(staffUid), {
+      staffTier: requestedTier,
+      managerPermissions: requestedPermissions,
+    });
+    batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), {
+      staffTier: requestedTier,
+      managerPermissions: requestedPermissions,
+    });
+    await batch.commit();
+
+    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    const eventType =
+      previousTier === 'staff' && requestedTier === 'manager' ? 'manager-granted' :
+      previousTier === 'manager' && requestedTier === 'staff' ? 'manager-revoked' :
+      'manager-permissions-changed';
+    const eventTitle =
+      eventType === 'manager-granted' ? 'Funcionário Promovido a Gestor' :
+      eventType === 'manager-revoked' ? 'Funcionário Despromovido de Gestor' :
+      'Permissões de Gestor Alteradas';
+
+    await db
+      .collection('businesses')
+      .doc(businessId)
+      .collection('timelineEvents')
+      .doc(timelineId)
+      .set({
+        id: timelineId,
+        type: eventType,
+        date: startedAt.slice(0, 10),
+        createdAt: startedAt,
+        userName: requesterProfile.name || 'Dono',
+        title: eventTitle,
+        description: `${staffName}: ${requestedTier === 'manager' ? `Gestor (fecho: ${requestedPermissions.closings ? 'sim' : 'não'}, gestão de equipa: ${requestedPermissions.staffManagement ? 'sim' : 'não'})` : 'Funcionário (nível padrão)'}.`,
+        details: { staffName, changedBy: requesterProfile.name || requesterUid, staffTier: requestedTier, managerPermissions: requestedPermissions },
+      });
+
+    console.log('[staff/set-tier] success', { requesterUid, staffUid, businessId, staffTier: requestedTier, timestamp: startedAt });
+    res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions });
+  } catch (err) {
+    console.error('[staff/set-tier] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao atualizar o nível do funcionário. Tente novamente.' });
+  }
+});
 
 // ------------------------------------------------------------------
 // Serve the built SPA for everything else.

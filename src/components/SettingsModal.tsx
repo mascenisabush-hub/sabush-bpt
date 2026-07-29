@@ -15,6 +15,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   const {
     business,
     isOwner,
+    canManagerManageStaff,
     currencySymbol,
     setCurrencySymbol,
     businessCategory,
@@ -26,6 +27,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     suspendStaffMember,
     reactivateStaffMember,
     resetStaffPin,
+    setStaffTier,
     pairedDevice,
     pairDevice,
     unpairDevice,
@@ -71,6 +73,46 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
 
   // Device pairing states (PIN quick-login on a shared shop device).
   const [pairError, setPairError] = useState<string | null>(null);
+
+  // Manager tier/permission states (BDS #16). Admin-only — this modal is
+  // never rendered for a Manager, same as the promote button that opens it.
+  const [staffPendingTierChange, setStaffPendingTierChange] = useState<StaffMember | null>(null);
+  const [tierDraftIsManager, setTierDraftIsManager] = useState(false);
+  const [tierDraftClosings, setTierDraftClosings] = useState(false);
+  const [tierDraftStaffManagement, setTierDraftStaffManagement] = useState(false);
+  const [tierLoading, setTierLoading] = useState(false);
+  const [tierError, setTierError] = useState<string | null>(null);
+
+  const openTierModal = (staff: StaffMember) => {
+    setTierError(null);
+    setTierDraftIsManager(staff.staffTier === 'manager');
+    setTierDraftClosings(staff.managerPermissions?.closings === true);
+    setTierDraftStaffManagement(staff.managerPermissions?.staffManagement === true);
+    setStaffPendingTierChange(staff);
+  };
+
+  const handleConfirmTierChange = async () => {
+    if (!staffPendingTierChange) return;
+    setTierLoading(true);
+    setTierError(null);
+    try {
+      await setStaffTier(
+        staffPendingTierChange.uid,
+        tierDraftIsManager ? 'manager' : 'staff',
+        tierDraftIsManager ? { closings: tierDraftClosings, staffManagement: tierDraftStaffManagement } : undefined
+      );
+      setStaffSuccess(
+        tierDraftIsManager
+          ? `${staffPendingTierChange.name} agora é Gestor.`
+          : `${staffPendingTierChange.name} voltou ao nível Staff padrão.`
+      );
+      setStaffPendingTierChange(null);
+    } catch (err: any) {
+      setTierError(err?.message || 'Erro ao atualizar o nível do funcionário.');
+    } finally {
+      setTierLoading(false);
+    }
+  };
 
   const handleConfirmResetPin = async () => {
     if (!staffPendingPinReset) return;
@@ -194,7 +236,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
         </div>
 
         {/* Tab switcher */}
-        {isOwner && (
+        {(isOwner || canManagerManageStaff) && (
           <div className="grid grid-cols-2 p-2 bg-white border-b border-gray-200 text-xs font-bold shrink-0">
             <button
               type="button"
@@ -338,7 +380,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
             </>
           )}
 
-          {activeSection === 'staff' && isOwner && (
+          {activeSection === 'staff' && (isOwner || canManagerManageStaff) && (
             <div className="space-y-6">
               {/* Device Pairing — PIN quick-login for a shared shop device */}
               <div className="bg-white border border-gray-200 rounded-2xl p-4">
@@ -531,10 +573,32 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-orange-500/10 text-orange-600 border border-orange-500/30">
                               Suspenso
                             </span>
+                          ) : staff.staffTier === 'manager' ? (
+                            <span
+                              className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-purple-500/10 text-purple-600 border border-purple-500/30"
+                              title={`Fecho: ${staff.managerPermissions?.closings ? 'sim' : 'não'} · Gestão de equipa: ${staff.managerPermissions?.staffManagement ? 'sim' : 'não'}`}
+                            >
+                              Gestor
+                            </span>
                           ) : (
                             <span className="text-[10px] font-bold uppercase tracking-wider px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 border border-blue-500/30">
                               Staff
                             </span>
+                          )}
+
+                          {/* Promote/demote + permission toggles — Admin-only.
+                              A Manager (even one granted staffManagement) never
+                              sees this: only the Admin may change staffTier or
+                              managerPermissions for any account (BDS #16). */}
+                          {isOwner && (
+                            <button
+                              type="button"
+                              onClick={() => openTierModal(staff)}
+                              className="p-1.5 text-gray-500 hover:text-purple-600 hover:bg-purple-500/10 rounded-lg transition"
+                              title="Gerir Nível de Gestor"
+                            >
+                              <ShieldCheck className="w-4 h-4" />
+                            </button>
                           )}
 
                           <button
@@ -837,6 +901,102 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
               >
                 {pinResetLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <KeyRound className="w-3.5 h-3.5" />}
                 {pinResetLoading ? 'A guardar...' : 'Redefinir PIN'}
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {staffPendingTierChange && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-purple-500/10 border border-purple-500/30 flex items-center justify-center shrink-0">
+                <ShieldCheck className="w-5 h-5 text-purple-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Gerir Nível de Gestor</h3>
+                <p className="text-[11px] text-gray-500">Para {staffPendingTierChange.name}</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <label className="flex items-center justify-between gap-3 p-3 bg-gray-50 rounded-2xl border border-gray-200 cursor-pointer">
+                <div>
+                  <span className="text-xs font-bold text-gray-800 block">Promover a Gestor</span>
+                  <span className="text-[11px] text-gray-500">
+                    Continua a ser uma conta Staff — apenas ganha as permissões que escolher abaixo.
+                  </span>
+                </div>
+                <input
+                  type="checkbox"
+                  checked={tierDraftIsManager}
+                  onChange={e => setTierDraftIsManager(e.target.checked)}
+                  className="w-5 h-5 accent-purple-600 shrink-0"
+                />
+              </label>
+
+              {tierDraftIsManager && (
+                <div className="space-y-2 pl-1">
+                  <p className="text-[11px] font-bold text-gray-600 uppercase tracking-wider">Permissões concedidas</p>
+
+                  <label className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer">
+                    <div>
+                      <span className="text-xs font-bold text-gray-800 block">Fecho Periódico (Closings)</span>
+                      <span className="text-[11px] text-gray-500">Pode realizar o Fecho Mensal/Anual em seu nome.</span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={tierDraftClosings}
+                      onChange={e => setTierDraftClosings(e.target.checked)}
+                      className="w-5 h-5 accent-purple-600 shrink-0"
+                    />
+                  </label>
+
+                  <label className="flex items-center justify-between gap-3 p-3 bg-white border border-gray-200 rounded-2xl cursor-pointer">
+                    <div>
+                      <span className="text-xs font-bold text-gray-800 block">Gestão de Equipa</span>
+                      <span className="text-[11px] text-gray-500">
+                        Pode adicionar, suspender, reativar e remover Staff — nunca outro Gestor nem a sua conta.
+                      </span>
+                    </div>
+                    <input
+                      type="checkbox"
+                      checked={tierDraftStaffManagement}
+                      onChange={e => setTierDraftStaffManagement(e.target.checked)}
+                      className="w-5 h-5 accent-purple-600 shrink-0"
+                    />
+                  </label>
+                </div>
+              )}
+
+              {tierError && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {tierError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setStaffPendingTierChange(null);
+                  setTierError(null);
+                }}
+                disabled={tierLoading}
+                className="px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmTierChange}
+                disabled={tierLoading}
+                className="px-4 py-2.5 rounded-xl bg-purple-600 hover:bg-purple-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {tierLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
+                {tierLoading ? 'A guardar...' : 'Guardar'}
               </button>
             </div>
           </div>
