@@ -3,7 +3,7 @@ Business Domain Specification
 # Dashboard
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #1 of 20 — Phase 1: Core Business Intelligence**
 **Architecture references:** [Section 1](../architecture/01-product-vision.md)
 (Product Vision), [Section 3.1](../architecture/03-domain-architecture.md)
