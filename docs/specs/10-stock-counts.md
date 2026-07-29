@@ -3,7 +3,7 @@ Business Domain Specification
 # Stock Counts
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #10 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.8.3](../architecture/03-domain-architecture.md)
 (Stock Counts domain — the `initial` count as "the permanent, immutable

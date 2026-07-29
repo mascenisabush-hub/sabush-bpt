@@ -45,8 +45,8 @@ intelligence), then build the platform capabilities around that.
 | 7 | [Breakages (Quebras)](./07-breakages.md) | ✅ Approved |
 | 8 | [Expenses](./08-expenses.md) | ✅ Approved |
 | 9 | [Withdrawals](./09-withdrawals.md) | ✅ Approved |
-| 10 | [Stock Counts](./10-stock-counts.md) | Drafted — awaiting approval |
-| 11 | Monthly Closings | Not started |
+| 10 | [Stock Counts](./10-stock-counts.md) | ✅ Approved |
+| 11 | [Monthly Closings](./11-monthly-closings.md) | Drafted — awaiting approval |
 
 ## Phase 3 — Insight & Decision Support
 
