@@ -79,7 +79,7 @@ intelligence), then build the platform capabilities around that.
 | # | Module | Status |
 |---|---|---|
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
-| 17 | Multi-Shop | Not started |
+| 17 | [Multi-Shop](./17-multi-shop.md) | Drafted — awaiting approval |
 | 18 | SuperAdmin | Not started |
 | 19 | Subscriptions | Not started |
 | 20 | Notifications | Not started |
