@@ -3,7 +3,7 @@ Business Domain Specification
 # Expenses
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #8 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.8.1](../architecture/03-domain-architecture.md)
 (Expenses domain), [Section 6.8 & 7.7](../architecture/06-user-architecture.md)
