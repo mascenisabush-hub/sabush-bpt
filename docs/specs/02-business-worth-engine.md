@@ -3,7 +3,7 @@ Business Domain Specification
 # Business Worth Engine
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved
 **Module #2 of 20 — Phase 1: Core Business Intelligence**
 **Architecture references:** [Section 1](../architecture/01-product-vision.md)
 (Product Vision — Business Worth as the Mission's own defined target),
