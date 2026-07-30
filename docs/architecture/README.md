@@ -1,6 +1,8 @@
 # Sabush BPT — Product Architecture Document
 
-**Status:** Complete — all 15 sections approved.
+**Status:** Sections 1–15 complete and approved. Section 16 added as a
+proposed Architecture Decision Record — see its own status line before
+treating it as approved.
 **Source of truth for scope/philosophy:** Sabush BPT is a **Business Worth Platform** — not a POS, not an accounting system, and it does not record sales. See Section 1 for the full reasoning.
 **Relationship to the prior audit:** The audit (delivered separately) is not repeated here. This document uses its findings as an input to design decisions, and will call out specifically where a decision responds to an audit finding.
 
@@ -25,5 +27,6 @@ This document is built section by section. Each section is only written once the
 | 13 | [Development Strategy](./13-development-strategy.md) | ✅ Approved |
 | 14 | [Future Roadmap](./14-future-roadmap.md) | ✅ Approved |
 | 15 | [Architecture Validation](./15-architecture-validation.md) | ✅ Approved |
+| 16 | [Context Boundary Strategy (ADR)](./16-context-boundary-strategy.md) | Proposed — awaiting approval |
 
 Each section file will be updated to ✅ **Approved** once confirmed, with the approval date and any amendments noted at the top of that file.
