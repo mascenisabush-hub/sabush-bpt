@@ -244,10 +244,10 @@ export const fr: TranslationDict = {
     helpModal: {
       title: 'Comment Fonctionne le Profit par Lot',
       section1Title: '1. Pas Besoin d\u2019Enregistrer les Ventes Quotidiennes',
-      section1Body: 'Vous n\u2019avez pas besoin d\u2019enregistrer chaque vente individuelle. Au lieu de cela, lorsque vous enregistrez un <strong>nouveau lot de stock</strong> pour un produit, le système déduit automatiquement que le <strong>lot précédent a été entièrement vendu</strong> (déduction faite des pertes enregistrées).',
+      section1Body: 'Vous n\u2019avez pas besoin d\u2019enregistrer chaque vente individuelle. Au lieu de cela, lorsque vous enregistrez un <strong>nouveau lot de stock</strong> pour un produit, le <strong>lot précédent se clôture automatiquement</strong>. Clôturer un lot ne signifie pas que le stock a été vendu — cela signifie qu\u2019il n\u2019est plus le lot d\u2019achat actif, et le calcul de son profit est finalisé sur la base du stock restant après les pertes enregistrées.',
       section2Title: '2. Lots Clôturés = Profit Finalisé',
       section2Body: 'Lorsqu\u2019un lot est remplacé par un nouveau, son profit est finalisé :',
-      section2Formula: 'Unités Vendues = Stock Initial du Lot − Pertes',
+      section2Formula: 'Stock Restant = Stock Initial du Lot − Pertes',
       section3Title: '3. Lot Actif = Estimation en Cours',
       section3Body: 'Pour le stock actif actuel, l\u2019application affiche une <strong>estimation en cours</strong> du profit projeté si les unités restantes se vendent au prix fixé.',
       section4Title: '4. Pertes et Dépenses Générales',
