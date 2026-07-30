@@ -12,15 +12,23 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Fixed the missing-`await` bug in `AddQuebraView.tsx` (same
-class of bug previously found/fixed in `AddExpenseView`/
-`AddWithdrawalView`) — this was the Product Architect's top-named
-follow-up item from last session. Typechecks cleanly. About to be
-committed and pushed. Modules #17 (Multi-Shop) and #18 (SuperAdmin)
-unchanged — still drafted, awaiting approval. The Firestore
-rules-unit-testing suite from the prior session (`tests/firestore-rules.test.ts`)
-is committed but **still not run against a live emulator** — that remains
-open, see below.
+**Status:** PR-001/PR-002 (the silent-failure `await` fixes across
+`AddQuebraView.tsx`, `AddStockView`, `ProductDetailModal`,
+`BusinessProfileSetupModal`) are **closed** — committed and pushed to
+`origin/main` (`74745b1` and `3222d08`), working tree clean, nothing
+pending. Per the Product Architect's review, the next disciplined step
+was audit *planning*, not feature work: added
+`docs/security/firestore-tenant-isolation-audit-plan.md`, which defines
+scope (every business-scoped collection in `firestore.rules`), attack
+scenarios, method, and acceptance criteria for a full tenant-isolation
+audit — no rule changes, no new test code written yet, plan only.
+Modules #17 (Multi-Shop / "Owner Portfolio" naming conflict, unresolved)
+and #18 (SuperAdmin) unchanged — still drafted, awaiting approval. The
+Firestore rules-unit-testing suite from a prior session
+(`tests/firestore-rules.test.ts`) is committed but **still not run
+against a live emulator** — that remains open, see below, and is
+unrelated to the new audit plan (the plan covers a broader set of
+collections than that suite currently tests).
 
 **Last completed:** `AddQuebraView.tsx`'s `handleSubmit` was calling
 `addQuebra(...)` (an async function that can reject — missing
@@ -43,11 +51,15 @@ network access and fix whatever it finds — treat a clean pass as the
 actual signal the Closing Integrity Amendment's rules are
 production-ready; this still hasn't happened (blocked in this sandbox —
 egress is allow-listed to npm/github/pypi/crates.io/ubuntu archives only,
-doesn't reach Google's emulator-binary infra). (2) A broader Firestore
-tenant-isolation/security audit beyond Closing Integrity. (3) Return to
-Module #17 (spec currently titled "Multi-Shop" in this repo — flagged
-naming discrepancy with the Architect's "Owner Portfolio," unresolved)
-only once its spec is approved.
+doesn't reach Google's emulator-binary infra). (2) Implement the test
+cases defined in `docs/security/firestore-tenant-isolation-audit-plan.md`
+into `tests/firestore-rules.test.ts` (still not started — the plan only
+defines scope/scenarios/acceptance criteria so far), then run them
+against a live emulator once one is reachable, and write up
+`docs/security/firestore-tenant-isolation-audit-findings.md` from the
+results. (3) Return to Module #17 (spec currently titled "Multi-Shop" in
+this repo — flagged naming discrepancy with the Architect's "Owner
+Portfolio," unresolved) only once its spec is approved.
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
 grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
