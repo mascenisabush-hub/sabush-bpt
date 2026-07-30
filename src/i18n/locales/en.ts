@@ -244,10 +244,10 @@ export const en: TranslationDict = {
     helpModal: {
       title: 'How Batch Profit Works',
       section1Title: '1. No Need to Log Daily Sales',
-      section1Body: 'You don\u2019t need to log every individual sale. Instead, when you record a <strong>new stock batch</strong> for a product, the system automatically infers that the <strong>previous batch was fully sold</strong> (net of any recorded losses).',
+      section1Body: 'You don\u2019t need to log every individual sale. Instead, when you record a <strong>new stock batch</strong> for a product, the <strong>previous batch closes automatically</strong>. Closing a batch doesn\u2019t mean its stock was sold \u2014 it means it\u2019s no longer the active purchase batch, and its profit calculation is finalized based on the stock remaining after recorded losses.',
       section2Title: '2. Closed Batches = Finalized Profit',
       section2Body: 'When a batch is replaced by a new one, its profit is finalized:',
-      section2Formula: 'Units Sold = Batch Starting Stock − Losses',
+      section2Formula: 'Remaining Stock = Batch Starting Stock − Losses',
       section3Title: '3. Active Batch = Ongoing Estimate',
       section3Body: 'For the current active stock, the app shows an <strong>ongoing estimate</strong> of projected profit if the remaining units sell at the set price.',
       section4Title: '4. Losses and General Expenses',

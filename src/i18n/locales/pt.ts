@@ -957,10 +957,10 @@ export const pt: TranslationDict = {
     helpModal: {
       title: 'Como Funciona o Lucro por Lote',
       section1Title: '1. Sem Necessidade de Registar Vendas Diárias',
-      section1Body: 'Não precisa de registar cada venda individual. Em vez disso, ao registar um <strong>novo lote de stock</strong> de um produto, o sistema infere automaticamente que o <strong>lote anterior foi totalmente vendido</strong> (descontando as quebras registadas).',
+      section1Body: 'Não precisa de registar cada venda individual. Em vez disso, ao registar um <strong>novo lote de stock</strong> de um produto, o <strong>lote anterior fecha automaticamente</strong>. Fechar um lote não significa que o stock foi vendido — significa que deixou de ser o lote de compra ativo, e o cálculo do seu lucro é finalizado com base no stock restante após as quebras registadas.',
       section2Title: '2. Lotes Fechados = Lucro Finalizado',
       section2Body: 'Quando um lote é substituído por um novo, o seu lucro é finalizado:',
-      section2Formula: 'Unidades Vendidas = Stock Inicial do Lote − Quebras',
+      section2Formula: 'Stock Restante = Stock Inicial do Lote − Quebras',
       section3Title: '3. Lote Ativo = Estimativa em Curso',
       section3Body: 'Para o stock ativo atual, a aplicação mostra uma <strong>estimativa em curso</strong> do lucro projetado caso as unidades restantes sejam vendidas ao preço definido.',
       section4Title: '4. Quebras e Despesas Gerais',
