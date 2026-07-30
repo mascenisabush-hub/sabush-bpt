@@ -124,7 +124,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   };
 
   // Submission validation and handling
-  const handleSubmit = (e: React.FormEvent) => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     // Validate rows
@@ -163,25 +165,38 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
     // Call multi-batch handler — everything in this session is grouped
     // into one Purchase Batch (Investment Ledger entry) under this supplier.
-    addMultipleStockBatches(
-      itemsToSave,
-      { name: supplierName, phone: supplierPhone, notes: '' },
-      batchNotes
-    );
+    // addMultipleStockBatches is async (a Firestore batch write that can
+    // reject — missing activeBusinessId, network failure, permission
+    // denial) — this must be awaited and caught, or the rejection is
+    // silently swallowed and the UI reports a successful stock intake that
+    // was never actually saved. Same class of bug already fixed in
+    // AddExpenseView/AddWithdrawalView/AddQuebraView.
+    setIsSaving(true);
+    try {
+      await addMultipleStockBatches(
+        itemsToSave,
+        { name: supplierName, phone: supplierPhone, notes: '' },
+        batchNotes
+      );
 
-    const messageText =
-      itemsToSave.length === 1
-        ? t('addStock.successMessageSingle', { product: itemsToSave[0].productName })
-        : t('addStock.successMessageMultiple', { count: itemsToSave.length });
+      const messageText =
+        itemsToSave.length === 1
+          ? t('addStock.successMessageSingle', { product: itemsToSave[0].productName })
+          : t('addStock.successMessageMultiple', { count: itemsToSave.length });
 
-    setSubmittedMessage(messageText);
-    setSupplierName('');
-    setSupplierPhone('');
-    setBatchNotes('');
+      setSubmittedMessage(messageText);
+      setSupplierName('');
+      setSupplierPhone('');
+      setBatchNotes('');
 
-    setTimeout(() => {
-      onComplete();
-    }, 1200);
+      setTimeout(() => {
+        onComplete();
+      }, 1200);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao registar a entrada de stock.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   // Calculate totals across all rows (new batches, so remainingQuantity == quantity — no quebras yet)
@@ -747,10 +762,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             {/* Submit Button */}
             <button
               type="submit"
-              className="btn-primary w-full py-3 px-4 text-sm"
+              disabled={isSaving}
+              className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-60"
             >
               <span>
-                {rows.length > 1
+                {isSaving
+                  ? '...'
+                  : rows.length > 1
                   ? t('addStock.submitMultiple', { count: rows.length })
                   : t('addStock.submitOne')}
               </span>

@@ -1,4 +1,4 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Product } from '../types';
 import { useApp } from '../context/AppContext';
 import { calculateBatch } from '../utils/calculations';
@@ -24,10 +24,27 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     .filter(b => b.productId === product.id)
     .sort((a, b) => new Date(b.dateEntered).getTime() - new Date(a.dateEntered).getTime());
 
-  const handleDeleteProduct = () => {
-    if (window.confirm(`Tem a certeza que pretende eliminar "${product.name}" e todos os lotes e perdas associados?`)) {
-      deleteProduct(product.id);
+  const [isDeleting, setIsDeleting] = useState(false);
+
+  // deleteProduct is async and cascades across multiple sequential
+  // Firestore calls (the product doc, then each of its batches, then each
+  // of its quebras) — any of which can reject. This must be awaited and
+  // caught, or a rejection is silently swallowed while the modal closes as
+  // if the whole cascade succeeded. Same class of bug already fixed in
+  // AddExpenseView/AddWithdrawalView/AddQuebraView (BDS #07: no
+  // silent-failure writes/deletes).
+  const handleDeleteProduct = async () => {
+    if (!window.confirm(`Tem a certeza que pretende eliminar "${product.name}" e todos os lotes e perdas associados?`)) {
+      return;
+    }
+    setIsDeleting(true);
+    try {
+      await deleteProduct(product.id);
       onClose();
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao eliminar o produto.');
+    } finally {
+      setIsDeleting(false);
     }
   };
 
@@ -53,11 +70,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           <div className="flex items-center gap-2 shrink-0">
             <button
               onClick={handleDeleteProduct}
-              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold transition-colors duration-150 flex items-center gap-1.5"
+              disabled={isDeleting}
+              className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold transition-colors duration-150 flex items-center gap-1.5 disabled:opacity-60"
               title="Eliminar Produto"
             >
               <Trash2 className="w-4 h-4" strokeWidth={2.25} />
-              <span className="hidden sm:inline">Eliminar Produto</span>
+              <span className="hidden sm:inline">{isDeleting ? 'A eliminar...' : 'Eliminar Produto'}</span>
             </button>
 
             <button

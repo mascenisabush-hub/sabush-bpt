@@ -8,7 +8,7 @@ interface BusinessProfileSetupModalProps {
   currentContact: string;
   currentLocation: string;
   currentEmail: string;
-  onSave: (profile: { name: string; category: string; contact: string; location: string; email: string }) => void;
+  onSave: (profile: { name: string; category: string; contact: string; location: string; email: string }) => void | Promise<void>;
   onClose?: () => void;
   isFirstTimeSetup?: boolean;
 }
@@ -86,15 +86,29 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
 
   const finalCategory = isCustomMode ? (customText.trim() || 'Outro') : selectedCat;
 
-  const handleSave = () => {
+  const [isSaving, setIsSaving] = useState(false);
+
+  // onSave is async at its only call site (SettingsModal.tsx, which awaits
+  // updateBusinessProfile — a Firestore write that can reject). It must be
+  // awaited and caught here too, or a rejection is silently swallowed
+  // while this modal closes as if the profile was saved. Same class of
+  // bug already fixed in AddExpenseView/AddWithdrawalView/AddQuebraView.
+  const handleSave = async () => {
     setError(null);
     if (!name.trim()) {
       setError('Por favor indique o nome do negócio.');
       return;
     }
 
-    onSave({ name: name.trim(), category: finalCategory, contact: contact.trim(), location: location.trim(), email: email.trim() });
-    if (onClose) onClose();
+    setIsSaving(true);
+    try {
+      await onSave({ name: name.trim(), category: finalCategory, contact: contact.trim(), location: location.trim(), email: email.trim() });
+      if (onClose) onClose();
+    } catch (err: any) {
+      setError(err?.message || 'Erro ao guardar o perfil do negócio.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -324,9 +338,10 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           <button
             type="button"
             onClick={handleSave}
-            className="btn-primary py-2.5 px-6 text-sm"
+            disabled={isSaving}
+            className="btn-primary py-2.5 px-6 text-sm disabled:opacity-60"
           >
-            <span>{isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
+            <span>{isSaving ? 'A guardar...' : isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
           </button>
         </div>
       </div>
