@@ -150,8 +150,9 @@ from the batches, never from the catalog record.
   discipline applies here specifically, since this is a per-keystroke
   interaction, not a per-screen-load one).
 - Product Detail's batch/Quebra list computation reuses the Calculation
-  Engine's O(n) per-batch cost (spec #2) — no additional nested
-  iteration introduced at the module level.
+  Engine's `O(batches + quebras)` cost (spec #2, corrected from an earlier
+  "O(n)" statement — see spec #2's Performance section) — no additional
+  nested iteration introduced at the module level.
 
 **Security**
 - Every Product read/write is scoped by the same tenant-isolation

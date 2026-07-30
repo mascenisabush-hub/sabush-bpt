@@ -37,6 +37,25 @@ export function calculateBatch(batch: StockBatch, batchQuebras: Quebra[]): Batch
 }
 
 /**
+ * Groups a Quebra list by batchId once, so callers iterating many batches
+ * can look up each batch's quebras in O(1) instead of filtering the full
+ * list per batch. Same semantics as `quebras.filter(q => q.batchId === id)`
+ * — batches with no quebras simply have no entry (callers use `?? []`).
+ */
+export function groupQuebrasByBatch(quebras: Quebra[]): Map<string, Quebra[]> {
+  const map = new Map<string, Quebra[]>();
+  for (const q of quebras) {
+    const existing = map.get(q.batchId);
+    if (existing) {
+      existing.push(q);
+    } else {
+      map.set(q.batchId, [q]);
+    }
+  }
+  return map;
+}
+
+/**
  * Aggregates Investment Value, Market Value and Embedded Profit across a
  * set of batches. This is the single source of truth for any aggregate
  * inventory figure (Dashboard cards, Reports, Closings) — nothing else
@@ -48,8 +67,10 @@ export function calculateInventoryTotals(batches: StockBatch[], quebras: Quebra[
   let totalEmbeddedProfit = 0;
   let activeBatchCount = 0;
 
+  const quebrasByBatch = groupQuebrasByBatch(quebras);
+
   batches.forEach((batch) => {
-    const calc = calculateBatch(batch, quebras);
+    const calc = calculateBatch(batch, quebrasByBatch.get(batch.id) ?? []);
     totalInvestmentValue += calc.investmentValue;
     totalMarketValue += calc.marketValue;
     totalEmbeddedProfit += calc.embeddedProfit;
@@ -104,6 +125,9 @@ export function generateReportSummary(
   // Filter withdrawals in range
   const withdrawalsInRange = withdrawals.filter(w => isDateInRange(w.date, startDate, endDate));
 
+  // Grouped once for the whole report, not re-filtered per batch/product.
+  const allQuebrasByBatch = groupQuebrasByBatch(quebras);
+
   const productDetails: ProductReportDetail[] = products.map(product => {
     const productBatchesInRange = batchesInRange.filter(b => b.productId === product.id);
     const productQuebrasInRange = quebrasInRange.filter(q => q.productId === product.id);
@@ -117,7 +141,7 @@ export function generateReportSummary(
     productBatchesInRange.forEach(batch => {
       // Find all quebras for this batch (not just ones in range — a batch's
       // remaining quantity depends on every quebra ever logged against it).
-      const batchQuebras = quebras.filter(q => q.batchId === batch.id);
+      const batchQuebras = allQuebrasByBatch.get(batch.id) ?? [];
       const calc = calculateBatch(batch, batchQuebras);
 
       totalQuantityEntered += batch.quantity;
