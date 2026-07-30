@@ -33,6 +33,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
   const [reason, setReason] = useState<string>('');
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
   // Set initial product and batch
   useEffect(() => {
@@ -76,7 +77,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
     isWarning = isQuebraExceedingWarning(targetBatch, existingBatchQuebras, numLoss);
   }
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!selectedProductId || !selectedBatchId) {
@@ -95,23 +96,35 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
       return;
     }
 
-    addQuebra({
-      productId: selectedProductId,
-      batchId: selectedBatchId,
-      date,
-      quantityLost: numLoss,
-      reason: reason.trim(),
-    });
+    // addQuebra is async and can reject (missing activeBusinessId, or a
+    // Firestore write/timeline-log failure) — this must be awaited and
+    // caught, or the rejection is silently swallowed and the UI shows
+    // "success" for a quebra that was never actually recorded. Same class
+    // of bug already fixed in AddExpenseView/AddWithdrawalView.
+    setIsSaving(true);
+    try {
+      await addQuebra({
+        productId: selectedProductId,
+        batchId: selectedBatchId,
+        date,
+        quantityLost: numLoss,
+        reason: reason.trim(),
+      });
 
-    setSubmittedMessage(
-      numLoss === 1
-        ? t('addQuebra.successMessageOne', { count: numLoss })
-        : t('addQuebra.successMessageOther', { count: numLoss })
-    );
+      setSubmittedMessage(
+        numLoss === 1
+          ? t('addQuebra.successMessageOne', { count: numLoss })
+          : t('addQuebra.successMessageOther', { count: numLoss })
+      );
 
-    setTimeout(() => {
-      onComplete();
-    }, 1200);
+      setTimeout(() => {
+        onComplete();
+      }, 1200);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao registar a quebra.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -290,10 +303,10 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             <div className="flex items-center pt-1">
               <button
                 type="submit"
-                disabled={!selectedBatchId}
+                disabled={!selectedBatchId || isSaving}
                 className="w-full min-h-[52px] py-3.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm transition-all duration-150 shadow-[0_10px_24px_-8px_rgba(225,29,72,0.35)] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
               >
-                <span>{t('addQuebra.submitButton')}</span>
+                <span>{isSaving ? '...' : t('addQuebra.submitButton')}</span>
                 <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
               </button>
             </div>

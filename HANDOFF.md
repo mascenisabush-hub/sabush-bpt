@@ -12,54 +12,42 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Firestore rules-unit-testing suite for the Closing Integrity
-Amendment written, typechecked, and smoke-tested (harness runs cleanly;
-actual rule assertions require a live emulator — see below). About to be
+**Status:** Fixed the missing-`await` bug in `AddQuebraView.tsx` (same
+class of bug previously found/fixed in `AddExpenseView`/
+`AddWithdrawalView`) — this was the Product Architect's top-named
+follow-up item from last session. Typechecks cleanly. About to be
 committed and pushed. Modules #17 (Multi-Shop) and #18 (SuperAdmin)
-unchanged — still drafted, awaiting approval.
+unchanged — still drafted, awaiting approval. The Firestore
+rules-unit-testing suite from the prior session (`tests/firestore-rules.test.ts`)
+is committed but **still not run against a live emulator** — that remains
+open, see below.
 
-**Last completed:** `tests/firestore-rules.test.ts` — covers every
-scenario the Product Architect review asked to verify: Owner/Manager/
-Staff × create/edit/delete × open/closed period on `expenses` and
-`withdrawals`; the `closings`/`closedPeriods` create-vs-reopen permission
-split; tenant isolation on the touched collections; and the full
-historical workflow (Closing A → reopen → new Expense → Closing B),
-asserting Closing A's frozen totals survive untouched and a
-still-active period can't be double-locked. Uses Node's built-in test
-runner (`node:test`) + `@firebase/rules-unit-testing`, both added as
-devDependencies, plus `firebase-tools` for emulator orchestration.
-`npm run test:rules:emulator` runs it end-to-end (starts the emulator via
-`firebase-tools`, runs the suite, tears down).
+**Last completed:** `AddQuebraView.tsx`'s `handleSubmit` was calling
+`addQuebra(...)` (an async function that can reject — missing
+`activeBusinessId`, or a Firestore `setDoc`/timeline-log failure) without
+`await`, so a rejected write was silently swallowed and the UI showed
+"Quebra registered" success even when nothing was saved. Fixed to match
+the established `AddExpenseView`/`AddWithdrawalView` pattern: `handleSubmit`
+is now `async`, awaits `addQuebra`, wraps it in `try/catch/finally`, shows
+a user-visible `alert` on failure, and adds an `isSaving` state that
+disables the submit button mid-flight. No business-rule change — Quebras
+remain explicitly out of scope for the Closing Integrity Amendment
+(no closed-period check was added). Grounds: BDS #07 (Breakages) already
+requires "no silent-failure" writes/deletes and a user-visible error on
+backend rejection.
 
-**This could not be executed end-to-end from this sandbox** — network
-egress here is allow-listed (npm/github/pypi/crates.io/ubuntu archives
-only) and doesn't reach Google's emulator-binary infrastructure. What
-*was* verified here: the suite typechecks cleanly (`tsc --noEmit -p .`),
-and a smoke run (`npx tsx --test tests/firestore-rules.test.ts`) confirms
-the harness itself loads and runs without any syntax/import errors — it
-fails only at the expected point (`initializeTestEnvironment`'s fetch to
-`localhost:8080`, "fetch failed" — no emulator listening), which is
-exactly the missing-emulator symptom, not a bug. **Running
-`npm run test:rules:emulator` for real, in an environment with open
-network access, is still the actual acceptance gate before deploying
-these rules to production — this has not yet happened.**
+**Files touched:** `src/components/AddQuebraView.tsx` only.
 
-**Files touched:** `tests/firestore-rules.test.ts` (new), `firebase.json`
-(added `emulators.firestore.port: 8080`), `package.json` (new
-devDependencies `@firebase/rules-unit-testing` + `firebase-tools`, new
-scripts `test:rules`/`test:rules:emulator`).
-
-**Next up:** Run `npm run test:rules:emulator` somewhere with real network
-access and fix whatever it finds — treat a clean pass as the actual
-signal the Closing Integrity Amendment's rules are production-ready, not
-this suite's mere existence. After that, the Product Architect's
-remaining suggested priorities were: audit `addQuebra` and similar async
-paths for the same missing-`await` bug found in `addExpense`/
-`addWithdrawal`; a broader Firestore tenant-isolation/security audit
-beyond Closing Integrity; then return to Module #17 (spec currently
-titled "Multi-Shop" in this repo — flagged a naming discrepancy with the
-Architect's "Owner Portfolio," unresolved) only once its spec is
-approved.
+**Next up:** (1) Run `npm run test:rules:emulator` somewhere with real
+network access and fix whatever it finds — treat a clean pass as the
+actual signal the Closing Integrity Amendment's rules are
+production-ready; this still hasn't happened (blocked in this sandbox —
+egress is allow-listed to npm/github/pypi/crates.io/ubuntu archives only,
+doesn't reach Google's emulator-binary infra). (2) A broader Firestore
+tenant-isolation/security audit beyond Closing Integrity. (3) Return to
+Module #17 (spec currently titled "Multi-Shop" in this repo — flagged
+naming discrepancy with the Architect's "Owner Portfolio," unresolved)
+only once its spec is approved.
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
 grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
@@ -97,11 +85,6 @@ clean. No open PRs, no half-finished edits.
   Manager sees "Staff" with no tier indicator in the header itself
   (SettingsModal shows it correctly). Cosmetic, noted as future
   enhancement in BDS #16.
-- `AddQuebraView.tsx`'s submit handler was not checked/fixed for the same
-  missing-`await` bug found in `AddExpenseView`/`AddWithdrawalView` last
-  session — Quebras aren't governed by the Closing Integrity Amendment,
-  so this was out of scope there. The Product Architect explicitly named
-  this as the next follow-up item.
 - `clearAllData` no longer removes Closings (they can no longer be
   deleted at all) — flagged for a product decision on whether its copy
   should change, not yet decided.
