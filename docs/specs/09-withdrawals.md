@@ -172,6 +172,13 @@ cost?" vs. "what has the owner taken out?") each have a clean answer.
    confirm dialog) — a smaller-severity version of the gap spec #7/#8
    named, since role-gating here is already correct; only the missing
    "are you sure?" step remains.
+10. **[Amendment v1.0] Not currently implemented:** blocking *creation*
+    of a new Withdrawal whose `date` falls inside an already-closed
+    period, matching Functional Requirement #10 in spec #8 — see
+    [Closing Integrity Amendment](./08-09-11-closing-integrity-amendment.md)
+    Decisions Record, Q1/Q2 — approved.
+11. **[Amendment v1.0] Not currently implemented:** future-dated
+    Withdrawals remain unrestricted (Amendment Q3 — no change).
 
 ## Non-functional Requirements
 
@@ -247,3 +254,8 @@ cost?" vs. "what has the owner taken out?") each have a clean answer.
       (Architecture 6.3) will be implemented, so "if granted" access to
       Withdrawals has a concrete path rather than remaining permanently
       aspirational.
+- [ ] **[Amendment v1.0]** A new Withdrawal cannot be created with a
+      `date` inside an already-closed period.
+- [ ] **[Amendment v1.0]** An Owner can reopen a closed period
+      (admin-only, logged), correct or add Withdrawals, then re-close
+      it — the sanctioned correction path for a locked record.

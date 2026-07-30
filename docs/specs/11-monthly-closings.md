@@ -287,6 +287,24 @@ direction**
 10. **Not currently implemented:** localization (`t()` calls) anywhere in
     `ClosingView.tsx` — entirely hardcoded Portuguese, unlike the
     downstream `CapitalGrowthReport.tsx` that consumes the same data.
+11. **[Amendment v1.0]** Per the
+    [Closing Integrity Amendment](./08-09-11-closing-integrity-amendment.md),
+    Decisions Record: a closed period must block creation of new
+    backdated Expense/Withdrawal records, not just protect records that
+    existed at close time (Amendment Q1/Q2). **Scope note:** this
+    amendment covers Expense (spec #8) and Withdrawal (spec #9) only —
+    FR#8's mention of Quebra/Stock Batch under Architecture 8.8's
+    four-domain lock is *not* part of this amendment and remains an
+    open gap for a future, separately-scoped assessment, consistent
+    with the standing instruction not to expand Finding B beyond its
+    approved boundary.
+12. **[Amendment v1.0]** An Owner (not Manager, regardless of
+    `closings` permission grant) can reopen a closed period —
+    admin-only, logged as its own `TimelineEvent`, superseding the
+    frozen snapshot rather than retroactively editing it, per
+    Architecture 8.8's existing `deleteClosing` pattern. Re-closing
+    after a reopen requires recording a new Closing, same as today's
+    flow.
 
 ## Non-functional Requirements
 
@@ -376,11 +394,20 @@ direction**
 - [ ] A recorded Closing document cannot be updated by any role through
       any path, verified directly against the Firestore rule, not only
       the app's own UI.
-- [ ] Expense, Withdrawal, Quebra, and Stock Batch records gain a
-      `closingId` (or equivalent) field, and writes to a date inside an
-      already-closed period are blocked or flagged — the same fix specs
-      #8 and #9 require, applied here as the module responsible for
-      owning the lock.
+- [ ] Expense and Withdrawal records gain a `closingId` (or equivalent)
+      enforcement mechanism, and writes to a date inside an
+      already-closed period are blocked — the same fix specs #8 and #9
+      require, applied here as the module responsible for owning the
+      lock. **[Amendment v1.0 scope note]** Quebra and Stock Batch are
+      *not* included in this amendment's approved scope; extending the
+      four-domain lock to them is a separate, future assessment.
+- [ ] **[Amendment v1.0]** Creating a new Expense or Withdrawal dated
+      inside an already-closed period is blocked, not just editing or
+      deleting a record that existed at close time.
+- [ ] **[Amendment v1.0]** An Owner can reopen a closed period,
+      admin-only, with the action logged as a `TimelineEvent`; the
+      prior Closing's snapshot is superseded, not retroactively
+      rewritten, and re-locking requires recording a new Closing.
 - [ ] A confirmation step exists before a Closing delete completes.
 - [ ] `ClosingView.tsx` is fully localized, matching every other entry
       form in this series and its own downstream Capital Growth Report.

@@ -181,6 +181,19 @@ the moment it's entered, not at some future bookkeeping close-out.
    once it belongs to a locked Closing period, per the same
    Architecture 8.7 rule — currently impossible to enforce at all
    without Functional Requirement #7's field existing first.
+10. **[Amendment v1.0] Not currently implemented:** blocking *creation*
+    of a new Expense whose `date` falls inside an already-closed
+    period — not just blocking edit/delete of records that already
+    existed at close time. See
+    [Closing Integrity Amendment](./08-09-11-closing-integrity-amendment.md)
+    Decisions Record, Q1/Q2 — approved. Without this, an Expense
+    recorded after the fact with a backdated date reopens the exact
+    mismatch Closing exists to prevent, without touching any existing
+    record.
+11. **[Amendment v1.0] Not currently implemented:** future-dated
+    Expenses remain unrestricted (Amendment Q3 — no change from
+    current behavior; stated here only so it isn't mistaken for an
+    oversight).
 9. **Not currently implemented:** gating the delete control by role to
    match the Firestore rule, a confirmation step before delete, and a
    visible error if a delete attempt is rejected — the same gap named
@@ -240,10 +253,11 @@ the moment it's entered, not at some future bookkeeping close-out.
   work Architecture 8.7 already specifies: an Expense records which
   Closing (if any) has locked it, and edit/delete is blocked once set,
   per Functional Requirements #7–8.
-- **Correction-as-new-record for a locked Expense** — once locked, a
-  correction becomes a new entry in the next open period referencing
-  what it corrects (Architecture 7.6's general pattern), rather than any
-  retroactive edit.
+- ~~**Correction-as-new-record for a locked Expense**~~ — **Superseded
+  by [Closing Integrity Amendment v1.0](./08-09-11-closing-integrity-amendment.md),
+  Q4.** The approved correction path is admin-only period reopening,
+  not a forward-dated correction entry (which Amendment Q1/Q2 now
+  blocks from being backdated into the closed period anyway).
 - **Close the UI/rules gap** — gate the delete control by role, add a
   confirmation step, and surface delete errors, mirroring spec #7's
   Future Enhancements for Quebras exactly.
@@ -269,3 +283,11 @@ the moment it's entered, not at some future bookkeeping close-out.
 - [ ] The Section 6.8/7.7 permission-matrix inconsistency has been
       explicitly resolved by product ownership, not left as an
       unreviewed side effect of whichever rule happened to ship first.
+- [ ] **[Amendment v1.0]** A new Expense cannot be created with a `date`
+      inside an already-closed period — closing a period blocks new
+      backdated entries, not just edits to existing ones.
+- [ ] **[Amendment v1.0]** An Owner can reopen a closed period
+      (admin-only, logged as a `TimelineEvent`), correct or add
+      Expenses, then re-close it — the only sanctioned correction path
+      for a locked record, superseding this spec's earlier
+      "correction-as-new-record" Future Enhancement.
