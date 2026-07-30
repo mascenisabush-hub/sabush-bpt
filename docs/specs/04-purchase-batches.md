@@ -152,8 +152,11 @@ in conversation or in a note, unlike a raw database ID.
   moving this server-side is already defined in Architecture 11.4/13.8,
   not re-decided here.
 - Building a `PurchaseBatchSummary` reuses the Calculation Engine's
-  already-O(n) per-batch cost (spec #2) — this module adds only
-  grouping/aggregation overhead on top, no independent recomputation.
+  `O(batches + quebras)` cost (spec #2, corrected from an earlier "O(n)"
+  statement — see spec #2's Performance section: quebras are now grouped
+  by `batchId` once via `groupQuebrasByBatch` rather than re-scanned per
+  line item) — this module adds only grouping/aggregation overhead on
+  top, no independent recomputation.
 
 **Security**
 - Every Purchase Batch and its line items are scoped by the same

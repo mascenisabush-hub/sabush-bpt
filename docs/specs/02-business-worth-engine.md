@@ -182,11 +182,17 @@ anywhere in the product:
 ## Non-functional Requirements
 
 **Performance**
-- `calculateInventoryTotals` runs in O(n) over the batch set — no nested
-  iteration that would degrade non-linearly as a single business's batch
-  count grows (Architecture Section 11's scaling discipline: this is the
-  one calculation every Dashboard and Report render depends on, so its
-  cost shape matters more than almost any other function in the app).
+- `calculateInventoryTotals` runs in `O(batches + quebras)` — quebras are
+  grouped by `batchId` once (`groupQuebrasByBatch`), then each batch does
+  an `O(1)` lookup instead of a full-list scan. No nested iteration that
+  would degrade non-linearly as a single business's batch or quebra count
+  grows (Architecture Section 11's scaling discipline: this is the one
+  calculation every Dashboard and Report render depends on, so its cost
+  shape matters more than almost any other function in the app).
+  *(Corrected from an earlier "O(n)" statement that described the
+  intended shape rather than the as-shipped code, which re-scanned the
+  full quebra list per batch; fixed in `calculations.ts` without changing
+  any formula, business rule, or output.)*
 - No network call, no async operation anywhere in this module — every
   function is a pure, synchronous calculation over data already loaded
   into memory.

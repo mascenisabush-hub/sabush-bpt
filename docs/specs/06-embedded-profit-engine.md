@@ -144,14 +144,19 @@ reads with equal weight either way.
 
 **Performance**
 - The estimated/finalized split iterates the full batch set once,
-  calling `calculateBatch` per batch — the same O(n) cost class as
-  `calculateInventoryTotals` (spec #2), but currently a **second**,
-  separate iteration rather than sharing one pass with whatever computes
-  the plain total. At current scale this is immaterial; flagged as a
-  candidate for consolidation into a single aggregation function if this
-  module and spec #2's totals are ever computed in the same render path
-  under real load (Architecture Section 11's discipline: not a problem
-  today, worth naming so it isn't rediscovered as a surprise later).
+  calling `calculateBatch` per batch, filtering the full `quebras` list
+  per batch inline in `DashboardView.tsx` — this is a **second**,
+  separate iteration from `calculateInventoryTotals` (spec #2), not one
+  that shares its pass or its now-corrected `O(batches + quebras)`
+  grouping. As of this module's own scope, this inline Dashboard
+  iteration still re-scans the full quebra list per batch (i.e. still
+  `O(batches × quebras)`), since fixing it was intentionally kept out of
+  scope of the spec #2 calculation-engine optimization to avoid bundling
+  Dashboard-file changes into that fix. At current scale this remains
+  immaterial; flagged as a candidate for the same grouping fix if this
+  module's iteration is ever consolidated with spec #2's totals, or
+  extracted into a named Calculation Engine export (see the existing gap
+  noted under Functional Requirements, above).
 
 **Security**
 - No additional access control beyond the standard tenant-isolation

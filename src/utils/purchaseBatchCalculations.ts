@@ -1,5 +1,5 @@
 import { StockBatch, Quebra, PurchaseBatch, PurchaseBatchStatus, Product } from '../types';
-import { calculateBatch } from './calculations';
+import { calculateBatch, groupQuebrasByBatch } from './calculations';
 
 /**
  * Generates the next permanent, human-readable batch number, e.g. "BAT-000001".
@@ -59,6 +59,7 @@ export function calculatePurchaseBatchSummary(
   products: Product[]
 ): PurchaseBatchSummary {
   const productMap = new Map(products.map((p) => [p.id, p]));
+  const quebrasByBatch = groupQuebrasByBatch(quebras);
 
   let totalQuantity = 0;
   let totalRemainingQuantity = 0;
@@ -69,7 +70,7 @@ export function calculatePurchaseBatchSummary(
   let inventoryLostValue = 0;
 
   const lineItems: LineItemCalculation[] = lineItemBatches.map((batch) => {
-    const batchQuebras = quebras.filter((q) => q.batchId === batch.id);
+    const batchQuebras = quebrasByBatch.get(batch.id) ?? [];
     const calc = calculateBatch(batch, batchQuebras);
 
     totalQuantity += batch.quantity;
