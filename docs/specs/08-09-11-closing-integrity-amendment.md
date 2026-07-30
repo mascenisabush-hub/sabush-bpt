@@ -2,10 +2,16 @@ Business Domain Specification — Amendment
 
 # Closing Integrity Amendment
 
-Version 0.1 (Draft)
-**Status:** 🟡 Drafted — awaiting approval. Does not amend #8, #9, or #11
-until explicitly approved; those specs remain the source of truth for
-everything not addressed here.
+Version 1.0
+**Status:** ✅ Approved (decisions recorded below). Specs #8, #9, and
+#11 have been amended to incorporate these decisions — see each spec's
+Business Rules / Functional Requirements / Acceptance Criteria for the
+`[Amendment v1.0]`-tagged additions. This document remains the record
+of *why*; the individual specs remain the source of truth for *what*.
+**Implementation status:** Not yet built. This amendment settles the
+business-rule decisions; the `closingId`/enforcement *mechanism*
+(Option A/B/C) is decided in the Rule 8 implementation plan that
+follows this document, not here.
 **Amends:** [Expenses (spec #8)](./08-expenses.md),
 [Withdrawals (spec #9)](./09-withdrawals.md),
 [Monthly Closings (spec #11)](./11-monthly-closings.md)
@@ -96,6 +102,34 @@ Options, concretely:
 - **Reversal entries** — a signed correction record explicitly linked to the original, still forward-dated, but with a formal link rather than an informal note. More audit-friendly, more to build.
 - **Period reopening (admin-only)** — an explicit, logged action that temporarily unlocks a closed period for correction, then re-closes it. Most flexible, but weakens "permanently locks... immutable once recorded" (Architecture 7.6/Principle 2.10) unless reopening itself is tightly scoped and audited — worth being cautious about, given that language is already approved.
 - **Decide later** — out of scope for this amendment; Questions 1–2 can be approved and implemented without settling this first, since "no correction path" is already the de facto behavior today (there's no `update*` function at all).
+
+## Decisions Record
+
+| Question | Decision |
+|---|---|
+| Q1 — Fully immutable closed periods? | **Approved.** Block edit/delete of existing records AND creation of new backdated records inside a closed period. |
+| Q2 — Block backdated entries into a closed period? | **Approved** (same decision as Q1 — backdated-entry blocking is how Q1's "fully immutable" is actually enforced). |
+| Q3 — Restrict future-dated entries? | **No change.** Future dates remain allowed, same as today's behavior. Unrelated to the closing-lock mechanism; not part of this amendment's implementation. |
+| Q4 — Correction path for a locked record? | **Period reopening — admin-only, logged, temporary unlock.** Not "no correction path," and not reversal entries. This is the more flexible, more powerful option, and carries the risk this document flagged: it weakens Architecture 7.6/Principle 2.10's "permanently locks... immutable once recorded" language unless reopening itself is tightly scoped, restricted to Owner (not Manager — see below), and every reopen/re-close is logged as its own `TimelineEvent`, auditable after the fact. |
+
+**Reopening — scope implied by the decision, to be confirmed in the
+implementation plan, not assumed here:**
+- Who: Owner only. Architecture's existing Manager-`closings`-permission
+  gate (BDS #16) governs *recording* a Closing; reopening is a more
+  destructive action and this document recommends it not inherit that
+  same permission automatically — a Manager granted "can close books"
+  is not necessarily a Manager who should be able to *un*-close them.
+  This is a recommendation carried into the implementation plan, not a
+  fifth question reopened here.
+- What happens to the frozen snapshot on reopen: the existing
+  `deleteClosing` pattern already establishes the answer architecturally
+  — Architecture 8.8 states deleting a Closing "re-opens the period; it
+  never edits the frozen figures retroactively." Reopening should follow
+  the same shape: the old Closing's snapshot is superseded, not
+  retroactively rewritten, and a new Closing is required to re-lock the
+  period once corrections are made.
+- Every reopen is a `TimelineEvent`, visible on the Business Timeline
+  (spec #13), not a silent unlock.
 
 ## Explicitly deferred — the `closingId` design question
 

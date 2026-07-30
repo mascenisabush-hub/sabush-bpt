@@ -48,6 +48,23 @@ intelligence), then build the platform capabilities around that.
 | 10 | [Stock Counts](./10-stock-counts.md) | ✅ Approved |
 | 11 | [Monthly Closings](./11-monthly-closings.md) | ✅ Approved |
 
+> **Note on the Closing Integrity Amendment (amends #8, #9, #11):** a
+> calculation audit found that closed-period integrity had a real
+> requirement gap, not just an implementation gap — specs #8/#9
+> required protecting *existing* Expense/Withdrawal records once
+> locked, but nothing required blocking *new*, backdated records from
+> being created inside an already-closed period. The
+> [Closing Integrity Amendment](./08-09-11-closing-integrity-amendment.md)
+> (v1.0, ✅ Approved) settles this: closed periods are now specified as
+> fully immutable — new backdated entries blocked, future-dated entries
+> unchanged, and the one sanctioned correction path is admin-only,
+> logged period reopening. Specs #8, #9, and #11 have been updated
+> in-place with `[Amendment v1.0]`-tagged Functional Requirements and
+> Acceptance Criteria. Scope is Expense/Withdrawal only — Quebra and
+> Stock Batch remain outside this amendment. Not yet implemented; the
+> `closingId`/enforcement mechanism is a separate Rule 8 implementation
+> plan, still pending.
+
 ## Phase 3 — Insight & Decision Support
 
 | # | Module | Status |
