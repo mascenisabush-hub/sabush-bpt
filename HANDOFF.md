@@ -12,51 +12,54 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Closing Integrity Amendment v1.0 implementation is complete,
-typechecked (`tsc --noEmit`), and built (`npm run build`) successfully.
-About to be committed and pushed. Modules #17 (Multi-Shop) and #18
-(SuperAdmin) are unchanged from before — still drafted, awaiting
-approval, not touched this session.
+**Status:** Firestore rules-unit-testing suite for the Closing Integrity
+Amendment written, typechecked, and smoke-tested (harness runs cleanly;
+actual rule assertions require a live emulator — see below). About to be
+committed and pushed. Modules #17 (Multi-Shop) and #18 (SuperAdmin)
+unchanged — still drafted, awaiting approval.
 
-**Last completed:** Closing Integrity Amendment v1.0 (governs
-Expense/Withdrawal integrity around Monthly/Yearly Closings — specs #8,
-#9, #11). Three Rule 8 decisions were made and implemented: lock
-mechanism = Option B (`closingId`/`lockedAt` fields + a `ClosedPeriod`
-lock-index collection, since Firestore rules can't run range queries);
-historical closings = backfill (`backfillClosingLocks()`, idempotent,
-Owner-only, exposed in Settings); reopening = built now (Owner-only,
-logged, supersedes the Closing in place rather than deleting it).
-Full detail, including one gap found and fixed mid-implementation (a
-Manager could previously delete/reopen any Closing — the `closings`
-Firestore rule now splits create from update/delete) and one
-product-facing behavior change flagged for a deliberate decision
-(`clearAllData` no longer removes Closings, since they can no longer be
-deleted at all) is in
-`docs/specs/08-09-11-closing-integrity-amendment.md`'s "Implementation
-status" section — read that before touching this area again.
+**Last completed:** `tests/firestore-rules.test.ts` — covers every
+scenario the Product Architect review asked to verify: Owner/Manager/
+Staff × create/edit/delete × open/closed period on `expenses` and
+`withdrawals`; the `closings`/`closedPeriods` create-vs-reopen permission
+split; tenant isolation on the touched collections; and the full
+historical workflow (Closing A → reopen → new Expense → Closing B),
+asserting Closing A's frozen totals survive untouched and a
+still-active period can't be double-locked. Uses Node's built-in test
+runner (`node:test`) + `@firebase/rules-unit-testing`, both added as
+devDependencies, plus `firebase-tools` for emulator orchestration.
+`npm run test:rules:emulator` runs it end-to-end (starts the emulator via
+`firebase-tools`, runs the suite, tears down).
 
-**Files touched:** `src/types.ts`, `src/context/AppContext.tsx`,
-`src/components/timeline/timelineHelpers.ts`, `src/components/ClosingView.tsx`,
-`src/components/AddExpenseView.tsx`, `src/components/AddWithdrawalView.tsx`,
-`src/components/reports/ExpenseReport.tsx`,
-`src/components/reports/WithdrawalReport.tsx`,
-`src/components/SettingsModal.tsx`, `firestore.rules`,
-`src/i18n/locales/{en,fr,pt}.ts` (new `reports.common.locked` key),
-`docs/specs/08-09-11-closing-integrity-amendment.md`.
+**This could not be executed end-to-end from this sandbox** — network
+egress here is allow-listed (npm/github/pypi/crates.io/ubuntu archives
+only) and doesn't reach Google's emulator-binary infrastructure. What
+*was* verified here: the suite typechecks cleanly (`tsc --noEmit -p .`),
+and a smoke run (`npx tsx --test tests/firestore-rules.test.ts`) confirms
+the harness itself loads and runs without any syntax/import errors — it
+fails only at the expected point (`initializeTestEnvironment`'s fetch to
+`localhost:8080`, "fetch failed" — no emulator listening), which is
+exactly the missing-emulator symptom, not a bug. **Running
+`npm run test:rules:emulator` for real, in an environment with open
+network access, is still the actual acceptance gate before deploying
+these rules to production — this has not yet happened.**
 
-**A real bug found and fixed along the way, not part of the original
-plan:** `addExpense`/`addWithdrawal` were being called without `await`
-in their respective Add*View forms — a rejected promise (e.g. the new
-closed-period check) was silently swallowed and the UI showed "success"
-regardless. Both views are now properly async/awaited/caught.
+**Files touched:** `tests/firestore-rules.test.ts` (new), `firebase.json`
+(added `emulators.firestore.port: 8080`), `package.json` (new
+devDependencies `@firebase/rules-unit-testing` + `firebase-tools`, new
+scripts `test:rules`/`test:rules:emulator`).
 
-**Next up:** Module #17 (Multi-Shop) — BDS spec drafted
-(`docs/specs/17-multi-shop.md`), documenting the module's substantially
-already-implemented state (`ShopSwitcher.tsx`, `addShop`/`switchShop` in
-`AppContext.tsx`, `firestore.rules` enforcement) plus one flagged gap
-(no shop-removal/archival flow) and one real i18n gap (`ShopSwitcher`'s
-hardcoded Portuguese strings). Awaiting explicit approval before any
-implementation begins.
+**Next up:** Run `npm run test:rules:emulator` somewhere with real network
+access and fix whatever it finds — treat a clean pass as the actual
+signal the Closing Integrity Amendment's rules are production-ready, not
+this suite's mere existence. After that, the Product Architect's
+remaining suggested priorities were: audit `addQuebra` and similar async
+paths for the same missing-`await` bug found in `addExpense`/
+`addWithdrawal`; a broader Firestore tenant-isolation/security audit
+beyond Closing Integrity; then return to Module #17 (spec currently
+titled "Multi-Shop" in this repo — flagged a naming discrepancy with the
+Architect's "Owner Portfolio," unresolved) only once its spec is
+approved.
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
 grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
@@ -83,26 +86,28 @@ Module #15 (AI Intelligence) remains drafted but deliberately not
 implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist yet.
 
-**Anything mid-flight / blocked:** Nothing once this session's commit
-lands. No open PRs, no half-finished edits, no pending decisions waiting
-on the PM beyond the `clearAllData` copy question flagged above.
+**Anything mid-flight / blocked:** The emulator test run itself is
+blocked on network access this sandbox doesn't have — everything else is
+clean. No open PRs, no half-finished edits.
 
 **Known gaps flagged but not yet scheduled:**
-- Rules-emulator verification for **both** the Module #16 firestore.rules
-  changes and this session's Closing Integrity Amendment rules changes
-  was flagged as a manual step (no Firestore emulator available in the
-  sandbox that built either) — worth a real test pass before either
-  matters in production. The amendment's rules are more consequential
-  to verify given they gate financial-record deletion.
+- Actually running `npm run test:rules:emulator` (see above) — the single
+  highest-priority item right now.
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a
   Manager sees "Staff" with no tier indicator in the header itself
   (SettingsModal shows it correctly). Cosmetic, noted as future
   enhancement in BDS #16.
 - `AddQuebraView.tsx`'s submit handler was not checked/fixed for the same
-  missing-`await` bug found in `AddExpenseView`/`AddWithdrawalView` this
+  missing-`await` bug found in `AddExpenseView`/`AddWithdrawalView` last
   session — Quebras aren't governed by the Closing Integrity Amendment,
-  so this was out of scope here, but it's the same bug shape and worth a
-  dedicated look.
+  so this was out of scope there. The Product Architect explicitly named
+  this as the next follow-up item.
+- `clearAllData` no longer removes Closings (they can no longer be
+  deleted at all) — flagged for a product decision on whether its copy
+  should change, not yet decided.
+- Module #17's name: this repo's spec/README call it "Multi-Shop"; the
+  Product Architect's review referred to it as "Owner Portfolio." Not
+  reconciled — worth a quick confirmation before that module is next.
 
 ---
 
