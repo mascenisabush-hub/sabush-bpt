@@ -11,6 +11,7 @@ import {
   UserMinus,
   UserX,
   UserCheck,
+  LockOpen,
 } from 'lucide-react';
 import { TimelineActivityType, TimelineEvent } from '../../types';
 import { isDateInRange } from '../../utils/calculations';
@@ -33,6 +34,7 @@ export const ACTIVITY_ICON: Record<TimelineActivityType, React.ComponentType<{ c
   'staff-removed': UserMinus,
   'staff-suspended': UserX,
   'staff-reactivated': UserCheck,
+  'period-reopened': LockOpen,
 };
 
 export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
@@ -50,6 +52,7 @@ export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
   'staff-removed': 'bg-slate-100 text-slate-600 border-slate-300',
   'staff-suspended': 'bg-orange-50 text-orange-600 border-orange-200',
   'staff-reactivated': 'bg-green-50 text-green-600 border-green-200',
+  'period-reopened': 'bg-yellow-50 text-yellow-700 border-yellow-300',
 };
 
 export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
@@ -67,6 +70,7 @@ export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
   'staff-removed': 'Funcionário Removido',
   'staff-suspended': 'Funcionário Suspenso',
   'staff-reactivated': 'Funcionário Reativado',
+  'period-reopened': 'Período Reaberto',
 };
 
 export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
@@ -84,6 +88,7 @@ export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
   'staff-removed',
   'staff-suspended',
   'staff-reactivated',
+  'period-reopened',
 ];
 
 export function getEventTime(createdAt: string): string {

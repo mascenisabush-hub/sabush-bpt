@@ -475,6 +475,7 @@ export interface TranslationDict {
       statusFullyConsumed: string;
       statusArchived: string;
       delete: string;
+      locked: string;
     };
     businessWorth: {
       title: string;
@@ -1244,6 +1245,7 @@ export const pt: TranslationDict = {
       statusFullyConsumed: 'Totalmente Consumido',
       statusArchived: 'Arquivado',
       delete: 'Eliminar',
+      locked: 'Bloqueado — reabra o período para editar',
     },
     businessWorth: {
     title: 'Valor do Negócio',

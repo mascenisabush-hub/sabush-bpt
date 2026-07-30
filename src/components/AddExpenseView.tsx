@@ -30,8 +30,9 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
   const [category, setCategory] = useState<string>('');
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     if (!description.trim()) {
@@ -45,18 +46,29 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
       return;
     }
 
-    addExpense({
-      date,
-      description: description.trim(),
-      amount: numAmount,
-      category: category.trim() || undefined,
-    });
+    // [Closing Integrity Amendment v1.0] addExpense can now reject (e.g. a
+    // backdated entry into an already-closed period) — this must be
+    // awaited and caught, or the rejection is silently swallowed and the
+    // UI shows "success" for an expense that was never actually recorded.
+    setIsSaving(true);
+    try {
+      await addExpense({
+        date,
+        description: description.trim(),
+        amount: numAmount,
+        category: category.trim() || undefined,
+      });
 
-    setSubmittedMessage(t('addExpense.successMessage', { amount: formatCurrency(numAmount, currencySymbol) }));
+      setSubmittedMessage(t('addExpense.successMessage', { amount: formatCurrency(numAmount, currencySymbol) }));
 
-    setTimeout(() => {
-      onComplete();
-    }, 1200);
+      setTimeout(() => {
+        onComplete();
+      }, 1200);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao registar a despesa.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -168,9 +180,10 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
-                className="btn-primary flex-1 min-h-[52px] py-3.5 px-5 text-[15px] rounded-2xl"
+                disabled={isSaving}
+                className="btn-primary flex-1 min-h-[52px] py-3.5 px-5 text-[15px] rounded-2xl disabled:opacity-60"
               >
-                <span>{t('addExpense.submitButton')}</span>
+                <span>{isSaving ? '...' : t('addExpense.submitButton')}</span>
                 <ArrowRight className="w-5 h-5" strokeWidth={2.25} />
               </button>
             </div>

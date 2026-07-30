@@ -62,6 +62,21 @@ service cloud.firestore {
       );
     }
 
+    // [Closing Integrity Amendment v1.0] A rule cannot run a range query
+    // ("does any Closing cover this date?") — it can only get() a document
+    // at a known path. ClosedPeriod docs exist purely so this becomes a
+    // deterministic lookup: split the incoming date "YYYY-MM-DD" and check
+    // both possible period keys (monthly and yearly) for that business.
+    // Must derive the exact same id shape as closedPeriodKey() in
+    // AppContext.tsx — if that function ever changes, this must too.
+    function isDateInsideClosedPeriod(businessId, dateStr) {
+      let parts = dateStr.split('-');
+      let year = parts[0];
+      let month = parts[1];
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/closedPeriods/$('monthly:' + year + '-' + month)) ||
+             exists(/databases/$(database)/documents/businesses/$(businessId)/closedPeriods/$('yearly:' + year));
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -201,11 +216,24 @@ service cloud.firestore {
         allow delete: if isOwnerOf(businessId);
       }
 
+      // [Closing Integrity Amendment v1.0]
+      //  - create: blocked if the entry's own date falls inside an
+      //    already-closed period (Half 2 — protects the closed period
+      //    itself, not just existing records).
+      //  - update/delete: blocked once closingId is set (Half 1 — no
+      //    client function currently calls update on an Expense, but the
+      //    rule itself must not be laxer than the app, the same class of
+      //    gap BDS #10 flagged for Stock Counts).
       match /expenses/{expenseId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId);
-        allow update: if isMemberOf(businessId);
-        allow delete: if isOwnerOf(businessId);
+        allow create: if isMemberOf(businessId) &&
+          !isDateInsideClosedPeriod(businessId, request.resource.data.date);
+        allow update: if isMemberOf(businessId) && (
+          resource.data.get('closingId', null) == null ||
+          (isOwnerOf(businessId) && request.resource.data.get('closingId', null) == null)
+        );
+        allow delete: if isOwnerOf(businessId) &&
+          resource.data.get('closingId', null) == null;
       }
 
       // Stock Counts (Initial Capital baseline + periodic physical counts).
@@ -219,8 +247,18 @@ service cloud.firestore {
 
       // Owner Withdrawals: money taken by the owner personally. Only the
       // owner may record/edit/remove these — staff never handle this.
+      // [Closing Integrity Amendment v1.0] Same create/update/delete
+      // protections as Expenses, above — see that comment for the rule.
       match /withdrawals/{withdrawalId} {
-        allow read, create, update, delete: if isOwnerOf(businessId);
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          !isDateInsideClosedPeriod(businessId, request.resource.data.date);
+        allow update: if isOwnerOf(businessId) && (
+          resource.data.get('closingId', null) == null ||
+          request.resource.data.get('closingId', null) == null
+        );
+        allow delete: if isOwnerOf(businessId) &&
+          resource.data.get('closingId', null) == null;
       }
 
       // Monthly/Yearly Closings: permanently lock a period's figures. The
@@ -228,8 +266,33 @@ service cloud.firestore {
       // too, but only if explicitly granted the 'closings' permission
       // (BDS #16 / Architecture 6.3) — staffTier === 'manager' alone is
       // not enough. A plain Staff member never handles this, same as today.
+      //
+      // [Closing Integrity Amendment v1.0 — fixes a real gap found during
+      // implementation] Reopening (update, setting status: 'reopened') is
+      // deliberately NOT covered by the same Manager grant that covers
+      // create — the amendment's Decisions Record is explicit that a
+      // Manager who can *record* a Closing is not automatically a Manager
+      // who should be able to *un*-close one. Before this amendment, this
+      // rule allowed a granted Manager to delete (and thereby reopen) any
+      // Closing — that gap is closed here, not just documented. A Closing
+      // is also never deleted anymore — reopening supersedes it in place
+      // (recordClosing/reopenClosing, AppContext.tsx).
       match /closings/{closingId} {
-        allow read, create, update, delete: if isOwnerOrGrantedManager(businessId, 'closings');
+        allow read, create: if isOwnerOrGrantedManager(businessId, 'closings');
+        allow update: if isOwnerOf(businessId);
+        allow delete: if false;
+      }
+
+      // [Closing Integrity Amendment v1.0] Lock-index docs — see
+      // ClosedPeriod in types.ts. Written alongside a Closing (create,
+      // same permission), deleted only by an Owner reopening a period
+      // (reopenClosing) — never by a Manager, matching the closings rule
+      // above. Never updated in place.
+      match /closedPeriods/{periodKey} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isOwnerOrGrantedManager(businessId, 'closings');
+        allow update: if false;
+        allow delete: if isOwnerOf(businessId);
       }
 
       // Staff roster management: the Admin can always do this. A Staff

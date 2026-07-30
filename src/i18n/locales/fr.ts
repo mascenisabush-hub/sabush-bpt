@@ -531,6 +531,7 @@ export const fr: TranslationDict = {
       statusFullyConsumed: 'Totalement Consommé',
       statusArchived: 'Archivé',
       delete: 'Supprimer',
+      locked: 'Verrouillé — rouvrez la période pour modifier',
     },
     businessWorth: {
     title: 'Valeur de l\'Entreprise',

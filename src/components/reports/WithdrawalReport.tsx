@@ -8,7 +8,7 @@ import { ReportFilterBar, useDateRange } from './shared/ReportFilterBar';
 import { exportReportPdf, exportReportExcel, printCurrentReport } from './shared/reportExport';
 import { concentrationInsight } from './shared/reportInsights';
 import { DonutChart, LineChartSimple } from './charts/MiniCharts';
-import { HandCoins, CalendarDays, Tag } from 'lucide-react';
+import { HandCoins, CalendarDays, Tag, Lock } from 'lucide-react';
 
 interface Props {
   onBack: () => void;
@@ -161,9 +161,24 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
                 </div>
                 <div className="flex items-center gap-3 report-no-print">
                   <span className="type-number text-rose-600 text-sm">{formatCurrency(w.amount, currencySymbol)}</span>
-                  <button onClick={() => deleteWithdrawal(w.id)} className="text-[10px] text-gray-400 hover:text-rose-600 transition">
-                    {t('reports.common.delete')}
-                  </button>
+                  {/* [Closing Integrity Amendment v1.0] Same lock display
+                      as ExpenseReport — see that comment. */}
+                  {w.closingId ? (
+                    <span className="flex items-center gap-1 text-[10px] text-gray-400" title={t('reports.common.locked')}>
+                      <Lock className="w-3 h-3" /> {t('reports.common.locked')}
+                    </span>
+                  ) : (
+                    <button
+                      onClick={() => {
+                        if (window.confirm(t('reports.common.delete') + '?')) {
+                          deleteWithdrawal(w.id).catch((err: any) => alert(err?.message || 'Erro ao remover.'));
+                        }
+                      }}
+                      className="text-[10px] text-gray-400 hover:text-rose-600 transition"
+                    >
+                      {t('reports.common.delete')}
+                    </button>
+                  )}
                 </div>
                 <span className="type-number text-rose-600 text-sm hidden report-print-only">{formatCurrency(w.amount, currencySymbol)}</span>
               </div>

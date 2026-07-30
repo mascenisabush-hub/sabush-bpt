@@ -12,6 +12,7 @@ import {
   collection,
   onSnapshot,
   writeBatch as createFirestoreBatch,
+  deleteField,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -27,6 +28,7 @@ import {
   StockCountType,
   Withdrawal,
   Closing,
+  ClosedPeriod,
   ClosingPeriodType,
   PurchaseBatch,
   Supplier,
@@ -156,7 +158,14 @@ interface AppContextType {
   // Monthly/Yearly Closings — permanently lock a period's figures.
   closings: Closing[];
   recordClosing: (params: RecordClosingParams) => Promise<Closing>;
-  deleteClosing: (id: string) => Promise<void>;
+  // [Closing Integrity Amendment v1.0] Replaces the old deleteClosing —
+  // a Closing is never deleted, only reopened (Owner-only, logged,
+  // supersedes in place). See reopenClosing's own comment for the full
+  // rule.
+  reopenClosing: (id: string, reason?: string) => Promise<void>;
+  // One-time, idempotent, Owner-only migration for Closings recorded
+  // before this amendment shipped — see its own comment for exact behavior.
+  backfillClosingLocks: () => Promise<{ closingsIndexed: number; expensesLocked: number; withdrawalsLocked: number }>;
   isPeriodClosed: (periodType: ClosingPeriodType, startDate: string, endDate: string) => boolean;
   // Business Timeline — chronological history log (see types.ts). Populated
   // automatically by the actions above; logReportExport is the one manual
@@ -220,6 +229,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [closings, setClosings] = useState<Closing[]>([]);
+  // [Closing Integrity Amendment v1.0] Lock-index docs — see ClosedPeriod
+  // type in types.ts for why this collection exists. Not shown anywhere
+  // in the UI; consumed only by backfillClosingLocks and recordClosing/
+  // reopenClosing's own writes.
+  const [closedPeriods, setClosedPeriods] = useState<ClosedPeriod[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
 
@@ -618,6 +632,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching closings:', err)
     );
 
+    // 5e. [Closing Integrity Amendment v1.0] ClosedPeriod lock-index docs
+    const closedPeriodsRef = collection(db, 'businesses', businessId, 'closedPeriods');
+    const unsubClosedPeriods = onSnapshot(
+      closedPeriodsRef,
+      (snap) => {
+        const list: ClosedPeriod[] = [];
+        snap.forEach((doc) => list.push(doc.data() as ClosedPeriod));
+        setClosedPeriods(list);
+      },
+      (err) => console.error('Error fetching closed periods:', err)
+    );
+
     // 6. Staff collection
     const staffRef = collection(db, 'businesses', businessId, 'staff');
     const unsubStaff = onSnapshot(
@@ -655,6 +681,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStockCounts();
       unsubWithdrawals();
       unsubClosings();
+      unsubClosedPeriods();
       unsubStaff();
       unsubTimeline();
     };
@@ -1077,8 +1104,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newQuebra;
   };
 
+  // [Closing Integrity Amendment v1.0 — Q1/Q2] A closed period must mean
+  // the same thing the day it closes and years later: no new Expense or
+  // Withdrawal may be *backdated* into it, even though nothing here
+  // touches an existing record. Checks only 'active' Closings — a
+  // reopened one no longer counts, by design (reopenClosing). This is the
+  // client-side half of the guard; firestore.rules enforces the same
+  // check independently via the closedPeriods lock index, since
+  // client-side gating alone is never sufficient (CLAUDE.md Rule 7).
+  const findClosedPeriodConflict = (date: string): Closing | undefined =>
+    closings.find((c) => (c.status ?? 'active') === 'active' && isDateInRange(date, c.startDate, c.endDate));
+
   const addExpense = async ({ date, description, amount, category }: AddExpenseParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
+
+    const conflict = findClosedPeriodConflict(date);
+    if (conflict) {
+      throw new Error(
+        `Não é possível registar uma despesa em ${date} — este período ("${conflict.periodLabel}") já foi fechado. Para corrigir um período fechado, reabra-o primeiro em Fechos.`
+      );
+    }
 
     const newExpense: Expense = {
       id: 'exp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
@@ -1114,6 +1159,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addWithdrawal = async ({ date, amount, reason, notes }: AddWithdrawalParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
+    const conflict = findClosedPeriodConflict(date);
+    if (conflict) {
+      throw new Error(
+        `Não é possível registar uma retirada em ${date} — este período ("${conflict.periodLabel}") já foi fechado. Para corrigir um período fechado, reabra-o primeiro em Fechos.`
+      );
+    }
+
     const newWithdrawal: Withdrawal = {
       id: 'wd-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       date,
@@ -1143,8 +1195,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newWithdrawal;
   };
 
+  // [Closing Integrity Amendment v1.0] Same lock check as deleteExpense —
+  // see that comment.
   const deleteWithdrawal = async (id: string) => {
     if (!activeBusinessId) return;
+    const target = withdrawals.find((w) => w.id === id);
+    if (target?.closingId) {
+      throw new Error('Esta retirada pertence a um período já fechado e não pode ser removida. Reabra o período em Fechos para a corrigir.');
+    }
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'withdrawals', id));
   };
 
@@ -1257,17 +1315,50 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // A period is "closed" if any existing Closing of the same type shares
   // its exact start/end range. Prevents accidentally closing the same
   // month or year twice.
+  // A 'reopened' Closing no longer counts as blocking its period — a new
+  // Closing can be recorded once corrections are made (Amendment v1.0, Q4).
   const isPeriodClosed = (periodType: ClosingPeriodType, startDate: string, endDate: string) => {
     return closings.some(
-      (c) => c.periodType === periodType && c.startDate === startDate && c.endDate === endDate
+      (c) => c.periodType === periodType && c.startDate === startDate && c.endDate === endDate && (c.status ?? 'active') === 'active'
     );
+  };
+
+  // [Closing Integrity Amendment v1.0] Deterministic id for the
+  // ClosedPeriod lock-index doc — firestore.rules derives this exact same
+  // id from an incoming Expense/Withdrawal's own `date` field (via
+  // string.split('-'), since rules can't slice/query). Keep both sides in
+  // sync if this ever changes.
+  const closedPeriodKey = (periodType: ClosingPeriodType, startDate: string): string => {
+    const [year, month] = startDate.split('-');
+    return periodType === 'monthly' ? `monthly:${year}-${month}` : `yearly:${year}`;
+  };
+
+  // Splits a flat list of batch operations into ≤498-write chunks (leaving
+  // headroom under Firestore's 500-write batch limit) so a single very
+  // large Closing (many expenses/withdrawals in one period) can never
+  // silently fail past that ceiling.
+  const commitInChunks = async (ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void>) => {
+    const CHUNK = 498;
+    for (let i = 0; i < ops.length; i += CHUNK) {
+      const batch = createFirestoreBatch(db);
+      ops.slice(i, i + CHUNK).forEach((op) => op(batch));
+      await batch.commit();
+    }
   };
 
   // Records a Monthly or Yearly Closing. This permanently locks the period's
   // figures (product profit, expenses, net income, withdrawals) as historical
   // fact, plus a snapshot of Business Worth (Cash on Hand + Current Inventory
-  // Value) at the moment of closing. Closings are never edited — only
-  // recorded or deleted (deleting simply re-opens the period).
+  // Value) at the moment of closing.
+  //
+  // [Closing Integrity Amendment v1.0] Closing is no longer just "record a
+  // snapshot" — it now also locks its *inputs*, not only freezing the
+  // *result*: every Expense/Withdrawal this snapshot actually counted gets
+  // closingId/lockedAt attached (Option B), and a ClosedPeriod lock-index
+  // doc is written so firestore.rules can independently block a new
+  // backdated Expense/Withdrawal from landing inside this period later.
+  // Closings are never edited or deleted — only recorded, or reopened
+  // (reopenClosing), which supersedes this one in place.
   const recordClosing = async ({ periodType, periodLabel, startDate, endDate }: RecordClosingParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
@@ -1290,9 +1381,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       inventoryMarketValueAtClose: totalMarketValueAllTime,
       businessWorthAtClose: businessWorth,
       closedAt: new Date().toISOString(),
+      status: 'active',
     };
 
-    await setDoc(doc(db, 'businesses', activeBusinessId, 'closings', newClosing.id), newClosing);
+    const lockedAt = newClosing.closedAt;
+    const periodKey = closedPeriodKey(periodType, startDate);
+    const closedPeriod: ClosedPeriod = {
+      id: periodKey,
+      periodType,
+      startDate,
+      endDate,
+      closingId: newClosing.id,
+      closedAt: newClosing.closedAt,
+    };
+
+    const expensesToLock = expenses.filter((e) => !e.closingId && isDateInRange(e.date, startDate, endDate));
+    const withdrawalsToLock = withdrawals.filter((w) => !w.closingId && isDateInRange(w.date, startDate, endDate));
+
+    const ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void> = [
+      (b) => b.set(doc(db, 'businesses', activeBusinessId!, 'closings', newClosing.id), newClosing),
+      (b) => b.set(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', periodKey), closedPeriod),
+      ...expensesToLock.map((e) => (b: ReturnType<typeof createFirestoreBatch>) =>
+        b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: newClosing.id, lockedAt })
+      ),
+      ...withdrawalsToLock.map((w) => (b: ReturnType<typeof createFirestoreBatch>) =>
+        b.update(doc(db, 'businesses', activeBusinessId!, 'withdrawals', w.id), { closingId: newClosing.id, lockedAt })
+      ),
+    ];
+    await commitInChunks(ops);
 
     await logTimelineEvent({
       type: periodType === 'monthly' ? 'monthly-closing' : 'yearly-closing',
@@ -1318,9 +1434,121 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newClosing;
   };
 
-  const deleteClosing = async (id: string) => {
-    if (!activeBusinessId) return;
-    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'closings', id));
+  // [Closing Integrity Amendment v1.0 — Q4: period reopening, Owner-only,
+  // logged] Replaces the old deleteClosing, which literally deleted the
+  // Closing document. The amendment decided a Closing is never deleted —
+  // reopening supersedes it in place (status: 'reopened'), so the original
+  // frozen snapshot remains a permanent historical record of what this
+  // Closing captured at close time (Architecture 8.8: "re-opens the
+  // period; never edits the frozen figures retroactively"). Every Expense/
+  // Withdrawal this Closing had locked is unlocked (closingId/lockedAt
+  // cleared) so it can be corrected; a brand-new Closing is required to
+  // re-lock the period afterward — recordClosing above will accept one,
+  // since isPeriodClosed ignores a 'reopened' Closing.
+  //
+  // Deliberately Owner-only — NOT covered by a Manager's granted
+  // 'closings' permission (BDS #16), since that permission governs
+  // *recording* a Closing, not undoing one (Amendment v1.0 Decisions
+  // Record). Enforced here and, independently, in firestore.rules.
+  const reopenClosing = async (id: string, reason?: string) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode reabrir um período fechado.');
+
+    const target = closings.find((c) => c.id === id);
+    if (!target) throw new Error('Fecho não encontrado.');
+    if ((target.status ?? 'active') !== 'active') {
+      throw new Error('Este período já foi reaberto anteriormente.');
+    }
+
+    const reopenedAt = new Date().toISOString();
+    const closingUpdate: Record<string, unknown> = {
+      status: 'reopened',
+      reopenedAt,
+      reopenedByUid: currentUser?.uid || '',
+      reopenedByName: userProfile?.name || '',
+    };
+    if (reason && reason.trim()) closingUpdate.reopenReason = reason.trim();
+
+    const lockedExpenses = expenses.filter((e) => e.closingId === id);
+    const lockedWithdrawals = withdrawals.filter((w) => w.closingId === id);
+
+    const ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void> = [
+      (b) => b.update(doc(db, 'businesses', activeBusinessId!, 'closings', id), closingUpdate),
+      (b) => b.delete(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', closedPeriodKey(target.periodType, target.startDate))),
+      ...lockedExpenses.map((e) => (b: ReturnType<typeof createFirestoreBatch>) =>
+        b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: deleteField(), lockedAt: deleteField() })
+      ),
+      ...lockedWithdrawals.map((w) => (b: ReturnType<typeof createFirestoreBatch>) =>
+        b.update(doc(db, 'businesses', activeBusinessId!, 'withdrawals', w.id), { closingId: deleteField(), lockedAt: deleteField() })
+      ),
+    ];
+    await commitInChunks(ops);
+
+    await logTimelineEvent({
+      type: 'period-reopened',
+      date: reopenedAt.slice(0, 10),
+      title: 'Período Reaberto',
+      description: `Período "${target.periodLabel}" reaberto por ${userProfile?.name || 'Dono'}${reason && reason.trim() ? ` — ${reason.trim()}` : ''}. As despesas e retiradas deste período foram desbloqueadas para correção.`,
+      details: {
+        periodLabel: target.periodLabel,
+        startDate: target.startDate,
+        endDate: target.endDate,
+        ...(reason && reason.trim() ? { reason: reason.trim() } : {}),
+      },
+    });
+  };
+
+  // [Closing Integrity Amendment v1.0 — backfill decision] One-time,
+  // idempotent, Owner-only migration: attaches closingId/lockedAt to every
+  // Expense/Withdrawal that falls inside an already-recorded (pre-amendment)
+  // active Closing's range but doesn't have a lock yet, and writes the
+  // ClosedPeriod lock-index doc for any active Closing missing one. Safe to
+  // run more than once — anything already locked/indexed is skipped, so
+  // this can be re-run harmlessly if it's ever interrupted partway.
+  const backfillClosingLocks = async (): Promise<{ closingsIndexed: number; expensesLocked: number; withdrawalsLocked: number }> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode aplicar esta migração.');
+
+    const activeClosings = closings.filter((c) => (c.status ?? 'active') === 'active');
+    const existingPeriodKeys = new Set(closedPeriods.map((p) => p.id));
+
+    const ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void> = [];
+    let closingsIndexed = 0;
+    let expensesLocked = 0;
+    let withdrawalsLocked = 0;
+
+    for (const c of activeClosings) {
+      const periodKey = closedPeriodKey(c.periodType, c.startDate);
+      if (!existingPeriodKeys.has(periodKey)) {
+        const closedPeriod: ClosedPeriod = {
+          id: periodKey,
+          periodType: c.periodType,
+          startDate: c.startDate,
+          endDate: c.endDate,
+          closingId: c.id,
+          closedAt: c.closedAt,
+        };
+        ops.push((b) => b.set(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', periodKey), closedPeriod));
+        closingsIndexed++;
+      }
+
+      const lockedAt = c.closedAt;
+      expenses
+        .filter((e) => !e.closingId && isDateInRange(e.date, c.startDate, c.endDate))
+        .forEach((e) => {
+          ops.push((b) => b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: c.id, lockedAt }));
+          expensesLocked++;
+        });
+      withdrawals
+        .filter((w) => !w.closingId && isDateInRange(w.date, c.startDate, c.endDate))
+        .forEach((w) => {
+          ops.push((b) => b.update(doc(db, 'businesses', activeBusinessId!, 'withdrawals', w.id), { closingId: c.id, lockedAt }));
+          withdrawalsLocked++;
+        });
+    }
+
+    await commitInChunks(ops);
+    return { closingsIndexed, expensesLocked, withdrawalsLocked };
   };
 
   const deleteQuebra = async (id: string) => {
@@ -1328,8 +1556,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'quebras', id));
   };
 
+  // [Closing Integrity Amendment v1.0 — protects existing records, the
+  // "Half 1" gap specs #8/#9 already named]. firestore.rules enforces this
+  // independently (allow delete only if resource.data.closingId is absent) —
+  // this client-side check exists purely to fail fast with a clear message
+  // instead of a raw permission-denied.
   const deleteExpense = async (id: string) => {
     if (!activeBusinessId) return;
+    const target = expenses.find((e) => e.id === id);
+    if (target?.closingId) {
+      throw new Error('Esta despesa pertence a um período já fechado e não pode ser removida. Reabra o período em Fechos para a corrigir.');
+    }
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'expenses', id));
   };
 
@@ -1647,9 +1884,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const w of withdrawals) {
       await deleteDoc(doc(db, 'businesses', businessId, 'withdrawals', w.id));
     }
-    for (const c of closings) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'closings', c.id));
-    }
+    // [Closing Integrity Amendment v1.0] Closings can no longer be
+    // deleted at all (firestore.rules: allow delete: if false — a Closing
+    // is permanent, only ever superseded via reopenClosing). "Clear All
+    // Data" therefore no longer removes Closing or ClosedPeriod records —
+    // attempting to would simply fail against the rule. This is a real,
+    // deliberate behavior change from before this amendment (when
+    // deleteClosing did a plain deleteDoc) and is worth a product decision
+    // on whether "Limpar Todos os Dados" should still claim to wipe
+    // literally everything, or whether its copy should be updated to
+    // reflect that Closings now survive a reset by design — flagged here,
+    // not silently decided.
     for (const t of timelineEvents) {
       await deleteDoc(doc(db, 'businesses', businessId, 'timelineEvents', t.id));
     }
@@ -1706,7 +1951,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         capitalGrowthPct,
         closings,
         recordClosing,
-        deleteClosing,
+        reopenClosing,
+        backfillClosingLocks,
         isPeriodClosed,
         timelineEvents,
         logReportExport,

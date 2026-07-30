@@ -2,11 +2,13 @@ import React, { useMemo, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { generateReportSummary, isDateInRange } from '../utils/calculations';
 import { formatCurrency, formatDate } from '../utils/formatters';
-import { ClosingPeriodType } from '../types';
+import { ClosingPeriodType, Closing } from '../types';
 import {
   Lock,
+  LockOpen,
   CheckCircle2,
   AlertTriangle,
+  AlertCircle,
   ChevronDown,
   ChevronUp,
   History,
@@ -14,8 +16,8 @@ import {
   TrendingUp,
   TrendingDown,
   Minus,
-  Trash2,
   CalendarRange,
+  Loader2,
 } from 'lucide-react';
 
 interface ClosingViewProps {
@@ -44,11 +46,12 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
     withdrawals,
     closings,
     recordClosing,
-    deleteClosing,
+    reopenClosing,
     isPeriodClosed,
     currencySymbol,
     totalMarketValueAllTime,
     businessWorth,
+    isOwner,
   } = useApp();
 
   const now = new Date();
@@ -61,7 +64,15 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
   const [confirming, setConfirming] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [showHistory, setShowHistory] = useState(true);
-  const [deletingId, setDeletingId] = useState<string | null>(null);
+  // [Closing Integrity Amendment v1.0] Reopening replaces the old delete
+  // flow — Owner-only (enforced in AppContext + firestore.rules; the
+  // button below is hidden for anyone else, not just relying on that
+  // enforcement, since a visible-but-rejected control is exactly the gap
+  // BDS #7/#8 flagged elsewhere in this codebase).
+  const [closingPendingReopen, setClosingPendingReopen] = useState<Closing | null>(null);
+  const [reopenReasonDraft, setReopenReasonDraft] = useState('');
+  const [reopenLoading, setReopenLoading] = useState(false);
+  const [reopenError, setReopenError] = useState<string | null>(null);
 
   const { startDate, endDate, periodLabel } = useMemo(() => {
     if (periodType === 'monthly') {
@@ -105,12 +116,18 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
     }
   };
 
-  const handleDelete = async (id: string) => {
-    setDeletingId(id);
+  const handleConfirmReopen = async () => {
+    if (!closingPendingReopen) return;
+    setReopenLoading(true);
+    setReopenError(null);
     try {
-      await deleteClosing(id);
+      await reopenClosing(closingPendingReopen.id, reopenReasonDraft.trim() || undefined);
+      setClosingPendingReopen(null);
+      setReopenReasonDraft('');
+    } catch (err: any) {
+      setReopenError(err?.message || 'Erro ao reabrir o período.');
     } finally {
-      setDeletingId(null);
+      setReopenLoading(false);
     }
   };
 
@@ -298,30 +315,51 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
               {sortedClosings.map((c, idx) => {
                 const prev = sortedClosings[idx + 1];
                 const diff = prev ? c.businessWorthAtClose - prev.businessWorthAtClose : null;
+                const isReopened = c.status === 'reopened';
                 return (
-                  <div key={c.id} className="group bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-3.5 space-y-2 transition-colors duration-150 hover:border-[#D4AF37]/25">
+                  <div key={c.id} className={`group border rounded-xl p-3.5 space-y-2 transition-colors duration-150 ${isReopened ? 'bg-yellow-50/50 border-yellow-200' : 'bg-[#FAFBFC] border-[#E5E7EB] hover:border-[#D4AF37]/25'}`}>
                     <div className="flex items-center justify-between gap-2">
                       <div>
                         <p className="text-xs font-bold text-[#111827] flex items-center gap-1.5">
-                          <Lock className="w-3 h-3 text-[#B8952F]" strokeWidth={2.25} />
+                          {isReopened ? (
+                            <LockOpen className="w-3 h-3 text-yellow-700" strokeWidth={2.25} />
+                          ) : (
+                            <Lock className="w-3 h-3 text-[#B8952F]" strokeWidth={2.25} />
+                          )}
                           {c.periodLabel}
                           <span className="text-[10px] font-normal text-gray-400">
                             ({c.periodType === 'monthly' ? 'Mensal' : 'Anual'})
                           </span>
+                          {isReopened && (
+                            <span className="text-[9px] font-bold uppercase tracking-wide text-yellow-700 bg-yellow-100 border border-yellow-300 rounded-full px-1.5 py-0.5">
+                              Reaberto
+                            </span>
+                          )}
                         </p>
                         <p className="text-[10px] text-gray-500 mt-0.5">
                           {formatDate(c.startDate)} — {formatDate(c.endDate)}
                         </p>
+                        {isReopened && c.reopenedAt && (
+                          <p className="text-[10px] text-yellow-700 mt-0.5">
+                            Reaberto por {c.reopenedByName || 'Dono'} em {formatDate(c.reopenedAt.slice(0, 10))}
+                            {c.reopenReason ? ` — ${c.reopenReason}` : ''}
+                          </p>
+                        )}
                       </div>
-                      <button
-                        type="button"
-                        disabled={deletingId === c.id}
-                        onClick={() => handleDelete(c.id)}
-                        title="Eliminar fecho (reabre o período)"
-                        className="p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-rose-600 hover:bg-rose-50 rounded-lg transition-all duration-150 disabled:opacity-50"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
+                      {isOwner && !isReopened && (
+                        <button
+                          type="button"
+                          onClick={() => {
+                            setReopenError(null);
+                            setReopenReasonDraft('');
+                            setClosingPendingReopen(c);
+                          }}
+                          title="Reabrir período (permite corrigir despesas/retiradas)"
+                          className="p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-yellow-700 hover:bg-yellow-50 rounded-lg transition-all duration-150"
+                        >
+                          <LockOpen className="w-3.5 h-3.5" />
+                        </button>
+                      )}
                     </div>
 
                     <div className="grid grid-cols-3 gap-1.5 text-center pt-1">
@@ -356,6 +394,84 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
               })}
             </div>
           )}
+        </div>
+      )}
+
+      {closingPendingReopen && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-yellow-500/10 border border-yellow-500/30 flex items-center justify-center shrink-0">
+                <LockOpen className="w-5 h-5 text-yellow-700" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Reabrir Período</h3>
+                <p className="text-[11px] text-gray-500">Desbloqueia despesas e retiradas deste período para correção.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              <div className="bg-white border border-gray-200 rounded-2xl p-3 space-y-1.5 text-xs">
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Período</span>
+                  <span className="font-bold text-gray-900">{closingPendingReopen.periodLabel}</span>
+                </div>
+                <div className="flex justify-between">
+                  <span className="text-gray-500">Intervalo</span>
+                  <span className="font-mono text-gray-900">{formatDate(closingPendingReopen.startDate)} — {formatDate(closingPendingReopen.endDate)}</span>
+                </div>
+              </div>
+
+              <div className="bg-yellow-500/10 border border-yellow-500/30 rounded-2xl p-3 flex gap-2">
+                <AlertCircle className="w-4 h-4 text-yellow-700 shrink-0 mt-0.5" />
+                <p className="text-[11px] text-yellow-800 leading-relaxed">
+                  O registo original de fecho <span className="font-bold">não é apagado</span> — fica marcado como
+                  "Reaberto" para histórico. As despesas e retiradas deste período ficam editáveis/removíveis novamente
+                  até fechar o período outra vez.
+                </p>
+              </div>
+
+              <div>
+                <label className="text-[11px] font-bold text-gray-600 mb-1 block">Motivo (opcional)</label>
+                <input
+                  type="text"
+                  value={reopenReasonDraft}
+                  onChange={e => setReopenReasonDraft(e.target.value)}
+                  placeholder="Ex: Despesa registada com valor errado"
+                  className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-yellow-600"
+                />
+              </div>
+
+              {reopenError && (
+                <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                  <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {reopenError}
+                </div>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={() => {
+                  setClosingPendingReopen(null);
+                  setReopenError(null);
+                }}
+                disabled={reopenLoading}
+                className="px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition disabled:opacity-50"
+              >
+                Cancelar
+              </button>
+              <button
+                type="button"
+                onClick={handleConfirmReopen}
+                disabled={reopenLoading}
+                className="px-4 py-2.5 rounded-xl bg-yellow-600 hover:bg-yellow-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+              >
+                {reopenLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <LockOpen className="w-3.5 h-3.5" />}
+                {reopenLoading ? 'A reabrir...' : 'Reabrir Período'}
+              </button>
+            </div>
+          </div>
         </div>
       )}
     </div>

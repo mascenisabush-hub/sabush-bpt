@@ -61,9 +61,15 @@ intelligence), then build the platform capabilities around that.
 > logged period reopening. Specs #8, #9, and #11 have been updated
 > in-place with `[Amendment v1.0]`-tagged Functional Requirements and
 > Acceptance Criteria. Scope is Expense/Withdrawal only — Quebra and
-> Stock Batch remain outside this amendment. Not yet implemented; the
-> `closingId`/enforcement mechanism is a separate Rule 8 implementation
-> plan, still pending.
+> Stock Batch remain outside this amendment. **Implemented** (types,
+> `AppContext.tsx`, `firestore.rules`, UI) — see the amendment doc's own
+> "Implementation status" section for exact files touched, one gap found
+> and fixed mid-implementation (a Manager could previously reopen a
+> Closing — now Owner-only, matching the decision), and one
+> product-facing behavior change flagged for a deliberate decision
+> (`clearAllData` no longer removes Closings). `firestore.rules` changes
+> are typecheck/build-verified but not yet run against the Firebase
+> emulator — flagged as a manual step before production deploy.
 
 ## Phase 3 — Insight & Decision Support
 

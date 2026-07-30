@@ -174,6 +174,13 @@ export interface Product {
   sellingPrice?: number; // reference price only, see note above
 }
 
+// [Closing Integrity Amendment v1.0 — Option B] closingId/lockedAt are
+// absent for every Expense recorded before this field existed, and for
+// any Expense in a period that has never been closed. Present once this
+// Expense has been included in a Closing's frozen snapshot (recordClosing,
+// AppContext.tsx) — at that point it can no longer be edited or deleted.
+// Cleared (not left stale) if the owning Closing is later reopened
+// (reopenClosing), per the amendment's "supersede, not rewrite" rule.
 export interface Expense {
   id: string;
   date: string; // YYYY-MM-DD
@@ -181,12 +188,16 @@ export interface Expense {
   amount: number;
   category?: string;
   createdAt: string; // ISO string
+  closingId?: string;
+  lockedAt?: string; // ISO string
 }
 
 // Owner Withdrawals: money taken out of the business by the owner for
 // personal use. This is intentionally a SEPARATE concept from Expense —
 // a withdrawal is not a business cost, it's capital leaving the business
 // in the owner's hands. Never merge these two collections.
+// [Closing Integrity Amendment v1.0 — Option B] Same lock-field pattern
+// as Expense, above — see that comment for the full rule.
 export interface Withdrawal {
   id: string;
   date: string; // YYYY-MM-DD
@@ -194,6 +205,8 @@ export interface Withdrawal {
   reason?: string; // e.g. Uso Pessoal, Salário, Família, Emergência, Casa, Veículo, Outro
   notes?: string;
   createdAt: string; // ISO string
+  closingId?: string;
+  lockedAt?: string; // ISO string
 }
 
 // ============================================================
@@ -236,6 +249,24 @@ export interface StockCount {
 // or, in case of a mistake, deleted (which simply re-opens the period).
 export type ClosingPeriodType = 'monthly' | 'yearly';
 
+// [Closing Integrity Amendment v1.0] A Firestore security rule cannot run
+// a range query ("does any Closing cover this date?") — it can only
+// `get()` one document at a known path. This collection exists purely so
+// that check becomes a plain, deterministic lookup: for any Expense/
+// Withdrawal `date`, the rule derives id `monthly:YYYY-MM` and
+// `yearly:YYYY` directly from the date string and checks whether either
+// document exists. Never read by the UI for anything financial — the
+// Closing document itself remains the source of truth for actual figures;
+// this is a lock index, not a duplicate ledger.
+export interface ClosedPeriod {
+  id: string; // 'monthly:2026-07' or 'yearly:2026'
+  periodType: ClosingPeriodType;
+  startDate: string;
+  endDate: string;
+  closingId: string;
+  closedAt: string; // ISO string
+}
+
 export interface Closing {
   id: string;
   periodType: ClosingPeriodType;
@@ -254,6 +285,20 @@ export interface Closing {
   inventoryMarketValueAtClose: number;
   businessWorthAtClose: number;
   closedAt: string; // ISO string
+  // [Closing Integrity Amendment v1.0] A Closing is never deleted —
+  // reopening supersedes it in place. 'active' (or absent, for every
+  // Closing recorded before this field existed — treated as active) means
+  // the period is currently locked and counted by isPeriodClosed/the
+  // backdated-entry block. 'reopened' means an Owner has temporarily
+  // unlocked the period for correction; the frozen totals above are left
+  // untouched as the historical record of what this Closing originally
+  // captured, and a brand-new Closing document is required to re-lock the
+  // same period — this one is never revived or edited back to 'active'.
+  status?: 'active' | 'reopened';
+  reopenedAt?: string; // ISO string
+  reopenedByUid?: string;
+  reopenedByName?: string;
+  reopenReason?: string;
 }
 
 export interface CurrencyOption {
@@ -339,7 +384,8 @@ export type TimelineActivityType =
   | 'report-exported'
   | 'staff-removed'
   | 'staff-suspended'
-  | 'staff-reactivated';
+  | 'staff-reactivated'
+  | 'period-reopened';
 
 export interface TimelineFinancialImpact {
   label: string; // e.g. "Investimento", "Despesa", "Retirada", "Perda"

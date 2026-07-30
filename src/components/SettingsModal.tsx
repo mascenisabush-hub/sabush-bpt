@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2, KeyRound, Smartphone, RefreshCw } from 'lucide-react';
+import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2, KeyRound, Smartphone, RefreshCw, Lock } from 'lucide-react';
 import { StaffMember } from '../types';
 import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
@@ -34,6 +34,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     activeBusinessId,
     loadSampleData,
     clearAllData,
+    closings,
+    backfillClosingLocks,
     products,
   } = useApp();
 
@@ -73,6 +75,30 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
 
   // Device pairing states (PIN quick-login on a shared shop device).
   const [pairError, setPairError] = useState<string | null>(null);
+
+  // [Closing Integrity Amendment v1.0] One-time, idempotent, Owner-only
+  // migration for Closings recorded before this amendment shipped.
+  const [backfillLoading, setBackfillLoading] = useState(false);
+  const [backfillResult, setBackfillResult] = useState<string | null>(null);
+  const [backfillError, setBackfillError] = useState<string | null>(null);
+
+  const handleBackfillClosingLocks = async () => {
+    setBackfillLoading(true);
+    setBackfillResult(null);
+    setBackfillError(null);
+    try {
+      const { closingsIndexed, expensesLocked, withdrawalsLocked } = await backfillClosingLocks();
+      setBackfillResult(
+        closingsIndexed === 0 && expensesLocked === 0 && withdrawalsLocked === 0
+          ? 'Já estava tudo em dia — nenhum fecho antigo precisava de bloqueio.'
+          : `Aplicado: ${closingsIndexed} período(s) indexado(s), ${expensesLocked} despesa(s) e ${withdrawalsLocked} retirada(s) bloqueadas.`
+      );
+    } catch (err: any) {
+      setBackfillError(err?.message || 'Erro ao aplicar o bloqueio aos fechos anteriores.');
+    } finally {
+      setBackfillLoading(false);
+    }
+  };
 
   // Manager tier/permission states (BDS #16). Admin-only — this modal is
   // never rendered for a Manager, same as the promote button that opens it.
@@ -360,11 +386,26 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                       <Sparkles className="w-3.5 h-3.5" />
                       Carregar Dados de Exemplo
                     </button>
+                    {/* [Closing Integrity Amendment v1.0 — backfill decision]
+                        Only relevant if there's at least one Closing that
+                        might predate this amendment. Idempotent — safe to
+                        click more than once. */}
+                    {closings.length > 0 && (
+                      <button
+                        type="button"
+                        onClick={handleBackfillClosingLocks}
+                        disabled={backfillLoading}
+                        className="px-3 py-2 rounded-xl bg-yellow-600/20 hover:bg-yellow-600/30 border border-yellow-500/40 text-yellow-800 text-xs font-semibold transition flex items-center gap-1.5 disabled:opacity-50"
+                      >
+                        {backfillLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Lock className="w-3.5 h-3.5" />}
+                        {backfillLoading ? 'A aplicar...' : 'Aplicar Bloqueio a Fechos Anteriores'}
+                      </button>
+                    )}
                     {products.length > 0 && (
                       <button
                         type="button"
                         onClick={async () => {
-                          if (confirm('Tem a certeza que deseja limpar TODOS os produtos e lotes? Esta ação não pode ser desfeita.')) {
+                          if (confirm('Tem a certeza que deseja limpar TODOS os produtos e lotes? Esta ação não pode ser desfeita. (Fechos permanentes não são removidos por esta ação.)')) {
                             await clearAllData();
                           }
                         }}
@@ -375,6 +416,12 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                       </button>
                     )}
                   </div>
+                  {backfillResult && (
+                    <p className="text-[11px] text-emerald-700 mt-2">{backfillResult}</p>
+                  )}
+                  {backfillError && (
+                    <p className="text-[11px] text-rose-600 mt-2 flex items-center gap-1"><AlertCircle className="w-3 h-3" /> {backfillError}</p>
+                  )}
                 </div>
               )}
             </>

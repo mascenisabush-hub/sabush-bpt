@@ -12,13 +12,43 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Two specs drafted, awaiting approval. No implementation
-started on either.
+**Status:** Closing Integrity Amendment v1.0 implementation is complete,
+typechecked (`tsc --noEmit`), and built (`npm run build`) successfully.
+About to be committed and pushed. Modules #17 (Multi-Shop) and #18
+(SuperAdmin) are unchanged from before — still drafted, awaiting
+approval, not touched this session.
 
-**Last completed:** Module #16 (Staff & Roles) — spec approved and fully
-implemented (types, firestore.rules, server/index.ts, AppContext.tsx,
-SettingsModal.tsx, Header.tsx). Commit `bccbd1a`. Verified with
-`tsc --noEmit` and a full `npm run build` before pushing.
+**Last completed:** Closing Integrity Amendment v1.0 (governs
+Expense/Withdrawal integrity around Monthly/Yearly Closings — specs #8,
+#9, #11). Three Rule 8 decisions were made and implemented: lock
+mechanism = Option B (`closingId`/`lockedAt` fields + a `ClosedPeriod`
+lock-index collection, since Firestore rules can't run range queries);
+historical closings = backfill (`backfillClosingLocks()`, idempotent,
+Owner-only, exposed in Settings); reopening = built now (Owner-only,
+logged, supersedes the Closing in place rather than deleting it).
+Full detail, including one gap found and fixed mid-implementation (a
+Manager could previously delete/reopen any Closing — the `closings`
+Firestore rule now splits create from update/delete) and one
+product-facing behavior change flagged for a deliberate decision
+(`clearAllData` no longer removes Closings, since they can no longer be
+deleted at all) is in
+`docs/specs/08-09-11-closing-integrity-amendment.md`'s "Implementation
+status" section — read that before touching this area again.
+
+**Files touched:** `src/types.ts`, `src/context/AppContext.tsx`,
+`src/components/timeline/timelineHelpers.ts`, `src/components/ClosingView.tsx`,
+`src/components/AddExpenseView.tsx`, `src/components/AddWithdrawalView.tsx`,
+`src/components/reports/ExpenseReport.tsx`,
+`src/components/reports/WithdrawalReport.tsx`,
+`src/components/SettingsModal.tsx`, `firestore.rules`,
+`src/i18n/locales/{en,fr,pt}.ts` (new `reports.common.locked` key),
+`docs/specs/08-09-11-closing-integrity-amendment.md`.
+
+**A real bug found and fixed along the way, not part of the original
+plan:** `addExpense`/`addWithdrawal` were being called without `await`
+in their respective Add*View forms — a rejected promise (e.g. the new
+closed-period check) was silently swallowed and the UI showed "success"
+regardless. Both views are now properly async/awaited/caught.
 
 **Next up:** Module #17 (Multi-Shop) — BDS spec drafted
 (`docs/specs/17-multi-shop.md`), documenting the module's substantially
@@ -28,13 +58,11 @@ already-implemented state (`ShopSwitcher.tsx`, `addShop`/`switchShop` in
 hardcoded Portuguese strings). Awaiting explicit approval before any
 implementation begins.
 
-Module #18 (SuperAdmin) — BDS spec now drafted (`docs/specs/18-superadmin.md`),
-grounded in `docs/architecture/09-superadmin-architecture.md`. This is
-genuinely greenfield — confirmed by search, zero SuperAdmin/platform-
-scoped code exists anywhere in `src/`, `server/`, or `firestore.rules`.
-**Awaiting architectural approval before any implementation begins** —
-per explicit instruction, no code, Firestore Rules, or schema was
-touched while drafting this spec.
+Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
+grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
+greenfield — confirmed by search, zero SuperAdmin/platform-scoped code
+exists anywhere in `src/`, `server/`, or `firestore.rules`. **Awaiting
+architectural approval before any implementation begins.**
 
 **Flagged discrepancy (needs a PM decision, not an engineering one):**
 a prior version of this file stated a "confirmed build order" of
@@ -55,18 +83,26 @@ Module #15 (AI Intelligence) remains drafted but deliberately not
 implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist yet.
 
-**Anything mid-flight / blocked:** Nothing. No open PRs, no half-finished
-edits, no pending decisions waiting on the PM.
+**Anything mid-flight / blocked:** Nothing once this session's commit
+lands. No open PRs, no half-finished edits, no pending decisions waiting
+on the PM beyond the `clearAllData` copy question flagged above.
 
 **Known gaps flagged but not yet scheduled:**
-- Rules-emulator verification for the Module #16 firestore.rules changes
+- Rules-emulator verification for **both** the Module #16 firestore.rules
+  changes and this session's Closing Integrity Amendment rules changes
   was flagged as a manual step (no Firestore emulator available in the
-  sandbox that built it) — worth a real test pass before this matters in
-  production.
+  sandbox that built either) — worth a real test pass before either
+  matters in production. The amendment's rules are more consequential
+  to verify given they gate financial-record deletion.
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a
   Manager sees "Staff" with no tier indicator in the header itself
   (SettingsModal shows it correctly). Cosmetic, noted as future
   enhancement in BDS #16.
+- `AddQuebraView.tsx`'s submit handler was not checked/fixed for the same
+  missing-`await` bug found in `AddExpenseView`/`AddWithdrawalView` this
+  session — Quebras aren't governed by the Closing Integrity Amendment,
+  so this was out of scope here, but it's the same bug shape and worth a
+  dedicated look.
 
 ---
 

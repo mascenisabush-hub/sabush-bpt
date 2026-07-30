@@ -157,3 +157,75 @@ and #11 get their Functional Requirements/Acceptance Criteria sections
 amended to match, `docs/specs/README.md` is updated to reflect the
 amendment, and only then does a Rule 8 implementation plan (which will
 pick the `closingId` mechanism) get written.
+
+## Rule 8 Implementation Assessment — decisions recorded
+
+Three decisions were required before coding, per the Rule 8 assessment:
+
+1. **Lock mechanism: Option B** — `closingId`/`lockedAt` fields on
+   Expense/Withdrawal, plus a `ClosedPeriod` lock-index collection so
+   `firestore.rules` can independently check a backdated create without
+   running a range query (rules can only `get()` a known path — the
+   lock-index doc's id is derived deterministically from the period,
+   e.g. `monthly:2026-07`).
+2. **Historical closings: backfill.** A one-time, idempotent, Owner-only
+   `backfillClosingLocks()` migration (exposed in Settings) attaches
+   locks/lock-index docs to any pre-amendment Closing that doesn't have
+   them yet. This supersedes the "does not retroactively apply" line
+   above, which was written before this decision was made.
+3. **Reopening: built now**, Owner-only (not covered by a Manager's
+   `closings` grant — a Manager who can *record* a Closing is not
+   automatically one who can *un*-close one), logged as a `TimelineEvent`,
+   and superseding the Closing in place (`status: 'reopened'`) rather than
+   deleting it — a Closing is never deleted anymore.
+
+## Implementation status
+
+**Implemented and typechecked/built successfully:**
+- `types.ts`: `closingId`/`lockedAt` on Expense/Withdrawal; `status`/
+  `reopenedAt`/`reopenedByUid`/`reopenedByName`/`reopenReason` on Closing;
+  new `ClosedPeriod` type; new `period-reopened` timeline event type.
+- `AppContext.tsx`: `addExpense`/`addWithdrawal` reject a backdated entry
+  into an active closed period; `deleteExpense`/`deleteWithdrawal` reject
+  deleting a locked record; `recordClosing` now batch-locks every
+  Expense/Withdrawal it counted and writes the `ClosedPeriod` lock-index
+  doc (chunked at 498 writes); `deleteClosing` replaced by
+  `reopenClosing` (Owner-only, logged, supersedes in place, unlocks
+  affected records); new `backfillClosingLocks()` migration.
+- `firestore.rules`: backdated-create block on `expenses`/`withdrawals`
+  via the new `isDateInsideClosedPeriod` function; lock check on
+  update/delete; `closings` split so reopening (`update`) is Owner-only
+  while recording (`create`) still honors a Manager's `closings` grant,
+  and `delete` is now always `false`; new `closedPeriods` collection
+  rules.
+- UI: `ClosingView.tsx` (reopen modal replacing the old delete button,
+  reopened-status badge in history), `ExpenseReport.tsx`/
+  `WithdrawalReport.tsx` (lock indicator replacing delete button on
+  locked records, confirmation added to the remaining delete path),
+  `AddExpenseView.tsx`/`AddWithdrawalView.tsx` (fixed a real bug found
+  during implementation — `addExpense`/`addWithdrawal` were called
+  without `await`, so a rejected promise, e.g. from the new closed-period
+  check, was silently swallowed and the UI showed "success" regardless;
+  now properly awaited and caught), `SettingsModal.tsx` (backfill
+  migration trigger, updated "Clear All Data" copy).
+
+**A gap found and fixed during implementation, not present in the
+original assessment above:** the pre-amendment `closings` Firestore rule
+allowed a Manager granted the `closings` permission to delete (and
+thereby reopen) any Closing — contradicting decision #3's "Owner-only"
+call before it was even implemented. Closed by the `closings` rule split
+described above.
+
+**A product-facing behavior change worth a deliberate decision, flagged
+rather than silently made:** because a Closing can no longer be deleted
+at all, `clearAllData` ("Limpar Todos os Dados") no longer removes
+Closing or ClosedPeriod records — attempting to would simply fail
+against the rule. Product ownership should confirm whether the
+button's copy/promise should be adjusted to reflect that Closings now
+survive a full reset by design.
+
+**Not yet done:** `firestore.rules` changes have not been verified
+against the Firebase emulator (no network path to Firebase from this
+sandbox — only TypeScript/build-level verification was possible here).
+This should be run before deploying to production.
+

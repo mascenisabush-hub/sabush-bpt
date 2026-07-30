@@ -31,8 +31,9 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
   const [notes, setNotes] = useState<string>('');
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
 
-  const handleSubmit = (e: React.FormEvent) => {
+  const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
     const numAmount = parseFloat(amount);
@@ -41,18 +42,28 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
       return;
     }
 
-    addWithdrawal({
-      date,
-      amount: numAmount,
-      reason: reason.trim() || undefined,
-      notes: notes.trim() || undefined,
-    });
+    // [Closing Integrity Amendment v1.0] Same fix as AddExpenseView — must
+    // await/catch, or a rejected (e.g. backdated-into-a-closed-period)
+    // withdrawal silently shows "success" anyway.
+    setIsSaving(true);
+    try {
+      await addWithdrawal({
+        date,
+        amount: numAmount,
+        reason: reason.trim() || undefined,
+        notes: notes.trim() || undefined,
+      });
 
-    setSubmittedMessage(t('addWithdrawal.successMessage', { amount: formatCurrency(numAmount, currencySymbol) }));
+      setSubmittedMessage(t('addWithdrawal.successMessage', { amount: formatCurrency(numAmount, currencySymbol) }));
 
-    setTimeout(() => {
-      onComplete();
-    }, 1200);
+      setTimeout(() => {
+        onComplete();
+      }, 1200);
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao registar a retirada.');
+    } finally {
+      setIsSaving(false);
+    }
   };
 
   return (
@@ -167,9 +178,10 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
             <div className="flex items-center gap-3 pt-2">
               <button
                 type="submit"
-                className="btn-primary flex-1 min-h-[52px] py-3.5 px-5 text-[15px] rounded-2xl"
+                disabled={isSaving}
+                className="btn-primary flex-1 min-h-[52px] py-3.5 px-5 text-[15px] rounded-2xl disabled:opacity-60"
               >
-                <span>{t('addWithdrawal.submitButton')}</span>
+                <span>{isSaving ? '...' : t('addWithdrawal.submitButton')}</span>
                 <ArrowRight className="w-5 h-5" strokeWidth={2.25} />
               </button>
             </div>
