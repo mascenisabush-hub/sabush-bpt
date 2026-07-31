@@ -22,26 +22,32 @@ feasibility passes) before any coding, and look for opportunities to
 automate consistency checks.
 
 First action under this new mode: a documentation-analysis-only Rule 8
-feasibility pass for **Module #19 (Subscriptions)** — scope, what
-already exists in code to reuse, what's genuinely greenfield, risks,
-and which of the four still-open Product decisions (plan names,
-pricing, processor vendor, migration mechanics) block which specific
-deliverable. Written up as
-`docs/engineering/19-subscriptions-implementation-readiness.md` (new
-file, following the precedent set by
-`17-owner-portfolio-feasibility-note.md`). Key findings: the
-Background Worker (Architecture §4.8) is 0% built — no second process,
-no cron, no Procfile exist in the repo, contrary to Architecture's
-"the existing... worker is extended" phrasing, which describes a
-target state, not current reality; Registration
-(`AuthView.tsx`) is a non-atomic 3-step client write today, and adding
-trial-subscription creation as an uncoordinated 4th step would extend
-an existing partial-failure gap; deliverables 1–4 (data model, trial
-creation, feature-gating framework, SuperAdmin override) have **no**
-payment-provider dependency and could sequence first; deliverables 6–7
-(webhook, migration mechanics) are genuinely blocked on the open items.
+feasibility pass for **Module #19 (Subscriptions)**, since restructured
+(same session) to the Product Architect's own explicit template —
+scope split into Core Subscription Domain (A) vs. Commercial
+Integration (B), files/systems affected, a dependency analysis against
+#17/#20/#18, open decisions split into blocking vs. configurable, a
+targeted risk assessment (tenant isolation, ownership boundaries, trial
+migration, entitlement mistakes, payment boundary, auditability), and
+proposed phase-only sequencing (no dates, no authorization implied).
+Written up as `docs/engineering/19-subscriptions-implementation-readiness.md`
+(v2 supersedes v1 in place — same file, following the precedent set by
+`17-owner-portfolio-feasibility-note.md`). Key findings unchanged from
+v1 and confirmed again: the Background Worker (Architecture §4.8) is
+0% built — no second process, no cron, no Procfile exist in the repo;
+it is shared infrastructure across #19 and #20, not #19-exclusive.
+Registration (`AuthView.tsx`) is a non-atomic 3-step client write
+today — a pre-existing gap this module's Business Rule 4 would make
+worse if not explicitly addressed in planning. Dependency analysis:
+#19 is upstream of #17, #18, and #20 — all three only read/react to
+#19's state, none redefine it; no conflicts found. Core Subscription
+Domain (data model, trial-at-Registration, entitlement framework,
+SuperAdmin override) has no payment-provider dependency and is
+technically sequenceable as Phase 1 independent of the four open
+items; Commercial Integration (Phases 3) remains genuinely blocked.
 **This assessment is informational only — it does not authorize
-implementation of Module #19 or any part of it.**
+implementation of Module #19 or any part of it, and explicitly
+recommends none at this time.**
 
 **Prior status (unchanged this session):** Module #18 (SuperAdmin)
 received Product Architect **Acceptance** last session.
