@@ -3,9 +3,12 @@
 **Type:** Execution plan. Not code, not implementation, not authorization
 to begin coding.
 **Lifecycle status:** Designed → Accepted → Readiness Assessed →
-**Planned**. Not Implemented, not Executed, not Analyzed. This document
-does not move the migration's lifecycle state past "Planned" and does
-not itself authorize starting Phase 0A.
+Planned. **Stage 1: Designed → Implemented → Executed → Analyzed →
+Accepted** (commit `699ab48`, Accepted by the Product Architect).
+**Stage 2 onward: Planned only** — each remaining stage requires its
+own separate, explicit authorization and reaches at most "Analyzed"
+before stopping for review, per the project's stage-by-stage
+governance.
 **Basis:** Architecture §6.1, §13.4 (item 1); the prior readiness
 assessment produced this session (superseded findings carried forward
 below, not repeated in full); the Product Architect's scope decisions
@@ -61,9 +64,22 @@ happens only at Stage 6.
 
 ### Stage 1 — Dual-read security rules
 
-**Change:** `firestore.rules` — every `role == 'owner'` check (in
-`isOwnerOf` and the profile-read/create rules) is updated to accept
-**either** `'owner'` or `'admin'`. No other file changes.
+**Change:** `firestore.rules` — every check that compares the technical
+role identifier against `'owner'` is updated to accept **either**
+`'owner'` or `'admin'`. This applies to **every** such comparison in the
+file, not only the two most prominent examples (`isOwnerOf` and the
+profile-read/create rules) — it also includes
+`isValidBusinessIdsChange()`'s `resource.data.role == 'owner'` check
+(gates multi-shop `businessIds` growth), and any other present or future
+`role == 'owner'` comparison in this file. Scoping this to "every
+comparison" rather than an enumerated list is deliberate: an
+enumeration risks silently missing a check and reintroducing the exact
+partial-migration lockout risk this stage exists to prevent, once
+Stage 3 backfills real accounts to `'admin'`. No other file changes.
+**[Clarified — Product Architect, following Stage 1 Acceptance]** this
+was the correct reading from the start; `isValidBusinessIdsChange()`'s
+inclusion during Stage 1's implementation was consistent with intent,
+not a scope expansion.
 **Commit boundary:** this stage alone, nothing else. `firestore.rules`
 only.
 **Verification checkpoint:** `npm run test:rules` (and
