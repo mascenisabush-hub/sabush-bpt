@@ -3,7 +3,8 @@ Business Domain Specification
 # SuperAdmin
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** Accepted — documentation & business rules; implementation
+not authorized
 **Module #18 of 20 — Phase 4: Platform**
 **Architecture references:** [Section 9](../architecture/09-superadmin-architecture.md)
 (full design — Application Shell 9.1, Platform Dashboard 9.2,
@@ -74,21 +75,26 @@ this document.
 
 ---
 
-## ⚠️ Sequencing note for the record
+## Sequencing note for the record
 
-`HANDOFF.md`'s prior "confirmed build order" line (`#17 → #18
-(SuperAdmin) → #19 (Subscriptions) → #20 (Notifications)`) is in direct
-tension with Architecture 13.2's rule 1 and 13.6, both of which state
-Phase 2 (SuperAdmin) is *blocked on* Phase 1 (Subscriptions,
-Notifications) having real data — specifically because 9.4 (Subscriptions
-& Billing) and 9.9 (platform-side Notifications) are designed to read
-those collections, not mock them. This spec does not resolve that
-discrepancy — resequencing HANDOFF's build order is a PM decision, not
-an engineering one — but it is flagged here explicitly, per this
-project's own discipline ("a process gap worth flagging when it's
-noticed, not a shortcut to take quietly," `docs/specs/README.md`),
-rather than silently drafted around. `HANDOFF.md` is updated below to
-carry this flag forward instead of repeating the contradicted order.
+The prior version of this section flagged a tension between an earlier
+`HANDOFF.md` build-order line (`#17 → #18 (SuperAdmin) → #19
+(Subscriptions) → #20 (Notifications)`) and Architecture 13.2/13.6. That
+conflict is no longer an active decision: `docs/specs/README.md` and
+`HANDOFF.md` have since confirmed the build order consistent with
+Architecture 13.2 (rule 1) and 13.6, and Module #19 and Module #20 have
+each reached Product Architect Acceptance (documentation & business
+rules) on that basis. The settled dependency, restated here as this
+module's own controlling statement rather than a flagged discrepancy:
+
+**#19 (Subscriptions) and #20 (Notifications) must be implemented and
+provide real data before #18 (SuperAdmin) runtime implementation
+begins.** This is unchanged by this module's own Acceptance — Module
+#18's Acceptance covers business specification, domain rules, security
+boundaries, dependency definitions, and audit requirements only; it
+does not authorize implementation, and implementation still additionally
+waits on #19 and #20 holding real data per Architecture 13.2/13.6 (see
+"Depends on," above, and "Product Architect Acceptance," below).
 
 ---
 
@@ -196,8 +202,7 @@ tenant SPA's Firebase project, privileged server, and Design System —
 never bundled into the tenant SPA's browser bundle.
 
 **Explicitly not in scope for this spec:** any implementation
-(code, Firestore Rules, schema, or deployment); resolving the
-HANDOFF.md sequencing discrepancy noted above; specifying the payment
+(code, Firestore Rules, schema, or deployment); specifying the payment
 processor vendor (Architecture 4.12 leaves that to whoever builds
 Subscriptions, Module #19); the tenant-facing Notification feed itself
 (Module #20's concern — this spec covers only the platform-side
@@ -712,8 +717,52 @@ target re-negotiated after the fact.*
 
 ---
 
-**Awaiting approval.** Per process, implementation does not begin until
-this spec is explicitly approved — and, per Architecture 13.2/13.6,
-even once approved, implementation additionally waits on Subscriptions
-(Module #19) and Notifications (Module #20) holding real data before
-Phase 2 build work can meaningfully begin on 9.4 and 9.9 specifically.
+## Product Architect Acceptance
+
+**Accepted.** Recorded 2026-07-31, during the Module #18 Acceptance
+Readiness Review session (following the documentation-analysis review
+that found no contradictions against Module #17's, #19's, and #20's
+Accepted rules, the SuperAdmin architecture sections, the tenant
+isolation principle, audit requirements, or the platform-aggregate
+boundary). Scope of this acceptance, as explicitly granted:
+
+1. **Business specification** — the twelve screens/capabilities (9.1–
+   9.12), their Users, User Stories, Business Rules, and Functional
+   Requirements as documented in this BDS.
+2. **Domain rules** — the three distinct, never-conflated access
+   patterns (Aggregated / Support Session / Impersonation); feature
+   flags as rollout pacing only, never authorization; soft-suspend vs.
+   hard-purge as separate, differently-guarded paths; Platform
+   Analytics and the Dashboard reading the same `platform_aggregates`
+   layer, never a second computation path.
+3. **Security boundaries** — `platform_operators/{uid}` as a
+   collection structurally separate from `users/{uid}`; every
+   privileged write server-verified against that record, never
+   trusted from client-rendered role state; a screen a role cannot
+   access is not rendered, not merely disabled.
+4. **Dependency definitions** — the `businessId`-keyed subscription
+   binding (9.4, matching Module #19's Accepted resolution); the
+   aggregate-only notification consumption boundary (9.9, matching
+   Module #20's Accepted boundary); and the settled sequencing
+   statement above ("Sequencing note for the record"): #19 and #20
+   must be implemented and hold real data before #18 runtime
+   implementation begins.
+5. **Audit requirements** — every privileged-write route logging to
+   `platform_audit_log`; a subscription override structurally
+   incapable of writing without a same-transaction audit entry;
+   Support Session and impersonation issuance/expiry both logged.
+
+**Not included in this acceptance:** any source code implementation,
+Firestore Rules, database schema, or migration of any kind — none of
+`src/`, `server/`, or `firestore.rules` is touched by this Acceptance.
+This acceptance clears the BDS's business specification, domain rules,
+security boundaries, dependency definitions, and audit requirements
+only — it is not, by itself, authorization to begin implementation.
+Per Rule 8, implementation still requires its own affected-files/plan/
+risks review at the point it's actually assigned, and, per Architecture
+13.2/13.6, implementation additionally waits on Subscriptions (Module
+#19) and Notifications (Module #20) holding real data before Phase 2
+build work can meaningfully begin on 9.4 and 9.9 specifically. Lifecycle:
+**Designed → Executed review → Analyzed → Accepted.** Not Implemented,
+Executed (as code), or further Analyzed beyond this review — no
+engineering work is authorized by this Acceptance.

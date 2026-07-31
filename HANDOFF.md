@@ -12,44 +12,48 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #20 (Notifications) went through a full
-documentation review this session — checked against Module #17's and
-Module #19's Accepted rules, Architecture's tenant isolation principle,
-and the SuperAdmin dependency chain — then received Product Architect
-**Acceptance**. `docs/specs/20-notifications.md` is now
-**✅ Accepted** (business spec & architectural decisions only;
-implementation not yet authorized), matching Module #17 and Module #19.
+**Status:** Module #18 (SuperAdmin) received Product Architect
+**Acceptance** this session. `docs/specs/18-superadmin.md` is now
+**✅ Accepted — documentation & business rules; implementation not
+authorized**, matching the pattern of Module #17, Module #19, and
+Module #20. This follows a documentation-analysis readiness review
+(prior session) that checked the BDS against Module #17's, #19's, and
+#20's Accepted rules, the SuperAdmin architecture sections, the tenant
+isolation principle, audit requirements, and the platform-aggregate
+boundary, and found no contradictions.
 
-The review surfaced one required correction before Acceptance: the
-BDS's original Business Rule 4 / Decision Gate 2 / FR 20.5 implied the
-Background Worker was the *only* notification-creation path.
-Architecture §4.9/§7.4 actually name three legitimate paths — the
-Background Worker (§4.8, scheduled/derived events: overdue Closings,
-subscription expiry checks, inventory risk scans), the privileged
-server (§4.4, immediate transactional events: staff suspension
-confirmation, security/account actions), and the payment webhook
-handler (§4.12, payment/subscription-provider events: payment result,
-subscription state change). Corrected in Business Rule 4, Decision
-Gate 2, and FR 20.5 (now "Notification Creation Path Contract"): the
-Background Worker is shared notification infrastructure for scheduled
-and derived events, not the exclusive creation owner; all three paths
-enforce the same tenant isolation, recipient binding, auditability, and
-notification rules. A second, minor completeness addition was also
-made to Business Rule 2: an Owner with multiple Businesses (Module #17)
-does not receive a combined cross-Business notification stream —
-notifications stay isolated per originating Business, mirroring #17's
-own no-aggregation boundary for financial data.
+Acceptance scope, per the BDS's own "Product Architect Acceptance"
+section: business specification (the twelve 9.1–9.12 screens/
+capabilities), domain rules (the three never-conflated access
+patterns; feature flags as rollout pacing only; soft-suspend vs.
+hard-purge as separate paths), security boundaries
+(`platform_operators/{uid}` structurally separate from `users/{uid}`,
+every privileged write server-verified), dependency definitions
+(`businessId`-keyed subscription integration matching Module #19;
+aggregate-only notification consumption matching Module #20), and
+audit requirements (every privileged write logged; a subscription
+override structurally incapable of writing without a same-transaction
+audit entry).
 
-Decision Gates 1, 3, and 4 (hybrid recipient binding; V1 = in-app only
-behind a Delivery Channel Interface; V1 = four fixed categories) were
-reviewed and found to already align with Architecture and were carried
-through to Acceptance unchanged.
+**Documentation synchronization performed this session (docs only):**
+- `docs/specs/18-superadmin.md` — status line flipped to Accepted;
+  obsolete "⚠️ Sequencing note for the record" (the old `#17→#18→#19→
+  #20` vs. `#19→#20→#18` tension, already resolved before this session)
+  replaced with this module's own settled dependency statement: **#19
+  and #20 must be implemented and provide real data before #18 runtime
+  implementation begins**; matching reference removed from "Out of
+  Scope"; a full "Product Architect Acceptance" section added,
+  replacing the old "Awaiting approval" closing line.
+- `docs/specs/README.md` — Phase 4 table flips #18 to Accepted; a new
+  Module #18 note added; the build-order note updated to state all
+  four Phase 4 modules (#17, #18, #19, #20) are now Accepted/Approved
+  at the documentation stage, none with implementation authorization.
+- `HANDOFF.md` — this section.
 
 **Not done this session, per explicit instruction:** no implementation,
-no `firestore.rules` schema, no `Header.tsx` changes, no
-`NotificationContext` created. `docs/specs/README.md`'s Phase 4 table
-and notes updated to reflect Module #20's Accepted status and the
-Decision Gate 2 correction.
+no code, no `firestore.rules`, no schema, no migration, no collection
+created. `src/`, `server/`, `firestore.rules`, and `docs/architecture/*`
+were not touched — confirmed untouched by this session's diff.
 
 **Build order (confirmed, unchanged):**
 
@@ -57,15 +61,15 @@ Decision Gate 2 correction.
 #19 Subscriptions → #20 Notifications → #18 SuperAdmin
 ```
 
-Module numbering is not dependency ordering. Module #19 and Module #20
-are now both **✅ Accepted** (business spec & architectural decisions
-only — implementation not authorized for either). Module #18
-(SuperAdmin) is therefore **ready for review / implementation
-planning** — its two Phase-1 doc-stage dependencies are both cleared —
-but reaching that stage is not itself an authorization to begin #18's
-implementation planning, or #19's or #20's implementation, on anyone's
-own initiative; each remains a separate, explicit Product Architect
-go-ahead per Rule 8.
+Module numbering is not dependency ordering. **Module #17, #19, #20,
+and #18 are now all Accepted/Approved** at the documentation &
+business-rules stage. None has implementation authorization. #18's
+own BDS additionally states its runtime implementation cannot begin
+until #19 and #20 are themselves implemented and hold real data
+(Architecture §13.2/13.6) — Acceptance of all three specs does not
+change that sequencing, and does not by itself authorize implementation
+planning for any of them; each remains a separate, explicit Product
+Architect go-ahead per Rule 8.
 
 **Prior status (unchanged this session):** PR-001/PR-002 remain closed.
 The Firestore tenant-isolation test suite (16 `describe` blocks, added
@@ -79,25 +83,24 @@ granted by this note; check that file's own Section 5 lifecycle table.
 Module #17 (Owner Portfolio) remains **Accepted (docs & business
 rules)** — unchanged, implementation not authorized.
 
-Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
-genuinely greenfield in code. **Its two Phase-1 doc-stage dependencies
-are now both cleared** — #19 Accepted (prior session), #20 Accepted
-(this session) — per the confirmed build order above. #18 is therefore
-**ready for review / implementation planning**, but has not itself
-received any Product Architect review, Acceptance, or implementation
-go-ahead this session. Its own Rule 8 review (affected files, plan,
-risks) has not been done.
+Module #18 (SuperAdmin) — BDS spec (`docs/specs/18-superadmin.md`) is
+now **Accepted (docs & business rules)**, per this session's recording
+above. Still genuinely greenfield in code — no implementation, no
+`firestore.rules`, no schema exists for it, and none is authorized by
+this Acceptance. Its runtime implementation remains gated on #19 and
+#20 holding real data (Architecture §13.2/13.6), independent of any
+module's own Acceptance status.
 
 Module #15 (AI Intelligence) remains drafted but deliberately not
 implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist in code yet.
 
 **Anything mid-flight / blocked:** Nothing blocked at the repository
-level, nothing uncommitted. Modules #19 and #20 are both Accepted
-(docs & business rules) — neither has implementation authorization. Do
-not begin #19, #20, or #18 implementation, schema, or `firestore.rules`
-work in the meantime; that authorization has not been given for any of
-the three.
+level, nothing uncommitted. Modules #17, #18, #19, and #20 are all
+Accepted/Approved (docs & business rules) — none has implementation
+authorization. Do not begin #17, #18, #19, or #20 implementation,
+schema, or `firestore.rules` work in the meantime; that authorization
+has not been given for any of them.
 
 **Known gaps flagged but not yet scheduled:**
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a

@@ -103,7 +103,7 @@ intelligence), then build the platform capabilities around that.
 |---|---|---|
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
-| 18 | [SuperAdmin](./18-superadmin.md) | Drafted — awaiting approval |
+| 18 | [SuperAdmin](./18-superadmin.md) | ✅ Accepted (documentation & business rules; implementation not authorized) |
 | 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
 | 20 | [Notifications](./20-notifications.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
 
@@ -159,6 +159,27 @@ intelligence), then build the platform capabilities around that.
 > legacy-migration mechanics (see the BDS's own "Explicitly Left Open"
 > section).
 
+> **Note on Module #18 (SuperAdmin):** a documentation-analysis
+> readiness review checked `18-superadmin.md` against Module #17's and
+> Module #19's Accepted rules, Module #20's Accepted rules, the
+> SuperAdmin architecture sections, the tenant isolation principle,
+> audit requirements, and the platform-aggregate boundary — no
+> contradictions found. The BDS's `businessId`-keyed subscription
+> integration (9.4) matches Module #19's Accepted binding; its
+> aggregate-only notification consumption (9.9) matches Module #20's
+> Accepted boundary; its access model (`platform_operators/{uid}`,
+> distinct from `users/{uid}`) does not reuse Owner/Manager tenant
+> access patterns. The BDS's obsolete "Sequencing note for the record"
+> (an earlier flagged tension between a prior `HANDOFF.md` build order
+> and Architecture §13.2/13.6) has been replaced with this module's own
+> settled dependency statement: **#19 and #20 must be implemented and
+> provide real data before #18 runtime implementation begins.** **✅
+> Accepted** — business specification, domain rules, security
+> boundaries, dependency definitions, and audit requirements only, per
+> the BDS's own "Product Architect Acceptance" section. Implementation
+> is not authorized by this Acceptance. No `src/`, `server/`,
+> `firestore.rules`, collection, schema, or migration has been touched.
+
 > **Note on build order (#18/#19/#20):** the discrepancy flagged
 > previously — a prior HANDOFF.md version stating `#17 → #18 → #19 →
 > #20` — is resolved by explicit Product Architect direction, consistent
@@ -166,13 +187,14 @@ intelligence), then build the platform capabilities around that.
 > Phase 1 data): **`#19 (Subscriptions) → #20 (Notifications) → #18
 > (SuperAdmin)`**. Module numbering is not dependency ordering. This
 > supersedes any prior numeric-order assumption in this repo's history.
-> As of this update, Module #19 and Module #20 are both **✅ Accepted**
-> (docs & business rules; implementation not yet authorized for either).
-> Module #18 (SuperAdmin) is therefore no longer blocked on a pending
-> Acceptance for either dependency — it is **ready for review /
-> implementation planning** — but reaching that stage is not itself
-> implementation authorization for #18, #19, or #20; each still requires
-> its own separate, explicit go-ahead per Rule 8.
+> As of this update, **Module #17, #19, #20, and #18 are all
+> ✅ Accepted/Approved** at the documentation & business-rules stage —
+> implementation is not authorized for any of them. Reaching this stage
+> for #18 is not itself implementation authorization for #18, #19, or
+> #20; each still requires its own separate, explicit go-ahead per
+> Rule 8, and #18's implementation additionally waits on #19 and #20
+> holding real data (Architecture §13.2/13.6) before its own runtime
+> build work on 9.4/9.9 can meaningfully begin.
 
 ---
 
