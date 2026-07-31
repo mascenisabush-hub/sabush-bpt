@@ -105,7 +105,7 @@ intelligence), then build the platform capabilities around that.
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | Drafted — awaiting approval |
 | 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
-| 20 | [Notifications](./20-notifications.md) | Designed — draft complete, awaiting Product Architect Acceptance |
+| 20 | [Notifications](./20-notifications.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
 
 > **Note on Module #20 (Notifications):** readiness analysis surfaced a
 > genuinely unresolved recipient-binding question in Architecture §4.9/
@@ -115,13 +115,29 @@ intelligence), then build the platform capabilities around that.
 > module's decision record is a section within `20-notifications.md`,
 > not a separate file, per explicit instruction): **hybrid model** —
 > Business-scoped and User-scoped notifications are both first-class.
-> Also fixed in the same section: Background Worker is a shared platform
-> dependency owned by neither #19 nor #20; V1 channel scope is in-app
-> only, behind a Delivery Channel Interface; V1 notification types are
-> fixed to four categories (Closing, Inventory Risk, Subscription,
-> Platform Announcements). **Designed, not yet Accepted.** No
-> `firestore.rules`, `Header.tsx`, or `NotificationContext` changes made
-> — explicitly out of scope for this drafting stage.
+> A subsequent documentation review against Module #17's and Module
+> #19's Accepted rules, Architecture's tenant isolation principle, and
+> the SuperAdmin dependency chain found the BDS's original Background
+> Worker wording too narrow — Architecture §4.9/§7.4 name three
+> legitimate notification-creation paths (Background Worker for
+> scheduled/derived events, the privileged server for immediate
+> transactional events, the payment webhook handler for payment/
+> subscription-provider events), not one. Corrected prior to
+> Acceptance: the Background Worker is shared notification
+> infrastructure for scheduled and derived events and does not
+> exclusively own notification creation; all three paths enforce the
+> same tenant isolation, recipient binding, auditability, and
+> notification rules. Also confirmed: V1 channel scope is in-app only,
+> behind a Delivery Channel Interface; V1 notification types are fixed
+> to four categories (Closing, Inventory Risk, Subscription, Platform
+> Announcements); an Owner with multiple Businesses (Module #17) does
+> not receive a combined cross-Business notification stream, mirroring
+> #17's own no-aggregation boundary. **✅ Accepted** — business
+> specification and architectural decisions only, per the BDS's own
+> "Product Architect Acceptance" section. Implementation is not
+> authorized by this Acceptance. No `firestore.rules`, `Header.tsx`, or
+> `NotificationContext` changes have been made — those remain out of
+> scope until implementation is separately authorized.
 
 > **Note on Module #19 (Subscriptions):** drafting required resolving a
 > genuine source-of-truth contradiction first — Architecture §3.13 left
@@ -145,13 +161,18 @@ intelligence), then build the platform capabilities around that.
 
 > **Note on build order (#18/#19/#20):** the discrepancy flagged
 > previously — a prior HANDOFF.md version stating `#17 → #18 → #19 →
-> #20` — is now resolved by explicit Product Architect direction,
-> consistent with Architecture §13.2 (rule 1) and §13.6 (SuperAdmin
-> blocked on Phase 1 data): **`#19 (Subscriptions) → #20 (Notifications)
-> → #18 (SuperAdmin)`**. Module numbering is not dependency ordering.
-> This supersedes any prior numeric-order assumption in this repo's
-> history. Module #19 is Accepted (docs); Module #20 readiness analysis
-> is the current next step, ahead of any #18 implementation planning.
+> #20` — is resolved by explicit Product Architect direction, consistent
+> with Architecture §13.2 (rule 1) and §13.6 (SuperAdmin blocked on
+> Phase 1 data): **`#19 (Subscriptions) → #20 (Notifications) → #18
+> (SuperAdmin)`**. Module numbering is not dependency ordering. This
+> supersedes any prior numeric-order assumption in this repo's history.
+> As of this update, Module #19 and Module #20 are both **✅ Accepted**
+> (docs & business rules; implementation not yet authorized for either).
+> Module #18 (SuperAdmin) is therefore no longer blocked on a pending
+> Acceptance for either dependency — it is **ready for review /
+> implementation planning** — but reaching that stage is not itself
+> implementation authorization for #18, #19, or #20; each still requires
+> its own separate, explicit go-ahead per Rule 8.
 
 ---
 

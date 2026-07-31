@@ -3,17 +3,21 @@ Business Domain Specification
 # Notifications
 
 Version 1.0
-**Status:** Designed — draft complete, awaiting Product Architect
-Acceptance
+**Status:** Accepted — business specification and architectural
+decisions accepted; implementation not yet authorized
 **Module #20 of 20 — Phase 4: Platform**
 **Architecture references:** [Section 3.12](../architecture/03-domain-architecture.md)
 (Notifications domain definition — channel-agnostic delivery, never a
-source of truth, Worth-First scope test), [Section 4.8](../architecture/04-system-architecture.md)
-(Background Processing and Scheduled Work — the shared worker this
-module's trigger logic runs on, idempotency/dedupe-key mechanism),
+source of truth, Worth-First scope test), [Section 4.4](../architecture/04-system-architecture.md)
+(Backend Architecture — The Privileged Server — one of three
+notification-creation paths, per Decision Gate 2), [Section 4.8](../architecture/04-system-architecture.md)
+(Background Processing and Scheduled Work — the shared worker for
+scheduled/derived trigger logic, idempotency/dedupe-key mechanism),
 [Section 4.9](../architecture/04-system-architecture.md) (Notifications
-Architecture — `notifications` collection, trigger sources, delivery
-fan-out), [Section 6.8](../architecture/06-user-architecture.md)
+Architecture — `notifications` collection, all three trigger sources,
+delivery fan-out), [Section 4.12](../architecture/04-system-architecture.md)
+(Payments and Subscriptions Integration — the payment webhook handler,
+the third notification-creation path, per Decision Gate 2), [Section 6.8](../architecture/06-user-architecture.md)
 (Permission Matrix — the "Manager: view only" pattern this module's
 visibility rule extends), [Section 7.4](../architecture/07-data-architecture.md)
 (data model — left recipient binding open as `uid` or `businessId`),
@@ -31,8 +35,10 @@ module does not duplicate or recompute that state, only observes it ·
 [Owner Portfolio (spec #17)](./17-owner-portfolio.md) — Business-scoped
 notification visibility must respect existing tenant-isolation and
 Manager-permission rules, unmodified by this module · the Background
-Worker (Architecture §4.8) — a shared platform dependency this module
-does not own (see Decision Record, Decision Gate 2, below)
+Worker (Architecture §4.8), the privileged server (§4.4), and the
+payment webhook handler (§4.12) — three shared platform creation paths
+this module does not own the infrastructure of, only its own trigger/
+creation logic on each (see Decision Record, Decision Gate 2, below)
 **Implementation:** None yet, with one caveat. `src/components/Header.tsx`
 has a bell-icon UI stub (`showNotifications`, `notificationsRef`,
 static "no notifications" copy) — UI scaffolding only, not backed by any
@@ -147,7 +153,12 @@ Without this module:
    `isOwnerOrGrantedManager` pattern, `firestore.rules`). No user may
    discover, directly or by inference, that a Business other than their
    own has any notification, event, or state — existence of a
-   notification is itself tenant-scoped information.
+   notification is itself tenant-scoped information. An Owner with
+   multiple Businesses (Module #17) does not receive a combined
+   notification stream across Businesses — notifications remain
+   isolated by their originating Business and are only visible through
+   the active authorized Business context, mirroring #17's own "no
+   aggregation across Businesses" boundary for financial data.
 3. **No accounting drift.** This module never calculates Business
    Worth, modifies Closing data, modifies Inventory, or replaces
    Reports. It only communicates events already produced by domains
@@ -156,11 +167,23 @@ Without this module:
    Subscriptions, spec #19). A notification payload references the
    triggering record; it never duplicates the financial fact itself
    (Architecture §4.9, Principle 2.4).
-4. **Background Worker is a shared platform dependency, not owned by
-   this module.** Neither Module #19 nor Module #20 owns the worker's
-   scheduling infrastructure. Each domain owns only its own trigger
-   logic (which events to scan for, what payload to write); platform
-   engineering owns the worker process itself. See Decision Record,
+4. **The Background Worker is shared notification infrastructure for
+   scheduled and derived events — it does not exclusively own
+   notification creation.** Architecture §4.9/§7.4 name three
+   legitimate creation paths into the `notifications` collection: the
+   Background Worker (§4.8 — scheduled/threshold-based checks: overdue
+   Closings, subscription expiry/trial-ending checks, inventory risk
+   scans), the privileged server (§4.4 — immediate transactional
+   events: staff suspension confirmation, security/account actions),
+   and the payment webhook handler (§4.12 — payment/subscription
+   provider events: payment result, subscription state change). No
+   module or path owns the shared infrastructure itself (worker
+   process, privileged server, webhook handler) — platform engineering
+   does. Each domain/path owns only its own trigger/creation logic
+   (which events produce a notification, what payload to write). All
+   three creation paths must enforce the same tenant isolation,
+   recipient binding (20.2), auditability, and notification rules this
+   BDS defines — no creation path is exempt. See Decision Record,
    Decision Gate 2.
 5. **V1 channel scope is in-app only.** Email, WhatsApp, SMS, and any
    external messaging provider are deferred, not built, in V1 — but the
@@ -284,17 +307,41 @@ Notification Event
   (Architecture §4.9's own reasoning, restated here as a hard V1
   constraint rather than a future aspiration).
 
-### 20.5 Background Worker Trigger Contract (Decision Gate 2 applied)
+### 20.5 Notification Creation Path Contract (Decision Gate 2 applied)
 
-- This module owns: which events to scan for (per category, 20.3), and
-  the payload/dedupe-key shape for each (20.1).
-- This module does not own: the worker's scheduling process, interval
-  configuration, or crash-recovery mechanism — those belong to the
-  shared Background Worker (Architecture §4.8), the same instance
-  Module #19's subscription-lifecycle checks run on.
-- Both modules' BDS documents state this explicitly so implementation
-  never treats either module as the owner of worker infrastructure —
-  neither #19 nor #20 should end up with its own competing scheduler.
+- This module owns: which events produce a notification (per category,
+  20.3), and the payload/dedupe-key shape for each (20.1) — regardless
+  of which of the three paths below creates the document.
+- **Path 1 — Background Worker (Architecture §4.8).** Scheduled/
+  threshold-based checks: Closing approaching/overdue, subscription
+  expiry/trial-ending state (Module #19), inventory/stock-count risk
+  scans. This module does not own the worker's scheduling process,
+  interval configuration, or crash-recovery mechanism — those belong
+  to the shared Background Worker, the same instance Module #19's
+  subscription-lifecycle checks run on.
+- **Path 2 — Privileged server (Architecture §4.4).** Immediate
+  transactional events produced synchronously with a server-verified
+  action — e.g., a staff-suspension confirmation, a security/account
+  event, a role-change confirmation (one of 20.2's User-scoped
+  examples). This module does not own the privileged-server
+  request-handling infrastructure, only the notification payload/type
+  produced when such an action occurs.
+- **Path 3 — Payment webhook handler (Architecture §4.12).** Payment
+  or subscription-provider-originated events — payment result,
+  subscription state change — a Module #19 dependency. This module
+  does not own the webhook handler or payment processor integration,
+  only the notification payload/type produced when such an event
+  arrives.
+- All three paths write into the same `notifications` collection using
+  the same schema (20.1) and the same recipient-scope rules (20.2) —
+  there is no separate schema, access path, or rule set per creation
+  source.
+- No module — #19, #20, nor any future one — owns the Background
+  Worker, privileged server, or webhook handler infrastructure itself;
+  those remain platform engineering's shared infrastructure. This
+  module owns only its own trigger/creation logic across all three
+  paths, and states this explicitly so implementation never treats any
+  single path as the sole owner of notification creation.
 
 ## Non-functional Requirements
 
@@ -405,14 +452,32 @@ alert.
 personal/account events that belong to one specific user, not the
 Business as a whole.
 
-### Decision Gate 2 — Background Worker Dependency
+### Decision Gate 2 — Notification Creation Path Ownership
 
-**Accepted:** shared platform dependency. No separate Notifications-only
-worker. Module #19 and Module #20 both state explicitly (Business
-Rule 4/Functional Requirement 20.5, and Module #19's own existing
-Non-functional Requirements) that: worker infrastructure is a
-dependency neither module owns; trigger logic belongs to each domain;
-scheduling infrastructure belongs to platform engineering.
+**Accepted:** notification creation is not exclusive to the Background
+Worker. Architecture §4.9/§7.4 name three legitimate creation paths —
+Background Worker (§4.8, scheduled/derived events), privileged server
+(§4.4, immediate transactional events), and payment webhook handler
+(§4.12, payment/subscription-provider events) — and this BDS's original
+drafting language (Business Rule 4/Functional Requirement 20.5)
+understated that by naming only the Background Worker. Corrected prior
+to Acceptance: the Background Worker is shared notification
+infrastructure for scheduled and derived events; it does not
+exclusively own notification creation. Privileged-server and
+payment-webhook creation paths are equally legitimate for immediate
+transactional or external-state events. No module owns any of the
+three pieces of shared infrastructure (worker, privileged server,
+webhook handler) themselves; each domain owns only its own trigger/
+creation logic. All creation paths must enforce the same tenant
+isolation, recipient binding, auditability, and notification rules
+this BDS defines — no path is exempt from those rules.
+
+**Rejected — Background Worker as sole/exclusive creation path.** This
+was the BDS's original implicit framing (Business Rule 4/FR 20.5 named
+only the worker) and would have contradicted Architecture §4.9/§7.4,
+which already name privileged-server and payment-webhook creation as
+legitimate paths. Corrected before Acceptance rather than carrying the
+narrower framing into implementation.
 
 ### Decision Gate 3 — V1 Channel Scope
 
@@ -435,21 +500,56 @@ reminders, staff productivity scoring, AI-generated recommendations
 
 ### Lifecycle
 
-**Designed.** This decision record and the BDS above document Product
-Architect direction as communicated for Module #20 drafting. It becomes
-**Accepted** only through the same explicit acceptance step every other
-module in this series has used (Module #17, Module #19) — not by virtue
-of being written down here.
+**Designed → Executed review → Analyzed → Accepted.** This decision
+record and the BDS above documented Product Architect direction as
+communicated for Module #20 drafting; a subsequent documentation review
+against Module #17's and Module #19's Accepted rules, Architecture's
+tenant isolation principle, and the SuperAdmin dependency chain
+surfaced the Decision Gate 2 correction above (analyzed findings), which
+was then applied to this document. Accepted through the same explicit
+acceptance step every other module in this series has used (Module #17,
+Module #19) — not by virtue of being written down here.
 
 ---
 
 ## Product Architect Acceptance
 
-**Not yet Accepted.** This BDS reflects Product Architect direction as
-communicated for drafting (Decision Gates 1–4, above). Per the same
-discipline used for Modules #17 and #19, this draft becomes
-Designed → **Accepted** only through an explicit acceptance step — not
-by virtue of having been written. Acceptance, when granted, should state
-its scope explicitly — per Rule 8, an accepted BDS is still not itself
-authorization to begin implementation; that remains a separate,
-explicit go-ahead.
+**Accepted.** Scope of this acceptance, as explicitly granted:
+
+1. **Recipient binding — hybrid model** (Decision Gate 1). Both
+   Business-scoped (`businessId`) and User-scoped (`userId`)
+   notifications are first-class; neither is a universal owner.
+2. **Notification creation path ownership** (Decision Gate 2, corrected
+   pre-Acceptance). The Background Worker is shared notification
+   infrastructure for scheduled and derived events; it does not
+   exclusively own notification creation. Notifications may also be
+   created by privileged-server workflows (§4.4) and payment webhook
+   handlers (§4.12) where immediate transactional or external-state
+   events require it. All creation paths enforce the same tenant
+   isolation, recipient binding, auditability, and notification rules
+   this BDS defines.
+3. **V1 channel scope — in-app only** (Decision Gate 3). Email and
+   WhatsApp deferred, behind a Delivery Channel Interface (20.4) built
+   from V1 so later channel addition is additive, not a redesign.
+4. **V1 notification types — four categories only** (Decision Gate 4).
+   Business Closing, Inventory Risk, Subscription (Module #19
+   dependency), Platform Announcements. Marketing, promotional,
+   staff-scoring, and AI-recommendation (Module #15 dependency)
+   categories remain explicitly excluded.
+5. **Tenant isolation, including the Module #17 boundary.** Business
+   Rule 2's multi-Business clarification is accepted: an Owner with
+   multiple Businesses does not receive a combined notification stream
+   across Businesses — notifications remain isolated per originating
+   Business, mirroring #17's "no aggregation across Businesses"
+   boundary for financial data.
+
+**Not included in this acceptance:** any source code implementation,
+`firestore.rules` changes, `Header.tsx` changes, or `NotificationContext`
+creation. This acceptance clears the BDS's business specification,
+architectural decisions, and the Decision Gate 2 correction — it is not,
+by itself, authorization to begin implementation. Per Rule 8,
+implementation still requires its own affected-files/plan/risks review
+at the point it's actually assigned. Lifecycle: **Designed → Executed
+review → Analyzed → Accepted.** Not Implemented, Executed (as code), or
+further Analyzed beyond this review — no engineering work is authorized
+by this Acceptance.

@@ -12,52 +12,60 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #20 (Notifications) moved from readiness analysis to
-a full BDS draft this session: `docs/specs/20-notifications.md`.
-**Designed, not yet Accepted.**
+**Status:** Module #20 (Notifications) went through a full
+documentation review this session — checked against Module #17's and
+Module #19's Accepted rules, Architecture's tenant isolation principle,
+and the SuperAdmin dependency chain — then received Product Architect
+**Acceptance**. `docs/specs/20-notifications.md` is now
+**✅ Accepted** (business spec & architectural decisions only;
+implementation not yet authorized), matching Module #17 and Module #19.
 
-Readiness analysis surfaced a genuinely unresolved recipient-binding
-question (Architecture §4.9/§7.4 left it as `uid` or `businessId`, and
-— unlike Module #19's binding — no section claimed to resolve it).
-Resolved via Product Architect decision, recorded as a "Decision
-Record" section *inside* `20-notifications.md` itself (not a separate
-file, per explicit instruction — different from Module #19's pattern,
-which used a standalone resolution doc):
+The review surfaced one required correction before Acceptance: the
+BDS's original Business Rule 4 / Decision Gate 2 / FR 20.5 implied the
+Background Worker was the *only* notification-creation path.
+Architecture §4.9/§7.4 actually name three legitimate paths — the
+Background Worker (§4.8, scheduled/derived events: overdue Closings,
+subscription expiry checks, inventory risk scans), the privileged
+server (§4.4, immediate transactional events: staff suspension
+confirmation, security/account actions), and the payment webhook
+handler (§4.12, payment/subscription-provider events: payment result,
+subscription state change). Corrected in Business Rule 4, Decision
+Gate 2, and FR 20.5 (now "Notification Creation Path Contract"): the
+Background Worker is shared notification infrastructure for scheduled
+and derived events, not the exclusive creation owner; all three paths
+enforce the same tenant isolation, recipient binding, auditability, and
+notification rules. A second, minor completeness addition was also
+made to Business Rule 2: an Owner with multiple Businesses (Module #17)
+does not receive a combined cross-Business notification stream —
+notifications stay isolated per originating Business, mirroring #17's
+own no-aggregation boundary for financial data.
 
-- **Decision Gate 1 (recipient binding):** hybrid model. Both
-  Business-scoped (`businessId` — Closing/Inventory/Subscription
-  alerts, visible to Admin + view-only Manager, never Staff by default)
-  and User-scoped (`userId` — personal/account events, visible only to
-  that user) are first-class. Neither "all `userId`" nor "all
-  `businessId`" was accepted.
-- **Decision Gate 2 (worker dependency):** Background Worker (§4.8) is
-  a shared platform dependency — neither #19 nor #20 owns the
-  scheduler; each owns only its own trigger logic.
-- **Decision Gate 3 (channel scope):** V1 = in-app only, behind a
-  Delivery Channel Interface so Email/WhatsApp are additive later, not
-  a redesign.
-- **Decision Gate 4 (notification types):** four V1 categories only —
-  Business Closing, Inventory Risk, Subscription (Module #19
-  dependency), Platform Announcements. Marketing, promotional, staff
-  scoring, and AI-recommendation (Module #15 dependency) notifications
-  explicitly excluded from V1.
+Decision Gates 1, 3, and 4 (hybrid recipient binding; V1 = in-app only
+behind a Delivery Channel Interface; V1 = four fixed categories) were
+reviewed and found to already align with Architecture and were carried
+through to Acceptance unchanged.
 
 **Not done this session, per explicit instruction:** no implementation,
 no `firestore.rules` schema, no `Header.tsx` changes, no
 `NotificationContext` created. `docs/specs/README.md`'s Phase 4 table
-and note updated to reflect the new Designed status and cross-reference
-the embedded decision record.
+and notes updated to reflect Module #20's Accepted status and the
+Decision Gate 2 correction.
 
-**Build order (confirmed last session, unchanged):**
+**Build order (confirmed, unchanged):**
 
 ```
 #19 Subscriptions → #20 Notifications → #18 SuperAdmin
 ```
 
-Module numbering is not dependency ordering. Module #19 remains
-**✅ Accepted** (business spec & architectural decisions only — see
-prior session); Module #20 is now **Designed**, awaiting the same
-explicit Acceptance step before it can join #19 at that stage.
+Module numbering is not dependency ordering. Module #19 and Module #20
+are now both **✅ Accepted** (business spec & architectural decisions
+only — implementation not authorized for either). Module #18
+(SuperAdmin) is therefore **ready for review / implementation
+planning** — its two Phase-1 doc-stage dependencies are both cleared —
+but reaching that stage is not itself an authorization to begin #18's
+implementation planning, or #19's or #20's implementation, on anyone's
+own initiative; each remains a separate, explicit Product Architect
+go-ahead per Rule 8.
 
 **Prior status (unchanged this session):** PR-001/PR-002 remain closed.
 The Firestore tenant-isolation test suite (16 `describe` blocks, added
@@ -72,20 +80,24 @@ Module #17 (Owner Portfolio) remains **Accepted (docs & business
 rules)** — unchanged, implementation not authorized.
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
-genuinely greenfield in code. **Still awaiting architectural approval;
-gated behind #19 and #20 per the confirmed build order above** — #20 is
-now Designed but not yet Accepted, so #18 remains blocked on both #19's
-already-Accepted status and #20 reaching the same stage.
+genuinely greenfield in code. **Its two Phase-1 doc-stage dependencies
+are now both cleared** — #19 Accepted (prior session), #20 Accepted
+(this session) — per the confirmed build order above. #18 is therefore
+**ready for review / implementation planning**, but has not itself
+received any Product Architect review, Acceptance, or implementation
+go-ahead this session. Its own Rule 8 review (affected files, plan,
+risks) has not been done.
 
 Module #15 (AI Intelligence) remains drafted but deliberately not
 implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist in code yet.
 
 **Anything mid-flight / blocked:** Nothing blocked at the repository
-level, nothing uncommitted. Module #20's BDS awaits explicit Product
-Architect Acceptance — not implemented, not scheduled. Do not begin #19
-or #20 implementation in the meantime; that authorization has not been
-given for either module.
+level, nothing uncommitted. Modules #19 and #20 are both Accepted
+(docs & business rules) — neither has implementation authorization. Do
+not begin #19, #20, or #18 implementation, schema, or `firestore.rules`
+work in the meantime; that authorization has not been given for any of
+the three.
 
 **Known gaps flagged but not yet scheduled:**
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a
