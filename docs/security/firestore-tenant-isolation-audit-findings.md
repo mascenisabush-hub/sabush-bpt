@@ -183,9 +183,10 @@ verification by this session.
 |---|---|---|
 | Designed | ✅ | Accepted architecture and security requirements (Architecture 12, Security Architecture doc; Audit Plan scope/scenarios). |
 | Implemented | ✅ | Security rules and tests implemented — 16 `describe` blocks in `tests/firestore-rules.test.ts`, typechecked clean. |
-| Executed | ✅ | 47/47 emulator tests passed, 0 failures, exit code 0 (reported result — see provenance note, Section header). |
-| Analyzed | ⏳ Pending | This document is the analysis artifact; marked pending until reviewed. |
-| Accepted | ⏳ Pending | Requires final approval — not self-granted by this document or its author. |
+| Executed | ✅ | 47/47 emulator tests passed, 0 failures, exit code 0 (see Appendix A for screenshot evidence review). |
+| Analyzed | ✅ | Reviewed and marked complete by the Product Architect (2026-07-31), on the basis of this findings document plus Appendix A's evidence review. Not self-granted by the document's author. |
+| Accepted | ⏳ Pending | Held pending completion of repository integration (push + review of the two documentation commits on `origin`). Not advanced by this edit. |
 
-This document does not advance Accepted. That decision belongs to
-whoever reviews it.
+This document does not self-advance Accepted — that remains an explicit,
+separate decision gated on the commits actually landing in the reviewed
+repository, per the Product Architect's stated condition.
