@@ -105,7 +105,23 @@ intelligence), then build the platform capabilities around that.
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | Drafted — awaiting approval |
 | 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
-| 20 | Notifications | Not started — readiness analysis in progress |
+| 20 | [Notifications](./20-notifications.md) | Designed — draft complete, awaiting Product Architect Acceptance |
+
+> **Note on Module #20 (Notifications):** readiness analysis surfaced a
+> genuinely unresolved recipient-binding question in Architecture §4.9/
+> §7.4 (`uid` or `businessId` — unlike Module #19's binding, no section
+> claimed to resolve this one). Resolved by Product Architect decision,
+> embedded directly in the BDS's own "Decision Record" section (this
+> module's decision record is a section within `20-notifications.md`,
+> not a separate file, per explicit instruction): **hybrid model** —
+> Business-scoped and User-scoped notifications are both first-class.
+> Also fixed in the same section: Background Worker is a shared platform
+> dependency owned by neither #19 nor #20; V1 channel scope is in-app
+> only, behind a Delivery Channel Interface; V1 notification types are
+> fixed to four categories (Closing, Inventory Risk, Subscription,
+> Platform Announcements). **Designed, not yet Accepted.** No
+> `firestore.rules`, `Header.tsx`, or `NotificationContext` changes made
+> — explicitly out of scope for this drafting stage.
 
 > **Note on Module #19 (Subscriptions):** drafting required resolving a
 > genuine source-of-truth contradiction first — Architecture §3.13 left
