@@ -12,41 +12,38 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Stage 3 backfill migration implementation authorized and
-built. **Reached Analyzed, not Executed.** `scripts/migrate-owner-to-admin.ts`
-created — a direct translation of the approved plan
-(`docs/engineering/phase0-stage3-backfill-migration-execution-plan.md`),
-no deviations. `tsc --noEmit` clean (confirmed the new script is
-included via `--listFiles`). **Not run against any project** — this
-sandbox's network egress excludes Firebase endpoints, so live/emulator
-execution is a manual step for whoever runs it next, per the plan's §9
-rollout procedure (dry run first).
+**Status:** Stage 3 implementation **complete and reviewed**, reached
+Analyzed. **Commit `0f7a4e5`** (`Stage 3 script: add rerun-count audit
+field (MIGRATION_RERUN_COUNT)`), pushed to `origin/main`.
+`scripts/migrate-owner-to-admin.ts` implements the approved plan
+exactly: `--dry-run` default-first path (no write batch created in that
+branch), batched single-field `role: 'admin'` updates only, stop-on-
+batch-failure, and full operational logging (timestamp, script Git
+commit, operator, scanned/migrated/failed counts, rerun count — all via
+`MIGRATION_SCRIPT_GIT_COMMIT` / `MIGRATION_OPERATOR` /
+`MIGRATION_RERUN_COUNT` env vars). Reviewed against the full
+implementation checklist; one gap (rerun count) found and fixed in this
+same commit. No credentials/service-account material ever logged.
 
-**Latest artifact:** `scripts/migrate-owner-to-admin.ts` — standalone
-script, reuses `server/index.ts`'s exact credential pattern
-(`FIREBASE_SERVICE_ACCOUNT_BASE64`), not wired into any HTTP path or
-build output. Supports `--dry-run` (default-first path per plan §11:
-runs the `role == 'owner'` query, reports count + sample ids, zero
-writes) and, without the flag, performs the real batched migration
-(single-field `role` update only, batch size configurable via
-`--batch-size`, default 400). Stops on batch failure rather than
-continuing past an unlogged error (plan §7). Final summary log line
-includes scanned/migrated/failed counts and reads
-`MIGRATION_SCRIPT_GIT_COMMIT` / `MIGRATION_OPERATOR` env vars for the
-audit fields the Product Architect's review required (§4) — **whoever
-runs this must set both env vars at invocation time**, e.g.:
-`MIGRATION_SCRIPT_GIT_COMMIT=$(git rev-parse HEAD) MIGRATION_OPERATOR="name" tsx scripts/migrate-owner-to-admin.ts --dry-run`.
+**Execution status: NOT YET RUN.** No dry-run and no write-mode
+execution has happened against any Firebase project (staging,
+production, or emulator) — this sandbox has no network egress to
+Firebase endpoints, so execution is necessarily a manual step outside
+this environment, per the plan's §9 rollout procedure.
 
-**Files changed this session:** only `scripts/migrate-owner-to-admin.ts`
-(new) and this file. No `src/`, `server/`, or `firestore.rules` change.
-Not yet committed as of this HANDOFF update — see next session/commit
-step.
+**Files changed across Stage 3 implementation:** only
+`scripts/migrate-owner-to-admin.ts` (new) and this file. No `src/`,
+`server/`, `firestore.rules`, or dependency changes at any point.
 
-**Awaiting:** (1) a real or emulated Firebase project to actually run
-`--dry-run` against (this sandbox cannot reach one), and (2) after a
-clean dry run, explicit go-ahead to run the write mode in production,
-per the plan's rollout procedure §9. Stage 4 (identifier rename) remains
-gated on this script's completeness check (§8.1) returning zero.
+**Stage 4 (identifier rename): remains explicitly not authorized and
+blocked**, both by process (separate authorization required per Rule 8)
+and by substance (gated on Stage 3's §8.1 completeness check returning
+zero, which requires an actual production run that hasn't happened).
+
+**Awaiting:** the next approval boundary — running `--dry-run` against
+the intended Firebase environment (staging/emulator or production, per
+whoever has that access) and reviewing its output before any write-mode
+invocation is considered.
 
 ---
 
