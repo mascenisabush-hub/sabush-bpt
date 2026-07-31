@@ -3,8 +3,8 @@ Business Domain Specification
 # Subscriptions
 
 Version 1.0
-**Status:** Designed — draft complete, awaiting Product Architect
-Acceptance
+**Status:** ✅ Accepted (business specification and architectural
+decisions only — not implementation)
 **Module #19 of 20 — Phase 4: Platform**
 **Architecture references:** [Section 3.13](../architecture/03-domain-architecture.md)
 (Subscriptions domain definition — plan/status/trial/entitlements,
@@ -357,12 +357,38 @@ explicit Product Architect decision:
 
 ## Product Architect Acceptance
 
-**Not yet Accepted.** This BDS reflects Product Architect direction as
-communicated for drafting (Decision Gates 1–6, and Decisions A/B/C).
-Per the same discipline used for Module #17, this draft becomes
-Designed → **Accepted** only through an explicit acceptance step — not
-by virtue of having been written. Acceptance, when granted, should
-state its scope explicitly (e.g., whether it covers this BDS's content
-only, or also authorizes moving toward implementation planning) — per
-Rule 8, an approved BDS is still not itself authorization to begin
-implementation; that remains a separate, explicit go-ahead.
+**Accepted.** Scope of this acceptance, as explicitly granted:
+
+1. **Subscription ownership model** — Business-level (`Business →
+   Subscription`), not Owner/Portfolio-level. Consistent with, and
+   granted alongside, the [Ownership Resolution](./19-subscription-ownership-resolution.md)'s
+   own Acceptance.
+2. **Trial model** — Business-level trial (Decision A). Every new
+   Business receives its own subscription lifecycle at registration;
+   subscription checks always resolve against the active Business; no
+   Owner-level "already has a trial" logic.
+3. **Expiry behavior** — Restricted features model (Decision B).
+   Login blocking, full read-only mode, and any data-hostage model are
+   not accepted. Permanent rule: Business Worth history, Closings,
+   Timeline, and historical performance information remain accessible
+   regardless of subscription status — subscription controls platform
+   capabilities, never ownership of business data.
+4. **Version 1 scope** (Decision C) — subscription records, trial
+   lifecycle, subscription states, entitlement evaluation, feature
+   gating framework, and the future payment-integration boundary are
+   in scope. Invoice system, receipt system, payment ledger, and
+   accounting-style billing history are explicitly excluded — Sabush
+   BPT remains a Business Worth platform, not a billing/accounting
+   platform.
+5. **`MAX_SHOPS_PER_OWNER` relationship** — confirmed unchanged at `10`
+   as a Module #17 Version 1 platform rule. Module #19 may in the
+   future replace the fixed limit with entitlement-driven evaluation;
+   no current change, no code authorization.
+
+**Not included in this acceptance:** any source code implementation.
+This acceptance clears the BDS's business specification and
+architectural-decision content — it is not, by itself, authorization to
+begin implementation. Per Rule 8, implementation still requires its own
+affected-files/plan/risks review at the point it's actually assigned.
+Lifecycle: **Designed → Accepted.** Not Implemented, Executed, or
+Analyzed — no engineering work is authorized by this Acceptance.

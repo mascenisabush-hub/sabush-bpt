@@ -104,8 +104,8 @@ intelligence), then build the platform capabilities around that.
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | Drafted — awaiting approval |
-| 19 | [Subscriptions](./19-subscriptions.md) | Designed — draft complete, awaiting Product Architect Acceptance |
-| 20 | Notifications | Not started |
+| 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
+| 20 | Notifications | Not started — readiness analysis in progress |
 
 > **Note on Module #19 (Subscriptions):** drafting required resolving a
 > genuine source-of-truth contradiction first — Architecture §3.13 left
@@ -117,11 +117,25 @@ intelligence), then build the platform capabilities around that.
 > unmodified. No `docs/architecture/*` file was edited to do this — the
 > resolution record is the authoritative cross-reference, following the
 > same pattern as the Closing Integrity Amendment (Phase 2, above). Both
-> this resolution record and the BDS itself are **Designed**, not yet
-> **Accepted** — three items remain explicitly open pending Product
-> Architect answers before implementation planning: plan names/pricing,
-> payment processor vendor selection, and legacy-migration mechanics (see
-> the BDS's own "Explicitly Left Open" section).
+> the resolution record and the BDS itself are now **✅ Accepted** —
+> scoped to business specification and architectural decisions only, per
+> each document's own "Product Architect Acceptance" section.
+> Implementation is not authorized by this Acceptance. Four items remain
+> explicitly open, unaffected by Acceptance, pending separate Product
+> Architect decisions before implementation planning: plan names/tier
+> structure, pricing, payment processor vendor selection, and
+> legacy-migration mechanics (see the BDS's own "Explicitly Left Open"
+> section).
+
+> **Note on build order (#18/#19/#20):** the discrepancy flagged
+> previously — a prior HANDOFF.md version stating `#17 → #18 → #19 →
+> #20` — is now resolved by explicit Product Architect direction,
+> consistent with Architecture §13.2 (rule 1) and §13.6 (SuperAdmin
+> blocked on Phase 1 data): **`#19 (Subscriptions) → #20 (Notifications)
+> → #18 (SuperAdmin)`**. Module numbering is not dependency ordering.
+> This supersedes any prior numeric-order assumption in this repo's
+> history. Module #19 is Accepted (docs); Module #20 readiness analysis
+> is the current next step, ahead of any #18 implementation planning.
 
 ---
 

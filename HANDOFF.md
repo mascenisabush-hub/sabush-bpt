@@ -12,132 +12,87 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #19 (Subscriptions) moved from "readiness analysis"
-to a full BDS draft this session. Two new docs-only files:
+**Status:** Module #19 (Subscriptions) is now **✅ Accepted** — business
+specification and architectural decisions only, **not** implementation.
+Both docs updated with a "Product Architect Acceptance" section (same
+pattern as Module #17):
 
-- `docs/specs/19-subscription-ownership-resolution.md` — resolves the
-  Architecture §3.13/§6.2/§9.4/§13.5 subscription-binding contradiction.
-  Resolution: **Business-level (`businessId`) binding**, no Owner/
-  Portfolio-level subscription (rejected), `MAX_SHOPS_PER_OWNER`
-  (Module #17) unmodified. No `docs/architecture/*` file was edited —
-  this record is the cross-reference, not a rewrite of those sections.
-- `docs/specs/19-subscriptions.md` — the Module #19 BDS itself, built on
-  Product Architect Decisions A (Business-level trial), B (expired =
-  restricted features, not blocked/read-only), and C (state +
-  entitlement gating only, no billing/invoice/ledger).
+- `docs/specs/19-subscription-ownership-resolution.md` — Accepted.
+  Resolves the Architecture §3.13/§6.2/§9.4/§13.5 subscription-binding
+  contradiction as **Business-level (`businessId`) binding**; Owner/
+  Portfolio-level subscription explicitly rejected; `MAX_SHOPS_PER_OWNER`
+  (Module #17) confirmed unchanged. No `docs/architecture/*` file
+  edited — this record remains the cross-reference, not a rewrite.
+- `docs/specs/19-subscriptions.md` — Accepted. Business-level trial
+  (Decision A); restricted-features expiry model, never login-blocking
+  or full read-only, Business Worth/Closings/Timeline/historical data
+  always accessible (Decision B); V1 scope = subscription state + trial
+  lifecycle + entitlement/feature gating + future payment-integration
+  boundary only, no invoices/receipts/ledger/billing history (Decision
+  C); `MAX_SHOPS_PER_OWNER` relationship confirmed, no code change.
 
-Both are **Designed, not Accepted.** Four items are explicitly left open
-in the BDS's own "Explicitly Left Open" section and must not be decided
-during any future implementation without a separate Product Architect
-call: plan names/tier structure, pricing, payment processor vendor
-selection (M-Pesa/e-Mola remains a regional requirement, not a vendor
-commitment), and legacy-migration mechanics (the *shape* — no null
-states — is fixed; script/timing is not).
+Lifecycle: **Designed → Accepted.** Not Implemented, Executed, or
+Analyzed — **no engineering work is authorized.** Four items remain
+explicitly open regardless of Acceptance (BDS's own "Explicitly Left
+Open"): plan names/tier structure, pricing, payment processor vendor
+selection, legacy-migration mechanics (shape fixed, script/timing not).
 
-`docs/specs/README.md`'s Phase 4 table updated to reflect Module #19's
-new status and cross-reference the resolution record.
+**Build order resolved.** The previously flagged discrepancy — an
+earlier version of this file stated `#17 → #18 (SuperAdmin) → #19
+(Subscriptions) → #20 (Notifications)`, contradicting Architecture
+§13.2/§13.6 — is now settled by explicit Product Architect direction:
 
-No implementation, no schema, no `firestore.rules`, no `src/` changes
-this session — docs only, per instruction ("Do not write
-implementation... Do not create schemas beyond the BDS design stage").
+```
+#19 Subscriptions → #20 Notifications → #18 SuperAdmin
+```
+
+Module numbering is not dependency ordering. This is the authoritative
+sequence going forward; `docs/specs/README.md`'s Phase 4 section
+records it alongside Module #19's status.
+
+**Next up:** Module #20 (Notifications) readiness analysis — the
+remaining prerequisite before any #18 (SuperAdmin) implementation
+planning, since #18's Subscriptions & Billing (9.4) and platform
+Notifications (9.9) screens both need real Phase-1 data. Readiness
+analysis only — not a BDS draft, not implementation, per instruction.
+
+`docs/specs/README.md` updated (Phase 4 table + two notes: Module #19
+Acceptance, and the resolved build-order sequence). No implementation,
+no schema, no `firestore.rules`, no `src/` changes this session — docs
+only.
 
 **Prior status (unchanged this session):** PR-001/PR-002 remain closed.
-The Firestore tenant-isolation test suite (16 `describe` blocks, added in
-`493c585`) has been **executed** against a real Firebase Rules Emulator
-— not just typechecked — in a local environment with working Java +
-Firebase CLI: 47/47 tests passed, 0 failures, exit code 0. Results are
-written up in `docs/security/firestore-tenant-isolation-audit-findings.md`
-(commits `cfd1af6`, `5f161a5`, `bd5229b`), which the Product Architect
-has reviewed and marked **Analyzed**. `Accepted` is a separate, explicit
-decision the findings document itself does not self-grant — check that
-file's own Section 5 lifecycle table for its current value rather than
-assuming it here.
+The Firestore tenant-isolation test suite (16 `describe` blocks, added
+in `493c585`) has been **executed** against a real Firebase Rules
+Emulator — not just typechecked: 47/47 tests passed, 0 failures, exit
+code 0. Results in `docs/security/firestore-tenant-isolation-audit-findings.md`
+(commits `cfd1af6`, `5f161a5`, `bd5229b`), reviewed and marked
+**Analyzed** by the Product Architect. `Accepted` is a separate,
+explicit decision the findings document itself does not self-grant —
+check that file's own Section 5 lifecycle table rather than assuming
+it here.
 
-Separately, `docs/engineering/17-owner-portfolio-feasibility-note.md`
-(`57ffea7`) is now on `main`: engineering discovery only, no
-implementation. It confirms the existing multi-business ownership code
-(`businessIds[]`, `activeBusinessId`, `addShop()`, `ShopSwitcher.tsx`)
-is a working foundation, maps where Business Worth is currently
-computed (live, per-active-business, in `AppContext.tsx` — no stored
-"current worth" field exists), and flags the hardcoded
-`MAX_SHOPS_PER_OWNER = 10` cap as something the BDS should address
-explicitly rather than leave implicit.
-
-**Module #17 — Owner Portfolio: Accepted (docs & business rules).**
-Correction to this file's own prior entry: an earlier version of this
-note described Portfolio as "a read-only aggregation layer with no new
-writes and no rule changes." That is **superseded and incorrect** — the
-Product Architect's actual, now-Accepted decision is the opposite: **no
-aggregation across Businesses at all**, no summed Business Worth,
-Capital, Embedded Profit, or Inventory Value, in any form, read-only or
-otherwise. Owner Portfolio is the rename/evolution of the existing
-Multi-Shop capability (ownership-management and business-switching),
-not an aggregation feature.
-
-`docs/specs/17-multi-shop.md` has been renamed to
-`docs/specs/17-owner-portfolio.md` (`git mv`, commit `2907517`), with a
-BDS Clarifications section added (`MAX_SHOPS_PER_OWNER` = V1 platform
-rule; future limits → Module #19; internal "Shop"-named identifiers not
-required to refactor; i18n cleanup is separate UI work). Product
-Architect Acceptance recorded directly in the spec's own "Product
-Architect Acceptance" section (end of `17-owner-portfolio.md`).
-**Acceptance is scoped to documentation/business-rules — it is not
-authorization to begin implementation**, per that section's own text.
-
-`docs/engineering/17-owner-portfolio-feasibility-note.md` still has a
-stale link to the old `17-multi-shop.md` filename and poses an
-open supersede/extend/retire question that today's Acceptance
-effectively answers (supersede/rename) — not yet written back into
-that file. Deferred follow-up, not yet assigned.
-
-**Files touched since `493c585`:** all documentation —
-`docs/security/firestore-tenant-isolation-audit-findings.md`,
-`docs/engineering/17-owner-portfolio-feasibility-note.md`,
-`docs/specs/17-owner-portfolio.md` (renamed from `17-multi-shop.md`),
-`docs/specs/README.md`, `docs/specs/18-superadmin.md`. One
-non-documentation exception: `bun.lock` was regenerated (`f8784f5`) to
-fix a Railway `--frozen-lockfile` build failure caused by `package.json`
-drift introduced in `3980e84` — `package.json` itself is unchanged, no
-new/removed/upgraded dependency. No other source code changed.
-
-**Next up:** Module #17's BDS content and business rules are Accepted.
-Implementation has not been authorized or scheduled — that's a separate
-Product Architect decision, to be sequenced against Modules #18/#19/#20
-(unchanged, still blocked as documented below).
+Module #17 (Owner Portfolio) remains **Accepted (docs & business
+rules)** — unchanged this session, implementation not authorized. See
+`docs/specs/17-owner-portfolio.md`'s own "Product Architect Acceptance"
+section.
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
 grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
-greenfield — confirmed by search, zero SuperAdmin/platform-scoped code
-exists anywhere in `src/`, `server/`, or `firestore.rules`. **Awaiting
-architectural approval before any implementation begins.**
-
-**Flagged discrepancy (needs a PM decision, not an engineering one):**
-a prior version of this file stated a "confirmed build order" of
-`#17 → #18 (SuperAdmin) → #19 (Subscriptions) → #20 (Notifications)`.
-That order directly contradicts Architecture Development Strategy
-13.2 (rule 1) and 13.6, both of which state Phase 2 (SuperAdmin)
-is *blocked on* Phase 1 (Subscriptions, Notifications) already holding
-real data — specifically because SuperAdmin's own Subscriptions &
-Billing (9.4) and platform-side Notifications (9.9) screens are
-designed to read those collections, not mock them. The spec for #18 is
-drafted regardless, since drafting a design document has no such
-dependency — but **Phase 2 implementation of #18 should not begin
-before #19 and #20 have real data**, regardless of numbering order.
-This is noted in `docs/specs/18-superadmin.md` itself and repeated here
-so it isn't missed in a quick read.
+greenfield — zero SuperAdmin/platform-scoped code exists anywhere in
+`src/`, `server/`, or `firestore.rules`. **Still awaiting architectural
+approval; now also gated behind #19 and #20 per the resolved build
+order above.**
 
 Module #15 (AI Intelligence) remains drafted but deliberately not
 implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist yet.
 
 **Anything mid-flight / blocked:** Nothing blocked at the repository
-level, nothing uncommitted. Module #17 documentation alignment is
-Accepted (see above). Module #19's BDS is now Designed and drafted,
-waiting on explicit Product Architect Acceptance before any
-implementation planning begins — not implemented, not scheduled. Next
-step is Product Architect Acceptance of the #19 BDS and resolution
-record, plus (separately, per Architecture 13.2/13.6) the still-open
-build-order question between #19/#20/#18.
+level, nothing uncommitted. Module #19 is Accepted but not scheduled for
+implementation — that authorization is a separate, explicit step not
+yet given. Immediate next step is Module #20 readiness analysis, per
+explicit instruction — do not begin #19 implementation in the meantime.
 
 **Known gaps flagged but not yet scheduled:**
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a

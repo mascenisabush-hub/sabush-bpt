@@ -2,9 +2,9 @@ Decision Record
 
 # Subscription Ownership Binding — Resolution
 
-**Status:** Designed — recorded as Product Architect direction, not yet
-Accepted. Acceptance is a separate, explicit step per the Module #19 BDS
-review process (see [`19-subscriptions.md`](./19-subscriptions.md)).
+**Status:** ✅ Accepted (business specification and architectural
+decisions only — not implementation). See "Product Architect
+Acceptance," below, for the exact scope granted.
 **Resolves:** A genuine source-of-truth contradiction between four
 Architecture sections, discovered during Module #19 readiness analysis.
 **Architecture references:** [Section 3.13](../architecture/03-domain-architecture.md)
@@ -139,11 +139,12 @@ Left open, intentionally, for the Module #19 BDS itself:
 
 ## Lifecycle
 
-**Designed.** This record documents Product Architect direction as
-communicated for Module #19 BDS drafting. It becomes **Accepted** only
-through the same explicit acceptance step every other module in this
-series has used (see Module #17's own "Product Architect Acceptance"
-section for the pattern) — not by virtue of being written down here.
+**Designed → Accepted.** This record documented Product Architect
+direction as communicated for Module #19 BDS drafting, and has since
+been explicitly Accepted (see "Product Architect Acceptance," below) —
+following the same pattern Module #17 established. It is not Implemented,
+Executed, or Analyzed — no engineering work is authorized by this
+Acceptance.
 
 No `docs/architecture/*` file has been modified by this record. §3.13,
 §6.2, and §13.5's literal text remains as originally written; this
@@ -157,3 +158,30 @@ its resolution directly into the Architecture document — is a
 here, per standing engineering discipline (no Architecture-file edits
 without separate, explicit instruction to touch that specific file).
 Flagged as a deferred follow-up, not executed.
+
+---
+
+## Product Architect Acceptance
+
+**Accepted.** Scope of this acceptance, as explicitly granted:
+
+- **Subscription ownership model.** Accepted: `Business → Subscription`.
+  Not accepted, explicitly rejected: `Owner → Portfolio Subscription →
+  Businesses`. Reason: Business remains the financial tenant; Owner
+  Portfolio remains an ownership/navigation capability only;
+  subscription state must not create a cross-Business ownership
+  abstraction; this preserves Module #17's tenant isolation principles.
+- **`businessId`-keyed binding** (§9.4's resolution) confirmed as the
+  Version 1 direction, superseding §3.13/§6.2/§13.5's conflicting or
+  stale wording for Module #19 purposes.
+- **`MAX_SHOPS_PER_OWNER` relationship.** Confirmed: remains a Module #17
+  Version 1 platform rule, unchanged, at `10`. Module #19 may in a future
+  version replace the fixed limit with entitlement-driven evaluation —
+  no current change, no code authorization.
+
+**Not included in this acceptance:** any source code implementation, or
+any change to `docs/architecture/*`. This acceptance clears this
+record's contradiction-resolution content and business-rule direction
+— it is not, by itself, authorization to begin implementation. Per
+Rule 8, implementation still requires its own affected-files/plan/risks
+review at the point it's actually assigned.
