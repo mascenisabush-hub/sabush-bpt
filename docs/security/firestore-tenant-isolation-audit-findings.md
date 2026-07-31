@@ -131,6 +131,52 @@ case is recorded in this execution.
 
 ---
 
+## Appendix A: Execution Evidence
+
+Following the provenance gap noted above, a screenshot of the actual
+`cmd.exe` terminal session running `npm run test:rules:emulator` was
+provided and reviewed. It shows real Firebase Rules Emulator log output
+rather than a paraphrased summary. Observed directly in the screenshot:
+
+- Suite summary: `tests 47`, `suites 16`, `pass 47`, `fail 0`,
+  `cancelled 0`, `skipped 0`, `todo 0`, `duration_ms 20834.4539`.
+- `Script exited successfully (code 0)`.
+- Clean emulator teardown sequence: Firestore Emulator stopped on
+  `SIGINT`, emulator hub stopped, logging emulator stopped — consistent
+  with a real local emulator run rather than a mocked/short-circuited
+  one.
+- Scenario-level detail visible in the log, matching Audit Plan Section
+  2 categories rather than generic output:
+  - `query-based leakage`: a cross-business collection-group query
+    against `expenses` denied to a caller who is not a member of every
+    business it would span — the exact "query-based leakage" scenario
+    class from Audit Plan Section 2, item 4.
+  - `suspended member`: passed, consistent with Section 2, item 7.
+  - `historical reopen → correct → re-close workflow`: confirms a second
+    Closing stays locked while a first Closing is reopened for
+    correction, then re-closes cleanly once the correction is made —
+    Closing Integrity Amendment behavior, not merely a generic
+    pass/fail.
+  - Several `PERMISSION_DENIED` gRPC log lines with real timestamps
+    (`2026-07-31T01:17:5x.xxxZ`) tied to specific rule-evaluation lines
+    (`L293`/`L294`) for `create`/`update` — consistent with Section 4's
+    interpretation: these are expected denials paired with passing
+    `assertFails` assertions, not unhandled errors.
+
+**This upgrades the record but doesn't fully close the evidence gap.**
+A screenshot is materially stronger than a narrative claim — it shows
+real tool output rather than a paraphrase — but it is still a partial,
+manually-captured view (scrolled terminal buffer), not an attached raw
+log file or CI artifact covering all 16 `describe` blocks end to end.
+For full reproducibility per Audit Plan Section 4, the ideal follow-up
+is the complete captured log (e.g. `npm run test:rules:emulator > run.log
+2>&1`) committed alongside this document. Noted as a nice-to-have, not
+a blocker — the reviewer evaluating Analyzed/Accepted should weigh this
+appendix as strong supporting evidence, not as full first-hand
+verification by this session.
+
+---
+
 ## 5. Lifecycle Status
 
 | Stage | Status | Detail |
