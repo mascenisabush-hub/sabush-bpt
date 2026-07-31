@@ -12,15 +12,47 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #18 (SuperAdmin) received Product Architect
-**Acceptance** this session. `docs/specs/18-superadmin.md` is now
-**✅ Accepted — documentation & business rules; implementation not
-authorized**, matching the pattern of Module #17, Module #19, and
-Module #20. This follows a documentation-analysis readiness review
-(prior session) that checked the BDS against Module #17's, #19's, and
-#20's Accepted rules, the SuperAdmin architecture sections, the tenant
-isolation principle, audit requirements, and the platform-aggregate
-boundary, and found no contradictions.
+**Status:** Product Architect has shifted process mode this session:
+from spec-writing into **implementation preparation**. Standing
+direction going forward: keep strict BDS acceptance, tenant boundary
+reviews, lifecycle vocabulary, and no-implementation-before-
+authorization; but stop expanding BDS documents unless a real ambiguity
+exists, produce **implementation readiness assessments** (Rule 8
+feasibility passes) before any coding, and look for opportunities to
+automate consistency checks.
+
+First action under this new mode: a documentation-analysis-only Rule 8
+feasibility pass for **Module #19 (Subscriptions)** — scope, what
+already exists in code to reuse, what's genuinely greenfield, risks,
+and which of the four still-open Product decisions (plan names,
+pricing, processor vendor, migration mechanics) block which specific
+deliverable. Written up as
+`docs/engineering/19-subscriptions-implementation-readiness.md` (new
+file, following the precedent set by
+`17-owner-portfolio-feasibility-note.md`). Key findings: the
+Background Worker (Architecture §4.8) is 0% built — no second process,
+no cron, no Procfile exist in the repo, contrary to Architecture's
+"the existing... worker is extended" phrasing, which describes a
+target state, not current reality; Registration
+(`AuthView.tsx`) is a non-atomic 3-step client write today, and adding
+trial-subscription creation as an uncoordinated 4th step would extend
+an existing partial-failure gap; deliverables 1–4 (data model, trial
+creation, feature-gating framework, SuperAdmin override) have **no**
+payment-provider dependency and could sequence first; deliverables 6–7
+(webhook, migration mechanics) are genuinely blocked on the open items.
+**This assessment is informational only — it does not authorize
+implementation of Module #19 or any part of it.**
+
+**Prior status (unchanged this session):** Module #18 (SuperAdmin)
+received Product Architect **Acceptance** last session.
+`docs/specs/18-superadmin.md` is now **✅ Accepted — documentation &
+business rules; implementation not authorized**, matching the pattern
+of Module #17, Module #19, and Module #20. This followed a
+documentation-analysis readiness review that checked the BDS against
+Module #17's, #19's, and #20's Accepted rules, the SuperAdmin
+architecture sections, the tenant isolation principle, audit
+requirements, and the platform-aggregate boundary, and found no
+contradictions.
 
 Acceptance scope, per the BDS's own "Product Architect Acceptance"
 section: business specification (the twelve 9.1–9.12 screens/
