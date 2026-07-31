@@ -12,50 +12,39 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Architect authorized Phase 0 **Stage 1 only** of
-`docs/engineering/phase0-owner-admin-migration-implementation-plan.md`.
-Stage 1 has been implemented, verified where the environment allows,
-and has reached lifecycle stage **Analyzed** — not Accepted. Execution
-stopped here as instructed; Stage 2 has not begun and is not
-authorized.
+**Status:** Product Architect Accepted Stage 1 and authorized Phase 0
+**Stage 2 only**. Stage 2 has been implemented, verified where the
+environment allows, and has reached lifecycle stage **Analyzed** — not
+Accepted. Execution stopped here as instructed; Stage 3 has not begun
+and is not authorized.
 
-**Latest commit:** `699ab48` — "Phase 0 Stage 1: dual-read owner/admin
-tolerance in firestore.rules". Widens every `role == 'owner'` check in
-`firestore.rules` (`isOwnerOf`, the `users/{userId}` read/create rules,
-and the `businessIds`-growth check) to also accept `'admin'`. No
-identifier renamed, no write path changed, no backfill run, no
-business rule or user-facing behavior change for any existing account.
-Adds a purely additive test suite proving `'admin'`-valued profiles
-pass identically to `'owner'`-valued ones. `tsc --noEmit` and
-`npm run build` both clean; `npm run test:rules` could not run
-end-to-end in this sandbox — the Firestore emulator binary download is
-blocked by the network egress allowlist (`storage.googleapis.com` not
-permitted), confirmed by a direct emulator-start attempt. This is an
-environment limitation, not a validation failure — see the full report
-delivered with this commit for details.
-
-**One deviation flagged for Product Architect review:** the plan's own
-Stage 1 text named only `isOwnerOf` and "the profile-read/create
-rules" as in scope. A fourth `role == 'owner'` check exists inside the
-`users/{userId}` update rule's `isValidBusinessIdsChange()` helper
-(gates multi-shop growth) — it was included in this stage's tolerance
-widening because leaving it `'owner'`-only would have reintroduced the
-exact partial-migration lockout risk Stage 1 exists to prevent once an
-account is actually backfilled to `'admin'` in Stage 3. Flagged, not
-silently decided — awaiting explicit confirmation this reading is
-correct before Stage 2 begins.
+**Latest commit:** `e10dede` — "Phase 0 Stage 2: new registrations
+persist role: 'admin'". Both self-registration write sites in
+`AuthView.tsx` (email/password flow and Google Auth flow) now write
+`role: 'admin'` instead of `role: 'owner'`. Confirmed by direct grep
+these are the only two `role: 'owner'` write sites anywhere in `src/`
+or `server/`. No other file changed. `tsc --noEmit` and `npm run build`
+both clean. `npm run test:rules` still **Execution blocked by
+environment** — same pre-existing Firestore-emulator network-egress
+limitation as Stage 1, not a new failure. A live/emulator round-trip
+through the actual registration UI could not be executed for the same
+reason; rule-level assurance for this exact write shape is covered by
+Stage 1's additive test, itself blocked from running end-to-end by the
+same constraint.
 
 **Awaiting:** explicit Product Architect review and authorization
-before Stage 2 (new-write path in `AuthView.tsx`) begins.
+before Stage 3 (backfill of existing `role: 'owner'` documents) begins.
 
 ---
 
 **Prior status (superseded above, kept for continuity):** Product
-Architect had moved from implementation-readiness review into **Phase
-0 execution planning**, specifically for the `owner`→`admin`
-migration. Standing direction unchanged: strict BDS acceptance, tenant
-boundary reviews, lifecycle vocabulary, and
-no-implementation-before-authorization remain in force.
+Architect Accepted Stage 1 (commit `699ab48`) and requested a
+documentation clarification to
+`docs/engineering/phase0-owner-admin-migration-implementation-plan.md`
+(commit `57e1f2c`) confirming the dual-read tolerance applies to every
+`role == 'owner'` comparison in `firestore.rules`, including
+`isValidBusinessIdsChange()` — a clarification of intent, not a scope
+change, since Stage 1's implementation already read it that way.
 
 **Latest artifact (most recent):**
 `docs/engineering/phase0-owner-admin-migration-implementation-plan.md`
