@@ -12,47 +12,36 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Architect Accepted Stage 2 is pending review (no
-Acceptance recorded yet for Stage 2) and, before authorizing Stage 3
-implementation, requested a dedicated migration execution plan for the
-backfill step. Stage 3 implementation is explicitly **not** authorized
-yet — this session produced only the planning document requested.
+**Status:** Product Architect has reviewed and approved the Stage 3
+execution plan document (method, idempotency, partial-failure
+handling, rollback, verification, and rollout procedure all approved
+as written). Two outcomes from that review, both now incorporated into
+the plan: the audit-log open question is resolved (no platform
+audit-log dependency for this one-time migration — operational logging
+only, with a specified minimum field set), and a required addition
+(dry-run mode, `--dry-run`) has been designed and wired into the
+rollout procedure. **Stage 3 implementation is still explicitly not
+authorized** — the review approved the plan document, not the start of
+coding, per the reviewer's own explicit statement.
 
-**Latest artifact:**
+**Latest artifact (updated this session):**
 `docs/engineering/phase0-stage3-backfill-migration-execution-plan.md`
-— expands Stage 3's one-paragraph description into: migration method
-(standalone Admin SDK script reusing `server/index.ts`'s existing
-service-account credential pattern, not Cloud Functions, not a new
-batch framework), idempotency (query-shape-guaranteed — the migration
-only ever selects `role == 'owner'` documents, so a second run is a
-natural no-op), progress logging (operational script logging only —
-explicitly recommends **against** writing to a platform audit-log
-collection, since `platform_audit_log` doesn't exist in code yet and
-Module #18 is docs-stage only; flagged as an open question for the
-Product Architect rather than decided unilaterally), rollback strategy
-(symmetric and safe throughout Stages 1–5, genuinely unsafe only after
-Stage 6 closes the compatibility window), partial-failure handling
-(idempotent re-run covers both batch-level and document-level
-failures; no partial failure ever leaves an account non-functional
-because Stage 1's dual-read tolerance covers every intermediate
-state), post-migration verification queries (completeness check,
-non-corruption spot-check, functional check), and a production
-rollout procedure (dry run, pre-migration count, low-traffic window,
-completeness gate before Stage 4, observation period before Stage 6).
-
-**One open question flagged, not resolved:** whether a permanent
-per-document platform audit-log entry is required for this migration,
-beyond operational script logging. Raised for explicit Product
-Architect decision before Stage 3 implementation, not assumed either
-way.
+— now includes §11 (Dry-Run Mode: `--dry-run` performs the read query
+and reports count/sample ids with zero writes; a second invocation
+performs the real migration), an updated §4 recording the Product
+Architect's audit-log decision and the specific fields the operational
+log must capture (timestamp, script Git commit, operator, scanned/
+migrated/failed counts, rerun count), and an updated §9 rollout
+procedure with the dry-run step inserted immediately before the write
+run.
 
 **Nothing implemented.** No `src/`, `server/`, `firestore.rules`, or
-`docs/specs/*` file touched — this document lives under
-`docs/engineering/` only.
+`docs/specs/*` file touched this session — only the Stage 3 plan
+document and this file, both under docs.
 
-**Awaiting:** Product Architect review of this plan, and separately,
-explicit authorization before Stage 3 implementation (the actual
-migration script) begins.
+**Awaiting:** explicit, separate Product Architect authorization before
+Stage 3 implementation (the actual migration script, including
+`--dry-run`) begins.
 
 ---
 

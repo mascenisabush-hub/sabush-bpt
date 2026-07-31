@@ -4,8 +4,11 @@
 authorization to run anything against real data.
 **Lifecycle status:** Stage 3 of
 `docs/engineering/phase0-owner-admin-migration-implementation-plan.md`
-is **Planned** as of this document. Not Designed-in-detail beyond what
-follows, not Implemented, not Executed, not Analyzed.
+is **Planned and Product-Architect-reviewed** as of this document (plan
+content approved; one addition required — §11 — before implementation;
+implementation itself still requires separate, explicit authorization
+per Rule 8). Not Designed-in-detail beyond what follows, not
+Implemented, not Executed, not Analyzed.
 **Basis:** Stage 3's one-paragraph description in the parent plan
 ("a one-time, idempotent script... updates every existing
 `users/{uid}` document with `role: 'owner'` to `role: 'admin'`"),
@@ -79,19 +82,26 @@ Two distinct things, kept separate:
   (never silently swallowed). This is standard operational logging, not
   a new data-model decision.
 - **A permanent, queryable Firestore audit-log entry per migrated
-  document: explicitly out of scope for this script.** The project's
-  audit-log surface (`platform_audit_log`, per Architecture §9 /
-  Module #18) does not exist in code yet — Module #18 is Accepted at
-  the documentation stage only, with no runtime implementation. Writing
-  into a collection that hasn't been architected for this purpose would
-  be inventing schema/business rules unilaterally, which is exactly
-  what this project's process forbids. If a permanent per-document
-  audit trail is wanted, that's a decision to raise with the Product
-  Architect *before* Stage 3 implementation, not something to add
-  quietly inside the migration script. The operational log above is
-  sufficient for engineering purposes (verifying the migration ran
-  correctly) but is not a substitute for a platform audit-log entry if
-  one is separately decided to be required.
+  document: decided out of scope for this script — Product Architect
+  decision, resolved.** The project's audit-log surface
+  (`platform_audit_log`, per Architecture §9 / Module #18) does not
+  exist in code yet — Module #18 is Accepted at the documentation stage
+  only, with no runtime implementation. Writing into a collection that
+  hasn't been architected for this purpose would be inventing
+  schema/business rules unilaterally, which is exactly what this
+  project's process forbids. Reasoning adopted by the Product
+  Architect: this migration is one-time, administrator-initiated,
+  operational, and outside the normal application workflow, so a
+  committed script plus operational logging is an adequate audit trail
+  without introducing new platform infrastructure for a one-off
+  migration. **Decision: do not block Stage 3 on a platform audit log.**
+  The operational log (§ above) must additionally capture, at minimum:
+  execution timestamp, Git commit hash of the script being run,
+  operator identity, total documents scanned, total migrated, failures
+  (with document ids), and rerun count if applicable. If the platform
+  later gains a general-purpose audit-logging capability, future
+  operational migrations may integrate with it — this decision does not
+  expand Stage 3's scope to build that now.
 
 ## 5. Rollback Strategy
 
@@ -203,10 +213,14 @@ migration "done" for that run:
    modify-write race with app-level logic), but because it minimizes
    any observability noise while confirming behavior for the first
    production run of a new script.
-4. **Run once, observe the full log output and completeness check.**
-   Do not proceed to Stage 4 (identifier rename) until §8.1's
-   completeness check returns zero.
-5. **Keep the compatibility window open (do not begin Stage 6) for an
+4. **Run `--dry-run` against production immediately before the real
+   run** (§11) — confirm the reported count matches the pre-migration
+   count from step 2, and spot-check the logged sample ids look
+   correct. Only then run without `--dry-run`.
+5. **Run once (write mode), observe the full log output and
+   completeness check.** Do not proceed to Stage 4 (identifier rename)
+   until §8.1's completeness check returns zero.
+6. **Keep the compatibility window open (do not begin Stage 6) for an
    agreed observation period** after Stage 3 completes in production —
    long enough to catch any account that logs in rarely and might
    surface an edge case the initial run didn't (e.g. a document with an
@@ -218,14 +232,48 @@ migration "done" for that run:
 
 - Does not write the migration script itself — that's Stage 3
   implementation, still separately authorized.
-- Does not decide whether a permanent platform audit-log entry is
-  required (§4) — flagged as a genuine open question for the Product
-  Architect, not decided here.
 - Does not change the parent plan's stage boundaries, commit
   discipline, or governance model in any way.
 
+## 11. Dry-Run Mode (required addition, Product Architect review)
+
+Added as a required part of the plan, not optional, before Stage 3
+implementation is authorized:
+
+- The script supports a `--dry-run` flag as its default review path.
+  In dry-run mode it performs the read query (`role == 'owner'`),
+  reports the total count of documents that would be updated, and logs
+  the first N document ids (N configurable, small default e.g. 20) —
+  and performs **zero writes**.
+- A second, separate invocation without `--dry-run` performs the actual
+  migration (writes), using the same query and batching logic already
+  specified in §2/§3.
+- This does not change §2 (method), §3 (idempotency), §7 (partial
+  failure handling), or §8 (post-migration verification) — dry-run is
+  an additional safety gate before the write path runs, not a
+  replacement for any of them. §9's rollout procedure step 1
+  ("staging/emulator dry run") and this flag are complementary: the
+  flag is what makes a dry run possible against production data itself,
+  not only staging/emulator, immediately before the real run.
+- Rationale: reduces operator error and provides a final, concrete
+  confirmation (exact count and sample ids) immediately before an
+  irreversible-in-practice production write, at negligible
+  implementation cost (the query and read path are already required by
+  the script; dry-run mode only gates whether the write step executes).
+
 ---
 
+**Product Architect review (this update):** Plan approved as written —
+method, idempotency, partial-failure handling, rollback, verification,
+and rollout procedure all approved without change. Audit-log open
+question (§4) resolved: no platform audit-log dependency, operational
+logging only, with the specific fields listed in §4. One addition
+required and now incorporated: dry-run mode (§11), wired into the
+rollout procedure (§9 step 4).
+
 **Next step, if and when authorized:** Stage 3 implementation — the
-migration script itself, built per this plan, as its own commit,
-verified per §8, and stopping at Analyzed for review before Stage 4.
+migration script itself (including `--dry-run` per §11), built per this
+plan, as its own commit, verified per §8, and stopping at Analyzed for
+review before Stage 4. **This review approves the plan document only —
+it does not authorize Stage 3 implementation.** That remains a
+separate, explicit go-ahead per Rule 8.
