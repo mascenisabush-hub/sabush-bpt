@@ -50,7 +50,7 @@ Notifications) are both designed against those collections already
 existing and populated, not against a mock. [Staff & Roles (spec #16)](./16-staff-roles.md)
 established the `isOwnerOf`/`suspended`-at-the-Rules-layer pattern this
 spec's business-suspension design (9.3) generalizes one level up, from
-staff to business. [Multi-Shop (spec #17)](./17-multi-shop.md) is the
+staff to business. [Owner Portfolio (spec #17)](./17-owner-portfolio.md) is the
 first spec to name a concrete, real SuperAdmin touchpoint
 (`businessCode` display, Architecture 8.14) that this module will
 eventually consume.

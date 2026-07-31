@@ -1,6 +1,12 @@
 Business Domain Specification
 
-# Multi-Shop
+# Owner Portfolio
+
+*(Formerly documented as "Multi-Shop." This module is the same
+capability, renamed to reflect its actual shape: a secure
+ownership-management and business-switching layer above independent
+Businesses — not a new aggregation system. See "BDS Clarifications"
+below.)*
 
 Version 1.0
 **Status:** Drafted, awaiting approval
@@ -324,6 +330,37 @@ implies:*
       second shop successfully and is correctly upgraded to a real
       `businessIds` array, with no disruption to their existing shop's
       data or access.
+
+## BDS Clarifications
+
+Added during the Owner Portfolio documentation alignment (rename from
+"Multi-Shop"), settling four scope questions raised by the rename itself
+so they don't get re-litigated each time this spec is read:
+
+1. **`MAX_SHOPS_PER_OWNER = 10` is a Version 1 platform rule.** It is a
+   flat constant today, applying identically to every Admin. Any future
+   subscription-tiered limit is out of scope for this module and belongs
+   to Module #19 (Subscriptions) — this spec does not anticipate or
+   design that mechanism (see Business Rules and Future Enhancements,
+   above, for the existing detail on this point).
+2. **Future subscription-based Business limits belong to Module #19.**
+   Restated here for clarity alongside point 1: replacing the hardcoded
+   cap with a live plan-tier read is Module #19's concern, not this
+   module's.
+3. **Existing internal identifiers containing "Shop" are not part of
+   this module's required refactor.** Code-level names such as
+   `MAX_SHOPS_PER_OWNER`, `addShop`, `switchShop`, `ShopSwitcher`, and
+   `ownedBusinesses`'s related identifiers are unaffected by this
+   documentation rename. Renaming internal identifiers to match "Owner
+   Portfolio"/"Business" terminology is not required or implied by this
+   alignment.
+4. **i18n terminology cleanup is separate UI-quality work, not ownership
+   redesign.** The existing, already-flagged gap (Non-functional
+   Requirements, above: `ShopSwitcher.tsx`'s hardcoded Portuguese
+   strings not yet routed through i18n) is unchanged by this rename. It
+   remains a UI-quality/localization task, tracked on its own terms —
+   this alignment does not fold it into an "ownership redesign" scope it
+   was never part of.
 
 ---
 
