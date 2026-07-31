@@ -12,39 +12,59 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Architect Accepted Stage 1 and authorized Phase 0
-**Stage 2 only**. Stage 2 has been implemented, verified where the
-environment allows, and has reached lifecycle stage **Analyzed** — not
-Accepted. Execution stopped here as instructed; Stage 3 has not begun
-and is not authorized.
+**Status:** Product Architect Accepted Stage 2 is pending review (no
+Acceptance recorded yet for Stage 2) and, before authorizing Stage 3
+implementation, requested a dedicated migration execution plan for the
+backfill step. Stage 3 implementation is explicitly **not** authorized
+yet — this session produced only the planning document requested.
 
-**Latest commit:** `e10dede` — "Phase 0 Stage 2: new registrations
-persist role: 'admin'". Both self-registration write sites in
-`AuthView.tsx` (email/password flow and Google Auth flow) now write
-`role: 'admin'` instead of `role: 'owner'`. Confirmed by direct grep
-these are the only two `role: 'owner'` write sites anywhere in `src/`
-or `server/`. No other file changed. `tsc --noEmit` and `npm run build`
-both clean. `npm run test:rules` still **Execution blocked by
-environment** — same pre-existing Firestore-emulator network-egress
-limitation as Stage 1, not a new failure. A live/emulator round-trip
-through the actual registration UI could not be executed for the same
-reason; rule-level assurance for this exact write shape is covered by
-Stage 1's additive test, itself blocked from running end-to-end by the
-same constraint.
+**Latest artifact:**
+`docs/engineering/phase0-stage3-backfill-migration-execution-plan.md`
+— expands Stage 3's one-paragraph description into: migration method
+(standalone Admin SDK script reusing `server/index.ts`'s existing
+service-account credential pattern, not Cloud Functions, not a new
+batch framework), idempotency (query-shape-guaranteed — the migration
+only ever selects `role == 'owner'` documents, so a second run is a
+natural no-op), progress logging (operational script logging only —
+explicitly recommends **against** writing to a platform audit-log
+collection, since `platform_audit_log` doesn't exist in code yet and
+Module #18 is docs-stage only; flagged as an open question for the
+Product Architect rather than decided unilaterally), rollback strategy
+(symmetric and safe throughout Stages 1–5, genuinely unsafe only after
+Stage 6 closes the compatibility window), partial-failure handling
+(idempotent re-run covers both batch-level and document-level
+failures; no partial failure ever leaves an account non-functional
+because Stage 1's dual-read tolerance covers every intermediate
+state), post-migration verification queries (completeness check,
+non-corruption spot-check, functional check), and a production
+rollout procedure (dry run, pre-migration count, low-traffic window,
+completeness gate before Stage 4, observation period before Stage 6).
 
-**Awaiting:** explicit Product Architect review and authorization
-before Stage 3 (backfill of existing `role: 'owner'` documents) begins.
+**One open question flagged, not resolved:** whether a permanent
+per-document platform audit-log entry is required for this migration,
+beyond operational script logging. Raised for explicit Product
+Architect decision before Stage 3 implementation, not assumed either
+way.
+
+**Nothing implemented.** No `src/`, `server/`, `firestore.rules`, or
+`docs/specs/*` file touched — this document lives under
+`docs/engineering/` only.
+
+**Awaiting:** Product Architect review of this plan, and separately,
+explicit authorization before Stage 3 implementation (the actual
+migration script) begins.
 
 ---
 
 **Prior status (superseded above, kept for continuity):** Product
-Architect Accepted Stage 1 (commit `699ab48`) and requested a
-documentation clarification to
-`docs/engineering/phase0-owner-admin-migration-implementation-plan.md`
-(commit `57e1f2c`) confirming the dual-read tolerance applies to every
-`role == 'owner'` comparison in `firestore.rules`, including
-`isValidBusinessIdsChange()` — a clarification of intent, not a scope
-change, since Stage 1's implementation already read it that way.
+Architect Accepted Stage 1 and authorized Stage 2 only. Stage 2
+(`e10dede`) implemented and reached Analyzed — new self-registrations
+now persist `role: 'admin'` in both write paths (`AuthView.tsx`); no
+other file changed; `tsc --noEmit`/`npm run build` clean;
+`npm run test:rules` and a live registration smoke test both
+Execution-blocked-by-environment (Firestore emulator unreachable in
+this sandbox — network egress allowlist excludes
+`storage.googleapis.com`).
 
 **Latest artifact (most recent):**
 `docs/engineering/phase0-owner-admin-migration-implementation-plan.md`
