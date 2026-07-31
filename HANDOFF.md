@@ -12,36 +12,41 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Architect has reviewed and approved the Stage 3
-execution plan document (method, idempotency, partial-failure
-handling, rollback, verification, and rollout procedure all approved
-as written). Two outcomes from that review, both now incorporated into
-the plan: the audit-log open question is resolved (no platform
-audit-log dependency for this one-time migration — operational logging
-only, with a specified minimum field set), and a required addition
-(dry-run mode, `--dry-run`) has been designed and wired into the
-rollout procedure. **Stage 3 implementation is still explicitly not
-authorized** — the review approved the plan document, not the start of
-coding, per the reviewer's own explicit statement.
+**Status:** Stage 3 backfill migration implementation authorized and
+built. **Reached Analyzed, not Executed.** `scripts/migrate-owner-to-admin.ts`
+created — a direct translation of the approved plan
+(`docs/engineering/phase0-stage3-backfill-migration-execution-plan.md`),
+no deviations. `tsc --noEmit` clean (confirmed the new script is
+included via `--listFiles`). **Not run against any project** — this
+sandbox's network egress excludes Firebase endpoints, so live/emulator
+execution is a manual step for whoever runs it next, per the plan's §9
+rollout procedure (dry run first).
 
-**Latest artifact (updated this session):**
-`docs/engineering/phase0-stage3-backfill-migration-execution-plan.md`
-— now includes §11 (Dry-Run Mode: `--dry-run` performs the read query
-and reports count/sample ids with zero writes; a second invocation
-performs the real migration), an updated §4 recording the Product
-Architect's audit-log decision and the specific fields the operational
-log must capture (timestamp, script Git commit, operator, scanned/
-migrated/failed counts, rerun count), and an updated §9 rollout
-procedure with the dry-run step inserted immediately before the write
-run.
+**Latest artifact:** `scripts/migrate-owner-to-admin.ts` — standalone
+script, reuses `server/index.ts`'s exact credential pattern
+(`FIREBASE_SERVICE_ACCOUNT_BASE64`), not wired into any HTTP path or
+build output. Supports `--dry-run` (default-first path per plan §11:
+runs the `role == 'owner'` query, reports count + sample ids, zero
+writes) and, without the flag, performs the real batched migration
+(single-field `role` update only, batch size configurable via
+`--batch-size`, default 400). Stops on batch failure rather than
+continuing past an unlogged error (plan §7). Final summary log line
+includes scanned/migrated/failed counts and reads
+`MIGRATION_SCRIPT_GIT_COMMIT` / `MIGRATION_OPERATOR` env vars for the
+audit fields the Product Architect's review required (§4) — **whoever
+runs this must set both env vars at invocation time**, e.g.:
+`MIGRATION_SCRIPT_GIT_COMMIT=$(git rev-parse HEAD) MIGRATION_OPERATOR="name" tsx scripts/migrate-owner-to-admin.ts --dry-run`.
 
-**Nothing implemented.** No `src/`, `server/`, `firestore.rules`, or
-`docs/specs/*` file touched this session — only the Stage 3 plan
-document and this file, both under docs.
+**Files changed this session:** only `scripts/migrate-owner-to-admin.ts`
+(new) and this file. No `src/`, `server/`, or `firestore.rules` change.
+Not yet committed as of this HANDOFF update — see next session/commit
+step.
 
-**Awaiting:** explicit, separate Product Architect authorization before
-Stage 3 implementation (the actual migration script, including
-`--dry-run`) begins.
+**Awaiting:** (1) a real or emulated Firebase project to actually run
+`--dry-run` against (this sandbox cannot reach one), and (2) after a
+clean dry run, explicit go-ahead to run the write mode in production,
+per the plan's rollout procedure §9. Stage 4 (identifier rename) remains
+gated on this script's completeness check (§8.1) returning zero.
 
 ---
 
