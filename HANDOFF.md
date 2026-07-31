@@ -12,58 +12,47 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Architect has shifted process mode: from
-spec-writing into **implementation preparation**. Standing direction:
-keep strict BDS acceptance, tenant boundary reviews, lifecycle
-vocabulary, and no-implementation-before-authorization; but stop
-expanding BDS documents unless a real ambiguity exists, produce
-**implementation readiness assessments** (Rule 8 feasibility passes)
-before any coding, and look for opportunities to automate consistency
-checks.
+**Status:** Product Architect has moved from implementation-readiness
+review into **Phase 0 execution planning**, specifically for the
+`owner`→`admin` migration. Standing direction unchanged: strict BDS
+acceptance, tenant boundary reviews, lifecycle vocabulary, and
+no-implementation-before-authorization remain in force.
 
 **Latest artifact (most recent):**
+`docs/engineering/phase0-owner-admin-migration-implementation-plan.md`
+— a Stage 1–6 execution plan for the `owner`→`admin` rename (dual-read
+rules → new-write path → backfill → identifier rename → full
+verification → close the compatibility window), each stage with its
+own commit boundary, verification checkpoint, rollback path, and
+acceptance criteria. This is a plan document, not code — it does not
+begin Stage 1 and does not itself authorize starting Phase 0A.
+
+**Scope decisions this session (Product Architect, now settled, not
+open):** rename boundary is limited to technical-authorization
+identifiers (`UserRole`, `isOwnerOf`, `isOwnerOrGrantedManager`,
+`ownedBusinessIds`, `isOwner`, related internal identifiers, i18n
+**key names** only, test constants) — explicitly **excludes**
+`ownerUid` (business-ownership field, different domain) and all
+user-facing "Owner" product terminology (Owner Withdrawals, Owner
+Portfolio, translated label values). Dual-read migration strategy is
+adopted as the required implementation approach. Module #18's
+dependency on this rename reclassified from "unaffected" to **low
+dependency** (a future Support Session/impersonation feature may rely
+on the renamed role model; not blocking).
+
+**Prior artifacts (same session, earlier, unchanged):**
 `docs/engineering/platform-infrastructure-readiness-assessment.md` —
-produced at the Product Architect's explicit request, following the
-Module #19 assessment below. Inventories the shared engineering
-foundation Phase 4 modules (#19/#20/#18) depend on: Background Worker,
-scheduling model, dedupe/watermark retry mechanism, audit integration,
-security boundaries, shared-service extraction, Railway deployment
-shape — explicitly distinguished from business-module scope.
-
-**Headline finding:** Architecture's own §13.2/§13.3 already places
-**Phase 0 (Foundation Hardening) before Phase 1 (Platform Backbone,
-which includes the Background Worker)** — no new sequencing answer
-needed to be invented, only a check on whether Phase 0 is actually
-done. It is not: the `'owner'`→`'admin'` rename is outstanding
-(`src/types.ts` and `firestore.rules` both still use `'owner'`), and
-no CI secret-scan pipeline exists (no `.github/workflows/`).
-Manager-tier migration (Phase 0 item 2) is confirmed done.
-**Recommendation: complete outstanding Phase 0 items before Phase 1
-begins, per Architecture as written, unless the Product Architect
-deliberately grants a stated sequencing exception** — flagged as the
-one genuinely Product-Architect-level decision in the document;
-everything else in it is engineering-planning detail. Nothing was
-built or changed to produce this finding — read-only analysis against
-`src/`, `firestore.rules`, and `.github/`.
-
-**Prior artifact (same session, earlier):**
+Background Worker confirmed 0% built; no CI secret-scan pipeline
+exists; Manager-tier migration confirmed done.
 `docs/engineering/19-subscriptions-implementation-readiness.md` (v2) —
-restructured per the Product Architect's own template: scope split
-into Core Subscription Domain vs. Commercial Integration, files/systems
-affected, dependency analysis vs. #17/#20/#18 (net result: #19 is
-upstream of all three, no conflicts), open decisions split
-blocking/configurable, targeted risk assessment, and phase-only
-proposed sequencing. Key findings carried forward: Background Worker
-confirmed 0% built (elaborated on by the newer Platform Infrastructure
-assessment above); Registration (`AuthView.tsx`) is a non-atomic
-3-step client write today, a pre-existing gap Module #19's
-never-null-subscription rule would make worse if not explicitly
-addressed in planning.
+scope split, dependency analysis, Registration's non-atomic write path
+flagged.
 
-**Neither assessment authorizes implementation of anything.** No
-`src/`, `server/`, `firestore.rules`, `docs/specs/*`, or
-`docs/architecture/*` file has been touched this session — confirmed
-by diff. Both new documents live under `docs/engineering/` only.
+**Nothing has been implemented.** No `src/`, `server/`,
+`firestore.rules`, `docs/specs/*`, or `docs/architecture/*` file has
+been touched this session — confirmed by diff. All new artifacts live
+under `docs/engineering/` only. Starting Stage 1 of the plan above
+still requires a separate, explicit Product Architect go-ahead.
 
 **Module status (all confirmed unchanged this session — see
 `docs/specs/README.md` for full detail, this is a pointer, not a
