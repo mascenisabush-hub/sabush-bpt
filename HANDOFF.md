@@ -34,26 +34,47 @@ computed (live, per-active-business, in `AppContext.tsx` — no stored
 `MAX_SHOPS_PER_OWNER = 10` cap as something the BDS should address
 explicitly rather than leave implicit.
 
-**Module #17 naming:** the Product Architect has decided the direction
-is **Owner Portfolio**, not the existing `docs/specs/17-multi-shop.md`
-draft — Business stays the tenant boundary, Portfolio is a read-only
-aggregation layer with no new writes and no rule changes. That
-direction decision is made; **the actual BDS superseding the Multi-Shop
-draft has not been written yet.** Module #17 remains Drafted until it
-is.
+**Module #17 — Owner Portfolio: Accepted (docs & business rules).**
+Correction to this file's own prior entry: an earlier version of this
+note described Portfolio as "a read-only aggregation layer with no new
+writes and no rule changes." That is **superseded and incorrect** — the
+Product Architect's actual, now-Accepted decision is the opposite: **no
+aggregation across Businesses at all**, no summed Business Worth,
+Capital, Embedded Profit, or Inventory Value, in any form, read-only or
+otherwise. Owner Portfolio is the rename/evolution of the existing
+Multi-Shop capability (ownership-management and business-switching),
+not an aggregation feature.
+
+`docs/specs/17-multi-shop.md` has been renamed to
+`docs/specs/17-owner-portfolio.md` (`git mv`, commit `2907517`), with a
+BDS Clarifications section added (`MAX_SHOPS_PER_OWNER` = V1 platform
+rule; future limits → Module #19; internal "Shop"-named identifiers not
+required to refactor; i18n cleanup is separate UI work). Product
+Architect Acceptance recorded directly in the spec's own "Product
+Architect Acceptance" section (end of `17-owner-portfolio.md`).
+**Acceptance is scoped to documentation/business-rules — it is not
+authorization to begin implementation**, per that section's own text.
+
+`docs/engineering/17-owner-portfolio-feasibility-note.md` still has a
+stale link to the old `17-multi-shop.md` filename and poses an
+open supersede/extend/retire question that today's Acceptance
+effectively answers (supersede/rename) — not yet written back into
+that file. Deferred follow-up, not yet assigned.
 
 **Files touched since `493c585`:** all documentation —
 `docs/security/firestore-tenant-isolation-audit-findings.md`,
-`docs/engineering/17-owner-portfolio-feasibility-note.md`. No source
-code changed.
+`docs/engineering/17-owner-portfolio-feasibility-note.md`,
+`docs/specs/17-owner-portfolio.md` (renamed from `17-multi-shop.md`),
+`docs/specs/README.md`, `docs/specs/18-superadmin.md`. One
+non-documentation exception: `bun.lock` was regenerated (`f8784f5`) to
+fix a Railway `--frozen-lockfile` build failure caused by `package.json`
+drift introduced in `3980e84` — `package.json` itself is unchanged, no
+new/removed/upgraded dependency. No other source code changed.
 
-**Next up:** (1) Write the Owner Portfolio BDS (superseding
-`docs/specs/17-multi-shop.md`), incorporating the feasibility note's
-findings — in particular, an explicit decision on live vs. cached
-aggregation for the portfolio dashboard, and whether
-`MAX_SHOPS_PER_OWNER` needs to change. (2) Get that BDS to Accepted
-before any implementation starts. Modules #18/#19/#20 unchanged, still
-blocked as documented below.
+**Next up:** Module #17's BDS content and business rules are Accepted.
+Implementation has not been authorized or scheduled — that's a separate
+Product Architect decision, to be sequenced against Modules #18/#19/#20
+(unchanged, still blocked as documented below).
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
 grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
@@ -81,8 +102,9 @@ implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist yet.
 
 **Anything mid-flight / blocked:** Nothing blocked at the repository
-level. The Owner Portfolio BDS has not been started as of this file's
-last update.
+level. Module #17 documentation alignment is Accepted (see above); next
+step is a proposed module sequence for Product Architect direction, not
+implementation of #17 itself.
 
 **Known gaps flagged but not yet scheduled:**
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a

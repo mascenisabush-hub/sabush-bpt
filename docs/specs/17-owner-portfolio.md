@@ -9,7 +9,8 @@ Businesses — not a new aggregation system. See "BDS Clarifications"
 below.)*
 
 Version 1.0
-**Status:** Drafted, awaiting approval
+**Status:** ✅ Approved — documentation alignment & business rules
+(see "Product Architect Acceptance," end of document)
 **Module #17 of 20 — Phase 4: Platform**
 **Architecture references:** [Section 2.8](../architecture/02-core-product-principles.md)
 (Tenant Isolation Is Non-Negotiable — "a business's data is never
@@ -364,5 +365,22 @@ so they don't get re-litigated each time this spec is read:
 
 ---
 
-**Awaiting approval.** Per process, implementation does not begin until
-this spec is explicitly approved.
+## Product Architect Acceptance
+
+**Accepted.** Scope of this acceptance, as explicitly granted:
+
+- Documentation alignment (Multi-Shop → Owner Portfolio rename).
+- The naming evolution itself: Owner Portfolio is a rename/evolution of
+  Multi-Shop, not a new module.
+- No aggregation across Businesses.
+- No Business Worth, Capital, Embedded Profit, or Inventory Value
+  consolidation.
+- Existing tenant isolation rules, unchanged.
+- Existing ownership model, unchanged.
+- No new schema/entity/Firestore collection.
+
+**Not included in this acceptance:** any source code implementation.
+This acceptance clears the spec's naming and business-rule content —
+it is not, by itself, authorization to begin implementation. Per Rule 8,
+implementation still requires its own affected-files/plan/risks review
+at the point it's actually assigned.
