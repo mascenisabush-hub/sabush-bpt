@@ -39,8 +39,13 @@ service cloud.firestore {
       );
     }
 
+    // [Phase 0 Stage 1 — owner->admin migration] Accepts both the legacy
+    // 'owner' value and the target 'admin' value so existing accounts
+    // keep working unchanged while new/backfilled accounts can use either
+    // value. This tolerance is intentionally temporary — see
+    // docs/engineering/phase0-owner-admin-migration-implementation-plan.md.
     function isOwnerOf(businessId) {
-      return isMemberOf(businessId) && myProfile().role == 'owner';
+      return isMemberOf(businessId) && (myProfile().role == 'owner' || myProfile().role == 'admin');
     }
 
     // BDS #16 (Staff & Roles) / Architecture 6.3 amendment. Manager is not
@@ -89,7 +94,7 @@ service cloud.firestore {
       allow read: if isSignedIn() && (
         request.auth.uid == userId ||
         (
-          myProfile().role == 'owner' &&
+          (myProfile().role == 'owner' || myProfile().role == 'admin') &&
           (myProfile().businessId == resource.data.businessId || resource.data.businessId in ownedBusinessIds())
         )
       );
@@ -104,7 +109,7 @@ service cloud.firestore {
       //     'manager' — promoting to Manager is a separate, Admin-only
       //     action (see the update rule below).
       allow create: if isSignedIn() && (
-        (request.auth.uid == userId && request.resource.data.role == 'owner') ||
+        (request.auth.uid == userId && (request.resource.data.role == 'owner' || request.resource.data.role == 'admin')) ||
         (
           request.auth.uid != userId &&
           request.resource.data.role == 'staff' &&
@@ -142,7 +147,7 @@ service cloud.firestore {
         let oldIds = resource.data.get('businessIds', []);
         let newIds = request.resource.data.get('businessIds', []);
         return newIds == oldIds || (
-          resource.data.role == 'owner' &&
+          (resource.data.role == 'owner' || resource.data.role == 'admin') &&
           oldIds.size() < 10 &&
           newIds == oldIds.concat([newIds[newIds.size() - 1]]) &&
           get(/databases/$(database)/documents/businesses/$(newIds[newIds.size() - 1])).data.ownerUid == request.auth.uid

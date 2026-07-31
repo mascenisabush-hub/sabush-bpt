@@ -65,6 +65,16 @@ const MANAGER_WITH_CLOSINGS_UID = 'manager1';
 const MANAGER_NO_PERMISSION_UID = 'manager2';
 const STAFF_UID = 'staff1';
 
+// [Phase 0 Stage 1 — owner->admin migration] A profile already holding the
+// *target* role value, to prove the dual-read tolerance added to
+// firestore.rules treats 'admin' as fully equivalent to 'owner' everywhere
+// isOwnerOf-style checks exist — see the "admin role dual-read tolerance"
+// describe block at the end of this file. Scoped to its own business
+// (ADMIN_BIZ) so it can't interact with any existing OWNER_UID/BIZ fixture
+// data above.
+const ADMIN_ROLE_UID = 'admin1';
+const ADMIN_BIZ = 'biz3';
+
 let testEnv: RulesTestEnvironment;
 
 before(async () => {
@@ -109,6 +119,9 @@ beforeEach(async () => {
       managerPermissions: { closings: false, staffManagement: false },
     });
     await setDoc(doc(db, 'users', STAFF_UID), { role: 'staff', businessId: BIZ });
+    // [Phase 0 Stage 1] Already-'admin'-valued profile, own business —
+    // simulates a backfilled/new-vocabulary account under dual-read rules.
+    await setDoc(doc(db, 'users', ADMIN_ROLE_UID), { role: 'admin', businessId: ADMIN_BIZ });
   });
 });
 
@@ -827,6 +840,75 @@ describe('historical reopen → correct → re-close workflow', () => {
       setDoc(doc(ownerDb, 'businesses', BIZ, 'closedPeriods', 'monthly:2026-07'), {
         id: 'monthly:2026-07', periodType: 'monthly', startDate: '2026-07-01', endDate: '2026-07-31',
         closingId: 'closing-C-premature', closedAt: new Date().toISOString(),
+      })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------
+// [Phase 0 Stage 1 — owner->admin migration] Dual-read tolerance.
+// Purely additive: does not modify any fixture or assertion above. Proves
+// a profile already holding role: 'admin' is treated identically to
+// role: 'owner' by every check widened in this stage (isOwnerOf, the
+// users/{userId} read/create rules, and the businessIds-growth check),
+// and that a plain Staff account is still denied exactly as before —
+// i.e. the tolerance only widens what 'owner' already allowed, it does
+// not loosen anything else. See
+// docs/engineering/phase0-owner-admin-migration-implementation-plan.md,
+// Stage 1 acceptance criteria.
+// ---------------------------------------------------------------------
+describe('Phase 0 Stage 1 — admin role dual-read tolerance', () => {
+  it('An "admin"-valued profile passes isOwnerOf-gated operations the same as an "owner"-valued one', async () => {
+    const adminDb = ctxFor(ADMIN_ROLE_UID).firestore();
+    // Owner-only create (stockCounts) — mirrors the existing 'stockCounts' describe block above.
+    await assertSucceeds(
+      setDoc(doc(adminDb, 'businesses', ADMIN_BIZ, 'stockCounts', 'sc-admin'), {
+        id: 'sc-admin', countedAt: new Date().toISOString(),
+      })
+    );
+    // Owner-only update/delete (products) — mirrors the existing 'products' describe block above.
+    await assertSucceeds(setDoc(doc(adminDb, 'businesses', ADMIN_BIZ, 'products', 'p-admin'), { id: 'p-admin', name: 'Widget' }));
+    await assertSucceeds(updateDoc(doc(adminDb, 'businesses', ADMIN_BIZ, 'products', 'p-admin'), { name: 'Renamed' }));
+    await assertSucceeds(deleteDoc(doc(adminDb, 'businesses', ADMIN_BIZ, 'products', 'p-admin')));
+  });
+
+  it('A Staff account is still denied the same owner-only operations regardless of the "admin" tolerance', async () => {
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(
+      setDoc(doc(staffDb, 'businesses', BIZ, 'stockCounts', 'sc-should-fail'), {
+        id: 'sc-should-fail', countedAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('The users/{userId} read rule lets an "admin"-valued profile read its own team\'s staff, same as "owner"', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', 'admin-staff-1'), { role: 'staff', businessId: ADMIN_BIZ });
+    });
+    const adminDb = ctxFor(ADMIN_ROLE_UID).firestore();
+    await assertSucceeds(getDoc(doc(adminDb, 'users', 'admin-staff-1')));
+  });
+
+  it('Self-registration accepts role: "admin" at profile creation, same as role: "owner"', async () => {
+    const newAdminDb = ctxFor('brand-new-admin').firestore();
+    await assertSucceeds(
+      setDoc(doc(newAdminDb, 'users', 'brand-new-admin'), { role: 'admin', businessId: 'biz-brand-new' })
+    );
+  });
+
+  it('An "admin"-valued profile can grow its businessIds (multi-shop) the same as an "owner"-valued one', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', ADMIN_ROLE_UID), {
+        role: 'admin', businessId: ADMIN_BIZ, businessIds: [ADMIN_BIZ],
+      });
+      await setDoc(doc(ctx.firestore(), 'businesses', 'biz3-second-shop'), {
+        id: 'biz3-second-shop', ownerUid: ADMIN_ROLE_UID, name: 'Second Shop',
+      });
+    });
+    const adminDb = ctxFor(ADMIN_ROLE_UID).firestore();
+    await assertSucceeds(
+      updateDoc(doc(adminDb, 'users', ADMIN_ROLE_UID), {
+        businessIds: [ADMIN_BIZ, 'biz3-second-shop'],
       })
     );
   });
