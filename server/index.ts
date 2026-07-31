@@ -118,7 +118,15 @@ async function verifyStaffManagementAction(
     return { status: 403, body: { error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' } };
   }
 
-  const isAdmin = requesterProfile.role === 'owner' && requesterProfile.businessId === businessId;
+  // [Phase 0 Stage 2 Compatibility Correction] Must match firestore.rules'
+  // isOwnerOf() and AppContext.tsx's isOwner — 'owner' and 'admin' are
+  // equivalent (Stage 1). Previously 'owner'-only here, which meant every
+  // account created after Stage 2 shipped got 403 permission-denied on
+  // every privileged staff-management endpoint (delete, suspend,
+  // reactivate, reset-pin, set-tier) — not just a UI gap.
+  const isAdmin =
+    (requesterProfile.role === 'owner' || requesterProfile.role === 'admin') &&
+    requesterProfile.businessId === businessId;
   const isGrantedManager =
     !options.adminOnly &&
     requesterProfile.role === 'staff' &&

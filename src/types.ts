@@ -1,4 +1,9 @@
-export type UserRole = 'owner' | 'staff';
+// [Phase 0 Stage 2 Compatibility Correction] Includes 'admin' alongside
+// the legacy 'owner' value — both are owner-level, per the Phase 0
+// owner->admin migration. New self-registrations write 'admin'
+// (AuthView.tsx); existing accounts remain 'owner' until Stage 3's
+// backfill runs. See docs/engineering/phase0-owner-admin-migration-implementation-plan.md.
+export type UserRole = 'owner' | 'admin' | 'staff';
 
 // Additive Staff tier (BDS #16). NOT a new UserRole value — a Manager is
 // still, structurally, role: 'staff' for every existing Auth pattern and

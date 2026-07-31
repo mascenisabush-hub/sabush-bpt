@@ -237,7 +237,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
 
-  const isOwner = userProfile?.role === 'owner';
+  // [Phase 0 Stage 2 Compatibility Correction] Must match firestore.rules'
+  // isOwnerOf(), which already treats 'owner' and 'admin' as equivalent
+  // (Stage 1). This was the missing synchronization point: Stage 2 started
+  // writing 'admin' for new registrations, but this check still only
+  // recognized 'owner', so every account created after Stage 2 shipped
+  // lost all owner-level app capability (while still passing the rules
+  // layer). Fixed here, not a new role model.
+  const isOwner = userProfile?.role === 'owner' || userProfile?.role === 'admin';
   const isStaff = userProfile?.role === 'staff';
   // BDS #16 — additive on top of isStaff, never a replacement for it.
   // Every existing `isStaff` check in the app is unaffected; these three

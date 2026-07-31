@@ -12,38 +12,60 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Stage 3 implementation **complete and reviewed**, reached
-Analyzed. **Commit `0f7a4e5`** (`Stage 3 script: add rerun-count audit
-field (MIGRATION_RERUN_COUNT)`), pushed to `origin/main`.
-`scripts/migrate-owner-to-admin.ts` implements the approved plan
-exactly: `--dry-run` default-first path (no write batch created in that
-branch), batched single-field `role: 'admin'` updates only, stop-on-
-batch-failure, and full operational logging (timestamp, script Git
-commit, operator, scanned/migrated/failed counts, rerun count — all via
-`MIGRATION_SCRIPT_GIT_COMMIT` / `MIGRATION_OPERATOR` /
-`MIGRATION_RERUN_COUNT` env vars). Reviewed against the full
-implementation checklist; one gap (rerun count) found and fixed in this
-same commit. No credentials/service-account material ever logged.
+**Status:** Stage 2 Compatibility Gap Correction implemented and
+validated. **Not yet committed as of this HANDOFF update** — see next
+step below.
 
-**Execution status: NOT YET RUN.** No dry-run and no write-mode
-execution has happened against any Firebase project (staging,
-production, or emulator) — this sandbox has no network egress to
-Firebase endpoints, so execution is necessarily a manual step outside
-this environment, per the plan's §9 rollout procedure.
+**What this fixes:** Stage 2 (`e10dede`) started writing `role: 'admin'`
+for new self-registrations, and `firestore.rules`' `isOwnerOf()` already
+treated `'owner'`/`'admin'` as equivalent (Stage 1). But two application-
+layer checks were never updated to match: `AppContext.tsx`'s `isOwner`
+derivation (client — caused every post-Stage-2 admin account to lose all
+owner-level UI capability, though the account's own single shop still
+loaded via a fallback) and `server/index.ts`'s `verifyStaffManagementAction`
+(server — caused `403 permission-denied` on all 5 privileged staff
+endpoints: delete, suspend, reactivate, reset-pin, set-tier). This was a
+functional gap, not a security issue — the failure mode was denying
+access that should have been granted, never granting access that
+shouldn't have been. Classified and authorized as a **Stage 2 completion
+correction**, not a new migration stage, not a role redesign.
 
-**Files changed across Stage 3 implementation:** only
-`scripts/migrate-owner-to-admin.ts` (new) and this file. No `src/`,
-`server/`, `firestore.rules`, or dependency changes at any point.
+**Files changed (exactly 3, as authorized):**
+- `src/types.ts` — `UserRole` widened from `'owner' | 'staff'` to
+  `'owner' | 'admin' | 'staff'`.
+- `src/context/AppContext.tsx` — `isOwner` now
+  `role === 'owner' || role === 'admin'`.
+- `server/index.ts` — `verifyStaffManagementAction`'s `isAdmin` now
+  checks both values.
 
-**Stage 4 (identifier rename): remains explicitly not authorized and
-blocked**, both by process (separate authorization required per Rule 8)
-and by substance (gated on Stage 3's §8.1 completeness check returning
-zero, which requires an actual production run that hasn't happened).
+**Explicitly not touched, per the authorized boundary:** `AuthView.tsx`
+(its separate `roleMode` login-tab UI state was investigated and
+confirmed unrelated to `users/{uid}.role` — no change needed),
+`firestore.rules` (already correct since Stage 1), `scripts/migrate-owner-to-admin.ts`
+(Stage 3, untouched), any database document, any SaaS module (#17–#20).
 
-**Awaiting:** the next approval boundary — running `--dry-run` against
-the intended Firebase environment (staging/emulator or production, per
-whoever has that access) and reviewing its output before any write-mode
-invocation is considered.
+**Validation completed:**
+- `tsc --noEmit` — clean.
+- `npm run build` (`vite build` + `build:server`) — succeeded; only
+  pre-existing, unrelated warnings (CSS lint, chunk size, dynamic
+  import) — no new errors.
+- Diff reviewed — exactly the 3 authorized files, no unrelated changes.
+- Regression check — confirmed `isStaff`/`role === 'staff'` branches
+  (unaffected by the rename) remain unchanged in both files.
+- **Not run at runtime** — same sandbox limitation as Stage 3: no
+  Firebase network egress here, so an actual affected-account login/
+  action flow has not been exercised end-to-end. That remains a manual
+  verification step.
+
+**Stage 3 (backfill) and Stage 4 (compatibility removal): unchanged by
+this correction, still not executed/not authorized.**
+`scripts/migrate-owner-to-admin.ts` (Analyzed, commit `0f7a4e5`) is
+untouched. Per this correction's own authorization terms, no Stage 3
+execution or further migration work proceeds until this checkpoint is
+reviewed.
+
+**Awaiting:** commit + push (next), then explicit review of this
+checkpoint.
 
 ---
 
