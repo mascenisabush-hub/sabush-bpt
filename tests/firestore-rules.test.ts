@@ -24,12 +24,16 @@
 // deploying these rules to production — do not treat this file's
 // existence, or its passing a typecheck, as equivalent to that.
 //
-// SCOPE: covers the Closing Integrity Amendment's new/changed rules
-// (expenses, withdrawals, closings, closedPeriods) plus enough tenant-
-// isolation coverage on those same collections to catch an obvious
-// regression. It is deliberately not a full security audit of every
-// collection in firestore.rules — that is a separate, larger piece of
-// work (see HANDOFF.md's flagged priorities).
+// SCOPE: originally covered only the Closing Integrity Amendment's
+// new/changed rules (expenses, withdrawals, closings, closedPeriods).
+// Extended per docs/security/firestore-tenant-isolation-audit-plan.md
+// to cover every business-scoped collection in firestore.rules (users,
+// businesses, products, batches, purchaseBatches, quebras, stockCounts,
+// staff, timelineEvents), a suspended-member access-cutoff check, and a
+// collection-group query-leakage check. This is now the audit itself —
+// see the plan doc for the acceptance criteria this suite is measured
+// against, and for which findings (if any) still need write-up once it
+// actually runs.
 
 import { readFileSync } from 'node:fs';
 import { before, after, beforeEach, describe, it } from 'node:test';
@@ -46,6 +50,9 @@ import {
   deleteDoc,
   getDoc,
   deleteField,
+  collectionGroup,
+  query,
+  getDocs,
 } from 'firebase/firestore';
 
 const PROJECT_ID = 'sabush-bpt-rules-test';
@@ -406,6 +413,290 @@ describe('closedPeriods', () => {
     await assertFails(deleteDoc(doc(managerDb, 'businesses', BIZ, 'closedPeriods', 'monthly:2026-07')));
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'closedPeriods', 'monthly:2026-07')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Users — profile documents; these gate membership for everything else,
+// so a leak here undermines every isMemberOf()/isOwnerOf() check.
+// ---------------------------------------------------------------------
+describe('users', () => {
+  it('A user can always read their own profile', async () => {
+    const db = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(getDoc(doc(db, 'users', STAFF_UID)));
+  });
+
+  it('An Owner can read a staff profile belonging to their own business', async () => {
+    const db = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(db, 'users', STAFF_UID)));
+  });
+
+  it('An Owner from another business cannot read a staff profile belonging to a different business', async () => {
+    const db = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(db, 'users', STAFF_UID)));
+  });
+
+  it('A plain Staff member cannot read another user\'s profile, even within the same business', async () => {
+    const db = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(db, 'users', MANAGER_WITH_CLOSINGS_UID)));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Businesses — the tenant root document.
+// ---------------------------------------------------------------------
+describe('businesses', () => {
+  it('A member can read their own business document; a non-member cannot', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'businesses', BIZ)));
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ)));
+  });
+
+  it('A business can only be created by a user whose uid matches its own ownerUid', async () => {
+    const db = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(db, 'businesses', 'biz-new'), { id: 'biz-new', ownerUid: OWNER_UID, name: 'New Biz' }));
+    await assertFails(setDoc(doc(db, 'businesses', 'biz-forged'), { id: 'biz-forged', ownerUid: OTHER_OWNER_UID, name: 'Forged' }));
+  });
+
+  it('Only the Owner can update business settings; nobody can ever delete a business', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', currency: 'BRL' });
+    });
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(updateDoc(doc(staffDb, 'businesses', BIZ), { currency: 'USD' }));
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ), { currency: 'USD' }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ)));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Products — any team member reads/creates; only Owner updates/deletes.
+// ---------------------------------------------------------------------
+describe('products', () => {
+  it('Any team member can read and create; only Owner can update or delete', async () => {
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p1'), { id: 'p1', name: 'Widget' }));
+    await assertSucceeds(getDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p1')));
+    await assertFails(updateDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p1'), { name: 'Renamed' }));
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p1')));
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'products', 'p1'), { name: 'Renamed' }));
+  });
+
+  it('A user from another business cannot read, create, update, or delete this business\'s products', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'products', 'p2'), { id: 'p2', name: 'Private Widget' });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'products', 'p2')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'products', 'p3'), { id: 'p3', name: 'Intrusion' }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'products', 'p2'), { name: 'Hijacked' }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'products', 'p2')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Batches — any team member reads/creates/updates; only Owner deletes.
+// ---------------------------------------------------------------------
+describe('batches', () => {
+  it('Any team member can read, create, and update; only Owner can delete', async () => {
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1'), { id: 'b1', quantity: 10 }));
+    await assertSucceeds(updateDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1'), { quantity: 5 }));
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1')));
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'b1')));
+  });
+
+  it('A user from another business cannot read, create, update, or delete this business\'s batches', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'batches', 'b2'), { id: 'b2', quantity: 20 });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b2')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b3'), { id: 'b3', quantity: 1 }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b2'), { quantity: 999 }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b2')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Purchase Batches — same access pattern as Batches.
+// ---------------------------------------------------------------------
+describe('purchaseBatches', () => {
+  it('Any team member can read, create, and update (archive/unarchive); only Owner can delete', async () => {
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'purchaseBatches', 'pb1'), { id: 'pb1', archived: false }));
+    await assertSucceeds(updateDoc(doc(staffDb, 'businesses', BIZ, 'purchaseBatches', 'pb1'), { archived: true }));
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'purchaseBatches', 'pb1')));
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'pb1')));
+  });
+
+  it('A user from another business cannot read, create, update, or delete this business\'s purchase batches', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'purchaseBatches', 'pb2'), { id: 'pb2', archived: false });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'purchaseBatches', 'pb2')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'purchaseBatches', 'pb3'), { id: 'pb3', archived: false }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'purchaseBatches', 'pb2'), { archived: true }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'purchaseBatches', 'pb2')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Quebras (Breakages) — same access pattern as Batches/Products.
+// ---------------------------------------------------------------------
+describe('quebras', () => {
+  it('Any team member can read, create, and update; only Owner can delete', async () => {
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1'), { id: 'q1', quantity: 2 }));
+    await assertSucceeds(updateDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1'), { quantity: 3 }));
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1')));
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'q1')));
+  });
+
+  it('A user from another business cannot read, create, update, or delete this business\'s quebras', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'quebras', 'q2'), { id: 'q2', quantity: 5 });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q3'), { id: 'q3', quantity: 1 }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2'), { quantity: 99 }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Stock Counts — establish/verify capital, so only the Owner may
+// record/edit/remove; any team member may read.
+// ---------------------------------------------------------------------
+describe('stockCounts', () => {
+  it('Any team member can read; only Owner can create, update, or delete', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc1'), { id: 'sc1', countedAt: new Date().toISOString() }));
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(getDoc(doc(staffDb, 'businesses', BIZ, 'stockCounts', 'sc1')));
+    await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'stockCounts', 'sc2'), { id: 'sc2', countedAt: new Date().toISOString() }));
+    await assertFails(updateDoc(doc(staffDb, 'businesses', BIZ, 'stockCounts', 'sc1'), { countedAt: new Date().toISOString() }));
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'stockCounts', 'sc1')));
+  });
+
+  it('A user from another business cannot read, create, update, or delete this business\'s stock counts', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'sc3'), { id: 'sc3', countedAt: new Date().toISOString() });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc3')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc4'), { id: 'sc4', countedAt: new Date().toISOString() }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc3'), { countedAt: new Date().toISOString() }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc3')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Staff roster — Owner-or-granted-Manager manage it; delete is always
+// false client-side (must go through the server's deleteStaffMember).
+// ---------------------------------------------------------------------
+describe('staff', () => {
+  it('Owner can read/create/update staff records; a Manager without the staffManagement grant cannot', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'staff', STAFF_UID), { id: STAFF_UID, role: 'staff' }));
+
+    // MANAGER_WITH_CLOSINGS_UID has managerPermissions.staffManagement === false
+    // in the shared fixture — reused here to prove staffManagement is a grant
+    // separate from closings, not implied by staffTier: 'manager' alone.
+    const managerDb = ctxFor(MANAGER_WITH_CLOSINGS_UID).firestore();
+    await assertFails(updateDoc(doc(managerDb, 'businesses', BIZ, 'staff', STAFF_UID), { staffTier: 'manager' }));
+  });
+
+  it('Nobody — not even the Owner — can delete a staff record from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'staff', STAFF_UID), { id: STAFF_UID, role: 'staff' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'staff', STAFF_UID)));
+  });
+
+  it('A user from another business cannot read, create, or update this business\'s staff records', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'staff', STAFF_UID), { id: STAFF_UID, role: 'staff' });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'staff', STAFF_UID)));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'staff', 'intruder'), { id: 'intruder', role: 'staff' }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'staff', STAFF_UID), { staffTier: 'manager' }));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Timeline Events — append-only; never updatable; only Owner deletes
+// (used solely by clearAllData / data reset).
+// ---------------------------------------------------------------------
+describe('timelineEvents', () => {
+  it('Any team member can read and create; entries are never updatable; only Owner can delete', async () => {
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'timelineEvents', 't1'), { id: 't1', type: 'stock_added', createdAt: new Date().toISOString() }));
+    await assertFails(updateDoc(doc(staffDb, 'businesses', BIZ, 'timelineEvents', 't1'), { type: 'edited' }));
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'timelineEvents', 't1')));
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'timelineEvents', 't1')));
+  });
+
+  it('A user from another business cannot read, create, or delete this business\'s timeline events', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'timelineEvents', 't2'), { id: 't2', type: 'sale', createdAt: new Date().toISOString() });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'timelineEvents', 't2')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'timelineEvents', 't3'), { id: 't3', type: 'intrusion', createdAt: new Date().toISOString() }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'timelineEvents', 't2')));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Suspended member — isSuspended() must cut off access immediately, not
+// merely once the member's ID token naturally expires.
+// ---------------------------------------------------------------------
+describe('suspended member', () => {
+  it('A suspended staff member loses read/write access even though their business membership is otherwise unchanged', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'users', STAFF_UID), { role: 'staff', businessId: BIZ, suspended: true });
+      await setDoc(doc(db, 'businesses', BIZ, 'products', 'p-susp'), { id: 'p-susp', name: 'Widget' });
+    });
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p-susp')));
+    await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p-susp-2'), { id: 'p-susp-2', name: 'Another' }));
+  });
+});
+
+// ---------------------------------------------------------------------
+// Query-based leakage — a collection-group query spans every business's
+// subcollection of the same name; confirm the rules engine refuses an
+// out-of-tenant caller's broad query rather than silently filtering it.
+// ---------------------------------------------------------------------
+describe('query-based leakage', () => {
+  it('A collection-group query across all businesses\' expenses is denied to a caller who is not a member of every business it would span', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'businesses', BIZ, 'expenses', 'e-cg1'), {
+        id: 'e-cg1', date: '2026-07-01', description: 'Biz1', amount: 1, createdAt: new Date().toISOString(),
+      });
+      await setDoc(doc(db, 'businesses', OTHER_BIZ, 'expenses', 'e-cg2'), {
+        id: 'e-cg2', date: '2026-07-01', description: 'Biz2', amount: 1, createdAt: new Date().toISOString(),
+      });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDocs(query(collectionGroup(otherDb, 'expenses'))));
   });
 });
 
