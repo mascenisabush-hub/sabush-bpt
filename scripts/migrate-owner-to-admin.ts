@@ -19,6 +19,17 @@
  * Optional flags:
  *   --batch-size=N     Firestore batch write size (default 400; hard cap 500 per batch)
  *   --sample-limit=N   number of sample document ids to log in dry-run mode (default 20)
+ *
+ * Optional env vars (all operator-supplied audit fields, per plan §4):
+ *   MIGRATION_SCRIPT_GIT_COMMIT   git rev-parse HEAD at invocation time
+ *   MIGRATION_OPERATOR            name/email of whoever is running it
+ *   MIGRATION_RERUN_COUNT         "1" for a first run, "2" for a second
+ *                                 attempt after a prior failure, etc. Not
+ *                                 script-tracked (no persistent state is
+ *                                 introduced — that would be schema scope
+ *                                 creep beyond this migration) — the
+ *                                 operator supplies it, same as the other
+ *                                 audit fields above.
  */
 
 import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
@@ -77,8 +88,9 @@ async function main() {
 
   const scriptGitCommit = process.env.MIGRATION_SCRIPT_GIT_COMMIT || '(unset — pass MIGRATION_SCRIPT_GIT_COMMIT=$(git rev-parse HEAD) when invoking)';
   const operator = process.env.MIGRATION_OPERATOR || process.env.USER || '(unset — pass MIGRATION_OPERATOR=<name/email>)';
+  const rerunCount = process.env.MIGRATION_RERUN_COUNT || '(unset — pass MIGRATION_RERUN_COUNT=1, 2, ... when invoking)';
 
-  logLine(`Starting owner->admin backfill migration. mode=${dryRun ? 'DRY-RUN' : 'WRITE'} batchSize=${batchSize} scriptGitCommit=${scriptGitCommit} operator=${operator}`);
+  logLine(`Starting owner->admin backfill migration. mode=${dryRun ? 'DRY-RUN' : 'WRITE'} batchSize=${batchSize} scriptGitCommit=${scriptGitCommit} operator=${operator} rerunCount=${rerunCount}`);
 
   const app = initializeApp({
     credential: cert(loadServiceAccount()),
@@ -93,7 +105,7 @@ async function main() {
   const totalScanned = snapshot.size;
 
   if (totalScanned === 0) {
-    logLine('Total migrated: 0. Remaining role==\'owner\' documents: 0. Nothing to do.');
+    logLine(`Total migrated: 0. Remaining role=='owner' documents: 0. Nothing to do. scriptGitCommit=${scriptGitCommit} operator=${operator} rerunCount=${rerunCount}.`);
     return;
   }
 
@@ -137,7 +149,7 @@ async function main() {
 
   logLine(
     `Total migrated: ${migratedCount}. Total failed: ${failedCount}${failedIds.length ? ` (ids: ${JSON.stringify(failedIds)})` : ''}. ` +
-      `Total scanned this run: ${totalScanned}. scriptGitCommit=${scriptGitCommit} operator=${operator}.`
+      `Total scanned this run: ${totalScanned}. scriptGitCommit=${scriptGitCommit} operator=${operator} rerunCount=${rerunCount}.`
   );
   logLine('Run the completeness check (users where role == \'owner\' must return zero) before proceeding to Stage 4, per plan §8.1.');
 }
