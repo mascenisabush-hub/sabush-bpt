@@ -104,8 +104,24 @@ intelligence), then build the platform capabilities around that.
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | Drafted — awaiting approval |
-| 19 | Subscriptions | Not started |
+| 19 | [Subscriptions](./19-subscriptions.md) | Designed — draft complete, awaiting Product Architect Acceptance |
 | 20 | Notifications | Not started |
+
+> **Note on Module #19 (Subscriptions):** drafting required resolving a
+> genuine source-of-truth contradiction first — Architecture §3.13 left
+> subscription binding open, §6.2 described it as Owner-level, §9.4
+> resolved it as `businessId`-level, and §13.5 still described it as
+> pending. The [Subscription Ownership Resolution](./19-subscription-ownership-resolution.md)
+> record settles this: **Business-level (`businessId`) binding**, no
+> Owner/Portfolio-level subscription, `MAX_SHOPS_PER_OWNER` (Module #17)
+> unmodified. No `docs/architecture/*` file was edited to do this — the
+> resolution record is the authoritative cross-reference, following the
+> same pattern as the Closing Integrity Amendment (Phase 2, above). Both
+> this resolution record and the BDS itself are **Designed**, not yet
+> **Accepted** — three items remain explicitly open pending Product
+> Architect answers before implementation planning: plan names/pricing,
+> payment processor vendor selection, and legacy-migration mechanics (see
+> the BDS's own "Explicitly Left Open" section).
 
 ---
 

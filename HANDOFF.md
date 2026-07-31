@@ -12,12 +12,41 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** PR-001/PR-002 remain closed. The Firestore tenant-isolation
-test suite (16 `describe` blocks, added in `493c585`) has now actually
-been **executed** against a real Firebase Rules Emulator — not just
-typechecked — in a local environment with working Java + Firebase CLI:
-47/47 tests passed, 0 failures, exit code 0. Results are written up in
-`docs/security/firestore-tenant-isolation-audit-findings.md`
+**Status:** Module #19 (Subscriptions) moved from "readiness analysis"
+to a full BDS draft this session. Two new docs-only files:
+
+- `docs/specs/19-subscription-ownership-resolution.md` — resolves the
+  Architecture §3.13/§6.2/§9.4/§13.5 subscription-binding contradiction.
+  Resolution: **Business-level (`businessId`) binding**, no Owner/
+  Portfolio-level subscription (rejected), `MAX_SHOPS_PER_OWNER`
+  (Module #17) unmodified. No `docs/architecture/*` file was edited —
+  this record is the cross-reference, not a rewrite of those sections.
+- `docs/specs/19-subscriptions.md` — the Module #19 BDS itself, built on
+  Product Architect Decisions A (Business-level trial), B (expired =
+  restricted features, not blocked/read-only), and C (state +
+  entitlement gating only, no billing/invoice/ledger).
+
+Both are **Designed, not Accepted.** Four items are explicitly left open
+in the BDS's own "Explicitly Left Open" section and must not be decided
+during any future implementation without a separate Product Architect
+call: plan names/tier structure, pricing, payment processor vendor
+selection (M-Pesa/e-Mola remains a regional requirement, not a vendor
+commitment), and legacy-migration mechanics (the *shape* — no null
+states — is fixed; script/timing is not).
+
+`docs/specs/README.md`'s Phase 4 table updated to reflect Module #19's
+new status and cross-reference the resolution record.
+
+No implementation, no schema, no `firestore.rules`, no `src/` changes
+this session — docs only, per instruction ("Do not write
+implementation... Do not create schemas beyond the BDS design stage").
+
+**Prior status (unchanged this session):** PR-001/PR-002 remain closed.
+The Firestore tenant-isolation test suite (16 `describe` blocks, added in
+`493c585`) has been **executed** against a real Firebase Rules Emulator
+— not just typechecked — in a local environment with working Java +
+Firebase CLI: 47/47 tests passed, 0 failures, exit code 0. Results are
+written up in `docs/security/firestore-tenant-isolation-audit-findings.md`
 (commits `cfd1af6`, `5f161a5`, `bd5229b`), which the Product Architect
 has reviewed and marked **Analyzed**. `Accepted` is a separate, explicit
 decision the findings document itself does not self-grant — check that
@@ -102,9 +131,13 @@ implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist yet.
 
 **Anything mid-flight / blocked:** Nothing blocked at the repository
-level. Module #17 documentation alignment is Accepted (see above); next
-step is a proposed module sequence for Product Architect direction, not
-implementation of #17 itself.
+level, nothing uncommitted. Module #17 documentation alignment is
+Accepted (see above). Module #19's BDS is now Designed and drafted,
+waiting on explicit Product Architect Acceptance before any
+implementation planning begins — not implemented, not scheduled. Next
+step is Product Architect Acceptance of the #19 BDS and resolution
+record, plus (separately, per Architecture 13.2/13.6) the still-open
+build-order question between #19/#20/#18.
 
 **Known gaps flagged but not yet scheduled:**
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a
