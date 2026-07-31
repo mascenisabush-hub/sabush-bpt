@@ -12,49 +12,48 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** PR-001/PR-002 are closed (unchanged from last session).
-Per the Product Architect's three-step sequencing (docs accuracy →
-security audit → next module), `tests/firestore-rules.test.ts` has now
-been extended to implement every scenario scoped in
-`docs/security/firestore-tenant-isolation-audit-plan.md`: new `describe`
-blocks for `users`, `businesses`, `products`, `batches`,
-`purchaseBatches`, `quebras`, `stockCounts`, `staff`, `timelineEvents`,
-a suspended-member access-cutoff check, and a collection-group
-query-leakage check — 16 `describe` blocks total, up from 5. Typechecks
-cleanly (`tsc --noEmit`, zero errors). **Still not run against a live
-emulator** — confirmed the run fails the same way as before (cancelled
-subtests, `before()` can't reach `localhost:8080`), which is the
-network-egress limitation, not a code defect. Modules #17/#18 unchanged,
-still awaiting approval.
+**Status:** PR-001/PR-002 remain closed. The Firestore tenant-isolation
+test suite (16 `describe` blocks, added in `493c585`) has now actually
+been **executed** against a real Firebase Rules Emulator — not just
+typechecked — in a local environment with working Java + Firebase CLI:
+47/47 tests passed, 0 failures, exit code 0. Results are written up in
+`docs/security/firestore-tenant-isolation-audit-findings.md`
+(commits `cfd1af6`, `5f161a5`, `bd5229b`), which the Product Architect
+has reviewed and marked **Analyzed**. `Accepted` is a separate, explicit
+decision the findings document itself does not self-grant — check that
+file's own Section 5 lifecycle table for its current value rather than
+assuming it here.
 
-**Last completed:** `AddQuebraView.tsx`'s `handleSubmit` was calling
-`addQuebra(...)` (an async function that can reject — missing
-`activeBusinessId`, or a Firestore `setDoc`/timeline-log failure) without
-`await`, so a rejected write was silently swallowed and the UI showed
-"Quebra registered" success even when nothing was saved. Fixed to match
-the established `AddExpenseView`/`AddWithdrawalView` pattern: `handleSubmit`
-is now `async`, awaits `addQuebra`, wraps it in `try/catch/finally`, shows
-a user-visible `alert` on failure, and adds an `isSaving` state that
-disables the submit button mid-flight. No business-rule change — Quebras
-remain explicitly out of scope for the Closing Integrity Amendment
-(no closed-period check was added). Grounds: BDS #07 (Breakages) already
-requires "no silent-failure" writes/deletes and a user-visible error on
-backend rejection.
+Separately, `docs/engineering/17-owner-portfolio-feasibility-note.md`
+(`57ffea7`) is now on `main`: engineering discovery only, no
+implementation. It confirms the existing multi-business ownership code
+(`businessIds[]`, `activeBusinessId`, `addShop()`, `ShopSwitcher.tsx`)
+is a working foundation, maps where Business Worth is currently
+computed (live, per-active-business, in `AppContext.tsx` — no stored
+"current worth" field exists), and flags the hardcoded
+`MAX_SHOPS_PER_OWNER = 10` cap as something the BDS should address
+explicitly rather than leave implicit.
 
-**Files touched:** `src/components/AddQuebraView.tsx` only.
+**Module #17 naming:** the Product Architect has decided the direction
+is **Owner Portfolio**, not the existing `docs/specs/17-multi-shop.md`
+draft — Business stays the tenant boundary, Portfolio is a read-only
+aggregation layer with no new writes and no rule changes. That
+direction decision is made; **the actual BDS superseding the Multi-Shop
+draft has not been written yet.** Module #17 remains Drafted until it
+is.
 
-**Next up:** (1) Run `npm run test:rules:emulator` somewhere with real
-network access to Firebase's emulator infra (still the single blocker —
-every collection's rule tests now exist, but none have actually executed
-against a live emulator) and fix whatever it finds. Treat a clean pass
-as the real acceptance gate for both the Closing Integrity Amendment AND
-the tenant-isolation audit — write the results up in
-`docs/security/firestore-tenant-isolation-audit-findings.md` per the
-plan's Section 5. (2) Only once that's clean: return to Module #17
-(spec titled "Multi-Shop" in this repo — flagged naming discrepancy with
-the Architect's "Owner Portfolio," unresolved) once its spec is
-approved, per the Architect's own sequencing (docs → security → next
-module).
+**Files touched since `493c585`:** all documentation —
+`docs/security/firestore-tenant-isolation-audit-findings.md`,
+`docs/engineering/17-owner-portfolio-feasibility-note.md`. No source
+code changed.
+
+**Next up:** (1) Write the Owner Portfolio BDS (superseding
+`docs/specs/17-multi-shop.md`), incorporating the feasibility note's
+findings — in particular, an explicit decision on live vs. cached
+aggregation for the portfolio dashboard, and whether
+`MAX_SHOPS_PER_OWNER` needs to change. (2) Get that BDS to Accepted
+before any implementation starts. Modules #18/#19/#20 unchanged, still
+blocked as documented below.
 
 Module #18 (SuperAdmin) — BDS spec drafted (`docs/specs/18-superadmin.md`),
 grounded in `docs/architecture/09-superadmin-architecture.md`. Genuinely
@@ -81,13 +80,11 @@ Module #15 (AI Intelligence) remains drafted but deliberately not
 implemented — blocked on Background Worker, SuperAdmin Feature Flags,
 Subscriptions, and Notifications, none of which exist yet.
 
-**Anything mid-flight / blocked:** The emulator test run itself is
-blocked on network access this sandbox doesn't have — everything else is
-clean. No open PRs, no half-finished edits.
+**Anything mid-flight / blocked:** Nothing blocked at the repository
+level. The Owner Portfolio BDS has not been started as of this file's
+last update.
 
 **Known gaps flagged but not yet scheduled:**
-- Actually running `npm run test:rules:emulator` (see above) — the single
-  highest-priority item right now.
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a
   Manager sees "Staff" with no tier indicator in the header itself
   (SettingsModal shows it correctly). Cosmetic, noted as future
@@ -95,9 +92,10 @@ clean. No open PRs, no half-finished edits.
 - `clearAllData` no longer removes Closings (they can no longer be
   deleted at all) — flagged for a product decision on whether its copy
   should change, not yet decided.
-- Module #17's name: this repo's spec/README call it "Multi-Shop"; the
-  Product Architect's review referred to it as "Owner Portfolio." Not
-  reconciled — worth a quick confirmation before that module is next.
+- The tenant-isolation audit findings document notes its own evidence
+  is based on operator-reported terminal output/screenshot, not a
+  full attached raw log file — a nice-to-have follow-up, not a
+  blocker, per that document's own Section 6/Appendix A.
 
 ---
 
