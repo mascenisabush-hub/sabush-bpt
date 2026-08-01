@@ -12,11 +12,11 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Stage 2 Compatibility Gap Correction implemented and
-validated. **Not yet committed as of this HANDOFF update** — see next
-step below.
+**Status:** Stage 2 Compatibility Gap Correction implemented, validated,
+and **committed** as `2006cd6`. (Previously noted here as "not yet
+committed" — that was stale; corrected on this update.)
 
-**What this fixes:** Stage 2 (`e10dede`) started writing `role: 'admin'`
+**What this fixed:** Stage 2 (`e10dede`) started writing `role: 'admin'`
 for new self-registrations, and `firestore.rules`' `isOwnerOf()` already
 treated `'owner'`/`'admin'` as equivalent (Stage 1). But two application-
 layer checks were never updated to match: `AppContext.tsx`'s `isOwner`
@@ -64,8 +64,34 @@ untouched. Per this correction's own authorization terms, no Stage 3
 execution or further migration work proceeds until this checkpoint is
 reviewed.
 
-**Awaiting:** commit + push (next), then explicit review of this
-checkpoint.
+---
+
+## Backend reliability — staff endpoints (current)
+
+**Status:** Working tree clean. Current branch is **ahead of
+`origin/main` by 1 commit** (`f39b80f`) — not yet pushed.
+
+- `de328e6` (pushed, on `origin/main`) — staged partial-failure handling
+  for `/api/staff/suspend` and `/api/staff/reactivate`.
+- `f39b80f` (**local only, not pushed**) — staged partial-failure
+  handling for `/api/staff/delete` and `/api/staff/set-tier`, completing
+  the same pattern for the remaining two endpoints.
+
+All four now follow the same staged pattern (authorize → effective
+mutation → non-critical downstream stages isolated so a Firestore-sync
+or timeline/audit failure after the primary action already succeeded is
+reported as `partialFailure`/`auditLogged: false`, not a misleading
+`500`):
+- `/api/staff/delete`
+- `/api/staff/suspend`
+- `/api/staff/reactivate`
+- `/api/staff/set-tier`
+
+**`/api/staff/reset-pin` was explicitly not included** — remains on its
+original error-handling shape, unchanged, out of scope for this pass.
+
+**Awaiting:** push of `f39b80f`, batched together with the documentation
+alignment commit that records this, once reviewed.
 
 ---
 

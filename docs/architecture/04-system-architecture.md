@@ -90,12 +90,14 @@ This diagram is the reference every subsection below expands on. Nothing in it i
 
 **What exists (audit-confirmed, and correctly built per Principle 2.9):** A single Express server, deployed on Railway, serving two roles:
 1. Serves the built SPA as static files (`dist/`) — this is what actually runs in production.
-2. Exposes a small set of privileged endpoints (`/api/staff/delete`, `/api/staff/suspend`, `/api/staff/reactivate`, `/api/staff/reset-pin`) that a client must never be able to perform unilaterally, because they touch another person's Firebase Auth account or override normal write rules.
+2. Exposes a small set of privileged endpoints (`/api/staff/delete`, `/api/staff/suspend`, `/api/staff/reactivate`, `/api/staff/reset-pin`, `/api/staff/set-tier`) that a client must never be able to perform unilaterally, because they touch another person's Firebase Auth account or override normal write rules.
 
 Every privileged endpoint follows one pattern, already correct and to be replicated for every future privileged action (Subscriptions billing changes, SuperAdmin actions, Section 9):
 - Verify the caller's Firebase ID token server-side (`requireAuth`).
 - **Re-read the caller's actual profile from Firestore** to confirm their real role and business membership — never trust a client-claimed role (Principle 2.9).
 - Re-verify the target record actually belongs to the caller's business before acting (tenant isolation, Principle 2.8).
+- Perform the effective mutation (the actual privileged action — an Auth account change, a Firestore write, or both).
+- **Separate non-critical downstream operations (such as audit/timeline writes) from the primary action**, so that once the primary mutation has already succeeded, a failure in a later, non-critical stage is reported accurately (e.g. `partialFailure` / `auditLogged: false`) rather than as a misleading full failure.
 
 **Extension required by Section 3's new domains:** SuperAdmin (3.14) and Subscriptions (3.13) both require privileged, server-verified actions of the same shape (suspend a *business* rather than a staff member; change a subscription's plan/status; issue a time-boxed impersonation token). These belong on the **same server**, as additional route groups (`/api/superadmin/*`, `/api/billing/*`), not a separate service — there is no scale or security reason to split them out, and doing so would multiply operational surface for no benefit (Principle 2.6). Section 9 designs the specific SuperAdmin endpoints; this section's job is to confirm they live in the same privileged-server pattern already proven correct.
 
