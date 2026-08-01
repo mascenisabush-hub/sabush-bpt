@@ -13,6 +13,7 @@
     "clean": "rm -rf dist server.js",
     "lint": "tsc --noEmit",
     "test:rules": "tsx --test tests/firestore-rules.test.ts",
+    "test:calculations": "tsx --test tests/calculations.test.ts",
     "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\""
   },
   "dependencies": {

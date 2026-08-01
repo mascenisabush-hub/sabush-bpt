@@ -12,7 +12,14 @@ export function calculateBatch(batch: StockBatch, batchQuebras: Quebra[]): Batch
   const totalQuebraQuantity = relevantQuebras.reduce((sum, q) => sum + Number(q.quantityLost || 0), 0);
   const quebraValue = totalQuebraQuantity * batch.costPrice;
 
-  const remainingQuantity = batch.quantity - totalQuebraQuantity;
+  // [Business Calculation Compliance Audit V-5] Financial valuation must
+  // never go negative, even if logged quebra quantity exceeds the batch's
+  // original quantity (a data-entry edge case). `totalQuebraQuantity` above
+  // is left untouched — it is the audit-trail record of what was actually
+  // logged, not a valuation figure — and `hasExceededWarning` below still
+  // fires exactly as before, so the fact that excessive quebra occurred is
+  // fully preserved. Only the *quantity used for valuation* is floored.
+  const remainingQuantity = Math.max(0, batch.quantity - totalQuebraQuantity);
 
   // Both values computed off the SAME basis (remainingQuantity) — a quebra
   // reduces Investment Value and Market Value identically, never one alone.
