@@ -68,20 +68,28 @@ reviewed.
 
 ## Backend reliability — staff endpoints (current)
 
-**Status:** Working tree clean. Current branch is **ahead of
-`origin/main` by 1 commit** (`f39b80f`) — not yet pushed.
+**Status:** Working tree clean, branch up to date with `origin/main`.
+`f39b80f` is pushed (previously noted here as "local only, not pushed" —
+that was stale; corrected on this update).
 
-- `de328e6` (pushed, on `origin/main`) — staged partial-failure handling
-  for `/api/staff/suspend` and `/api/staff/reactivate`.
-- `f39b80f` (**local only, not pushed**) — staged partial-failure
-  handling for `/api/staff/delete` and `/api/staff/set-tier`, completing
-  the same pattern for the remaining two endpoints.
+- `de328e6` (pushed) — staged partial-failure handling for
+  `/api/staff/suspend` and `/api/staff/reactivate`.
+- `f39b80f` (pushed) — staged partial-failure handling for
+  `/api/staff/delete` and `/api/staff/set-tier`, completing the same
+  pattern for the remaining two endpoints.
+- `8a1e6ee` (pushed, docs-only) — aligned this file and
+  `docs/architecture/04-system-architecture.md` §4.4 with the shipped
+  staff-reliability pattern; no code changes.
+- `480dafe`, `b394ace` (pushed, CI-only) — added a GitHub Actions
+  workflow running `firestore.rules` emulator validation, plus the Java
+  21 setup step the emulator requires. No application code touched; not
+  previously recorded in this file.
 
-All four now follow the same staged pattern (authorize → effective
-mutation → non-critical downstream stages isolated so a Firestore-sync
-or timeline/audit failure after the primary action already succeeded is
-reported as `partialFailure`/`auditLogged: false`, not a misleading
-`500`):
+All four privileged staff endpoints now follow the same staged pattern
+(authorize → effective mutation → non-critical downstream stages
+isolated so a Firestore-sync or timeline/audit failure after the
+primary action already succeeded is reported as
+`partialFailure`/`auditLogged: false`, not a misleading `500`):
 - `/api/staff/delete`
 - `/api/staff/suspend`
 - `/api/staff/reactivate`
@@ -90,8 +98,7 @@ reported as `partialFailure`/`auditLogged: false`, not a misleading
 **`/api/staff/reset-pin` was explicitly not included** — remains on its
 original error-handling shape, unchanged, out of scope for this pass.
 
-**Awaiting:** push of `f39b80f`, batched together with the documentation
-alignment commit that records this, once reviewed.
+**Nothing awaiting push.** This section is fully landed.
 
 ---
 
