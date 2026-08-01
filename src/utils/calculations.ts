@@ -192,7 +192,13 @@ export function generateReportSummary(
     };
   });
 
-  // Filter out products that have no activity in period if desired, or keep all products with activity
+  // [V-4 Report Data Semantic Correction] productDetails represents products
+  // with activity inside the selected period — nothing more. An empty
+  // activity period returns an empty collection, not a fallback to the full
+  // product list. Scalar totals below are intentionally still summed from
+  // the full, unfiltered `productDetails` (inactive products always
+  // contribute 0), so this filter only affects the returned list, never the
+  // totals.
   const activeProductDetails = productDetails.filter(p =>
     p.quantityEntered > 0 || p.quebras.length > 0
   );
@@ -204,7 +210,7 @@ export function generateReportSummary(
   return {
     startDate,
     endDate,
-    productDetails: activeProductDetails.length > 0 ? activeProductDetails : productDetails,
+    productDetails: activeProductDetails,
     totalEmbeddedProfit,
     totalExpenses,
     totalWithdrawals,

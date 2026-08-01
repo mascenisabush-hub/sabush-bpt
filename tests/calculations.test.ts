@@ -14,8 +14,8 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { calculateBatch } from '../src/utils/calculations';
-import { StockBatch, Quebra } from '../src/types';
+import { calculateBatch, generateReportSummary } from '../src/utils/calculations';
+import { StockBatch, Quebra, Product } from '../src/types';
 
 function makeBatch(overrides: Partial<StockBatch> = {}): StockBatch {
   return {
@@ -26,6 +26,15 @@ function makeBatch(overrides: Partial<StockBatch> = {}): StockBatch {
     costPrice: 10,
     sellingPrice: 15,
     status: 'open',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    ...overrides,
+  };
+}
+
+function makeProduct(overrides: Partial<Product> = {}): Product {
+  return {
+    id: 'product-1',
+    name: 'Test Product',
     createdAt: '2026-01-01T00:00:00.000Z',
     ...overrides,
   };
@@ -143,5 +152,82 @@ describe('calculateBatch — excessive quebra does not create negative valuation
     assert.equal(calc.marketValue, 0);
     assert.equal(calc.embeddedProfit, 0);
     assert.equal(calc.hasExceededWarning, true);
+  });
+});
+
+describe('generateReportSummary — productDetails reflects period activity (V-4)', () => {
+  it('an active period returns only products with activity in range', () => {
+    const products = [
+      makeProduct({ id: 'p1', name: 'Active Product' }),
+      makeProduct({ id: 'p2', name: 'Inactive Product' }),
+    ];
+    const batches: StockBatch[] = [
+      makeBatch({ id: 'b1', productId: 'p1', dateEntered: '2026-02-10', quantity: 20 }),
+      // b2 belongs to p2 but falls OUTSIDE the report range below
+      makeBatch({ id: 'b2', productId: 'p2', dateEntered: '2026-05-01', quantity: 20 }),
+    ];
+
+    const report = generateReportSummary(
+      '2026-02-01', '2026-02-28',
+      products, batches, [], [], []
+    );
+
+    assert.equal(report.productDetails.length, 1);
+    assert.equal(report.productDetails[0].product.id, 'p1');
+  });
+
+  it('a period with zero activity returns an empty productDetails collection, not the full product list', () => {
+    const products = [
+      makeProduct({ id: 'p1', name: 'Product One' }),
+      makeProduct({ id: 'p2', name: 'Product Two' }),
+    ];
+    const batches: StockBatch[] = [
+      // both batches dated well outside the queried range
+      makeBatch({ id: 'b1', productId: 'p1', dateEntered: '2026-01-01', quantity: 10 }),
+      makeBatch({ id: 'b2', productId: 'p2', dateEntered: '2026-01-01', quantity: 10 }),
+    ];
+
+    const report = generateReportSummary(
+      '2026-06-01', '2026-06-30',
+      products, batches, [], [], []
+    );
+
+    assert.deepEqual(report.productDetails, []); // empty, not a fallback to all products
+  });
+
+  it('scalar totals are unaffected by the productDetails filter — a genuinely empty period sums to zero', () => {
+    const products = [makeProduct({ id: 'p1' })];
+    const batches: StockBatch[] = [
+      makeBatch({ id: 'b1', productId: 'p1', dateEntered: '2026-01-01', quantity: 10 }),
+    ];
+
+    const report = generateReportSummary(
+      '2026-06-01', '2026-06-30',
+      products, batches, [], [], []
+    );
+
+    assert.equal(report.productDetails.length, 0);
+    assert.equal(report.totalEmbeddedProfit, 0);
+    assert.equal(report.totalExpenses, 0);
+    assert.equal(report.totalWithdrawals, 0);
+  });
+
+  it('scalar totals for an ACTIVE period are unchanged by the V-4 correction (sum full productDetails, not just active)', () => {
+    const products = [makeProduct({ id: 'p1', costPrice: 10, sellingPrice: 15 })];
+    const batches: StockBatch[] = [
+      makeBatch({ id: 'b1', productId: 'p1', dateEntered: '2026-02-10', quantity: 20, costPrice: 10, sellingPrice: 15 }),
+    ];
+    const expenses = [{ id: 'e1', date: '2026-02-15', description: 'rent', amount: 500, createdAt: '2026-02-15T00:00:00.000Z' }];
+    const withdrawals = [{ id: 'w1', date: '2026-02-20', amount: 200, createdAt: '2026-02-20T00:00:00.000Z' }];
+
+    const report = generateReportSummary(
+      '2026-02-01', '2026-02-28',
+      products, batches, [], expenses, withdrawals
+    );
+
+    assert.equal(report.productDetails.length, 1);
+    assert.equal(report.totalEmbeddedProfit, 100); // 20 * (15-10)
+    assert.equal(report.totalExpenses, 500);
+    assert.equal(report.totalWithdrawals, 200);
   });
 });
