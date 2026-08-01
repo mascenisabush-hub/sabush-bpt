@@ -159,6 +159,31 @@ intelligence), then build the platform capabilities around that.
 > legacy-migration mechanics (see the BDS's own "Explicitly Left Open"
 > section).
 
+> **Update — Module #19 Governance Stack and Specification Rewrite
+> (v2.0):** since the note above was written, Module #19 gained a full
+> governance layer sitting above the BDS itself: [BDR-0001](./19-subscription-philosophy.md)
+> (Subscription Philosophy), [BDR-0002](./19-value-realization-framework.md)
+> (Value Realization Framework), [BDR-0003](./19-trial-experience-framework.md)
+> (Trial Experience Framework), [BDR-0004](./BDR-0004-customer-communication-architecture.md)
+> (Customer Communication Architecture, platform-wide), the complete
+> [POL-19-001](./19-pol-001-trial-activation-policy.md) through
+> [POL-19-008](./19-pol-008-subscription-notification-policy.md) Planned
+> Policy Series, and the [BDR/Policy Document Framework](./19-governance-bdr-policy-framework.md)
+> establishing that hierarchy. The [Specification Alignment Amendment](./19-specification-alignment-amendment.md)
+> then found two direct conflicts between that governance stack and the
+> original BDS text (trial duration wording, trial-expiry model) and
+> authorized a full rewrite. `19-subscriptions.md` is now **Version 2.0**,
+> rewritten in full from the governance stack above — Version 1.0 is
+> retired, retained only in git history. Scope, ownership binding
+> (`businessId`), `MAX_SHOPS_PER_OWNER` non-modification, and the
+> "Explicitly Left Open" items are unchanged by the rewrite. **Still ✅
+> Accepted** — business specification and architectural decisions only;
+> implementation is not authorized by the rewrite. A downstream
+> [Implementation Plan](../engineering/19-subscriptions-implementation-plan.md)
+> now also exists (`docs/engineering/`) — planning only, recommending
+> Phase 1 (Foundations) as "ready after minor preparation" and Phases
+> 2–6 as not ready; it does not itself authorize any implementation.
+
 > **Note on Module #18 (SuperAdmin):** a documentation-analysis
 > readiness review checked `18-superadmin.md` against Module #17's and
 > Module #19's Accepted rules, Module #20's Accepted rules, the
