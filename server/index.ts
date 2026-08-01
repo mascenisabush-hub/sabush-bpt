@@ -187,6 +187,15 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
     return;
   }
 
+  // Stage A — authorization + the actual effective, irreversible action
+  // (Firebase Auth account deletion). Nothing has changed yet if anything
+  // in this stage throws (other than the account already being absent,
+  // which is treated as already-done, not a failure), so a plain 500 (no
+  // state change) remains accurate here.
+  let requesterProfile: FirebaseFirestore.DocumentData;
+  let staffName: string;
+  let staffEmail: string;
+  let authAccountDeleted = true;
   try {
     const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId);
     if (permissionError) {
@@ -196,20 +205,16 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
     }
 
     const requesterSnap = await db.collection('users').doc(requesterUid).get();
-    const requesterProfile = requesterSnap.data()!;
+    requesterProfile = requesterSnap.data()!;
     const [staffProfileSnap, staffRosterSnap] = await Promise.all([
       db.collection('users').doc(staffUid).get(),
       db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
     ]);
     const staffProfile = staffProfileSnap.data();
     const staffRoster = staffRosterSnap.data();
+    staffName = staffProfile?.name || staffRoster?.name || 'Funcionário';
+    staffEmail = staffProfile?.email || staffRoster?.email || '';
 
-    const staffName = staffProfile?.name || staffRoster?.name || 'Funcionário';
-    const staffEmail = staffProfile?.email || staffRoster?.email || '';
-
-    // 1) Delete the Firebase Authentication account — the whole reason
-    //    this can't run on the client.
-    let authAccountDeleted = true;
     try {
       await auth.deleteUser(staffUid);
     } catch (err: any) {
@@ -217,19 +222,36 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
         authAccountDeleted = false;
         console.log('[staff/delete] auth account already absent, continuing', { requesterUid, staffUid, businessId });
       } else {
-        console.error('[staff/delete] failed to delete auth account', { requesterUid, staffUid, businessId, error: err?.message });
-        res.status(500).json({ error: 'internal', message: 'Não foi possível remover a conta de autenticação do funcionário.' });
-        return;
+        throw err;
       }
     }
+  } catch (err) {
+    console.error('[staff/delete] Auth stage failed — no state changed', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível remover a conta de autenticação do funcionário.' });
+    return;
+  }
 
-    // 2) Delete Firestore records belonging to this staff member only.
+  // Stage B — Firestore cleanup. The Auth account is already deleted (or
+  // already absent) at this point, so a failure here is a partial state
+  // — the account access is already fully revoked — never a full failure.
+  // NOTE for documentation: `partialFailure: true` here does NOT mean the
+  // deletion failed. It means the primary action (Auth account removal,
+  // which is what actually revokes access) already succeeded; only the
+  // Firestore record cleanup/reconciliation did not complete.
+  try {
     const batch = db.batch();
     batch.delete(db.collection('users').doc(staffUid));
     batch.delete(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid));
     await batch.commit();
+  } catch (err) {
+    console.error('[staff/delete] Firestore stage failed after Auth deletion succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, authAccountDeleted, partialFailure: true, firestoreSyncFailed: true });
+    return;
+  }
 
-    // 3) Permanent audit / timeline entry.
+  // Stage C — timeline/audit entry. Auth + Firestore already succeeded, so
+  // this is business history only, never a reason to report failure.
+  try {
     const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
@@ -251,13 +273,14 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
           reason: reason || undefined,
         },
       });
-
-    console.log('[staff/delete] success', { requesterUid, staffUid, businessId, authAccountDeleted, timestamp: startedAt });
-    res.json({ success: true, staffUid, authAccountDeleted });
   } catch (err) {
-    console.error('[staff/delete] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao remover o funcionário. Tente novamente.' });
+    console.error('[staff/delete] timeline stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, authAccountDeleted, auditLogged: false });
+    return;
   }
+
+  console.log('[staff/delete] success', { requesterUid, staffUid, businessId, authAccountDeleted, timestamp: startedAt });
+  res.json({ success: true, staffUid, authAccountDeleted });
 });
 
 // ------------------------------------------------------------------
@@ -539,6 +562,14 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
     return;
   }
 
+  // Stage A+B — permission check, lookups, and the Firestore batch commit,
+  // which is the primary/effective action here (there is no separate
+  // external Auth mutation for this endpoint, unlike suspend/reactivate/
+  // delete). If anything in this stage throws, no state has changed — a
+  // plain 500 remains correct and unchanged from before.
+  let requesterProfile: FirebaseFirestore.DocumentData;
+  let staffName: string;
+  let previousTier: 'manager' | 'staff';
   try {
     // Admin-only — this is the one staff-management action a Manager can
     // never perform on anyone, including themselves.
@@ -550,13 +581,13 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
     }
 
     const requesterSnap = await db.collection('users').doc(requesterUid).get();
-    const requesterProfile = requesterSnap.data()!;
+    requesterProfile = requesterSnap.data()!;
     const [staffProfileSnap, staffRosterSnap] = await Promise.all([
       db.collection('users').doc(staffUid).get(),
       db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
     ]);
-    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
-    const previousTier = staffProfileSnap.data()?.staffTier === 'manager' ? 'manager' : 'staff';
+    staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+    previousTier = staffProfileSnap.data()?.staffTier === 'manager' ? 'manager' : 'staff';
 
     const batch = db.batch();
     batch.update(db.collection('users').doc(staffUid), {
@@ -568,7 +599,16 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
       managerPermissions: requestedPermissions,
     });
     await batch.commit();
+  } catch (err) {
+    console.error('[staff/set-tier] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao atualizar o nível do funcionário. Tente novamente.' });
+    return;
+  }
 
+  // Stage C — timeline/audit entry. The batch commit above already
+  // succeeded, so this is business history only — a failure here must
+  // not be reported as if the tier/permission change itself failed.
+  try {
     const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     const eventType =
       previousTier === 'staff' && requestedTier === 'manager' ? 'manager-granted' :
@@ -594,13 +634,14 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
         description: `${staffName}: ${requestedTier === 'manager' ? `Gestor (fecho: ${requestedPermissions.closings ? 'sim' : 'não'}, gestão de equipa: ${requestedPermissions.staffManagement ? 'sim' : 'não'})` : 'Funcionário (nível padrão)'}.`,
         details: { staffName, changedBy: requesterProfile.name || requesterUid, staffTier: requestedTier, managerPermissions: requestedPermissions },
       });
-
-    console.log('[staff/set-tier] success', { requesterUid, staffUid, businessId, staffTier: requestedTier, timestamp: startedAt });
-    res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions });
   } catch (err) {
-    console.error('[staff/set-tier] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao atualizar o nível do funcionário. Tente novamente.' });
+    console.error('[staff/set-tier] timeline stage failed after batch commit succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions, auditLogged: false });
+    return;
   }
+
+  console.log('[staff/set-tier] success', { requesterUid, staffUid, businessId, staffTier: requestedTier, timestamp: startedAt });
+  res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions });
 });
 
 // ------------------------------------------------------------------
