@@ -62,3 +62,14 @@ exposes `POST /api/staff/delete`. Set `FIREBASE_SERVICE_ACCOUNT_BASE64` (and
 your usual `VITE_FIREBASE_*` / `GEMINI_API_KEY` vars) in Railway's
 environment variables and it just works — no Google Cloud billing account
 needed anywhere in this flow.
+
+### CORS / `ALLOWED_ORIGIN`
+
+Since `server.js` serves both the SPA and `/api/*` from the same host,
+requests are same-origin in the standard Railway setup above and
+`ALLOWED_ORIGIN` doesn't need to be set. Only set it if the API is ever
+split onto its own host, or another domain needs to call `/api/*` directly:
+in Railway, add an `ALLOWED_ORIGIN` environment variable set to your app's
+production URL (e.g. `https://your-app.up.railway.app`). If left unset, CORS
+falls back to accepting any origin — safe for the default single-host
+deployment, but worth setting explicitly the moment that assumption changes.

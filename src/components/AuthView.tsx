@@ -52,12 +52,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
     setError(null);
     setLoading(true);
 
-    console.log('[handleAuth] Running handleAuth with Firebase Config:', {
-      projectId: firebaseConfig.projectId,
-      authDomain: firebaseConfig.authDomain,
-      apiKey: firebaseConfig.apiKey ? `${firebaseConfig.apiKey.substring(0, 8)}...` : undefined,
-    });
-
     try {
       if (mode === 'login') {
         let userCred;
