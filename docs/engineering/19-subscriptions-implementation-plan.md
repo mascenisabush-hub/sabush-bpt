@@ -18,6 +18,15 @@ Decision](./registration-subscription-creation-architecture-decision.md)
 **Nothing has been modified in `src/`, `server/`, `firestore.rules`, or
 any `docs/specs/*`/`docs/architecture/*` file to produce this document.**
 
+**Post-planning update:** the client-vs-server Auth fork surfaced in §14
+(Rule 8 Assessment) below has since been resolved by
+[ADR-0001](../adr/ADR-0001-business-provisioning-orchestrator.md) —
+**Option B** (Auth stays client-managed; provisioning, including the
+subscription record, moves server-side, behind the existing
+`requireAuth` pattern). §14 and §15 below are left as originally
+written, reflecting the state of planning at the time; read them
+together with ADR-0001, not as superseded text.
+
 **Note on superseded inputs:** the Implementation Readiness Assessment
 above was written before the v2.0 specification rewrite and contains
 two now-retired details — trial duration described as "a Plan-level
