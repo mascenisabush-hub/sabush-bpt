@@ -27,6 +27,12 @@ jobs:
       - name: Run calculations tests
         run: npm run test:calculations
 
+      - name: Set up Java 21 (required by firebase-tools emulator)
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '21'
+
       - name: Run Firestore rules tests (emulator)
         run: npm run test:rules:emulator
 
