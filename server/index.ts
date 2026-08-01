@@ -285,6 +285,11 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
     return;
   }
 
+  // Stage A — authorization + the actual effective action (Firebase Auth).
+  // Nothing has changed yet if anything in this stage throws, so a plain
+  // 500 (no state change) remains accurate here.
+  let requesterProfile: FirebaseFirestore.DocumentData;
+  let staffName: string;
   try {
     const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId);
     if (permissionError) {
@@ -294,21 +299,37 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
     }
 
     const requesterSnap = await db.collection('users').doc(requesterUid).get();
-    const requesterProfile = requesterSnap.data()!;
+    requesterProfile = requesterSnap.data()!;
     const [staffProfileSnap, staffRosterSnap] = await Promise.all([
       db.collection('users').doc(staffUid).get(),
       db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
     ]);
-    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+    staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
 
     await auth.updateUser(staffUid, { disabled: true });
     await auth.revokeRefreshTokens(staffUid);
+  } catch (err) {
+    console.error('[staff/suspend] Auth stage failed — no state changed', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao suspender o funcionário. Tente novamente.' });
+    return;
+  }
 
+  // Stage B — Firestore sync. The Auth account is already disabled at this
+  // point, so a failure here is a partial state, never a full failure.
+  try {
     const batch = db.batch();
     batch.update(db.collection('users').doc(staffUid), { suspended: true });
     batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), { suspended: true });
     await batch.commit();
+  } catch (err) {
+    console.error('[staff/suspend] Firestore stage failed after Auth suspension succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, partialFailure: true, firestoreSyncFailed: true });
+    return;
+  }
 
+  // Stage C — timeline/audit entry. Auth + Firestore already succeeded, so
+  // this is business history only, never a reason to report failure.
+  try {
     const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
@@ -325,13 +346,14 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
         description: `O acesso de "${staffName}" foi suspenso.`,
         details: { staffName, suspendedBy: requesterProfile.name || requesterUid, reason: reason || undefined },
       });
-
-    console.log('[staff/suspend] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
-    res.json({ success: true, staffUid });
   } catch (err) {
-    console.error('[staff/suspend] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao suspender o funcionário. Tente novamente.' });
+    console.error('[staff/suspend] timeline stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, auditLogged: false });
+    return;
   }
+
+  console.log('[staff/suspend] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
+  res.json({ success: true, staffUid });
 });
 
 // ------------------------------------------------------------------
@@ -350,6 +372,11 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
     return;
   }
 
+  // Stage A — authorization + the actual effective action (Firebase Auth).
+  // Nothing has changed yet if anything in this stage throws, so a plain
+  // 500 (no state change) remains accurate here.
+  let requesterProfile: FirebaseFirestore.DocumentData;
+  let staffName: string;
   try {
     const permissionError = await verifyStaffManagementAction(requesterUid, staffUid, businessId);
     if (permissionError) {
@@ -359,20 +386,36 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
     }
 
     const requesterSnap = await db.collection('users').doc(requesterUid).get();
-    const requesterProfile = requesterSnap.data()!;
+    requesterProfile = requesterSnap.data()!;
     const [staffProfileSnap, staffRosterSnap] = await Promise.all([
       db.collection('users').doc(staffUid).get(),
       db.collection('businesses').doc(businessId).collection('staff').doc(staffUid).get(),
     ]);
-    const staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
+    staffName = staffProfileSnap.data()?.name || staffRosterSnap.data()?.name || 'Funcionário';
 
     await auth.updateUser(staffUid, { disabled: false });
+  } catch (err) {
+    console.error('[staff/reactivate] Auth stage failed — no state changed', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao reativar o funcionário. Tente novamente.' });
+    return;
+  }
 
+  // Stage B — Firestore sync. The Auth account is already re-enabled at
+  // this point, so a failure here is a partial state, never a full failure.
+  try {
     const batch = db.batch();
     batch.update(db.collection('users').doc(staffUid), { suspended: false });
     batch.update(db.collection('businesses').doc(businessId).collection('staff').doc(staffUid), { suspended: false });
     await batch.commit();
+  } catch (err) {
+    console.error('[staff/reactivate] Firestore stage failed after Auth re-enable succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, partialFailure: true, firestoreSyncFailed: true });
+    return;
+  }
 
+  // Stage C — timeline/audit entry. Auth + Firestore already succeeded, so
+  // this is business history only, never a reason to report failure.
+  try {
     const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
@@ -389,13 +432,14 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
         description: `O acesso de "${staffName}" foi reativado.`,
         details: { staffName, reactivatedBy: requesterProfile.name || requesterUid },
       });
-
-    console.log('[staff/reactivate] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
-    res.json({ success: true, staffUid });
   } catch (err) {
-    console.error('[staff/reactivate] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao reativar o funcionário. Tente novamente.' });
+    console.error('[staff/reactivate] timeline stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.json({ success: true, staffUid, auditLogged: false });
+    return;
   }
+
+  console.log('[staff/reactivate] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
+  res.json({ success: true, staffUid });
 });
 
 // ------------------------------------------------------------------
