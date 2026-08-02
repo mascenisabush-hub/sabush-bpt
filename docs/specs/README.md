@@ -104,8 +104,8 @@ intelligence), then build the platform capabilities around that.
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | ✅ Accepted (documentation & business rules; implementation not authorized) |
-| 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
-| 20 | [Notifications](./20-notifications.md) | ✅ Accepted (business spec & architectural decisions; implementation not yet authorized) |
+| 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted; Phase 1 (Foundations) implemented & closed (`4d9d34b`); Phase 2 (Trial Engine) decisions recorded, implementation not yet authorized |
+| 20 | [Notifications](./20-notifications.md) | ✅ Accepted; Phase 1 (Foundations) implemented & closed; Phase 2 (Privileged-Server Creation Path) not yet authorized |
 
 > **Note on Module #20 (Notifications):** readiness analysis surfaced a
 > genuinely unresolved recipient-binding question in Architecture §4.9/
@@ -138,6 +138,16 @@ intelligence), then build the platform capabilities around that.
 > authorized by this Acceptance. No `firestore.rules`, `Header.tsx`, or
 > `NotificationContext` changes have been made — those remain out of
 > scope until implementation is separately authorized.
+
+> **Update — Implementation Status:** Module #20 Phase 1 (Foundations)
+> was subsequently authorized separately
+> (`docs/engineering/20-phase1-implementation-authorization.md`),
+> implemented, verified, and formally closed
+> (`docs/engineering/20-phase1-closeout.md`). `firestore.rules`,
+> `NotificationContext`, `DeliveryChannel`, and Header bell-dropdown
+> wiring now exist in `src/`, superseding the "no changes have been
+> made" statement above as of that point in time. Phase 2
+> (Privileged-Server Creation Path) remains unauthorized.
 
 > **Update — Module #20 Specification Enhancement Amendment (v1.1):**
 > `20-notifications.md` is now **Version 1.1**. The
@@ -191,6 +201,15 @@ intelligence), then build the platform capabilities around that.
 > now also exists (`docs/engineering/`) — planning only, recommending
 > Phase 1 (Foundations) as "ready after minor preparation" and Phases
 > 2–6 as not ready; it does not itself authorize any implementation.
+
+> **Update — Implementation Status:** Module #19 Phase 1 (Foundations)
+> was subsequently authorized separately, implemented, verified, and
+> formally closed (`docs/engineering/19-phase1-closeout.md`, commit
+> `4d9d34b`, pushed). The `subscriptions/{businessId}` data model,
+> `firestore.rules` match block, and Business Provisioning Orchestrator
+> now exist in `src/` and `server/`. Phase 2 (Trial Engine) — decisions
+> recorded in `19-phase2-trial-engine-decisions.md` — remains
+> unauthorized for implementation.
 
 > **Note on Module #18 (SuperAdmin):** a documentation-analysis
 > readiness review checked `18-superadmin.md` against Module #17's and
