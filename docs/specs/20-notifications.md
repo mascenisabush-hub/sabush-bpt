@@ -2,10 +2,17 @@ Business Domain Specification
 
 # Notifications
 
-Version 1.0
+Version 1.1
 **Status:** Accepted — business specification and architectural
 decisions accepted; implementation not yet authorized
 **Module #20 of 20 — Phase 4: Platform**
+**Amended by:** [Module #20 Specification Enhancement Amendment](./20-notifications-enhancement-amendment.md)
+(v1.1) — three owner-experience enhancements (Context-First
+Communication, Communication Priority, Owner Confidence Principle).
+All four Decision Gates below remain unchanged; V1 scope (Decision
+Gate 4) was explicitly not widened. `[Amendment v1.1]`-tagged additions
+throughout this document mark what changed; everything else is
+unchanged v1.0 content.
 **Architecture references:** [Section 3.12](../architecture/03-domain-architecture.md)
 (Notifications domain definition — channel-agnostic delivery, never a
 source of truth, Worth-First scope test), [Section 4.4](../architecture/04-system-architecture.md)
@@ -208,6 +215,35 @@ Without this module:
    (Architecture §4.8.1's existing mechanism) — a crash-and-restart must
    never produce a duplicate notification for the same real-world
    event.
+9. **[Amendment v1.1] Context-First Communication.** Every notification
+   must explain what happened, why it matters, and what action (if any)
+   is recommended — not just that an event occurred. This affects
+   presentation content, not scope: it does not add a new category, a
+   new recipient rule, or a new creation path: it requires every
+   existing category's payload to carry this explanation. See
+   Functional Requirement 20.6.
+10. **[Amendment v1.1] Communication Priority.** Not every notification
+    deserves interruption. Every notification is assigned one of three
+    priority tiers — immediate alert, activity timeline, or daily
+    summary — reflecting how urgently it needs the owner's attention,
+    independent of its category. This changes delivery behavior, not
+    business scope: it does not change which events produce a
+    notification (Decision Gate 4, unchanged), only how each one is
+    surfaced. See Functional Requirement 20.7.
+
+## UX Principles [Amendment v1.1]
+
+**Owner Confidence Principle** (Amendment C). Communication should help
+the owner make decisions, not just report that something happened. It
+should reduce uncertainty rather than merely generate alerts, and
+should include guidance where possible rather than reporting a problem
+in isolation. This is a UX principle guiding how Context-First content
+(Business Rule 9) is written and how the four accepted categories
+present themselves — it is not a technical requirement and has no
+corresponding schema field or Acceptance Criterion of its own. It is
+recorded here so implementation and future content decisions are
+judged against it, the same way Business Rules are judged against
+tenant isolation.
 
 ## Functional Requirements
 
@@ -228,7 +264,17 @@ notifications/{notificationId}
   channel: 'in_app',            // V1: always 'in_app'; the field exists so future channels are additive
   status: 'unread' | 'read',
   dedupeKey: string,            // deterministic, e.g. `{businessId|userId}:{type}:{period-or-eventId}`
-  createdAt: timestamp
+  createdAt: timestamp,
+
+  // [Amendment v1.1] Context-First Communication (Business Rule 9, 20.6)
+  context: {
+    whatHappened: string,        // plain-language description of the event
+    whyItMatters: string,        // why this matters for the business, not just that it occurred
+    recommendedAction: string | null  // null only when no action is possible/needed
+  },
+
+  // [Amendment v1.1] Communication Priority (Business Rule 10, 20.7)
+  priority: 'immediate' | 'timeline' | 'daily_summary'
 }
 ```
 
@@ -242,6 +288,10 @@ notifications/{notificationId}
 - No `channel` value other than `'in_app'` is populated in V1 — the
   field exists now so Functional Requirement 20.4's channel interface
   doesn't require a schema migration later.
+- **[Amendment v1.1]** `context` and `priority` are both required,
+  non-null on every notification document, regardless of category —
+  a document missing either is not valid under this spec. This applies
+  uniformly across all three creation paths (20.5); no path is exempt.
 
 ### 20.2 Recipient Scope Rules (Decision Gate 1 applied)
 
@@ -343,6 +393,49 @@ Notification Event
   paths, and states this explicitly so implementation never treats any
   single path as the sole owner of notification creation.
 
+### 20.6 Context-First Communication [Amendment v1.1] (Business Rule 9 applied)
+
+- Every notification's `context` (20.1) must be populated with three
+  pieces, regardless of category: what happened, why it matters to the
+  business, and what action — if any — is recommended.
+  `recommendedAction` is `null` only when no action is genuinely
+  possible or needed (e.g., a Platform Announcement), never merely
+  because the specific wording hasn't been written yet.
+- This is a presentation/content requirement, not a scope change: it
+  does not add a category, a recipient rule, or a creation path. Each
+  of the three existing trigger sources (Background Worker, privileged
+  server, payment webhook — 20.5) is responsible for populating
+  `context` for the notifications it creates, using language
+  appropriate to that event.
+- Exact wording/copy for each notification `type` is implementation-
+  planning work, not fixed by this amendment (see "Explicitly Left
+  Open," below) — this requirement fixes that the three pieces must
+  exist and be populated, not their specific phrasing.
+
+### 20.7 Communication Priority Tiers [Amendment v1.1] (Business Rule 10 applied)
+
+- Every notification is assigned one `priority` (20.1) at creation:
+  - **`immediate`** — warrants interruption; the owner should see this
+    without needing to open the app and look.
+  - **`timeline`** — belongs in the Business Timeline / activity feed
+    (spec #13); worth recording and seeing on a normal visit, not worth
+    interrupting for.
+  - **`daily_summary`** — belongs in a periodic digest rather than a
+    standalone alert; individually low-urgency, but useful in
+    aggregate.
+- This governs delivery behavior within the existing in-app channel
+  (Decision Gate 3, unchanged) — it does not introduce a new channel,
+  and it does not change which events produce a notification (Decision
+  Gate 4, unchanged).
+- Which specific `type` within each of the four accepted categories
+  (20.3) defaults to which tier is **not decided by this amendment** —
+  see "Explicitly Left Open," below. This section fixes the taxonomy
+  (three tiers, one required field) and its purpose, not the mapping.
+- A `daily_summary`-tier notification is not exempt from any Business
+  Rule in this spec (tenant isolation, dedupe, recipient scope,
+  Context-First content) merely because it isn't `immediate` — priority
+  affects delivery timing/grouping only, never which rules apply.
+
 ## Non-functional Requirements
 
 - **Tenant isolation.** Read access to a `notifications/{id}` document
@@ -401,6 +494,13 @@ Notification Event
 - [ ] The Delivery Channel Interface (20.4) exists structurally even
       though only the in-app channel is implemented — adding Email or
       WhatsApp later requires no schema migration.
+- [ ] **[Amendment v1.1]** Every `notifications/{id}` document has a
+      populated `context` (20.6) — `whatHappened` and `whyItMatters` are
+      always non-empty; `recommendedAction` is `null` only when no
+      action is genuinely possible or needed.
+- [ ] **[Amendment v1.1]** Every `notifications/{id}` document has a
+      `priority` (20.7) of exactly one of `immediate`, `timeline`, or
+      `daily_summary` — never absent, never any other value.
 
 ## What This BDS Does Not Do
 
@@ -424,6 +524,13 @@ Per explicit instruction for this drafting stage:
 - Whether/when Staff visibility into Business-scoped notifications is
   ever granted (Business Rule 7) — a future, separate Product Architect
   decision.
+- **[Amendment v1.1]** Exact `context` wording/copy for each specific
+  notification `type` — 20.6 fixes that the three pieces must exist and
+  be populated, not their phrasing.
+- **[Amendment v1.1]** The default `priority` tier for each specific
+  notification `type` within the four accepted categories — 20.7 fixes
+  the three-tier taxonomy and its purpose, not the mapping. Implementation
+  planning assigns each `type` to a tier before Module #20 is built.
 
 ---
 
@@ -553,3 +660,40 @@ at the point it's actually assigned. Lifecycle: **Designed → Executed
 review → Analyzed → Accepted.** Not Implemented, Executed (as code), or
 further Analyzed beyond this review — no engineering work is authorized
 by this Acceptance.
+
+---
+
+## Product Architect Acceptance — Amendment v1.1
+
+**Accepted.** Full detail and rationale in the [Module #20
+Specification Enhancement Amendment](./20-notifications-enhancement-amendment.md).
+Scope of this acceptance:
+
+1. **Context-First Communication** (Amendment A, Business Rule 9,
+   20.6). Every notification's payload must carry `context`: what
+   happened, why it matters, and a recommended action (or an explicit
+   `null` where none applies).
+2. **Communication Priority** (Amendment B, Business Rule 10, 20.7).
+   Every notification carries a `priority` of `immediate`, `timeline`,
+   or `daily_summary`, independent of category.
+3. **Owner Confidence Principle** (Amendment C, UX Principles section).
+   Recorded as a UX principle guiding Context-First content and future
+   presentation decisions — explicitly not a technical requirement, with
+   no schema field or Acceptance Criterion of its own.
+
+**Decision Gates 1–4 are unchanged and remain fully in force** —
+this amendment does not reopen, widen, or reinterpret any of them.
+Decision Gate 4 in particular was explicitly considered and left as-is:
+V1 remains exactly four categories.
+
+**Not included in this acceptance:**
+- Renaming the module or replacing this specification.
+- Widening Decision Gate 4 (no AI-recommendation, Staff Activity, or
+  Business Worth milestone notification category is introduced).
+- Any source code implementation, `firestore.rules` changes,
+  `Header.tsx` changes, or `NotificationContext` creation — this
+  amendment is documentation only, same as the v1.0 acceptance above.
+
+**Lifecycle:** Designed → Executed review → Analyzed → **Accepted**.
+Not Implemented, Executed (as code), or further Analyzed beyond this
+review — no engineering work is authorized by this amendment.
