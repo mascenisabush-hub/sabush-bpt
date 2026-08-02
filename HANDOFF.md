@@ -34,14 +34,23 @@ not allowlisted), same limitation as every prior emulator-dependent
 change here. This remains an outstanding manual step for a local
 environment.
 
-**Phase 2 (Trial Engine) has not begun.** No `src/`, `server/`,
-`firestore.rules`, or spec file touched beyond Phase 1's scope. Phase 2
-requires its own Rule 8 Assessment (technical activation trigger, trial
-state transitions, activation timestamp, restricted-operation
-enforcement post-expiry, Grace Period interaction, read-only access
-preservation, lifecycle-transition auditability) before any code is
-written, and its own explicit Product Architect authorization —
-neither has happened yet.
+**Phase 2 (Trial Engine) — decisions recorded, coding not yet
+authorized.** Rule 8 Assessment
+([`docs/engineering/19-phase2-trial-engine-rule8-assessment.md`](./docs/engineering/19-phase2-trial-engine-rule8-assessment.md))
+identified four open items; Product Architect decisions on all four
+are recorded in
+[`docs/engineering/19-phase2-trial-engine-decisions.md`](./docs/engineering/19-phase2-trial-engine-decisions.md):
+(1) activation trigger = platform-level "first operational transaction
+creating enduring business value," not bound to a specific feature;
+(2) restricted operations = principle-based ("changes Business Worth
+or financial position"), not a fixed list; (3) Phase 2 builds a
+minimal Trial Lifecycle Worker (elapsed-time `trial_active →
+trial_completed` only), not the full Background Worker framework; (4)
+Business Rule 8's audit guarantee extends to automatic lifecycle
+transitions, not just SuperAdmin overrides. **No further strategic
+uncertainty remains for Phase 2 as scoped.** Still no `src/`,
+`server/`, `firestore.rules` file touched — this record does not
+authorize coding; that remains a separate, explicit go-ahead.
 
 ---
 
