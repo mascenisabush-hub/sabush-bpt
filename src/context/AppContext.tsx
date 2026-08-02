@@ -791,6 +791,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // Module #19 Phase 2 (Trial Engine), Decision 1 (approved): the
+  // platform-level activation concept — "the first successful
+  // operational transaction that creates enduring business value" —
+  // mapped, as implementation detail per that decision's own delegation,
+  // onto this codebase's actual write paths: stock receipt
+  // (addStockBatch/addMultipleStockBatches), expenses (addExpense),
+  // inventory adjustment (addQuebra), and the initial Stock Count
+  // (recordStockCount) — POL-19-001's own "recording initial business
+  // inventory" example. Deliberately NOT wired to addWithdrawal (a
+  // withdrawal extracts value rather than recording genuine business
+  // activity) or plain product creation (catalog metadata alone doesn't
+  // move Business Worth) — see the Phase 2 report for this reasoning.
+  //
+  // Fire-and-forget: never blocks or throws into the caller's own
+  // operation — this is a best-effort trigger, not a precondition for
+  // using the app. A call that's missed (offline, server briefly down)
+  // has no automatic retry today; the next qualifying write attempts
+  // activation again, so a business using the app at all will still
+  // activate on its next real transaction — but this is an accepted
+  // interim risk, not a guaranteed retry, and is called out as such in
+  // the Phase 2 report.
+  const triggerTrialActivation = (businessId: string) => {
+    if (!currentUser) return;
+    currentUser
+      .getIdToken()
+      .then((idToken) =>
+        fetch('/api/subscriptions/activate-trial', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ businessId }),
+        })
+      )
+      .catch((err) => {
+        console.warn('[trial-activation] best-effort trigger failed, ignored', err);
+      });
+  };
+
   const switchShop = async (businessId: string) => {
     if (!currentUser || !isOwner) return;
     if (!ownedBusinessIds.includes(businessId)) {
@@ -936,6 +976,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     });
 
+    triggerTrialActivation(businessId);
     return { productId: productId!, batchId: newBatchId };
   };
 
@@ -1073,6 +1114,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     });
 
+    triggerTrialActivation(businessId);
     return { purchaseBatchId: newPurchaseBatchId };
   };
 
@@ -1129,6 +1171,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     });
 
+    triggerTrialActivation(activeBusinessId);
     return newQuebra;
   };
 
@@ -1178,6 +1221,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       },
     });
 
+    triggerTrialActivation(activeBusinessId);
     return newExpense;
   };
 
@@ -1337,6 +1381,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    triggerTrialActivation(businessId);
     return newCount;
   };
 

@@ -82,6 +82,45 @@ service cloud.firestore {
              exists(/databases/$(database)/documents/businesses/$(businessId)/closedPeriods/$('yearly:' + year));
     }
 
+    // [Module #19 Phase 2 — Trial Engine] Restricted-Operations
+    // Enforcement (Business Rule 6 / Phase 2 Decision 2, principle-based:
+    // "operations that create, modify, or delete records affecting
+    // Business Worth or financial position become unavailable after
+    // trial completion unless an appropriate subscription state is
+    // restored"). Applied to `create` only in this pass — the spec's own
+    // Restricted-Operations Enforcement language is specifically about
+    // "new operational record creation," and scoping to create keeps
+    // this change reviewable without touching the already-battle-tested
+    // closingId-based update/delete logic on Expenses/Withdrawals below.
+    // Broadening to update/delete is a disclosed, deliberate follow-up
+    // decision, not silently out of scope — see the Phase 2 report.
+    //
+    // hasSubscription()/subscriptionAllowsNewRecords() together fail
+    // OPEN (permit the write) when no subscriptions/{businessId} document
+    // exists at all. This is a deliberate, explicitly-flagged INTERIM
+    // behavior: every Business created since Phase 1 (commit 4d9d34b)
+    // always has one, but Businesses that predate Phase 1 do not yet —
+    // the legacy migration that gives every existing Business an
+    // explicit subscription record (spec's "Explicitly Left Open," item
+    // 6) has not been built. Business Rule 4 ("no null subscription
+    // states, ever") means this fail-open is accepted as temporary, not
+    // permanent — it must not be read as "missing means unrestricted
+    // forever." Denying instead (fail-closed) was rejected here because
+    // it would lock every real, currently-operating pre-Phase-1 tenant
+    // out of recording sales/purchases/expenses the moment this rule
+    // deployed, with no migration having run yet to give them a
+    // subscription document to be governed by in the first place.
+    function hasSubscription(businessId) {
+      return exists(/databases/$(database)/documents/subscriptions/$(businessId));
+    }
+
+    function subscriptionAllowsNewRecords(businessId) {
+      return !hasSubscription(businessId) || (
+        get(/databases/$(database)/documents/subscriptions/$(businessId)).data.status != 'trial_completed' &&
+        get(/databases/$(database)/documents/subscriptions/$(businessId)).data.status != 'expired'
+      );
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -195,7 +234,9 @@ service cloud.firestore {
 
       match /batches/{batchId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId);
+        // [Module #19 Phase 2] Stock receipt — restricted once trial
+        // completes/expires (Business Rule 6 / Decision 2).
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
         // Batches are also updated by staff/owner alike when a new batch
         // closes out the previous open one (addStockBatch / addMultipleStockBatches).
         allow update: if isMemberOf(businessId);
@@ -209,14 +250,20 @@ service cloud.firestore {
       // can delete.
       match /purchaseBatches/{purchaseBatchId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId);
+        // [Module #19 Phase 2] New purchase — restricted once trial
+        // completes/expires (Business Rule 6 / Decision 2). update
+        // (archive/unarchive) is left unrestricted — organizing an
+        // existing record doesn't create or change Business Worth.
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
         allow update: if isMemberOf(businessId);
         allow delete: if isOwnerOf(businessId);
       }
 
       match /quebras/{quebraId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId);
+        // [Module #19 Phase 2] Inventory adjustment — restricted once
+        // trial completes/expires (Business Rule 6 / Decision 2).
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
         allow update: if isMemberOf(businessId);
         allow delete: if isOwnerOf(businessId);
       }
@@ -231,8 +278,12 @@ service cloud.firestore {
       //    gap BDS #10 flagged for Stock Counts).
       match /expenses/{expenseId} {
         allow read: if isMemberOf(businessId);
+        // [Module #19 Phase 2] Restricted once trial completes/expires
+        // (Business Rule 6 / Decision 2), independent of and in addition
+        // to the closed-period check already here.
         allow create: if isMemberOf(businessId) &&
-          !isDateInsideClosedPeriod(businessId, request.resource.data.date);
+          !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
+          subscriptionAllowsNewRecords(businessId);
         allow update: if isMemberOf(businessId) && (
           resource.data.get('closingId', null) == null ||
           (isOwnerOf(businessId) && request.resource.data.get('closingId', null) == null)
@@ -246,7 +297,10 @@ service cloud.firestore {
       // record or remove them; any team member may read them.
       match /stockCounts/{stockCountId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isOwnerOf(businessId);
+        // [Module #19 Phase 2] Establishes/adjusts the capital baseline
+        // that Business Worth is measured against — restricted once
+        // trial completes/expires (Business Rule 6 / Decision 2).
+        allow create: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId);
         allow update, delete: if isOwnerOf(businessId);
       }
 
@@ -256,8 +310,12 @@ service cloud.firestore {
       // protections as Expenses, above — see that comment for the rule.
       match /withdrawals/{withdrawalId} {
         allow read: if isOwnerOf(businessId);
+        // [Module #19 Phase 2] Changes financial position directly —
+        // restricted once trial completes/expires (Business Rule 6 /
+        // Decision 2), same as Expenses above.
         allow create: if isOwnerOf(businessId) &&
-          !isDateInsideClosedPeriod(businessId, request.resource.data.date);
+          !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
+          subscriptionAllowsNewRecords(businessId);
         allow update: if isOwnerOf(businessId) && (
           resource.data.get('closingId', null) == null ||
           request.resource.data.get('closingId', null) == null
@@ -334,7 +392,10 @@ service cloud.firestore {
     // ==========================================================
     // /subscriptions/{subscriptionId} - one doc per Business
     // (subscriptionId === businessId, per docs/specs/19-subscriptions.md
-    // "Data Model"). Module #19, Phase 1 (Foundations).
+    // "Data Model"). Module #19, Phase 1 (Foundations) + Phase 2
+    // (Trial Engine) -- Phase 2 adds two more Admin-SDK-only writers
+    // (the activate-trial endpoint and the Trial Lifecycle Worker) but
+    // does not change this block's rules: still no client write path.
     //
     // Read scope deliberately narrower than plain isMemberOf(businessId):
     // the spec's Security Considerations section (§616-622) says this
@@ -355,6 +416,28 @@ service cloud.firestore {
         isMemberOf(subscriptionId) &&
         myProfile().get('staffTier', 'staff') == 'manager'
       );
+      allow write: if false;
+    }
+
+    // ==========================================================
+    // /platform_audit_log/{eventId} - append-only, system-written only.
+    // Module #19 Phase 2 (Trial Engine), Decision 4 — automatic
+    // lifecycle transitions (trial activated/completed, and future
+    // grace-period/expiry/renewal events) are audited the same way
+    // Business Rule 8 already requires for SuperAdmin overrides.
+    //
+    // Architecture §9.6 scopes read access to platform-operator roles
+    // (Support/Developer/SuperAdmin) — but that role model
+    // (`platformRole` on a user profile) is Module #18, not yet built.
+    // Rather than invent a role check ahead of #18's own design, this
+    // collection is entirely client-inaccessible for now: no client
+    // read, no client write (every write goes through server/index.ts
+    // via the Admin SDK, same guarantee as /subscriptions above). Read
+    // access for platform operators is added when #18 builds the actual
+    // role model — tracked, not silently deferred.
+    // ==========================================================
+    match /platform_audit_log/{eventId} {
+      allow read: if false;
       allow write: if false;
     }
   }

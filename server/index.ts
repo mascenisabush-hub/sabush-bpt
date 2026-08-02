@@ -66,6 +66,18 @@ expressApp.use(express.json());
 // isDateInsideClosedPeriod() in firestore.rules.
 const MAX_SHOPS_PER_OWNER = 10;
 
+// Module #19 Phase 2 (Trial Engine). POL-19-002: fixed and flat across
+// every plan, no per-plan override.
+const TRIAL_DURATION_DAYS = 30;
+
+// Module #19 Phase 2, Decision 3 (Product Architect, approved): a
+// minimal Trial Lifecycle Worker only — a single setInterval inside this
+// same process, not a general-purpose scheduled-job framework. Its only
+// job is the elapsed-time trial_active -> trial_completed transition.
+// Overridable via env var for local testing; defaults to hourly, matching
+// Architecture §4.8's own cadence language.
+const TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS = Number(process.env.TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS) || 60 * 60 * 1000;
+
 // Same-origin in production (this server also serves the SPA), so CORS is
 // mostly relevant for local dev where Vite runs on a different port. Lock
 // it down via ALLOWED_ORIGIN in production if the API is ever split out.
@@ -842,6 +854,205 @@ expressApp.post('/api/provisioning/business', requireAuth, async (req: AuthedReq
     res.status(500).json({ error: 'internal', message: 'Não foi possível criar o negócio. Tente novamente.' });
   }
 });
+
+// ------------------------------------------------------------------
+// Module #19 Phase 2 — Trial Engine
+// (docs/engineering/19-phase2-trial-engine-rule8-assessment.md,
+// docs/engineering/19-phase2-trial-engine-decisions.md)
+// ------------------------------------------------------------------
+
+// Decision 4 (audit scope, approved): every automatic lifecycle
+// transition writes one platform_audit_log entry, in the same
+// transaction as the state change itself — an automatic transition with
+// no corresponding audit entry must be structurally impossible, the same
+// guarantee Business Rule 8 already requires for SuperAdmin overrides.
+// Auto-id doc (uniqueness isn't load-bearing here — the parent
+// subscription's own status guard, checked inside the same transaction,
+// is what makes both call sites below idempotent).
+function newAuditEventRef() {
+  return db.collection('platform_audit_log').doc();
+}
+
+// ------------------------------------------------------------------
+// POST /api/subscriptions/activate-trial
+// Body: { businessId: string }
+//
+// Decision 1 (activation trigger, approved): fires on "the first
+// successful operational transaction that creates enduring business
+// value" — a platform-level concept. AppContext.tsx calls this endpoint,
+// fire-and-forget, immediately after each of the write paths it maps
+// that concept onto today (addStockBatch, addMultipleStockBatches,
+// addExpense, addQuebra, recordStockCount) succeeds. That mapping is
+// this phase's own implementation detail, per Decision 1's explicit
+// delegation — extending it to future operational modules later does
+// not require reopening this decision.
+//
+// Idempotent by construction: only transitions trial_pending ->
+// trial_active; any other current status (including a second call after
+// the first already activated) is a silent no-op, not an error — this
+// endpoint is a best-effort trigger, never a precondition the caller's
+// own action depends on succeeding.
+// ------------------------------------------------------------------
+expressApp.post('/api/subscriptions/activate-trial', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const uid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+
+  if (!businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+    return;
+  }
+
+  try {
+    // Membership check — same derivation as addShop's server-side
+    // re-verification above: never trust the client's claim, re-read the
+    // caller's own profile.
+    const requesterSnap = await db.collection('users').doc(uid).get();
+    const requesterProfile = requesterSnap.data();
+    if (!requesterSnap.exists || !requesterProfile) {
+      res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
+      return;
+    }
+    const ownedBusinessIds: string[] =
+      Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+        ? requesterProfile.businessIds
+        : requesterProfile.businessId
+          ? [requesterProfile.businessId]
+          : [];
+    const isMember = requesterProfile.businessId === businessId || ownedBusinessIds.includes(businessId);
+    if (!isMember) {
+      res.status(403).json({ error: 'permission-denied', message: 'Este utilizador não pertence a este negócio.' });
+      return;
+    }
+
+    const subscriptionRef = db.collection('subscriptions').doc(businessId);
+
+    const result = await db.runTransaction(async (tx) => {
+      const snap = await tx.get(subscriptionRef);
+      if (!snap.exists) {
+        // Pre-Phase-1 Business without a subscription document yet
+        // (legacy migration, spec's "Explicitly Left Open" item 6, not
+        // yet built). Not an error — this endpoint is best-effort.
+        return { activated: false, status: null as string | null };
+      }
+      const current = snap.data()!;
+      if (current.status !== 'trial_pending') {
+        // Already activated (or past activation) — idempotent no-op.
+        return { activated: false, status: current.status as string };
+      }
+
+      const now = new Date();
+      const trialActivatedAt = now.toISOString();
+      const trialEndsAt = new Date(now.getTime() + TRIAL_DURATION_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+      tx.update(subscriptionRef, {
+        status: 'trial_active',
+        trialActivatedAt,
+        trialEndsAt,
+        updatedAt: trialActivatedAt,
+      });
+      tx.set(newAuditEventRef(), {
+        eventType: 'trial_activated',
+        businessId,
+        subscriptionId: businessId,
+        previousStatus: 'trial_pending',
+        newStatus: 'trial_active',
+        occurredAt: trialActivatedAt,
+      });
+
+      return { activated: true, status: 'trial_active', trialActivatedAt, trialEndsAt };
+    });
+
+    res.json({ success: true, ...result });
+  } catch (err) {
+    console.error('[subscriptions/activate-trial] failed', {
+      uid,
+      businessId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível processar a ativação do período experimental.' });
+  }
+});
+
+// ------------------------------------------------------------------
+// Trial Lifecycle Worker (Decision 3, approved) — the minimal worker:
+// its only job is the elapsed-time trial_active -> trial_completed
+// transition. Nothing else lives here yet; general-purpose scheduled
+// processing (notifications, renewal evaluation, aggregation rollups —
+// Architecture §4.8's fuller design, shared with Module #20) is
+// deliberately deferred until a second real consumer needs it.
+//
+// Requires a composite index on subscriptions (status ASC, trialEndsAt
+// ASC) — see firestore.indexes.json. Without it deployed, this query
+// throws on every run; caught and logged below, never crashes the
+// server, but the transition silently never happens until the index
+// exists. Deploy with `firebase deploy --only firestore:indexes` before
+// relying on this in production — same category of manual step as the
+// emulator run this repo already tracks elsewhere.
+// ------------------------------------------------------------------
+async function runTrialLifecycleSweep(): Promise<void> {
+  const nowIso = new Date().toISOString();
+  let snap;
+  try {
+    snap = await db
+      .collection('subscriptions')
+      .where('status', '==', 'trial_active')
+      .where('trialEndsAt', '<=', nowIso)
+      .get();
+  } catch (err) {
+    console.error('[trial-lifecycle-worker] query failed (composite index missing?)', {
+      error: err instanceof Error ? err.message : String(err),
+    });
+    return;
+  }
+
+  if (snap.empty) return;
+
+  for (const docSnap of snap.docs) {
+    const businessId = docSnap.id;
+    const subscriptionRef = db.collection('subscriptions').doc(businessId);
+    try {
+      await db.runTransaction(async (tx) => {
+        const current = await tx.get(subscriptionRef);
+        if (!current.exists) return;
+        const data = current.data()!;
+        // Re-check inside the transaction — guards against a second
+        // sweep (or a race with a future manual/SuperAdmin override)
+        // having already moved this subscription on since the query ran.
+        if (data.status !== 'trial_active' || !(data.trialEndsAt <= nowIso)) return;
+
+        tx.update(subscriptionRef, { status: 'trial_completed', updatedAt: nowIso });
+        tx.set(newAuditEventRef(), {
+          eventType: 'trial_completed',
+          businessId,
+          subscriptionId: businessId,
+          previousStatus: 'trial_active',
+          newStatus: 'trial_completed',
+          occurredAt: nowIso,
+        });
+      });
+      console.log('[trial-lifecycle-worker] trial_completed', { businessId, timestamp: nowIso });
+    } catch (err) {
+      // One bad doc must never stop the sweep from processing the rest.
+      console.error('[trial-lifecycle-worker] transition failed for one business, continuing', {
+        businessId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+    }
+  }
+}
+
+// Run once shortly after boot (don't wait a full interval for the first
+// pass), then on the configured interval.
+setTimeout(() => {
+  runTrialLifecycleSweep().catch((err) =>
+    console.error('[trial-lifecycle-worker] initial run failed', err instanceof Error ? err.message : String(err))
+  );
+}, 5000);
+setInterval(() => {
+  runTrialLifecycleSweep().catch((err) =>
+    console.error('[trial-lifecycle-worker] scheduled run failed', err instanceof Error ? err.message : String(err))
+  );
+}, TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS);
 
 // ------------------------------------------------------------------
 // Serve the built SPA for everything else.

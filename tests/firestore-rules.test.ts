@@ -750,6 +750,106 @@ describe('subscriptions', () => {
   });
 });
 
+// ---------------------------------------------------------------------
+// Module #19 Phase 2 (Trial Engine) — Restricted-Operations Enforcement
+// (Business Rule 6 / Decision 2). Applies to `create` on the six
+// operational collections identified as "affecting Business Worth or
+// financial position": batches, purchaseBatches, quebras, expenses,
+// withdrawals, stockCounts. Reads are never restricted (Read-Only
+// Preservation, Business Rule 5) — checked explicitly below, not just
+// assumed. The fail-open-if-no-subscription-doc interim behavior is
+// exercised implicitly by every pre-existing describe block above (none
+// of them seed a subscriptions/{BIZ} doc) and once more explicitly here.
+// ---------------------------------------------------------------------
+describe('Module #19 Phase 2 — restricted operations enforcement', () => {
+  const seedSubscriptionStatus = async (status: string) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), {
+        businessId: BIZ,
+        planId: 'v1-default',
+        status,
+        trialActivatedAt: status === 'trial_pending' ? null : '2026-01-01T00:00:00.000Z',
+        trialEndsAt: status === 'trial_pending' ? null : '2026-01-31T00:00:00.000Z',
+        gracePeriodEndsAt: null,
+        renewalDate: null,
+        entitlements: { business_limit: 10, feature_flags: {} },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      });
+    });
+  };
+
+  it('While trial_active, every restricted collection still accepts new records', async () => {
+    await seedSubscriptionStatus('trial_active');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ta-b1'), { id: 'ta-b1', quantity: 1 }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'ta-pb1'), { id: 'ta-pb1', archived: false }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'ta-q1'), { id: 'ta-q1', quantity: 1 }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ta-e1'), { id: 'ta-e1', date: '2026-06-01', amount: 10 }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'ta-w1'), { id: 'ta-w1', date: '2026-06-01', amount: 10 }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'ta-sc1'), { id: 'ta-sc1', countedAt: '2026-06-01' }));
+  });
+
+  it('Once trial_completed, every restricted collection rejects new records', async () => {
+    await seedSubscriptionStatus('trial_completed');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'tc-b1'), { id: 'tc-b1', quantity: 1 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'tc-pb1'), { id: 'tc-pb1', archived: false }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'tc-q1'), { id: 'tc-q1', quantity: 1 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'tc-e1'), { id: 'tc-e1', date: '2026-06-01', amount: 10 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'tc-w1'), { id: 'tc-w1', date: '2026-06-01', amount: 10 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'tc-sc1'), { id: 'tc-sc1', countedAt: '2026-06-01' }));
+  });
+
+  it('Once expired, every restricted collection rejects new records (same as trial_completed)', async () => {
+    await seedSubscriptionStatus('expired');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ex-b1'), { id: 'ex-b1', quantity: 1 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ex-e1'), { id: 'ex-e1', date: '2026-06-01', amount: 10 }));
+  });
+
+  it('Read-Only Preservation: existing records remain fully readable once trial_completed', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'expenses', 'ro-e1'), { id: 'ro-e1', date: '2026-01-01', amount: 5 });
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'batches', 'ro-b1'), { id: 'ro-b1', quantity: 1 });
+    });
+    await seedSubscriptionStatus('trial_completed');
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(getDoc(doc(staffDb, 'businesses', BIZ, 'expenses', 'ro-e1')));
+    await assertSucceeds(getDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'ro-b1')));
+  });
+
+  it('No subscription document at all (pre-Phase-1 legacy Business): new records still accepted (accepted interim risk, not permanent)', async () => {
+    // Deliberately does not seed subscriptions/{BIZ} at all.
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'legacy-e1'), { id: 'legacy-e1', date: '2026-06-01', amount: 10 }));
+  });
+});
+
+// ---------------------------------------------------------------------
+// platform_audit_log — Module #19 Phase 2, Decision 4. Entirely
+// client-inaccessible for now (Architecture §9.6's platform-operator
+// read scope depends on Module #18's role model, not yet built) — every
+// write goes through server/index.ts via the Admin SDK.
+// ---------------------------------------------------------------------
+describe('platform_audit_log', () => {
+  it('No role can read, create, update, or delete an audit event from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_audit_log', 'evt1'), {
+        eventType: 'trial_activated',
+        businessId: BIZ,
+        subscriptionId: BIZ,
+        occurredAt: '2026-01-01T00:00:00.000Z',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(getDoc(doc(ownerDb, 'platform_audit_log', 'evt1')));
+    await assertFails(setDoc(doc(ownerDb, 'platform_audit_log', 'evt2'), { eventType: 'trial_activated' }));
+    await assertFails(updateDoc(doc(ownerDb, 'platform_audit_log', 'evt1'), { eventType: 'trial_completed' }));
+    await assertFails(deleteDoc(doc(ownerDb, 'platform_audit_log', 'evt1')));
+  });
+});
+
 describe('suspended member', () => {
   it('A suspended staff member loses read/write access even though their business membership is otherwise unchanged', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
