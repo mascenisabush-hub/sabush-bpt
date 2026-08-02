@@ -432,6 +432,77 @@ export interface TimelineFinancialImpact {
   tone: 'positive' | 'negative' | 'neutral';
 }
 
+// ============================================================
+// Module #20 (Notifications), Phase 1 (Foundations) — data model per
+// docs/specs/20-notifications.md §20.1 (v1.1, Accepted), including
+// [Amendment v1.1]'s `context`/`priority` fields (Business Rules 9/10).
+// Authored field-by-field against that schema; no field invented here.
+// One top-level `notifications/{notificationId}` collection (not
+// business-nested) — see firestore.rules for the tenant-isolation
+// mechanism this implies. Documents are never created client-side
+// (Decision Gate 2) — only the server/Background Worker/webhook
+// handler (20.5) write them, via the Admin SDK. `createdAt` uses this
+// file's existing ISO-string convention (see `Subscription`, `Business`
+// above), not a raw Firestore Timestamp type.
+// ============================================================
+
+// Exactly one of `businessId`/`userId` is set on any document, matching
+// `scope` (Business Rule 1 / Decision Gate 1) — never both, never
+// neither. Enforced by the writer (server-side), not by this type.
+export type NotificationScope = 'business' | 'user';
+
+// The four V1 categories (20.3, Decision Gate 4) — fixed, not
+// extensible without a spec amendment.
+export type NotificationCategory =
+  | 'closing'
+  | 'inventory_risk'
+  | 'subscription'
+  | 'platform_announcement';
+
+// V1 implements exactly one delivery channel (20.4, Decision Gate 3).
+// The field exists now so Email/WhatsApp are additive later, not a
+// schema migration.
+export type NotificationChannel = 'in_app';
+
+export type NotificationStatus = 'unread' | 'read';
+
+// Communication Priority Tiers [Amendment v1.1], 20.7 / Business Rule 10.
+export type NotificationPriority = 'immediate' | 'timeline' | 'daily_summary';
+
+// Pointer only — never duplicates the triggering record's financial
+// data (Business Rule 3).
+export interface NotificationPayloadRef {
+  collection: string;
+  documentId: string;
+}
+
+// [Amendment v1.1] Context-First Communication, 20.6 / Business Rule 9.
+// Named `NotificationEventContext` (not `NotificationContext`) to avoid
+// colliding with the React context of the same conceptual name in
+// src/context/NotificationContext.tsx; the field on `Notification`
+// itself is still named `context`, matching 20.1 exactly.
+export interface NotificationEventContext {
+  whatHappened: string;
+  whyItMatters: string;
+  recommendedAction: string | null;
+}
+
+export interface Notification {
+  id: string;
+  scope: NotificationScope;
+  businessId: string | null;
+  userId: string | null;
+  category: NotificationCategory;
+  type: string;
+  payloadRef: NotificationPayloadRef;
+  channel: NotificationChannel;
+  status: NotificationStatus;
+  dedupeKey: string;
+  createdAt: string;
+  context: NotificationEventContext;
+  priority: NotificationPriority;
+}
+
 export interface TimelineEvent {
   id: string;
   type: TimelineActivityType;

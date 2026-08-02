@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
 import { LanguageProvider } from './context/LanguageContext';
+import { NotificationProvider } from './context/NotificationContext';
 import { Header } from './components/Header';
 import { NavigationTabs, TabType } from './components/NavigationTabs';
 import { DashboardView } from './components/DashboardView';
@@ -172,7 +173,9 @@ export default function App() {
   return (
     <LanguageProvider>
       <AppProvider>
-        <MainApp />
+        <NotificationProvider>
+          <MainApp />
+        </NotificationProvider>
       </AppProvider>
     </LanguageProvider>
   );
