@@ -7,11 +7,28 @@ import { ShopSwitcher } from './ShopSwitcher';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
 import { LanguageSwitcher } from './LanguageSwitcher';
 import { useLanguage } from '../context/LanguageContext';
+import { useNotifications } from '../context/NotificationContext';
+import { formatDate } from '../utils/formatters';
+import { NotificationPriority } from '../types';
 
 interface HeaderProps {
   activeTab: TabType;
   setActiveTab: (tab: TabType) => void;
 }
+
+// DESIGN_SYSTEM.md §Notifications: feed entries use the same
+// left-border-color convention as the toast surface (navy =
+// informational, warning = needs attention soon, error = needs
+// attention now). `priority` (20.7, Amendment B) is the schema
+// dimension that already encodes exactly that urgency distinction —
+// `immediate` warrants interruption, `timeline` is routine activity,
+// `daily_summary` is informational — so it drives the border color
+// here, not `category`.
+const PRIORITY_BORDER_COLOR: Record<NotificationPriority, string> = {
+  immediate: '#DC2626', // --error
+  timeline: '#D97706', // --warning
+  daily_summary: '#0B1F3A', // --navy
+};
 
 export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const {
@@ -28,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   } = useApp();
 
   const { t } = useLanguage();
+  const { notifications, unreadCount, markAsRead } = useNotifications();
   const visibleTabs = isStaff ? NAV_TABS.filter(tab => !tab.ownerOnly) : NAV_TABS;
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
@@ -140,13 +158,53 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <button
                 onClick={() => setShowNotifications(v => !v)}
                 title={t('header.notifications')}
-                className="w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#D4AF37]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
+                className="relative w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#D4AF37]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
               >
                 <Bell className="w-4 h-4" />
+                {unreadCount > 0 && (
+                  <span className="absolute -top-0.5 -right-0.5 min-w-[16px] h-4 px-1 rounded-full bg-[#DC2626] text-white text-[10px] font-bold flex items-center justify-center leading-none">
+                    {unreadCount > 9 ? '9+' : unreadCount}
+                  </span>
+                )}
               </button>
               {showNotifications && (
-                <div className="absolute right-0 top-full mt-2 w-64 bg-white rounded-xl elevation-2 p-4 z-40 text-center">
-                  <p className="text-xs text-gray-500">{t('header.noNotifications')}</p>
+                <div className="absolute right-0 top-full mt-2 w-80 bg-white rounded-xl elevation-2 z-40 max-h-96 overflow-y-auto">
+                  {notifications.length === 0 ? (
+                    <div className="p-4 text-center">
+                      <p className="text-xs text-gray-500">{t('header.noNotifications')}</p>
+                    </div>
+                  ) : (
+                    <ul>
+                      {notifications.map((n) => (
+                        <li
+                          key={n.id}
+                          onClick={() => markAsRead(n.id)}
+                          style={{ borderLeftColor: PRIORITY_BORDER_COLOR[n.priority] }}
+                          className="border-l-4 border-b border-b-gray-100 last:border-b-0 px-3 py-2.5 flex items-start gap-2 cursor-pointer hover:bg-[#F5F7FA] transition"
+                        >
+                          <span
+                            className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${
+                              n.status === 'unread' ? 'bg-[#D4AF37]' : 'bg-white border border-[#D4AF37]'
+                            }`}
+                          />
+                          <div className="min-w-0 flex-1">
+                            <p className="type-label mb-0.5">{formatDate(n.createdAt)}</p>
+                            <p className="text-xs text-[#0B1F3A] font-semibold leading-snug">
+                              {n.context.whatHappened}
+                            </p>
+                            <p className="text-xs text-gray-500 leading-snug mt-0.5">
+                              {n.context.whyItMatters}
+                            </p>
+                            {n.context.recommendedAction && (
+                              <p className="text-xs text-[#8A6D1F] leading-snug mt-1">
+                                {n.context.recommendedAction}
+                              </p>
+                            )}
+                          </div>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
                 </div>
               )}
             </div>

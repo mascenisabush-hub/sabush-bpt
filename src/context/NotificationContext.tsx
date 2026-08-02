@@ -2,13 +2,14 @@
 //
 // Read-only live Firestore listener, per the Rule 8 Assessment's own
 // scoping (docs/engineering/20-phase1-foundations-rule8-assessment.md
-// §3): this phase ships a context that can hold and surface
-// notifications, not one that creates or mutates them. No `markAsRead`/
-// `dismiss` method exists here — the client-direct `status` update path
-// depends on `firestore.rules` (a later checkpoint) and is wired into
-// the UI in a later checkpoint too; adding a write method ahead of the
-// rule that would guard it is exactly the kind of client-side-only
-// gating CLAUDE.md's Rule 7 warns against.
+// §3), plus the one narrowly-scoped write Phase 1's own working basis
+// adopted (Implementation Plan §7, items 1-2; Phase 1 Authorization §3):
+// `markAsRead`, a single-field `status` update matching exactly what
+// `firestore.rules`' `/notifications/{notificationId}` update block
+// (Checkpoint 2) permits and nothing more. Per POL-20-001, dismiss is
+// coupled to read (Active -> Archived is derived, not a separate stored
+// field or write) — so there is no separate `dismiss` method; the UI
+// (Checkpoint 3, Header.tsx) calls this same function for both actions.
 //
 // Recipient scope (docs/specs/20-notifications.md §20.2, Decision
 // Gate 1):
@@ -27,7 +28,7 @@
 // segment, unlike every other collection in AppContext.tsx.
 
 import React, { createContext, useContext, useEffect, useState } from 'react';
-import { collection, onSnapshot, orderBy, query, where } from 'firebase/firestore';
+import { collection, doc, onSnapshot, orderBy, query, updateDoc, where } from 'firebase/firestore';
 import { db } from '../lib/firebase';
 import { Notification } from '../types';
 import { useApp } from './AppContext';
@@ -36,6 +37,7 @@ interface NotificationContextType {
   notifications: Notification[];
   unreadCount: number;
   isLoading: boolean;
+  markAsRead: (notificationId: string) => Promise<void>;
 }
 
 const NotificationContext = createContext<NotificationContextType | undefined>(undefined);
@@ -138,8 +140,25 @@ export const NotificationProvider: React.FC<{ children: React.ReactNode }> = ({ 
   const unreadCount = notifications.filter((n) => n.status === 'unread').length;
   const isLoading = isAuthLoading || businessLoading || userLoading;
 
+  // The one client-direct write this domain permits (firestore.rules
+  // `/notifications/{notificationId}` update block, Checkpoint 2):
+  // exactly the `status` field, nothing else. A no-op for an
+  // already-read notification avoids an unnecessary write; errors are
+  // logged, not thrown, so a denied/failed update never crashes the
+  // dropdown it's called from.
+  const markAsRead = async (notificationId: string) => {
+    const target = notifications.find((n) => n.id === notificationId);
+    if (!target || target.status === 'read') return;
+
+    try {
+      await updateDoc(doc(db, 'notifications', notificationId), { status: 'read' });
+    } catch (err) {
+      console.error('Error marking notification as read:', err);
+    }
+  };
+
   return (
-    <NotificationContext.Provider value={{ notifications, unreadCount, isLoading }}>
+    <NotificationContext.Provider value={{ notifications, unreadCount, isLoading, markAsRead }}>
       {children}
     </NotificationContext.Provider>
   );
