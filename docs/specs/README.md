@@ -139,6 +139,14 @@ intelligence), then build the platform capabilities around that.
 > `NotificationContext` changes have been made — those remain out of
 > scope until implementation is separately authorized.
 
+> **Update — Module #20 Specification Enhancement Amendment (v1.1):**
+> `20-notifications.md` is now **Version 1.1**. The
+> [Module #20 Specification Enhancement Amendment](./20-notifications-enhancement-amendment.md)
+> records three approved owner-experience enhancements (Context-First
+> Communication, Communication Priority, the Owner Confidence
+> Principle) — Decision Gates 1–4 above are unchanged. **✅ Accepted**;
+> implementation is not authorized by this amendment.
+
 > **Note on Module #19 (Subscriptions):** drafting required resolving a
 > genuine source-of-truth contradiction first — Architecture §3.13 left
 > subscription binding open, §6.2 described it as Owner-level, §9.4
