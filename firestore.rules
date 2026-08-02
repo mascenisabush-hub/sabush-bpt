@@ -330,5 +330,32 @@ service cloud.firestore {
         allow delete: if isOwnerOf(businessId);
       }
     }
+
+    // ==========================================================
+    // /subscriptions/{subscriptionId} - one doc per Business
+    // (subscriptionId === businessId, per docs/specs/19-subscriptions.md
+    // "Data Model"). Module #19, Phase 1 (Foundations).
+    //
+    // Read scope deliberately narrower than plain isMemberOf(businessId):
+    // the spec's Security Considerations section (§616-622) says this
+    // document is readable by "that Business's own Admin/Manager (view)"
+    // — not by every team member. Regular (non-Manager) Staff has no
+    // read access here, unlike most other collections in this file.
+    // (Rule 8 Assessment, Module #19 Phase 1, Decision 2 — approved.)
+    //
+    // Every write (creation by the Business Provisioning Orchestrator,
+    // future SuperAdmin overrides, future billing-webhook updates) goes
+    // through server/index.ts via the Admin SDK, which bypasses these
+    // rules entirely — allow write is unconditionally false here, same
+    // guarantee as `suspended`/`staffTier`/`managerPermissions` on
+    // /users/{userId}. No client path may ever write a subscription.
+    // ==========================================================
+    match /subscriptions/{subscriptionId} {
+      allow read: if isOwnerOf(subscriptionId) || (
+        isMemberOf(subscriptionId) &&
+        myProfile().get('staffTier', 'staff') == 'manager'
+      );
+      allow write: if false;
+    }
   }
 }

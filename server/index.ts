@@ -55,6 +55,17 @@ const auth = getAuth(app);
 const expressApp = express();
 expressApp.use(express.json());
 
+// Duplicated from src/context/AppContext.tsx's MAX_SHOPS_PER_OWNER —
+// Module #19 Business Rule 3 keeps this a Module #17 platform rule,
+// unmodified by Subscriptions. Re-checked here so the Business
+// Provisioning Orchestrator's addShop mode never trusts the client's
+// own count (the client-side check in AppContext.tsx remains a UX
+// guard, not the enforcement point, exactly like the pre-Module-#19
+// staff-management checks above). If AppContext.tsx's value ever
+// changes, this must too — same duplication pattern as
+// isDateInsideClosedPeriod() in firestore.rules.
+const MAX_SHOPS_PER_OWNER = 10;
+
 // Same-origin in production (this server also serves the SPA), so CORS is
 // mostly relevant for local dev where Vite runs on a different port. Lock
 // it down via ALLOWED_ORIGIN in production if the API is ever split out.
@@ -642,6 +653,194 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
 
   console.log('[staff/set-tier] success', { requesterUid, staffUid, businessId, staffTier: requestedTier, timestamp: startedAt });
   res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions });
+});
+
+// ------------------------------------------------------------------
+// POST /api/provisioning/business
+//
+// Business Provisioning Orchestrator (ADR-0001, docs/adr/ADR-0001-
+// business-provisioning-orchestrator.md). Called by an already-
+// authenticated client immediately after either:
+//   - Firebase Auth account creation (mode: 'register') — Auth account
+//     creation itself stays entirely client-side, unchanged (ADR-0001
+//     Decision, Option B); only the Firestore-side provisioning that
+//     used to be two separate client setDoc calls in AuthView.tsx
+//     moves here, or
+//   - an existing Owner/Admin creating an additional shop
+//     (mode: 'addShop') — replaces AppContext.tsx's addShop direct
+//     client writes, per the Registration & Subscription Creation
+//     Architecture Decision's Future Work item on reusing the same
+//     pattern for addShop's equivalent, smaller atomicity gap.
+//
+// Both modes create, in one Firestore transaction: the business doc,
+// the owner's membership (users/{uid} create for register, update for
+// addShop), and — Module #19 Business Rule 4, "no null subscription
+// states, ever" — an initial 'trial_pending' subscriptions/{businessId}
+// doc. If the transaction throws, nothing has changed (Firestore
+// transactions are all-or-nothing) — a plain 500 is accurate.
+//
+// Rollback mechanics (Rule 8 Assessment, Module #19 Phase 1, Decision
+// 1 — approved): this endpoint does not create or delete any Firebase
+// Auth account. If this call fails after the client's own Auth account
+// creation already succeeded (register mode only), the client attempts
+// a best-effort self-cleanup (auth.currentUser.delete()) — see
+// AuthView.tsx. That cleanup is a convenience, never a guarantee; the
+// authoritative recovery path is the future Background Worker's
+// reconciliation sweep (Architecture §4.8, not yet built — tracked as
+// an accepted interim risk for Phase 1, not a blocker).
+// ------------------------------------------------------------------
+expressApp.post('/api/provisioning/business', requireAuth, async (req: AuthedRequest, res: Response) => {
+  const uid = req.callerUid!;
+  const startedAt = new Date().toISOString();
+
+  const mode = req.body?.mode === 'addShop' ? 'addShop' : req.body?.mode === 'register' ? 'register' : null;
+  const businessName = String(req.body?.businessName || '').trim();
+  const category = String(req.body?.category || '').trim();
+  const currencySymbol = String(req.body?.currencySymbol || 'MT').trim() || 'MT';
+
+  if (!mode) {
+    res.status(400).json({ error: 'invalid-argument', message: 'mode deve ser "register" ou "addShop".' });
+    return;
+  }
+  if (!businessName) {
+    res.status(400).json({ error: 'invalid-argument', message: 'O nome do negócio é obrigatório.' });
+    return;
+  }
+
+  const businessId = 'bus-' + Date.now() + '-' + Math.random().toString(36).slice(2, 7);
+
+  // Module #19 v2.0 spec, Data Model + "Plan Definition (minimal, V1)".
+  // Phase 1 produces Trial Pending only — no activation logic exists
+  // yet (Phase 2). 'v1-default' is a placeholder plan id; the Plan
+  // catalogue itself (names, tiers, pricing) remains explicitly out of
+  // scope (spec's "Explicitly Left Open," items 1-2).
+  const initialSubscription = {
+    businessId,
+    planId: 'v1-default',
+    status: 'trial_pending' as const,
+    trialActivatedAt: null,
+    trialEndsAt: null,
+    gracePeriodEndsAt: null,
+    renewalDate: null,
+    entitlements: {
+      business_limit: MAX_SHOPS_PER_OWNER,
+      feature_flags: {},
+    },
+    createdAt: startedAt,
+    updatedAt: startedAt,
+  };
+
+  try {
+    if (mode === 'register') {
+      const email = String(req.body?.email || '').trim();
+      const name = String(req.body?.name || '').trim();
+      if (!email || !name) {
+        res.status(400).json({ error: 'invalid-argument', message: 'email e name são obrigatórios para o registo.' });
+        return;
+      }
+
+      // register mode is for brand-new accounts only — a profile must
+      // not already exist for this uid. This is the server-side
+      // guarantee of the same invariant AuthView.tsx's Google Sign-In
+      // path already checks client-side (getDoc existence check).
+      const existingProfile = await db.collection('users').doc(uid).get();
+      if (existingProfile.exists) {
+        res.status(409).json({ error: 'already-exists', message: 'Este utilizador já possui um perfil.' });
+        return;
+      }
+
+      const business = {
+        id: businessId,
+        name: businessName,
+        ownerUid: uid,
+        category,
+        currencySymbol,
+        createdAt: startedAt,
+      };
+      const userProfile = {
+        uid,
+        email,
+        name,
+        role: 'admin',
+        businessId,
+        businessIds: [businessId],
+        activeBusinessId: businessId,
+        createdAt: startedAt,
+      };
+
+      await db.runTransaction(async (tx) => {
+        tx.set(db.collection('businesses').doc(businessId), business);
+        tx.set(db.collection('users').doc(uid), userProfile);
+        tx.set(db.collection('subscriptions').doc(businessId), initialSubscription);
+      });
+
+      console.log('[provisioning/business] register success', { uid, businessId, timestamp: startedAt });
+      res.json({ success: true, businessId });
+      return;
+    }
+
+    // mode === 'addShop' — requester must already be an Owner/Admin.
+    // Re-read from Firestore, never trusted from the client, same
+    // pattern as verifyStaffManagementAction above.
+    const requesterSnap = await db.collection('users').doc(uid).get();
+    const requesterProfile = requesterSnap.data();
+    if (!requesterSnap.exists || !requesterProfile) {
+      res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
+      return;
+    }
+    const isAdmin = requesterProfile.role === 'owner' || requesterProfile.role === 'admin';
+    if (!isAdmin) {
+      res.status(403).json({ error: 'permission-denied', message: 'Apenas o dono pode criar uma nova loja.' });
+      return;
+    }
+
+    // Re-derive the owner's current shop list server-side, with the
+    // same legacy-singular-businessId fallback AppContext.tsx's own
+    // ownedBusinessIds derivation uses — MAX_SHOPS_PER_OWNER is
+    // re-verified here rather than trusted from the client, which
+    // today's client-only check in AppContext.tsx's addShop does not
+    // do (Rule 8 Assessment, Security Impact).
+    const ownedBusinessIds: string[] =
+      Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+        ? requesterProfile.businessIds
+        : requesterProfile.businessId
+          ? [requesterProfile.businessId]
+          : [];
+
+    if (ownedBusinessIds.length >= MAX_SHOPS_PER_OWNER) {
+      res.status(403).json({ error: 'limit-reached', message: `Limite de ${MAX_SHOPS_PER_OWNER} lojas por conta atingido.` });
+      return;
+    }
+
+    const business = {
+      id: businessId,
+      name: businessName,
+      ownerUid: uid,
+      category,
+      currencySymbol,
+      createdAt: startedAt,
+    };
+
+    await db.runTransaction(async (tx) => {
+      tx.set(db.collection('businesses').doc(businessId), business);
+      tx.update(db.collection('users').doc(uid), {
+        businessIds: [...ownedBusinessIds, businessId],
+        activeBusinessId: businessId,
+      });
+      tx.set(db.collection('subscriptions').doc(businessId), initialSubscription);
+    });
+
+    console.log('[provisioning/business] addShop success', { uid, businessId, timestamp: startedAt });
+    res.json({ success: true, businessId });
+  } catch (err) {
+    console.error('[provisioning/business] failed — transaction did not commit, no state changed', {
+      uid,
+      mode,
+      businessId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível criar o negócio. Tente novamente.' });
+  }
 });
 
 // ------------------------------------------------------------------

@@ -679,6 +679,77 @@ describe('timelineEvents', () => {
 // Suspended member — isSuspended() must cut off access immediately, not
 // merely once the member's ID token naturally expires.
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// Subscriptions (Module #19, Phase 1) — one doc per business, id ===
+// businessId. Read narrower than plain isMemberOf: Owner/Admin +
+// Manager-tier staff only, per docs/specs/19-subscriptions.md's
+// Security Considerations ("Admin/Manager (view)"). All writes are
+// server-only (Admin SDK, via server/index.ts's Business Provisioning
+// Orchestrator) — allow write is unconditionally false for every role.
+// ---------------------------------------------------------------------
+describe('subscriptions', () => {
+  const seedSubscription = async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), {
+        businessId: BIZ,
+        planId: 'v1-default',
+        status: 'trial_pending',
+        trialActivatedAt: null,
+        trialEndsAt: null,
+        gracePeriodEndsAt: null,
+        renewalDate: null,
+        entitlements: { business_limit: 10, feature_flags: {} },
+        createdAt: '2026-01-01T00:00:00.000Z',
+        updatedAt: '2026-01-01T00:00:00.000Z',
+      });
+    });
+  };
+
+  it('The Owner/Admin of the business can read its subscription', async () => {
+    await seedSubscription();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'subscriptions', BIZ)));
+  });
+
+  it('Manager-tier staff can read the subscription; a Manager permission (e.g. closings) is not required', async () => {
+    await seedSubscription();
+    const managerDb = ctxFor(MANAGER_NO_PERMISSION_UID).firestore();
+    await assertSucceeds(getDoc(doc(managerDb, 'subscriptions', BIZ)));
+  });
+
+  it('A plain (non-Manager) Staff member cannot read the subscription', async () => {
+    await seedSubscription();
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(staffDb, 'subscriptions', BIZ)));
+  });
+
+  it('An Owner from a different business cannot read this business\'s subscription', async () => {
+    await seedSubscription();
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'subscriptions', BIZ)));
+  });
+
+  it('No role — not even the Owner — can create, update, or delete a subscription from the client', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'subscriptions', BIZ), {
+      businessId: BIZ,
+      planId: 'v1-default',
+      status: 'trial_pending',
+      trialActivatedAt: null,
+      trialEndsAt: null,
+      gracePeriodEndsAt: null,
+      renewalDate: null,
+      entitlements: { business_limit: 10, feature_flags: {} },
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }));
+
+    await seedSubscription();
+    await assertFails(updateDoc(doc(ownerDb, 'subscriptions', BIZ), { status: 'active' }));
+    await assertFails(deleteDoc(doc(ownerDb, 'subscriptions', BIZ)));
+  });
+});
+
 describe('suspended member', () => {
   it('A suspended staff member loses read/write access even though their business membership is otherwise unchanged', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {

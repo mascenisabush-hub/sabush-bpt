@@ -65,6 +65,40 @@ export interface Business {
   email?: string;
 }
 
+// Module #19 (Subscriptions), Phase 1 — Business State Model's technical
+// encoding, per docs/specs/19-subscriptions.md "Technical Status Model".
+// These six values, and no others, are approved (POL-19-005). Phase 1
+// only ever produces 'trial_pending' — the remaining five are reachable
+// starting Phase 2 (Trial Engine) and Phase 3 (Subscription Lifecycle).
+export type SubscriptionStatus =
+  | 'trial_pending'
+  | 'trial_active'
+  | 'trial_completed'
+  | 'active'
+  | 'grace_period'
+  | 'expired';
+
+// One document per Business (subscriptions/{businessId} — subscriptionId
+// === businessId, per the spec's Data Model). Created exclusively by the
+// server's Business Provisioning Orchestrator (server/index.ts) via the
+// Admin SDK — never client-writable (see firestore.rules). Business
+// Rule 7: no payment-instrument field exists here, ever.
+export interface Subscription {
+  businessId: string; // required, immutable after creation
+  planId: string; // Phase 1: a single placeholder V1 plan id; Plan catalogue is out of scope
+  status: SubscriptionStatus;
+  trialActivatedAt: string | null; // null until Phase 2's activation trigger fires (POL-19-001)
+  trialEndsAt: string | null; // set at activation; trialActivatedAt + 30 days (POL-19-002)
+  gracePeriodEndsAt: string | null; // set on entry to grace_period; +7 days (POL-19-004)
+  renewalDate: string | null;
+  entitlements: {
+    business_limit: number;
+    feature_flags: { [featureKey: string]: boolean };
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
 export interface StaffMember {
   uid: string;
   email: string;

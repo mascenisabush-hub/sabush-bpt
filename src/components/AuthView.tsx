@@ -6,7 +6,7 @@ import {
   signInWithPopup,
 } from 'firebase/auth';
 import { auth, db, firebaseConfig } from '../lib/firebase';
-import { doc, getDoc, setDoc } from 'firebase/firestore';
+import { doc, getDoc } from 'firebase/firestore';
 import { Store, Lock, Mail, User, ShieldCheck, ArrowRight, AlertCircle, Sparkles, Eye, EyeOff } from 'lucide-react';
 import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
@@ -16,6 +16,70 @@ import { LanguageSwitcher } from './LanguageSwitcher';
 
 interface AuthViewProps {
   onBackToQuickLogin?: () => void;
+}
+
+// Business Provisioning Orchestrator client call (ADR-0001,
+// docs/adr/ADR-0001-business-provisioning-orchestrator.md; endpoint at
+// server/index.ts POST /api/provisioning/business). Firebase Auth
+// account creation itself stays exactly where it already was — this
+// only replaces the two client-side setDoc calls each registration
+// entry point below used to make, with one authenticated server call
+// that creates the business, the owner's membership, and (Module #19
+// Business Rule 4) the initial 'trial_pending' subscription atomically.
+async function provisionBusiness(
+  idToken: string,
+  params: {
+    mode: 'register' | 'addShop';
+    businessName: string;
+    category: string;
+    currencySymbol: string;
+    email?: string;
+    name?: string;
+  }
+): Promise<{ businessId: string }> {
+  let response: Response;
+  try {
+    response = await fetch('/api/provisioning/business', {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${idToken}`,
+      },
+      body: JSON.stringify(params),
+    });
+  } catch {
+    throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+  }
+
+  if (!response.ok) {
+    let message = 'Não foi possível criar o negócio. Tente novamente.';
+    try {
+      const body = await response.json();
+      if (body?.message) message = body.message;
+    } catch {
+      // response wasn't JSON — keep the generic message
+    }
+    throw new Error(message);
+  }
+
+  return response.json();
+}
+
+// Rule 8 Assessment (Module #19 Phase 1), Decision 1 — approved: if the
+// Orchestrator call fails after the client's own Auth account creation
+// already succeeded, attempt a best-effort self-cleanup so no orphaned
+// Auth account is left behind. This is a convenience, never a
+// guarantee — it is never assumed to have succeeded, and its failure is
+// swallowed (logged only). The authoritative recovery path remains the
+// future Background Worker's reconciliation sweep (Architecture §4.8,
+// not yet built — an accepted interim risk for Phase 1, not this
+// function's concern).
+async function bestEffortAuthCleanup(userToDelete: { delete: () => Promise<void> }) {
+  try {
+    await userToDelete.delete();
+  } catch (cleanupErr) {
+    console.error('[provisionBusiness] best-effort Auth self-cleanup failed — orphaned account pending future Worker reconciliation', cleanupErr);
+  }
 }
 
 export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
@@ -123,39 +187,24 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           throw new Error(`[Passo 1 (Auth) | Code: ${err.code || 'N/A'}] ${userMsg}`);
         }
 
-        const uid = userCred.user.uid;
-        const businessId = 'bus-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-
-        // Step 2: Create User Profile in Firestore
+        // Step 2: Business Provisioning Orchestrator (ADR-0001) —
+        // creates the user profile, business, and initial subscription
+        // atomically, server-side. Replaces the previous two separate
+        // client-side setDoc calls (Steps 2 and 3).
         try {
-          await setDoc(doc(db, 'users', uid), {
-            uid,
+          const idToken = await userCred.user.getIdToken();
+          await provisionBusiness(idToken, {
+            mode: 'register',
+            businessName: businessName.trim(),
+            category,
+            currencySymbol: currency,
             email: email.trim(),
             name: name.trim(),
-            role: 'admin',
-            businessId,
-            businessIds: [businessId],
-            activeBusinessId: businessId,
-            createdAt: new Date().toISOString(),
           });
         } catch (err: any) {
-          console.error('[Registar Step 2 - User Document Firestore Error]:', err);
-          throw new Error(`[Passo 2 (Perfil Firestore) | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.saveProfileFailed')}`);
-        }
-
-        // Step 3: Create Business Document in Firestore
-        try {
-          await setDoc(doc(db, 'businesses', businessId), {
-            id: businessId,
-            name: businessName.trim(),
-            ownerUid: uid,
-            category: category,
-            currencySymbol: currency,
-            createdAt: new Date().toISOString(),
-          });
-        } catch (err: any) {
-          console.error('[Registar Step 3 - Business Document Firestore Error]:', err);
-          throw new Error(`[Passo 3 (Negócio Firestore) | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.saveBusinessFailed')}`);
+          console.error('[Registar Step 2 - Provisioning Error]:', err);
+          await bestEffortAuthCleanup(userCred.user);
+          throw new Error(`[Passo 2 (Aprovisionamento)] ${err.message || t('auth.errors.saveBusinessFailed')}`);
         }
       }
     } catch (err: any) {
@@ -180,22 +229,6 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
       // Check if user doc exists in Firestore
       const userDoc = await getDoc(doc(db, 'users', uid));
       if (!userDoc.exists()) {
-        const bName = businessName.trim() || t('auth.defaults.businessNameFallback');
-        const businessId = 'bus-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
-
-        // Step 1: Create User doc
-        await setDoc(doc(db, 'users', uid), {
-          uid,
-          email: userEmail,
-          name: userName,
-          role: 'admin',
-          businessId,
-          businessIds: [businessId],
-          activeBusinessId: businessId,
-          createdAt: new Date().toISOString(),
-        });
-
-        // Step 2: Create Business doc
         // NOTE: category must NOT be hardcoded here. Saving a fixed value
         // would look like the owner manually chose it, which permanently
         // disables auto-detection from the business name in the
@@ -203,14 +236,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         // name-based detection, and leave it blank otherwise so the setup
         // modal can auto-detect (or the owner can pick/search manually)
         // once the business name is entered/confirmed.
-        await setDoc(doc(db, 'businesses', businessId), {
-          id: businessId,
-          name: bName,
-          ownerUid: uid,
-          category: category || detectCategoryFromName(bName) || '',
-          currencySymbol: currency || 'MT',
-          createdAt: new Date().toISOString(),
-        });
+        const bName = businessName.trim() || t('auth.defaults.businessNameFallback');
+        const resolvedCategory = category || detectCategoryFromName(bName) || '';
+
+        // Business Provisioning Orchestrator (ADR-0001) — Google
+        // Sign-In already created the Firebase Auth account as part of
+        // signInWithPopup above (unchanged); this replaces the previous
+        // two client-side setDoc calls with one server call that
+        // atomically creates the user profile, business, and initial
+        // subscription. Cleanup on failure only applies here, since
+        // this branch is specifically the "brand-new account" path —
+        // an existing user signing back in never reaches this block.
+        try {
+          const idToken = await userCred.user.getIdToken();
+          await provisionBusiness(idToken, {
+            mode: 'register',
+            businessName: bName,
+            category: resolvedCategory,
+            currencySymbol: currency || 'MT',
+            email: userEmail,
+            name: userName,
+          });
+        } catch (err: any) {
+          console.error('[Google Auth - Provisioning Error]:', err);
+          await bestEffortAuthCleanup(userCred.user);
+          throw err;
+        }
       }
     } catch (err: any) {
       console.error('[Google Auth Error]:', err);

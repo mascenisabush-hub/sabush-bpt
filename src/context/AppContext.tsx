@@ -738,6 +738,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // MULTI-SHOP: add a new shop (up to MAX_SHOPS_PER_OWNER) and make it
   // the active one, or switch which existing shop is active.
   // ============================================================
+  // Module #19 Phase 1 (ADR-0001) — addShop now calls the Business
+  // Provisioning Orchestrator instead of writing businesses/users
+  // directly from the client. This is the "equivalent, though smaller"
+  // atomicity gap the Registration & Subscription Creation Architecture
+  // Decision's Future Work section named: the same server endpoint that
+  // handles Registration also creates addShop's business record, updates
+  // the owner's shop list, AND — Business Rule 4, "no null subscription
+  // states, ever" — the new shop's initial 'trial_pending' subscription,
+  // in one Firestore transaction. The client-side MAX_SHOPS_PER_OWNER
+  // check below remains as an immediate UX guard (fail fast without a
+  // round-trip); the server independently re-verifies it against the
+  // caller's actual profile, never trusting this check alone (Rule 8
+  // Assessment, Security Impact).
   const addShop = async (businessName: string, category: string, symbol: string = 'MT') => {
     if (!currentUser || !isOwner) throw new Error('Apenas o dono pode criar uma nova loja.');
 
@@ -745,29 +758,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new Error(`Limite de ${MAX_SHOPS_PER_OWNER} lojas por conta atingido.`);
     }
 
-    const businessId = 'bus-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5);
+    const idToken = await currentUser.getIdToken();
 
-    const newBusiness: Business = {
-      id: businessId,
-      name: businessName.trim(),
-      ownerUid: currentUser.uid,
-      category: category.trim(),
-      currencySymbol: symbol,
-      createdAt: new Date().toISOString(),
-    };
+    let response: Response;
+    try {
+      response = await fetch('/api/provisioning/business', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          mode: 'addShop',
+          businessName: businessName.trim(),
+          category: category.trim(),
+          currencySymbol: symbol,
+        }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
 
-    // 1. Create the new business doc.
-    await setDoc(doc(db, 'businesses', businessId), newBusiness);
-
-    // 2. Append it to this owner's shop list and make it active. We persist
-    // the full derived `ownedBusinessIds` here (not just an arrayUnion of
-    // the new id) so that an owner account still running on the legacy
-    // single `businessId` field gets properly upgraded to the `businessIds`
-    // array the first time they add a second shop.
-    await updateDoc(doc(db, 'users', currentUser.uid), {
-      businessIds: [...ownedBusinessIds, businessId],
-      activeBusinessId: businessId,
-    });
+    if (!response.ok) {
+      let message = 'Não foi possível criar a nova loja. Tente novamente.';
+      try {
+        const body = await response.json();
+        if (body?.message) message = body.message;
+      } catch {
+        // response wasn't JSON — keep the generic message
+      }
+      throw new Error(message);
+    }
   };
 
   const switchShop = async (businessId: string) => {
