@@ -1055,6 +1055,140 @@ setInterval(() => {
 }, TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS);
 
 // ------------------------------------------------------------------
+// Module #20 (Notifications), Phase 1 (Foundations), Checkpoint 2 —
+// notification persistence layer. Infrastructure only, per explicit
+// scope: this is a reusable write helper, not a notification producer.
+// Nothing in this checkpoint calls it — no route is registered, no
+// Background Worker job type is added, no producer (Subscriptions,
+// Inventory, Closing, Platform Announcements) is wired to it. Those are
+// later checkpoints/phases (20-notifications-implementation-plan.md
+// §9; 20-phase1-foundations-rule8-assessment.md §0/§3).
+//
+// Schema per docs/specs/20-notifications.md §20.1 (v1.1, Accepted),
+// mirrored from src/types.ts's `Notification`/`NotificationEventContext`
+// (Checkpoint 1) — kept as plain literal types here rather than
+// importing the client type, since server/index.ts has no existing
+// dependency on src/ (consistent with this file's own convention of
+// re-deriving shared constants like MAX_SHOPS_PER_OWNER above rather
+// than importing across the client/server boundary).
+// ------------------------------------------------------------------
+
+type NotificationScope = 'business' | 'user';
+type NotificationCategory = 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement';
+type NotificationChannel = 'in_app';
+type NotificationPriority = 'immediate' | 'timeline' | 'daily_summary';
+
+interface NotificationPayload {
+  scope: NotificationScope;
+  businessId: string | null;
+  userId: string | null;
+  category: NotificationCategory;
+  type: string;
+  payloadRef: { collection: string; documentId: string };
+  dedupeKey: string;
+  context: {
+    whatHappened: string;
+    whyItMatters: string;
+    recommendedAction: string | null;
+  };
+  priority: NotificationPriority;
+}
+
+const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
+  'closing',
+  'inventory_risk',
+  'subscription',
+  'platform_announcement',
+];
+const NOTIFICATION_PRIORITIES: NotificationPriority[] = ['immediate', 'timeline', 'daily_summary'];
+
+// Minimal, hand-written checks — matching this file's existing style
+// (see the businessId/uid checks in /api/subscriptions/activate-trial
+// above); no validation library/framework is introduced. Throws
+// (rather than returning a result object) so a future producer's own
+// try/catch/error-response handling decides what to do with a bad
+// payload — this helper doesn't assume it's always called from an
+// Express handler.
+function validateNotificationPayload(payload: NotificationPayload): void {
+  if (payload.scope !== 'business' && payload.scope !== 'user') {
+    throw new Error(`Invalid notification scope: ${String(payload.scope)}`);
+  }
+  // Business Rule 1 / Decision Gate 1 (20.1): exactly one of
+  // businessId/userId set, matching scope — never both, never neither.
+  if (payload.scope === 'business') {
+    if (!payload.businessId || payload.userId) {
+      throw new Error('Business-scoped notification requires businessId set and userId null.');
+    }
+  } else {
+    if (!payload.userId || payload.businessId) {
+      throw new Error('User-scoped notification requires userId set and businessId null.');
+    }
+  }
+  if (!NOTIFICATION_CATEGORIES.includes(payload.category)) {
+    throw new Error(`Invalid notification category: ${String(payload.category)}`);
+  }
+  if (!payload.type || typeof payload.type !== 'string') {
+    throw new Error('Notification type is required.');
+  }
+  if (!payload.payloadRef?.collection || !payload.payloadRef?.documentId) {
+    throw new Error('Notification payloadRef.collection and payloadRef.documentId are required.');
+  }
+  if (!payload.dedupeKey || typeof payload.dedupeKey !== 'string') {
+    throw new Error('Notification dedupeKey is required.');
+  }
+  // [Amendment v1.1] Business Rule 9 — context is required, non-null,
+  // on every notification regardless of category. recommendedAction may
+  // be null (e.g. a Platform Announcement) but the key must be present.
+  if (
+    !payload.context ||
+    typeof payload.context.whatHappened !== 'string' || !payload.context.whatHappened ||
+    typeof payload.context.whyItMatters !== 'string' || !payload.context.whyItMatters ||
+    (payload.context.recommendedAction !== null && typeof payload.context.recommendedAction !== 'string')
+  ) {
+    throw new Error('Notification context (whatHappened, whyItMatters, recommendedAction) is required.');
+  }
+  // [Amendment v1.1] Business Rule 10 — priority is required, non-null.
+  if (!NOTIFICATION_PRIORITIES.includes(payload.priority)) {
+    throw new Error(`Invalid notification priority: ${String(payload.priority)}`);
+  }
+}
+
+// Reusable write helper for future producers (Phase 2/3). Validates,
+// then writes via the Admin SDK (bypasses firestore.rules, same
+// guarantee newAuditEventRef()'s caller relies on above) — client
+// creation is unconditionally denied by firestore.rules regardless
+// (Decision Gate 2). `channel` is always 'in_app' in V1 (20.1) — not a
+// caller-supplied field, so no producer can accidentally set anything
+// else. `status` always starts 'unread' — never caller-supplied either,
+// since a notification can't begin already-read.
+//
+// Not called anywhere in this checkpoint — exercised only by its own
+// unit test (Rule 8 Assessment §6, Risk 7: keeps the helper verified
+// even while unused, rather than letting it drift from the schema
+// until Phase 2/3 first calls it for real).
+async function writeNotification(payload: NotificationPayload): Promise<string> {
+  validateNotificationPayload(payload);
+
+  const ref = db.collection('notifications').doc();
+  await ref.set({
+    scope: payload.scope,
+    businessId: payload.businessId,
+    userId: payload.userId,
+    category: payload.category,
+    type: payload.type,
+    payloadRef: payload.payloadRef,
+    channel: 'in_app' as NotificationChannel,
+    status: 'unread',
+    dedupeKey: payload.dedupeKey,
+    createdAt: new Date().toISOString(),
+    context: payload.context,
+    priority: payload.priority,
+  });
+
+  return ref.id;
+}
+
+// ------------------------------------------------------------------
 // Serve the built SPA for everything else.
 // ------------------------------------------------------------------
 const distPath = path.resolve(__dirname, 'dist');

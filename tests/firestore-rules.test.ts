@@ -50,6 +50,7 @@ import {
   deleteDoc,
   getDoc,
   deleteField,
+  collection,
   collectionGroup,
   query,
   getDocs,
@@ -751,6 +752,193 @@ describe('subscriptions', () => {
 });
 
 // ---------------------------------------------------------------------
+// notifications — Module #20 Phase 1 (Foundations), Checkpoint 2.
+// This repository's first top-level (not business-nested) collection —
+// recipient scoping is field-based (scope/businessId/userId), not a
+// path segment, unlike every other describe block in this file. See
+// isNotificationRecipient() in firestore.rules.
+//
+// "Dismissal" is deliberately not tested as a separate field: the
+// approved data model (20.1) has exactly one mutable field, `status`,
+// and POL-20-001 Decision 1 explicitly couples dismiss-and-mark-read
+// onto that one field ("dismissing a notification automatically marks
+// it read"). The "permitted dismissal update" case below is the same
+// unread->read transition as the "permitted read-status update" case —
+// two UI actions, one rule.
+// ---------------------------------------------------------------------
+describe('notifications', () => {
+  const businessNotifId = 'n-biz-1';
+  const userNotifId = 'n-user-1';
+
+  const baseFields = {
+    category: 'closing' as const,
+    type: 'closing_overdue',
+    payloadRef: { collection: 'businesses', documentId: BIZ },
+    channel: 'in_app' as const,
+    status: 'unread' as const,
+    dedupeKey: 'dedupe-1',
+    createdAt: '2026-08-01T00:00:00.000Z',
+    context: {
+      whatHappened: 'The June closing is overdue.',
+      whyItMatters: 'Business Worth cannot be trusted until it is closed.',
+      recommendedAction: 'Close the period from the Closing tab.',
+    },
+    priority: 'immediate' as const,
+  };
+
+  const seedBusinessScoped = async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', businessNotifId), {
+        ...baseFields,
+        scope: 'business',
+        businessId: BIZ,
+        userId: null,
+      });
+    });
+  };
+
+  const seedUserScoped = async (uid: string) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', userNotifId), {
+        ...baseFields,
+        category: 'subscription',
+        type: 'staff_role_changed',
+        scope: 'user',
+        businessId: null,
+        userId: uid,
+      });
+    });
+  };
+
+  // -- Tenant isolation / recipient access --------------------------
+
+  it('The Owner/Admin of the business can read its business-scoped notification', async () => {
+    await seedBusinessScoped();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'notifications', businessNotifId)));
+  });
+
+  it('An admin-role account can read its own business\'s notification (Phase 0 dual-read tolerance)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', 'n-admin-biz'), {
+        ...baseFields,
+        scope: 'business',
+        businessId: ADMIN_BIZ,
+        userId: null,
+      });
+    });
+    const adminDb = ctxFor(ADMIN_ROLE_UID).firestore();
+    await assertSucceeds(getDoc(doc(adminDb, 'notifications', 'n-admin-biz')));
+  });
+
+  it('Manager-tier staff can read a business-scoped notification; no specific Manager permission is required (view-only, per 20.2)', async () => {
+    await seedBusinessScoped();
+    const managerDb = ctxFor(MANAGER_NO_PERMISSION_UID).firestore();
+    await assertSucceeds(getDoc(doc(managerDb, 'notifications', businessNotifId)));
+  });
+
+  it('A plain (non-Manager) Staff member cannot read a business-scoped notification', async () => {
+    await seedBusinessScoped();
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(staffDb, 'notifications', businessNotifId)));
+  });
+
+  it('An Owner/Admin from a different business cannot read this business\'s notification (tenant isolation)', async () => {
+    await seedBusinessScoped();
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'notifications', businessNotifId)));
+  });
+
+  it('The matching user can read their own user-scoped notification', async () => {
+    await seedUserScoped(STAFF_UID);
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(getDoc(doc(staffDb, 'notifications', userNotifId)));
+  });
+
+  it('A different authenticated user — including that user\'s own Business Admin — cannot read a user-scoped notification that isn\'t theirs', async () => {
+    await seedUserScoped(STAFF_UID);
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    const otherStaffDb = ctxFor(MANAGER_NO_PERMISSION_UID).firestore();
+    await assertFails(getDoc(doc(ownerDb, 'notifications', userNotifId)));
+    await assertFails(getDoc(doc(otherStaffDb, 'notifications', userNotifId)));
+  });
+
+  it('A suspended staff member loses access to their own user-scoped notification', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'users', STAFF_UID), { role: 'staff', businessId: BIZ, suspended: true });
+    });
+    await seedUserScoped(STAFF_UID);
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(staffDb, 'notifications', userNotifId)));
+  });
+
+  // -- Server-only creation / prohibited deletion --------------------
+
+  it('No role — not even the Owner — can create a notification from the client', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'notifications', 'n-client-create'), {
+      ...baseFields,
+      scope: 'business',
+      businessId: BIZ,
+      userId: null,
+    }));
+  });
+
+  it('No role can delete a notification from the client', async () => {
+    await seedBusinessScoped();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(deleteDoc(doc(ownerDb, 'notifications', businessNotifId)));
+
+    await seedUserScoped(STAFF_UID);
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(deleteDoc(doc(staffDb, 'notifications', userNotifId)));
+  });
+
+  // -- Restricted client update: status only (read + dismiss) --------
+
+  it('permitted read-status update: the recipient can flip status unread -> read, changing no other field', async () => {
+    await seedBusinessScoped();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(updateDoc(doc(ownerDb, 'notifications', businessNotifId), { status: 'read' }));
+  });
+
+  it('permitted dismissal update: same unread -> read transition (POL-20-001 dismiss/read coupling — no separate dismissed field exists)', async () => {
+    await seedUserScoped(STAFF_UID);
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(updateDoc(doc(staffDb, 'notifications', userNotifId), { status: 'read' }));
+  });
+
+  it('A Manager (view-only) can also flip status, same as Owner/Admin — read access implies the same restricted update right', async () => {
+    await seedBusinessScoped();
+    const managerDb = ctxFor(MANAGER_NO_PERMISSION_UID).firestore();
+    await assertSucceeds(updateDoc(doc(managerDb, 'notifications', businessNotifId), { status: 'read' }));
+  });
+
+  it('prohibited update of any other field: changing category/priority/context alongside or instead of status is denied', async () => {
+    await seedBusinessScoped();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'notifications', businessNotifId), { category: 'inventory_risk' }));
+    await assertFails(updateDoc(doc(ownerDb, 'notifications', businessNotifId), { priority: 'daily_summary' }));
+    await assertFails(updateDoc(doc(ownerDb, 'notifications', businessNotifId), {
+      status: 'read',
+      priority: 'daily_summary',
+    }));
+  });
+
+  it('prohibited update: a non-recipient cannot update status even if they somehow guess the document id', async () => {
+    await seedBusinessScoped();
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(updateDoc(doc(otherDb, 'notifications', businessNotifId), { status: 'read' }));
+  });
+
+  it('prohibited update: an invalid status value is rejected', async () => {
+    await seedBusinessScoped();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'notifications', businessNotifId), { status: 'archived' }));
+  });
+});
+
+// ---------------------------------------------------------------------
 // Module #19 Phase 2 (Trial Engine) — Restricted-Operations Enforcement
 // (Business Rule 6 / Decision 2). Applies to `create` on the six
 // operational collections identified as "affecting Business Worth or
@@ -881,6 +1069,30 @@ describe('query-based leakage', () => {
     });
     const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
     await assertFails(getDocs(query(collectionGroup(otherDb, 'expenses'))));
+  });
+
+  it('An unscoped query against the top-level notifications collection is rejected outright, not merely filtered to an empty result', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', 'n-leak-1'), {
+        scope: 'business',
+        businessId: BIZ,
+        userId: null,
+        category: 'closing',
+        type: 'closing_overdue',
+        payloadRef: { collection: 'businesses', documentId: BIZ },
+        channel: 'in_app',
+        status: 'unread',
+        dedupeKey: 'dedupe-leak-1',
+        createdAt: new Date().toISOString(),
+        context: { whatHappened: 'x', whyItMatters: 'y', recommendedAction: null },
+        priority: 'timeline',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    // No where('businessId', ...) / where('userId', ...) clause at all —
+    // exactly the shape Rule 8 Assessment Risk 2 says must structurally
+    // fail, not silently return nothing.
+    await assertFails(getDocs(query(collection(ownerDb, 'notifications'))));
   });
 });
 

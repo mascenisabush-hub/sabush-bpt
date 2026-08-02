@@ -67,6 +67,38 @@ service cloud.firestore {
       );
     }
 
+    // [Module #20 Phase 1 (Foundations), Checkpoint 2] `notifications` is
+    // this repository's first top-level (not business-nested) collection
+    // — recipient scoping (spec 20.1/20.2) is expressed via document
+    // fields (`scope`/`businessId`/`userId`) rather than a path segment,
+    // unlike every isMemberOf/isOwnerOf use above. Mirrors the
+    // /subscriptions read-scope shape below (Owner/Admin full access,
+    // Manager-tier view-only, no specific granted permission required —
+    // 20.2's "same 'view only' boundary already established for
+    // Subscription visibility") re-expressed for a field-scoped, not
+    // path-scoped, document.
+    //
+    // Suspension check: isMemberOf()/isOwnerOf() already fold in
+    // !isSuspended() for the Business-scoped branch. For the User-scoped
+    // branch this function applies the same platform-wide suspension cut
+    // (see the "suspended member" test elsewhere in this repo's test
+    // suite) rather than carving out an exception for a user's own
+    // notifications — consistent existing behavior, not a new rule.
+    function isNotificationRecipient(resource) {
+      return resource.data.scope == 'business'
+        ? (
+            isOwnerOf(resource.data.businessId) || (
+              isMemberOf(resource.data.businessId) &&
+              myProfile().get('staffTier', 'staff') == 'manager'
+            )
+          )
+        : (
+            resource.data.scope == 'user' &&
+            isSignedIn() && !isSuspended() &&
+            resource.data.userId == request.auth.uid
+          );
+    }
+
     // [Closing Integrity Amendment v1.0] A rule cannot run a range query
     // ("does any Closing cover this date?") — it can only get() a document
     // at a known path. ClosedPeriod docs exist purely so this becomes a
@@ -417,6 +449,60 @@ service cloud.firestore {
         myProfile().get('staffTier', 'staff') == 'manager'
       );
       allow write: if false;
+    }
+
+    // ==========================================================
+    // /notifications/{notificationId} — Module #20 Phase 1
+    // (Foundations), Checkpoint 2. Top-level collection (spec 20.1) —
+    // see isNotificationRecipient() above for why this is field-scoped
+    // rather than path-scoped.
+    //
+    // - read: Business-scoped visible to that Business's Owner/Admin and
+    //   Manager-tier staff (view-only, no specific permission required —
+    //   20.2); User-scoped visible only to the matching uid. Never a
+    //   plain (non-Manager) Staff member for Business-scoped documents.
+    // - create: always false. No client ever creates a notification, in
+    //   any phase (Decision Gate 2) — only the privileged server, the
+    //   Background Worker, or the payment webhook handler, all via the
+    //   Admin SDK, which bypasses these rules. No producer exists yet in
+    //   Phase 1 regardless (Checkpoint 2 ships only a persistence
+    //   helper, unwired to any producer).
+    // - update: permitted only as a single-field `status` transition, by
+    //   a caller who already satisfies the read condition above. This is
+    //   the one client-direct write path this collection has, covering
+    //   both the "mark read" and "dismiss" UI actions — POL-20-001
+    //   Decision 1 explicitly couples them onto this same field
+    //   ("dismissing a notification automatically marks it read"; the
+    //   approved data model, 20.1, has no separate dismissal field).
+    //   Every other field is immutable after creation (POL-20-001
+    //   Decision 4, Notification Immutability) — enforced here by
+    //   requiring every field but `status` to be unchanged, the same
+    //   field-by-field-equality idiom used by /users/{userId}'s own
+    //   update rule above, rather than introducing a new diff()/
+    //   affectedKeys() mechanism this file hasn't used before.
+    // - delete: always false. No automatic or client-initiated deletion
+    //   in V1 (POL-20-001 Decision 3).
+    // ==========================================================
+    match /notifications/{notificationId} {
+      allow read: if isSignedIn() && isNotificationRecipient(resource);
+
+      allow create: if false;
+
+      allow update: if isSignedIn() && isNotificationRecipient(resource) &&
+        request.resource.data.scope == resource.data.scope &&
+        request.resource.data.businessId == resource.data.businessId &&
+        request.resource.data.userId == resource.data.userId &&
+        request.resource.data.category == resource.data.category &&
+        request.resource.data.type == resource.data.type &&
+        request.resource.data.payloadRef == resource.data.payloadRef &&
+        request.resource.data.channel == resource.data.channel &&
+        request.resource.data.dedupeKey == resource.data.dedupeKey &&
+        request.resource.data.createdAt == resource.data.createdAt &&
+        request.resource.data.context == resource.data.context &&
+        request.resource.data.priority == resource.data.priority &&
+        (request.resource.data.status == 'unread' || request.resource.data.status == 'read');
+
+      allow delete: if false;
     }
 
     // ==========================================================
