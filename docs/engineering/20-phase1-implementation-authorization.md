@@ -9,14 +9,9 @@ Assessment, §14–15 there, with no separate authorization record). This
 document establishes that step explicitly for Module #20, per your
 instruction, and is available as a template for future modules/phases
 going forward.
-**Status:** 🟡 **Proposed — awaiting Product Architect signature.** This
-document is drafted by engineering (Claude, Lead Software Engineer) but,
-consistent with every other governance artifact in this chain (spec
-Acceptance, POL-20-001's Proposed→Approved transition, ADR-0002's
-Approval), **authorization is a Product Architect act, not an
-engineering one.** Drafting this record is not the same as signing it —
-see "Signature," below. No runtime file will be touched on the basis of
-this document alone, in its current status.
+**Status:** ✅ **Authorized.** Signed by the Product Architect — see
+"Signature," below. Phase 1 (Foundations) implementation, exactly as
+scoped by the Phase 1 Rule 8 Assessment, is authorized to begin.
 **Basis:** [`20-notifications.md`](../specs/20-notifications.md) (v1.1,
 Accepted), [Specification Enhancement Amendment](../specs/20-notifications-enhancement-amendment.md)
 (Accepted), [POL-20-001](../specs/20-pol-001-notification-retention-policy.md)
@@ -128,17 +123,38 @@ implementation proceeds on the changed basis.
 
 ## 5. Signature
 
-**This document is not yet in effect.** Per the same discipline this
-project has used for every prior Accepted/Approved artifact — drafting
-is engineering's work; acceptance is the Product Architect's — this
-record moves from **Proposed** to **Authorized** only on your explicit
-confirmation. A draft recommending authorization (however clearly
-reasoned) is not itself the signature.
+**Signed.** Product Architect decision, recorded verbatim:
 
-Once you confirm, this section will be updated to record: the explicit
-authorization statement, the date, and this document's status changed
-to **✅ Authorized**. Only at that point will Claude begin changing any
-runtime file listed in §2.
+> "I have reviewed: Module #20 Specification v1.1; Enhancement
+> Amendment; POL-20-001; Engineering Readiness Assessment; ADR-0002;
+> Implementation Plan; Phase 1 Rule 8 Assessment; Phase 1 Implementation
+> Authorization (Proposed). I confirm that the governance process for
+> Module #20 Phase 1 has been completed satisfactorily. As Product
+> Architect, I formally authorize Module #20 – Phase 1 (Foundations)
+> implementation."
+
+**Date:** August 2, 2026.
+
+**Authorization scope, as explicitly stated at signature:** applies
+only to the implementation scope defined in
+`docs/engineering/20-phase1-foundations-rule8-assessment.md`.
+Implementation shall remain strictly within the approved Phase 1
+boundaries and include only the runtime files identified there. No
+additional functionality, architectural redesign, feature expansion, or
+implementation of Phases 2–6 is authorized.
+
+**Governance requirements attached to this authorization, in effect for
+the duration of implementation:**
+- Any newly discovered architectural ambiguity shall be reported
+  immediately, not resolved silently.
+- Any scope expansion shall return to Product Architect review before
+  proceeding.
+- No business rule may be changed during implementation.
+- No specification, policy, or ADR may be modified unless separately
+  authorized.
+
+Claude begins changing the runtime files listed in §2 following this
+signature, once this document is merged to `main`.
 
 ---
 
