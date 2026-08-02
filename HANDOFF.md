@@ -12,6 +12,41 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Module #19 (Subscriptions), **Phase 1 (Foundations) is
+implemented, verified, and formally closed.** Commit `4d9d34b`
+(pushed, `main` == `origin/main`). Full detail:
+[`docs/engineering/19-phase1-closeout.md`](./docs/engineering/19-phase1-closeout.md).
+
+**What shipped:** `subscriptions/{businessId}` data model
+(`src/types.ts`), `firestore.rules` match block (read scoped to
+Owner/Admin + Manager-tier staff; write unconditionally false), the
+Business Provisioning Orchestrator (`POST /api/provisioning/business`
+in `server/index.ts` — single Firestore transaction: business doc +
+owner membership + initial `trial_pending` subscription doc, per
+ADR-0001 Option B), and `AuthView.tsx`/`AppContext.tsx` updated to call
+it instead of direct client writes.
+
+**Verified this session:** `tsc --noEmit` clean; `npm run build`
+clean; diff reviewed against spec/ADR/plan line-by-line. **Not
+verified:** Firestore emulator run of the new `subscriptions` rules
+tests — blocked by this sandbox's network egress (`storage.googleapis.com`
+not allowlisted), same limitation as every prior emulator-dependent
+change here. This remains an outstanding manual step for a local
+environment.
+
+**Phase 2 (Trial Engine) has not begun.** No `src/`, `server/`,
+`firestore.rules`, or spec file touched beyond Phase 1's scope. Phase 2
+requires its own Rule 8 Assessment (technical activation trigger, trial
+state transitions, activation timestamp, restricted-operation
+enforcement post-expiry, Grace Period interaction, read-only access
+preservation, lifecycle-transition auditability) before any code is
+written, and its own explicit Product Architect authorization —
+neither has happened yet.
+
+---
+
+## Prior status (superseded above, kept for continuity)
+
 **Status:** Stage 2 Compatibility Gap Correction implemented, validated,
 and **committed** as `2006cd6`. (Previously noted here as "not yet
 committed" — that was stale; corrected on this update.)
@@ -148,20 +183,24 @@ been touched this session — confirmed by diff. All new artifacts live
 under `docs/engineering/` only. Starting Stage 1 of the plan above
 still requires a separate, explicit Product Architect go-ahead.
 
-**Module status (all confirmed unchanged this session — see
-`docs/specs/README.md` for full detail, this is a pointer, not a
-restatement):** Modules #17, #18, #19, and #20 are all
-Accepted/Approved (docs & business rules) — none has implementation
-authorization. Build order: `#19 → #20 → #18`; #18's own BDS
-additionally gates its runtime implementation on #19/#20 holding real
-data. Module #15 (AI Intelligence) remains drafted, not implemented.
+**Module status (superseded for #19 by the "Right now" section at the
+top of this file — Phase 1 is implemented and closed; the note below is
+stale for #19, kept for #17/#18/#20 accuracy):** Modules #17, #18, and
+#20 remain Accepted/Approved (docs & business rules) — none has
+implementation authorization. Build order: `#19 → #20 → #18`; #18's own
+BDS additionally gates its runtime implementation on #19/#20 holding
+real data. Module #15 (AI Intelligence) remains drafted, not
+implemented.
 
 **Anything mid-flight / blocked:** Nothing blocked at the repository
-level, nothing uncommitted. Do not begin #17, #18, #19, or #20
+level, nothing uncommitted. Do not begin #17, #18, or #20
 implementation, schema, or `firestore.rules` work — not authorized.
-Per this session's Platform Infrastructure finding, also hold off on
-Background Worker implementation before Phase 0 completion (or an
-explicit, stated Product Architect exception) — see above.
+#19 Phase 1 is closed; #19 Phase 2 (Trial Engine) is not authorized and
+has not begun — requires its own Rule 8 Assessment first (see "Right
+now," top of file). Per this session's Platform Infrastructure finding,
+also hold off on Background Worker implementation before Phase 0
+completion (or an explicit, stated Product Architect exception) — see
+above.
 
 **Known gaps flagged but not yet scheduled:**
 - `Header.tsx`'s role label still only distinguishes Owner/Staff — a
