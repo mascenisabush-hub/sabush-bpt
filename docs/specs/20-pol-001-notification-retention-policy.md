@@ -2,15 +2,19 @@ Decision Record
 
 # POL-20-001 — Notification Retention Policy
 
-**Status:** Proposed — structure, principles, and lifecycle model below
-reflect the shape you asked for; the specific parameters (retention
-duration, dismissal semantics, deletion vs. archival) are presented as
-options for your decision in "Parameters Requiring Approval," below,
-not invented here. This record becomes **Approved** once those
-parameters are selected — consistent with this repository's practice
-of not fixing a specific business number (Module #19's POL-19-002 fixed
-"thirty days" because that figure had already been decided; no
-equivalent figure has been decided for notification retention yet).
+**Status:** ✅ Approved. All four parameters below have been decided by
+Product Architect authorization: (1) dismissal marks a notification
+read (coupled), (2) archival is priority-tiered (Option C — specific
+windows deferred to engineering), (3) no automatic deletion in V1, and
+(4) notification immutability (append-only) is adopted as an additional
+approved business rule. See "Parameters Requiring Approval" below for
+the full decision record. This record does not fix a specific retention
+number — consistent with this repository's practice of not fixing a
+specific business number until it's genuinely decided (Module #19's
+POL-19-002 fixed "thirty days" because that figure had already been
+decided; no equivalent figure has been decided for notification
+retention — the priority-tiered *windows themselves* remain engineering
+work, per Decision 2 below).
 **Type:** Policy document, per the category established in the
 [Governance Decision — BDR Phase Completion & Policy Document
 Framework](./19-governance-bdr-policy-framework.md). Operationalizes
@@ -105,18 +109,25 @@ data-deletion action.** Dismissing:
   Admin, and vice versa, consistent with Module #20's existing
   recipient-visibility model (20.2).
 
-**Genuinely open, requiring your decision (see "Parameters Requiring
-Approval," below):** whether dismissing a notification also
-automatically marks it read, or whether "read" and "dismissed" remain
-two independent user actions.
+**Decided (Parameters Requiring Approval, Decision 1):** dismissing a
+notification automatically marks it read. The two actions are coupled,
+not independent — dismissal represents acknowledgment that the
+notification has been seen and removed from the active workspace.
 
 ## Retention Duration and Deletion
 
-**Genuinely open, requiring your decision:** how long an Active
-notification remains Active before automatically moving to Archived,
-and whether Archived notifications are ever automatically Deleted (and
-if so, after how long). Three options, not a recommendation forced on
-you:
+**Decided (Parameters Requiring Approval, Decisions 2 and 3):** the
+active lifetime of a notification is determined by its Communication
+Priority (Option C, below), aligning with the Context-First and
+Communication Priority principles introduced by Amendment v1.1. Archived
+notifications are never automatically deleted in V1 — they remain part
+of the business communication history unless a future, separately
+approved governance decision establishes a retention or
+legal-compliance policy. Specific per-tier retention windows are not
+fixed by this business policy — they remain implementation detail for
+Module #20's engineering specification.
+
+Options considered (Option C selected):
 
 - **Option A — Read-triggered archival.** A notification archives
   automatically once read; unread notifications remain Active
@@ -126,15 +137,33 @@ you:
   automatically after a fixed number of days regardless of read status
   (e.g., mirroring POL-19-002's own "fixed and flat" pattern). Keeps the
   feed bounded even if an owner never opens the app.
-- **Option C — Priority-tiered windows.** Different windows per
-  Communication Priority tier (20.7) — e.g., `immediate` notifications
-  stay Active longer since they're the ones most likely to still need
-  action, `daily_summary` notifications archive fastest since they were
-  never meant to demand attention in the first place.
+- **Option C — Priority-tiered windows. Selected.** Different windows
+  per Communication Priority tier (20.7) — e.g., `immediate`
+  notifications stay Active longer since they're the ones most likely
+  to still need action, `daily_summary` notifications archive fastest
+  since they were never meant to demand attention in the first place.
 
-This policy does not pick one — each is compatible with every principle
-above; the choice is a business judgment about how the live feed should
-feel, not an engineering constraint.
+Option C is adopted as business policy. The specific per-tier windows
+(how many days for `immediate` vs. `daily_summary`, etc.) are not fixed
+here — they remain Module #20 engineering specification work.
+
+## Notification Immutability
+
+**Decided (Parameters Requiring Approval, Decision 4 — a new business
+rule, intentionally introduced now, not previously covered elsewhere in
+`20-notifications.md` or this policy):**
+
+Once a notification has been created, its business meaning shall remain
+historically accurate. Notifications are not rewritten to reflect later
+events. If additional communication is required, a new notification
+shall be created rather than modifying the original notification.
+
+This preserves historical integrity in the same spirit that SABUSH
+preserves financial and business history. This is a business principle,
+not an implementation requirement — it does not prescribe database
+mechanics, storage strategy, or whether "no rewriting" is enforced via
+`firestore.rules`, application logic, or another mechanism. That remains
+Module #20 engineering specification work.
 
 ## What This Policy Does Not Affect
 
@@ -168,16 +197,21 @@ explicit instruction, once the business parameters below are decided.
 
 ---
 
-## Parameters Requiring Approval
+## Parameters Requiring Approval — Decision Record
 
-For this record to move from Proposed to Approved:
+Approved by Product Architect. This record moved from Proposed to
+Approved on the basis of these four decisions:
 
-1. **Dismiss/read coupling** — does dismissing a notification also mark
-   it read, or are these independent actions?
-2. **Archival trigger** — Option A (read-triggered), Option B (fixed
-   window), Option C (priority-tiered window), or a different rule.
-3. **Deletion** — are Archived notifications ever permanently deleted,
-   and if so, after what additional period past archival?
+1. **Dismiss/read coupling — Approved.** Dismissing a notification
+   automatically marks it read. Coupled, not independent.
+2. **Archival trigger — Approved.** Option C (priority-tiered windows).
+   Specific windows remain engineering specification work.
+3. **Deletion — Approved.** No automatic deletion in V1. Archived
+   notifications remain part of business communication history unless a
+   future, separately approved governance decision changes this.
+4. **Notification immutability — Approved.** A new business rule (see
+   "Notification Immutability," above): notifications are never
+   rewritten after creation; a new notification is created instead.
 
 ---
 
@@ -193,9 +227,14 @@ For this record to move from Proposed to Approved:
   append-only) or ADR-0002's Background Worker scope.
 - `docs/specs/README.md` does not yet reference this record — updating
   that index is a separate, subsequent documentation step, not
-  performed here, consistent with how POL-19-001 was first recorded.
+  performed as part of this Approval, consistent with how POL-19-001
+  was first recorded.
+- This Approval is a business-policy decision only. It does not
+  authorize implementation — no `firestore.rules`, `src/`, or `server/`
+  file has been touched to produce it, and none is authorized by it.
 
-**Lifecycle:** Designed → **Proposed**. Not yet Approved — the three
-parameters above require your decision first. Not Implemented,
-Executed, or Analyzed — no engineering work is authorized by this
-record regardless of its eventual approval status.
+**Lifecycle:** Designed → Proposed → **Approved**. All four business
+parameters (dismiss/read coupling, archival trigger, deletion,
+immutability) are now decided. Not Implemented, Executed, or Analyzed —
+no engineering work is authorized by this record; that remains a
+separate, explicit go-ahead.
