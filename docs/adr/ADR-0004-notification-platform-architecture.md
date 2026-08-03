@@ -53,6 +53,25 @@ default.
 
 ---
 
+## Terminology
+
+These terms recur throughout this ADR and are intended to be the
+platform's stable vocabulary for future ADRs and module specs, not
+just this document's local usage:
+
+| Term | Meaning |
+|---|---|
+| Business Fact | Something that occurred in the business domain — true independent of whether anyone is ever told about it. |
+| BusinessEvent | The immutable, in-process representation of a Business Fact as it flows through the platform (see Decision 1, Decision 3). |
+| Notification | A communication generated *from* a BusinessEvent — one possible outcome of Decision 4's communication-policy evaluation, never guaranteed. |
+| Delivery Channel | The mechanism used to deliver a notification (in-app, email, SMS, WhatsApp, push, webhook — see Decision 8). Answers *how*. |
+| Recipient | The actor who receives a notification (Business Owner, Staff Member, SuperAdmin, a future Auditor — see Decision 7). Answers *who*. |
+
+Delivery Channel and Recipient are orthogonal axes and are never mixed
+in this architecture — see Decision 8.
+
+---
+
 ## Decision 1 — Producers Emit Business Events, Not Notification Text
 
 **A producer's output is a structured `BusinessEvent`, never a rendered
@@ -60,14 +79,19 @@ notification.** The Notification Platform is solely responsible for
 turning a `BusinessEvent` into a persisted `notifications/{id}`
 document (or into no notification at all — see Decision 4).
 
-**A `BusinessEvent` represents a business fact, not a communication.**
-"Trial expired," "Inventory risk detected," "Staff suspended," "Store
-closed late" — each is a fact a producer observed, true independent of
-whether anyone is ever told about it. A notification is one possible
-downstream consequence of a fact; it is never the fact itself. Keeping
-this distinction explicit is what prevents Decision 4's communication
-policy from quietly collapsing back into "one fact, one notification,
-always" as more producers are added.
+**A `BusinessEvent` represents an immutable business fact. It is not a
+notification, message, or communication.** "Trial expired," "Inventory
+risk detected," "Staff suspended," "Store closed late" — each is a
+fact a producer observed, true independent of whether anyone is ever
+told about it. A notification is one possible downstream consequence
+of a fact; it is never the fact itself. Keeping this distinction
+explicit is what prevents Decision 4's communication policy from
+quietly collapsing back into "one fact, one notification, always" as
+more producers are added. The event/fact distinction is deliberate,
+not just wording: `BusinessEvent` is the software artifact that flows
+through the platform (open to future metadata — `occurredAt`,
+`dedupeKey`, `producer`, correlation IDs, versioning — without the name
+becoming awkward); the *fact* is what that artifact represents.
 
 ```
 Business Module (producer)
@@ -301,19 +325,22 @@ subsystem.
 
 ## Decision 8 — Delivery Fan-Out Is Already Architected; This ADR Does Not Redecide It
 
-**The Notification Platform's channel expansion is not a new decision
-this ADR needs to make — it is already architected and partially
-implemented.** Spec §20.4 (Decision Gate 3) and its Phase 1
-implementation (`src/lib/notifications/deliveryChannel.ts`) already
-define a `DeliveryChannel` interface that a persisted `Notification`
-is handed to for fan-out: in-app is implemented today; email and
-WhatsApp are designed as future implementations of the same interface,
-not a redesign. This ADR's producer/`BusinessEvent` contract feeds
-into that existing design unchanged — a `BusinessEvent` becomes a
-persisted `Notification` (Decisions 1–5), and the already-existing
-`DeliveryChannel` interface fans it out from there. Webhook, if ever
-added, is a plausible future implementation of that same interface —
-another *channel*, on the same axis as email/SMS/push.
+**The Notification Platform delegates delivery through the existing
+`DeliveryChannel` abstraction. New delivery mechanisms — Email, SMS,
+Push, WhatsApp, Webhooks, and so on — are implemented as additional
+Delivery Channels, never by altering producer logic or notification
+generation.** This is not a new decision this ADR needs to make — it
+is already architected and partially implemented. Spec §20.4 (Decision
+Gate 3) and its Phase 1 implementation
+(`src/lib/notifications/deliveryChannel.ts`) already define exactly
+this interface: in-app is implemented today; email and WhatsApp are
+designed as future implementations of the same interface, not a
+redesign. This ADR's producer/`BusinessEvent` contract feeds into that
+existing design unchanged — a `BusinessEvent` becomes a persisted
+`Notification` (Decisions 1–5), and the already-existing
+`DeliveryChannel` interface fans it out from there. Reinforcing this
+existing investment, rather than inventing a parallel layer beside it,
+keeps the architecture coherent.
 
 **SuperAdmin is explicitly not a channel.** It is a *recipient*
 (Decision 7's concern — who receives a notification), not a *delivery
