@@ -2,10 +2,9 @@ Business Decision Record
 
 # BDR-0005 — Notification Language Resolution Policy
 
-**Status:** Proposed (Pending Product Architect Approval). Recorded here
-in this status explicitly — not Accepted — pending a separate, explicit
-Product Architect approval step. No engineering work is authorized by
-this record in its current status.
+**Status:** ✅ Accepted. Business policy only — see "Product Architect
+Acceptance," below, for the explicit scope of this acceptance. No
+engineering work is authorized by this record.
 **Module:** #20 — Notifications
 **Record ID:** BDR-0005
 **Type:** Business Decision Record — business policy only. Does not
@@ -132,6 +131,28 @@ Authorization, and approved engineering planning.
 
 ---
 
+## Product Architect Acceptance
+
+**Accepted.** Scope of this acceptance, as explicitly granted:
+
+1. **The three-level deterministic fallback chain (§4)** — User
+   Preference → Business Default Language → Platform Default
+   (Portuguese) — is adopted as settled business policy for how
+   server-generated notification language is resolved.
+2. **Notification language independence (§6)** — a notification's
+   language is fixed at creation time and is never rewritten by a later
+   user language change.
+3. **Separation of responsibilities (§7)** — engineering owns storage,
+   caching, and retrieval mechanics for language preference; it may not
+   alter the fallback order itself.
+
+**Not included in this acceptance:** any source code implementation,
+schema change to the `User`/`Business` documents, `LanguageContext`
+changes, or any `firestore.rules`/`src/`/`server/` file — none are
+touched or authorized by this record. Per §11 (unchanged by
+acceptance), implementation remains subject to its own Rule 8
+Assessment and Implementation Authorization.
+
 ## Governance Notes
 
 - This record does not modify `20-notifications.md`, any Decision Gate,
@@ -139,9 +160,14 @@ Authorization, and approved engineering planning.
   close-out.
 - This record does not implement code, modify runtime behavior, or edit
   any `firestore.rules`, `src/`, or `server/` file. None were touched to
-  produce it.
-- **Lifecycle:** Designed → **Proposed**. Not yet Accepted. A separate,
-  explicit Product Architect approval step is required before this
-  record's fallback chain (§4) may be treated as settled business
-  policy for any Rule 8 Assessment or Implementation Plan to build
-  against.
+  produce it, and none is authorized by this acceptance.
+- This acceptance resolves the language-resolution piece of ADR-0004's
+  Notification Platform layer (Decision 5). It does not, by itself,
+  resolve the other open items the Module #20 Phase 3 Rule 8 Assessment
+  identified — the ADR-0003/Implementation-Plan job-registration
+  conflict, the dedupe/watermark mechanism, or the detection-threshold
+  decisions all remain open, unaffected by this record.
+- **Lifecycle:** Designed → Proposed → **Accepted**. Not Implemented,
+  Executed, or further Analyzed — no engineering work is authorized by
+  this acceptance; that remains a separate, explicit go-ahead per Rule
+  8.
