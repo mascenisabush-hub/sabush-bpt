@@ -1,6 +1,6 @@
 # ADR-0004 — Notification Platform Architecture: Business Event Contract, Content Ownership, and Producer Scope
 
-**Status:** Proposed (architecture decision only — not implementation
+**Status:** Accepted (architecture decision only — not implementation
 authorization).
 **Type:** Architecture Decision Record. Fourth entry in the formally
 numbered ADR series (`docs/adr/`), following [ADR-0001](./ADR-0001-business-provisioning-orchestrator.md),

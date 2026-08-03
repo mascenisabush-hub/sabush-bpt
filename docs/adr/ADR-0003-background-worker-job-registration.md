@@ -1,6 +1,6 @@
 # ADR-0003 — Background Worker Job Registration Model
 
-**Status:** Proposed (architecture decision only — not implementation
+**Status:** Accepted (architecture decision only — not implementation
 authorization).
 **Type:** Architecture Decision Record. Third entry in the formally
 numbered ADR series (`docs/adr/`), following [ADR-0001](./ADR-0001-business-provisioning-orchestrator.md)
