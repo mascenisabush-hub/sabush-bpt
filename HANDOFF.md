@@ -12,45 +12,97 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #19 (Subscriptions), **Phase 1 (Foundations) is
-implemented, verified, and formally closed.** Commit `4d9d34b`
-(pushed, `main` == `origin/main`). Full detail:
-[`docs/engineering/19-phase1-closeout.md`](./docs/engineering/19-phase1-closeout.md).
+**Status:** Module #20 (Notifications), **Phase 3 (Background Worker
+Scheduled Triggers) has been Rule-8-Assessed and classified NOT READY.**
+`main` == `origin/main` at `be0f676` (confirmed via fresh `git fetch`,
+not assumed). Full detail:
+[`docs/engineering/20-phase3-rule8-assessment.md`](./docs/engineering/20-phase3-rule8-assessment.md).
 
-**What shipped:** `subscriptions/{businessId}` data model
-(`src/types.ts`), `firestore.rules` match block (read scoped to
-Owner/Admin + Manager-tier staff; write unconditionally false), the
-Business Provisioning Orchestrator (`POST /api/provisioning/business`
-in `server/index.ts` — single Firestore transaction: business doc +
-owner membership + initial `trial_pending` subscription doc, per
-ADR-0001 Option B), and `AuthView.tsx`/`AppContext.tsx` updated to call
-it instead of direct client writes.
+**Do not start Phase 3 implementation.** No job-registration interface,
+no `BusinessEvent` type, no detection logic, and no dedupe/watermark
+mechanism exists anywhere in `src/` or `server/` as of this commit.
 
-**Verified this session:** `tsc --noEmit` clean; `npm run build`
-clean; diff reviewed against spec/ADR/plan line-by-line. **Not
-verified:** Firestore emulator run of the new `subscriptions` rules
-tests — blocked by this sandbox's network egress (`storage.googleapis.com`
-not allowlisted), same limitation as every prior emulator-dependent
-change here. This remains an outstanding manual step for a local
-environment.
+**What's true right now, in order:**
 
-**Phase 2 (Trial Engine) — decisions recorded, coding not yet
-authorized.** Rule 8 Assessment
-([`docs/engineering/19-phase2-trial-engine-rule8-assessment.md`](./docs/engineering/19-phase2-trial-engine-rule8-assessment.md))
-identified four open items; Product Architect decisions on all four
-are recorded in
-[`docs/engineering/19-phase2-trial-engine-decisions.md`](./docs/engineering/19-phase2-trial-engine-decisions.md):
-(1) activation trigger = platform-level "first operational transaction
-creating enduring business value," not bound to a specific feature;
-(2) restricted operations = principle-based ("changes Business Worth
-or financial position"), not a fixed list; (3) Phase 2 builds a
-minimal Trial Lifecycle Worker (elapsed-time `trial_active →
-trial_completed` only), not the full Background Worker framework; (4)
-Business Rule 8's audit guarantee extends to automatic lifecycle
-transitions, not just SuperAdmin overrides. **No further strategic
-uncertainty remains for Phase 2 as scoped.** Still no `src/`,
-`server/`, `firestore.rules` file touched — this record does not
-authorize coding; that remains a separate, explicit go-ahead.
+1. **Phase 1 (Foundations) and Phase 2 (Privileged-Server Creation
+   Path) are both implemented, verified, and closed.**
+   [`20-phase1-closeout.md`](./docs/engineering/20-phase1-closeout.md),
+   [`20-phase2-closeout.md`](./docs/engineering/20-phase2-closeout.md),
+   [`20-milestone-review-phases-1-2.md`](./docs/engineering/20-milestone-review-phases-1-2.md).
+2. **ADR-0002, ADR-0003, ADR-0004 are all Accepted** (Background Worker
+   ownership; job-registration interface; BusinessEvent/Notification
+   Platform contract) — but **none of the three is implemented in code
+   yet.** `runTrialLifecycleSweep()` in `server/index.ts` remains the
+   only real worker instance, still a single hardcoded `setInterval`
+   with no registration mechanism.
+3. **BDR-0005 (Notification Language Resolution Policy) is Accepted**
+   (`docs/specs/20-bdr-0005-notification-language-resolution-policy.md`,
+   commit `7b90b2c`) — the deterministic User → Business → Portuguese
+   fallback chain for server-generated notification language.
+4. **BDR-0006 (Notification Communication Policy) does NOT exist in
+   this repository.** It was shared as chat text only, never committed.
+   If its content (Notify/Batch/Suppress outcomes + priority for the
+   three Phase 3 producers) is still wanted, it needs to be re-authored
+   and actually committed+pushed — do not treat anything from a prior
+   chat transcript as real governance state without checking `git log`
+   / `git fetch origin` yourself first. This exact mistake (a real,
+   properly-committed BDR-0005 from an earlier session existing only in
+   that session's local, unpushed clone, then being lost when the
+   sandbox ended) already happened once this project — see the Rule 8
+   Assessment's own §1.1 for the fuller story.
+
+**The Phase 3 Rule 8 Assessment's conclusion (Not Ready) rests on four
+things still needing an explicit Product Architect decision, unaffected
+by BDR-0005's acceptance:**
+
+1. **ADR-0003 vs. the Implementation Plan's own Phase 3 wording.**
+   `20-notifications-implementation-plan.md` §9 still says "extend
+   `runTrialLifecycleSweep()`'s process... not a second process" —
+   written before ADR-0003 existed and describing the hardcoded-branch
+   shape ADR-0003 exists to replace. Needs an explicit Stage 6
+   Implementation Plan amendment, or an explicit decision that
+   ADR-0003 doesn't apply here.
+2. **ADR-0004 vs. the Accepted spec's own §20.1 schema / Phase 2's
+   shipped code.** The spec still has producers populate `context`
+   directly (which is exactly what Phase 2's five `/api/staff/*`
+   endpoints do, in hardcoded Portuguese, bypassing `LanguageContext`/
+   `t()` entirely). Whether Phase 3 producers must build the full
+   BusinessEvent/template/policy layer ADR-0004 describes (much larger
+   scope) or continue Phase 2's direct-write precedent is undecided —
+   and either way, `20-notifications.md` §20.1 needs a formal amendment
+   to say which.
+3. **The §4.8.1 dedupe/watermark mechanism, cited everywhere as
+   "existing," has never actually been built.** `writeNotification()`
+   has zero duplicate-check logic. Low-risk for Phase 2's one-shot
+   writes; a real gap for Phase 3's recurring scheduled sweep. Pick one
+   of Architecture §4.8.1's two named mechanisms (dedupe key as
+   document ID, vs. a separate `platform_worker_state/{jobType}`
+   collection) before any producer code is written.
+4. **Detection thresholds undecided:** overdue-Closing day-count,
+   Inventory-risk criteria, and a new "trial ending soon" threshold for
+   Subscriptions (distinct from the existing trial-expiry check) —
+   explicitly out of scope for both BDR-0005 and BDR-0006, still open.
+
+**If the next session's task is "resolve these and re-run the Rule 8
+Assessment":** do exactly that — re-verify each of the four items
+above against a fresh `git fetch`/`git log`, don't assume anything
+described in a chat transcript is already in the repo, and don't start
+writing Phase 3 code until all four have an explicit, committed
+Product Architect decision behind them (a spec/plan amendment or a new
+BDR/ADR, the same way every prior phase in this repo has done it).
+
+**If the next session's task is something else entirely** (a different
+module, a documentation fix, etc.): the two items below are known,
+already-flagged debt that doesn't block anything, but should be kept in
+mind:
+
+- `docs/specs/README.md`'s Module #20 row still reads "Phase 2...
+  not yet authorized" — stale; Phase 2 is closed. Not corrected yet,
+  per this repo's practice of flagging rather than silently fixing
+  drift mid-unrelated-task.
+- The rest of this file, below this section, describes older sessions
+  (Module #19 Phase 1/2, the owner→admin migration) and is historical
+  context only — not current status.
 
 ---
 
