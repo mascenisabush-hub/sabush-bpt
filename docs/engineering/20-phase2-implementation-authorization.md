@@ -6,11 +6,10 @@ authorized to begin. Follows the same pattern established by
 [`20-phase1-implementation-authorization.md`](./20-phase1-implementation-authorization.md)
 (Module #20's own precedent for this artifact type), per Stage 8 of the
 [Platform Engineering Governance Standard](./platform-engineering-governance-standard.md).
-**Status:** 🟡 **Proposed — Awaiting Product Architect Signature.**
-Nothing below is authorized until §7's signature block is signed and
-this document's status line is updated accordingly, matching the exact
-lifecycle discipline the Phase 1 authorization itself followed
-(Designed → **Proposed** → Authorized).
+**Status:** ✅ **Authorized.** Signed by the Product Architect — see
+§8 "Product Architect Signature," below. Phase 2 (Privileged-Server
+Creation Path) implementation, exactly as scoped by this document, is
+authorized to begin.
 **Basis:** [`20-notifications.md`](../specs/20-notifications.md) (v1.2,
 Accepted), [Specification Enhancement Amendment](../specs/20-notifications-enhancement-amendment.md)
 (v1.1, Accepted), [Module #20 Category Amendment](../specs/20-notifications-category-amendment.md)
@@ -54,7 +53,7 @@ document) → Implementation → Close-out**
 | Prior Phase | Phase 1 (Foundations) | ✅ Implemented, verified, **Closed** (`20-phase1-closeout.md`) |
 | Rule 8 Assessment | `20-phase2-privileged-server-rule8-assessment.md` | ✅ Assessed — Ready after minor preparation |
 | Rule 8 Re-Assessment | `20-phase2-privileged-server-rule8-reassessment.md` | ✅ Re-Assessed — **Ready** |
-| **Authorization** | **This document** | 🟡 Proposed, pending signature |
+| **Authorization** | **This document** | ✅ Authorized, signed August 3, 2026 |
 | Implementation | — | Not begun |
 | Close-out | — | Not begun |
 
@@ -249,19 +248,25 @@ open-ended risk requiring its own ongoing mitigation.
 
 ## 8. Product Architect Signature
 
-**Status: 🟡 Unsigned. Not authorized.**
+**Status: ✅ Signed. Authorized.**
 
-> I have reviewed: Module #20 Specification v1.2; Specification
-> Enhancement Amendment (v1.1); Module #20 Category Amendment (v1.2);
-> POL-20-001; ADR-0002; Implementation Plan; Phase 1 Close-Out; Phase 2
-> Rule 8 Assessment; Phase 2 Rule 8 Re-Assessment; this Phase 2
-> Implementation Authorization (Proposed). I confirm that the
-> governance process for Module #20 Phase 2 has been completed
-> satisfactorily. As Product Architect, I formally authorize Module
-> #20 – Phase 2 (Privileged-Server Creation Path) implementation.
+> I have reviewed the Module #20 Phase 2 Implementation Authorization
+> together with: Specification v1.2; Specification Amendment v1.2;
+> Phase 2 Rule 8 Assessment; Phase 2 Re-Assessment; ADR-0002;
+> POL-20-001. I confirm that all identified governance blockers have
+> been resolved and that the repository is consistent with the
+> approved governance state. I authorize implementation of Module #20
+> — Phase 2 (Privileged-Server Creation Path) exactly as defined by
+> this authorization document. This authorization applies only to
+> Phase 2. It does not authorize: Phase 3 (Background Worker Scheduled
+> Triggers); Phase 4 (User Experience Enhancements); Phase 5
+> (Commercial Integration); Phase 6 (Future Enhancements); any work
+> outside the explicitly authorized Phase 2 scope. Any additional
+> scope discovered during implementation must return to Product
+> Architecture for review before implementation proceeds.
 
-**Signed by:** _______________________
-**Date:** _______________________
+**Decision:** ✅ Authorized
+**Date:** August 3, 2026
 
 **Authorization scope, upon signature:** applies only to the
 implementation scope defined in §3/§5 of this document (which itself
@@ -281,8 +286,10 @@ the duration of implementation, unchanged from the Phase 1 precedent:**
 - No specification, policy, or ADR may be modified unless separately
   authorized.
 
-Implementation of the runtime files listed in §5 begins only once this
-document is signed and merged to `main`.
+Implementation of the runtime files listed in §5 begins following this
+signature, once this document is merged to `main` — starting with
+Checkpoint 1 (§6.1's Implementation Alignment), per the same
+incremental-checkpoint discipline used for Phase 1.
 
 ---
 
@@ -301,6 +308,6 @@ document is signed and merged to `main`.
 - This record does not pre-authorize Phase 3 or later — each requires
   its own Rule 8 Assessment and its own Authorization record, per §4.
 
-**Lifecycle:** Designed → **Proposed**, pending Product Architect
-signature. Not Implemented, not Executed — no engineering work is
-authorized by this document in its current status.
+**Lifecycle:** Designed → Proposed → **Authorized** (signed August 3,
+2026). Implementation may now begin, strictly within §3/§5/§6.1's
+boundaries.
