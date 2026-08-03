@@ -84,27 +84,29 @@ Performed fresh, immediately before drafting this document:
   `firestore.rules` path — confirmed by `git log 9f39737..origin/main`
   against those paths, returning no results.
 
-**One inconsistency found, independently, not present in either Rule 8
-document — flagged here rather than folded silently into §5's file
-list below:**
+**One implementation-alignment item found during verification — not a
+governance blocker, recorded here rather than left implicit:**
 
 `src/types.ts`'s `NotificationCategory` type still reads exactly
 `'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement'`
-— **no `'staff'` value exists in code**, confirmed by direct inspection.
-`server/index.ts` carries its own separate literal copy of the same
-type (by this repository's established convention of not importing
-`src/` types into `server/`, per Phase 1 Checkpoint 2's own commit
-message) — that copy is likewise still the original four values. This
-is expected and correct on Amendment v1.2's own terms — its status line
-states plainly that it is "documentation only" and "does not
-implement code" — but it means the original Phase 2 Rule 8 Assessment's
-§3 statement, "no `src/` file is touched by Phase 2 as scoped," is now
-stale relative to what implementing Phase 2 actually requires, since a
-category value the spec now requires (`staff`) does not yet exist in
-either type definition. The Re-Assessment did not re-derive §3 from
-scratch (by its own §0 statement of scope), so it did not catch this
-either. **This authorization's own §5 file list, below, corrects for
-it rather than reproducing the stale statement.**
+— **`'staff'` does not yet exist in code**, confirmed by direct
+inspection. `server/index.ts` carries its own separate literal copy of
+the same type (by this repository's established convention of not
+importing `src/` types into `server/`, per Phase 1 Checkpoint 2's own
+commit message) — that copy is likewise still the original four
+values. This is expected, not a gap: Amendment v1.2 changed the
+specification first, deliberately deferring the corresponding runtime
+change to the phase that actually needs it — Phase 2 is exactly that
+phase. **Specification says what the system should become; this
+authorization says what Phase 2 is allowed to change; Phase 2
+implementation performs that change.** The original Phase 2 Rule 8
+Assessment's §3 statement, "no `src/` file is touched by Phase 2 as
+scoped," predates Amendment v1.2 and is superseded by it, not
+contradicted by it — bringing `NotificationCategory` into alignment
+with the now-Accepted specification is one of Phase 2's first
+implementation tasks. **This authorization's own §5 file list, below,
+reflects that directly, as Implementation Alignment (§6) rather than a
+risk.**
 
 ## 3. Scope Authorized (Phase 2 Only)
 
@@ -170,7 +172,7 @@ own Authorization record, following this same document's pattern.
 
 | File | Change | Note |
 |---|---|---|
-| `src/types.ts` | Add `'staff'` to `NotificationCategory`. | **Not listed in either Rule 8 document** — added here per §2's independently-found inconsistency. Amendment v1.2 is Accepted at the specification level; this is the corresponding code change, required for Phase 2 to produce a schema-valid document. |
+| `src/types.ts` | Add `'staff'` to `NotificationCategory`. | Implementation alignment with Specification v1.2 — see §6, below. Not listed in either Rule 8 document; Amendment v1.2 changed the specification first and deliberately deferred this runtime change to Phase 2. |
 | `server/index.ts` | Add `'staff'` to its own literal `NotificationCategory` copy (~line 1077) and its `NOTIFICATION_CATEGORIES` array (~line 1097); add the five per-endpoint `NotificationPayload` constructions and their `writeNotification()` calls, each inside its existing staged-write flow. | Core of Phase 2. |
 | `tests/` | New assertions on the five existing staff-endpoint test suites (or a new adjacent test file, engineering's choice at implementation time) confirming a correctly-shaped `notifications` document exists after each successful action, and that a rejected/failed action produces none. | Per Rule 8 Assessment §9. |
 
@@ -188,10 +190,31 @@ of which phase produced it (Rule 8 Assessment §3).
 | 2 | Partial-failure handling for the new write | Open, accepted | Must follow the existing staged `partialFailure`/`auditLogged` pattern exactly (Rule 8 Assessment §10) — a notification-write failure is a non-critical downstream failure, never a reason to fail or roll back the primary staff action. |
 | 3 | `context`/`priority` content quality | Open, accepted | Schema validity alone does not guarantee good copy; the five payloads' `context` text requires content review against Business Rule 9's intent before merge, not assumed correct because `validateNotificationPayload()` accepted it. |
 | 4 | `dedupeKey` construction correctness | Open, accepted | Each of the five endpoints' `dedupeKey` must match 20.1's deterministic shape (`{businessId\|userId}:{type}:{period-or-eventId}`), verified per-endpoint during implementation. |
-| 5 *(new, this document)* | `src/types.ts`/`server/index.ts` `NotificationCategory` code gap (§2) | Open, accepted | Must be closed as the first step of implementation, before any endpoint calls `writeNotification()` with `category: 'staff'` — otherwise `validateNotificationPayload()`'s own enum check would reject every Phase 2 write. |
 
 No risk in this table requires reopening a Decision Gate, Business
 Rule, or POL parameter.
+
+## 6.1. Implementation Alignment
+
+Phase 2 introduces the `staff` `NotificationCategory` value into
+runtime code. This is an intentional implementation alignment with
+Specification v1.2, not a design uncertainty and not a risk: the
+specification changed first (Amendment v1.2, Accepted), deliberately
+deferring the corresponding runtime change to the phase that actually
+needs it, per that amendment's own "documentation only, implementation
+not yet built" status. Phase 2 is exactly that phase.
+
+**Expected runtime updates:**
+- `src/types.ts` — add `'staff'` to `NotificationCategory`.
+- `server/index.ts` — add `'staff'` to its own literal
+  `NotificationCategory` copy and `NOTIFICATION_CATEGORIES` array.
+
+This is not considered a governance blocker, because Specification
+Amendment v1.2 explicitly deferred runtime implementation to Phase 2.
+It is treated as the natural first implementation step of this phase —
+performed before any of the five endpoint changes, since they depend
+on `'staff'` existing as a valid enum value — not as a separate,
+open-ended risk requiring its own ongoing mitigation.
 
 ## 7. Preconditions Before Coding
 
@@ -200,10 +223,11 @@ Rule, or POL parameter.
    state alone, per the Governance Standard's Non-Negotiable Principle
    #7 ("numbering is not authorization") and the Phase 1 authorization's
    own precedent.
-2. Risk 5 (§6, this document) — the `NotificationCategory` code gap —
-   must be closed first, as its own clearly-identified sub-step, before
-   any of the five endpoint changes are written, since every subsequent
-   change in §5 depends on `'staff'` existing as a valid enum value.
+2. The `NotificationCategory` implementation alignment (§6.1, this
+   document) should be completed first, as its own clearly-identified
+   sub-step, before any of the five endpoint changes are written, since
+   every subsequent change in §5 depends on `'staff'` existing as a
+   valid enum value.
 3. The five `context`/`priority` payloads should be drafted and
    reviewed for genuine Business-Rule-9 quality (Risk 3) before merge,
    not written once and assumed sufficient because they pass validation.
@@ -242,10 +266,10 @@ Rule, or POL parameter.
 **Authorization scope, upon signature:** applies only to the
 implementation scope defined in §3/§5 of this document (which itself
 implements the Phase 2 Rule 8 Assessment and Re-Assessment, plus the
-one independently-found correction in §2/§6 Risk 5). Implementation
-shall remain strictly within these boundaries. No additional
-functionality, architectural redesign, feature expansion, or
-implementation of Phase 3 or later is authorized by a signature here.
+Implementation Alignment identified in §2/§6.1). Implementation shall
+remain strictly within these boundaries. No additional functionality,
+architectural redesign, feature expansion, or implementation of Phase
+3 or later is authorized by a signature here.
 
 **Governance requirements attached to this authorization, in effect for
 the duration of implementation, unchanged from the Phase 1 precedent:**
@@ -271,9 +295,9 @@ document is signed and merged to `main`.
 - This record does not modify the Phase 2 Rule 8 Assessment, the Phase
   2 Rule 8 Re-Assessment, Amendment v1.2, or any other prior governance
   document in the chain (§1) — it sits downstream of all of them,
-  authorizing based on their settled content, and separately notes
-  (§2, §5, §6 Risk 5) one gap those documents did not themselves catch,
-  without rewriting them to retrofit that finding.
+  authorizing based on their settled content, and separately identifies
+  (§2, §5, §6.1) one runtime-alignment item those documents' own file
+  lists predate, without rewriting them to retrofit that finding.
 - This record does not pre-authorize Phase 3 or later — each requires
   its own Rule 8 Assessment and its own Authorization record, per §4.
 
