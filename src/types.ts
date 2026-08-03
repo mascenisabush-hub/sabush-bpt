@@ -451,13 +451,18 @@ export interface TimelineFinancialImpact {
 // neither. Enforced by the writer (server-side), not by this type.
 export type NotificationScope = 'business' | 'user';
 
-// The four V1 categories (20.3, Decision Gate 4) — fixed, not
-// extensible without a spec amendment.
+// The five V1 categories (20.3, Decision Gate 4, as amended by
+// [Amendment v1.2] — the Module #20 Category Amendment). Originally
+// four; `staff` added by v1.2 to give staff-action confirmation events
+// (suspend/reactivate/delete/set-tier/reset-pin — Business Rule 4,
+// 20.5 Path 2) a category to belong to. Still fixed, not extensible
+// without a further spec amendment.
 export type NotificationCategory =
   | 'closing'
   | 'inventory_risk'
   | 'subscription'
-  | 'platform_announcement';
+  | 'platform_announcement'
+  | 'staff';
 
 // V1 implements exactly one delivery channel (20.4, Decision Gate 3).
 // The field exists now so Email/WhatsApp are additive later, not a

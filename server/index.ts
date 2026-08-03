@@ -1074,7 +1074,14 @@ setInterval(() => {
 // ------------------------------------------------------------------
 
 type NotificationScope = 'business' | 'user';
-type NotificationCategory = 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement';
+// Five V1 categories per 20.3/Decision Gate 4 as amended by [Amendment
+// v1.2] (Module #20 Category Amendment) — adds 'staff' for the
+// staff-action confirmation events Phase 2 produces (Business Rule 4,
+// 20.5 Path 2). Kept as its own literal copy, not imported from
+// src/types.ts, per this file's existing client/server boundary
+// convention (see the comment block above) — must be kept in sync
+// with src/types.ts's NotificationCategory by hand.
+type NotificationCategory = 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement' | 'staff';
 type NotificationChannel = 'in_app';
 type NotificationPriority = 'immediate' | 'timeline' | 'daily_summary';
 
@@ -1099,6 +1106,7 @@ const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'inventory_risk',
   'subscription',
   'platform_announcement',
+  'staff',
 ];
 const NOTIFICATION_PRIORITIES: NotificationPriority[] = ['immediate', 'timeline', 'daily_summary'];
 
