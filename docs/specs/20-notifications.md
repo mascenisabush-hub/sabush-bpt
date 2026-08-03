@@ -2,17 +2,23 @@ Business Domain Specification
 
 # Notifications
 
-Version 1.1
+Version 1.2
 **Status:** Accepted — business specification and architectural
 decisions accepted; implementation not yet authorized
 **Module #20 of 20 — Phase 4: Platform**
 **Amended by:** [Module #20 Specification Enhancement Amendment](./20-notifications-enhancement-amendment.md)
 (v1.1) — three owner-experience enhancements (Context-First
 Communication, Communication Priority, Owner Confidence Principle).
-All four Decision Gates below remain unchanged; V1 scope (Decision
-Gate 4) was explicitly not widened. `[Amendment v1.1]`-tagged additions
-throughout this document mark what changed; everything else is
-unchanged v1.0 content.
+Decision Gate 4 (V1 scope) was explicitly not widened by v1.1.
+`[Amendment v1.1]`-tagged additions throughout this document mark what
+that amendment changed. **[Module #20 Category Amendment](./20-notifications-category-amendment.md)
+(v1.2)** — adds `staff` as a fifth `NotificationCategory` value,
+resolving a gap the Phase 2 Rule 8 Assessment surfaced (staff-action
+confirmation events, already anticipated in Business Rule 4/20.5 Path
+2, had no category to belong to). This is the first amendment to
+reopen Decision Gate 4; Decision Gates 1–3 remain unchanged.
+`[Amendment v1.2]`-tagged changes mark what this amendment changed;
+everything else is unchanged v1.1 content.
 **Architecture references:** [Section 3.12](../architecture/03-domain-architecture.md)
 (Notifications domain definition — channel-agnostic delivery, never a
 source of truth, Worth-First scope test), [Section 4.4](../architecture/04-system-architecture.md)
@@ -197,13 +203,17 @@ Without this module:
    domain is built behind a Delivery Channel Interface from the start,
    so adding a channel later is additive, not a redesign. See Decision
    Record, Decision Gate 3.
-6. **V1 notification types are fixed to four categories:** Business
-   Closing Notifications, Inventory Risk Notifications, Subscription
-   Notifications (Module #19 dependency), and Platform Announcements.
-   No other category — marketing, promotional, sales reminders, staff
-   productivity scoring, or AI-generated recommendations (Module #15
-   dependency) — is in scope for V1. See Decision Record, Decision
-   Gate 4.
+6. **[Amendment v1.2] V1 notification types are fixed to five
+   categories:** Business Closing Notifications, Inventory Risk
+   Notifications, Subscription Notifications (Module #19 dependency),
+   Platform Announcements, and Staff Action Notifications (Module #16
+   dependency — added by the Category Amendment, v1.2). No other
+   category — marketing, promotional, sales reminders, staff
+   productivity/activity scoring or monitoring, or AI-generated
+   recommendations (Module #15 dependency) — is in scope for V1. This
+   rule originally fixed four categories; see Decision Record, Decision
+   Gate 4, and its Amendment v1.2 update block, for the full history of
+   this change.
 7. **Manager visibility mirrors existing Subscription-visibility
    pattern.** Manager sees Business-scoped notifications view-only,
    consistent with Architecture §6.8's existing "Own Subscription —
@@ -238,8 +248,8 @@ the owner make decisions, not just report that something happened. It
 should reduce uncertainty rather than merely generate alerts, and
 should include guidance where possible rather than reporting a problem
 in isolation. This is a UX principle guiding how Context-First content
-(Business Rule 9) is written and how the four accepted categories
-present themselves — it is not a technical requirement and has no
+(Business Rule 9) is written and how the five accepted categories
+(20.3, updated by Amendment v1.2) present themselves — it is not a technical requirement and has no
 corresponding schema field or Acceptance Criterion of its own. It is
 recorded here so implementation and future content decisions are
 judged against it, the same way Business Rules are judged against
@@ -255,7 +265,7 @@ notifications/{notificationId}
   scope: 'business' | 'user',
   businessId: string | null,   // required and non-null when scope='business'; null when scope='user'
   userId: string | null,       // required and non-null when scope='user'; null when scope='business'
-  category: 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement',
+  category: 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement' | 'staff', // [Amendment v1.2] 'staff' added
   type: string,                 // specific event key within the category, e.g. 'closing_overdue'
   payloadRef: {
     collection: string,         // the source-of-truth collection this notification references
@@ -331,10 +341,22 @@ notifications/{notificationId}
    notifications (these are typically broadcast, not per-Business
    triggered) — exact broadcast mechanism is a Functional Requirement
    for implementation planning, not fixed by this BDS.
+5. **[Amendment v1.2] Staff Action Notifications** — User-scoped
+   confirmation of a staff-management action taken on that user's
+   account: suspension, reactivation, deletion, tier change, or PIN
+   reset. Sourced from Staff & Roles (spec #16); created via the
+   privileged-server path (20.5, Path 2) — each of the five existing
+   `/api/staff/*` endpoints is a legitimate creation point, already
+   anticipated by Business Rule 4's own example ("staff suspension
+   confirmation"). **Not** staff productivity/activity monitoring or
+   scoring — see "Explicitly not V1," below, which remains unchanged
+   and still excludes that separate concept.
 
 **Explicitly not V1:** marketing notifications, promotional campaigns,
-sales reminders, staff productivity scoring, AI-generated recommendations
-(Module #15 dependency), WhatsApp delivery, email delivery.
+sales reminders, staff productivity/activity scoring or monitoring
+(distinct from category 5's one-time action confirmations, above),
+AI-generated recommendations (Module #15 dependency), WhatsApp
+delivery, email delivery.
 
 ### 20.4 Delivery Channel Interface (Decision Gate 3 applied)
 
@@ -425,10 +447,13 @@ Notification Event
     aggregate.
 - This governs delivery behavior within the existing in-app channel
   (Decision Gate 3, unchanged) — it does not introduce a new channel,
-  and it does not change which events produce a notification (Decision
-  Gate 4, unchanged).
-- Which specific `type` within each of the four accepted categories
-  (20.3) defaults to which tier is **not decided by this amendment** —
+  and it does not itself change which events produce a notification
+  (Decision Gate 4 was unchanged by this Amendment v1.1 specifically;
+  it was later reopened, narrowly, by Amendment v1.2 — see Decision
+  Gate 4's Update block, not by anything in this v1.1 section).
+- Which specific `type` within each of the **[Amendment v1.2] five**
+  accepted categories (20.3) defaults to which tier is **not decided by
+  this amendment** —
   see "Explicitly Left Open," below. This section fixes the taxonomy
   (three tiers, one required field) and its purpose, not the mapping.
 - A `daily_summary`-tier notification is not exempt from any Business
@@ -488,9 +513,15 @@ Notification Event
       document's payload is a reference (`payloadRef`) only.
 - [ ] A simulated Background Worker crash-and-restart produces no
       duplicate notification for the same real-world event.
-- [ ] V1 ships exactly the four accepted categories (20.3); no
-      marketing, promotional, staff-scoring, or AI-recommendation
-      notification type exists in the schema or trigger logic.
+- [ ] **[Amendment v1.2]** V1 ships exactly the five accepted
+      categories (20.3); no marketing, promotional, staff-scoring, or
+      AI-recommendation notification type exists in the schema or
+      trigger logic.
+- [ ] **[Amendment v1.2]** Every `staff`-category notification is
+      User-scoped (`scope: 'user'`), created only via the
+      privileged-server path (20.5, Path 2), and carries populated
+      `context`/`priority` exactly as required of the other four
+      categories — no exemption for the new category.
 - [ ] The Delivery Channel Interface (20.4) exists structurally even
       though only the in-app channel is implemented — adding Email or
       WhatsApp later requires no schema migration.
@@ -528,9 +559,11 @@ Per explicit instruction for this drafting stage:
   notification `type` — 20.6 fixes that the three pieces must exist and
   be populated, not their phrasing.
 - **[Amendment v1.1]** The default `priority` tier for each specific
-  notification `type` within the four accepted categories — 20.7 fixes
-  the three-tier taxonomy and its purpose, not the mapping. Implementation
-  planning assigns each `type` to a tier before Module #20 is built.
+  notification `type` within the **[Amendment v1.2] five** accepted
+  categories — 20.7 fixes the three-tier taxonomy and its purpose, not
+  the mapping. Implementation planning assigns each `type` (including
+  the five `staff`-category types) to a tier before Module #20 is
+  built.
 
 ---
 
@@ -604,6 +637,24 @@ Business health and platform continuity, consistent with the platform's
 core identity. Explicitly excluded: marketing, promotional, sales
 reminders, staff productivity scoring, AI-generated recommendations
 (Module #15 dependency), WhatsApp delivery, email delivery.
+
+> **Update — Category Amendment (v1.2):** this Decision Gate is
+> reopened, narrowly, by the [Module #20 Category Amendment](./20-notifications-category-amendment.md).
+> A fifth category, `staff` (Staff Action Notifications — see 20.3,
+> category 5), is added: User-scoped confirmation of a staff-management
+> action (suspension, reactivation, deletion, tier change, PIN reset),
+> sourced from Module #16, created via the privileged-server path
+> (20.5, Path 2) already accepted under Decision Gate 2. This is **not**
+> the "staff productivity scoring" this Gate already excluded above —
+> that remains excluded, unchanged (see the Category Amendment's own
+> Disambiguation section for the full reasoning). Every other
+> exclusion in this Gate's original text — marketing, promotional,
+> sales reminders, AI-generated recommendations, WhatsApp, email —
+> remains unchanged and in force. Origin: the [Module #20 Phase 2
+> Rule 8 Assessment](../engineering/20-phase2-privileged-server-rule8-assessment.md),
+> which found staff-action confirmation events had no category to
+> belong to and flagged this as a Product Architect decision rather
+> than resolving it unilaterally.
 
 ### Lifecycle
 
@@ -693,6 +744,52 @@ V1 remains exactly four categories.
 - Any source code implementation, `firestore.rules` changes,
   `Header.tsx` changes, or `NotificationContext` creation — this
   amendment is documentation only, same as the v1.0 acceptance above.
+
+**Lifecycle:** Designed → Executed review → Analyzed → **Accepted**.
+Not Implemented, Executed (as code), or further Analyzed beyond this
+review — no engineering work is authorized by this amendment.
+
+---
+
+## Product Architect Acceptance — Amendment v1.2
+
+**Accepted.** Full detail and rationale in the [Module #20 Category
+Amendment](./20-notifications-category-amendment.md). Scope of this
+acceptance:
+
+1. **`staff` added as a fifth `NotificationCategory` value** (20.1,
+   20.3, Business Rule 6, Decision Gate 4 Update block). User-scoped
+   confirmation of a staff-management action (suspension, reactivation,
+   deletion, tier change, PIN reset), created via the privileged-server
+   path (20.5, Path 2), sourced from Module #16.
+2. **Disambiguated from "Staff Activity"/staff productivity scoring**
+   (still excluded, unchanged) — the Category Amendment's own
+   Disambiguation section is the authoritative reasoning; this
+   acceptance does not reopen that separate exclusion.
+
+**Decision Gate 4 is reopened, narrowly, by this amendment** — the one
+Decision Gate the v1.1 Enhancement Amendment explicitly left
+untouched. Decision Gates 1, 2, and 3 remain unchanged and fully in
+force; this amendment does not reopen, widen, or reinterpret any of
+them. All `[Amendment v1.1]`-tagged content (Context-First
+Communication, Communication Priority, Owner Confidence Principle)
+remains unchanged and applies identically to the new category.
+
+**Not included in this acceptance:**
+- Renaming the module or replacing this specification.
+- Reopening Decision Gates 1, 2, or 3.
+- Introducing Staff Activity/productivity-scoring, marketing,
+  promotional, or AI-recommendation (Module #15 dependency)
+  categories — all remain explicitly excluded.
+- Changing Staff-role visibility rules (Business Rule 7) — a separate,
+  still-undecided item, unaffected by this amendment.
+- Any source code implementation, `firestore.rules` changes, or
+  `server/index.ts` changes — this amendment is documentation only.
+- **Phase 2 implementation authorization.** This acceptance resolves
+  the one open item the Phase 2 Rule 8 Assessment flagged; it does not
+  itself authorize Phase 2. Per Rule 8, a re-run Rule 8 Assessment and
+  a separate, explicit Phase 2 Authorization remain required before any
+  coding begins.
 
 **Lifecycle:** Designed → Executed review → Analyzed → **Accepted**.
 Not Implemented, Executed (as code), or further Analyzed beyond this
