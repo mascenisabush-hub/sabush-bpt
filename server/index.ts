@@ -273,16 +273,20 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
   }
 
   // Stage C — timeline/audit entry. Auth + Firestore already succeeded, so
-  // this is business history only, never a reason to report failure.
+  // this is business history only, never a reason to report failure. No
+  // longer early-returns on failure (Phase 2 Checkpoint 2) — Stage D below
+  // is an independent best-effort side effect of the same already-succeeded
+  // primary action, not conditional on this stage's own outcome.
+  const eventId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  let auditLogged = true;
   try {
-    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
       .doc(businessId)
       .collection('timelineEvents')
-      .doc(timelineId)
+      .doc(eventId)
       .set({
-        id: timelineId,
+        id: eventId,
         type: 'staff-removed',
         date: startedAt.slice(0, 10),
         createdAt: startedAt,
@@ -298,12 +302,40 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
       });
   } catch (err) {
     console.error('[staff/delete] timeline stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.json({ success: true, staffUid, authAccountDeleted, auditLogged: false });
-    return;
+    auditLogged = false;
+  }
+
+  // Stage D — User-scoped 'staff' notification (Module #20 Phase 2
+  // Checkpoint 2, per the signed Phase 2 Implementation Authorization).
+  // Best-effort, same as Stage C: a failure here must never roll back or
+  // fail the already-succeeded staff removal.
+  let notificationLogged = true;
+  try {
+    await writeNotification({
+      scope: 'user',
+      businessId: null,
+      userId: staffUid,
+      category: 'staff',
+      type: 'staff_removed',
+      payloadRef: { collection: 'users', documentId: staffUid },
+      dedupeKey: `${staffUid}:staff_removed:${eventId}`,
+      context: {
+        whatHappened: 'O seu acesso a esta conta foi removido permanentemente.',
+        whyItMatters: 'Já não pode iniciar sessão nesta conta nem aceder aos dados desta empresa.',
+        recommendedAction: 'Se acredita que isto foi um erro, contacte o proprietário da empresa.',
+      },
+      priority: 'immediate',
+    });
+  } catch (err) {
+    console.error('[staff/delete] notification stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    notificationLogged = false;
   }
 
   console.log('[staff/delete] success', { requesterUid, staffUid, businessId, authAccountDeleted, timestamp: startedAt });
-  res.json({ success: true, staffUid, authAccountDeleted });
+  const response: Record<string, unknown> = { success: true, staffUid, authAccountDeleted };
+  if (!auditLogged) response.auditLogged = false;
+  if (!notificationLogged) response.notificationLogged = false;
+  res.json(response);
 });
 
 // ------------------------------------------------------------------
@@ -374,16 +406,20 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
   }
 
   // Stage C — timeline/audit entry. Auth + Firestore already succeeded, so
-  // this is business history only, never a reason to report failure.
+  // this is business history only, never a reason to report failure. No
+  // longer early-returns on failure (Phase 2 Checkpoint 2) — Stage D below
+  // is an independent best-effort side effect of the same already-succeeded
+  // primary action, not conditional on this stage's own outcome.
+  const eventId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  let auditLogged = true;
   try {
-    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
       .doc(businessId)
       .collection('timelineEvents')
-      .doc(timelineId)
+      .doc(eventId)
       .set({
-        id: timelineId,
+        id: eventId,
         type: 'staff-suspended',
         date: startedAt.slice(0, 10),
         createdAt: startedAt,
@@ -394,12 +430,40 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
       });
   } catch (err) {
     console.error('[staff/suspend] timeline stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.json({ success: true, staffUid, auditLogged: false });
-    return;
+    auditLogged = false;
+  }
+
+  // Stage D — User-scoped 'staff' notification (Module #20 Phase 2
+  // Checkpoint 2, per the signed Phase 2 Implementation Authorization).
+  // Best-effort, same as Stage C: a failure here must never roll back or
+  // fail the already-succeeded suspension.
+  let notificationLogged = true;
+  try {
+    await writeNotification({
+      scope: 'user',
+      businessId: null,
+      userId: staffUid,
+      category: 'staff',
+      type: 'staff_suspended',
+      payloadRef: { collection: 'users', documentId: staffUid },
+      dedupeKey: `${staffUid}:staff_suspended:${eventId}`,
+      context: {
+        whatHappened: 'O seu acesso a esta empresa foi suspenso.',
+        whyItMatters: 'Não pode iniciar sessão até que o acesso seja reativado.',
+        recommendedAction: 'Contacte o proprietário ou gestor da empresa para mais informações.',
+      },
+      priority: 'immediate',
+    });
+  } catch (err) {
+    console.error('[staff/suspend] notification stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    notificationLogged = false;
   }
 
   console.log('[staff/suspend] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
-  res.json({ success: true, staffUid });
+  const response: Record<string, unknown> = { success: true, staffUid };
+  if (!auditLogged) response.auditLogged = false;
+  if (!notificationLogged) response.notificationLogged = false;
+  res.json(response);
 });
 
 // ------------------------------------------------------------------
@@ -460,16 +524,20 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
   }
 
   // Stage C — timeline/audit entry. Auth + Firestore already succeeded, so
-  // this is business history only, never a reason to report failure.
+  // this is business history only, never a reason to report failure. No
+  // longer early-returns on failure (Phase 2 Checkpoint 2) — Stage D below
+  // is an independent best-effort side effect of the same already-succeeded
+  // primary action, not conditional on this stage's own outcome.
+  const eventId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  let auditLogged = true;
   try {
-    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
     await db
       .collection('businesses')
       .doc(businessId)
       .collection('timelineEvents')
-      .doc(timelineId)
+      .doc(eventId)
       .set({
-        id: timelineId,
+        id: eventId,
         type: 'staff-reactivated',
         date: startedAt.slice(0, 10),
         createdAt: startedAt,
@@ -480,12 +548,42 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
       });
   } catch (err) {
     console.error('[staff/reactivate] timeline stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.json({ success: true, staffUid, auditLogged: false });
-    return;
+    auditLogged = false;
+  }
+
+  // Stage D — User-scoped 'staff' notification (Module #20 Phase 2
+  // Checkpoint 2, per the signed Phase 2 Implementation Authorization).
+  // Best-effort, same as Stage C: a failure here must never roll back or
+  // fail the already-succeeded reactivation. recommendedAction is null —
+  // access is fully restored, genuinely no further action needed (Business
+  // Rule 9: null only when no action is truly possible/needed).
+  let notificationLogged = true;
+  try {
+    await writeNotification({
+      scope: 'user',
+      businessId: null,
+      userId: staffUid,
+      category: 'staff',
+      type: 'staff_reactivated',
+      payloadRef: { collection: 'users', documentId: staffUid },
+      dedupeKey: `${staffUid}:staff_reactivated:${eventId}`,
+      context: {
+        whatHappened: 'O seu acesso a esta empresa foi reativado.',
+        whyItMatters: 'Pode voltar a iniciar sessão normalmente.',
+        recommendedAction: null,
+      },
+      priority: 'immediate',
+    });
+  } catch (err) {
+    console.error('[staff/reactivate] notification stage failed after Auth+Firestore succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    notificationLogged = false;
   }
 
   console.log('[staff/reactivate] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
-  res.json({ success: true, staffUid });
+  const response: Record<string, unknown> = { success: true, staffUid };
+  if (!auditLogged) response.auditLogged = false;
+  if (!notificationLogged) response.notificationLogged = false;
+  res.json(response);
 });
 
 // ------------------------------------------------------------------
@@ -541,8 +639,38 @@ expressApp.post('/api/staff/reset-pin', requireAuth, async (req: AuthedRequest, 
     // itself is never logged anywhere, and "PIN was reset" isn't
     // meaningful business history the way suspension/removal are.
 
+    // Notification stage (Module #20 Phase 2 Checkpoint 2, per the signed
+    // Phase 2 Implementation Authorization). Its own inner try/catch, not
+    // part of the outer try above's failure path — a notification-write
+    // failure here must never turn an already-succeeded PIN reset into a
+    // reported failure (the outer catch below returns 500).
+    let notificationLogged = true;
+    const eventId = `ev-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+    try {
+      await writeNotification({
+        scope: 'user',
+        businessId: null,
+        userId: staffUid,
+        category: 'staff',
+        type: 'staff_pin_reset',
+        payloadRef: { collection: 'users', documentId: staffUid },
+        dedupeKey: `${staffUid}:staff_pin_reset:${eventId}`,
+        context: {
+          whatHappened: 'O seu PIN de acesso foi redefinido.',
+          whyItMatters: 'Precisa do novo PIN para iniciar sessão a partir de agora.',
+          recommendedAction: 'Se não solicitou esta alteração, contacte o proprietário da empresa imediatamente.',
+        },
+        priority: 'immediate',
+      });
+    } catch (err) {
+      console.error('[staff/reset-pin] notification stage failed after Auth update succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+      notificationLogged = false;
+    }
+
     console.log('[staff/reset-pin] success', { requesterUid, staffUid, businessId, timestamp: startedAt });
-    res.json({ success: true, staffUid });
+    const response: Record<string, unknown> = { success: true, staffUid };
+    if (!notificationLogged) response.notificationLogged = false;
+    res.json(response);
   } catch (err) {
     console.error('[staff/reset-pin] unexpected failure', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
     res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao redefinir o PIN. Tente novamente.' });
@@ -630,25 +758,28 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
 
   // Stage C — timeline/audit entry. The batch commit above already
   // succeeded, so this is business history only — a failure here must
-  // not be reported as if the tier/permission change itself failed.
+  // not be reported as if the tier/permission change itself failed. No
+  // longer early-returns on failure (Phase 2 Checkpoint 2) — Stage D below
+  // is an independent best-effort side effect of the same already-succeeded
+  // primary action, not conditional on this stage's own outcome.
+  const eventId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
+  const eventType =
+    previousTier === 'staff' && requestedTier === 'manager' ? 'manager-granted' :
+    previousTier === 'manager' && requestedTier === 'staff' ? 'manager-revoked' :
+    'manager-permissions-changed';
+  const eventTitle =
+    eventType === 'manager-granted' ? 'Funcionário Promovido a Gestor' :
+    eventType === 'manager-revoked' ? 'Funcionário Despromovido de Gestor' :
+    'Permissões de Gestor Alteradas';
+  let auditLogged = true;
   try {
-    const timelineId = `tl-${Date.now()}-${Math.random().toString(36).slice(2, 7)}`;
-    const eventType =
-      previousTier === 'staff' && requestedTier === 'manager' ? 'manager-granted' :
-      previousTier === 'manager' && requestedTier === 'staff' ? 'manager-revoked' :
-      'manager-permissions-changed';
-    const eventTitle =
-      eventType === 'manager-granted' ? 'Funcionário Promovido a Gestor' :
-      eventType === 'manager-revoked' ? 'Funcionário Despromovido de Gestor' :
-      'Permissões de Gestor Alteradas';
-
     await db
       .collection('businesses')
       .doc(businessId)
       .collection('timelineEvents')
-      .doc(timelineId)
+      .doc(eventId)
       .set({
-        id: timelineId,
+        id: eventId,
         type: eventType,
         date: startedAt.slice(0, 10),
         createdAt: startedAt,
@@ -659,12 +790,45 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
       });
   } catch (err) {
     console.error('[staff/set-tier] timeline stage failed after batch commit succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
-    res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions, auditLogged: false });
-    return;
+    auditLogged = false;
+  }
+
+  // Stage D — User-scoped 'staff' notification (Module #20 Phase 2
+  // Checkpoint 2, per the signed Phase 2 Implementation Authorization).
+  // Best-effort, same as Stage C: a failure here must never roll back or
+  // fail the already-succeeded tier/permission change. Content keyed off
+  // the same eventType already computed above for the timeline entry.
+  let notificationLogged = true;
+  try {
+    const whatHappened =
+      eventType === 'manager-granted' ? 'Foi promovido a Gestor nesta empresa.' :
+      eventType === 'manager-revoked' ? 'O seu nível de acesso foi alterado para Funcionário.' :
+      'As suas permissões de Gestor foram alteradas.';
+    await writeNotification({
+      scope: 'user',
+      businessId: null,
+      userId: staffUid,
+      category: 'staff',
+      type: 'staff_tier_changed',
+      payloadRef: { collection: 'users', documentId: staffUid },
+      dedupeKey: `${staffUid}:staff_tier_changed:${eventId}`,
+      context: {
+        whatHappened,
+        whyItMatters: 'Isto altera as permissões que tem nesta empresa.',
+        recommendedAction: 'Reveja as suas novas permissões com o proprietário ou gestor da empresa.',
+      },
+      priority: 'immediate',
+    });
+  } catch (err) {
+    console.error('[staff/set-tier] notification stage failed after batch commit succeeded', { requesterUid, staffUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    notificationLogged = false;
   }
 
   console.log('[staff/set-tier] success', { requesterUid, staffUid, businessId, staffTier: requestedTier, timestamp: startedAt });
-  res.json({ success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions });
+  const response: Record<string, unknown> = { success: true, staffUid, staffTier: requestedTier, managerPermissions: requestedPermissions };
+  if (!auditLogged) response.auditLogged = false;
+  if (!notificationLogged) response.notificationLogged = false;
+  res.json(response);
 });
 
 // ------------------------------------------------------------------
