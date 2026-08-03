@@ -1334,10 +1334,10 @@ function validateNotificationPayload(payload: NotificationPayload): void {
 // else. `status` always starts 'unread' — never caller-supplied either,
 // since a notification can't begin already-read.
 //
-// Not called anywhere in this checkpoint — exercised only by its own
-// unit test (Rule 8 Assessment §6, Risk 7: keeps the helper verified
-// even while unused, rather than letting it drift from the schema
-// until Phase 2/3 first calls it for real).
+// Called by all five /api/staff/* endpoints (Phase 2 Checkpoint 2) —
+// see tests/staff-notifications.test.ts (Phase 2 Checkpoint 3) for
+// structural verification of each call site's payload shape and
+// partial-failure handling.
 async function writeNotification(payload: NotificationPayload): Promise<string> {
   validateNotificationPayload(payload);
 
