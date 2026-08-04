@@ -9,12 +9,25 @@ governance baseline into a structured, phased implementation roadmap.
 separate, explicit Product Architect decision, per Rule 8, requiring
 its own Phase 1 Rule 8 Assessment first.
 **Basis:**
-- [`20-notifications.md`](../specs/20-notifications.md) (v1.1, ✅ Accepted)
+- [`20-notifications.md`](../specs/20-notifications.md) (v1.2, ✅ Accepted)
 - [Module #20 Specification Enhancement Amendment](../specs/20-notifications-enhancement-amendment.md) (✅ Accepted)
+- [Module #20 Specification Category Amendment](../specs/20-notifications-category-amendment.md) (v1.2, ✅ Accepted)
 - [POL-20-001 — Notification Retention Policy](../specs/20-pol-001-notification-retention-policy.md) (✅ Approved)
 - [Module #20 Engineering Readiness Assessment](./20-notifications-implementation-readiness.md) (Rule 8, Assessed)
-- [ADR-0002 — Platform Background Worker Architecture](../adr/ADR-0002-platform-background-worker.md) (Approved)
+- [ADR-0002 — Platform Background Worker Architecture](../adr/ADR-0002-platform-background-worker.md) (✅ Accepted)
+- [ADR-0003 — Background Worker Job Registration](../adr/ADR-0003-background-worker-job-registration.md) (✅ Accepted)
+- [ADR-0004 — Notification Platform Architecture](../adr/ADR-0004-notification-platform-architecture.md) (✅ Accepted)
+- [BDR-0005 — Notification Language Resolution Policy](../specs/20-bdr-0005-notification-language-resolution-policy.md) (✅ Accepted)
+- [BDR-0006 — Notification Communication Policy](../specs/20-bdr-0006-notification-communication-policy.md) (✅ Accepted)
 - Architecture §3.12, §4.4, §4.8, §4.9, §4.12, §6.8, §7.4, §8.13, §9.9, §13.5
+
+**Reconciliation note:** this plan was originally drafted against
+ADR-0002 and POL-20-001 only. ADR-0003, ADR-0004, BDR-0005, and
+BDR-0006 were Accepted afterward. The sections below were amended
+against
+[`20-notifications-implementation-plan-reconciliation-review.md`](./20-notifications-implementation-plan-reconciliation-review.md)
+(Product Architect-approved) to reflect them — see that document for
+the full conflict-by-conflict record of what changed and why.
 
 **Nothing has been modified in `src/`, `server/`, `firestore.rules`, or
 any `docs/specs/*`/`docs/architecture/*` file to produce this document.**
@@ -106,10 +119,15 @@ Engine already own.
   documents going forward (one `platform_audit_log` entry, already
   built; one `notifications` document, new) — not one document read by
   two audiences.
-- **Background Worker (ADR-0002):** Module #20's scheduled job types
-  (Closing-overdue, Inventory-risk, Subscription-notification companion
-  writes) extend the same shared worker process `runTrialLifecycleSweep()`
-  already runs on. This plan does not build a second scheduled process.
+- **Background Worker (ADR-0002, ADR-0003):** Module #20's scheduled
+  job types (Closing-overdue, Inventory-risk, Subscription-notification
+  companion writes) extend the same shared worker process
+  `runTrialLifecycleSweep()` already runs on, added via ADR-0003's
+  `registerJob(...)` interface. This plan does not build a second
+  scheduled process. Per the reconciliation review's approved Decision
+  1, `runTrialLifecycleSweep()` itself is migrated onto this same
+  interface as the first registered job, rather than remaining a
+  separate legacy path — see "Legacy Compatibility," §6a below.
 - **Inventory (Stock Counts #10, Breakages #7):** no existing
   discrepancy/risk detection logic exists anywhere in the codebase
   today — this is new Background Worker logic, not a wiring exercise
@@ -162,36 +180,66 @@ Repository-evidence-based, spot-checked against current `main`
   `notifications` query exists today. New indexes required at minimum:
   `businessId` + `createdAt`, `userId` + `createdAt` (live-feed
   queries), possibly `+ status` for unread-count queries.
-- **`server/index.ts`** — no notification-write helper exists today.
-  A shared helper (mirroring the existing `newAuditEventRef()` pattern
-  Module #19 Phase 2 established) is added, called from:
+- **`server/index.ts`** — no notification-write helper and no
+  job-registration interface exist today. Per ADR-0003, new Background
+  Worker job types are added through a `registerJob({ jobType,
+  schedule, execute, dedupeKeyFn, retryPolicy })` interface — not as
+  additional hardcoded branches inside `runTrialLifecycleSweep()`. This
+  phase's scope includes building that registration interface for the
+  first time. Per the reconciliation review's approved Decision 1,
+  `runTrialLifecycleSweep()` (line ~992) is **migrated onto this
+  interface as the first registered job**, becoming the reference
+  implementation for ADR-0003, rather than continuing to run alongside
+  it as a separate legacy path — see "Legacy Compatibility," §6a below.
+  Per ADR-0004, no producer writes a final notification document
+  directly:
   - The five existing `requireAuth`-protected staff endpoints
     (`/api/staff/suspend`, `/api/staff/reactivate`, `/api/staff/delete`,
-    `/api/staff/set-tier`, `/api/staff/reset-pin`) — each already a
-    privileged-server transaction; adding a notification write is
-    additive to the existing transaction.
-  - `runTrialLifecycleSweep()` (line ~992) — extended with new job
-    types per ADR-0002's "extend, not introduce" resolution, not
-    replaced.
+    `/api/staff/set-tier`, `/api/staff/reset-pin`) remain exactly as
+    shipped in Phase 2 — per the reconciliation review's approved
+    Decision 2, these are **not** retrofitted onto the BusinessEvent
+    contract (see "Legacy Compatibility," §6a below).
+  - New Phase 3 Background Worker job types emit a `BusinessEvent` each,
+    evaluated by the Notification Platform step (new — see §5, below)
+    rather than writing a notification document themselves.
 
 ## 5. New Components (planning concepts only)
 
 - **`Notification` / `NotificationCategory` / `NotificationPriority`
-  types** (`src/types.ts`) — mirrors the schema fixed by 20.1: `scope`,
-  `businessId`/`userId` (exactly one set), `category`, `type`,
-  `payloadRef`, `channel`, `status`, `dedupeKey`, `createdAt`, `context`
-  (`whatHappened`/`whyItMatters`/`recommendedAction`), `priority`.
+  types** (`src/types.ts`) — mirrors the schema fixed by 20.1, field for
+  field: `scope`, `businessId`/`userId` (exactly one set), `category`,
+  `type`, `payloadRef`, `channel`, `status`, `dedupeKey`, `createdAt`,
+  `context` (`whatHappened`/`whyItMatters`/`recommendedAction`),
+  `priority`. Per ADR-0004/BDR-0006, `context` and `priority` are
+  written by the Notification Platform evaluation step (§5, below), not
+  directly by the originating job or endpoint — for Phase 3's three
+  producers specifically, `priority` is fixed and deterministic per
+  BDR-0006 §9 (Closing/Subscription → Immediate, Inventory Risk →
+  High), not computed per event. A separate `BusinessEvent` type (new,
+  not part of 20.1, introduced by ADR-0004) is what Phase 3 producers
+  actually emit.
 - **`NotificationContext`** (`src/context/NotificationContext.tsx`,
   new) — Architecture §8.13's frontend counterpart: a live Firestore
   listener scoped to the current user's own feed (Business-scoped
   notifications for their active Business, plus their own User-scoped
   ones). Read-only — no client-direct write path except the narrowly-
   scoped read/dismiss action described in §7, below.
-- **Shared server-side notification-write helper** (`server/index.ts`,
-  new) — the single choke point all three creation paths (Background
-  Worker, privileged server, payment webhook) call through, so schema
-  shape, `dedupeKey` construction, and `context`/`priority` population
-  are enforced once, not per call site.
+- **`BusinessEvent` emission** (`server/index.ts` and/or a new shared
+  module) — per ADR-0004, Phase 3's three Background Worker producers
+  construct a `BusinessEvent` (a fact, never rendered text) and hand it
+  to the Notification Platform evaluation step below. Per the
+  reconciliation review's approved Decision 2, Phase 2's five existing
+  staff endpoints are **not** changed to emit `BusinessEvent`s — see
+  "Legacy Compatibility," §6a below.
+- **Notification Platform evaluation step** (`server/index.ts`, new) —
+  the single choke point every Phase 3 `BusinessEvent` passes through.
+  Applies BDR-0006's communication policy (Notify/Batch/Suppress +
+  priority — fixed and deterministic for all three Phase 3 producers
+  per BDR-0006 §9, not computed dynamically in V1), resolves language
+  per BDR-0005's User → Business → Portuguese fallback chain, resolves
+  a template into `context`, and only then writes the `notifications`
+  document — `dedupeKey` construction happens here, once, not per
+  producer.
 - **Delivery Channel Interface** (20.4) — a lightweight TypeScript
   interface (e.g., `interface DeliveryChannel { send(notification):
   Promise<void> }`) with exactly one implementation in V1
@@ -201,8 +249,9 @@ Repository-evidence-based, spot-checked against current `main`
   per the Readiness Assessment (§3, item 3).
 - **Background Worker job types** — Closing-overdue detection,
   Inventory-risk detection, Subscription-notification companion writes
-  — each a new function registered into the existing worker process
-  per ADR-0002, not a new process.
+  — each registered into the existing worker process via the ADR-0003
+  `registerJob(...)` interface, per ADR-0002's "extend, not introduce"
+  resolution (one process, not a new one).
 
 ## 6. What This Plan Does Not Authorize
 
@@ -219,6 +268,48 @@ document referenced above:
   risks review, performed at the point Phase 1 is actually assigned —
   is required first, per Rule 8 and consistent with how Module #19's
   own plan (§14–15 there) required the same before its Phase 1 began.
+
+---
+
+## 6a. Legacy Compatibility
+
+ADR-0003 and ADR-0004 are architectural improvements, not retrospective
+corrections. Existing completed implementations remain valid unless
+explicitly identified for migration. This plan distinguishes three
+categories, per the Product Architect's explicit decisions recorded in
+[`20-notifications-implementation-plan-reconciliation-review.md`](./20-notifications-implementation-plan-reconciliation-review.md)
+§4:
+
+- **Existing implementation selected as reference migration:**
+  `runTrialLifecycleSweep()` (Module #19's Trial Lifecycle Worker). It
+  is migrated onto the ADR-0003 `registerJob(...)` interface as part of
+  Phase 3, becoming the first registered job and the reference
+  implementation for every job type after it — not left as a permanent
+  legacy exception alongside newly registered ones. Chosen because it
+  is already isolated, already has deterministic scheduling, already
+  uses watermark/dedupe concepts, and is the only scheduled worker that
+  exists today.
+- **Existing implementation retained as a supported legacy pattern:**
+  Phase 2's five `/api/staff/*` notification-producing endpoints. They
+  remain a supported direct-producer implementation because they
+  originate from synchronous, request/response, privileged-server
+  operations — not scheduled BusinessEvent evaluation — which is the
+  problem ADR-0004 was written to solve. Retrofitting them onto the
+  BusinessEvent contract would add churn to already-closed Phase 2 work
+  for no corresponding business value. Future privileged-server
+  features may adopt the BusinessEvent contract where it genuinely
+  fits, but existing Phase 2 Staff Notifications are not required to
+  migrate.
+- **New Phase 3 implementation requirements:** the three new Background
+  Worker producers (Closing-overdue, Inventory-risk, Subscription-
+  notification companion) are built against ADR-0003/ADR-0004/
+  BDR-0005/BDR-0006 from the start — they have no legacy precedent to
+  reconcile against.
+
+This section exists so a future contributor reading ADR-0003/ADR-0004
+does not assume every older implementation in this codebase is
+"wrong" — only the two categories above that were explicitly evaluated
+and placed into one bucket or the other.
 
 ---
 
@@ -277,7 +368,7 @@ review. Flagged here for visibility, not silently assumed.
 
 | Module | Relationship |
 |---|---|
-| **#19 — Subscriptions** | Source of category-3 event truth. #20 observes state transitions only; does not recompute or duplicate them. Shares one Background Worker instance (ADR-0002) as two sets of job types, not two workers. |
+| **#19 — Subscriptions** | Source of category-3 event truth. #20 observes state transitions only; does not recompute or duplicate them. Shares one Background Worker instance (ADR-0002) as registered job types on the same `registerJob(...)` interface (ADR-0003) — including the migrated Trial Lifecycle job itself — not two workers. |
 | **#16 — Staff & Roles** | Staff-action notifications (suspend/reactivate/delete/set-tier/reset-pin) are User-scoped, created via the privileged-server path, additive to existing endpoints. |
 | **#17 — Multi-Shop / Owner Portfolio** | Notifications remain isolated per originating Business — no cross-Business aggregation for an Owner with multiple Businesses (Business Rule 2), mirroring #17's own "no aggregation across Businesses" boundary. |
 | **#18 — SuperAdmin** | Future consumer of aggregate delivery-health data (§9.9) once #18 is built. Not a dependency of #20's own implementation; the `platform_operators/{uid}` recipient-binding question (Readiness Assessment §2) is deferred to #18's own work, not resolved here. |
@@ -353,32 +444,54 @@ independent creation path); no open Product decision blocks it.
 ### Phase 3 — Background Worker Scheduled Triggers
 
 **Objective:** Closing-overdue detection, Inventory-risk detection, and
-Subscription-notification companion writes, registered on the existing
-shared worker per ADR-0002.
+Subscription-notification companion events, each registered as an
+independent job type on the shared Background Worker per ADR-0002 and
+ADR-0003, each emitting a `BusinessEvent` evaluated by the Notification
+Platform step per ADR-0004/BDR-0006.
 
-- Extend `runTrialLifecycleSweep()`'s process with new job types (not a
-  second process) — each job type owns its own dedupe-key shape (Risk
-  1, §10) and its own detection logic (no existing "overdue" or
-  "discrepancy" logic exists anywhere today to wire onto — this is new
-  business-adjacent detection code, sourced from Closings/#11, Stock
-  Counts/#10, Breakages/#7, and Subscriptions/#19's own state).
-- Subscription-notification companion write: alongside the existing
-  `platform_audit_log` entry `runTrialLifecycleSweep()` already writes,
-  add a second, owner-facing `notifications` document for the same
-  transition — two documents, two audiences, per §3 above.
+- Each job type is added via `registerJob(...)` (ADR-0003) — own
+  schedule, own dedupe-key function, own retry policy — not as a branch
+  inside `runTrialLifecycleSweep()`. Per the reconciliation review's
+  approved Decision 1, `runTrialLifecycleSweep()` itself is migrated
+  onto this same interface as part of this phase, becoming the
+  reference implementation, not a fourth job type alongside three new
+  ones running on a separate legacy path.
+- No existing "overdue" or "discrepancy" detection logic exists
+  anywhere today for any of the three (Closings/#11, Stock Counts/#10 +
+  Breakages/#7, Subscriptions/#19's own state) — this is new detection
+  code for all three, not a wiring exercise.
+- Each detection produces a `BusinessEvent`, not a notification
+  document directly. The Notification Platform evaluation step (§5,
+  above) applies BDR-0006 §9's fixed Version 1 policy — Closing →
+  Notify/Immediate, Subscription → Notify/Immediate, Inventory Risk →
+  Notify/High — and resolves language per BDR-0005 before any
+  `notifications` document is written.
+- Subscription-notification: alongside the existing `platform_audit_log`
+  entry `runTrialLifecycleSweep()` already writes, a `BusinessEvent` is
+  emitted for the same transition, flowing through the same evaluation
+  step as the other two producers — not a bespoke second write path.
 
-**Prerequisites:** Phase 1 complete. ADR-0002 already resolves the
-worker-ownership question that would otherwise block this phase.
+**Prerequisites:** Phase 1 complete. ADR-0002 resolves worker
+ownership; ADR-0003 resolves how job types are registered; ADR-0004/
+BDR-0005/BDR-0006 resolve the BusinessEvent-to-notification path for
+all three producers.
 
 **Explicitly out of scope:** any detection threshold/grace-period
 tuning beyond what's needed to ship (exact day-counts remain
-implementation detail per the spec's "Explicitly Left Open").
+implementation detail per the spec's "Explicitly Left Open," still an
+open Product decision as of this amendment — see
+[`20-phase3-rule8-assessment.md`](./20-phase3-rule8-assessment.md)).
 
-**Readiness classification: Ready after Phase 1** — the one
-architectural blocker this phase depended on (Background Worker
-ownership) is resolved by ADR-0002. Per-job-type dedupe-key correctness
-(Risk 1, §10) needs verifying individually during this phase, not
-assumed from Module #19's single working example.
+**Readiness classification: no current readiness determination** — see
+[`20-phase3-rule8-assessment.md`](./20-phase3-rule8-assessment.md) for
+the authoritative record; this row is not it (§11, below). The
+architectural questions this phase depended on are now resolved
+(ADR-0002/0003/0004, BDR-0005/0006); the dedupe/watermark mechanism
+(Risk 1, §10) still needs to be designed and built — including for the
+migrated Trial Lifecycle job, which has never used a dedupe-key
+mechanism itself and is not a proven example of one — and the three
+detection thresholds still need an explicit Product decision or
+deferral.
 
 ---
 
@@ -455,11 +568,18 @@ work beyond this placeholder, begins.
 
 ## 10. Risks (carried forward from the Readiness Assessment, with phase mapping)
 
-1. **Duplicate notifications** (Phase 3). Business Rule 8's
-   `dedupeKey` mechanism is conceptually sound (reuses Architecture
-   §4.8.1) but unproven per-job-type. Mitigation: each new job type
-   gets its own dedupe-key correctness check during Phase 3, not
-   assumed from Module #19's single working example.
+1. **Duplicate notifications** (Phase 3). The dedupe-key mechanism
+   described conceptually at Architecture §4.8.1 does not exist in
+   code today, for any job type — confirmed by repository review (see
+   [`20-phase3-rule8-assessment.md`](./20-phase3-rule8-assessment.md)
+   §1, §7 Risk 1). This must be designed and built as part of this
+   phase, not assumed proven from Module #19's example, which achieves
+   idempotency by a different mechanism entirely (transaction-based
+   state re-check on the subscription document itself, not a
+   dedupe-key check). Mitigation: design the dedupe/watermark mechanism
+   (one of Architecture §4.8.1's two candidate shapes) before any
+   producer code is written, and verify it per registered job type,
+   including the migrated Trial Lifecycle job.
 2. **Event ordering** (Phase 4). Low risk — display order by
    `createdAt` handles simultaneous events adequately. Mitigation:
    a one-line sort-order decision during Phase 4, not a structural
@@ -495,7 +615,7 @@ work beyond this placeholder, begins.
 |---|---|---|
 | 1 — Foundations | **Ready** (pending its own Phase 1 Rule 8 Assessment) | All governance inputs (spec, Amendment, POL-20-001, ADR-0002) resolved; no open Product decision blocks it |
 | 2 — Privileged-Server Path | Ready after Phase 1 | Decision Gate 2 already legitimizes this path; endpoints already exist |
-| 3 — Background Worker Triggers | Ready after Phase 1 | ADR-0002 resolves the sole architectural blocker (worker ownership) |
+| 3 — Background Worker Triggers | No current readiness determination — see [`20-phase3-rule8-assessment.md`](./20-phase3-rule8-assessment.md) | ADR-0002/0003/0004 and BDR-0005/0006 collectively govern this phase; the Phase 3 Rule 8 Assessment is the authoritative readiness record, not this table |
 | 4 — Tenant UX | Ready after Phases 1–3 | No open Product decision; purely sequential dependency |
 | 5 — Payment Webhook Path | **Not ready** | Blocked on Module #19's own Commercial Integration phase (vendor/pricing) |
 | 6 — Future Delivery Channels | **Not ready — out of V1 scope** | No governance authorizes work beyond the Delivery Channel Interface itself |
