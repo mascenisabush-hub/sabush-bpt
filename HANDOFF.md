@@ -12,15 +12,57 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #20 (Notifications), **Phase 3 (Background Worker
-Scheduled Triggers) has been Rule-8-Assessed and classified NOT READY.**
-`main` == `origin/main` at `be0f676` (confirmed via fresh `git fetch`,
-not assumed). Full detail:
-[`docs/engineering/20-phase3-rule8-assessment.md`](./docs/engineering/20-phase3-rule8-assessment.md).
+**[Corrected — this section was 13 commits stale as of 2026-08-05;**
+**see "Superseded note" below.]**
 
-**Do not start Phase 3 implementation.** No job-registration interface,
-no `BusinessEvent` type, no detection logic, and no dedupe/watermark
-mechanism exists anywhere in `src/` or `server/` as of this commit.
+**Status:** Module #20 (Notifications) Phase 3 is **authorized and
+in progress.** `main` == `origin/main` at `d147106` (confirmed via
+fresh `git fetch`, not assumed).
+
+**What's true right now, in order:**
+
+1. Phase 1 and Phase 2 remain implemented, verified, and closed (unchanged).
+2. The original Rule 8 Assessment's "Not Ready" verdict was
+   **superseded** by
+   [`20-phase3-rule8-assessment-v2.md`](./docs/engineering/20-phase3-rule8-assessment-v2.md)
+   — **Governance Readiness: Ready** — after BDR-0006/BDR-0007
+   acceptance and an Implementation Plan reconciliation resolved the
+   four items the original assessment flagged as blocking.
+3. [`20-phase3-implementation-authorization.md`](./docs/engineering/20-phase3-implementation-authorization.md)
+   is **signed** (2026-08-05), authorizing exactly three
+   `BusinessEvent` producers: `closing-integrity`, `breakage-tracking`,
+   `trial-engine`.
+4. **Three implementation checkpoints are shipped** against that
+   authorization:
+   - Checkpoint 1 (`e18691b`) — `server/backgroundWorker.ts`,
+     `registerJob()` abstraction; `runTrialLifecycleSweep()` migrated
+     onto it, business logic byte-for-byte unchanged.
+   - Checkpoint 2 (`f96c2f4`) — `server/notificationPlatform.ts`:
+     `BusinessEvent` contract, dedupe/watermark
+     (`platform_event_dedupe`, `platform_worker_state`), template +
+     BDR-0005/0006 localization/policy pipeline. No producer wired yet
+     at this checkpoint, by design.
+   - Checkpoint 3 (`d147106`, HEAD) — `server/trialNotificationProducer.ts`:
+     first real producer (`trial.ending_soon`/`trial.ending_tomorrow`),
+     end-to-end Event → Platform → Notification pipeline proven. 9/9
+     new tests; 20/20 + 58/58 + 12/12 existing suites still passing.
+     Template copy is a first draft, explicitly flagged as **not**
+     Product-Architect-approved wording.
+5. **Not yet started:** `closing-integrity` and `breakage-tracking`
+   producers (Checkpoints 4–5). Before either is coded, the
+   current-period boundary derivation (`periodType`/`startDate`/
+   `endDate` source for a server-side sweep — `AppContext.tsx`'s
+   `isPeriodClosed()` takes these as inputs, doesn't derive them) needs
+   to be traced/confirmed, and the Breakage producer needs its
+   collection-group query scoped. Flagged, not solved, as of this
+   commit.
+
+**Superseded note:** the "NOT READY" status, `be0f676` HEAD claim, and
+"do not start Phase 3" instruction previously in this section were
+stale — written at commit `d1d46d3` and never updated across the 13
+commits since. Treat any HANDOFF.md snapshot with suspicion; always
+`git fetch`/`git log` before trusting it, per this file's own repeated
+prior warning about exactly this failure mode.
 
 **What's true right now, in order:**
 
