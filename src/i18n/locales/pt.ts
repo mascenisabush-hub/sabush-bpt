@@ -710,6 +710,27 @@ export interface TranslationDict {
       insightValueDown: string;
     };
   };
+  // Module #20 Phase 3 Checkpoint 3 (Trial Engine Producer) — server-
+  // rendered notification content, read by server/notificationPlatform.ts's
+  // t() via resolveNotificationLanguage()/LanguageContext's own locale
+  // dictionaries (ADR-0004 Decision 5: one source of truth, not a
+  // second localization system). First-draft copy, not itself a
+  // Business Decision Record — see 20-notifications-implementation
+  // reasoning / trialNotificationProducer.ts's own header.
+  notificationTemplates: {
+    trial: {
+      endingSoon: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+      endingTomorrow: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+    };
+  };
 }
 
 // Portuguese (Português) — canonical/fallback locale.
@@ -1478,6 +1499,20 @@ export const pt: TranslationDict = {
       insightLatestAdjusted: 'Na verificação mais recente ({{date}}), {{adjusted}} de {{total}} produtos tiveram a quantidade ajustada.',
       insightValueUp: 'O valor do inventário aumentou {{amount}} desde a contagem anterior.',
       insightValueDown: 'O valor do inventário diminuiu {{amount}} desde a contagem anterior.',
+    },
+  },
+  notificationTemplates: {
+    trial: {
+      endingSoon: {
+        whatHappened: 'O seu período experimental termina em 7 dias.',
+        whyItMatters: 'Escolha um plano para continuar a utilizar o Sabush BPT sem interrupções.',
+        recommendedAction: 'Reveja os planos disponíveis.',
+      },
+      endingTomorrow: {
+        whatHappened: 'O seu período experimental termina amanhã.',
+        whyItMatters: 'Após o término, escolha um plano para continuar a utilizar o Sabush BPT sem interrupções.',
+        recommendedAction: 'Escolha o seu plano agora.',
+      },
     },
   },
 };

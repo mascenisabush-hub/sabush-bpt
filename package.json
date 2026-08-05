@@ -16,6 +16,7 @@
     "test:calculations": "tsx --test tests/calculations.test.ts",
     "test:staff-notifications": "tsx --test tests/staff-notifications.test.ts",
     "test:notification-platform": "tsx --test tests/notification-platform.test.ts",
+    "test:trial-notification-producer": "tsx --test tests/trial-notification-producer.test.ts",
     "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\""
   },
   "dependencies": {

@@ -766,4 +766,18 @@ export const fr: TranslationDict = {
       insightValueDown: 'La valeur de l\'inventaire a diminué de {{amount}} depuis le comptage précédent.',
     },
   },
+  notificationTemplates: {
+    trial: {
+      endingSoon: {
+        whatHappened: 'Votre essai gratuit se termine dans 7 jours.',
+        whyItMatters: 'Choisissez un forfait pour continuer à utiliser Sabush BPT sans interruption.',
+        recommendedAction: 'Consultez les forfaits disponibles.',
+      },
+      endingTomorrow: {
+        whatHappened: 'Votre essai gratuit se termine demain.',
+        whyItMatters: 'Une fois terminé, choisissez un forfait pour continuer à utiliser Sabush BPT sans interruption.',
+        recommendedAction: 'Choisissez votre forfait maintenant.',
+      },
+    },
+  },
 };

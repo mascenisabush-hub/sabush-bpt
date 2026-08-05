@@ -766,4 +766,18 @@ export const en: TranslationDict = {
       insightValueDown: 'The inventory value decreased {{amount}} since the previous count.',
     },
   },
+  notificationTemplates: {
+    trial: {
+      endingSoon: {
+        whatHappened: 'Your free trial ends in 7 days.',
+        whyItMatters: 'Choose a plan to keep using Sabush BPT without interruption.',
+        recommendedAction: 'Review the available plans.',
+      },
+      endingTomorrow: {
+        whatHappened: 'Your free trial ends tomorrow.',
+        whyItMatters: 'After it ends, choose a plan to keep using Sabush BPT without interruption.',
+        recommendedAction: 'Choose your plan now.',
+      },
+    },
+  },
 };

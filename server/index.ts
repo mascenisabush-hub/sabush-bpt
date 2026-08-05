@@ -23,6 +23,7 @@ import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { backgroundWorker } from './backgroundWorker';
 import { createNotificationPlatform } from './notificationPlatform';
+import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -62,6 +63,12 @@ const auth = getAuth(app);
 // call; only its module location changed.
 const notificationPlatform = createNotificationPlatform(db);
 const { writeNotification } = notificationPlatform;
+// Module #20 Phase 3 Checkpoint 3 — Trial Engine Producer (the first
+// real producer wired against Checkpoint 2's platform). Registers this
+// producer's communication policy + templates once, at startup, against
+// the same shared Notification Platform instance every producer uses.
+registerTrialNotificationPolicyAndTemplates(notificationPlatform);
+const trialNotificationProducer = createTrialNotificationProducer(db, notificationPlatform);
 
 const expressApp = express();
 expressApp.use(express.json());
@@ -1227,6 +1234,20 @@ backgroundWorker.registerJob({
   jobType: 'trial-lifecycle-sweep',
   scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
   execute: runTrialLifecycleSweep,
+});
+
+// Module #20 Phase 3 Checkpoint 3 — Trial Engine Producer
+// (server/trialNotificationProducer.ts). A second, independent
+// registered job — not folded into runTrialLifecycleSweep() above,
+// which keeps sole ownership of the trial_active -> trial_completed
+// transition (Module #19 Phase 2, Decision 3), unmodified by this
+// checkpoint. Reuses the same schedule interval; the two jobs are
+// isolated from each other by the Background Worker (ADR-0003) — a
+// failure in one never blocks the other's own tick.
+backgroundWorker.registerJob({
+  jobType: 'trial-notification-sweep',
+  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+  execute: trialNotificationProducer.runTrialNotificationSweep,
 });
 
 // ------------------------------------------------------------------
