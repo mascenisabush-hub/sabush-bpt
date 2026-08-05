@@ -21,6 +21,7 @@ import { fileURLToPath } from 'url';
 import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { backgroundWorker } from './backgroundWorker';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1138,12 +1139,15 @@ expressApp.post('/api/subscriptions/activate-trial', requireAuth, async (req: Au
 });
 
 // ------------------------------------------------------------------
-// Trial Lifecycle Worker (Decision 3, approved) — the minimal worker:
-// its only job is the elapsed-time trial_active -> trial_completed
-// transition. Nothing else lives here yet; general-purpose scheduled
-// processing (notifications, renewal evaluation, aggregation rollups —
-// Architecture §4.8's fuller design, shared with Module #20) is
-// deliberately deferred until a second real consumer needs it.
+// Trial Lifecycle Worker (Module #19 Phase 2, Decision 3) — its only
+// job is the elapsed-time trial_active -> trial_completed transition.
+//
+// As of Module #20 Phase 3 Checkpoint 1 (ADR-0003), this job is
+// registered against the shared Platform Background Worker
+// (./backgroundWorker.ts) rather than driving its own setTimeout/
+// setInterval directly — a pure scheduling-plumbing refactor, no
+// change to this function's own business logic or transaction
+// behavior. See the registerJob() call below.
 //
 // Requires a composite index on subscriptions (status ASC, trialEndsAt
 // ASC) — see firestore.indexes.json. Without it deployed, this query
@@ -1205,18 +1209,15 @@ async function runTrialLifecycleSweep(): Promise<void> {
   }
 }
 
-// Run once shortly after boot (don't wait a full interval for the first
-// pass), then on the configured interval.
-setTimeout(() => {
-  runTrialLifecycleSweep().catch((err) =>
-    console.error('[trial-lifecycle-worker] initial run failed', err instanceof Error ? err.message : String(err))
-  );
-}, 5000);
-setInterval(() => {
-  runTrialLifecycleSweep().catch((err) =>
-    console.error('[trial-lifecycle-worker] scheduled run failed', err instanceof Error ? err.message : String(err))
-  );
-}, TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS);
+// Registered as the Platform Background Worker's first job (ADR-0003).
+// Scheduling (initial-run delay, interval, failure isolation, generic
+// job-run logging) is now owned by backgroundWorker.ts; this job's own
+// execute() — runTrialLifecycleSweep — is untouched.
+backgroundWorker.registerJob({
+  jobType: 'trial-lifecycle-sweep',
+  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+  execute: runTrialLifecycleSweep,
+});
 
 // ------------------------------------------------------------------
 // Module #20 (Notifications), Phase 1 (Foundations), Checkpoint 2 —
