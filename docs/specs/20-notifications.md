@@ -2,9 +2,12 @@ Business Domain Specification
 
 # Notifications
 
-Version 1.2
+Version 1.3
 **Status:** Accepted — business specification and architectural
-decisions accepted; implementation not yet authorized
+decisions accepted; implementation not yet authorized (Phase 3
+implementation is separately authorized by the signed Phase 3
+Implementation Authorization, not by this specification's own
+Acceptance)
 **Module #20 of 20 — Phase 4: Platform**
 **Amended by:** [Module #20 Specification Enhancement Amendment](./20-notifications-enhancement-amendment.md)
 (v1.1) — three owner-experience enhancements (Context-First
@@ -17,8 +20,16 @@ resolving a gap the Phase 2 Rule 8 Assessment surfaced (staff-action
 confirmation events, already anticipated in Business Rule 4/20.5 Path
 2, had no category to belong to). This is the first amendment to
 reopen Decision Gate 4; Decision Gates 1–3 remain unchanged.
-`[Amendment v1.2]`-tagged changes mark what this amendment changed;
-everything else is unchanged v1.1 content.
+`[Amendment v1.2]`-tagged changes mark what this amendment changed.
+**[Priority Reconciliation Amendment](./20-notifications-priority-reconciliation-amendment.md)
+(v1.3, Accepted)** — resolves a terminology collision discovered during
+Phase 3 implementation between this spec's `priority` (delivery
+strategy, v1.1) and BDR-0006 §6's "Communication Priority" (business
+importance): adds a new `importance` field (20.1) rather than
+redefining `priority`; does not reopen any Decision Gate or Business
+Rule. `[Priority Reconciliation Amendment, v1.3]`-tagged additions mark
+what this amendment changed; everything else is unchanged v1.2
+content.
 **Architecture references:** [Section 3.12](../architecture/03-domain-architecture.md)
 (Notifications domain definition — channel-agnostic delivery, never a
 source of truth, Worth-First scope test), [Section 4.4](../architecture/04-system-architecture.md)
@@ -283,8 +294,19 @@ notifications/{notificationId}
     recommendedAction: string | null  // null only when no action is possible/needed
   },
 
-  // [Amendment v1.1] Communication Priority (Business Rule 10, 20.7)
-  priority: 'immediate' | 'timeline' | 'daily_summary'
+  // [Amendment v1.1] Communication Priority — delivery strategy
+  // (Business Rule 10, 20.7). Renamed in scope, not value, by the
+  // Priority Reconciliation Amendment (v1.3) below: this field means
+  // delivery/grouping only; it is not the same concept as `importance`.
+  priority: 'immediate' | 'timeline' | 'daily_summary',
+
+  // [Priority Reconciliation Amendment, v1.3] Business significance of
+  // the underlying BusinessEvent, per BDR-0006 §6. Independent of
+  // `priority` — see 20.7's "Delivery Priority vs. Business Importance"
+  // note. Required on every notification created after this amendment;
+  // absent (not backfilled) on documents predating it — no migration
+  // required, per the amendment's own Migration Statement.
+  importance: 'immediate' | 'high' | 'normal' | 'low'
 }
 ```
 
@@ -302,6 +324,11 @@ notifications/{notificationId}
   non-null on every notification document, regardless of category —
   a document missing either is not valid under this spec. This applies
   uniformly across all three creation paths (20.5); no path is exempt.
+- **[Priority Reconciliation Amendment, v1.3]** `importance` is
+  required, non-null, on every notification document created from this
+  amendment's Acceptance onward, same rule as `context`/`priority`
+  above — but is not backfilled onto documents that predate it (see
+  20.7's note and the amendment's own Migration Statement).
 
 ### 20.2 Recipient Scope Rules (Decision Gate 1 applied)
 
@@ -460,6 +487,22 @@ Notification Event
   Rule in this spec (tenant isolation, dedupe, recipient scope,
   Context-First content) merely because it isn't `immediate` — priority
   affects delivery timing/grouping only, never which rules apply.
+
+**Delivery Priority vs. Business Importance [Priority Reconciliation
+Amendment, v1.3, Accepted]:** `priority` (this section) and
+`importance` (20.1) are two independent properties, not two names for
+the same thing. `priority` is a Notification Platform decision — when/
+how this is surfaced within the in-app channel. `importance` is a
+property of the underlying BusinessEvent's business significance, per
+BDR-0006 §6, set by whichever producer/policy evaluation created the
+notification. A notification can combine any `priority` with any
+`importance` — e.g. a `high`-importance event delivered as
+`daily_summary` is valid; nothing in this section or 20.1 requires
+`importance` to determine `priority`, though a given producer's own
+policy may choose to set both consistently (Phase 3's Notify-outcome
+producers do — see BDR-0007 §5). See the
+[Priority Reconciliation Amendment](./20-notifications-priority-reconciliation-amendment.md)
+for the full rationale.
 
 ## Non-functional Requirements
 
@@ -794,3 +837,45 @@ remains unchanged and applies identically to the new category.
 **Lifecycle:** Designed → Executed review → Analyzed → **Accepted**.
 Not Implemented, Executed (as code), or further Analyzed beyond this
 review — no engineering work is authorized by this amendment.
+
+## Product Architect Acceptance — Priority Reconciliation Amendment (v1.3)
+
+**Accepted (2026-08-05).** Full detail and rationale in the
+[Priority Reconciliation Amendment](./20-notifications-priority-reconciliation-amendment.md).
+Scope of this acceptance:
+
+1. **`importance` added to the Notification data model** (20.1) — a
+   new, independent field carrying BDR-0006 §6's four-value business-
+   importance scale (`immediate`/`high`/`normal`/`low`), required on
+   every notification created from this Acceptance onward.
+2. **`priority` (20.1, 20.7) is unchanged** — name, values, and meaning
+   remain exactly as fixed by Amendment v1.1. No existing Phase 1/2
+   data, code, or UI referencing `priority` is affected.
+3. **20.7 gains a "Delivery Priority vs. Business Importance" note**
+   clarifying the two fields are independent and neither derives the
+   other, per the amendment's §2/§3.
+4. **No migration of any existing notification document is required** —
+   per the amendment's own Migration Statement; `importance` is simply
+   absent on documents predating this Acceptance.
+
+This amendment reconciles a terminology collision between this
+specification and BDR-0006 §6 discovered during Phase 3 implementation.
+It does not change any previously accepted business policy — it does
+not reopen BDR-0006, BDR-0007, ADR-0002/0003/0004, or any Decision
+Gate, and it does not itself authorize or perform any implementation.
+
+**Not included in this acceptance:**
+- Any change to BDR-0006's Notify/Batch/Suppress outcomes or four-tier
+  importance scale, or to BDR-0007's per-eventType mapping — both are
+  adopted as-is onto the new field.
+- Reopening Decision Gates 1–4 or any Business Rule other than the
+  `context`/`priority`-required rule's `importance` counterpart (20.1).
+- Any change to `firestore.rules`' existing `/notifications/{id}`
+  read/write rules.
+- Any source code implementation — this amendment is documentation
+  only. Phase 3 implementation proceeds under the already-signed Phase
+  3 Implementation Authorization, not under this Acceptance itself.
+
+**Lifecycle:** Designed → Proposed → revised → **Accepted**. Not
+Implemented or Executed by this Acceptance — Phase 3 engineering work
+resumes under its own, separately signed Authorization.

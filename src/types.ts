@@ -474,6 +474,15 @@ export type NotificationStatus = 'unread' | 'read';
 // Communication Priority Tiers [Amendment v1.1], 20.7 / Business Rule 10.
 export type NotificationPriority = 'immediate' | 'timeline' | 'daily_summary';
 
+// [Priority Reconciliation Amendment, v1.3, Accepted] Business
+// significance of the underlying BusinessEvent (BDR-0006 §6) —
+// independent of NotificationPriority, which is delivery strategy
+// only. Optional here (not on the server's own literal payload type)
+// because documents created before this amendment have no value for
+// it and are never migrated — a client reading an old notification
+// must not assume this field exists.
+export type NotificationImportance = 'immediate' | 'high' | 'normal' | 'low';
+
 // Pointer only — never duplicates the triggering record's financial
 // data (Business Rule 3).
 export interface NotificationPayloadRef {
@@ -506,6 +515,10 @@ export interface Notification {
   createdAt: string;
   context: NotificationEventContext;
   priority: NotificationPriority;
+  // [Priority Reconciliation Amendment, v1.3] absent on documents
+  // created before this amendment — see NotificationImportance's own
+  // comment above.
+  importance?: NotificationImportance;
 }
 
 export interface TimelineEvent {

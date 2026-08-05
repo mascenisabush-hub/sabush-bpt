@@ -4,14 +4,14 @@ Business Domain Specification — Amendment
 
 Version 1.1 (revised per Product Architect review — see "Revision
 History," below)
-**Status:** 🟡 Proposed. Not yet Accepted. Does not amend
-`20-notifications.md` until a Product Architect Acceptance is recorded
-below — this document is the proposal only.
-**Implementation status:** Not built, and not implementable. No
-`src/`, `server/`, or `firestore.rules` file is touched by this
-document, and per the Phase 3 Implementation Authorization's Scope
-Discipline (§4), no Phase 3 code may write a `priority` or
-`importance` value until this is resolved.
+**Status:** ✅ Accepted (2026-08-05). See "Product Architect
+Acceptance," below.
+**Implementation status:** Not yet built. This amendment is
+documentation only — it does not itself implement code, modify runtime
+behavior, or change `firestore.rules`, `src/`, or `server/`. Phase 3
+implementation (all three producers) may now resume under the already
+signed Phase 3 Implementation Authorization, writing both `priority`
+and `importance` per §3/§6 below.
 **Amends (once Accepted):** [Notifications (spec #20)](./20-notifications.md)
 — proposed v1.2 → v1.3, specifically §20.1 (Data Model) and §20.7
 (Communication Priority Tiers).
@@ -157,9 +157,29 @@ discretion beyond the field split itself.
 
 ## Product Architect Acceptance
 
-**Pending.** Not yet reviewed or accepted. Implementation of the
-`BusinessEvent`/Notification Platform evaluation layer (all three Phase
-3 producers) remains paused until this section is completed.
+**Status:** ✅ Accepted.
+
+> After reviewing the Notification Priority Reconciliation Amendment
+> (revision committed locally as `92329e5`), I confirm that this
+> amendment correctly reconciles the terminology conflict identified
+> during Phase 3 implementation.
+>
+> This amendment does not change previously accepted business policy.
+> It clarifies the distinction between:
+>
+> - `importance` — the business significance of a BusinessEvent (as
+>   defined by BDR-0006), and
+> - `priority` — the Notification Platform's delivery strategy (as
+>   defined by Module #20).
+>
+> Existing Phase 1 and Phase 2 behavior remains unchanged, and no
+> migration of existing notification documents is required.
+>
+> The amendment is therefore Accepted and becomes the governing
+> interpretation for Module #20.
+
+**Product Architect:** Sabushimike Masceni Dieudonne
+**Date:** 2026-08-05
 
 ---
 

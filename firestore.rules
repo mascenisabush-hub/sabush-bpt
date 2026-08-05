@@ -500,6 +500,17 @@ service cloud.firestore {
         request.resource.data.createdAt == resource.data.createdAt &&
         request.resource.data.context == resource.data.context &&
         request.resource.data.priority == resource.data.priority &&
+        // [Priority Reconciliation Amendment, v1.3] `importance` is a
+        // new field (20.1) alongside `priority` — POL-20-001 Decision 4
+        // (Notification Immutability) already covers "every field but
+        // status"; this line keeps that existing guarantee true for the
+        // new field rather than leaving it silently unenforced. Not a
+        // new client read/write surface — `importance` was never
+        // client-writable before this line existed, since `create` is
+        // unconditionally false above; this only closes the same
+        // immutability net around a field that didn't exist yet when
+        // that net was first drawn.
+        request.resource.data.importance == resource.data.importance &&
         (request.resource.data.status == 'unread' || request.resource.data.status == 'read');
 
       allow delete: if false;
