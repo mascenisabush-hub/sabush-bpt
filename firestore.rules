@@ -537,5 +537,38 @@ service cloud.firestore {
       allow read: if false;
       allow write: if false;
     }
+
+    // ==========================================================
+    // /platform_event_dedupe/{dedupeKey} — Module #20 Phase 3
+    // Checkpoint 2 (Platform Infrastructure). The dedupe/watermark
+    // mechanism Architecture §4.8.1 names (one of its two candidate
+    // shapes — see server/notificationPlatform.ts's own comment for
+    // the engineering rationale). Records that a producer-owned
+    // BusinessEvent dedupeKey has been evaluated (ADR-0004 Decision 2),
+    // independent of whether that evaluation produced a notification.
+    // Purely internal platform state — never a business fact, never
+    // read or written by any client. Same access shape as
+    // /platform_audit_log above: no client read, no client write, only
+    // the Admin SDK (server/notificationPlatform.ts), which bypasses
+    // these rules entirely.
+    // ==========================================================
+    match /platform_event_dedupe/{dedupeKey} {
+      allow read: if false;
+      allow write: if false;
+    }
+
+    // ==========================================================
+    // /platform_worker_state/{jobType} — Module #20 Phase 3 Checkpoint
+    // 2 (Platform Infrastructure). Architecture §4.8.1's run-level
+    // watermark (`lastRunCompletedAt`) — an optimization to narrow a
+    // future scheduled producer's scan window, never the correctness
+    // mechanism by itself (platform_event_dedupe above is). Same
+    // access shape as /platform_audit_log and /platform_event_dedupe:
+    // entirely client-inaccessible, Admin-SDK-only.
+    // ==========================================================
+    match /platform_worker_state/{jobType} {
+      allow read: if false;
+      allow write: if false;
+    }
   }
 }

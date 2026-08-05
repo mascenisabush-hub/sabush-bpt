@@ -44,9 +44,15 @@ describe('Notification producer count (Phase 2 boundary)', () => {
     assert.equal(matches.length, 5, 'Expected exactly five callers — one per staff endpoint. A different count means either a missing endpoint or an unauthorized new producer (Background Worker, Subscription, Closing, Inventory Risk, or Platform Announcement) has been introduced without its own Rule 8 Assessment and Authorization.');
   });
 
-  it('defines writeNotification() itself exactly once (the Phase 1 helper, not a duplicate)', () => {
-    const matches = SOURCE.match(/async function writeNotification\(/g) || [];
-    assert.equal(matches.length, 1);
+  it('defines writeNotification() itself exactly once, now in server/notificationPlatform.ts (moved there, Phase 3 Checkpoint 2 — not duplicated, not left behind in server/index.ts)', () => {
+    const indexMatches = SOURCE.match(/async function writeNotification\(/g) || [];
+    assert.equal(indexMatches.length, 0, 'server/index.ts should no longer define writeNotification() itself — it now imports it from server/notificationPlatform.ts.');
+
+    const platformSource = readFileSync(new URL('../server/notificationPlatform.ts', import.meta.url), 'utf8');
+    const platformMatches = platformSource.match(/async function writeNotification\(/g) || [];
+    assert.equal(platformMatches.length, 1, 'server/notificationPlatform.ts should define writeNotification() exactly once.');
+
+    assert.match(SOURCE, /import\s*\{\s*createNotificationPlatform\s*\}\s*from\s*'\.\/notificationPlatform'/, 'server/index.ts should import the Notification Platform factory rather than redefining writeNotification locally.');
   });
 
   it('no function other than the five staff endpoints calls writeNotification() (no Background Worker/Subscription/Closing/Inventory Risk/Platform Announcement producer exists)', () => {

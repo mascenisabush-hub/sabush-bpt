@@ -1038,6 +1038,40 @@ describe('platform_audit_log', () => {
   });
 });
 
+describe('platform_event_dedupe', () => {
+  it('No role can read, create, update, or delete a dedupe record from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_event_dedupe', 'dk1'), {
+        dedupeKey: 'dk1',
+        producer: 'trial-engine',
+        eventType: 'trial.ending_soon',
+        outcome: 'notify',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(getDoc(doc(ownerDb, 'platform_event_dedupe', 'dk1')));
+    await assertFails(setDoc(doc(ownerDb, 'platform_event_dedupe', 'dk2'), { dedupeKey: 'dk2' }));
+    await assertFails(updateDoc(doc(ownerDb, 'platform_event_dedupe', 'dk1'), { outcome: 'suppress' }));
+    await assertFails(deleteDoc(doc(ownerDb, 'platform_event_dedupe', 'dk1')));
+  });
+});
+
+describe('platform_worker_state', () => {
+  it('No role can read, create, update, or delete worker-state from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_worker_state', 'trial-lifecycle-sweep'), {
+        jobType: 'trial-lifecycle-sweep',
+        lastRunCompletedAt: '2026-08-05T00:00:00.000Z',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(getDoc(doc(ownerDb, 'platform_worker_state', 'trial-lifecycle-sweep')));
+    await assertFails(setDoc(doc(ownerDb, 'platform_worker_state', 'other-job'), { jobType: 'other-job' }));
+    await assertFails(updateDoc(doc(ownerDb, 'platform_worker_state', 'trial-lifecycle-sweep'), { lastRunCompletedAt: '2026-08-06T00:00:00.000Z' }));
+    await assertFails(deleteDoc(doc(ownerDb, 'platform_worker_state', 'trial-lifecycle-sweep')));
+  });
+});
+
 describe('suspended member', () => {
   it('A suspended staff member loses read/write access even though their business membership is otherwise unchanged', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
