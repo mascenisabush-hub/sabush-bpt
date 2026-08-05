@@ -6,9 +6,8 @@ pattern established by
 [Phase 1](./20-phase1-implementation-authorization.md) and
 [Phase 2](./20-phase2-implementation-authorization.md)'s Authorization
 records.
-**Status:** 🟡 Proposed, pending Product Architect signature. Not
-Authorized. No engineering work may begin against this document until
-§5 is signed.
+**Status:** ✅ Authorized (signed 2026-08-05). Engineering may begin
+implementation strictly within the scope defined by §2/§3.
 **Basis:** [`20-notifications.md`](../specs/20-notifications.md) (v1.2,
 Accepted), [ADR-0002](../adr/ADR-0002-platform-background-worker.md),
 [ADR-0003](../adr/ADR-0003-background-worker-job-registration.md),
@@ -22,12 +21,12 @@ relative to BDR-0007, tracked as non-blocking per the Rule 8
 Assessment v2 §13.2 — not a precondition of this Authorization),
 [**Phase 3 Rule 8 Assessment v2**](./20-phase3-rule8-assessment-v2.md)
 (Assessed — **Governance Readiness: Ready**, §13.1).
-**Repository state at drafting:** `main` HEAD `2842c74`, plus two
-locally-created, not-yet-pushed documents this Authorization depends
-on: BDR-0007 (Accepted) and the Phase 3 Rule 8 Assessment v2 (Ready).
-Both must be committed and pushed to `main` before or alongside this
-document, so that `main` reflects a self-consistent governance chain
-at the moment this Authorization takes effect — not before.
+**Repository state at drafting:** `main` HEAD `2842c74` at drafting
+time. BDR-0007 and the Phase 3 Rule 8 Assessment v2, both local-only at
+drafting time, were subsequently committed and pushed ahead of this
+document, and this document itself was committed at `76c8c4e` — `main`
+reflected a self-consistent governance chain before this Authorization
+was signed, as required.
 
 **Nothing has been modified in `src/`, `server/`, `firestore.rules`,
 `firestore.indexes.json`, `20-notifications.md`, any ADR, or any BDR to
@@ -48,7 +47,7 @@ Rule 8 → Authorization (this document) → Implementation → Close-out**
 | Business Decision (event creation policy) | **BDR-0007** | ✅ Accepted |
 | Implementation Plan | `20-notifications-implementation-plan.md` §9 | ✅ Planned (two non-blocking documentation-sync items outstanding, §13.2 of the Rule 8 Assessment v2) |
 | Rule 8 | `20-phase3-rule8-assessment-v2.md` | ✅ Assessed — **Governance Readiness: Ready** |
-| **Authorization** | **This document** | 🟡 Proposed, pending signature |
+| **Authorization** | **This document** | ✅ Authorized (2026-08-05) |
 | Implementation | — | Not begun |
 | Close-out | — | Not begun |
 
@@ -168,19 +167,36 @@ verbatim). This applies in particular to:
 
 ## 5. Signature
 
-**Unsigned.** This section is a placeholder for the Product Architect's
-explicit authorization and is intentionally left blank pending review.
+**Status:** ✅ Authorized.
 
-> "I have reviewed: Module #20 Specification v1.2; ADR-0002/0003/0004;
-> BDR-0005/0006/0007; the Implementation Plan; the Phase 3 Rule 8
-> Assessment v2; and this Phase 3 Implementation Authorization
-> (Proposed). I confirm that the governance process for Module #20
-> Phase 3 has been completed satisfactorily. As Product Architect, I
-> formally authorize Module #20 – Phase 3 (Background Worker Scheduled
-> Triggers) implementation, scoped exactly as described in §2 of this
-> document."
+> Having reviewed: Module #20 Notification Specification (v1.2);
+> ADR-0002; ADR-0003; ADR-0004; BDR-0005; BDR-0006; BDR-0007; the
+> Phase 3 Rule 8 Assessment v2; and this Phase 3 Implementation
+> Authorization —
+>
+> I confirm that the governance required for Module #20 Phase 3 has
+> been completed. I authorize engineering to begin implementation only
+> within the scope defined by this Authorization document.
+>
+> This authorization specifically permits implementation of: the
+> approved Background Worker architecture, the `registerJob()`
+> framework, the dedupe/watermark mechanism, the `BusinessEvent`
+> processing pipeline, the Notification Platform evaluation layer, the
+> six BusinessEvents defined by BDR-0007, and the supporting Firestore
+> indexes required by this phase.
+>
+> This authorization does not permit: implementation of Stock Counts
+> notification logic, expansion into Phase 4, Phase 5, or Phase 6,
+> changes to previously accepted ADRs or BDRs, modification of Decision
+> Gates, or any scope beyond that explicitly described in this document.
+>
+> If implementation reveals a genuine governance contradiction,
+> engineering shall immediately stop work on the affected area and
+> return the matter for Product Architecture review rather than
+> introducing new business behavior.
 
-**Date:** _pending_.
+**Product Architect:** Sabushimike Masceni Dieudonne
+**Date:** 2026-08-05
 
 **Governance requirements attached to this authorization, once signed,
 in effect for the duration of implementation** (carried forward from
@@ -213,13 +229,12 @@ document is signed and merged to `main` — not before.
 - This record does not pre-authorize Phase 4 or later, and does not
   authorize Stock Counts work under any phase — each requires its own
   governance record.
-- This record, BDR-0007, and the Rule 8 Assessment v2 are all
-  currently local-only, not yet committed or pushed (no token
-  available this session). They should be committed together, in that
-  dependency order, so `main` never reflects an Authorization whose
-  cited basis documents aren't themselves present.
+- This record, BDR-0007, and the Rule 8 Assessment v2 are all present
+  on `main` as of `76c8c4e`, in that dependency order — `main` does not
+  reflect an Authorization whose cited basis documents aren't
+  themselves present.
 
-**Lifecycle:** Designed → **Proposed**, pending Product Architect
-signature. Not Authorized, not Implemented, not Executed — no
-engineering work is permitted under this document in its current
-status.
+**Lifecycle:** Designed → Proposed → **Authorized** (2026-08-05, Product
+Architect Sabushimike Masceni Dieudonne). Not yet Implemented, not yet
+Executed. Engineering work under this document begins now, strictly
+within §2/§3's boundary.
