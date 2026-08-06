@@ -796,5 +796,12 @@ export const en: TranslationDict = {
         recommendedAction: 'Close the period to keep your records accurate.',
       },
     },
+    inventoryRisk: {
+      breakage: {
+        whatHappened: 'One of your stock batches has lost more units than it originally had.',
+        whyItMatters: "Losses on this batch already exceed what was purchased — this changes the batch's real value.",
+        recommendedAction: "Review this batch's loss entries to confirm they're accurate.",
+      },
+    },
   },
 };

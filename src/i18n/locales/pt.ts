@@ -747,6 +747,13 @@ export interface TranslationDict {
         recommendedAction: string;
       };
     };
+    inventoryRisk: {
+      breakage: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+    };
   };
 }
 
@@ -1546,6 +1553,13 @@ export const pt: TranslationDict = {
         whatHappened: 'A data de Fecho do seu período atual já passou e o período continua aberto.',
         whyItMatters: 'Um período aberto significa que novos registos continuam a entrar nele em vez de um período novo — fechá-lo regista os valores de hoje como histórico definitivo.',
         recommendedAction: 'Feche o período para manter os seus registos organizados.',
+      },
+    },
+    inventoryRisk: {
+      breakage: {
+        whatHappened: 'Um dos seus lotes de stock perdeu mais unidades do que tinha originalmente.',
+        whyItMatters: 'As perdas neste lote já excedem a quantidade comprada — isto altera o valor real do lote.',
+        recommendedAction: 'Reveja os registos de quebra deste lote para confirmar que estão corretos.',
       },
     },
   },

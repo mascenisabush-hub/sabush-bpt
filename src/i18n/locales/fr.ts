@@ -796,5 +796,12 @@ export const fr: TranslationDict = {
         recommendedAction: 'Clôturez la période pour garder vos registres exacts.',
       },
     },
+    inventoryRisk: {
+      breakage: {
+        whatHappened: "L'un de vos lots de stock a perdu plus d'unités qu'il n'en avait à l'origine.",
+        whyItMatters: "Les pertes sur ce lot dépassent déjà la quantité achetée — cela modifie la valeur réelle du lot.",
+        recommendedAction: 'Vérifiez les entrées de perte de ce lot pour confirmer qu\'elles sont exactes.',
+      },
+    },
   },
 };

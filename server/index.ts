@@ -25,6 +25,7 @@ import { backgroundWorker } from './backgroundWorker';
 import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
+import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -74,6 +75,10 @@ const trialNotificationProducer = createTrialNotificationProducer(db, notificati
 // the same shared Notification Platform instance every producer uses.
 registerClosingNotificationPolicyAndTemplates(notificationPlatform);
 const closingNotificationProducer = createClosingNotificationProducer(db, notificationPlatform);
+// Module #20 Phase 3 Checkpoint 5 — Breakage Producer, against the
+// same shared Notification Platform instance every producer uses.
+registerBreakageNotificationPolicyAndTemplates(notificationPlatform);
+const breakageNotificationProducer = createBreakageNotificationProducer(db, notificationPlatform);
 
 const expressApp = express();
 expressApp.use(express.json());
@@ -1266,6 +1271,20 @@ backgroundWorker.registerJob({
   jobType: 'closing-notification-sweep',
   scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
   execute: closingNotificationProducer.runClosingNotificationSweep,
+});
+
+// Module #20 Phase 3 Checkpoint 5 — Breakage Producer
+// (server/breakageNotificationProducer.ts). A fourth, independent
+// registered job — reuses the same schedule interval as the others.
+// This is the final producer named by the Phase 3 Implementation
+// Authorization §2 (closing.approaching/due/overdue,
+// trial.ending_soon/ending_tomorrow, inventory.risk.breakage — six
+// eventTypes, three producers, all now wired). Isolated from every
+// other registered job by the Background Worker (ADR-0003).
+backgroundWorker.registerJob({
+  jobType: 'breakage-notification-sweep',
+  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+  execute: breakageNotificationProducer.runBreakageNotificationSweep,
 });
 
 // ------------------------------------------------------------------

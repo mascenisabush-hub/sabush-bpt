@@ -18,6 +18,7 @@
     "test:notification-platform": "tsx --test tests/notification-platform.test.ts",
     "test:trial-notification-producer": "tsx --test tests/trial-notification-producer.test.ts",
     "test:closing-notification-producer": "tsx --test tests/closing-notification-producer.test.ts",
+    "test:breakage-notification-producer": "tsx --test tests/breakage-notification-producer.test.ts",
     "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\""
   },
   "dependencies": {
