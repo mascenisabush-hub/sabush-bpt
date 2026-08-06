@@ -24,6 +24,7 @@ import { getFirestore } from 'firebase-admin/firestore';
 import { backgroundWorker } from './backgroundWorker';
 import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
+import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -69,6 +70,10 @@ const { writeNotification } = notificationPlatform;
 // the same shared Notification Platform instance every producer uses.
 registerTrialNotificationPolicyAndTemplates(notificationPlatform);
 const trialNotificationProducer = createTrialNotificationProducer(db, notificationPlatform);
+// Module #20 Phase 3 Checkpoint 4 — Closing Integrity Producer, against
+// the same shared Notification Platform instance every producer uses.
+registerClosingNotificationPolicyAndTemplates(notificationPlatform);
+const closingNotificationProducer = createClosingNotificationProducer(db, notificationPlatform);
 
 const expressApp = express();
 expressApp.use(express.json());
@@ -1248,6 +1253,19 @@ backgroundWorker.registerJob({
   jobType: 'trial-notification-sweep',
   scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
   execute: trialNotificationProducer.runTrialNotificationSweep,
+});
+
+// Module #20 Phase 3 Checkpoint 4 — Closing Integrity Producer
+// (server/closingNotificationProducer.ts). A third, independent
+// registered job — reuses the same schedule interval as the two Trial
+// jobs above (BDR-0007's 3-day thresholds don't need finer-grained
+// polling than the existing hourly cadence). Isolated from every other
+// registered job by the Background Worker (ADR-0003) — a failure here
+// never blocks Trial or a future Breakage producer's own tick.
+backgroundWorker.registerJob({
+  jobType: 'closing-notification-sweep',
+  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+  execute: closingNotificationProducer.runClosingNotificationSweep,
 });
 
 // ------------------------------------------------------------------

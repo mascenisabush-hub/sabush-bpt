@@ -779,5 +779,22 @@ export const fr: TranslationDict = {
         recommendedAction: 'Choisissez votre forfait maintenant.',
       },
     },
+    closing: {
+      approaching: {
+        whatHappened: 'La date de Clôture de votre période actuelle approche dans quelques jours.',
+        whyItMatters: "Clôturer la période enregistre les chiffres de votre entreprise jusqu'à cette date — profit intégré, dépenses et retraits.",
+        recommendedAction: 'Vérifiez vos chiffres avant de clôturer la période.',
+      },
+      due: {
+        whatHappened: 'Votre période actuelle a atteint sa date de Clôture.',
+        whyItMatters: 'Rien n\'est perdu si vous clôturez un peu plus tard, mais plus tôt c\'est fait, plus tôt la période suivante démarre proprement.',
+        recommendedAction: 'Clôturez la période quand vous êtes prêt.',
+      },
+      overdue: {
+        whatHappened: 'La date de Clôture de votre période actuelle est dépassée et la période est toujours ouverte.',
+        whyItMatters: "Une période ouverte signifie que de nouvelles entrées continuent d'y être ajoutées au lieu d'une période neuve — la clôturer enregistre les chiffres d'aujourd'hui comme historique définitif.",
+        recommendedAction: 'Clôturez la période pour garder vos registres exacts.',
+      },
+    },
   },
 };

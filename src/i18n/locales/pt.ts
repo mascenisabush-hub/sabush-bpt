@@ -730,6 +730,23 @@ export interface TranslationDict {
         recommendedAction: string;
       };
     };
+    closing: {
+      approaching: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+      due: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+      overdue: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+    };
   };
 }
 
@@ -1512,6 +1529,23 @@ export const pt: TranslationDict = {
         whatHappened: 'O seu período experimental termina amanhã.',
         whyItMatters: 'Após o término, escolha um plano para continuar a utilizar o Sabush BPT sem interrupções.',
         recommendedAction: 'Escolha o seu plano agora.',
+      },
+    },
+    closing: {
+      approaching: {
+        whatHappened: 'A data de Fecho do seu período atual aproxima-se dentro de poucos dias.',
+        whyItMatters: 'Fechar o período regista os valores do seu negócio até esta data — lucro embutido, despesas e retiradas.',
+        recommendedAction: 'Reveja os seus valores antes de fechar o período.',
+      },
+      due: {
+        whatHappened: 'O seu período atual atingiu a data de Fecho.',
+        whyItMatters: 'Nada se perde se fechar um pouco mais tarde, mas quanto mais cedo fechar, mais cedo o próximo período começa organizado.',
+        recommendedAction: 'Feche o período quando estiver pronto.',
+      },
+      overdue: {
+        whatHappened: 'A data de Fecho do seu período atual já passou e o período continua aberto.',
+        whyItMatters: 'Um período aberto significa que novos registos continuam a entrar nele em vez de um período novo — fechá-lo regista os valores de hoje como histórico definitivo.',
+        recommendedAction: 'Feche o período para manter os seus registos organizados.',
       },
     },
   },

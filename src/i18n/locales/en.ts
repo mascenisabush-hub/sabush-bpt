@@ -779,5 +779,22 @@ export const en: TranslationDict = {
         recommendedAction: 'Choose your plan now.',
       },
     },
+    closing: {
+      approaching: {
+        whatHappened: "Your current period's Closing date is coming up in a few days.",
+        whyItMatters: "Closing the period records your business's figures up to this date — embedded profit, expenses, and withdrawals.",
+        recommendedAction: 'Review your figures before closing the period.',
+      },
+      due: {
+        whatHappened: 'Your current period has reached its Closing date.',
+        whyItMatters: "Nothing is lost if you close a little later, but the sooner it's closed, the sooner the next period starts clean.",
+        recommendedAction: "Close the period when you're ready.",
+      },
+      overdue: {
+        whatHappened: "Your current period's Closing date has passed and the period is still open.",
+        whyItMatters: "An open period means new entries keep landing inside it instead of a fresh one — closing it locks today's figures in as the historical record.",
+        recommendedAction: 'Close the period to keep your records accurate.',
+      },
+    },
   },
 };
