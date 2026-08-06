@@ -50,6 +50,39 @@ vocabulary*, so those don't have to be re-decided per module.
 | 10 | Phase Close-Out | A record that the phase's authorized scope was implemented and verified — governance compliance, what shipped, acceptance evidence, runtime/security/performance impact, explicit remaining-work boundary | `docs/engineering/NN-phaseX-closeout.md` | Engineering records; not itself a new authorization |
 | 11 | Milestone Review | A cross-reference summary spanning multiple closed phases, read as a single checkpoint before the next major decision (e.g., before commercial features, before a new module's producers start writing to this one) | `docs/engineering/NN-milestone-review-phases-X-Y.md` | Engineering records; explicitly states it does not authorize what comes next |
 
+## 2a. Stage 9 Detail — The Per-Checkpoint Loop
+
+Stage 9 (Incremental Implementation, §2 above) says "one commit per
+logical checkpoint within the authorized phase." This section fixes
+*how* — extracted the same way the rest of this document was: from a
+sequence already independently followed, checkpoint after checkpoint
+(Module #20 Phase 3, Checkpoints 1–4), not designed in advance of using
+it.
+
+**This loop operates entirely inside Stage 9, on an already-Authorized
+phase.** It never substitutes for, shortcuts, or reopens Stage 7 (Rule
+8 Assessment) or Stage 8 (Implementation Authorization) — those remain
+per-*phase*, Product-Architect-gated, and are not re-run per checkpoint.
+What repeats per checkpoint is narrower: confirming the specific slice
+of already-authorized scope is understood correctly today, building it,
+and closing the loop before the next one opens.
+
+| # | Step | What it means in practice |
+|---|---|---|
+| 1 | Repository Verification | Fresh `git clone`/`git fetch` against `origin/main`, not memory of an earlier turn (Non-Negotiable Principle 2, §4) — confirms the checkpoint's starting point is real. |
+| 2 | Rule 8 Verification | Re-read the phase's Authorization and this checkpoint's own slice of its affected-files list — confirms the work about to happen is inside authorized scope, not a fresh Rule 8 Assessment. |
+| 3 | Implementation | The actual code change, scoped to exactly this checkpoint — never spilling into the next checkpoint's files "while already in there." |
+| 4 | Testing | Automated tests for the new code, plus a full existing-suite run (no regressions) and a typecheck/build pass — evidence, not an assertion that it works. |
+| 5 | Internal Review | A code-review-only pass (technical debt, duplication, naming, reuse opportunities, complexity, missing comments, edge cases, ADR conformance, accidental coupling) before the checkpoint is considered done — same questions a human PR reviewer would ask, run explicitly rather than assumed satisfied by tests passing. |
+| 6 | Rule 8 Completion Report | Summary / Files Changed / Database Impact / Security Impact / Performance Impact / Testing Checklist, per CLAUDE.md's own reporting requirement — states what shipped, doesn't imply what comes next is authorized (Non-Negotiable Principle 6, §4). |
+| 7 | Merge | Commit and push, diff scope confirmed against the checkpoint's own affected-files list first (Non-Negotiable Principle 4, §4) — not assumed clean from intent. |
+| 8 | Next Checkpoint | Stop. A completed checkpoint is not itself authorization to begin the next one's *design* work, but the next checkpoint inside an already-Authorized phase may begin its own Step 1 without a new Stage 7/8 — that gate was already cleared for the whole phase. |
+
+**What this section does not change:** the eleven stages in §2, the
+lifecycle vocabulary in §3, or any of the seven Non-Negotiable
+Principles in §4 — this is a zoomed-in view of Stage 9 alone, using
+vocabulary and principles all already fixed elsewhere in this document.
+
 ## 3. Lifecycle Vocabulary (fixed terms, used consistently)
 
 A single document moves through a subset of these states, left to
@@ -143,41 +176,6 @@ A new module starts at Stage 1 with no shortcuts assumed:
   so a future session's `docs/specs/README.md`-first read (per this
   repository's own standing instruction) reliably finds it without a
   separate index.
-
----
-
-## 2a. Stage 9 Detail — The Per-Checkpoint Loop
-
-Stage 9 (Incremental Implementation, §2 above) says "one commit per
-logical checkpoint within the authorized phase." This section fixes
-*how* — extracted the same way the rest of this document was: from a
-sequence already independently followed, checkpoint after checkpoint
-(Module #20 Phase 3, Checkpoints 1–4), not designed in advance of using
-it.
-
-**This loop operates entirely inside Stage 9, on an already-Authorized
-phase.** It never substitutes for, shortcuts, or reopens Stage 7 (Rule
-8 Assessment) or Stage 8 (Implementation Authorization) — those remain
-per-*phase*, Product-Architect-gated, and are not re-run per checkpoint.
-What repeats per checkpoint is narrower: confirming the specific slice
-of already-authorized scope is understood correctly today, building it,
-and closing the loop before the next one opens.
-
-| # | Step | What it means in practice |
-|---|---|---|
-| 1 | Repository Verification | Fresh `git clone`/`git fetch` against `origin/main`, not memory of an earlier turn (Non-Negotiable Principle 2, §4) — confirms the checkpoint's starting point is real. |
-| 2 | Rule 8 Verification | Re-read the phase's Authorization and this checkpoint's own slice of its affected-files list — confirms the work about to happen is inside authorized scope, not a fresh Rule 8 Assessment. |
-| 3 | Implementation | The actual code change, scoped to exactly this checkpoint — never spilling into the next checkpoint's files "while already in there." |
-| 4 | Testing | Automated tests for the new code, plus a full existing-suite run (no regressions) and a typecheck/build pass — evidence, not an assertion that it works. |
-| 5 | Internal Review | A code-review-only pass (technical debt, duplication, naming, reuse opportunities, complexity, missing comments, edge cases, ADR conformance, accidental coupling) before the checkpoint is considered done — same questions a human PR reviewer would ask, run explicitly rather than assumed satisfied by tests passing. |
-| 6 | Rule 8 Completion Report | Summary / Files Changed / Database Impact / Security Impact / Performance Impact / Testing Checklist, per CLAUDE.md's own reporting requirement — states what shipped, doesn't imply what comes next is authorized (Non-Negotiable Principle 6, §4). |
-| 7 | Merge | Commit and push, diff scope confirmed against the checkpoint's own affected-files list first (Non-Negotiable Principle 4, §4) — not assumed clean from intent. |
-| 8 | Next Checkpoint | Stop. A completed checkpoint is not itself authorization to begin the next one's *design* work, but the next checkpoint inside an already-Authorized phase may begin its own Step 1 without a new Stage 7/8 — that gate was already cleared for the whole phase. |
-
-**What this section does not change:** the eleven stages in §2, the
-lifecycle vocabulary in §3, or any of the seven Non-Negotiable
-Principles in §4 — this is a zoomed-in view of Stage 9 alone, using
-vocabulary and principles all already fixed elsewhere in this document.
 
 ---
 
