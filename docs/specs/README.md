@@ -105,7 +105,7 @@ intelligence), then build the platform capabilities around that.
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | ✅ Accepted (documentation & business rules; implementation not authorized) |
 | 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted; Phase 1 (Foundations) implemented & closed (`4d9d34b`); Phase 2 (Trial Engine) decisions recorded, implementation not yet authorized |
-| 20 | [Notifications](./20-notifications.md) | ✅ Accepted; Phase 1 (Foundations) implemented & closed; Phase 2 (Privileged-Server Creation Path) not yet authorized |
+| 20 | [Notifications](./20-notifications.md) | ✅ Accepted; Phase 1 (Foundations), Phase 2 (Privileged-Server Creation Path), and Phase 3 (Background Worker Scheduled Triggers) all implemented & closed (`20-phase3-closeout.md`, commit `32bafbf`); Phase 4 (Tenant User Experience) not yet authorized |
 
 > **Note on Module #20 (Notifications):** readiness analysis surfaced a
 > genuinely unresolved recipient-binding question in Architecture §4.9/
@@ -148,6 +148,23 @@ intelligence), then build the platform capabilities around that.
 > wiring now exist in `src/`, superseding the "no changes have been
 > made" statement above as of that point in time. Phase 2
 > (Privileged-Server Creation Path) remains unauthorized.
+
+> **Update — Phase 2 and Phase 3 Implementation Status:** Phase 2
+> (Privileged-Server Creation Path) was subsequently authorized,
+> implemented, verified, and formally closed
+> (`docs/engineering/20-phase2-closeout.md`), superseding the "remains
+> unauthorized" statement immediately above as of that point in time.
+> Phase 3 (Background Worker Scheduled Triggers) followed the same
+> pattern: BDR-0007 (BusinessEvent Creation Policy) and its Closing
+> Cadence Amendment were Accepted, the Phase 3 Rule 8 Assessment v2
+> concluded Governance Readiness: Ready, the Phase 3 Implementation
+> Authorization was signed, and all five checkpoints (job registration,
+> platform infrastructure, and the three producers named by BDR-0007 —
+> `trial-engine`, `closing-integrity`, `breakage-tracking`) were
+> implemented, tested, and formally closed
+> (`docs/engineering/20-phase3-closeout.md`, commit `32bafbf`). Phase 4
+> (Tenant User Experience beyond the existing bell dropdown) remains
+> unauthorized.
 
 > **Update — Module #20 Specification Enhancement Amendment (v1.1):**
 > `20-notifications.md` is now **Version 1.1**. The

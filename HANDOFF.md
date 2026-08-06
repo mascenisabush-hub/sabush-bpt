@@ -12,139 +12,69 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**[Corrected — this section was 13 commits stale as of 2026-08-05;**
-**see "Superseded note" below.]**
+**Status:** Module #20 (Notifications) **Phase 3 (Background Worker
+Scheduled Triggers) is implemented, tested, and formally closed.**
+`main` == `origin/main` at `32bafbf` (confirmed via fresh `git fetch`,
+not assumed).
 
-**Status:** Module #20 (Notifications) Phase 3 is **authorized and
-in progress.** `main` == `origin/main` at `d147106` (confirmed via
-fresh `git fetch`, not assumed).
+**What's true right now:**
 
-**What's true right now, in order:**
-
-1. Phase 1 and Phase 2 remain implemented, verified, and closed (unchanged).
-2. The original Rule 8 Assessment's "Not Ready" verdict was
-   **superseded** by
-   [`20-phase3-rule8-assessment-v2.md`](./docs/engineering/20-phase3-rule8-assessment-v2.md)
-   — **Governance Readiness: Ready** — after BDR-0006/BDR-0007
-   acceptance and an Implementation Plan reconciliation resolved the
-   four items the original assessment flagged as blocking.
-3. [`20-phase3-implementation-authorization.md`](./docs/engineering/20-phase3-implementation-authorization.md)
-   is **signed** (2026-08-05), authorizing exactly three
-   `BusinessEvent` producers: `closing-integrity`, `breakage-tracking`,
-   `trial-engine`.
-4. **Three implementation checkpoints are shipped** against that
-   authorization:
-   - Checkpoint 1 (`e18691b`) — `server/backgroundWorker.ts`,
-     `registerJob()` abstraction; `runTrialLifecycleSweep()` migrated
-     onto it, business logic byte-for-byte unchanged.
-   - Checkpoint 2 (`f96c2f4`) — `server/notificationPlatform.ts`:
-     `BusinessEvent` contract, dedupe/watermark
-     (`platform_event_dedupe`, `platform_worker_state`), template +
-     BDR-0005/0006 localization/policy pipeline. No producer wired yet
-     at this checkpoint, by design.
-   - Checkpoint 3 (`d147106`, HEAD) — `server/trialNotificationProducer.ts`:
-     first real producer (`trial.ending_soon`/`trial.ending_tomorrow`),
-     end-to-end Event → Platform → Notification pipeline proven. 9/9
-     new tests; 20/20 + 58/58 + 12/12 existing suites still passing.
-     Template copy is a first draft, explicitly flagged as **not**
-     Product-Architect-approved wording.
-5. **Not yet started:** `closing-integrity` and `breakage-tracking`
-   producers (Checkpoints 4–5). Before either is coded, the
-   current-period boundary derivation (`periodType`/`startDate`/
-   `endDate` source for a server-side sweep — `AppContext.tsx`'s
-   `isPeriodClosed()` takes these as inputs, doesn't derive them) needs
-   to be traced/confirmed, and the Breakage producer needs its
-   collection-group query scoped. Flagged, not solved, as of this
-   commit.
-
-**Superseded note:** the "NOT READY" status, `be0f676` HEAD claim, and
-"do not start Phase 3" instruction previously in this section were
-stale — written at commit `d1d46d3` and never updated across the 13
-commits since. Treat any HANDOFF.md snapshot with suspicion; always
-`git fetch`/`git log` before trusting it, per this file's own repeated
-prior warning about exactly this failure mode.
-
-**What's true right now, in order:**
-
-1. **Phase 1 (Foundations) and Phase 2 (Privileged-Server Creation
-   Path) are both implemented, verified, and closed.**
-   [`20-phase1-closeout.md`](./docs/engineering/20-phase1-closeout.md),
+1. **Phase 1, Phase 2, and Phase 3 are all implemented, verified, and
+   closed.** [`20-phase1-closeout.md`](./docs/engineering/20-phase1-closeout.md),
    [`20-phase2-closeout.md`](./docs/engineering/20-phase2-closeout.md),
-   [`20-milestone-review-phases-1-2.md`](./docs/engineering/20-milestone-review-phases-1-2.md).
-2. **ADR-0002, ADR-0003, ADR-0004 are all Accepted** (Background Worker
-   ownership; job-registration interface; BusinessEvent/Notification
-   Platform contract) — but **none of the three is implemented in code
-   yet.** `runTrialLifecycleSweep()` in `server/index.ts` remains the
-   only real worker instance, still a single hardcoded `setInterval`
-   with no registration mechanism.
-3. **BDR-0005 (Notification Language Resolution Policy) is Accepted**
-   (`docs/specs/20-bdr-0005-notification-language-resolution-policy.md`,
-   commit `7b90b2c`) — the deterministic User → Business → Portuguese
-   fallback chain for server-generated notification language.
-4. **BDR-0006 (Notification Communication Policy) does NOT exist in
-   this repository.** It was shared as chat text only, never committed.
-   If its content (Notify/Batch/Suppress outcomes + priority for the
-   three Phase 3 producers) is still wanted, it needs to be re-authored
-   and actually committed+pushed — do not treat anything from a prior
-   chat transcript as real governance state without checking `git log`
-   / `git fetch origin` yourself first. This exact mistake (a real,
-   properly-committed BDR-0005 from an earlier session existing only in
-   that session's local, unpushed clone, then being lost when the
-   sandbox ended) already happened once this project — see the Rule 8
-   Assessment's own §1.1 for the fuller story.
+   [`20-phase3-closeout.md`](./docs/engineering/20-phase3-closeout.md).
+2. **All six BDR-0007 `eventType`s exist and are wired**, across three
+   producers: `trial-engine` (`trial.ending_soon`, `trial.ending_tomorrow`
+   — Checkpoint 3), `closing-integrity` (`closing.approaching`,
+   `closing.due`, `closing.overdue` — Checkpoint 4), `breakage-tracking`
+   (`inventory.risk.breakage` — Checkpoint 5). Confirmed by direct grep
+   at close-out, not assumed.
+3. **ADR-0002, ADR-0003, ADR-0004 are all Accepted and now implemented
+   in code** — `server/backgroundWorker.ts` (`registerJob()`),
+   `server/notificationPlatform.ts` (`BusinessEvent` contract,
+   `evaluateBusinessEvent()` pipeline), all three producers built
+   against both.
+4. **126/126 executable tests pass** (calculations, notification-platform,
+   staff-notifications, trial/closing/breakage producers) — no
+   regressions across any checkpoint. `tsc --noEmit` clean, `npm run
+   build` clean. The Firestore emulator rules test remains
+   execution-blocked by this sandbox's network egress allowlist (same
+   standing limitation as every prior phase) — a manual local-environment
+   verification step still owed before production deploy, not a code
+   defect.
+5. **Not yet started:** Module #20 Completion Review (module-level,
+   distinct from this phase-level close-out), Phase 4 (Tenant User
+   Experience beyond the existing bell dropdown), Phase 5 (Payment
+   Webhook), Phase 6 (additional delivery channels), and Stock Counts
+   Inventory Risk (BDR-0007 §4.2 explicit deferral — no eventType
+   exists to build against). None assessed, none authorized, none
+   begun.
+6. **Template copy across all six eventTypes** (`en`/`pt`/`fr`) is
+   first-draft engineering wording, flagged at every checkpoint as
+   **not** Product-Architect-approved — open for review, doesn't block
+   functional correctness.
 
-**The Phase 3 Rule 8 Assessment's conclusion (Not Ready) rests on four
-things still needing an explicit Product Architect decision, unaffected
-by BDR-0005's acceptance:**
+**If the next session's task is "Module #20 Completion Review":** read
+[`20-phase3-closeout.md`](./docs/engineering/20-phase3-closeout.md) and
+the three phase close-outs it lists first — this review is module-wide,
+not phase-scoped, and should independently re-verify ADR-0002/0003/0004
+conformance and Notification Platform ownership boundaries across all
+three phases, not just re-read this file's own summary of them.
 
-1. **ADR-0003 vs. the Implementation Plan's own Phase 3 wording.**
-   `20-notifications-implementation-plan.md` §9 still says "extend
-   `runTrialLifecycleSweep()`'s process... not a second process" —
-   written before ADR-0003 existed and describing the hardcoded-branch
-   shape ADR-0003 exists to replace. Needs an explicit Stage 6
-   Implementation Plan amendment, or an explicit decision that
-   ADR-0003 doesn't apply here.
-2. **ADR-0004 vs. the Accepted spec's own §20.1 schema / Phase 2's
-   shipped code.** The spec still has producers populate `context`
-   directly (which is exactly what Phase 2's five `/api/staff/*`
-   endpoints do, in hardcoded Portuguese, bypassing `LanguageContext`/
-   `t()` entirely). Whether Phase 3 producers must build the full
-   BusinessEvent/template/policy layer ADR-0004 describes (much larger
-   scope) or continue Phase 2's direct-write precedent is undecided —
-   and either way, `20-notifications.md` §20.1 needs a formal amendment
-   to say which.
-3. **The §4.8.1 dedupe/watermark mechanism, cited everywhere as
-   "existing," has never actually been built.** `writeNotification()`
-   has zero duplicate-check logic. Low-risk for Phase 2's one-shot
-   writes; a real gap for Phase 3's recurring scheduled sweep. Pick one
-   of Architecture §4.8.1's two named mechanisms (dedupe key as
-   document ID, vs. a separate `platform_worker_state/{jobType}`
-   collection) before any producer code is written.
-4. **Detection thresholds undecided:** overdue-Closing day-count,
-   Inventory-risk criteria, and a new "trial ending soon" threshold for
-   Subscriptions (distinct from the existing trial-expiry check) —
-   explicitly out of scope for both BDR-0005 and BDR-0006, still open.
+**If the next session's task is something else entirely:** the two
+items below are known, already-flagged debt that doesn't block
+anything, but should be kept in mind — no other documentation drift is
+currently known.
 
-**If the next session's task is "resolve these and re-run the Rule 8
-Assessment":** do exactly that — re-verify each of the four items
-above against a fresh `git fetch`/`git log`, don't assume anything
-described in a chat transcript is already in the repo, and don't start
-writing Phase 3 code until all four have an explicit, committed
-Product Architect decision behind them (a spec/plan amendment or a new
-BDR/ADR, the same way every prior phase in this repo has done it).
+- Template copy (item 6, above) remains unreviewed by the Product
+  Architect.
+- The emulator-run manual verification step (item 4, above) is still
+  owed before any production deploy touching `firestore.rules` or
+  `firestore.indexes.json` changes from Phase 1–3.
 
-**If the next session's task is something else entirely** (a different
-module, a documentation fix, etc.): the two items below are known,
-already-flagged debt that doesn't block anything, but should be kept in
-mind:
-
-- `docs/specs/README.md`'s Module #20 row still reads "Phase 2...
-  not yet authorized" — stale; Phase 2 is closed. Not corrected yet,
-  per this repo's practice of flagging rather than silently fixing
-  drift mid-unrelated-task.
-- The rest of this file, below this section, describes older sessions
-  (Module #19 Phase 1/2, the owner→admin migration) and is historical
-  context only — not current status.
+The rest of this file, below this section, describes older sessions
+(Module #19 Phase 1/2, the owner→admin migration) and is historical
+context only — not current status.
 
 ---
 
