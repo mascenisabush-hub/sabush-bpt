@@ -88,6 +88,32 @@ of any policy — each POL document remains entirely unwritten:
 | POL-19-007 | Recovery Policy |
 | POL-19-008 | Notification Policy |
 
+### Numbering Ledger (Addendum — Post-Planned-Series Identifiers)
+
+The Planned Policy Series above (POL-19-001 through 008) is complete,
+per POL-19-008's own Governance Notes. Everything below POL-19-008 is
+**not** part of that original planned series — each identifier below
+was assigned individually, across separate sessions, as new policy
+needs arose. This addendum exists solely to resolve an identifier
+ambiguity that surfaced across sessions: a prior task prompt referred
+to "the existing POL-19-010 scaffold" as if it were already a file in
+this repository. It was not — confirmed by direct filesystem
+inspection before this addendum was written. The table below is the
+single canonical mapping; if any future prompt or session disagrees
+with it, that prompt is wrong about repo state, not this table.
+
+| # | Policy | Status |
+|---|---|---|
+| POL-19-009 | Early Renewal During Trial | **Reserved** — assigned to this topic conversationally in a prior session; not yet drafted as a file; out of scope for the session that produced POL-19-010/011 below. |
+| POL-19-010 | [Payment Reversal Policy](./19-pol-010-payment-reversal-policy.md) | Approved |
+| POL-19-011 | [V1 Commercial Plan, Payment Processor & Voluntary Cancellation Decision](./19-pol-011-v1-commercial-plan-processor-cancellation-decision.md) | Approved |
+| POL-19-012 | Business-Lifecycle / Subscription-Status Interaction (candidate topic — per `19-subscriptions.md`'s State Mapping cross-reference and its Explicitly Left Open item 7) | **Recommended, not assigned.** No file exists. Do not use this number for any other topic without an explicit Product Architect decision. |
+
+No identifier above POL-19-008 may be renumbered or reused for a
+different topic than the one recorded in this ledger without an
+explicit Product Architect decision — the same discipline that governs
+the original Planned Policy Series applies here.
+
 ## 3. Governance Relationship
 
 The following hierarchy is recorded as approved. Each level must derive

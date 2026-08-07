@@ -104,7 +104,7 @@ intelligence), then build the platform capabilities around that.
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
 | 18 | [SuperAdmin](./18-superadmin.md) | ✅ Accepted (documentation & business rules; implementation not authorized) |
-| 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted; Phase 1 (Foundations) implemented & closed (`4d9d34b`); Phase 2 (Trial Engine) decisions recorded, implementation not yet authorized |
+| 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted; Phase 1 (Foundations) and Phase 2 (Trial Engine) implemented & closed (see `19-milestone-review-phases-1-2.md`); POL-19-010 (Payment Reversal) and POL-19-011 (V1 Commercial Plan & Processor Decision) recorded; Phase 3/Phase 5 minimum-slice implementation not yet authorized |
 | 20 | [Notifications](./20-notifications.md) | ✅ Accepted; Phase 1 (Foundations), Phase 2 (Privileged-Server Creation Path), and Phase 3 (Background Worker Scheduled Triggers) all implemented & closed (`20-phase3-closeout.md`, commit `32bafbf`); Phase 4 (Tenant User Experience) not yet authorized |
 
 > **Note on Module #20 (Notifications):** readiness analysis surfaced a
@@ -227,6 +227,25 @@ intelligence), then build the platform capabilities around that.
 > now exist in `src/` and `server/`. Phase 2 (Trial Engine) — decisions
 > recorded in `19-phase2-trial-engine-decisions.md` — remains
 > unauthorized for implementation.
+
+> **Update — Phase 2 Implemented & Closed; V1 Commercial Decisions
+> Recorded:** the note directly above is now stale — Phase 2 (Trial
+> Engine) was subsequently authorized, implemented, verified, and
+> formally closed (commit `0c92cad`), per
+> [`19-milestone-review-phases-1-2.md`](../engineering/19-milestone-review-phases-1-2.md).
+> Separately, the three commercial decisions Phase 5 (Commercial
+> Integration) was blocked on are now resolved for V1 scope:
+> [POL-19-010](./19-pol-010-payment-reversal-policy.md) (Payment
+> Reversal Policy) and
+> [POL-19-011](./19-pol-011-v1-commercial-plan-processor-cancellation-decision.md)
+> (V1 Commercial Plan, Payment Processor & Voluntary Cancellation
+> Decision) are both Approved. A prior identifier ambiguity around
+> POL-19-009/010 is resolved by the Numbering Ledger addendum in
+> [`19-governance-bdr-policy-framework.md`](./19-governance-bdr-policy-framework.md).
+> **None of this authorizes implementation.** A dependency-specific
+> Rule 8 Assessment, scoped to the minimum V1 payment path only (not
+> full Phase 3 or full Phase 5), is the next step and remains subject
+> to its own separate authorization.
 
 > **Note on Module #18 (SuperAdmin):** a documentation-analysis
 > readiness review checked `18-superadmin.md` against Module #17's and
