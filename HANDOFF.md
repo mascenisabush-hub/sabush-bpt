@@ -12,9 +12,13 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #19 (Subscriptions) — **implementation phase is
-closed; the project has shifted to Customer & Commercial Validation.**
-The V1 Manual Payment Bridge (below) is fully implemented and live.
+**Status:** Module #19 (Subscriptions) V1 — **formally closed**
+(`docs/specs/19-v1-formal-completion-closeout.md`, decision: CLOSED —
+V1 COMPLETE). Independently re-verified in a dedicated closeout audit
+— all seven Engine transitions, the Manual Payment Bridge, security
+boundaries, and 164/164 tests re-confirmed against the actual
+repository, not assumed from any prior session's own claim. The
+project has shifted to Customer & Commercial Validation.
 **No further engineering work is authorized until real customer
 evidence justifies it** — see
 [`19-v1-customer-validation-plan.md`](./docs/engineering/19-v1-customer-validation-plan.md)
