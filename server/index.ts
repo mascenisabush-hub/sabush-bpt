@@ -26,6 +26,7 @@ import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
+import { createSubscriptionEngine } from './subscriptionEngine';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -1285,6 +1286,25 @@ backgroundWorker.registerJob({
   jobType: 'breakage-notification-sweep',
   scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
   execute: breakageNotificationProducer.runBreakageNotificationSweep,
+});
+
+// Module #19 V1 Subscription Lifecycle Engine
+// (server/subscriptionEngine.ts) — the one governed transition with no
+// triggering event: grace_period -> expired once 7 days elapse with no
+// recovery (POL-19-004, POL-19-005). Reuses the same schedule interval;
+// isolated from every other registered job by the Background Worker
+// (ADR-0003). Per the signed Implementation Authorization
+// (docs/engineering/19-v1-subscription-lifecycle-engine-implementation-authorization.md),
+// this is the ONLY wiring this Authorization permits — applyLifecycleEvent()
+// (the event-triggered half of the Engine) is deliberately NOT called
+// from any HTTP route here. No /api/billing/webhook exists, and none
+// may be added until a verified PaySuite Payment Adapter is separately
+// authorized (Authorization §3).
+const subscriptionEngine = createSubscriptionEngine(db);
+backgroundWorker.registerJob({
+  jobType: 'grace-period-expiry-sweep',
+  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+  execute: subscriptionEngine.runGracePeriodExpirySweep,
 });
 
 // ------------------------------------------------------------------
