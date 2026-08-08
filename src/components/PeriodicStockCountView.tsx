@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCountType } from '../types';
+import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
   Plus,
@@ -55,6 +56,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     stockCounts,
     hasInitialStockCount,
     initialCapitalValue,
+    subscriptionBlocksNewRecords,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -186,6 +188,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20';
   const fieldLabelClass = 'block type-label mb-1';
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
+
+  if (subscriptionBlocksNewRecords) {
+    return <SubscriptionBlockedNotice />;
+  }
 
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-4">

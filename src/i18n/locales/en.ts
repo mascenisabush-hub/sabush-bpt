@@ -766,6 +766,36 @@ export const en: TranslationDict = {
       insightValueDown: 'The inventory value decreased {{amount}} since the previous count.',
     },
   },
+  subscription: {
+    banner: {
+      trialActive: {
+        title: 'Trial active',
+        daysRemaining: 'Days remaining: {{days}}',
+        endsOn: 'Trial ends on {{date}}',
+        subscribeButton: 'Subscribe',
+      },
+      gracePeriod: {
+        title: 'Your subscription needs attention',
+        daysRemaining: 'Grace period remaining: {{days}} days',
+        subscribeButton: 'Subscribe',
+      },
+      expired: {
+        title: 'Your business is currently read-only',
+        contactButton: 'Contact Support',
+      },
+    },
+    blockedNotice: {
+      title: 'New records are paused',
+      trialCompletedMessage: 'Your trial has ended. Your data and history remain available, but you can\'t create new records until you subscribe to a plan.',
+      expiredMessage: 'Your subscription has expired. Your data and history remain available, but you can\'t create new records until you renew.',
+      contactButton: 'Contact Support',
+    },
+    contactModal: {
+      title: 'Subscribe to Sabush BPT',
+      message: 'To activate or renew your subscription, contact the Sabush BPT team. In-app subscription will be available soon.',
+      closeButton: 'Close',
+    },
+  },
   notificationTemplates: {
     trial: {
       endingSoon: {

@@ -19,6 +19,7 @@ import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
 import { QuickLoginScreen } from './components/QuickLoginScreen';
 import AppLoadingScreen from './components/AppLoadingScreen';
+import { SubscriptionStatusBanner } from './components/SubscriptionStatusBanner';
 import { Product } from './types';
 
 function MainApp() {
@@ -89,6 +90,7 @@ function MainApp() {
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
       <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
+      <SubscriptionStatusBanner />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 pb-24 md:pb-12">
         {!isStaff && activeTab === 'dashboard' && (

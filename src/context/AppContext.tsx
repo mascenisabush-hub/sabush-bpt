@@ -38,6 +38,7 @@ import {
   PairedDevice,
   StaffTier,
   ManagerPermissions,
+  Subscription,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
@@ -100,6 +101,22 @@ interface AppContextType {
   currentUser: FirebaseUser | null;
   userProfile: UserProfile | null;
   business: Business | null;
+  // Release Readiness Audit (19-v1-completion-review-and-release-readiness-audit.md,
+  // §2a) finding: the client previously never read the subscription
+  // document at all — zero in-app visibility of trial/grace/expired
+  // status, despite firestore.rules already permitting the read. These
+  // four fields close that gap. `subscriptionBlocksNewRecords` mirrors
+  // firestore.rules' own subscriptionAllowsNewRecords() exactly
+  // (blocks only on 'trial_completed'/'expired', fail-open — false —
+  // when no subscription document exists at all, matching that
+  // function's own documented INTERIM behavior for pre-Phase-1
+  // legacy businesses) so the client can pre-empt a write with a
+  // clear message instead of only reacting to a raw permission-denied
+  // error after the fact.
+  subscription: Subscription | null;
+  subscriptionTrialDaysRemaining: number | null;
+  subscriptionGracePeriodDaysRemaining: number | null;
+  subscriptionBlocksNewRecords: boolean;
   isAuthLoading: boolean;
   isOwner: boolean;
   isStaff: boolean;
@@ -219,6 +236,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // screen can show *why* they were logged out, then it's cleared once shown.
   const [suspensionNotice, setSuspensionNotice] = useState<string | null>(null);
   const [business, setBusiness] = useState<Business | null>(null);
+  const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   const [products, setProducts] = useState<Product[]>([]);
@@ -386,6 +404,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, activeBusinessId, JSON.stringify(staffMembers), business?.name]);
 
+  // ============================================================
+  // SUBSCRIPTION STATUS — derived, read-only client mirrors of
+  // firestore.rules' own gating logic. Never a second source of
+  // truth: the Security Rule is what actually enforces the
+  // restriction (Architecture 7.1, same as every other module) —
+  // these values exist only so the UI can explain that restriction
+  // clearly, pre-emptively, instead of surfacing a raw
+  // permission-denied error after a blocked write attempt.
+  // ============================================================
+  const MS_PER_DAY = 24 * 60 * 60 * 1000;
+  const subscriptionTrialDaysRemaining =
+    subscription && subscription.status === 'trial_active' && subscription.trialEndsAt
+      ? Math.max(0, Math.ceil((new Date(subscription.trialEndsAt).getTime() - Date.now()) / MS_PER_DAY))
+      : null;
+  const subscriptionGracePeriodDaysRemaining =
+    subscription && subscription.status === 'grace_period' && subscription.gracePeriodEndsAt
+      ? Math.max(0, Math.ceil((new Date(subscription.gracePeriodEndsAt).getTime() - Date.now()) / MS_PER_DAY))
+      : null;
+  // Mirrors firestore.rules' subscriptionAllowsNewRecords() exactly:
+  // blocks only on 'trial_completed'/'expired'; fail-open (false, not
+  // blocking) when no subscription document exists at all, matching
+  // that function's own documented INTERIM behavior for businesses
+  // that predate Phase 1's atomic subscription creation.
+  const subscriptionBlocksNewRecords =
+    !!subscription && (subscription.status === 'trial_completed' || subscription.status === 'expired');
+
   // The one-and-only 'initial' StockCount establishes the permanent
   // Initial Business Capital baseline (see types.ts for the rationale).
   const initialStockCount = stockCounts.find((s) => s.type === 'initial') || null;
@@ -531,6 +575,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
       },
       (err) => console.error('Error fetching business:', err)
+    );
+
+    // 1a. Subscription doc listener — top-level collection, doc ID ==
+    // businessId (server/subscriptionEngine.ts and server/index.ts's
+    // own activate-trial endpoint both key it this same way). Added
+    // per the Release Readiness Audit's own finding: previously never
+    // read client-side at all.
+    const subscriptionRef = doc(db, 'subscriptions', businessId);
+    const unsubSubscription = onSnapshot(
+      subscriptionRef,
+      (snap) => {
+        setSubscription(snap.exists() ? (snap.data() as Subscription) : null);
+      },
+      (err) => console.error('Error fetching subscription:', err)
     );
 
     // 2. Products collection
@@ -680,6 +738,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     return () => {
       unsubBusiness();
+      unsubSubscription();
       unsubProducts();
       unsubBatches();
       unsubPurchaseBatches();
@@ -1979,6 +2038,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         currentUser,
         userProfile,
         business,
+        subscription,
+        subscriptionTrialDaysRemaining,
+        subscriptionGracePeriodDaysRemaining,
+        subscriptionBlocksNewRecords,
         isAuthLoading,
         isOwner,
         isStaff,

@@ -4,6 +4,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
+import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -23,7 +24,7 @@ interface StockRowItem {
 }
 
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
-  const { products, batches, addMultipleStockBatches, currencySymbol, businessCategory, isStaff } = useApp();
+  const { products, batches, addMultipleStockBatches, currencySymbol, businessCategory, isStaff, subscriptionBlocksNewRecords } = useApp();
   const { t } = useLanguage();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -215,6 +216,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     },
     { totalInvestmentValue: 0, totalMarketValue: 0, totalEmbeddedProfit: 0 }
   );
+
+  // Release Readiness Audit finding — pre-empt the write with a clear
+  // explanation instead of letting firestore.rules' subscriptionAllowsNewRecords()
+  // reject it and surface a raw permission-denied error.
+  if (subscriptionBlocksNewRecords) {
+    return <SubscriptionBlockedNotice />;
+  }
 
   return (
     <div className="max-w-5xl mx-auto pb-12">

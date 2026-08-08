@@ -710,6 +710,43 @@ export interface TranslationDict {
       insightValueDown: string;
     };
   };
+  // Release Readiness Audit finding (19-v1-completion-review-and-release-readiness-audit.md,
+  // §2a/§2c): the client previously had zero in-app subscription/trial
+  // status visibility, and a blocked write surfaced a raw Firebase
+  // error. These keys are the minimum client-facing surface closing
+  // that gap — a persistent status banner and a shared notice shown
+  // in place of any entry form once subscriptionBlocksNewRecords is
+  // true, per AppContext.tsx's own new derived value of that name.
+  subscription: {
+    banner: {
+      trialActive: {
+        title: string;
+        daysRemaining: string; // {{days}}
+        endsOn: string; // {{date}}
+        subscribeButton: string;
+      };
+      gracePeriod: {
+        title: string;
+        daysRemaining: string; // {{days}}
+        subscribeButton: string;
+      };
+      expired: {
+        title: string;
+        contactButton: string;
+      };
+    };
+    blockedNotice: {
+      title: string;
+      trialCompletedMessage: string;
+      expiredMessage: string;
+      contactButton: string;
+    };
+    contactModal: {
+      title: string;
+      message: string;
+      closeButton: string;
+    };
+  };
   // Module #20 Phase 3 Checkpoint 3 (Trial Engine Producer) — server-
   // rendered notification content, read by server/notificationPlatform.ts's
   // t() via resolveNotificationLanguage()/LanguageContext's own locale
@@ -1523,6 +1560,36 @@ export const pt: TranslationDict = {
       insightLatestAdjusted: 'Na verificação mais recente ({{date}}), {{adjusted}} de {{total}} produtos tiveram a quantidade ajustada.',
       insightValueUp: 'O valor do inventário aumentou {{amount}} desde a contagem anterior.',
       insightValueDown: 'O valor do inventário diminuiu {{amount}} desde a contagem anterior.',
+    },
+  },
+  subscription: {
+    banner: {
+      trialActive: {
+        title: 'Período experimental ativo',
+        daysRemaining: 'Dias restantes: {{days}}',
+        endsOn: 'O período experimental termina a {{date}}',
+        subscribeButton: 'Subscrever',
+      },
+      gracePeriod: {
+        title: 'A sua subscrição precisa de atenção',
+        daysRemaining: 'Período de tolerância restante: {{days}} dias',
+        subscribeButton: 'Subscrever',
+      },
+      expired: {
+        title: 'O seu negócio está atualmente em modo só de leitura',
+        contactButton: 'Contactar Suporte',
+      },
+    },
+    blockedNotice: {
+      title: 'Novos registos estão pausados',
+      trialCompletedMessage: 'O seu período experimental terminou. Os seus dados e histórico continuam disponíveis, mas não é possível criar novos registos até subscrever um plano.',
+      expiredMessage: 'A sua subscrição expirou. Os seus dados e histórico continuam disponíveis, mas não é possível criar novos registos até renovar a subscrição.',
+      contactButton: 'Contactar Suporte',
+    },
+    contactModal: {
+      title: 'Subscrever o Sabush BPT',
+      message: 'Para ativar ou renovar a sua subscrição, contacte a equipa Sabush BPT. Em breve poderá subscrever diretamente na aplicação.',
+      closeButton: 'Fechar',
     },
   },
   notificationTemplates: {

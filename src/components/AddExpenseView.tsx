@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { Receipt, CheckCircle2, ArrowRight } from 'lucide-react';
+import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 
 interface AddExpenseViewProps {
   onComplete: () => void;
@@ -21,7 +22,7 @@ const COMMON_CATEGORY_KEYS = [
 ];
 
 export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) => {
-  const { addExpense, currencySymbol } = useApp();
+  const { addExpense, currencySymbol, subscriptionBlocksNewRecords } = useApp();
   const { t } = useLanguage();
 
   const [date, setDate] = useState<string>(getTodayDateString());
@@ -70,6 +71,10 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
       setIsSaving(false);
     }
   };
+
+  if (subscriptionBlocksNewRecords) {
+    return <SubscriptionBlockedNotice />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-12">

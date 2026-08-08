@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { HandCoins, CheckCircle2, ArrowRight, Info } from 'lucide-react';
+import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 
 interface AddWithdrawalViewProps {
   onComplete: () => void;
@@ -22,7 +23,7 @@ const COMMON_REASON_KEYS = [
 ];
 
 export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete }) => {
-  const { addWithdrawal, currencySymbol } = useApp();
+  const { addWithdrawal, currencySymbol, subscriptionBlocksNewRecords } = useApp();
   const { t } = useLanguage();
 
   const [date, setDate] = useState<string>(getTodayDateString());
@@ -65,6 +66,10 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
       setIsSaving(false);
     }
   };
+
+  if (subscriptionBlocksNewRecords) {
+    return <SubscriptionBlockedNotice />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-12">

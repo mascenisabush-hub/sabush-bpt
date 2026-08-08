@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -18,7 +19,7 @@ interface CountRowItem {
 }
 
 export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ onComplete, onSkip }) => {
-  const { businessCategory, currencySymbol, recordStockCount, hasInitialStockCount } = useApp();
+  const { businessCategory, currencySymbol, recordStockCount, hasInitialStockCount, subscriptionBlocksNewRecords } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
   const createEmptyRow = (): CountRowItem => ({
@@ -131,6 +132,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // Column widths: Nome gets the most room, numeric fields stay tight,
   // last column is just wide enough for the hover-revealed delete icon.
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
+
+  if (subscriptionBlocksNewRecords) {
+    return <SubscriptionBlockedNotice />;
+  }
 
   return (
     <div className="max-w-5xl mx-auto pb-12">

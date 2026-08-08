@@ -24,8 +24,8 @@ jobs:
       - name: Lint (type check)
         run: npm run lint
 
-      - name: Run calculations tests
-        run: npm run test:calculations
+      - name: Run full test suite
+        run: npm run test:all
 
       - name: Set up Java 21 (required by firebase-tools emulator)
         uses: actions/setup-java@v4

@@ -2,6 +2,7 @@ import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { calculateBatch, isQuebraExceedingWarning } from '../utils/calculations';
+import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
 
@@ -23,7 +24,7 @@ const COMMON_REASON_KEYS = [
 ];
 
 export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, onComplete }) => {
-  const { products, batches, quebras, addQuebra, currencySymbol } = useApp();
+  const { products, batches, quebras, addQuebra, currencySymbol, subscriptionBlocksNewRecords } = useApp();
   const { t } = useLanguage();
 
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -126,6 +127,10 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
       setIsSaving(false);
     }
   };
+
+  if (subscriptionBlocksNewRecords) {
+    return <SubscriptionBlockedNotice />;
+  }
 
   return (
     <div className="max-w-2xl mx-auto pb-12">

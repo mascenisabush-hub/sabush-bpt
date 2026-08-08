@@ -766,6 +766,36 @@ export const fr: TranslationDict = {
       insightValueDown: 'La valeur de l\'inventaire a diminué de {{amount}} depuis le comptage précédent.',
     },
   },
+  subscription: {
+    banner: {
+      trialActive: {
+        title: 'Essai gratuit actif',
+        daysRemaining: 'Jours restants : {{days}}',
+        endsOn: 'L\'essai se termine le {{date}}',
+        subscribeButton: 'S\'abonner',
+      },
+      gracePeriod: {
+        title: 'Votre abonnement nécessite votre attention',
+        daysRemaining: 'Période de tolérance restante : {{days}} jours',
+        subscribeButton: 'S\'abonner',
+      },
+      expired: {
+        title: 'Votre entreprise est actuellement en lecture seule',
+        contactButton: 'Contacter le support',
+      },
+    },
+    blockedNotice: {
+      title: 'Les nouveaux enregistrements sont suspendus',
+      trialCompletedMessage: 'Votre essai gratuit est terminé. Vos données et votre historique restent disponibles, mais vous ne pouvez pas créer de nouveaux enregistrements avant de vous abonner.',
+      expiredMessage: 'Votre abonnement a expiré. Vos données et votre historique restent disponibles, mais vous ne pouvez pas créer de nouveaux enregistrements avant de renouveler.',
+      contactButton: 'Contacter le support',
+    },
+    contactModal: {
+      title: 'S\'abonner à Sabush BPT',
+      message: 'Pour activer ou renouveler votre abonnement, contactez l\'équipe Sabush BPT. L\'abonnement dans l\'application sera bientôt disponible.',
+      closeButton: 'Fermer',
+    },
+  },
   notificationTemplates: {
     trial: {
       endingSoon: {
