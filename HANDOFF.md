@@ -12,76 +12,80 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #19 (Subscriptions) — **V1 Commercial Decision
-Closure.** Four release-gating decisions (Plan/Pricing, Payment
-Processor, Payment Reversal, Voluntary Cancellation) that were left
-open at the end of the prior #19 session are now all recorded.
-`main` == `origin/main` at `4110ebb` at session start (confirmed via
-fresh `git clone` + `git fetch`, not assumed) — verify again before
-continuing, this note does not update itself.
+**Status:** Module #19 (Subscriptions) — **V1 payment-path governance
+simplified and re-assessed.** The four release-gating decisions
+(Plan/Pricing, Payment Processor, Payment Reversal, Voluntary
+Cancellation) recorded last session are still in effect, with one
+amendment this session: the Payment Reversal rule for a reversal
+arriving mid-Grace-Period was simplified from "recalculate a fresh
+7 days" to "no effect at all — remains on its original window."
+`main` == `origin/main` at `d82198b` at this session's start (confirmed
+via fresh `git fetch`, not assumed) — verify again before continuing,
+this note does not update itself.
 
 **What's true right now:**
 
-1. **[POL-19-010 — Payment Reversal Policy](./docs/specs/19-pol-010-payment-reversal-policy.md)**
-   is Approved. Core transition: `active → grace_period` on reversal,
-   historical business data never rewritten. Both previously-open edge
-   cases are resolved: a reversal arriving while already in
-   `grace_period` recalculates the end date as a fresh 7 days from the
-   new event (replacing, not stacking, the prior end date); a reversal
-   arriving after `expired` is explicitly deferred for V1 (log-only, no
-   state effect — Recovery/POL-19-007 remains the only path back).
-2. **[POL-19-011 — V1 Commercial Plan, Payment Processor & Voluntary
-   Cancellation Decision](./docs/specs/19-pol-011-v1-commercial-plan-processor-cancellation-decision.md)**
-   is Approved: one paid plan, monthly, single business, 750 MZN/month;
-   PaySuite selected as V1 processor (vendor decision only — no
-   endpoint/webhook/signature/payload mechanics recorded or verified
-   yet, that's still owed before any PaySuite-specific code is
-   written); voluntary cancellation deferred from V1, handled
-   operationally via the existing Support/SuperAdmin subscription
-   override capability (Architecture §9.4/§6.7) — no new state, no new
-   UI.
-3. **The POL-19-009/010 identifier ambiguity is resolved.** A prior
-   task prompt asserted "the existing POL-19-010 scaffold" as if it
-   were already a repo file — confirmed false by direct inspection.
-   POL-19-009 remains reserved (unassigned as a file) for "Early
-   Renewal During Trial," a prior conversational assignment, untouched
-   this session. See the Numbering Ledger addendum in
-   [`19-governance-bdr-policy-framework.md`](./docs/specs/19-governance-bdr-policy-framework.md)
-   for the canonical mapping — POL-19-012 remains recommended-only for
-   the Business-Lifecycle/Subscription-Status question, also untouched.
-4. **`docs/specs/README.md` updated** — Module #19's row and its
-   "Update" notes now correctly reflect Phase 2 (Trial Engine) as
-   implemented & closed (this was previously stale, still saying "not
-   yet authorized"), plus references to POL-19-010/011.
-5. **Nothing has been implemented.** No `src/`, `server/`,
+1. **[POL-19-013 — Payment Reversal Policy Amendment](./docs/specs/19-pol-013-payment-reversal-grace-period-reset-amendment.md)**
+   is Approved. Replaces POL-19-010's original Edge Case A: a reversal
+   arriving while already `grace_period` now has **no effect** —
+   `gracePeriodEndsAt` is set once, at first entry, and never
+   recalculated by a repeat reversal. Confirms POL-19-010's Edge Case B
+   (reversal after `expired`) as **settled**, not merely deferred: no
+   automatic effect, ever — Recovery (POL-19-007) remains the sole path
+   back to Active. Net effect: `ACTIVE → GRACE PERIOD (fixed 7 days) →
+   EXPIRED`, one-directional, no backward movement from a late
+   financial event.
+2. **[POL-19-010](./docs/specs/19-pol-010-payment-reversal-policy.md)
+   and [POL-19-011](./docs/specs/19-pol-011-v1-commercial-plan-processor-cancellation-decision.md)
+   remain Approved, unedited** — their original text is preserved as
+   historical record; POL-19-010 carries a pointer at its top directing
+   to POL-19-013 for the current rule. POL-19-011's plan/pricing (750
+   MZN/month, one business), PaySuite selection (vendor-only, technical
+   mechanics still unverified), and voluntary-cancellation deferral are
+   all unchanged and unaffected by this session.
+3. **[19-v1-payment-path-rule8-assessment-v2.md](./docs/engineering/19-v1-payment-path-rule8-assessment-v2.md)
+   supersedes the v1 assessment** (v1 preserved, marked superseded, not
+   deleted). v2's §2b and implementation-plan step 3 reflect POL-19-013:
+   the minimum implementation is **simpler** than v1 assessed — one
+   fewer state-write branch (no recalculation logic needed for a repeat
+   reversal during grace), one risk (ordering/idempotency) narrowed.
+   Still **Assessed, not Authorized** — reaching this state is not
+   itself a go-ahead to write code.
+4. **Nothing has been implemented.** No `src/`, `server/`,
    `firestore.rules`, or `docs/specs/19-subscriptions.md` file was
-   touched this session — confirmed by diff. All new/changed files are
-   `docs/specs/19-pol-010-*.md` (new), `docs/specs/19-pol-011-*.md`
-   (new), `docs/specs/19-governance-bdr-policy-framework.md` (addendum
-   only), `docs/specs/README.md`, and this file.
-6. **Next step, not yet authorized:** a dependency-specific Rule 8
-   Assessment scoped to the *minimum* V1 customer payment path only —
-   `trial_completed → paid → processor confirms → verified webhook →
-   active`, and `active → reversal → grace_period`. This explicitly
-   does **not** mean full Phase 2 (already done), full Phase 3
-   (Grace/Conversion/Recovery in general), or full Phase 5 (Commercial
-   Integration in general) — see that assessment document's own scope
-   section once produced. PaySuite's technical documentation must be
+   touched this session — confirmed by diff. Re-verified fresh, not
+   assumed: still zero PaySuite references and zero `/api/billing/webhook`
+   route anywhere in `server/`; exactly two subscription-mutating
+   endpoints exist (`POST /api/provisioning/business`,
+   `POST /api/subscriptions/activate-trial`), neither is the webhook.
+5. **POL-19-012's reservation is untouched** — still recommended-only
+   for the Business-Lifecycle/Subscription-Status question, not reused
+   for this session's amendment (which took the next available slot,
+   POL-19-013, per the Numbering Ledger's own rule).
+6. **Next step, not yet authorized:** a formal Implementation
+   Authorization for exactly the minimum slice v2's own scope section
+   states — `trial_completed → paid → processor confirms → verified
+   webhook → active`, and `active → reversal → grace_period → (grace
+   expires) → expired`. PaySuite's technical documentation must be
    verified before any processor-specific code is written, regardless
-   of what this assessment authorizes.
+   of what any future authorization covers. No SuperAdmin expansion,
+   plan-change engine, early renewal, trial-abuse system, multi-tier
+   billing, or additional notification channels are in scope for this
+   minimum path — all deferred until after this slice ships.
 
 **If the next session's task is Module #19 Phase 3/5 implementation:**
-read [`19-v1-payment-path-rule8-assessment.md`](./docs/engineering/19-v1-payment-path-rule8-assessment.md)
-first, and confirm its stated minimum-scope boundary before writing any
-code. Do not treat "Phase 3 is required" or "Phase 5 is required" as
-authorization to build the full phase — that document's own §2c lists,
-by name, everything still excluded. It also flags two open items worth
-carrying forward: (1) whether early payment during `trial_active`
-(before natural trial completion) also converts to `active`, and (2) no
-`grace_period → active` renewal path exists within the currently
-authorized minimum scope — a real stopgap may be the existing
-SuperAdmin manual override (Architecture §9.4/§6.7) until that's
-designed properly.
+read [`19-v1-payment-path-rule8-assessment-v2.md`](./docs/engineering/19-v1-payment-path-rule8-assessment-v2.md)
+first (not v1 — superseded), and confirm its stated minimum-scope
+boundary before writing any code. Do not treat "Phase 3 is required" or
+"Phase 5 is required" as authorization to build the full phase — that
+document's own §2c lists, by name, everything still excluded. It also
+flags two open items worth carrying forward: (1) whether early payment
+during `trial_active` (before natural trial completion) also converts
+to `active`, and (2) no `grace_period → active` renewal path exists
+within the currently authorized minimum scope — a real stopgap may be
+the existing SuperAdmin manual override (Architecture §9.4/§6.7) until
+that's designed properly. An explicit Implementation Authorization
+still does not exist — do not begin coding without one.
 
 **If the next session's task is something else entirely (e.g. Module
 #20 Completion Review):** that work is still fully valid and unblocked

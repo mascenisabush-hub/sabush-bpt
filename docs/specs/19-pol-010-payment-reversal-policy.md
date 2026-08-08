@@ -1,5 +1,19 @@
 Decision Record
 
+> **Superseded in part — see
+> [POL-19-013](./19-pol-013-payment-reversal-grace-period-reset-amendment.md).**
+> Edge Case A below (recalculating grace period on each repeat
+> reversal) has been replaced by a simpler rule: a reversal arriving
+> while already in Grace Period now has no additional effect — the
+> subscription remains `grace_period` on its original, unchanged
+> 7-day window. Edge Case B below is otherwise confirmed as the
+> settled V1 rule by that same record. Everything else in this
+> document — the Core Transition, Historical Data Preservation, and
+> Scope Exclusions — remains unchanged and in effect. This document's
+> own text below is preserved as the original historical record and is
+> **not** edited to reflect the amendment; read POL-19-013 for the
+> current rule.
+
 # POL-19-010 — Payment Reversal Policy
 
 **Status:** Approved (operational policy — not a Business Decision
