@@ -12,85 +12,101 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #19 (Subscriptions) — **V1 payment-path governance
-simplified and re-assessed.** The four release-gating decisions
-(Plan/Pricing, Payment Processor, Payment Reversal, Voluntary
-Cancellation) recorded last session are still in effect, with one
-amendment this session: the Payment Reversal rule for a reversal
-arriving mid-Grace-Period was simplified from "recalculate a fresh
-7 days" to "no effect at all — remains on its original window."
-`main` == `origin/main` at `d82198b` at this session's start (confirmed
-via fresh `git fetch`, not assumed) — verify again before continuing,
-this note does not update itself.
+**Status:** Module #19 (Subscriptions) — **V1 Manual Payment Bridge
+implemented.** This is a full-session summary spanning several
+sessions since the last update to this file — that gap is itself a
+finding: this file had drifted stale for multiple sessions, silently.
+Verify `main` == `origin/main` yourself before trusting anything below
+— this note does not update itself.
 
 **What's true right now:**
 
-1. **[POL-19-013 — Payment Reversal Policy Amendment](./docs/specs/19-pol-013-payment-reversal-grace-period-reset-amendment.md)**
-   is Approved. Replaces POL-19-010's original Edge Case A: a reversal
-   arriving while already `grace_period` now has **no effect** —
-   `gracePeriodEndsAt` is set once, at first entry, and never
-   recalculated by a repeat reversal. Confirms POL-19-010's Edge Case B
-   (reversal after `expired`) as **settled**, not merely deferred: no
-   automatic effect, ever — Recovery (POL-19-007) remains the sole path
-   back to Active. Net effect: `ACTIVE → GRACE PERIOD (fixed 7 days) →
-   EXPIRED`, one-directional, no backward movement from a late
-   financial event.
-2. **[POL-19-010](./docs/specs/19-pol-010-payment-reversal-policy.md)
-   and [POL-19-011](./docs/specs/19-pol-011-v1-commercial-plan-processor-cancellation-decision.md)
-   remain Approved, unedited** — their original text is preserved as
-   historical record; POL-19-010 carries a pointer at its top directing
-   to POL-19-013 for the current rule. POL-19-011's plan/pricing (750
-   MZN/month, one business), PaySuite selection (vendor-only, technical
-   mechanics still unverified), and voluntary-cancellation deferral are
-   all unchanged and unaffected by this session.
-3. **[19-v1-payment-path-rule8-assessment-v2.md](./docs/engineering/19-v1-payment-path-rule8-assessment-v2.md)
-   supersedes the v1 assessment** (v1 preserved, marked superseded, not
-   deleted). v2's §2b and implementation-plan step 3 reflect POL-19-013:
-   the minimum implementation is **simpler** than v1 assessed — one
-   fewer state-write branch (no recalculation logic needed for a repeat
-   reversal during grace), one risk (ordering/idempotency) narrowed.
-   Still **Assessed, not Authorized** — reaching this state is not
-   itself a go-ahead to write code.
-4. **Nothing has been implemented.** No `src/`, `server/`,
-   `firestore.rules`, or `docs/specs/19-subscriptions.md` file was
-   touched this session — confirmed by diff. Re-verified fresh, not
-   assumed: still zero PaySuite references and zero `/api/billing/webhook`
-   route anywhere in `server/`; exactly two subscription-mutating
-   endpoints exist (`POST /api/provisioning/business`,
-   `POST /api/subscriptions/activate-trial`), neither is the webhook.
-5. **POL-19-012's reservation is untouched** — still recommended-only
-   for the Business-Lifecycle/Subscription-Status question, not reused
-   for this session's amendment (which took the next available slot,
-   POL-19-013, per the Numbering Ledger's own rule).
-6. **Next step, not yet authorized:** a formal Implementation
-   Authorization for exactly the minimum slice v2's own scope section
-   states — `trial_completed → paid → processor confirms → verified
-   webhook → active`, and `active → reversal → grace_period → (grace
-   expires) → expired`. PaySuite's technical documentation must be
-   verified before any processor-specific code is written, regardless
-   of what any future authorization covers. No SuperAdmin expansion,
-   plan-change engine, early renewal, trial-abuse system, multi-tier
-   billing, or additional notification channels are in scope for this
-   minimum path — all deferred until after this slice ships.
+1. **The V1 Subscription Lifecycle Engine is complete, tested, and
+   unmodified since.** `server/subscriptionEngine.ts` — all seven
+   governed state transitions (trial_completed→active,
+   active→grace_period, grace_period repeat-reversal no-op,
+   grace_period→active recovery, grace_period→expired on time-elapse,
+   expired repeat-reversal no-op, expired→active recovery), 27 tests,
+   processor-independent by construction. Confirmed unchanged this
+   session — its only references to any payment processor are two
+   comments explicitly stating it has none.
+2. **PaySuite verification stalled on document/KYB friction.**
+   Investigated directly (browser session, real dashboard access) —
+   confirmed a real sandbox environment, real API keys, real webhook-
+   secret infrastructure exist, but payment methods were never
+   activated on the account (checkout showed no M-Pesa/e-Mola/card
+   options at all) — an "Integração" screen showed a pending request,
+   never resolved.
+3. **PayTED was investigated as an alternative — also stalled**, same
+   class of account-activation friction, confirmed via the same kind
+   of direct dashboard access (sandbox exists, keys exist, checkout
+   had no payment methods to select).
+4. **Two "too-good-to-be-true" alternative processors (NetShop,
+   Debito Pay) were researched and explicitly rejected** — both had
+   suspiciously complete marketing sites answering every open
+   technical question perfectly, zero independent corroboration
+   anywhere (no news, no registry listing, no third-party review), and
+   in Debito Pay's case, a real red flag (its own "investor relations"
+   page hosted under an unrelated domain). Do not pursue either without
+   independent verification first (Mozambique company registry, Banco
+   de Moçambique's licensed-PSP list) — flagged clearly, not silently
+   forgotten.
+5. **Given both real processors stalled on the same activation
+   friction, the V1 launch strategy pivoted to a Manual Payment Bridge**
+   — implemented this session, per explicit Product Architect
+   authorization. Customer submits a payment reference (M-Pesa/e-Mola/
+   Millennium BIM, `src/data/subscriptionPlan.ts` holds the real
+   destination numbers) via `SubscriptionContactModal.tsx`; this only
+   ever writes a `'pending'` Payment record
+   (`businesses/{businessId}/payments/{paymentId}`) — never touches
+   subscription state directly. Confirmation happens exclusively via
+   `server/scripts/confirmPayment.ts`, run by hand with
+   `FIREBASE_SERVICE_ACCOUNT_BASE64` access — deliberately NOT an
+   in-app role (Module #18/SuperAdmin has no `platformRole` mechanism
+   built or authorized yet; inventing one was an explicit Stop
+   Condition this session correctly avoided). Confirmation calls the
+   unmodified `applyLifecycleEvent()` — the Engine remains the sole
+   owner of subscription-state transitions, exactly as designed.
+6. **11 new tests** (`tests/payment-confirmation.test.ts`) cover
+   idempotency (including the specific partial-failure scenario where
+   a payment is marked confirmed but the lifecycle call fails
+   separately — always safe to retry, reasoned through explicitly in
+   `server/paymentConfirmation.ts`'s own header), concurrent
+   confirmation, reject/confirm conflicts, and tenant isolation. New
+   `firestore.rules` coverage for `payments` written but **not yet
+   run** — this sandbox's standing network limitation
+   (`storage.googleapis.com` not allowlisted) blocks the emulator JAR
+   download, same gap as every prior session.
+7. **Also fixed this session, all independently verified:** the
+   missing `subscriptions` composite index for the grace-period-expiry
+   sweep (was silently non-functional in production); CI now runs all
+   8 test suites (was 2 of 8); a documented backup/recovery procedure;
+   in-app trial/subscription status visibility (a persistent banner);
+   a business-meaningful message when a write is blocked by
+   subscription status (was a raw Firebase error). Railway's earlier
+   deploy failure was also independently confirmed resolved (screenshot
+   showed "Active," not "Failed").
+8. **Nothing has been committed yet this session.** Everything above
+   is sitting in the working tree, verified (`tsc --noEmit` clean, 164
+   tests passing across 8 suites, build clean) but not yet reviewed as
+   a final diff, not committed, not pushed — per this task's own git
+   discipline instruction to hold until explicitly told.
 
-**If the next session's task is Module #19 Phase 3/5 implementation:**
-read [`19-v1-payment-path-rule8-assessment-v2.md`](./docs/engineering/19-v1-payment-path-rule8-assessment-v2.md)
-first (not v1 — superseded), and confirm its stated minimum-scope
-boundary before writing any code. Do not treat "Phase 3 is required" or
-"Phase 5 is required" as authorization to build the full phase — that
-document's own §2c lists, by name, everything still excluded. It also
-flags two open items worth carrying forward: (1) whether early payment
-during `trial_active` (before natural trial completion) also converts
-to `active`, and (2) no `grace_period → active` renewal path exists
-within the currently authorized minimum scope — a real stopgap may be
-the existing SuperAdmin manual override (Architecture §9.4/§6.7) until
-that's designed properly. An explicit Implementation Authorization
-still does not exist — do not begin coding without one.
+**If the next session's task is anything Module #19 payment-related:**
+read `server/paymentConfirmation.ts`'s own header first — it explains
+the deliberate two-step (not-atomic) design and exactly why re-running
+confirmPayment() is always safe. Do not attempt to make the Payment
+transition and the lifecycle transition one atomic operation — Firestore
+doesn't support nested Admin SDK transactions, and the current design
+already handles the partial-failure case correctly.
 
-**If the next session's task is something else entirely (e.g. Module
-#20 Completion Review):** that work is still fully valid and unblocked
-by anything above — see "Prior status" below for its own state, which
-remains accurate as of `32bafbf`.
+**If the next session's task is something else entirely:** this file
+had drifted badly stale before this rewrite (Module #20's own work,
+several sessions of Module #19 governance/engine work, and this
+session's implementation had accumulated with zero HANDOFF.md updates
+in between) — don't assume the next drift-check will be this thorough;
+verify `docs/specs/README.md` directly rather than trusting any
+summary, including this one.
 
 ---
 

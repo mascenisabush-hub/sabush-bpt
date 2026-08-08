@@ -1330,3 +1330,93 @@ describe('Phase 0 Stage 1 — admin role dual-read tolerance', () => {
     );
   });
 });
+
+// ---------------------------------------------------------------------
+// Payments (Module #19 V1 Manual Payment Bridge) — Owner-only, and
+// deliberately NOT gated by subscriptionAllowsNewRecords(), unlike
+// every other create rule in this file. This is the one collection
+// that must remain creatable specifically WHILE a subscription is
+// trial_completed/expired — it's the way out of that state.
+// ---------------------------------------------------------------------
+describe('payments', () => {
+  it('Owner can submit a pending payment; Staff cannot read or create at all', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p1'), {
+        id: 'p1', businessId: BIZ, submittedBy: OWNER_UID, amount: 750, currency: 'MZN',
+        method: 'mpesa', reference: 'TXN123', submittedAt: new Date().toISOString(), status: 'pending',
+      })
+    );
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(
+      setDoc(doc(staffDb, 'businesses', BIZ, 'payments', 'p2'), {
+        id: 'p2', businessId: BIZ, submittedBy: STAFF_UID, amount: 750, currency: 'MZN',
+        method: 'mpesa', reference: 'TXN456', submittedAt: new Date().toISOString(), status: 'pending',
+      })
+    );
+    await assertFails(getDoc(doc(staffDb, 'businesses', BIZ, 'payments', 'p1')));
+  });
+
+  it('A submission must start pending, with businessId/submittedBy matching the caller — cannot create an already-confirmed record or submit on another business\'s behalf', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    // Wrong status at creation.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p3'), {
+        id: 'p3', businessId: BIZ, submittedBy: OWNER_UID, amount: 750, currency: 'MZN',
+        method: 'mpesa', reference: 'TXN789', submittedAt: new Date().toISOString(), status: 'confirmed',
+      })
+    );
+    // Confirmation fields present at creation — must be rejected even with status: pending.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p4'), {
+        id: 'p4', businessId: BIZ, submittedBy: OWNER_UID, amount: 750, currency: 'MZN',
+        method: 'mpesa', reference: 'TXN000', submittedAt: new Date().toISOString(), status: 'pending',
+        confirmedAt: new Date().toISOString(), confirmedBy: 'someone',
+      })
+    );
+    // businessId mismatch.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p5'), {
+        id: 'p5', businessId: 'some-other-biz', submittedBy: OWNER_UID, amount: 750, currency: 'MZN',
+        method: 'mpesa', reference: 'TXN111', submittedAt: new Date().toISOString(), status: 'pending',
+      })
+    );
+  });
+
+  it('Client can never update or delete a payment — only the server-side confirmation script may', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'payments', 'p6'), {
+        id: 'p6', businessId: BIZ, submittedBy: OWNER_UID, amount: 750, currency: 'MZN',
+        method: 'mpesa', reference: 'TXN222', submittedAt: new Date().toISOString(), status: 'pending',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p6'), { status: 'confirmed' }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p6')));
+  });
+
+  it('Payment submission succeeds even when the subscription is expired — this is the one collection NOT gated by subscriptionAllowsNewRecords()', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), {
+        businessId: BIZ, status: 'expired', planId: 'v1-monthly',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    // Control: a normal operational record (expenses) IS correctly blocked.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'e-blocked'), {
+        id: 'e-blocked', date: '2026-07-15', amount: 50, category: 'Outro', createdAt: new Date().toISOString(),
+      })
+    );
+
+    // The actual assertion: payment submission is NOT blocked.
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'payments', 'p7'), {
+        id: 'p7', businessId: BIZ, submittedBy: OWNER_UID, amount: 750, currency: 'MZN',
+        method: 'emola', reference: 'TXN333', submittedAt: new Date().toISOString(), status: 'pending',
+      })
+    );
+  });
+});
+

@@ -235,6 +235,52 @@ export interface Expense {
 // personal use. This is intentionally a SEPARATE concept from Expense —
 // a withdrawal is not a business cost, it's capital leaving the business
 // in the owner's hands. Never merge these two collections.
+// ============================================================
+// PAYMENTS (Module #19 V1 Manual Payment Bridge)
+//
+// Temporary manual confirmation bridge — NOT the final payment
+// architecture. PaySuite/PayTED automated processor integration
+// remains deferred pending vendor verification (see
+// docs/engineering/19-v1-payment-adapter-contract-and-test-matrix.md).
+// A Payment record here is submitted by a Business Owner after paying
+// externally (M-Pesa/e-Mola/Millennium BIM), then confirmed or
+// rejected by a privileged, server-side-only mechanism — never by the
+// client, never by the submitting Owner themselves. Confirmation is
+// the ONLY thing that ever calls the Subscription Lifecycle Engine's
+// applyLifecycleEvent() with a payment_success event; this record
+// itself never mutates subscription.status directly, at any point.
+//
+// Payment status is deliberately a separate concept from Subscription
+// status (src/types.ts SubscriptionStatus) — a 'pending' Payment has
+// no effect on the subscription at all until confirmed.
+export type PaymentStatus = 'pending' | 'confirmed' | 'rejected';
+export type PaymentMethod = 'mpesa' | 'emola' | 'bim';
+
+export interface Payment {
+  id: string;
+  businessId: string;
+  amount: number; // MZN — 750 for V1's single plan (POL-19-011)
+  currency: 'MZN';
+  method: PaymentMethod;
+  // Customer-provided evidence of the external payment — an M-Pesa/
+  // e-Mola transaction ID, or a bank transfer reference. Free text;
+  // never validated against a real processor (there is none, by
+  // design, in this bridge).
+  reference: string;
+  submittedAt: string; // ISO
+  submittedBy: string; // uid of the Owner who submitted it
+  status: PaymentStatus;
+  // Set only by the server-side confirmation mechanism — never
+  // client-writable (firestore.rules: allow update: if false on this
+  // collection, matching /subscriptions' own pattern).
+  confirmedAt?: string; // ISO
+  confirmedBy?: string; // free-text identifier of who ran the confirmation — no platform-operator role exists yet (Module #18 gap), so this is a human-readable name/note, not a Firebase Auth uid
+  rejectedAt?: string; // ISO
+  rejectedBy?: string;
+  rejectionReason?: string;
+  notes?: string;
+}
+
 // [Closing Integrity Amendment v1.0 — Option B] Same lock-field pattern
 // as Expense, above — see that comment for the full rule.
 export interface Withdrawal {

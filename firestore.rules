@@ -356,6 +356,37 @@ service cloud.firestore {
           resource.data.get('closingId', null) == null;
       }
 
+      // Payments (Module #19 V1 Manual Payment Bridge) — a temporary
+      // confirmation bridge, NOT the final payment architecture.
+      // Deliberately NOT gated by subscriptionAllowsNewRecords(): this
+      // is the one write path that must remain reachable specifically
+      // WHILE a subscription is trial_completed/expired — it is the
+      // Owner's way out of that state, not another kind of operational
+      // record that state is meant to restrict.
+      //
+      // Only the Owner may submit (never Staff — this mirrors
+      // Withdrawals' owner-only access, since subscription payment is
+      // an owner-level financial matter). A submission must always
+      // start 'pending', with no confirmation fields present — the
+      // client can never create an already-confirmed record. Once
+      // created, a Payment is immutable from the client's side in
+      // every respect: no update, no delete. Only the server-side
+      // confirmation mechanism (Admin SDK, bypasses these rules
+      // entirely, per Implementation Authorization §5 "server-side
+      // only... not callable by an ordinary tenant user") may ever
+      // transition it to confirmed/rejected.
+      match /payments/{paymentId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.businessId == businessId &&
+          request.resource.data.submittedBy == request.auth.uid &&
+          request.resource.data.status == 'pending' &&
+          request.resource.data.currency == 'MZN' &&
+          !request.resource.data.keys().hasAny(['confirmedAt', 'confirmedBy', 'rejectedAt', 'rejectedBy', 'rejectionReason']);
+        allow update: if false;
+        allow delete: if false;
+      }
+
       // Monthly/Yearly Closings: permanently lock a period's figures. The
       // Admin can always do this; a Staff account promoted to Manager can
       // too, but only if explicitly granted the 'closings' permission

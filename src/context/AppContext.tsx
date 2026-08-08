@@ -39,11 +39,14 @@ import {
   StaffTier,
   ManagerPermissions,
   Subscription,
+  Payment,
+  PaymentMethod,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq } from '../utils/purchaseBatchCalculations';
 import { getTodayDateString } from '../utils/formatters';
+import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
 
 interface AddStockParams {
   productName: string;
@@ -135,6 +138,10 @@ interface AppContextType {
   expenses: Expense[];
   stockCounts: StockCount[];
   withdrawals: Withdrawal[];
+  // Module #19 V1 Manual Payment Bridge — temporary confirmation
+  // bridge, not the final payment architecture.
+  payments: Payment[];
+  submitPayment: (params: { method: PaymentMethod; reference: string; notes?: string }) => Promise<Payment>;
   staffMembers: StaffMember[];
   currencySymbol: string;
   setCurrencySymbol: (symbol: string) => void;
@@ -246,6 +253,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
+  const [payments, setPayments] = useState<Payment[]>([]);
   const [closings, setClosings] = useState<Closing[]>([]);
   // [Closing Integrity Amendment v1.0] Lock-index docs — see ClosedPeriod
   // type in types.ts for why this collection exists. Not shown anywhere
@@ -684,6 +692,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching withdrawals:', err)
     );
 
+    // 5c-ii. Payments collection (Module #19 V1 Manual Payment Bridge —
+    // temporary confirmation bridge, not the final payment architecture)
+    const paymentsRef = collection(db, 'businesses', businessId, 'payments');
+    const unsubPayments = onSnapshot(
+      paymentsRef,
+      (snap) => {
+        const list: Payment[] = [];
+        snap.forEach((doc) => list.push(doc.data() as Payment));
+        list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+        setPayments(list);
+      },
+      (err) => console.error('Error fetching payments:', err)
+    );
+
     // 5d. Closings collection (Monthly/Yearly period locks)
     const closingsRef = collection(db, 'businesses', businessId, 'closings');
     const unsubClosings = onSnapshot(
@@ -746,6 +768,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubExpenses();
       unsubStockCounts();
       unsubWithdrawals();
+      unsubPayments();
       unsubClosings();
       unsubClosedPeriods();
       unsubStaff();
@@ -1324,6 +1347,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return newWithdrawal;
+  };
+
+  // Module #19 V1 Manual Payment Bridge — temporary confirmation bridge,
+  // not the final payment architecture (PaySuite/PayTED remain
+  // deferred). Writes a 'pending' Payment record only — never touches
+  // subscription.status directly, at any point. Deliberately does NOT
+  // check subscriptionAllowsNewRecords()/trial/grace/expired status:
+  // this is precisely the write path that must remain reachable while
+  // a subscription is trial_completed or expired, since it's the
+  // Owner's way out of that state. firestore.rules enforces the same
+  // (payments/create has no subscriptionAllowsNewRecords() gate,
+  // unlike every other create rule in this file).
+  const submitPayment = async ({
+    method,
+    reference,
+    notes,
+  }: {
+    method: PaymentMethod;
+    reference: string;
+    notes?: string;
+  }): Promise<Payment> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão expirada. Inicie sessão novamente.');
+    if (!reference.trim()) throw new Error('Indique a referência do pagamento.');
+
+    const newPayment: Payment = {
+      id: 'pmt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      businessId: activeBusinessId,
+      amount: SUBSCRIPTION_PLAN_PRICE_MZN,
+      currency: SUBSCRIPTION_PLAN_CURRENCY,
+      method,
+      reference: reference.trim(),
+      submittedAt: new Date().toISOString(),
+      submittedBy: currentUser.uid,
+      status: 'pending',
+      notes: notes ? notes.trim() : undefined,
+    };
+
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'payments', newPayment.id), newPayment);
+
+    return newPayment;
   };
 
   // [Closing Integrity Amendment v1.0] Same lock check as deleteExpense —
@@ -2055,6 +2119,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         expenses,
         stockCounts,
         withdrawals,
+        payments,
+        submitPayment,
         staffMembers,
         currencySymbol,
         setCurrencySymbol,

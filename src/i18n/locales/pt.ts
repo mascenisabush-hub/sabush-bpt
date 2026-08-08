@@ -746,6 +746,36 @@ export interface TranslationDict {
       message: string;
       closeButton: string;
     };
+    // Module #19 V1 Manual Payment Bridge (temporary — PaySuite/PayTED
+    // remain deferred). Payment destination labels, keyed by
+    // PaymentMethod (src/types.ts) — src/data/subscriptionPlan.ts's own
+    // PAYMENT_METHODS array references these via labelKey.
+    paymentMethods: {
+      mpesa: { label: string };
+      emola: { label: string };
+      bim: { label: string };
+    };
+    subscribe: {
+      title: string;
+      priceLabel: string;
+      chooseMethod: string;
+      payTo: string;
+      referenceLabel: string;
+      referencePlaceholder: string;
+      notesLabel: string;
+      submitButton: string;
+      submitting: string;
+      pendingTitle: string;
+      pendingMessage: string;
+      pendingMethod: string;
+      pendingReference: string;
+      pendingSubmittedAt: string;
+      rejectedTitle: string;
+      rejectedRetryHint: string;
+      errorMissingMethod: string;
+      errorMissingReference: string;
+      errorGeneric: string;
+    };
   };
   // Module #20 Phase 3 Checkpoint 3 (Trial Engine Producer) — server-
   // rendered notification content, read by server/notificationPlatform.ts's
@@ -1590,6 +1620,32 @@ export const pt: TranslationDict = {
       title: 'Subscrever o Sabush BPT',
       message: 'Para ativar ou renovar a sua subscrição, contacte a equipa Sabush BPT. Em breve poderá subscrever diretamente na aplicação.',
       closeButton: 'Fechar',
+    },
+    paymentMethods: {
+      mpesa: { label: 'M-Pesa' },
+      emola: { label: 'e-Mola' },
+      bim: { label: 'Millennium BIM' },
+    },
+    subscribe: {
+      title: 'Subscrever o Sabush BPT',
+      priceLabel: 'por mês',
+      chooseMethod: 'Escolha um método de pagamento',
+      payTo: 'Pague para:',
+      referenceLabel: 'Referência do pagamento / ID da transação',
+      referencePlaceholder: 'Ex: QGH7X2K9P1',
+      notesLabel: 'Notas (opcional)',
+      submitButton: 'Submeter pagamento',
+      submitting: 'A submeter…',
+      pendingTitle: 'Pagamento em análise',
+      pendingMessage: 'Recebemos a sua referência de pagamento. A nossa equipa vai confirmar e a sua subscrição será ativada em breve.',
+      pendingMethod: 'Método',
+      pendingReference: 'Referência',
+      pendingSubmittedAt: 'Submetido em',
+      rejectedTitle: 'O pagamento anterior não foi confirmado',
+      rejectedRetryHint: 'Verifique os dados e submeta novamente, ou contacte o suporte se o pagamento foi efetuado corretamente.',
+      errorMissingMethod: 'Escolha um método de pagamento.',
+      errorMissingReference: 'Indique a referência do pagamento.',
+      errorGeneric: 'Não foi possível submeter o pagamento. Tente novamente.',
     },
   },
   notificationTemplates: {
