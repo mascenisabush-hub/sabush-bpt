@@ -12,12 +12,17 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #19 (Subscriptions) — **V1 Manual Payment Bridge
-implemented.** This is a full-session summary spanning several
-sessions since the last update to this file — that gap is itself a
-finding: this file had drifted stale for multiple sessions, silently.
-Verify `main` == `origin/main` yourself before trusting anything below
-— this note does not update itself.
+**Status:** Module #19 (Subscriptions) — **implementation phase is
+closed; the project has shifted to Customer & Commercial Validation.**
+The V1 Manual Payment Bridge (below) is fully implemented and live.
+**No further engineering work is authorized until real customer
+evidence justifies it** — see
+[`19-v1-customer-validation-plan.md`](./docs/engineering/19-v1-customer-validation-plan.md)
+for the test design and evidence-capture template; §5 of that document
+is where results go once the test actually runs — **it is currently
+empty, no test has been run yet.** Verify `main` == `origin/main`
+yourself before trusting anything below — this note does not update
+itself.
 
 **What's true right now:**
 
