@@ -16,6 +16,10 @@ export interface StockCountInputItem {
   quantity: number | string;
   unit?: string;
   costPrice: number | string;
+  // Optional so callers/tests written before this field existed keep
+  // compiling and behaving the same way — missing/invalid input
+  // coerces to 0, matching costPrice's own `Number(x) || 0` rule.
+  sellingPrice?: number | string;
 }
 
 export interface NormalizedStockCountItem {
@@ -23,6 +27,7 @@ export interface NormalizedStockCountItem {
   quantity: number;
   unit: string;
   costPrice: number;
+  sellingPrice: number;
   totalValue: number;
 }
 
@@ -49,6 +54,11 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
 
     const quantity = Number(raw.quantity) || 0;
     const costPrice = Number(raw.costPrice) || 0;
+    // sellingPrice is additional information only — it never
+    // participates in totalValue, which stays quantity * costPrice
+    // (the investment basis), matching Expected Current Stock Value's
+    // existing cost-based rule.
+    const sellingPrice = Number(raw.sellingPrice) || 0;
     const itemTotal = Number((quantity * costPrice).toFixed(2));
     totalValue += itemTotal;
 
@@ -57,6 +67,7 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
       quantity,
       unit: raw.unit ? raw.unit.trim() : 'un',
       costPrice,
+      sellingPrice,
       totalValue: itemTotal,
     });
   }

@@ -29,6 +29,7 @@ interface CountRowItem {
   quantity: string;
   unit: string;
   costPrice: string;
+  sellingPrice: string;
 }
 
 const TYPE_LABELS: Record<StockCountType, string> = {
@@ -66,6 +67,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     quantity: '',
     unit: suggestedUnits[0] || 'un',
     costPrice: '',
+    sellingPrice: '',
   });
 
   const [type, setType] = useState<StockCountType>('monthly');
@@ -129,6 +131,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
       const numQty = parseFloat(row.quantity) || 0;
       const numCost = parseFloat(row.costPrice) || 0;
+      const numSelling = parseFloat(row.sellingPrice) || 0;
 
       if (numQty <= 0) {
         setError(`Introduza uma quantidade maior que zero para "${trimmedName}".`);
@@ -138,12 +141,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         setError(`Introduza um custo válido para "${trimmedName}".`);
         return;
       }
+      if (numSelling < 0) {
+        setError(`Introduza um preço de venda válido para "${trimmedName}".`);
+        return;
+      }
 
       itemsToSave.push({
         productName: trimmedName,
         quantity: numQty,
         unit: row.unit || 'un',
         costPrice: numCost,
+        sellingPrice: numSelling,
       });
     }
 
@@ -194,7 +202,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     'w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
     'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20';
   const fieldLabelClass = 'block type-label mb-1';
-  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
+  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_112px_120px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
   if (subscriptionBlocksNewRecords) {
     return <SubscriptionBlockedNotice />;
@@ -291,6 +299,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Qtd</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Unid</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Custo/Un</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Venda/Un</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Valor Total</span>
               <span />
             </div>
@@ -342,6 +351,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       step="0.01"
                       value={row.costPrice}
                       onChange={(e) => updateRow(row.id, { costPrice: e.target.value })}
+                      className={`${fieldClass} font-mono tabular-nums`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.sellingPrice}
+                      onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value })}
                       className={`${fieldClass} font-mono tabular-nums`}
                     />
                   </div>

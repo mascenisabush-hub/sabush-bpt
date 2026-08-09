@@ -35,8 +35,8 @@ import { normalizeStockCountItems } from '../src/utils/stockCount';
 describe('normal confirmation', () => {
   it('normalizes a valid submitted item list into the exact persisted shape', () => {
     const result = normalizeStockCountItems([
-      { productName: 'Arroz', quantity: 10, unit: 'kg', costPrice: 50 },
-      { productName: 'Feijão', quantity: 5, unit: 'kg', costPrice: 80 },
+      { productName: 'Arroz', quantity: 10, unit: 'kg', costPrice: 50, sellingPrice: 65 },
+      { productName: 'Feijão', quantity: 5, unit: 'kg', costPrice: 80, sellingPrice: 100 },
     ]);
     assert.equal(result.items.length, 2);
     assert.deepEqual(result.items[0], {
@@ -44,8 +44,12 @@ describe('normal confirmation', () => {
       quantity: 10,
       unit: 'kg',
       costPrice: 50,
+      sellingPrice: 65,
       totalValue: 500,
     });
+    // totalValue stays cost-based (investment basis) — sellingPrice never
+    // participates in it, matching Expected Current Stock Value's
+    // existing cost-based rule.
     assert.equal(result.totalValue, 500 + 400);
   });
 
@@ -58,6 +62,45 @@ describe('normal confirmation', () => {
     assert.equal(result.items[0].productName, 'Óleo');
     assert.equal(result.items[0].quantity, 0);
     assert.equal(result.items[0].unit, 'un'); // default unit when blank
+  });
+});
+
+// [Module #10 — Selling Price on Stock Counts] normalizeStockCountItems()
+// is the single choke point recordStockCount() uses to build both Initial
+// Stock and Periodic Contagem items — these tests cover sellingPrice for
+// both callers at once, since neither passes anything extra beyond this
+// function's input shape.
+describe('selling price', () => {
+  it('accepts and persists a submitted selling price alongside cost price', () => {
+    const result = normalizeStockCountItems([
+      { productName: 'Arroz', quantity: 10, unit: 'kg', costPrice: 50, sellingPrice: 65 },
+    ]);
+    assert.equal(result.items[0].costPrice, 50);
+    assert.equal(result.items[0].sellingPrice, 65);
+  });
+
+  it('accepts an explicit 0 selling price (matching the existing zero-cost rule)', () => {
+    const result = normalizeStockCountItems([
+      { productName: 'Amostra Grátis', quantity: 3, unit: 'un', costPrice: 0, sellingPrice: 0 },
+    ]);
+    assert.equal(result.items[0].sellingPrice, 0);
+  });
+
+  it('coerces a missing/invalid selling price to 0, matching costPrice\'s own Number(x) || 0 rule — backward-compatible with callers that never pass it', () => {
+    const result = normalizeStockCountItems([
+      { productName: 'Feijão', quantity: 5, unit: 'kg', costPrice: 80 }, // no sellingPrice field at all
+      { productName: 'Óleo', quantity: 2, unit: 'l', costPrice: 40, sellingPrice: NaN as unknown as number },
+    ]);
+    assert.equal(result.items[0].sellingPrice, 0);
+    assert.equal(result.items[1].sellingPrice, 0);
+  });
+
+  it('does not let selling price influence totalValue — investment basis stays cost * quantity', () => {
+    const result = normalizeStockCountItems([
+      { productName: 'Arroz', quantity: 10, unit: 'kg', costPrice: 50, sellingPrice: 999 },
+    ]);
+    assert.equal(result.items[0].totalValue, 500);
+    assert.equal(result.totalValue, 500);
   });
 });
 

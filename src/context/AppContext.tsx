@@ -87,6 +87,7 @@ interface RecordStockCountItemInput {
   quantity: number;
   unit?: string;
   costPrice: number;
+  sellingPrice?: number;
 }
 
 interface RecordStockCountParams {
@@ -1553,6 +1554,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quantity: norm.quantity,
         unit: norm.unit,
         costPrice: norm.costPrice,
+        sellingPrice: norm.sellingPrice,
         totalValue: norm.totalValue,
       });
     }

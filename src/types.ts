@@ -311,6 +311,18 @@ export interface StockCountItem {
   quantity: number;
   unit?: string;
   costPrice: number; // cost per unit at the time of the count
+  // [Module #10 — Selling Price on Stock Counts] The expected selling
+  // price per unit at the time of the count, recorded alongside
+  // costPrice so historical stock reconciliation can see both what the
+  // owner paid and what the stock was expected to sell for — mirrors
+  // StockBatch's existing costPrice/sellingPrice pair (see StockBatch
+  // above). Optional because every StockCountItem persisted before this
+  // field existed has no sellingPrice — those historical documents
+  // remain readable as-is; this is never backfilled. Purely additional
+  // information: it does NOT feed Expected Current Stock Value or the
+  // Investment Value calculation, which remain cost-based (see
+  // BATCH CALCULATIONS note below and the amendment doc's Part 5).
+  sellingPrice?: number; // selling price per unit at the time of the count
   totalValue: number; // quantity * costPrice
 }
 
@@ -345,6 +357,10 @@ export interface InitialStockDraftItem {
   quantity: number;
   unit?: string;
   costPrice: number;
+  // [Module #10 — Selling Price on Stock Counts] Optional for the same
+  // backward-compatibility reason as StockCountItem.sellingPrice above —
+  // drafts saved before this field existed have no sellingPrice.
+  sellingPrice?: number;
 }
 
 export interface InitialStockDraft {

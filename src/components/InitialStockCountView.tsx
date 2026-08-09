@@ -17,6 +17,7 @@ interface CountRowItem {
   quantity: string;
   unit: string;
   costPrice: string;
+  sellingPrice: string;
 }
 
 const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
@@ -25,6 +26,7 @@ const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
   quantity: parseFloat(row.quantity) || 0,
   unit: row.unit,
   costPrice: parseFloat(row.costPrice) || 0,
+  sellingPrice: parseFloat(row.sellingPrice) || 0,
 });
 
 const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
@@ -33,6 +35,10 @@ const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
   quantity: item.quantity ? String(item.quantity) : '',
   unit: item.unit || 'un',
   costPrice: item.costPrice ? String(item.costPrice) : '',
+  // Optional on InitialStockDraftItem for backward compatibility — a
+  // draft saved before this field existed simply has no selling price
+  // to restore, so the field starts blank, same as any other unset row.
+  sellingPrice: item.sellingPrice ? String(item.sellingPrice) : '',
 });
 
 export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ onComplete, onSkip }) => {
@@ -55,6 +61,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     quantity: '',
     unit: suggestedUnits[0] || 'un',
     costPrice: '',
+    sellingPrice: '',
   });
 
   const [date, setDate] = useState(getTodayDateString());
@@ -137,7 +144,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       // window before Firestore's answer arrived, don't clobber their
       // in-progress input with an older saved draft — their current
       // typing wins, and it will autosave over the old draft shortly.
-      const userHasStartedTyping = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice);
+      const userHasStartedTyping = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice);
       if (!userHasStartedTyping) {
         skipNextAutosave.current = true;
         setRows(initialStockDraft.items.map(draftItemToRow));
@@ -158,7 +165,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       skipNextAutosave.current = false;
       return;
     }
-    const hasAnyContent = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice);
+    const hasAnyContent = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice);
     if (!hasAnyContent) return;
 
     setDraftSaveState('saving');
@@ -205,6 +212,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
       const numQty = parseFloat(row.quantity) || 0;
       const numCost = parseFloat(row.costPrice) || 0;
+      const numSelling = parseFloat(row.sellingPrice) || 0;
 
       if (numQty <= 0) {
         setError(`Introduza uma quantidade maior que zero para "${trimmedName}".`);
@@ -214,12 +222,17 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         setError(`Introduza um custo válido para "${trimmedName}".`);
         return;
       }
+      if (numSelling < 0) {
+        setError(`Introduza um preço de venda válido para "${trimmedName}".`);
+        return;
+      }
 
       itemsToSave.push({
         productName: trimmedName,
         quantity: numQty,
         unit: row.unit || 'un',
         costPrice: numCost,
+        sellingPrice: numSelling,
       });
     }
 
@@ -266,7 +279,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   const fieldLabelClass = 'block type-label mb-1';
   // Column widths: Nome gets the most room, numeric fields stay tight,
   // last column is just wide enough for the hover-revealed delete icon.
-  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_120px_128px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
+  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_112px_120px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
   if (subscriptionBlocksNewRecords) {
     return <SubscriptionBlockedNotice />;
@@ -333,6 +346,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Qtd</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Unid</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Custo/Un</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Venda/Un</span>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Valor Total</span>
               <span />
             </div>
@@ -384,6 +398,18 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                       step="0.01"
                       value={row.costPrice}
                       onChange={(e) => updateRow(row.id, { costPrice: e.target.value })}
+                      className={`${fieldClass} font-mono tabular-nums`}
+                    />
+                  </div>
+
+                  <div>
+                    <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={row.sellingPrice}
+                      onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value })}
                       className={`${fieldClass} font-mono tabular-nums`}
                     />
                   </div>

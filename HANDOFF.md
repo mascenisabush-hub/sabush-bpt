@@ -12,6 +12,76 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Module #10 (Stock Counts) — **narrow enhancement**: both
+Initial Stock and Periodic Contagem now capture `sellingPrice` per unit
+alongside the existing `costPrice`, per an explicit task prompt from
+the Product Architect ("Add Selling Price to Initial Stock & Periodic
+Contagem"). Implemented and verified this session, **but not yet
+formally reflected in `docs/specs/10-stock-counts.md`** — flagging
+that explicitly per this repo's own governance rule (do not silently
+edit spec docs to make an implementation look pre-approved). The task
+prompt itself functioned as the authorization; a spec-text update
+covering the new field is still an open item for whoever picks this up
+next.
+
+**What changed:**
+
+1. **`StockCountItem.sellingPrice` and `InitialStockDraftItem.sellingPrice`**
+   (`src/types.ts`) — both **optional**, so every historical
+   `stockCounts`/`stockCountDrafts` document written before this change
+   remains readable as-is; nothing is backfilled.
+2. **`normalizeStockCountItems()`** (`src/utils/stockCount.ts`) now
+   accepts/returns `sellingPrice` (defaults to 0 via the same
+   `Number(x) || 0` coercion as `costPrice`), but it **never
+   participates in `totalValue`** — `totalValue` stays `quantity *
+   costPrice`, the investment basis, unchanged.
+3. **`AppContext.recordStockCount`** passes the normalized
+   `sellingPrice` straight through into the persisted `StockCountItem`
+   — no other logic in `recordStockCount` touched.
+4. **UI** — `InitialStockCountView.tsx` and `PeriodicStockCountView.tsx`
+   both got a new "Venda/Un" column (controlled input, same validation
+   pattern as Custo/Un: reject negative, allow 0), and Initial Stock's
+   draft round-trip (`rowToDraftItem`/`draftItemToRow`, autosave
+   "has content" check) now carries `sellingPrice` too — the
+   `initialStockDraftLoaded`/`loadedForBusinessId` business-switch fix
+   from the prior session was **not touched** and still passes its own
+   regression tests.
+5. **Expected Current Stock Value, Investment Value, and Market Value
+   formulas were NOT touched** — this was the task's explicit hard
+   boundary, and `calculations.ts` was not part of this diff at all.
+6. **4 new tests** added to `tests/initial-stock-confirmation.test.ts`
+   (`describe('selling price', …)`): accepts a submitted value, accepts
+   an explicit 0, defaults missing/invalid input to 0, and confirms
+   `sellingPrice` never leaks into `totalValue`. One pre-existing exact-
+   shape assertion was updated to include the new field (the assertion
+   itself, not its intent, changed). **11/11 passing** in this suite
+   (7 prior + 4 new); `npm run test:all` — all suites green, no
+   regressions elsewhere.
+7. **Verified:** `tsc --noEmit` clean, `npm run build` clean (client +
+   server). Firestore rules emulator re-attempted — **still blocked**
+   by the same standing `storage.googleapis.com` network-egress gap as
+   every prior session (`Error: download failed, status 403: Host not
+   in allowlist`) — not claimed as passing.
+8. **Diff scope, checked explicitly before commit:** exactly 6 files
+   touched (`src/types.ts`, `src/utils/stockCount.ts`,
+   `src/context/AppContext.tsx`, `InitialStockCountView.tsx`,
+   `PeriodicStockCountView.tsx`, the one test file) — no
+   `firestore.rules` change was needed (that file has no field-level
+   schema validation on `stockCounts`/`stockCountDrafts`), and Modules
+   #18/#19/#20, Business Worth/Capital Growth formulas, and Add Stock's
+   pricing architecture were not reopened.
+
+**Open item for next session (or before production deploy):** decide
+whether `docs/specs/10-stock-counts.md` gets a `[Amendment]`-tagged
+update documenting the new `sellingPrice` field, matching the pattern
+already used for the Expected Stock Value amendment below — this
+session implemented the field but deliberately did not touch spec text
+itself.
+
+---
+
+## Prior status — Module #10 Expected Stock Value & Persistent Initial Stock (superseded above, kept for continuity)
+
 **Status:** Module #10 (Stock Counts) amended and implemented this
 session — **Expected Current Stock Value & Persistent Initial Stock**
 ([`10-expected-stock-value-amendment.md`](./docs/specs/10-expected-stock-value-amendment.md),
