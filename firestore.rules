@@ -264,6 +264,18 @@ service cloud.firestore {
         allow update, delete: if isOwnerOf(businessId);
       }
 
+      // [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
+      // Supplier entities — same access tier as /products above (any
+      // team member can read/create, only the owner can edit/delete),
+      // reused verbatim per the approved implementation's explicit
+      // instruction not to invent a new "Supplier Manager" tier. Not a
+      // valuation input anywhere — see the amendment's Part 10.
+      match /suppliers/{supplierId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId);
+        allow update, delete: if isOwnerOf(businessId);
+      }
+
       match /batches/{batchId} {
         allow read: if isMemberOf(businessId);
         // [Module #19 Phase 2] Stock receipt — restricted once trial
@@ -286,7 +298,13 @@ service cloud.firestore {
         // completes/expires (Business Rule 6 / Decision 2). update
         // (archive/unarchive) is left unrestricted — organizing an
         // existing record doesn't create or change Business Worth.
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
+        // [Durable Purchase Capture Amendment v1.0] supplierId is
+        // optional and additive — when present, must be a string (a
+        // reference to a /suppliers document; not itself dereferenced
+        // here, matching this file's existing "cheap, deterministic
+        // checks, no second read" pattern for shape-only validation).
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
+          (!('supplierId' in request.resource.data) || request.resource.data.supplierId is string);
         allow update: if isMemberOf(businessId);
         allow delete: if isOwnerOf(businessId);
       }
@@ -355,6 +373,31 @@ service cloud.firestore {
         // subscription should never trap an owner unable to clean up
         // their own provisional draft.
         allow delete: if isOwnerOf(businessId);
+      }
+
+      // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
+      // Purchase Draft — the Add Stock analogue of stockCountDrafts
+      // above, deliberately narrower in a different way: NOT Owner-only
+      // (Add Stock is already isMemberOf-tier, matching /batches and
+      // /purchaseBatches above — this is everyday operational recording,
+      // not the Owner-exclusive, capital-defining Initial Stock action),
+      // but scoped per-user via the document ID itself. draftId MUST
+      // equal the caller's own uid — this is the entire concurrency
+      // model (Rule 8 Assessment, Section 7/11): two team members'
+      // drafts are two different documents by construction, so this
+      // check alone is sufficient, no ownership field needed. Never
+      // itself inventory — see the amendment's Part 10.
+      match /purchaseDrafts/{draftId} {
+        allow read, create, update: if isMemberOf(businessId) &&
+          request.auth.uid == draftId &&
+          subscriptionAllowsNewRecords(businessId);
+        // Deleting/clearing the draft (including the delete that
+        // happens atomically as part of finalization,
+        // addMultipleStockBatches) is never subscription-gated, same
+        // reasoning as stockCountDrafts' own delete rule above — a
+        // blocked subscription must never trap someone unable to clean
+        // up (or finalize past) their own provisional draft.
+        allow delete: if isMemberOf(businessId) && request.auth.uid == draftId;
       }
 
       // [Initial Stock Valuation History] Immutable, append-only audit

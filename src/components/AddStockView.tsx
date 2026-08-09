@@ -447,6 +447,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     { totalInvestmentValue: 0, totalMarketValue: 0, totalEmbeddedProfit: 0 }
   );
 
+  // [Durable Purchase Capture Amendment v1.0] Supplier autocomplete
+  // filtering — same shape as the Product autocomplete's own
+  // filteredProducts/exactMatchExists computed per-row below, applied
+  // here once for the single supplier field.
+  const supplierSearchLower = supplierName.trim().toLowerCase();
+  const filteredSuppliers = supplierSearchLower
+    ? suppliers.filter((s) => s.name.toLowerCase().includes(supplierSearchLower))
+    : suppliers;
+  const exactSupplierMatchExists = suppliers.some((s) => s.name.toLowerCase() === supplierSearchLower);
+  const hasDraftContent =
+    rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice) ||
+    supplierName.trim() ||
+    batchNotes.trim();
+
   // Release Readiness Audit finding — pre-empt the write with a clear
   // explanation instead of letting firestore.rules' subscriptionAllowsNewRecords()
   // reject it and surface a raw permission-denied error.
@@ -470,6 +484,44 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           </div>
         </div>
 
+        {/* [Durable Purchase Capture Amendment v1.0] Draft status bar —
+            shown only while actively editing (not once submitted), and
+            only when there's something meaningful to say: a restored
+            banner if a prior draft was just loaded, an autosave status
+            indicator, and a discard action, but only once there's
+            actual draft content — an empty, never-touched form has
+            nothing to discard and nothing to report. */}
+        {!submittedMessage && wasRestoredFromDraft && (
+          <div className="bg-[#D4AF37]/[0.08] border border-[#D4AF37]/30 rounded-xl px-4 py-2.5 flex items-start gap-2.5">
+            <Info className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[3px]" strokeWidth={2.25} />
+            <p className="text-[11.5px] leading-relaxed text-[#5c4a1a]">
+              {t('addStock.draft.restoredNotice')}
+            </p>
+          </div>
+        )}
+
+        {!submittedMessage && hasDraftContent && (
+          <div className="flex items-center justify-between gap-2 text-[11px]">
+            <span className="text-gray-400 flex items-center gap-1.5">
+              {draftSaveState === 'saving' && t('addStock.draft.savingIndicator')}
+              {draftSaveState === 'saved' && (
+                <>
+                  <CheckCircle2 className="w-3 h-3 text-emerald-500" />
+                  {t('addStock.draft.savedIndicator')}
+                </>
+              )}
+            </span>
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="text-gray-400 hover:text-rose-600 font-semibold transition-colors duration-150 flex items-center gap-1"
+            >
+              <Trash2 className="w-3 h-3" />
+              {t('addStock.draft.discardButton')}
+            </button>
+          </div>
+        )}
+
         {submittedMessage ? (
           <div className="py-10 text-center space-y-3">
             <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
@@ -487,17 +539,79 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <span className="text-[12.5px] font-bold text-[#111827]">{t('addStock.supplier.sectionTitle')}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
-                <div className="sm:col-span-2">
+                <div className="sm:col-span-2 relative">
                   <label className="block type-label mb-1">
                     {t('addStock.supplier.nameLabel')}
                   </label>
-                  <input
-                    type="text"
-                    placeholder={t('addStock.supplier.namePlaceholder')}
-                    value={supplierName}
-                    onChange={e => setSupplierName(e.target.value)}
-                    className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-                  />
+                  {supplierId ? (
+                    // Existing SupplierRecord selected — read-only display,
+                    // per handleSelectSupplier's own comment: editing an
+                    // existing supplier's own details is a separate,
+                    // out-of-scope action, so this form never implies it.
+                    <div className="flex items-center justify-between gap-2 bg-white border border-[#D4AF37]/40 rounded-[10px] px-2.5 py-2">
+                      <span className="text-[13px] text-[#111827] font-semibold truncate">{supplierName}</span>
+                      <button
+                        type="button"
+                        onClick={handleChangeSupplier}
+                        className="text-[11px] font-semibold text-[#B8952F] hover:underline shrink-0"
+                      >
+                        {t('addStock.supplier.changeSupplier')}
+                      </button>
+                    </div>
+                  ) : (
+                    <>
+                      <div className="relative">
+                        <input
+                          type="text"
+                          placeholder={t('addStock.supplier.searchPlaceholder')}
+                          value={supplierName}
+                          onFocus={() => setIsSupplierDropdownOpen(true)}
+                          onChange={(e) => {
+                            setSupplierName(e.target.value);
+                            setIsSupplierDropdownOpen(true);
+                          }}
+                          className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 pr-7"
+                        />
+                        <Search className="w-3 h-3 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
+                      </div>
+
+                      {isSupplierDropdownOpen && (
+                        <>
+                          <div
+                            className="fixed inset-0 z-10"
+                            onClick={() => setIsSupplierDropdownOpen(false)}
+                          />
+                          <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-[#E5E7EB] rounded-xl shadow-[0_16px_40px_-12px_rgba(11,31,58,0.22)] max-h-48 overflow-y-auto z-30 divide-y divide-[#F1F3F6]">
+                            {filteredSuppliers.map((s) => (
+                              <button
+                                key={s.id}
+                                type="button"
+                                onClick={() => handleSelectSupplier(s)}
+                                className="w-full text-left px-3 py-2 hover:bg-[#FAFBFC] transition-colors duration-150 flex items-center justify-between text-xs text-[#111827]"
+                              >
+                                <span className="font-semibold">{s.name}</span>
+                                <span className="text-[10px] text-gray-400 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
+                                  {t('addStock.supplier.existingTag')}
+                                </span>
+                              </button>
+                            ))}
+
+                            {supplierName.trim() && !exactSupplierMatchExists && (
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setIsSupplierDropdownOpen(false)
+                                }
+                                className="w-full text-left px-3 py-2 text-xs text-[#B8952F] font-semibold hover:bg-[#D4AF37]/[0.06] transition-colors duration-150"
+                              >
+                                {t('addStock.supplier.createNewShort', { name: supplierName.trim() })}
+                              </button>
+                            )}
+                          </div>
+                        </>
+                      )}
+                    </>
+                  )}
                 </div>
                 <div>
                   <label className="block type-label mb-1">
@@ -507,11 +621,21 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     type="text"
                     placeholder={t('addStock.supplier.phonePlaceholder')}
                     value={supplierPhone}
+                    disabled={!!supplierId}
                     onChange={e => setSupplierPhone(e.target.value)}
-                    className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                    className={`w-full border rounded-[10px] px-2.5 py-2 text-[13px] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 ${
+                      supplierId
+                        ? 'bg-[#F5F7FA] border-[#E5E7EB] text-gray-500 cursor-not-allowed'
+                        : 'bg-white border-[#E5E7EB] text-[#111827]'
+                    }`}
                   />
                 </div>
               </div>
+              {supplierId && (
+                <p className="text-[10.5px] text-[#B8952F]">
+                  {t('addStock.supplier.selectedHint')}
+                </p>
+              )}
               <div>
                 <label className="block type-label mb-1">
                   {t('addStock.supplier.notesLabel')}

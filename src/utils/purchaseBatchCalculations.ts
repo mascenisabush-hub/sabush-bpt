@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, PurchaseBatch, PurchaseBatchStatus, Product } from '../types';
+import { StockBatch, Quebra, PurchaseBatch, PurchaseBatchStatus, Product, SupplierRecord } from '../types';
 import { calculateBatch, groupQuebrasByBatch } from './calculations';
 
 /**
@@ -18,6 +18,84 @@ export function generateBatchNumber(seq: number): string {
 export function getNextBatchSeq(existing: PurchaseBatch[]): number {
   if (!existing.length) return 1;
   return Math.max(...existing.map((b) => b.batchSeq || 0)) + 1;
+}
+
+// ============================================================
+// [Durable Purchase Capture Amendment v1.0] Supplier resolution
+// ============================================================
+// Pure supplier find-or-create RESOLUTION logic, extracted out of
+// AppContext.tsx's addMultipleStockBatches specifically so it can be
+// tested without a live Firestore client — the same reason
+// generateBatchNumber/getNextBatchSeq above live here rather than
+// inline in AppContext.tsx (see tests/purchase-draft-and-suppliers.test.ts's
+// own header comment for the fuller rationale, matching this repo's
+// established pattern for every other Firebase-coupled AppContext
+// function).
+//
+// This function only RESOLVES what the supplier snapshot/link should
+// be — it never writes to Firestore and never generates a document ID
+// (id generation stays in AppContext.tsx, consistent with every other
+// find-or-create in this codebase, e.g. Product's own inline id
+// generation in addMultipleStockBatches). The caller is responsible
+// for creating a new SupplierRecord (with its own id) when
+// matchedSupplierId comes back undefined but name is non-empty.
+export interface SupplierResolutionInput {
+  supplierId?: string;
+  supplierName?: string;
+  supplierPhone?: string;
+  supplierNotes?: string;
+}
+
+export interface SupplierResolution {
+  // Set when an existing SupplierRecord was matched — either by the
+  // caller's own supplierId (if it still resolves) or by a
+  // case-insensitive, trimmed name match. Undefined means either "no
+  // supplier information was given at all" (name is '') or "a new
+  // SupplierRecord should be created" (name is non-empty).
+  matchedSupplierId?: string;
+  name: string; // resolved display name — '' only when nothing was entered
+  phone?: string;
+  notes?: string;
+}
+
+export function resolveSupplierForPurchase(
+  existingSuppliers: Pick<SupplierRecord, 'id' | 'name' | 'phone' | 'notes'>[],
+  input: SupplierResolutionInput
+): SupplierResolution {
+  const trimmedName = (input.supplierName || '').trim();
+  const trimmedPhone = input.supplierPhone?.trim() || undefined;
+  const trimmedNotes = input.supplierNotes?.trim() || undefined;
+
+  if (input.supplierId) {
+    // Caller selected an existing SupplierRecord — use its CURRENT
+    // fields (freshest data at the moment of purchase). If it can no
+    // longer be found (deleted/stale id), fall through to the
+    // free-text path below instead of failing — a stale reference must
+    // never block a purchase.
+    const existing = existingSuppliers.find((s) => s.id === input.supplierId);
+    if (existing) {
+      return { matchedSupplierId: existing.id, name: existing.name, phone: existing.phone, notes: existing.notes };
+    }
+  }
+
+  if (trimmedName) {
+    // Case-insensitive, trimmed find — retyping an existing supplier's
+    // name (different capitalization/whitespace) reuses it instead of
+    // creating a duplicate, mirroring Product's own find-or-create
+    // matching exactly.
+    const existingByName = existingSuppliers.find((s) => s.name.toLowerCase() === trimmedName.toLowerCase());
+    if (existingByName) {
+      return {
+        matchedSupplierId: existingByName.id,
+        name: existingByName.name,
+        phone: existingByName.phone,
+        notes: existingByName.notes,
+      };
+    }
+    return { matchedSupplierId: undefined, name: trimmedName, phone: trimmedPhone, notes: trimmedNotes };
+  }
+
+  return { matchedSupplierId: undefined, name: '', phone: undefined, notes: undefined };
 }
 
 export interface LineItemCalculation {

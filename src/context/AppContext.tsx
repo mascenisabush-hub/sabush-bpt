@@ -51,7 +51,7 @@ import {
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation } from '../utils/calculations';
-import { generateBatchNumber, getNextBatchSeq } from '../utils/purchaseBatchCalculations';
+import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { getTodayDateString } from '../utils/formatters';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
 
@@ -1334,57 +1334,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let totalMarketValue = 0;
     const lineItemSummaries: { productName: string; quantity: number; unit: string }[] = [];
 
-    // [Durable Purchase Capture Amendment v1.0] Supplier find-or-create,
-    // modeled directly on the Product find-or-create loop below it —
-    // same reasoning, same "create in the same batch, never before
-    // finalization" discipline (Rule 8 Assessment, Section 13). A
-    // brand-new SupplierRecord is only ever created here, at
-    // finalization — never while a draft is merely being typed, so an
-    // abandoned draft leaves no permanent Supplier behind.
-    let resolvedSupplierId: string | undefined = supplierId;
-    let resolvedSupplierName = (supplier?.name || '').trim();
-    let resolvedSupplierPhone = supplier?.phone?.trim() || undefined;
-    let resolvedSupplierNotes = supplier?.notes?.trim() || undefined;
+    // [Durable Purchase Capture Amendment v1.0] Supplier find-or-create.
+    // Resolution itself is a pure function
+    // (resolveSupplierForPurchase, purchaseBatchCalculations.ts) so it
+    // can be tested without a live Firestore client — this block only
+    // handles the Firestore-specific part: generating a new document
+    // id and adding it to the SAME batch as everything else (Rule 8
+    // Assessment, Section 13). A brand-new SupplierRecord is only ever
+    // created here, at finalization — never while a draft is merely
+    // being typed, so an abandoned draft leaves no permanent Supplier
+    // behind.
+    const supplierResolution = resolveSupplierForPurchase(suppliers, {
+      supplierId,
+      supplierName: supplier?.name,
+      supplierPhone: supplier?.phone,
+      supplierNotes: supplier?.notes,
+    });
+    let resolvedSupplierId = supplierResolution.matchedSupplierId;
+    const resolvedSupplierName = supplierResolution.name;
+    const resolvedSupplierPhone = supplierResolution.phone;
+    const resolvedSupplierNotes = supplierResolution.notes;
 
-    if (resolvedSupplierId) {
-      // Caller selected an existing SupplierRecord — use its CURRENT
-      // fields as the historical snapshot (freshest data at the moment
-      // of purchase). If it can no longer be found (deleted/stale id),
-      // defensively fall through to the free-text path below instead
-      // of throwing — a stale reference must never block a purchase.
-      const existing = suppliers.find((s) => s.id === resolvedSupplierId);
-      if (existing) {
-        resolvedSupplierName = existing.name;
-        resolvedSupplierPhone = existing.phone;
-        resolvedSupplierNotes = existing.notes;
-      } else {
-        resolvedSupplierId = undefined;
-      }
-    } else if (resolvedSupplierName) {
-      // No explicit supplierId, but a supplier name was typed — same
-      // case-insensitive, trimmed find-or-create as Product uses just
-      // below, so retyping an existing supplier's name (different
-      // capitalization/whitespace) reuses it instead of creating a
-      // duplicate.
-      const existingByName = suppliers.find((s) => s.name.toLowerCase() === resolvedSupplierName.toLowerCase());
-      if (existingByName) {
-        resolvedSupplierId = existingByName.id;
-        resolvedSupplierName = existingByName.name;
-        resolvedSupplierPhone = existingByName.phone;
-        resolvedSupplierNotes = existingByName.notes;
-      } else {
-        const newSupplierId = 'supplier-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
-        const newSupplierRecord: SupplierRecord = {
-          id: newSupplierId,
-          name: resolvedSupplierName,
-          phone: resolvedSupplierPhone,
-          notes: resolvedSupplierNotes,
-          createdAt: new Date().toISOString(),
-          createdByName: userProfile.name,
-        };
-        fsBatch.set(doc(db, 'businesses', businessId, 'suppliers', newSupplierId), newSupplierRecord);
-        resolvedSupplierId = newSupplierId;
-      }
+    if (!resolvedSupplierId && resolvedSupplierName) {
+      // No existing SupplierRecord matched, but a name was given (new
+      // or free-text) — create one now, in the same batch.
+      const newSupplierId = 'supplier-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+      const newSupplierRecord: SupplierRecord = {
+        id: newSupplierId,
+        name: resolvedSupplierName,
+        phone: resolvedSupplierPhone,
+        notes: resolvedSupplierNotes,
+        createdAt: new Date().toISOString(),
+        createdByName: userProfile.name,
+      };
+      fsBatch.set(doc(db, 'businesses', businessId, 'suppliers', newSupplierId), newSupplierRecord);
+      resolvedSupplierId = newSupplierId;
     }
     // If neither a supplierId nor a name was given at all, resolvedSupplierId
     // stays undefined and resolvedSupplierName stays '' — unchanged from
