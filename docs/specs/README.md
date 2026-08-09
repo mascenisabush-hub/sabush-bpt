@@ -45,7 +45,7 @@ intelligence), then build the platform capabilities around that.
 | 7 | [Breakages (Quebras)](./07-breakages.md) | ✅ Approved |
 | 8 | [Expenses](./08-expenses.md) | ✅ Approved |
 | 9 | [Withdrawals](./09-withdrawals.md) | ✅ Approved |
-| 10 | [Stock Counts](./10-stock-counts.md) | ✅ Approved — **Version 1.1**, amended by the [Expected Current Stock Value & Persistent Initial Stock Amendment](./10-expected-stock-value-amendment.md) (✅ Approved, implemented; see that document and `docs/engineering/10-rule8-assessment.md` / `10-expected-stock-value-implementation-plan.md`) |
+| 10 | [Stock Counts](./10-stock-counts.md) | ✅ Approved — **Version 1.2**, amended by the [Expected Current Stock Value & Persistent Initial Stock Amendment](./10-expected-stock-value-amendment.md) (✅ Approved, implemented; see that document and `docs/engineering/10-rule8-assessment.md` / `10-expected-stock-value-implementation-plan.md`) and by the [Initial Stock Valuation History Amendment](./10-initial-stock-valuation-history-amendment.md) (✅ Approved, governance-only pass formalizing an already-implemented capability; see that document and `docs/engineering/10-initial-stock-valuation-history-governance-rule8-assessment.md`). Note: the related `sellingPrice`-on-Stock-Count-items addition remains separately unformalized — see the amendment's Part 12. |
 | 11 | [Monthly Closings](./11-monthly-closings.md) | ✅ Approved |
 
 > **Note on the Closing Integrity Amendment (amends #8, #9, #11):** a

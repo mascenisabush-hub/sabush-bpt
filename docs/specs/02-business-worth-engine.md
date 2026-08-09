@@ -148,6 +148,15 @@ anywhere in the product:
   formulas, Functional Requirements, and Acceptance Criteria are
   otherwise unchanged by that amendment.
 
+**Explicit non-goal, added by [Initial Stock Valuation History Amendment v1.0](./10-initial-stock-valuation-history-amendment.md)**
+- Module #10's Current Initial Stock Investment Value, Current Initial
+  Stock Selling Value, and per-event Valuation Change are computed
+  alongside this Engine's outputs but are not Embedded Profit. They do
+  not modify `businessWorth`, `capitalGrowth`, `capitalGrowthPct`, or
+  `totalEmbeddedProfitAllTime`, and are never fed back into any formula
+  in this spec. This Engine's formulas, Functional Requirements, and
+  Acceptance Criteria are otherwise unchanged by that amendment.
+
 **Currency integrity**
 - No batch, expense, withdrawal, or stock count record stores which
   currency it was recorded in (Architecture 7.6's currency-change

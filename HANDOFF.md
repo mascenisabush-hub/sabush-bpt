@@ -12,17 +12,82 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Module #10 (Stock Counts) — **governance-only session,
+closing a debt flagged in the two prior sessions below.** Created
+[`10-initial-stock-valuation-history-amendment.md`](./docs/specs/10-initial-stock-valuation-history-amendment.md)
+(✅ Approved), formalizing the Initial Stock Valuation History / Price
+Change Events feature described under "Prior status" below — that
+feature was implemented off direct task prompts across two sessions
+*before* this governance record existed; this session writes the
+governance record *after* the fact, verified directly against the
+shipped code rather than assumed. See that amendment document (Parts
+1–10) for the formal business rules, Part 11 for why no BDR/POL/ADR was
+also needed, and Part 12 for explicit non-goals.
+
+**No code was touched this session** — this was a strict
+governance-only pass (per explicit task instruction): no `src/`,
+`server/`, `firestore.rules`, or `tests/` file was created, edited, or
+deleted. Only documentation changed:
+`docs/specs/10-initial-stock-valuation-history-amendment.md` (new),
+`docs/specs/10-stock-counts.md` (Version 1.1 → 1.2, new
+`[Valuation History Amendment v1.0]`-tagged sections),
+`docs/specs/02-business-worth-engine.md` (one new non-goal bullet,
+mirroring the existing Expected Stock Value non-goal bullet exactly in
+form), `docs/specs/README.md` (Module #10 row updated),
+`docs/engineering/10-initial-stock-valuation-history-governance-rule8-assessment.md`
+(new — a 12-question governance-readiness assessment, not a standard
+files/plan/risks implementation Rule 8, per the task's own framing),
+and this file.
+
+**Explicit boundaries confirmed, not just declared** (checked via
+`git diff` during this session): `expectedCurrentStockValue`,
+`businessWorth`, `capitalGrowth`, and `capitalGrowthPct` (all in
+`AppContext.tsx`) remain byte-for-byte unmodified. The existing
+[Expected Current Stock Value & Persistent Initial Stock Amendment](./docs/specs/10-expected-stock-value-amendment.md)
+is not touched, superseded, or reopened. Whether Current Initial Stock
+Valuation should ever feed Expected Current Stock Value remains an
+**explicit, separate, not-yet-authorized decision** (amendment Part 9)
+— unchanged from how the prior two sessions already left it.
+
+**Nothing was committed or pushed this session**, matching the task's
+explicit instruction. Combined with the still-uncommitted code from the
+session before this one (see "Prior status," directly below), the
+working tree currently holds:
+- 3 uncommitted **code** files from the prior (non-governance) session:
+  `src/utils/calculations.ts`, `src/components/InitialStockPriceChangeModal.tsx`,
+  `tests/initial-stock-price-change.test.ts` — already `tsc`/build/
+  test-verified (200/200 passing) in that session; not re-touched here.
+- 6 uncommitted **documentation** files from this session (listed
+  above).
+- Both sets are uncommitted on top of `main @ c6433a1` and were never
+  committed together — whoever picks this up next should review both
+  before committing, ideally as two separate, semantically-scoped
+  commits (governance record first, then the code it governs — or a
+  single combined commit if that's preferred; not decided here).
+
+**Remaining governance gap, explicitly not closed by this session:** the
+`sellingPrice`-on-Stock-Count-items addition (see the next "Prior
+status" entry down) remains unformalized — this session's amendment
+depends on that field existing but does not itself govern it (amendment
+Part 12). That's still an open item for a future session.
+
+## Prior status — Module #10 Initial Stock Valuation History implementation (superseded above, kept for continuity)
+
 **Status:** Module #10 (Stock Counts) — **new feature, narrow scope**:
 Initial Stock Valuation History / Price Change Events, implemented and
 verified this session per an explicit task prompt ("Initial Stock
-Valuation History / Price Change Events"). **Not yet formally specified**
-— I searched `docs/specs/README.md`, `10-stock-counts.md`,
-`10-expected-stock-value-amendment.md`, and `02-business-worth-engine.md`
-before starting; none authorizes this feature. Followed this repo's own
+Valuation History / Price Change Events"). Followed this repo's own
 precedent (the sellingPrice addition below, implemented off a task
 prompt and flagged afterward): implemented narrowly, flagging a formal
-BDS amendment as still owed — do not treat this session's task prompt
-as equivalent to a `docs/specs/` amendment.
+BDS amendment as still owed.
+
+> **Update, from the governance session directly above:** the formal
+> amendment flagged as owed by this section (open item #1, below) is
+> now closed — see
+> [`10-initial-stock-valuation-history-amendment.md`](./docs/specs/10-initial-stock-valuation-history-amendment.md).
+> Open items #2 (Firestore emulator) and #3 (Expected Current Stock
+> Value wiring) remain open exactly as stated below — the governance
+> session did not change either.
 
 **What this feature is:** lets the Owner record a price change affecting
 units still remaining from the original Initial Stock, WITHOUT editing

@@ -2,12 +2,15 @@ Business Domain Specification
 
 # Stock Counts
 
-Version 1.1
+Version 1.2
 **Status:** ✅ Approved. Amended by the
 [Expected Current Stock Value & Persistent Initial Stock Amendment](./10-expected-stock-value-amendment.md)
 (v1.0, ✅ Approved) — `[Amendment v1.0]`-tagged sections below carry
 that amendment's changes; the amendment document itself is the record
-of *why*.
+of *why*. Further amended by the
+[Initial Stock Valuation History Amendment](./10-initial-stock-valuation-history-amendment.md)
+(v1.0, ✅ Approved) — `[Valuation History Amendment v1.0]`-tagged
+sections below carry that amendment's changes.
 **Module #10 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.8.3](../architecture/03-domain-architecture.md)
 (Stock Counts domain — the `initial` count as "the permanent, immutable
@@ -208,6 +211,30 @@ workflow, not a single-shot form [Amendment v1.0]**
   that remains an open item in this spec's own Future Enhancements,
   unchanged by this amendment.
 
+**Initial Stock Valuation History — price-change events on remaining
+Initial Stock [Valuation History Amendment v1.0 — new]**
+- An Owner may record a per-product `InitialStockPriceChangeEvent`
+  stating that, as of a given effective date, a given quantity of
+  remaining Initial Stock should now be valued at new cost/selling
+  prices. This is an **owner-asserted valuation snapshot**, not an
+  inventory movement, sale, purchase, expense, withdrawal, or
+  accounting adjustment — see the amendment document's Parts 3–5 for
+  the full rule and formulas.
+- Events are append-only: no `update` or `delete` path exists for any
+  role, matching the `initial` Stock Count's own "no exceptions" tier
+  (Business Rules, above). The original `initial` Stock Count itself is
+  never modified by this feature — Initial Capital remains exactly as
+  defined above.
+- For a product with multiple events, the latest event (by
+  `effectiveDate`) represents the current valuation state; earlier
+  events are never summed with it and remain permanently available as
+  audit/explanation history — see the amendment document's Part 6.
+- The resulting **Current Initial Stock Investment Value**, **Current
+  Initial Stock Selling Value**, and **Valuation Change** figures are
+  explicitly distinct from Embedded Profit, Business Worth, Expected
+  Current Stock Value, and Initial Capital — none of this feature's
+  output feeds any of those formulas (amendment document Parts 7–9).
+
 ## Functional Requirements
 
 *Exactly what the module must do.*
@@ -245,6 +272,13 @@ workflow, not a single-shot form [Amendment v1.0]**
    inventory`) as the comparison baseline for every periodic Contagem,
    and persist it as `expectedValueAtCount` on each new periodic
    `StockCount` — currently implemented.
+9. **[Valuation History Amendment v1.0 — new]** Allow an Owner to
+   record an append-only, per-product Initial Stock price-change event
+   and view the resulting Current Initial Stock Investment/Selling
+   Value and per-event Valuation Change, without altering the original
+   `initial` Stock Count or Initial Capital — currently implemented
+   (`InitialStockPriceChangeModal.tsx`, `calculateInitialStockCurrentValuation`,
+   `calculateInitialStockValuationChange`).
 
 ## Non-functional Requirements
 
@@ -262,6 +296,14 @@ workflow, not a single-shot form [Amendment v1.0]**
   delete), matching the existing `stockCounts` creation restriction,
   and is gated by the same `subscriptionAllowsNewRecords` check as
   every other new-record write in this business.
+- **[Valuation History Amendment v1.0]** The new
+  `initialStockPriceChangeEvents` collection restricts `create` to the
+  Owner (gated by `subscriptionAllowsNewRecords`, with field-shape
+  validation on `quantityRemaining`/`newCostPrice`/`newSellingPrice`);
+  `read` is tenant-wide (any team member, matching the `stockCounts`
+  read tier); `update`/`delete` are refused unconditionally for every
+  role, including Owner — the same "no exceptions" tier as the
+  `initial` Stock Count itself.
 
 **Accessibility**
 - Numeric fields use `.type-number`/tabular-nums and `font-mono`
@@ -334,3 +376,10 @@ workflow, not a single-shot form [Amendment v1.0]**
       Product Architect and recorded in the amendment document — this
       supersedes, rather than confirms, the original "most recent
       count" rule this criterion referred to.
+- [x] **[Valuation History Amendment v1.0]** Initial Stock price-change
+      events are append-only, refuse `update`/`delete` for every role
+      at the Security Rules layer, never modify the `initial` Stock
+      Count or Initial Capital, and do not feed Embedded Profit,
+      Business Worth, or Expected Current Stock Value — verified
+      directly against `firestore.rules` and `calculations.ts`, not
+      only product intent.
