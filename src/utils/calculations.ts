@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -85,6 +85,117 @@ export function calculateInventoryTotals(batches: StockBatch[], quebras: Quebra[
   });
 
   return { totalInvestmentValue, totalMarketValue, totalEmbeddedProfit, activeBatchCount };
+}
+
+/**
+ * [Initial Stock Valuation History] Current, per-product-aware valuation
+ * of the remaining ORIGINAL Initial Stock — distinct from the immutable
+ * `initialCapitalValue` (== the confirmed 'initial' StockCount's own
+ * frozen `totalValue`, always the original prices, never touched here).
+ *
+ * For each product on the 'initial' StockCount:
+ *   - If it has one or more price-change events, the most recent one
+ *     (by effectiveDate, tie-broken by createdAt) is authoritative: that
+ *     event's own quantityRemaining × new{Cost,Selling}Price is what's
+ *     used — NOT the original item's quantity/price, and NOT summed
+ *     across all of a product's events (each new event's quantityRemaining
+ *     already represents everything left at that later moment, per this
+ *     feature's own quantity semantics — see InitialStockPriceChangeEvent
+ *     in types.ts).
+ *   - If it has none, the original item's quantity/costPrice/sellingPrice
+ *     is used unchanged — this is what makes the function fully backward
+ *     compatible: a business with zero price-change events gets back
+ *     exactly the original Initial Stock valuation, product by product.
+ *
+ * Deterministic, side-effect-free, no Firestore/AppContext dependency —
+ * safe to unit test directly. Does not read, write, or otherwise
+ * participate in initialCapitalValue, businessWorth, capitalGrowth, or
+ * expectedCurrentStockValue; wiring this into any of those remains an
+ * explicit, separate, not-yet-authorized decision (see
+ * docs/specs/README.md's governance note for this feature).
+ */
+export function calculateInitialStockCurrentValuation(
+  initialStockCount: StockCount | null,
+  priceChangeEvents: InitialStockPriceChangeEvent[]
+): {
+  totalInvestmentValue: number;
+  totalMarketValue: number;
+  perProduct: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    costPrice: number;
+    sellingPrice: number;
+    investmentValue: number;
+    marketValue: number;
+    hasPriceChange: boolean;
+    latestEvent: InitialStockPriceChangeEvent | null;
+  }>;
+} {
+  if (!initialStockCount) {
+    return { totalInvestmentValue: 0, totalMarketValue: 0, perProduct: [] };
+  }
+
+  // Group events by productId, then resolve the single most-recent one
+  // per product once, rather than re-scanning the full event list per item.
+  const eventsByProduct = new Map<string, InitialStockPriceChangeEvent[]>();
+  for (const ev of priceChangeEvents) {
+    const list = eventsByProduct.get(ev.productId);
+    if (list) list.push(ev);
+    else eventsByProduct.set(ev.productId, [ev]);
+  }
+
+  const mostRecent = (events: InitialStockPriceChangeEvent[]): InitialStockPriceChangeEvent =>
+    events.reduce((latest, ev) => {
+      const latestDate = new Date(latest.effectiveDate).getTime();
+      const evDate = new Date(ev.effectiveDate).getTime();
+      if (evDate !== latestDate) return evDate > latestDate ? ev : latest;
+      // Same effectiveDate — tie-break on createdAt (later write wins).
+      return new Date(ev.createdAt).getTime() > new Date(latest.createdAt).getTime() ? ev : latest;
+    });
+
+  let totalInvestmentValue = 0;
+  let totalMarketValue = 0;
+  const perProduct: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    costPrice: number;
+    sellingPrice: number;
+    investmentValue: number;
+    marketValue: number;
+    hasPriceChange: boolean;
+    latestEvent: InitialStockPriceChangeEvent | null;
+  }> = [];
+
+  for (const item of initialStockCount.items) {
+    const productEvents = eventsByProduct.get(item.productId);
+    const latestEvent = productEvents && productEvents.length > 0 ? mostRecent(productEvents) : null;
+
+    const quantity = latestEvent ? latestEvent.quantityRemaining : item.quantity;
+    const costPrice = latestEvent ? latestEvent.newCostPrice : item.costPrice;
+    const sellingPrice = latestEvent ? latestEvent.newSellingPrice : (item.sellingPrice ?? 0);
+
+    const investmentValue = quantity * costPrice;
+    const marketValue = quantity * sellingPrice;
+
+    totalInvestmentValue += investmentValue;
+    totalMarketValue += marketValue;
+
+    perProduct.push({
+      productId: item.productId,
+      productName: item.productName,
+      quantity,
+      costPrice,
+      sellingPrice,
+      investmentValue,
+      marketValue,
+      hasPriceChange: !!latestEvent,
+      latestEvent,
+    });
+  }
+
+  return { totalInvestmentValue, totalMarketValue, perProduct };
 }
 
 /**

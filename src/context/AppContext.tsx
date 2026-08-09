@@ -44,9 +44,10 @@ import {
   Subscription,
   Payment,
   PaymentMethod,
+  InitialStockPriceChangeEvent,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, generateReportSummary, isDateInRange } from '../utils/calculations';
+import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq } from '../utils/purchaseBatchCalculations';
 import { getTodayDateString } from '../utils/formatters';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
@@ -101,6 +102,18 @@ interface RecordStockCountParams {
   // Never set for type === 'initial' (it has no baseline to compare
   // against yet).
   expectedValueAtCount?: number;
+}
+
+// [Initial Stock Valuation History] Owner-entered input for a new price
+// change event — see InitialStockPriceChangeEvent (types.ts) for why
+// quantityRemaining is an explicit input, not a derived figure.
+interface RecordInitialStockPriceChangeParams {
+  productId: string;
+  effectiveDate: string;
+  quantityRemaining: number;
+  newCostPrice: number;
+  newSellingPrice: number;
+  reason?: string;
 }
 
 interface RecordClosingParams {
@@ -171,6 +184,26 @@ interface AppContextType {
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
   recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
+  // [Initial Stock Valuation History] Immutable, append-only audit trail
+  // of price changes affecting units still remaining from the original
+  // 'initial' StockCount. NEVER edits initialStockCount/initialCapitalValue
+  // — see types.ts (InitialStockPriceChangeEvent) and calculations.ts
+  // (calculateInitialStockCurrentValuation) for the full rule.
+  initialStockPriceChangeEvents: InitialStockPriceChangeEvent[];
+  recordInitialStockPriceChangeEvent: (params: RecordInitialStockPriceChangeParams) => Promise<InitialStockPriceChangeEvent>;
+  // Current, per-product-aware valuation of the remaining original
+  // Initial Stock (falls back to original prices for any product with no
+  // price-change event — see the underlying pure function's own comment
+  // for the full backward-compatibility guarantee). NOT read by
+  // expectedCurrentStockValue/businessWorth/capitalGrowth — wiring this
+  // into any of those formulas is an explicit, separate, not-yet-
+  // authorized decision (see docs/specs/README.md governance note for
+  // this feature).
+  initialStockCurrentValuation: {
+    totalInvestmentValue: number;
+    totalMarketValue: number;
+    perProduct: ReturnType<typeof calculateInitialStockCurrentValuation>['perProduct'];
+  };
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
   // Persistent Initial Stock draft — null until an Owner starts one,
   // cleared automatically the moment it's confirmed. NOT Initial Capital.
@@ -277,6 +310,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
+  const [initialStockPriceChangeEvents, setInitialStockPriceChangeEvents] = useState<InitialStockPriceChangeEvent[]>([]);
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
   // Null when no draft exists yet for this business (or once confirmed
   // and cleared). Never itself Initial Capital.
@@ -539,6 +573,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // (0 + totalInvestmentValueAllTime), never NaN/undefined.
   const expectedCurrentStockValue = initialCapitalValue + totalInvestmentValueAllTime;
 
+  // [Initial Stock Valuation History] Derived, read-only — see the
+  // AppContextType field's own comment and calculateInitialStockCurrentValuation's
+  // header comment (calculations.ts) for the full rule. Deliberately NOT
+  // folded into expectedCurrentStockValue/businessWorth/capitalGrowth above.
+  const initialStockCurrentValuation = calculateInitialStockCurrentValuation(
+    initialStockCount,
+    initialStockPriceChangeEvents
+  );
+
   // A business is considered "complete" once it has a category plus the core
   // contact-card fields. Businesses created before these fields existed will
   // be missing them and get prompted once to fill the gap.
@@ -751,6 +794,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching stock counts:', err)
     );
 
+    // [Initial Stock Valuation History] Immutable, append-only price-change
+    // audit trail — read tier matches stockCounts (any team member).
+    const initialStockPriceChangeEventsRef = collection(db, 'businesses', businessId, 'initialStockPriceChangeEvents');
+    const unsubInitialStockPriceChangeEvents = onSnapshot(
+      initialStockPriceChangeEventsRef,
+      (snap) => {
+        const list: InitialStockPriceChangeEvent[] = [];
+        snap.forEach((doc) => list.push(doc.data() as InitialStockPriceChangeEvent));
+        list.sort((a, b) => new Date(b.effectiveDate).getTime() - new Date(a.effectiveDate).getTime());
+        setInitialStockPriceChangeEvents(list);
+      },
+      (err) => console.error('Error fetching initial stock price change events:', err)
+    );
+
     // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
     // 5b-2. Persistent Initial Stock draft — single doc, id 'initial'.
     // Owner-only per firestore.rules; a non-Owner (Staff) session simply
@@ -860,6 +917,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubQuebras();
       unsubExpenses();
       unsubStockCounts();
+      unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
       unsubWithdrawals();
       unsubPayments();
@@ -1621,6 +1679,109 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newCount;
   };
 
+  // [Initial Stock Valuation History] Records a price change affecting
+  // units still remaining from the original 'initial' StockCount, WITHOUT
+  // editing that StockCount — see InitialStockPriceChangeEvent (types.ts)
+  // for the full data-model rule this implements. Owner-only, matching
+  // firestore.rules' own create rule for this collection.
+  const recordInitialStockPriceChangeEvent = async ({
+    productId,
+    effectiveDate,
+    quantityRemaining,
+    newCostPrice,
+    newSellingPrice,
+    reason,
+  }: RecordInitialStockPriceChangeParams) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode registar uma alteração de preço.');
+    if (!initialStockCount) throw new Error('O Capital Inicial ainda não foi definido.');
+
+    const originalItem = initialStockCount.items.find((i) => i.productId === productId);
+    if (!originalItem) {
+      throw new Error('Este produto não faz parte da Contagem Inicial de Stock.');
+    }
+
+    if (!Number.isFinite(quantityRemaining) || quantityRemaining <= 0) {
+      throw new Error('Introduza uma quantidade restante maior que zero.');
+    }
+    // Validated against the ORIGINAL item's quantity — this event can
+    // never claim more units remain than were ever originally counted.
+    // It intentionally does NOT validate against a prior event's own
+    // quantityRemaining: the app has no sales ledger to reliably derive
+    // "remaining" from, so a later, larger owner-entered correction for
+    // the same product is not treated as an error here (see types.ts —
+    // quantityRemaining is the Owner's authoritative input, not a
+    // system-derived figure).
+    if (quantityRemaining > originalItem.quantity) {
+      throw new Error(`A quantidade restante não pode exceder a quantidade original (${originalItem.quantity}).`);
+    }
+    if (!Number.isFinite(newCostPrice) || newCostPrice < 0) {
+      throw new Error('Introduza um custo válido (não negativo).');
+    }
+    if (!Number.isFinite(newSellingPrice) || newSellingPrice < 0) {
+      throw new Error('Introduza um preço de venda válido (não negativo).');
+    }
+    if (!effectiveDate) {
+      throw new Error('Introduza uma data efetiva válida.');
+    }
+
+    const businessId = activeBusinessId;
+
+    // Previous price snapshot: the most recent existing event for this
+    // product if one exists, otherwise the original 'initial' item's own
+    // values — see the field's own comment on InitialStockPriceChangeEvent.
+    const existingForProduct = initialStockPriceChangeEvents.filter((e) => e.productId === productId);
+    const previousEvent = existingForProduct.length
+      ? existingForProduct.reduce((latest, e) =>
+          new Date(e.effectiveDate).getTime() > new Date(latest.effectiveDate).getTime() ||
+          (new Date(e.effectiveDate).getTime() === new Date(latest.effectiveDate).getTime() &&
+            new Date(e.createdAt).getTime() > new Date(latest.createdAt).getTime())
+            ? e
+            : latest
+        )
+      : null;
+
+    const previousCostPrice = previousEvent ? previousEvent.newCostPrice : originalItem.costPrice;
+    const previousSellingPrice = previousEvent ? previousEvent.newSellingPrice : (originalItem.sellingPrice ?? 0);
+
+    const newEvent: InitialStockPriceChangeEvent = {
+      id: 'iscpe-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      businessId,
+      productId,
+      productName: originalItem.productName,
+      effectiveDate,
+      quantityRemaining: Number(quantityRemaining),
+      previousCostPrice,
+      previousSellingPrice,
+      newCostPrice: Number(newCostPrice),
+      newSellingPrice: Number(newSellingPrice),
+      ...(reason?.trim() ? { reason: reason.trim() } : {}),
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.uid || '',
+    };
+
+    await setDoc(doc(db, 'businesses', businessId, 'initialStockPriceChangeEvents', newEvent.id), newEvent);
+
+    await logTimelineEvent({
+      type: 'stock-verification',
+      date: effectiveDate,
+      title: 'Alteração de Preço no Capital Inicial Registada',
+      description: `Preço de "${originalItem.productName}" atualizado para ${quantityRemaining} unidade(s) restantes do Capital Inicial.`,
+      productName: originalItem.productName,
+      details: {
+        productId,
+        quantityRemaining,
+        previousCostPrice,
+        previousSellingPrice,
+        newCostPrice,
+        newSellingPrice,
+        reason: reason?.trim(),
+      },
+    });
+
+    return newEvent;
+  };
+
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
   // Upserts the persistent Initial Stock draft. Owner-only at the rules
   // layer. Deliberately NOT Initial Capital — this never writes to
@@ -2234,6 +2395,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (s.type === 'initial') continue;
       await deleteDoc(doc(db, 'businesses', businessId, 'stockCounts', s.id));
     }
+    // [Initial Stock Valuation History] Same "no exceptions" immutability
+    // tier as the 'initial' StockCount itself (firestore.rules: allow
+    // delete: if false, unconditionally) — "Clear All Data" does not
+    // attempt to remove these either, for the identical reason the loop
+    // above skips the 'initial' StockCount. Not iterated at all, matching
+    // that established pattern rather than looping and swallowing a
+    // guaranteed per-item failure.
     // The draft (if any) is not itself Initial Capital, so it is still
     // fully cleared by "Clear All Data" — no rule prevents this.
     await deleteDoc(doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial')).catch(() => {
@@ -2302,6 +2470,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockCount,
         initialCapitalValue,
         recordStockCount,
+        initialStockPriceChangeEvents,
+        recordInitialStockPriceChangeEvent,
+        initialStockCurrentValuation,
         initialStockDraft,
         initialStockDraftLoaded,
         saveInitialStockDraft,

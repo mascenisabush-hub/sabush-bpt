@@ -12,6 +12,101 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Module #10 (Stock Counts) — **new feature, narrow scope**:
+Initial Stock Valuation History / Price Change Events, implemented and
+verified this session per an explicit task prompt ("Initial Stock
+Valuation History / Price Change Events"). **Not yet formally specified**
+— I searched `docs/specs/README.md`, `10-stock-counts.md`,
+`10-expected-stock-value-amendment.md`, and `02-business-worth-engine.md`
+before starting; none authorizes this feature. Followed this repo's own
+precedent (the sellingPrice addition below, implemented off a task
+prompt and flagged afterward): implemented narrowly, flagging a formal
+BDS amendment as still owed — do not treat this session's task prompt
+as equivalent to a `docs/specs/` amendment.
+
+**What this feature is:** lets the Owner record a price change affecting
+units still remaining from the original Initial Stock, WITHOUT editing
+that Initial Stock record — the confirmed `'initial'` StockCount and
+`initialCapitalValue` remain exactly as immutable as before. Each price
+change is a separate, permanent, auditable event.
+
+**What changed:**
+
+1. **New type `InitialStockPriceChangeEvent`** (`src/types.ts`):
+   `id, businessId, productId, productName, effectiveDate,
+   quantityRemaining, previousCostPrice, previousSellingPrice,
+   newCostPrice, newSellingPrice, reason?, createdAt, createdBy`.
+   `quantityRemaining` is deliberately Owner-entered, not
+   system-derived — this app has no sales ledger, so there is no
+   reliable way to compute "units still remaining" from existing data.
+2. **New Firestore collection** `businesses/{businessId}/initialStockPriceChangeEvents`
+   — `firestore.rules`: read = any team member, create = Owner-only with
+   field-shape validation (own businessId, own uid as createdBy, positive
+   quantity, non-negative prices), **update/delete = `false`
+   unconditionally** — same "no exceptions" immutability tier as the
+   `'initial'` StockCount itself.
+3. **New pure function `calculateInitialStockCurrentValuation()`**
+   (`src/utils/calculations.ts`) — per product, uses the most recent
+   price-change event (by effectiveDate, tie-broken by createdAt) if one
+   exists, else falls back to the original Initial Stock item's own
+   quantity/prices. No Firestore/AppContext dependency; fully backward
+   compatible (zero events → identical to today's figures).
+4. **`AppContext.tsx`** — new `initialStockPriceChangeEvents` state +
+   listener, new `recordInitialStockPriceChangeEvent()` action
+   (Owner-only, validates quantity/prices, derives the previous-price
+   snapshot from the latest existing event or the original item), and a
+   new derived `initialStockCurrentValuation` field. **Deliberately NOT
+   wired into `expectedCurrentStockValue`/`businessWorth`/
+   `capitalGrowth`** — the task's own explicit instruction was not to
+   silently change that formula; doing so remains a separate,
+   not-yet-authorized decision. `clearAllData` explicitly does not
+   attempt to delete this collection (same reasoning as its existing
+   `'initial'`-StockCount skip).
+5. **New UI** — `InitialStockPriceChangeModal.tsx`, reachable from the
+   Dashboard's Initial Capital KPI card once Initial Stock is confirmed
+   (previously that click did nothing). Shows original-vs-current
+   valuation per product and a form to record a new event, framed as
+   "Registar Alteração de Preço" throughout — never "Editar Capital
+   Inicial."
+6. **8 new tests** (`tests/initial-stock-price-change.test.ts`) — basic
+   event, no event, multiple events (including a same-day tie-break),
+   historical immutability, backward compatibility with a missing
+   `sellingPrice`. New `firestore.rules` coverage
+   (`tests/firestore-rules.test.ts`, `initialStockPriceChangeEvents`
+   describe block) — written and typechecked but **not executed**, same
+   standing `storage.googleapis.com` emulator-download network-egress
+   gap as every prior session in this file.
+7. **Verified:** `tsc --noEmit` clean, `npm run build` clean,
+   `npm run test:all` — **189/189 passing**, zero regressions.
+8. **Diff scope, checked explicitly before commit:** 9 files (2 new —
+   `InitialStockPriceChangeModal.tsx`,
+   `tests/initial-stock-price-change.test.ts`; 7 modified — `types.ts`,
+   `calculations.ts`, `AppContext.tsx`, `DashboardView.tsx`,
+   `firestore.rules`, `tests/firestore-rules.test.ts`, `package.json`
+   for the new test script). Every change to `AppContext.tsx` and
+   `calculations.ts` is additive — confirmed via `git diff` that the
+   only removed lines are the two import statements, each replaced by
+   an extended version. Business Worth, Capital Growth, StockBatch
+   pricing, and Modules #17/#18/#19/#20 are untouched.
+
+**Open item for next session (or before production deploy):**
+1. A formal `docs/specs/10-*` amendment (or new BDS) authorizing this
+   feature is still owed — this session's task prompt functioned as
+   authorization the same way the sellingPrice addition's prompt did,
+   but neither has been formalized into spec text yet; both are open.
+2. The Firestore rules emulator run for the new
+   `initialStockPriceChangeEvents` coverage — same standing sandbox
+   network gap, needs to run in an environment with real egress before
+   production deploy.
+3. Whether/how `initialStockCurrentValuation` should ever feed into
+   `expectedCurrentStockValue` was explicitly left as an open,
+   not-yet-authorized product decision — flagged, not decided, per the
+   task's own instruction.
+
+---
+
+## Prior status — Module #10 selling price enhancement (superseded above, kept for continuity)
+
 **Status:** Module #10 (Stock Counts) — **narrow enhancement**: both
 Initial Stock and Periodic Contagem now capture `sellingPrice` per unit
 alongside the existing `costPrice`, per an explicit task prompt from

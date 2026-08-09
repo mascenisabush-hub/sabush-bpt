@@ -370,6 +370,58 @@ export interface InitialStockDraft {
 }
 
 // ============================================================
+// INITIAL STOCK PRICE CHANGE EVENTS
+// ============================================================
+// [Initial Stock Valuation History] Records a price change affecting
+// units of a product still remaining from the original 'initial'
+// StockCount, WITHOUT editing that StockCount. The 'initial' StockCount
+// (and therefore initialCapitalValue) remains a permanently immutable
+// historical snapshot — see StockCount/type above and firestore.rules'
+// "no exceptions" tier for type === 'initial'. This is a parallel,
+// append-only audit trail that lets later valuation figures use current
+// pricing for the units that are still around, without rewriting history.
+//
+// QUANTITY SEMANTICS: this app records no sales/POS ledger (Architecture
+// non-goal — see CLAUDE.md Rule 3/4), so there is no reliable, derivable
+// "units of the original Initial Stock still remaining" figure anywhere
+// in the data model. quantityRemaining is therefore the Owner's own
+// explicit, entered-at-event-time figure — the authoritative input, not
+// a value the system reconstructs. It is validated (>0, not exceeding
+// the original item's quantity) but never inferred.
+//
+// MULTIPLE EVENTS: a product can have any number of these, one per price
+// change. Each is immutable once created (see firestore.rules — update
+// and delete are both refused unconditionally, the same "no exceptions"
+// tier as the 'initial' StockCount itself). The most recent event (by
+// effectiveDate, tie-broken by createdAt) is the one that reflects
+// current reality for that product; earlier ones remain as history, not
+// superseded/mutated in place. See calculations.ts
+// (calculateInitialStockCurrentValuation) for how "most recent" is
+// resolved deterministically.
+export interface InitialStockPriceChangeEvent {
+  id: string;
+  businessId: string;
+  productId: string;
+  productName: string; // denormalized at creation, same pattern as StockCountItem.productName
+  effectiveDate: string; // YYYY-MM-DD
+  // Quantity of the ORIGINAL Initial Stock still remaining/affected at
+  // the moment of this price change (Owner-entered — see note above).
+  quantityRemaining: number;
+  // Snapshot of what the price was immediately before this event — the
+  // original 'initial' StockCount's item values the first time this
+  // product is repriced, or the previous event's new* values for a
+  // second-or-later reprice of the same product. Recorded for audit
+  // legibility only; never itself read by any calculation.
+  previousCostPrice: number;
+  previousSellingPrice: number;
+  newCostPrice: number;
+  newSellingPrice: number;
+  reason?: string;
+  createdAt: string; // ISO string
+  createdBy: string; // uid of the Owner who recorded this event
+}
+
+// ============================================================
 // CLOSINGS (Monthly/Yearly period locking)
 // ============================================================
 // A Closing permanently "locks" a calendar period (a month or a year).

@@ -357,6 +357,43 @@ service cloud.firestore {
         allow delete: if isOwnerOf(businessId);
       }
 
+      // [Initial Stock Valuation History] Immutable, append-only audit
+      // trail of price changes affecting units still remaining from the
+      // original 'initial' StockCount — NEVER an edit to that StockCount
+      // (which keeps its own unconditional no-update/no-delete rule
+      // above, untouched by this feature). Owner-only at every layer,
+      // same tier as recording the 'initial' count itself — this affects
+      // how the business's capital is valued going forward, so Staff
+      // never create or modify these, though any team member may read
+      // them (same read tier as stockCounts).
+      match /initialStockPriceChangeEvents/{eventId} {
+        allow read: if isMemberOf(businessId);
+        // [Module #19 Phase 2 pattern] Restricted once trial completes/
+        // expires (Business Rule 6 / Decision 2), matching every other
+        // capital-affecting create rule in this file. Field-shape
+        // validation mirrors /payments' own pattern: the write must be
+        // self-consistent (own businessId, own author) and cannot arrive
+        // pre-negative — cheap, deterministic checks the rules layer can
+        // make without a second read.
+        allow create: if isOwnerOf(businessId) &&
+          subscriptionAllowsNewRecords(businessId) &&
+          request.resource.data.businessId == businessId &&
+          request.resource.data.createdBy == request.auth.uid &&
+          request.resource.data.quantityRemaining is number &&
+          request.resource.data.quantityRemaining > 0 &&
+          request.resource.data.newCostPrice is number &&
+          request.resource.data.newCostPrice >= 0 &&
+          request.resource.data.newSellingPrice is number &&
+          request.resource.data.newSellingPrice >= 0;
+        // Historical valuation records are immutable once created —
+        // AUDITABILITY requirement: "create event" over "edit previous
+        // event", no post-creation correction mechanism exists or is
+        // authorized. Same unconditional "no exceptions" tier as the
+        // 'initial' StockCount and /payments — Owner included.
+        allow update: if false;
+        allow delete: if false;
+      }
+
       // Owner Withdrawals: money taken by the owner personally. Only the
       // owner may record/edit/remove these — staff never handle this.
       // [Closing Integrity Amendment v1.0] Same create/update/delete

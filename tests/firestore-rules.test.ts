@@ -650,6 +650,76 @@ describe('stockCountDrafts', () => {
   });
 });
 
+// [Initial Stock Valuation History] Immutable, append-only price-change
+// audit trail for units remaining from the 'initial' StockCount. See
+// firestore.rules' own comment on this match block for the full rule.
+describe('initialStockPriceChangeEvents', () => {
+  const validEvent = (overrides: Record<string, unknown> = {}) => ({
+    id: 'evt1',
+    businessId: BIZ,
+    productId: 'prod1',
+    productName: 'Coca-Cola',
+    effectiveDate: '2026-08-01',
+    quantityRemaining: 35,
+    previousCostPrice: 550,
+    previousSellingPrice: 560,
+    newCostPrice: 580,
+    newSellingPrice: 600,
+    createdAt: new Date().toISOString(),
+    createdBy: OWNER_UID,
+    ...overrides,
+  });
+
+  it('Any team member can read; only Owner can create a well-formed event', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt1'), validEvent()));
+
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(getDoc(doc(staffDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt1')));
+    await assertFails(
+      setDoc(doc(staffDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt2'), validEvent({ id: 'evt2', createdBy: STAFF_UID }))
+    );
+  });
+
+  it('Rejects a create with a negative price or non-positive quantity', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-bad-price'), validEvent({ id: 'evt-bad-price', newCostPrice: -1 }))
+    );
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-bad-qty'), validEvent({ id: 'evt-bad-qty', quantityRemaining: 0 }))
+    );
+  });
+
+  it('Rejects a create whose businessId or createdBy does not match the caller/path', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-wrong-biz'), validEvent({ id: 'evt-wrong-biz', businessId: OTHER_BIZ }))
+    );
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-wrong-author'), validEvent({ id: 'evt-wrong-author', createdBy: OTHER_OWNER_UID }))
+    );
+  });
+
+  it('Is immutable once created — Owner included, no exceptions', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-immutable'), validEvent({ id: 'evt-immutable' })));
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-immutable'), { newCostPrice: 999 }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-immutable')));
+  });
+
+  it('A user from another business cannot read or create this business\'s events', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-tenant'), validEvent({ id: 'evt-tenant' }));
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-tenant')));
+    await assertFails(
+      setDoc(doc(otherDb, 'businesses', BIZ, 'initialStockPriceChangeEvents', 'evt-tenant2'), validEvent({ id: 'evt-tenant2', createdBy: OTHER_OWNER_UID }))
+    );
+  });
+});
+
 // ---------------------------------------------------------------------
 // Staff roster — Owner-or-granted-Manager manage it; delete is always
 // false client-side (must go through the server's deleteStaffMember).

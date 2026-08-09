@@ -24,6 +24,7 @@ import {
 } from 'lucide-react';
 import { Product } from '../types';
 import { EditProductModal } from './EditProductModal';
+import { InitialStockPriceChangeModal } from './InitialStockPriceChangeModal';
 import { useLanguage } from '../context/LanguageContext';
 
 interface DashboardViewProps {
@@ -147,6 +148,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [showWorthModal, setShowWorthModal] = useState(false);
+  const [showInitialStockValuationModal, setShowInitialStockValuationModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'profit' | 'cost'>('name');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
@@ -247,7 +249,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ? t('dashboard.kpi.initialCapital.descSet')
               : t('dashboard.kpi.initialCapital.descUnset')
           }
-          onClick={!hasInitialStockCount ? onNavigateToInitialStockCount : undefined}
+          onClick={!hasInitialStockCount ? onNavigateToInitialStockCount : () => setShowInitialStockValuationModal(true)}
           action={!hasInitialStockCount}
         />
 
@@ -875,6 +877,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
       {editingProduct && (
         <EditProductModal product={editingProduct} onClose={() => setEditingProduct(null)} />
+      )}
+
+      {showInitialStockValuationModal && (
+        <InitialStockPriceChangeModal onClose={() => setShowInitialStockValuationModal(false)} />
       )}
     </div>
   );
