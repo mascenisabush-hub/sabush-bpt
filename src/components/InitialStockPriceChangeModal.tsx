@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/formatters';
+import { calculateInitialStockValuationChange } from '../utils/calculations';
 import { X, History, ShieldCheck, Info, TrendingUp, Save } from 'lucide-react';
 
 interface InitialStockPriceChangeModalProps {
@@ -25,6 +26,7 @@ interface InitialStockPriceChangeModalProps {
 export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModalProps> = ({ onClose }) => {
   const {
     currencySymbol,
+    initialCapitalValue,
     initialStockCount,
     initialStockCurrentValuation,
     initialStockPriceChangeEvents,
@@ -127,6 +129,30 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
               Isto NÃO edita a Contagem Inicial de Stock — esse registo permanece histórico e imutável. Cada alteração
               de preço cria um novo evento, permanente e auditável, com a quantidade restante e os preços anterior/novo.
             </p>
+          </div>
+
+          {/* [Refinement] Capital Inicial (histórico, congelado) vs Valorização
+              Atual do Stock Inicial restante (soma de todos os produtos) — a
+              distinção que este ecrã existe para tornar óbvia. Capital Inicial
+              nunca muda; o valor abaixo dele reflecte apenas os preços mais
+              recentes registados para as unidades que ainda restam. */}
+          <div className="grid grid-cols-2 gap-3">
+            <div className="border border-gray-200 rounded-xl p-3 bg-gray-50">
+              <p className="text-[10px] font-semibold uppercase text-gray-500">Capital Inicial</p>
+              <p className="text-sm font-mono font-bold text-gray-900 mt-0.5">
+                {formatCurrency(initialCapitalValue, currencySymbol)}
+              </p>
+              <p className="text-[10px] text-gray-400 mt-0.5">Valor histórico — nunca é alterado</p>
+            </div>
+            <div className="border border-[#D4AF37]/30 rounded-xl p-3 bg-[#D4AF37]/5">
+              <p className="text-[10px] font-semibold uppercase text-gray-500">Valorização Atual do Stock Inicial</p>
+              <p className="text-sm font-mono font-bold text-[#0B1F3A] mt-0.5">
+                {formatCurrency(initialStockCurrentValuation.totalInvestmentValue, currencySymbol)} <span className="text-gray-400 font-normal">custo</span>
+              </p>
+              <p className="text-[10px] text-gray-500 mt-0.5">
+                {formatCurrency(initialStockCurrentValuation.totalMarketValue, currencySymbol)} valor de venda
+              </p>
+            </div>
           </div>
 
           {/* Original vs current, per product */}
@@ -279,15 +305,48 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
               {eventsForSelectedProduct.length > 0 && (
                 <div className="pt-2 border-t border-gray-100">
                   <h4 className="text-[11px] font-semibold uppercase text-gray-500 mb-1.5">Histórico deste produto</h4>
-                  <div className="space-y-1.5">
-                    {eventsForSelectedProduct.map((ev) => (
-                      <div key={ev.id} className="text-[11px] text-gray-600 bg-gray-50 rounded-lg px-2.5 py-1.5">
-                        {ev.effectiveDate} — {ev.quantityRemaining} un. restantes: {formatCurrency(ev.previousCostPrice, currencySymbol)} →{' '}
-                        {formatCurrency(ev.newCostPrice, currencySymbol)}
-                        {ev.reason ? ` (${ev.reason})` : ''}
-                      </div>
-                    ))}
+                  {/* [Refinement] Each historical event gets its own Valuation
+                      Change explanation, computed from that event's own
+                      fields alone (calculateInitialStockValuationChange) —
+                      not just the current/latest one. This is explicitly a
+                      VALUATION CHANGE (price-driven difference on the
+                      remaining units), never labeled "profit"/"lucro" —
+                      see that function's own header comment in
+                      calculations.ts for why. */}
+                  <div className="space-y-2">
+                    {eventsForSelectedProduct.map((ev) => {
+                      const change = calculateInitialStockValuationChange(ev);
+                      return (
+                        <div key={ev.id} className="text-[11px] text-gray-600 bg-gray-50 rounded-lg px-2.5 py-2 space-y-1">
+                          <div className="flex items-center justify-between">
+                            <span className="font-semibold text-gray-700">{ev.effectiveDate}</span>
+                            <span className="text-gray-500">{ev.quantityRemaining} un. restantes</span>
+                          </div>
+                          <div className="grid grid-cols-2 gap-x-3 gap-y-0.5">
+                            <span>
+                              Custo: {formatCurrency(ev.previousCostPrice, currencySymbol)} → {formatCurrency(ev.newCostPrice, currencySymbol)}
+                            </span>
+                            <span className={change.costValuationChange >= 0 ? 'text-emerald-700' : 'text-red-700'}>
+                              Alteração de valorização: {change.costValuationChange >= 0 ? '+' : ''}
+                              {formatCurrency(change.costValuationChange, currencySymbol)}
+                            </span>
+                            <span>
+                              Venda: {formatCurrency(ev.previousSellingPrice, currencySymbol)} → {formatCurrency(ev.newSellingPrice, currencySymbol)}
+                            </span>
+                            <span className={change.sellingValuationChange >= 0 ? 'text-emerald-700' : 'text-red-700'}>
+                              Alteração de valorização: {change.sellingValuationChange >= 0 ? '+' : ''}
+                              {formatCurrency(change.sellingValuationChange, currencySymbol)}
+                            </span>
+                          </div>
+                          {ev.reason && <p className="text-gray-500 italic">Motivo: {ev.reason}</p>}
+                        </div>
+                      );
+                    })}
                   </div>
+                  <p className="text-[10px] text-gray-400 mt-1.5 flex items-start gap-1">
+                    <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                    Estas são alterações de valorização — não são lucro, venda, compra, despesa ou levantamento.
+                  </p>
                 </div>
               )}
             </div>

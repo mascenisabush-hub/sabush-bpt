@@ -114,6 +114,55 @@ export function calculateInventoryTotals(batches: StockBatch[], quebras: Quebra[
  * explicit, separate, not-yet-authorized decision (see
  * docs/specs/README.md's governance note for this feature).
  */
+/**
+ * [Initial Stock Valuation History — Refinement] The six figures that
+ * explain the PRICE-DRIVEN VALUATION DIFFERENCE a single price-change
+ * event represents, at that event's own `quantityRemaining`. These are
+ * explicitly VALUATION CHANGES, not profit, sales, purchases, expenses,
+ * withdrawals, or stock movements — see InitialStockPriceChangeEvent's
+ * own header comment in types.ts for why this feature has no
+ * inventory-movement ledger. Deliberately NOT fed into
+ * calculateInventoryTotals/embeddedProfit, businessWorth, or
+ * Initial Capital anywhere in this codebase.
+ *
+ * Operates on a single event's own fields only (not the full event list
+ * or the StockCount) — this makes it equally usable for the CURRENT
+ * state (the latest event) and for every HISTORICAL event in a
+ * product's audit trail, so the owner can see "what did this specific
+ * recorded change explain" for any entry, not only the most recent one.
+ */
+export interface InitialStockValuationChange {
+  costValuationBefore: number;
+  costValuationAfter: number;
+  costValuationChange: number;
+  sellingValuationBefore: number;
+  sellingValuationAfter: number;
+  sellingValuationChange: number;
+}
+
+export function calculateInitialStockValuationChange(event: {
+  quantityRemaining: number;
+  previousCostPrice: number;
+  newCostPrice: number;
+  previousSellingPrice: number;
+  newSellingPrice: number;
+}): InitialStockValuationChange {
+  const qty = event.quantityRemaining;
+  const costValuationBefore = qty * event.previousCostPrice;
+  const costValuationAfter = qty * event.newCostPrice;
+  const sellingValuationBefore = qty * event.previousSellingPrice;
+  const sellingValuationAfter = qty * event.newSellingPrice;
+
+  return {
+    costValuationBefore,
+    costValuationAfter,
+    costValuationChange: costValuationAfter - costValuationBefore,
+    sellingValuationBefore,
+    sellingValuationAfter,
+    sellingValuationChange: sellingValuationAfter - sellingValuationBefore,
+  };
+}
+
 export function calculateInitialStockCurrentValuation(
   initialStockCount: StockCount | null,
   priceChangeEvents: InitialStockPriceChangeEvent[]
@@ -130,6 +179,11 @@ export function calculateInitialStockCurrentValuation(
     marketValue: number;
     hasPriceChange: boolean;
     latestEvent: InitialStockPriceChangeEvent | null;
+    // [Refinement] The valuation-change explanation for the CURRENT
+    // state, derived from `latestEvent` alone (see
+    // calculateInitialStockValuationChange above). null when the
+    // product has no price-change event — there is nothing to explain.
+    valuationChange: InitialStockValuationChange | null;
   }>;
 } {
   if (!initialStockCount) {
@@ -166,6 +220,7 @@ export function calculateInitialStockCurrentValuation(
     marketValue: number;
     hasPriceChange: boolean;
     latestEvent: InitialStockPriceChangeEvent | null;
+    valuationChange: InitialStockValuationChange | null;
   }> = [];
 
   for (const item of initialStockCount.items) {
@@ -192,6 +247,7 @@ export function calculateInitialStockCurrentValuation(
       marketValue,
       hasPriceChange: !!latestEvent,
       latestEvent,
+      valuationChange: latestEvent ? calculateInitialStockValuationChange(latestEvent) : null,
     });
   }
 
