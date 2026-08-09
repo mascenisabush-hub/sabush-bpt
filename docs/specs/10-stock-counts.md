@@ -2,8 +2,12 @@ Business Domain Specification
 
 # Stock Counts
 
-Version 1.0
-**Status:** ✅ Approved
+Version 1.1
+**Status:** ✅ Approved. Amended by the
+[Expected Current Stock Value & Persistent Initial Stock Amendment](./10-expected-stock-value-amendment.md)
+(v1.0, ✅ Approved) — `[Amendment v1.0]`-tagged sections below carry
+that amendment's changes; the amendment document itself is the record
+of *why*.
 **Module #10 of 20 — Phase 2: Capital Protection**
 **Architecture references:** [Section 3.8.3](../architecture/03-domain-architecture.md)
 (Stock Counts domain — the `initial` count as "the permanent, immutable
@@ -163,17 +167,46 @@ a real gap in how it's enforced**
   consequential screen in the entire product, since Architecture 3.8.3
   calls it the permanent baseline everything else is measured against.
 
-**Periodic counts compare against the most recent count, not always the
-initial one**
-- `comparisonBaseline` is the most recent non-`initial` count if one
+**Periodic counts compare against Expected Current Stock Value
+[Amendment v1.0 — supersedes the original rule below]**
+- ~~`comparisonBaseline` is the most recent non-`initial` count if one
   exists, falling back to `initialCapitalValue` only if no periodic
-  count has ever been recorded (`PeriodicStockCountView.tsx` lines
-  84–85) — each new count is compared against the one immediately
-  before it, not against the permanent baseline every time. This is a
-  reasonable, intentional design (it answers "did stock move since my
-  *last* check," not "since day one"), stated here so it's an explicit
-  product decision rather than an implicit one a future reader has to
-  reverse-engineer from the code.
+  count has ever been recorded.~~ **Superseded.** The comparison
+  baseline is now **Expected Current Stock Value** — `Confirmed Initial
+  Capital + cost value of governed StockBatch inventory at current
+  remaining quantity` (Quebra already netted in via `remainingQuantity`)
+  — computed the same way for every periodic count, not the previous
+  physical count. See the amendment document's Part 2 and Part 4 for
+  the full rule, the StockBatch double-counting analysis, and why this
+  does not touch Business Worth (spec #2).
+- Every periodic count recorded after this amendment persists
+  `expectedValueAtCount` on the `StockCount` document — the exact
+  Expected Current Stock Value used for that comparison, as a permanent
+  historical snapshot, never recalculated later from the live formula.
+  Historical counts recorded before this amendment do not have this
+  field and are not backfilled.
+- The variance shown (Physical Counted Value − Expected Current Stock
+  Value) remains neutral diagnostic information — never automatically
+  labeled loss, shrinkage, theft, or error, unchanged from the
+  module's original framing.
+
+**Initial Stock is now a persistent Draft → Editable → Confirmed
+workflow, not a single-shot form [Amendment v1.0]**
+- Before confirmation, items are held in a per-business draft
+  (`businesses/{businessId}/stockCountDrafts/initial`) that the Owner
+  can freely add to, edit, and delete from. The draft persists across
+  refresh, logout/login, and device/browser changes (ordinary Firestore
+  persistence, scoped to the business).
+- The draft is explicitly not Initial Capital: it is not read by
+  `initialCapitalValue`, does not participate in Business Worth,
+  Capital Growth, or Expected Current Stock Value while unconfirmed.
+- Confirmation is the one-way transition into the permanent `initial`
+  `stockCounts` record, atomic with draft cleanup (single Firestore
+  batch write — see the amendment document's Part 1). A failed
+  confirmation leaves the draft untouched.
+- This does not introduce a post-confirmation correction mechanism —
+  that remains an open item in this spec's own Future Enhancements,
+  unchanged by this amendment.
 
 ## Functional Requirements
 
@@ -193,16 +226,25 @@ initial one**
 4. Show a running history of past periodic counts, expandable/
    collapsible — currently implemented (`showHistory` state, lines
    407–443).
-5. **Not currently implemented, and the most consequential gap this
-   spec names:** enforce the `initial` Stock Count's immutability at the
-   Security Rules layer, per Architecture 8.6's explicit requirement —
-   today's Firestore rule permits update/delete of any Stock Count,
-   `initial` included, to any Owner.
-6. **Not currently implemented:** any scoped correction path for a
-   mistaken Stock Count (of any type) short of "Clear All Data,"
-   which removes every record in the business.
+5. **[Amendment v1.0 — closed]** Enforce the `initial` Stock Count's
+   immutability at the Security Rules layer, per Architecture 8.6's
+   explicit requirement — `firestore.rules`' `stockCounts` block now
+   refuses `update`/`delete` unconditionally when
+   `resource.data.type == 'initial'`, for every role including Owner.
+6. **Partially addressed by Amendment v1.0:** a scoped
+   Draft → Editable → Confirmed workflow now exists for the *initial*
+   count specifically (add/edit/delete before confirmation). A
+   post-confirmation correction path for a mistaken Stock Count of any
+   type (short of "Clear All Data") remains **not implemented** —
+   unchanged, still open.
 7. **Not currently implemented:** localization (`t()` calls) in either
-   Stock Count entry form — both currently hardcoded Portuguese.
+   Stock Count entry form — both currently hardcoded Portuguese,
+   including the new draft-workflow UI added by Amendment v1.0.
+8. **[Amendment v1.0 — new]** Provide **Expected Current Stock Value**
+   (`Confirmed Initial Capital + cost value of governed StockBatch
+   inventory`) as the comparison baseline for every periodic Contagem,
+   and persist it as `expectedValueAtCount` on each new periodic
+   `StockCount` — currently implemented.
 
 ## Non-functional Requirements
 
@@ -212,11 +254,14 @@ initial one**
   scale.
 
 **Security**
-- Tenant isolation via `isMemberOf`/`isOwnerOf` is present, but see
-  Business Rules — the `initial` count's stricter, "no exceptions"
-  immutability tier is not actually enforced at this layer today, the
-  one place Architecture is most explicit that UI omission is
-  insufficient.
+- Tenant isolation via `isMemberOf`/`isOwnerOf` is present. **[Amendment
+  v1.0]** The `initial` count's "no exceptions" immutability tier is now
+  enforced at the Security Rules layer, not merely UI omission — see
+  Business Rules and the amendment document's Part 3. The new
+  `stockCountDrafts` collection is Owner-only (create/read/update/
+  delete), matching the existing `stockCounts` creation restriction,
+  and is gated by the same `subscriptionAllowsNewRecords` check as
+  every other new-record write in this business.
 
 **Accessibility**
 - Numeric fields use `.type-number`/tabular-nums and `font-mono`
@@ -275,15 +320,17 @@ initial one**
 
 **When can this module be considered complete?**
 
-- [ ] The `initial` Stock Count cannot be updated or deleted by any
-      role through any path, verified directly against the Firestore
-      rule, not only the app's own UI.
+- [x] **[Amendment v1.0]** The `initial` Stock Count cannot be updated
+      or deleted by any role through any path, verified directly
+      against the Firestore rule, not only the app's own UI.
 - [ ] Both Stock Count entry forms are fully localized, matching every
-      other entry form in this series.
-- [ ] A product decision has been made on whether a scoped correction
-      mechanism will be built, or whether "Clear All Data" remains the
-      only recourse — not left as an unreviewed gap.
-- [ ] A periodic count's comparison-baseline behavior (most recent
-      count, not always the permanent initial one) has been confirmed
-      as intentional by product ownership, per the Business Rules note
-      above.
+      other entry form in this series. *(Still open — explicitly out of
+      scope for Amendment v1.0, see that document's Part 7.)*
+- [ ] A product decision on a **post-confirmation** correction mechanism
+      (of any Stock Count type) remains open — Amendment v1.0 only adds
+      a pre-confirmation draft/edit path for the `initial` count.
+- [x] **[Amendment v1.0]** The comparison-baseline behavior is now
+      Expected Current Stock Value, confirmed as intentional by the
+      Product Architect and recorded in the amendment document — this
+      supersedes, rather than confirms, the original "most recent
+      count" rule this criterion referred to.

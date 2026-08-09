@@ -1,9 +1,10 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { InitialStockDraftItem } from '../types';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -18,8 +19,34 @@ interface CountRowItem {
   costPrice: string;
 }
 
+const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
+  id: row.id,
+  productName: row.productName,
+  quantity: parseFloat(row.quantity) || 0,
+  unit: row.unit,
+  costPrice: parseFloat(row.costPrice) || 0,
+});
+
+const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
+  id: item.id,
+  productName: item.productName,
+  quantity: item.quantity ? String(item.quantity) : '',
+  unit: item.unit || 'un',
+  costPrice: item.costPrice ? String(item.costPrice) : '',
+});
+
 export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ onComplete, onSkip }) => {
-  const { businessCategory, currencySymbol, recordStockCount, hasInitialStockCount, subscriptionBlocksNewRecords } = useApp();
+  const {
+    businessCategory,
+    currencySymbol,
+    recordStockCount,
+    hasInitialStockCount,
+    subscriptionBlocksNewRecords,
+    initialStockDraft,
+    initialStockDraftLoaded,
+    saveInitialStockDraft,
+    activeBusinessId,
+  } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
   const createEmptyRow = (): CountRowItem => ({
@@ -35,6 +62,114 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
+  // [Amendment v1.0] Distinguishes "draft not loaded yet" from "no draft
+  // exists" so an existing draft isn't overwritten by the two default
+  // empty rows before the listener's first snapshot arrives.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const skipNextAutosave = useRef(false);
+
+  // [Fix — business-switch draft staleness, Option B] Tracks which
+  // business the component's current local state (rows/date/draftLoaded)
+  // actually belongs to. InitialStockCountView is never remounted on a
+  // business switch — ShopSwitcher lives in a permanent Header sibling
+  // of <main>, and this view is selected only by `activeTab`, which
+  // doesn't change when the active business does. Without this, the
+  // component's own "load once" latch (draftLoaded) would stay true
+  // across a switch and never re-arm for the newly active business,
+  // regardless of AppContext correctly updating initialStockDraft —
+  // meaning Business A's already-loaded rows (or lack of any) would
+  // keep being shown under Business B indefinitely.
+  const [loadedForBusinessId, setLoadedForBusinessId] = useState<string | null>(activeBusinessId ?? null);
+
+  useEffect(() => {
+    if (activeBusinessId === loadedForBusinessId) return;
+    // The active business changed under this mounted view. Discard
+    // every piece of local state tied to the previous business first —
+    // the previous business's draft (loaded or not) must never be
+    // shown, autosaved over, or confirmed under the new business's
+    // identity. Resetting `rows`/`draftLoaded` here also cancels any
+    // in-flight autosave debounce for the old business: the autosave
+    // effect below depends on [rows, ...], so this state change runs
+    // its cleanup (clearTimeout) before the new render's effects fire,
+    // closing the window where a stale debounced write could otherwise
+    // land in the new business's stockCountDrafts.
+    setLoadedForBusinessId(activeBusinessId ?? null);
+    setRows([createEmptyRow(), createEmptyRow()]);
+    setDate(getTodayDateString());
+    setError(null);
+    setIsSaving(false);
+    setSavedMessage(null);
+    setDraftSaveState('idle');
+    skipNextAutosave.current = false;
+    setDraftLoaded(false); // re-arms the load effect below for the new business
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusinessId]);
+
+  // Load the existing draft (if any) exactly once, the first time
+  // Firestore's real answer becomes available — this is what makes the
+  // draft survive refresh/logout/device change: it's read from
+  // Firestore, not from anything local.
+  //
+  // [Fix] Gated on initialStockDraftLoaded, not merely on
+  // initialStockDraft !== null. onSnapshot's first callback is always
+  // asynchronous, so on every fresh mount initialStockDraft starts as
+  // its untouched default (null) before Firestore has answered at all.
+  // Without this gate, that default was indistinguishable from "Firestore
+  // confirmed no draft exists," so this effect fired immediately, set
+  // draftLoaded = true prematurely, and permanently discarded the real
+  // snapshot the instant it actually arrived (blocked by the
+  // `if (draftLoaded) return;` guard below) — meaning a previously-saved
+  // draft would silently fail to load back into the form on remount.
+  useEffect(() => {
+    if (draftLoaded) return;
+    if (loadedForBusinessId !== activeBusinessId) return; // still catching up to a business switch — the reset effect above will re-run this once it settles
+    if (!initialStockDraftLoaded) return; // Firestore hasn't answered yet — wait
+    if (initialStockDraft === null) {
+      // Firestore has now confirmed: no draft exists for this business
+      // yet — keep the default two empty rows and today's date.
+      setDraftLoaded(true);
+      return;
+    }
+    if (initialStockDraft.items.length > 0) {
+      // Defense in depth: if the user has already started typing into
+      // the default rows during the (now much smaller, but non-zero)
+      // window before Firestore's answer arrived, don't clobber their
+      // in-progress input with an older saved draft — their current
+      // typing wins, and it will autosave over the old draft shortly.
+      const userHasStartedTyping = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice);
+      if (!userHasStartedTyping) {
+        skipNextAutosave.current = true;
+        setRows(initialStockDraft.items.map(draftItemToRow));
+        setDate(initialStockDraft.date);
+      }
+    }
+    setDraftLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialStockDraft, initialStockDraftLoaded, loadedForBusinessId, activeBusinessId]);
+
+  // Autosave to the persistent draft on every row/date change, debounced
+  // so a fast typist doesn't trigger a write per keystroke. Never runs
+  // before the initial load above, and never runs once Initial Stock is
+  // already confirmed (nothing left to draft).
+  useEffect(() => {
+    if (!draftLoaded || hasInitialStockCount || isSaving || savedMessage) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
+    const hasAnyContent = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice);
+    if (!hasAnyContent) return;
+
+    setDraftSaveState('saving');
+    const handle = setTimeout(() => {
+      saveInitialStockDraft(rows.map(rowToDraftItem), date)
+        .then(() => setDraftSaveState('saved'))
+        .catch(() => setDraftSaveState('idle'));
+    }, 800);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, date, draftLoaded, hasInitialStockCount]);
 
   const updateRow = (id: string, fields: Partial<CountRowItem>) => {
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...fields } : row)));
@@ -145,7 +280,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
             <Wallet className="w-5 h-5" strokeWidth={2} />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="type-title">
               Contagem de Stock Inicial <span className="text-gray-400 font-semibold">(Capital Inicial)</span>
             </h2>
@@ -153,6 +288,11 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               Registe tudo o que já possui no seu negócio — isto NÃO é uma compra.
             </p>
           </div>
+          {draftSaveState !== 'idle' && (
+            <span className="text-[11px] text-gray-400 shrink-0 font-medium">
+              {draftSaveState === 'saving' ? 'A guardar rascunho…' : 'Rascunho guardado'}
+            </span>
+          )}
         </div>
 
         {/* Info box — informs quietly, never dominates */}
@@ -162,7 +302,8 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             Esta contagem estabelece o seu <strong className="text-[#111827] font-semibold">Capital Inicial do Negócio</strong> — o
             ponto de partida contra o qual todo o crescimento (ou perda) de capital será medido a partir de agora. Ao
             contrário de uma compra de stock (lote), esta contagem{' '}
-            <strong className="text-[#111827] font-semibold">não cria um lote de compra</strong>. Só pode ser feita uma vez.
+            <strong className="text-[#111827] font-semibold">não cria um lote de compra</strong>. Pode editar livremente
+            antes de confirmar — o seu progresso fica guardado. Só pode ser <strong className="text-[#111827] font-semibold">confirmada</strong> uma vez.
           </p>
         </div>
 

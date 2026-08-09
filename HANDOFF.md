@@ -12,6 +12,123 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Module #10 (Stock Counts) amended and implemented this
+session — **Expected Current Stock Value & Persistent Initial Stock**
+([`10-expected-stock-value-amendment.md`](./docs/specs/10-expected-stock-value-amendment.md),
+✅ Approved). Explicit Product Architect authorization, following the
+full governance sequence (amendment → spec update → Rule 8 → plan →
+implementation → verification), not a shortcut. Origin: the Customer &
+Commercial Validation gate (Module #19) cannot produce meaningful
+evidence if customers can't safely complete Initial Stock — this is a
+controlled validation-enablement exception, not a reopening of the
+wider project. Modules #18, #19, and #20 are untouched and remain in
+their previously closed/accepted state.
+
+**What changed:**
+
+1. **Initial Stock is now Draft → Editable → Confirmed**, not a
+   single-shot form. Persistent per-business draft
+   (`stockCountDrafts/initial`, Owner-only), autosaved, survives
+   refresh/logout/device change. Confirmation is atomic with draft
+   cleanup (same Firestore batch).
+2. **New `stockCounts` immutability enforcement** — `initial` count
+   `update`/`delete` now refused unconditionally at the Security Rules
+   layer, closing spec #10's own named Functional Requirement #5 gap.
+   **One flagged consequence:** `clearAllData` can no longer delete the
+   `initial` `stockCounts` document either — fixed (skips it, continues
+   deleting everything else), same pattern already established for
+   Closings by the Closing Integrity Amendment.
+3. **New Expected Current Stock Value** (`Confirmed Initial Capital +
+   StockBatch cost value`, Quebra already netted via
+   `remainingQuantity`) is now Contagem's comparison baseline,
+   replacing "most recent count / Initial Capital fallback" —
+   supersedes spec #10's prior stated rule outright, not in parallel.
+   Persisted per-count as `expectedValueAtCount` going forward;
+   historical counts unchanged, not backfilled.
+4. **StockBatch/Initial Stock double-counting ambiguity resolved**,
+   grounded in the actual data model, not inferred: the two have never
+   had any field or write path linking them, so they're separate,
+   non-overlapping value pools by construction — both are always
+   included, unconditionally, regardless of creation order.
+5. **6 new tests** (`tests/expected-stock-value.test.ts`) verify the
+   composition against the real `calculateInventoryTotals` export —
+   no reimplementation of the math. New `firestore.rules` coverage for
+   both the tightened `stockCounts` rule and the new
+   `stockCountDrafts` rule was written but **not executable here** —
+   same standing `storage.googleapis.com` emulator-download gap as
+   every prior session (confirmed again this session, not assumed).
+6. **Verified:** `tsc --noEmit` clean, `npm run build` clean, `npm run
+   test:all` — 166/166 passing (160 pre-existing + 6 new), zero
+   regressions.
+7. **Nothing has been committed yet this session** — see
+   `docs/engineering/10-rule8-assessment.md` and
+   `10-expected-stock-value-implementation-plan.md` for the full
+   governed sequence and scope boundary before committing/pushing.
+8. **Second-pass fixes, from Product Architect review before commit
+   authorization:**
+   - **Confirmation data-flow re-verified**: `recordStockCount` never
+     read `initialStockDraft`; `handleSubmit` already passed the live,
+     synchronously-read `rows` state explicitly. No defect there — but
+     the review correctly pushed for re-inspection rather than trusting
+     the first "clean" report at face value, which is how this next
+     item was actually found:
+   - **Real defect found and fixed: Initial Stock draft load race.**
+     `initialStockDraft === null` (AppContext's default) was
+     indistinguishable from "Firestore confirmed no draft exists" —
+     since `onSnapshot`'s first callback is always asynchronous, a
+     previously-saved draft would essentially never load back into the
+     form on a fresh mount. Fixed with a new `initialStockDraftLoaded`
+     flag that only becomes true after Firestore's real first answer.
+   - **Real defect found and fixed: business-switch draft staleness.**
+     `InitialStockCountView` is never remounted when an Owner switches
+     shops (`ShopSwitcher` lives in a permanent `Header` sibling) — its
+     local `draftLoaded` latch would never re-arm for the newly active
+     business. Required a fix at **two layers**: `AppContext`'s own
+     `initialStockDraft`/`initialStockDraftLoaded` only reset when
+     `activeBusinessId` became falsy, never on a direct A→B switch
+     (now reset unconditionally on every change); and the view now
+     tracks `loadedForBusinessId` and resets all local state
+     (rows/date/draftLoaded) the moment `activeBusinessId` diverges
+     from it, which also cancels any in-flight autosave debounce for
+     the old business via the existing cleanup mechanism.
+   - **Doc fix:** the amendment document had two contradictory
+     `**Implementation**` lines (one saying "implemented this session,"
+     one saying "none yet, before any code was touched" — a leftover
+     from when the document was first drafted). Now clearly
+     distinguishes drafting-time state (historical) from current status.
+   - **New regression tests:** `tests/initial-stock-confirmation.test.ts`
+     — 7 tests total (normal confirmation; immediate confirmation
+     before debounce; last-second edit; failed-confirmation-preserves-
+     draft via batch-ordering guards; no-closure-over-draft guard;
+     business-switch reset-ordering guard). All source-level guards are
+     labeled honestly as such — this repo has no jsdom/testing-
+     library/vitest, so true component-timing tests aren't achievable
+     without introducing a new test harness, which would itself be
+     scope creep beyond this fix.
+   - **Re-verified after both fixes:** `tsc --noEmit` clean, `npm run
+     build` clean, `npm run test:all` — **173/173 passing** (166 prior
+     + 7 in the new confirmation suite — the expected-stock-value suite
+     stayed at 6). Firestore rules emulator re-attempted — **still
+     blocked** by the same standing `storage.googleapis.com` network
+     gap; not claimed as passing.
+   - **Still not committed.** Awaiting Product Architect commit
+     authorization per the desired final state: implementation complete
+     → defects resolved → verification clean → emulator limitation
+     explicitly recorded → awaiting commit.
+
+**If the next session's task touches Module #10:** read the amendment
+document's Part 7 (explicit non-goals) first — localization and a
+post-confirmation correction mechanism remain open items, deliberately
+out of scope for this change.
+
+**If the next session's task is something else entirely:** verify
+`docs/specs/README.md` directly rather than trusting any summary,
+including this one.
+
+---
+
+## Prior status — Module #19 V1 close-out (superseded above, kept for continuity)
+
 **Status:** Module #19 (Subscriptions) V1 — **formally closed**
 (`docs/specs/19-v1-formal-completion-closeout.md`, decision: CLOSED —
 V1 COMPLETE). Independently re-verified in a dedicated closeout audit

@@ -322,6 +322,35 @@ export interface StockCount {
   items: StockCountItem[];
   totalValue: number; // sum of all items' totalValue = inventory value at this count
   createdAt: string; // ISO string
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 5]
+  // Present only on periodic counts recorded after this amendment.
+  // The exact Expected Current Stock Value used as this count's
+  // comparison baseline, frozen at record time — never recalculated
+  // later from the live formula. Absent on the 'initial' count (it has
+  // no baseline to compare against) and on every historical count
+  // recorded before this field existed.
+  expectedValueAtCount?: number;
+}
+
+// [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1] A
+// persistent, per-business, pre-confirmation Initial Stock draft. NOT
+// Initial Capital — never read by initialCapitalValue, never part of
+// Business Worth or Expected Current Stock Value while unconfirmed.
+// Single document per business (fixed id 'initial'); confirming it
+// deletes this document in the same Firestore batch that creates the
+// permanent 'initial' StockCount.
+export interface InitialStockDraftItem {
+  id: string; // stable client-generated row id, so edits round-trip cleanly
+  productName: string;
+  quantity: number;
+  unit?: string;
+  costPrice: number;
+}
+
+export interface InitialStockDraft {
+  items: InitialStockDraftItem[];
+  date: string; // YYYY-MM-DD — the count date the owner has staged so far
+  updatedAt: string; // ISO string
 }
 
 // ============================================================

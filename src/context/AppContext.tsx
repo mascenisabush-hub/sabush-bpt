@@ -15,6 +15,7 @@ import {
   deleteField,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
+import { normalizeStockCountItems } from '../utils/stockCount';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -26,6 +27,8 @@ import {
   StaffMember,
   StockCount,
   StockCountType,
+  InitialStockDraft,
+  InitialStockDraftItem,
   Withdrawal,
   Closing,
   ClosedPeriod,
@@ -91,6 +94,12 @@ interface RecordStockCountParams {
   label?: string;
   date: string;
   items: RecordStockCountItemInput[];
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 5]
+  // The Expected Current Stock Value at the moment this periodic count
+  // is being recorded — frozen into the resulting StockCount document.
+  // Never set for type === 'initial' (it has no baseline to compare
+  // against yet).
+  expectedValueAtCount?: number;
 }
 
 interface RecordClosingParams {
@@ -161,6 +170,21 @@ interface AppContextType {
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
   recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
+  // Persistent Initial Stock draft — null until an Owner starts one,
+  // cleared automatically the moment it's confirmed. NOT Initial Capital.
+  initialStockDraft: InitialStockDraft | null;
+  // True once Firestore's onSnapshot has delivered its first callback
+  // (success or denied) for this business — disambiguates "we don't
+  // know yet" from "confirmed: no draft exists." See the fix comment on
+  // the underlying state in AppProvider for why this exists.
+  initialStockDraftLoaded: boolean;
+  saveInitialStockDraft: (items: InitialStockDraftItem[], date: string) => Promise<void>;
+  clearInitialStockDraft: () => Promise<void>;
+  // [Amendment v1.0, Part 2] Contagem's comparison baseline — Confirmed
+  // Initial Capital + StockBatch cost value. NOT a Business Worth input;
+  // see spec #2's own non-goals note for the boundary.
+  expectedCurrentStockValue: number;
   // Ground-truth physical count value (from the latest Stock Count), kept
   // separate from the batch-derived figures below. See the computation
   // block in AppProvider for the full rationale.
@@ -252,6 +276,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
+  // Null when no draft exists yet for this business (or once confirmed
+  // and cleared). Never itself Initial Capital.
+  const [initialStockDraft, setInitialStockDraft] = useState<InitialStockDraft | null>(null);
+  // [Fix — Initial Stock draft load race] `initialStockDraft === null` is
+  // ambiguous on its own: it's both the untouched default AND what
+  // Firestore reports when no draft doc exists. onSnapshot's first
+  // callback is always asynchronous — never synchronous on mount — so a
+  // consumer that treats the default null as "confirmed no draft" acts
+  // on stale information. This flag disambiguates: false until the
+  // listener's first callback (success OR error) has actually fired.
+  const [initialStockDraftLoaded, setInitialStockDraftLoaded] = useState(false);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [closings, setClosings] = useState<Closing[]>([]);
@@ -486,6 +522,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const capitalGrowth = businessWorth - initialCapitalValue;
   const capitalGrowthPct = initialCapitalValue > 0 ? (capitalGrowth / initialCapitalValue) * 100 : 0;
 
+  // ============================================================
+  // EXPECTED CURRENT STOCK VALUE — [Amendment v1.0, Part 2]
+  // ============================================================
+  // Contagem's comparison baseline, NOT a Business Worth input. Confirmed
+  // Initial Capital + StockBatch cost value at current remaining
+  // quantity (Quebra already netted in via totalInvestmentValueAllTime's
+  // own remainingQuantity basis — no second subtraction here). Initial
+  // Capital and StockBatch inventory are separate, non-overlapping value
+  // pools by construction (see the amendment document's Part 2 — neither
+  // type has ever referenced the other), so both are always included,
+  // unconditionally, regardless of which was created first. Mirrors
+  // capitalGrowthPct's own explicit-zero-not-NaN pattern: a business
+  // that hasn't confirmed Initial Stock yet still gets a defined number
+  // (0 + totalInvestmentValueAllTime), never NaN/undefined.
+  const expectedCurrentStockValue = initialCapitalValue + totalInvestmentValueAllTime;
+
   // A business is considered "complete" once it has a category plus the core
   // contact-card fields. Businesses created before these fields existed will
   // be missing them and get prompted once to fill the gap.
@@ -510,6 +562,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setQuebras([]);
         setExpenses([]);
         setStockCounts([]);
+        setInitialStockDraft(null);
+        setInitialStockDraftLoaded(false);
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
@@ -556,6 +610,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // Listen to Business and Subcollections when userProfile and businessId exist
   useEffect(() => {
+    // [Fix — business-switch draft staleness] Reset unconditionally on
+    // every activeBusinessId change, not only when it becomes falsy.
+    // This effect is keyed solely on [activeBusinessId] and re-runs in
+    // full on a direct Business A → Business B switch (ShopSwitcher's
+    // switchShop) — but every OTHER branch below only reset state in
+    // the `!activeBusinessId` case, so a direct switch would otherwise
+    // leave Business A's already-loaded initialStockDraft (and its
+    // stale "loaded" flag) sitting in state until Business B's listener
+    // delivered its first snapshot. That window is exactly how
+    // Business A's draft could momentarily read as if it belonged to
+    // Business B. Scoped narrowly to these two draft-specific values —
+    // the equivalent staleness exists for every other collection here
+    // too, but fixing that broadly is a separate, larger change outside
+    // this specific fix's scope.
+    setInitialStockDraft(null);
+    setInitialStockDraftLoaded(false);
+
     if (!activeBusinessId) {
       setBusiness(null);
       setProducts([]);
@@ -679,6 +750,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching stock counts:', err)
     );
 
+    // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
+    // 5b-2. Persistent Initial Stock draft — single doc, id 'initial'.
+    // Owner-only per firestore.rules; a non-Owner (Staff) session simply
+    // never receives a snapshot, same as any other Owner-only read here.
+    const initialDraftRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial');
+    const unsubInitialDraft = onSnapshot(
+      initialDraftRef,
+      (snap) => {
+        setInitialStockDraft(snap.exists() ? (snap.data() as InitialStockDraft) : null);
+        setInitialStockDraftLoaded(true);
+      },
+      // Expected for a Staff session (rules deny read) — not an error
+      // worth logging noisily; the draft simply stays null for them.
+      // Still counts as "loaded": a denied read IS Firestore's actual
+      // answer for this session, not an unknown/pending state.
+      () => {
+        setInitialStockDraft(null);
+        setInitialStockDraftLoaded(true);
+      }
+    );
+
     // 5c. Withdrawals collection (money the owner has taken out — NOT an expense)
     const withdrawalsRef = collection(db, 'businesses', businessId, 'withdrawals');
     const unsubWithdrawals = onSnapshot(
@@ -767,6 +859,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubQuebras();
       unsubExpenses();
       unsubStockCounts();
+      unsubInitialDraft();
       unsubWithdrawals();
       unsubPayments();
       unsubClosings();
@@ -1409,7 +1502,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -1421,43 +1514,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fsBatch = createFirestoreBatch(db);
     const tempProducts = [...products];
 
+    // [Fix — data-flow contract] Normalization happens via the pure,
+    // independently-tested normalizeStockCountItems() — operating only
+    // on the `items` argument this function received explicitly from
+    // its caller. Nothing here reads initialStockDraft or any other
+    // React/context state; whatever the caller passed is exactly what
+    // gets persisted, regardless of debounce timing on any autosave
+    // side-channel. See tests/initial-stock-confirmation.test.ts.
+    const { items: normalizedItems } = normalizeStockCountItems(items);
+
     const countItems: StockCount['items'] = [];
     let totalValue = 0;
 
-    for (const raw of items) {
-      const trimmedName = raw.productName.trim();
-      if (!trimmedName) continue;
-
+    for (const norm of normalizedItems) {
       // Find or create the product, exactly like addStockBatch does —
       // a Stock Count can introduce products the business hasn't
       // purchased through a batch yet (e.g. inventory owned before
       // starting to use this system).
-      let product = tempProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+      let product = tempProducts.find((p) => p.name.toLowerCase() === norm.productName.toLowerCase());
       let productId = product?.id;
 
       if (!product) {
         productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
         const newProd: Product = {
           id: productId,
-          name: trimmedName,
+          name: norm.productName,
           createdAt: new Date().toISOString(),
         };
         fsBatch.set(doc(db, 'businesses', businessId, 'products', productId), newProd);
         tempProducts.push(newProd);
       }
 
-      const quantity = Number(raw.quantity) || 0;
-      const costPrice = Number(raw.costPrice) || 0;
-      const itemTotal = Number((quantity * costPrice).toFixed(2));
-      totalValue += itemTotal;
+      totalValue += norm.totalValue;
 
       countItems.push({
         productId: productId!,
-        productName: trimmedName,
-        quantity,
-        unit: raw.unit ? raw.unit.trim() : 'un',
-        costPrice,
-        totalValue: itemTotal,
+        productName: norm.productName,
+        quantity: norm.quantity,
+        unit: norm.unit,
+        costPrice: norm.costPrice,
+        totalValue: norm.totalValue,
       });
     }
 
@@ -1471,9 +1567,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       items: countItems,
       totalValue: Number(totalValue.toFixed(2)),
       createdAt: new Date().toISOString(),
+      // [Amendment v1.0, Part 5] Only ever set for periodic counts — the
+      // 'initial' count has no baseline to compare against, and the
+      // caller (recordStockCount's own callers) never passes it for
+      // type === 'initial'; this guard is a second line of defense
+      // against that ever changing silently.
+      ...(type !== 'initial' && typeof expectedValueAtCount === 'number'
+        ? { expectedValueAtCount: Number(expectedValueAtCount.toFixed(2)) }
+        : {}),
     };
 
     fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), newCount);
+    // [Amendment v1.0, Part 1] Confirmation is atomic with draft cleanup —
+    // same Firestore batch as the stockCounts write above. If the batch
+    // fails to commit for any reason, this delete never happens either,
+    // so the draft is left intact, exactly as specified.
+    if (type === 'initial') {
+      fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial'));
+    }
     await fsBatch.commit();
 
     if (type === 'initial') {
@@ -1506,6 +1617,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     triggerTrialActivation(businessId);
     return newCount;
+  };
+
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
+  // Upserts the persistent Initial Stock draft. Owner-only at the rules
+  // layer. Deliberately NOT Initial Capital — this never writes to
+  // stockCounts, never creates a Product, and is never read by
+  // initialCapitalValue/expectedCurrentStockValue. Overwrites the whole
+  // draft document each call (the draft is small — a handful of rows —
+  // so a full overwrite is simpler and safer than incremental per-item
+  // writes, and matches how the view already holds the whole row list
+  // in local state before calling this).
+  const saveInitialStockDraft = async (items: InitialStockDraftItem[], date: string) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (hasInitialStockCount) {
+      throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
+    }
+    const draft: InitialStockDraft = {
+      items,
+      date,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'), draft);
+  };
+
+  // Discards the draft without confirming it — an explicit "start over"
+  // path, distinct from confirmation's automatic cleanup.
+  const clearInitialStockDraft = async () => {
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'));
   };
 
   // A period is "closed" if any existing Closing of the same type shares
@@ -2074,9 +2214,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const e of expenses) {
       await deleteDoc(doc(db, 'businesses', businessId, 'expenses', e.id));
     }
+    // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 3]
+    // The 'initial' StockCount is now refused by firestore.rules for
+    // update/delete unconditionally, Owner included ("no exceptions",
+    // Architecture 8.6). This loop is sequential, unguarded deleteDoc
+    // calls — the same shape the Closing Integrity Amendment already
+    // found and fixed for Closings (comment below), so an attempted
+    // delete of the 'initial' document here would throw and silently
+    // abort before reaching withdrawals/timelineEvents. Skipping it
+    // explicitly is the identical fix applied there: "Clear All Data"
+    // now no longer removes the Initial Capital baseline either — a
+    // real, deliberate, and directly-intended consequence of the
+    // already-approved immutability rule (not a new decision made here),
+    // flagged plainly rather than left to be discovered as a runtime
+    // error.
     for (const s of stockCounts) {
+      if (s.type === 'initial') continue;
       await deleteDoc(doc(db, 'businesses', businessId, 'stockCounts', s.id));
     }
+    // The draft (if any) is not itself Initial Capital, so it is still
+    // fully cleared by "Clear All Data" — no rule prevents this.
+    await deleteDoc(doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial')).catch(() => {
+      // No draft existed — nothing to clean up, not an error.
+    });
     for (const w of withdrawals) {
       await deleteDoc(doc(db, 'businesses', businessId, 'withdrawals', w.id));
     }
@@ -2140,6 +2300,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockCount,
         initialCapitalValue,
         recordStockCount,
+        initialStockDraft,
+        initialStockDraftLoaded,
+        saveInitialStockDraft,
+        clearInitialStockDraft,
+        expectedCurrentStockValue,
         latestStockCount,
         currentInventoryValue,
         totalInvestmentValueAllTime,

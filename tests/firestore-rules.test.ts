@@ -614,6 +614,40 @@ describe('stockCounts', () => {
     await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc3'), { countedAt: new Date().toISOString() }));
     await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc3')));
   });
+
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 3]
+  it('Owner can update/delete a non-initial count, but never an initial count — no exceptions', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { id: 'sc-periodic', type: 'monthly', countedAt: new Date().toISOString() }));
+    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { countedAt: new Date().toISOString() }));
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic')));
+
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial'), { id: 'sc-initial', type: 'initial', countedAt: new Date().toISOString() }));
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial'), { countedAt: new Date().toISOString() }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial')));
+  });
+});
+
+// [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
+describe('stockCountDrafts', () => {
+  it('Owner can read/create/update/delete their own draft; Staff and other businesses cannot', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-08-01', updatedAt: new Date().toISOString() }));
+    await assertSucceeds(getDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
+    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { updatedAt: new Date().toISOString() }));
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
+
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
+    await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-08-01', updatedAt: new Date().toISOString() }));
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-08-01', updatedAt: new Date().toISOString() });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
+  });
 });
 
 // ---------------------------------------------------------------------
@@ -976,6 +1010,9 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ta-e1'), { id: 'ta-e1', date: '2026-06-01', amount: 10 }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'ta-w1'), { id: 'ta-w1', date: '2026-06-01', amount: 10 }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'ta-sc1'), { id: 'ta-sc1', countedAt: '2026-06-01' }));
+    // [Amendment v1.0] stockCountDrafts create/update follow the same
+    // restriction as stockCounts create; delete never restricted.
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-06-01', updatedAt: new Date().toISOString() }));
   });
 
   it('Once trial_completed, every restricted collection rejects new records', async () => {
@@ -987,6 +1024,7 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'tc-e1'), { id: 'tc-e1', date: '2026-06-01', amount: 10 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'tc-w1'), { id: 'tc-w1', date: '2026-06-01', amount: 10 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'tc-sc1'), { id: 'tc-sc1', countedAt: '2026-06-01' }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-06-01', updatedAt: new Date().toISOString() }));
   });
 
   it('Once expired, every restricted collection rejects new records (same as trial_completed)', async () => {

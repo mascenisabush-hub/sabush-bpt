@@ -138,6 +138,16 @@ anywhere in the product:
   set Initial Capital yet, rather than producing `NaN` or `Infinity` for
   every consumer to separately guard against.
 
+**Explicit non-goal, added by [Stock Counts Amendment v1.0](./10-expected-stock-value-amendment.md)**
+- Module #10's **Expected Current Stock Value** (`Confirmed Initial
+  Capital + cost value of governed StockBatch inventory`) is a
+  Contagem-only comparison figure, computed in `AppContext` alongside
+  this Engine's outputs. It does not modify `businessWorth`,
+  `capitalGrowth`, `capitalGrowthPct`, or `totalEmbeddedProfitAllTime`,
+  and is never fed back into any formula in this spec. This Engine's
+  formulas, Functional Requirements, and Acceptance Criteria are
+  otherwise unchanged by that amendment.
+
 **Currency integrity**
 - No batch, expense, withdrawal, or stock count record stores which
   currency it was recorded in (Architecture 7.6's currency-change

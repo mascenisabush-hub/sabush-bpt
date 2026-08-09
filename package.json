@@ -14,6 +14,8 @@
     "lint": "tsc --noEmit",
     "test:rules": "tsx --test tests/firestore-rules.test.ts",
     "test:calculations": "tsx --test tests/calculations.test.ts",
+    "test:expected-stock-value": "tsx --test tests/expected-stock-value.test.ts",
+    "test:initial-stock-confirmation": "tsx --test tests/initial-stock-confirmation.test.ts",
     "test:staff-notifications": "tsx --test tests/staff-notifications.test.ts",
     "test:notification-platform": "tsx --test tests/notification-platform.test.ts",
     "test:trial-notification-producer": "tsx --test tests/trial-notification-producer.test.ts",
@@ -21,7 +23,7 @@
     "test:breakage-notification-producer": "tsx --test tests/breakage-notification-producer.test.ts",
     "test:subscription-engine": "tsx --test tests/subscription-engine.test.ts",
     "test:payment-confirmation": "tsx --test tests/payment-confirmation.test.ts",
-    "test:all": "npm run test:calculations && npm run test:notification-platform && npm run test:staff-notifications && npm run test:trial-notification-producer && npm run test:closing-notification-producer && npm run test:breakage-notification-producer && npm run test:subscription-engine && npm run test:payment-confirmation",
+    "test:all": "npm run test:calculations && npm run test:expected-stock-value && npm run test:initial-stock-confirmation && npm run test:notification-platform && npm run test:staff-notifications && npm run test:trial-notification-producer && npm run test:closing-notification-producer && npm run test:breakage-notification-producer && npm run test:subscription-engine && npm run test:payment-confirmation",
     "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\""
   },
   "dependencies": {

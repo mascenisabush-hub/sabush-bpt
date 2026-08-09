@@ -55,7 +55,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     recordStockCount,
     stockCounts,
     hasInitialStockCount,
-    initialCapitalValue,
+    expectedCurrentStockValue,
     subscriptionBlocksNewRecords,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
@@ -84,7 +84,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const mostRecentCount = pastCounts[0] || null;
-  const comparisonBaseline = mostRecentCount ? mostRecentCount.totalValue : initialCapitalValue;
+  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 4]
+  // Comparison baseline is now Expected Current Stock Value,
+  // unconditionally — this supersedes the prior "most recent count,
+  // falling back to Initial Capital" rule. `mostRecentCount` is kept
+  // (used for the history list and the "since your last count" label
+  // context below), but no longer feeds `comparisonBaseline`.
+  const comparisonBaseline = expectedCurrentStockValue;
 
   const updateRow = (id: string, fields: Partial<CountRowItem>) => {
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...fields } : row)));
@@ -153,6 +159,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         label: type === 'custom' ? label.trim() : undefined,
         date,
         items: itemsToSave,
+        expectedValueAtCount: expectedCurrentStockValue,
       });
       setSavedTotal(saved.totalValue);
       setSavedMessage(`Contagem ${TYPE_LABELS[type]} registada com sucesso!`);
@@ -222,9 +229,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
           <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
           <p className="text-[12px] leading-relaxed text-gray-600">
-            Esta contagem regista o que existe fisicamente em stock agora. Será comparada com{' '}
-            {mostRecentCount ? 'a contagem mais recente' : 'o Capital Inicial'} para mostrar se o valor do seu
-            inventário cresceu ou diminuiu.
+            Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
+            <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> — o Capital Inicial mais o
+            valor (a custo) do stock em lote atualmente registado — para mostrar se o valor do seu inventário
+            corresponde ao que o sistema esperava.
           </p>
         </div>
 
@@ -380,10 +388,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               </span>
             </div>
 
-            {(hasInitialStockCount || mostRecentCount) && (
+            {/* [Amendment v1.0] Shown whenever there's a meaningful baseline to
+                compare against — i.e. Expected Current Stock Value is nonzero
+                (Initial Capital confirmed, or batches already exist). */}
+            {comparisonBaseline > 0 && (
               <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/10 text-xs">
                 <span className="text-white/50">
-                  vs. {mostRecentCount ? `última contagem (${formatDate(mostRecentCount.date)})` : 'Capital Inicial'}
+                  vs. Valor Esperado ({formatCurrency(comparisonBaseline, currencySymbol)})
                 </span>
                 <span
                   className={`type-number tabular-nums flex items-center gap-1 ${
@@ -438,9 +449,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     </p>
                     <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(count.date)} · {count.items.length} produtos</p>
                   </div>
-                  <span className="type-number text-sm text-[#111827] tabular-nums">
-                    {formatCurrency(count.totalValue, currencySymbol)}
-                  </span>
+                  <div className="text-right">
+                    <span className="type-number text-sm text-[#111827] tabular-nums block">
+                      {formatCurrency(count.totalValue, currencySymbol)}
+                    </span>
+                    {/* [Amendment v1.0, Part 5] Historical snapshot — only
+                        present on counts recorded after this amendment;
+                        never recalculated from the live formula. */}
+                    {typeof count.expectedValueAtCount === 'number' && (
+                      <span className="text-[10px] text-gray-400 tabular-nums block mt-0.5">
+                        vs. {formatCurrency(count.expectedValueAtCount, currencySymbol)} esperado
+                      </span>
+                    )}
+                  </div>
                 </div>
               ))}
             </div>
