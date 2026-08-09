@@ -1358,12 +1358,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!resolvedSupplierId && resolvedSupplierName) {
       // No existing SupplierRecord matched, but a name was given (new
       // or free-text) — create one now, in the same batch.
+      //
+      // [Bug fix — undefined-field Firestore rejection] phone/notes are
+      // conditionally spread, never assigned `undefined` directly. This
+      // repository's Firestore client uses default settings
+      // (ignoreUndefinedProperties is NOT enabled, src/lib/firebase.ts)
+      // — WriteBatch.set()/setDoc() reject any field whose value is the
+      // literal `undefined`, even nested inside an object, at call time
+      // (synchronously, before any network I/O). `phone: resolvedSupplierPhone`
+      // would set that literal value whenever no phone was entered,
+      // throwing "Unsupported field value: undefined" and aborting the
+      // entire write before fsBatch.commit() is ever reached. Omitting
+      // the key entirely — rather than writing `''` — matches
+      // SupplierRecord's own `phone?: string` type contract (absent,
+      // not empty) and this repository's existing convention for
+      // exactly this situation (InitialStockPriceChangeEvent.reason,
+      // `...(reason?.trim() ? { reason: reason.trim() } : {})`, above).
       const newSupplierId = 'supplier-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
       const newSupplierRecord: SupplierRecord = {
         id: newSupplierId,
         name: resolvedSupplierName,
-        phone: resolvedSupplierPhone,
-        notes: resolvedSupplierNotes,
+        ...(resolvedSupplierPhone ? { phone: resolvedSupplierPhone } : {}),
+        ...(resolvedSupplierNotes ? { notes: resolvedSupplierNotes } : {}),
         createdAt: new Date().toISOString(),
         createdByName: userProfile.name,
       };
@@ -1379,6 +1395,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // batch number. This never touches cost/price figures — those still
     // live entirely on the StockBatch line items and the existing
     // Embedded Profit engine in calculations.ts.
+    //
+    // [Bug fix — undefined-field Firestore rejection] Same fix applied
+    // here: supplier.phone/notes, the top-level supplierId, and the
+    // top-level notes are all conditionally spread. supplierId and
+    // notes are pre-existing optional fields — supplierId is new to
+    // this amendment; notes?.trim() || undefined already existed
+    // before this amendment and shared the identical vulnerability
+    // whenever no batch notes were entered, independent of anything
+    // supplier-related. Fixed here as part of the same narrowly-scoped
+    // correction, since this exact write path now exercises it.
     const newBatchSeq = getNextBatchSeq(purchaseBatches);
     const newPurchaseBatchId = 'pbatch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
     const newPurchaseBatch: PurchaseBatch = {
@@ -1388,11 +1414,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       date: items[0].dateEntered,
       supplier: {
         name: resolvedSupplierName || 'Fornecedor Não Especificado',
-        phone: resolvedSupplierPhone,
-        notes: resolvedSupplierNotes,
+        ...(resolvedSupplierPhone ? { phone: resolvedSupplierPhone } : {}),
+        ...(resolvedSupplierNotes ? { notes: resolvedSupplierNotes } : {}),
       },
-      supplierId: resolvedSupplierId,
-      notes: notes?.trim() || undefined,
+      ...(resolvedSupplierId ? { supplierId: resolvedSupplierId } : {}),
+      ...(notes?.trim() ? { notes: notes.trim() } : {}),
       createdByName: userProfile.name,
       createdAt: new Date().toISOString(),
     };
@@ -1980,6 +2006,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // saveInitialStockDraft: small document, matches how AddStockView
   // already holds the whole row list in local state before calling
   // this.
+  //
+  // [Bug fix — undefined-field Firestore rejection] This is the most
+  // consequential instance of the bug: autosave fires automatically,
+  // in the background, on every meaningful change — and the common
+  // case (no supplier selected yet, phone/notes/batch-notes still
+  // blank) is exactly the case that previously set these fields to the
+  // literal value `undefined`. setDoc() rejects that synchronously,
+  // and the autosave effect's own .catch() silently swallowed the
+  // failure — meaning the draft was very likely never actually
+  // persisting in the common case, defeating the entire durability
+  // purpose of this feature. Every optional field below is now
+  // conditionally spread (omitted when falsy/absent) rather than
+  // assigned `undefined` directly — this function is written to be
+  // Firestore-safe regardless of whether its caller passes `undefined`
+  // or `''` for "not provided," so this fix holds even if a future
+  // call site is less careful.
   const savePurchaseDraft = async (
     items: PurchaseDraftLineItem[],
     supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string },
@@ -1990,12 +2032,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) throw new Error('Sessão inválida.');
     const draft: PurchaseDraft = {
       items,
-      supplierId: supplier.supplierId,
-      supplierName: supplier.supplierName,
-      supplierPhone: supplier.supplierPhone,
-      supplierNotes: supplier.supplierNotes,
+      ...(supplier.supplierId ? { supplierId: supplier.supplierId } : {}),
+      ...(supplier.supplierName ? { supplierName: supplier.supplierName } : {}),
+      ...(supplier.supplierPhone ? { supplierPhone: supplier.supplierPhone } : {}),
+      ...(supplier.supplierNotes ? { supplierNotes: supplier.supplierNotes } : {}),
       date,
-      notes,
+      ...(notes ? { notes } : {}),
       updatedAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid), draft);
