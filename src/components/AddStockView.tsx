@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { PurchaseDraftLineItem } from '../types';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -23,8 +24,48 @@ interface StockRowItem {
   isUnitPopoverOpen?: boolean;
 }
 
+// [Durable Purchase Capture Amendment v1.0] Row <-> draft-line-item
+// converters, directly modeled on InitialStockCountView's own
+// rowToDraftItem/draftItemToRow — the UI-only fields (isDropdownOpen,
+// isUnitPopoverOpen) are never persisted, same reasoning.
+const rowToDraftLineItem = (row: StockRowItem): PurchaseDraftLineItem => ({
+  id: row.id,
+  productName: row.productName,
+  dateEntered: row.dateEntered,
+  quantity: parseFloat(row.quantity) || 0,
+  unit: row.unit,
+  costPrice: parseFloat(row.costPrice) || 0,
+  sellingPrice: parseFloat(row.sellingPrice) || 0,
+});
+
+const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
+  id: item.id,
+  productName: item.productName,
+  dateEntered: item.dateEntered || getTodayDateString(),
+  quantity: item.quantity ? String(item.quantity) : '',
+  unit: item.unit || 'un',
+  costPrice: item.costPrice ? String(item.costPrice) : '',
+  sellingPrice: item.sellingPrice ? String(item.sellingPrice) : '',
+  isDropdownOpen: false,
+  isUnitPopoverOpen: false,
+});
+
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
-  const { products, batches, addMultipleStockBatches, currencySymbol, businessCategory, isStaff, subscriptionBlocksNewRecords } = useApp();
+  const {
+    products,
+    batches,
+    suppliers,
+    addMultipleStockBatches,
+    currencySymbol,
+    businessCategory,
+    isStaff,
+    subscriptionBlocksNewRecords,
+    purchaseDraft,
+    purchaseDraftLoaded,
+    savePurchaseDraft,
+    clearPurchaseDraft,
+    activeBusinessId,
+  } = useApp();
   const { t } = useLanguage();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -66,20 +107,169 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
+  const [date, setDate] = useState(getTodayDateString());
+  const [isSaving, setIsSaving] = useState(false);
 
   // Supplier applies to the whole purchase (batch), not to individual
   // product rows — every item added in this session was bought from the
   // same supplier, on the same purchase event.
+  //
+  // [Durable Purchase Capture Amendment v1.0] supplierId is set only
+  // when an EXISTING SupplierRecord was selected from the autocomplete
+  // below — in that case name/phone/notes below mirror that record's
+  // current values and are read-only in the UI (editing an existing
+  // supplier's details is a separate, Owner-only action, out of scope
+  // here — see the Rule 8 Assessment). When supplierId is unset, the
+  // three fields are plain, editable free text for a not-yet-created
+  // supplier, exactly as before this amendment.
+  const [supplierId, setSupplierId] = useState<string | undefined>(undefined);
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
+  const [supplierNotes, setSupplierNotes] = useState('');
+  const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
   const [batchNotes, setBatchNotes] = useState('');
 
-  // If initialProductName changes from prop
+  // [Durable Purchase Capture Amendment v1.0] Draft lifecycle state —
+  // directly modeled on InitialStockCountView's own draftLoaded/
+  // draftSaveState/skipNextAutosave/loadedForBusinessId, adapted from a
+  // per-business draft to a per-(business, user) one. See Rule 8
+  // Assessment, Section 12 for the full lifecycle this implements.
+  const [draftLoaded, setDraftLoaded] = useState(false);
+  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [wasRestoredFromDraft, setWasRestoredFromDraft] = useState(false);
+  const skipNextAutosave = useRef(false);
+  // [Fix — business-switch draft staleness, Option B, mirrored from
+  // InitialStockCountView] AddStockView is not remounted on a business
+  // switch (selected only by activeTab), so this component's own
+  // "loaded once" latch must be re-armed explicitly when the active
+  // business changes, or the previous business's already-loaded rows
+  // would keep showing under the new one.
+  const [loadedForBusinessId, setLoadedForBusinessId] = useState<string | null>(activeBusinessId ?? null);
+
   useEffect(() => {
-    if (initialProductName && rows.length === 1 && !rows[0].productName) {
-      setRows([createEmptyRow(initialProductName)]);
+    if (activeBusinessId === loadedForBusinessId) return;
+    setLoadedForBusinessId(activeBusinessId ?? null);
+    setRows([createEmptyRow('')]);
+    setDate(getTodayDateString());
+    setSupplierId(undefined);
+    setSupplierName('');
+    setSupplierPhone('');
+    setSupplierNotes('');
+    setBatchNotes('');
+    setSubmittedMessage(null);
+    setIsSaving(false);
+    setDraftSaveState('idle');
+    setWasRestoredFromDraft(false);
+    skipNextAutosave.current = false;
+    setDraftLoaded(false); // re-arms the load effect below for the new business
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusinessId]);
+
+  // Load the existing Purchase Draft (if any) exactly once, the first
+  // time Firestore's real answer becomes available for the CURRENT
+  // (business, user) pair — this is what makes the draft survive
+  // refresh/logout/device change: it's read from Firestore, not from
+  // anything local. Directly modeled on InitialStockCountView's own
+  // load effect; see that component's comment for the full race this
+  // avoids (onSnapshot's first callback is always asynchronous).
+  useEffect(() => {
+    if (draftLoaded) return;
+    if (loadedForBusinessId !== activeBusinessId) return; // still catching up to a business switch — the reset effect above will re-run this once it settles
+    if (!purchaseDraftLoaded) return; // Firestore hasn't answered yet — wait
+    if (purchaseDraft === null) {
+      // Firestore has now confirmed: no draft exists for this user on
+      // this business yet — if a product name was handed in via props
+      // (e.g. "add stock for this product" from elsewhere in the app),
+      // seed the one initial row with it; otherwise keep the single
+      // default empty row.
+      if (initialProductName) {
+        setRows([createEmptyRow(initialProductName)]);
+      }
+      setDraftLoaded(true);
+      return;
     }
-  }, [initialProductName]);
+    // Defense in depth: if the user has already started typing into the
+    // default row during the (small, but non-zero) window before
+    // Firestore's answer arrived, don't clobber their in-progress input
+    // with an older saved draft — their current typing wins, and it
+    // will autosave over the old draft shortly.
+    const userHasStartedTyping = rows.some(
+      (r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice
+    );
+    if (!userHasStartedTyping) {
+      skipNextAutosave.current = true;
+      if (purchaseDraft.items.length > 0) {
+        setRows(purchaseDraft.items.map(draftLineItemToRow));
+        setWasRestoredFromDraft(true);
+      }
+      setDate(purchaseDraft.date);
+      setSupplierId(purchaseDraft.supplierId);
+      setSupplierName(purchaseDraft.supplierName || '');
+      setSupplierPhone(purchaseDraft.supplierPhone || '');
+      setSupplierNotes(purchaseDraft.supplierNotes || '');
+      setBatchNotes(purchaseDraft.notes || '');
+    }
+    setDraftLoaded(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [purchaseDraft, purchaseDraftLoaded, loadedForBusinessId, activeBusinessId]);
+
+  // Autosave to the persistent draft on every meaningful change,
+  // debounced (same 800ms interval as Module #10's Initial Stock
+  // draft) so a fast typist doesn't trigger a write per keystroke.
+  // Never runs before the initial load above, and never runs while a
+  // submit is already in flight or has just succeeded (submittedMessage
+  // set) — nothing left to draft once finalization has started/finished.
+  useEffect(() => {
+    if (!draftLoaded || isSaving || submittedMessage) return;
+    if (skipNextAutosave.current) {
+      skipNextAutosave.current = false;
+      return;
+    }
+    const hasAnyContent =
+      rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice) ||
+      supplierName.trim() ||
+      batchNotes.trim();
+    if (!hasAnyContent) return;
+
+    setDraftSaveState('saving');
+    const handle = setTimeout(() => {
+      savePurchaseDraft(
+        rows.map(rowToDraftLineItem),
+        { supplierId, supplierName: supplierName || undefined, supplierPhone: supplierPhone || undefined, supplierNotes: supplierNotes || undefined },
+        date,
+        batchNotes || undefined
+      )
+        .then(() => setDraftSaveState('saved'))
+        .catch(() => setDraftSaveState('idle'));
+    }, 800);
+    return () => clearTimeout(handle);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded]);
+
+  // Explicit discard — clears the persisted draft and resets the form
+  // to a single empty row, per the amendment's "must be discardable"
+  // requirement. Distinct from finalization's automatic clear.
+  const handleDiscardDraft = () => {
+    if (!window.confirm(t('addStock.draft.discardConfirm'))) return;
+    skipNextAutosave.current = true;
+    setRows([createEmptyRow('')]);
+    setDate(getTodayDateString());
+    setSupplierId(undefined);
+    setSupplierName('');
+    setSupplierPhone('');
+    setSupplierNotes('');
+    setBatchNotes('');
+    setDraftSaveState('idle');
+    setWasRestoredFromDraft(false);
+    clearPurchaseDraft().catch(() => {
+      // Best-effort — if this fails (e.g. transient network issue), the
+      // local form is already reset; the next autosave (now empty
+      // content, so it won't fire — see hasAnyContent above) simply
+      // leaves whatever was last persisted. Not surfaced as a blocking
+      // error since the user's immediate intent (start over locally)
+      // already succeeded.
+    });
+  };
 
   const updateRow = (id: string, fields: Partial<StockRowItem>) => {
     setRows(prev =>
@@ -124,9 +314,32 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     });
   };
 
-  // Submission validation and handling
-  const [isSaving, setIsSaving] = useState(false);
+  // [Durable Purchase Capture Amendment v1.0] Selecting an existing
+  // SupplierRecord fills name/phone/notes from its current data and
+  // locks those fields (Rule 8 Assessment, Section 13 — editing an
+  // existing supplier's own details is a separate, out-of-scope
+  // action; the finalization function resolves the historical snapshot
+  // from the record's CURRENT data by supplierId regardless of what's
+  // shown here, so keeping these fields read-only avoids the form
+  // implying an edit that wouldn't actually be saved).
+  const handleSelectSupplier = (s: { id: string; name: string; phone?: string; notes?: string }) => {
+    setSupplierId(s.id);
+    setSupplierName(s.name);
+    setSupplierPhone(s.phone || '');
+    setSupplierNotes(s.notes || '');
+    setIsSupplierDropdownOpen(false);
+  };
 
+  // Clears the selection, returning to free-text entry for a
+  // not-yet-created supplier (or a different existing one via search).
+  const handleChangeSupplier = () => {
+    setSupplierId(undefined);
+    setSupplierName('');
+    setSupplierPhone('');
+    setSupplierNotes('');
+  };
+
+  // Submission validation and handling
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
 
@@ -172,12 +385,26 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // silently swallowed and the UI reports a successful stock intake that
     // was never actually saved. Same class of bug already fixed in
     // AddExpenseView/AddWithdrawalView/AddQuebraView.
+    //
+    // [Durable Purchase Capture Amendment v1.0] supplierId is passed
+    // through when an existing SupplierRecord was selected — the
+    // function resolves the historical snapshot (name/phone/notes)
+    // from that record's current data itself (Rule 8 Assessment,
+    // Section 13); the free-text fields below still cover the
+    // not-yet-created-supplier case exactly as before this amendment.
+    // On success, addMultipleStockBatches also deletes this user's
+    // Purchase Draft atomically in the same Firestore batch — no
+    // separate clearPurchaseDraft() call is needed or made here; if
+    // this call fails/rejects, the draft is guaranteed to remain
+    // exactly as it was (same Firestore batch atomicity), so the
+    // catch block below deliberately does NOT touch the draft either.
     setIsSaving(true);
     try {
       await addMultipleStockBatches(
         itemsToSave,
-        { name: supplierName, phone: supplierPhone, notes: '' },
-        batchNotes
+        { name: supplierName, phone: supplierPhone, notes: supplierNotes },
+        batchNotes,
+        supplierId
       );
 
       const messageText =
@@ -186,9 +413,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           : t('addStock.successMessageMultiple', { count: itemsToSave.length });
 
       setSubmittedMessage(messageText);
+      setSupplierId(undefined);
       setSupplierName('');
       setSupplierPhone('');
+      setSupplierNotes('');
       setBatchNotes('');
+      setWasRestoredFromDraft(false);
 
       setTimeout(() => {
         onComplete();

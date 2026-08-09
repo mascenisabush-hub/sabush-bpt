@@ -163,6 +163,23 @@ export interface Supplier {
   notes?: string;
 }
 
+// [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
+// Supplier entity — deliberately a DIFFERENT type from `Supplier`
+// above, which remains exactly as-is and continues to be what
+// PurchaseBatch.supplier embeds as a historical, point-in-time
+// snapshot. Editing a SupplierRecord must never rewrite any existing
+// PurchaseBatch.supplier snapshot — see PurchaseBatch.supplierId's own
+// comment below and the amendment's Part 7. Not itself a valuation
+// input anywhere — see the amendment's Part 10.
+export interface SupplierRecord {
+  id: string;
+  name: string;
+  phone?: string;
+  notes?: string;
+  createdAt: string; // ISO string
+  createdByName?: string; // display convenience, mirrors PurchaseBatch.createdByName — not audit-log-grade
+}
+
 // A Purchase Batch's status is always derived automatically from its line
 // items' remaining quantities (see calculatePurchaseBatchSummary) — never
 // stored/edited directly, except for 'archived' which is an explicit,
@@ -184,6 +201,16 @@ export interface PurchaseBatch {
   batchSeq: number; // numeric sequence used to generate batchNumber
   date: string; // YYYY-MM-DD — purchase date
   supplier: Supplier;
+  // [Durable Purchase Capture Amendment v1.0] Optional, additive —
+  // present only on purchases finalized after this feature shipped
+  // AND linked to a reusable SupplierRecord (selected existing, or a
+  // new one created at finalization time). Absent on every historical
+  // PurchaseBatch and on any purchase where no reusable supplier was
+  // involved. The `supplier` field above remains the always-populated,
+  // immutable historical snapshot regardless of whether this field is
+  // present — this field is purely a forward-looking reference back to
+  // the reusable SupplierRecord, never a replacement for the snapshot.
+  supplierId?: string;
   notes?: string;
   createdByName?: string; // display name of whoever recorded the purchase
   createdAt: string; // ISO string
@@ -366,6 +393,48 @@ export interface InitialStockDraftItem {
 export interface InitialStockDraft {
   items: InitialStockDraftItem[];
   date: string; // YYYY-MM-DD — the count date the owner has staged so far
+  updatedAt: string; // ISO string
+}
+
+// [Durable Purchase Capture Amendment v1.0] A persistent, per-user,
+// pre-finalization Purchase Draft — the Add Stock analogue of
+// InitialStockDraft above, deliberately modeled on it. NOT inventory —
+// never read by calculateBatch, calculateInventoryTotals,
+// calculatePurchaseBatchSummary, expectedCurrentStockValue,
+// businessWorth, capitalGrowth, capitalGrowthPct, or
+// initialCapitalValue while unfinalized (amendment Part 10). One
+// document per (businessId, uid) — the document ID IS the owning
+// user's own Firebase Auth uid, so two team members' drafts can never
+// collide (Rule 8 Assessment, Section 11). Finalizing deletes this
+// document in the same Firestore batch that creates the real
+// PurchaseBatch/StockBatch records; a failed finalization never
+// deletes it, since the delete lives in the same all-or-nothing batch.
+export interface PurchaseDraftLineItem {
+  id: string; // stable client-generated row id, so edits round-trip cleanly
+  productName: string;
+  dateEntered: string; // YYYY-MM-DD
+  quantity: number;
+  unit?: string;
+  costPrice: number;
+  sellingPrice: number;
+}
+
+export interface PurchaseDraft {
+  items: PurchaseDraftLineItem[];
+  // Supplier is EITHER a reference to an existing SupplierRecord
+  // (supplierId set) OR free-text fields for a not-yet-created
+  // supplier (supplierId absent) — never both meaningfully populated
+  // at once. A brand-new supplier is not created as a real
+  // SupplierRecord until finalization, mirroring how a new Product is
+  // not created until finalization today (Rule 8 Assessment, Section
+  // 13) — an abandoned, never-finalized draft must not leave
+  // permanent master data behind.
+  supplierId?: string;
+  supplierName?: string;
+  supplierPhone?: string;
+  supplierNotes?: string;
+  date: string; // YYYY-MM-DD — purchase date staged so far
+  notes?: string; // batch-level notes, mirrors PurchaseBatch.notes
   updatedAt: string; // ISO string
 }
 

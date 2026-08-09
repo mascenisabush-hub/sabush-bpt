@@ -12,67 +12,124 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #4 (Purchase Batches) — **new governance-only work,
-not yet committed.** Across two sessions: (1) an investigation-only
-pass traced the current Add Stock flow, current supplier handling,
-current persistence/interruption behavior, and current valuation
-calculations directly against the code, and produced a governance
-proposal; (2) this session converted that proposal into the formal
-amendment. **No code was touched in either session** — this is
-documentation only, exactly as both task prompts instructed.
+**Status:** Module #4 (Purchase Batches) — **implementation IN
+PROGRESS, mid-flight, not yet committed at the point this section was
+last written — committed now as an explicit WIP commit per direct
+instruction.** Governance (amendment, Rule 8 Assessment, Implementation
+Plan) is fully approved and already on `main`. This session is
+executing that plan's 9 phases directly against the code.
 
-**What exists now, uncommitted:**
+**Phases complete (typechecked, `npx tsc --noEmit -p .` clean at every
+step):**
 
-- **New file:** [`docs/specs/04-durable-purchase-capture-and-suppliers-amendment.md`](./docs/specs/04-durable-purchase-capture-and-suppliers-amendment.md)
-  — ✅ Approved (business specification only; implementation NOT
-  authorized). Covers two capabilities: a durable, interruption-
-  resilient Purchase Draft for multi-product Add Stock entry (reusing
-  Module #10's already-shipped `stockCountDrafts` draft pattern as
-  precedent), and a reusable, tenant-scoped Supplier entity
-  (`businesses/{businessId}/suppliers/{supplierId}`) to replace
-  today's disposable, retyped-every-purchase `Supplier` value object.
-  **Explicitly excludes** all payment/cash/credit/supplier-debt/
-  accounts-payable capability — flagged as a separate, not-yet-started
-  governance track requiring its own BDR, per the amendment's Part 11
-  (this was a mandatory exclusion in the task prompt, not my own
-  scoping choice).
-- **Modified:** `docs/specs/04-purchase-batches.md` — bumped to
-  Version 1.1, `[Durable Purchase Capture Amendment v1.0]`-tagged
-  additions to Business Rules, Functional Requirements, Future
-  Enhancements, and Acceptance Criteria. Everything else on the page
-  unchanged from Version 1.0.
-- **Modified:** `docs/specs/README.md` — Module #4's row now points to
-  the new amendment, matching the style already used for Module #10's
-  two amendments.
-- **Not touched, confirmed by `git status --porcelain`:** spec #2
-  (Business Worth Engine — no boundary note needed, see the
-  amendment's Part 10, since no new valuation figure is introduced),
-  spec #3 (Products — `Product.supplier` is a separate, pre-existing
-  field, see the amendment's Part 8), any `src/`, `server/`,
-  `firestore.rules`, or `tests/` file, Module #17/#18/#19/#20.
+- **Phase 1 — Types (`src/types.ts`):** `SupplierRecord`,
+  `PurchaseDraftLineItem`, `PurchaseDraft` added; one additive optional
+  field `PurchaseBatch.supplierId?: string`. Existing `Supplier`
+  value-object type (the historical snapshot) untouched.
+- **Phase 2 — Supplier read/list (`AppContext.tsx`):** `suppliers`
+  state + business-scoped listener, mirroring `products` exactly.
+  Exposed on `AppContextType`/provider.
+- **Phase 3 — Purchase Draft persistence (`AppContext.tsx`):**
+  `purchaseDraft`/`purchaseDraftLoaded` state with an **isolated**
+  `useEffect` (deliberately separate from the main business-scoped
+  listener block, keyed on `[activeBusinessId, currentUser]`, so a
+  per-user draft doesn't force-resubscribe every unrelated collection
+  on a staff PIN quick-login switch). Draft doc ID is the signed-in
+  user's own `uid` — `purchaseDrafts/{uid}` — per the approved
+  concurrency decision. `savePurchaseDraft`/`clearPurchaseDraft` added,
+  modeled directly on `saveInitialStockDraft`/`clearInitialStockDraft`,
+  including the same business/user-switch staleness fix already proven
+  for Module #10.
+- **Phase 5 — Finalization (`addMultipleStockBatches` extended, not
+  replaced):** new optional 4th parameter `supplierId?: string`.
+  Supplier find-or-create step added (modeled on the existing Product
+  find-or-create loop) — resolves by `supplierId` or case-insensitive/
+  trimmed name match, or creates a new `SupplierRecord`, all inside the
+  SAME Firestore batch as Product/StockBatch/PurchaseBatch writes.
+  Unconditional `fsBatch.delete()` of the finalizing user's own draft
+  added to that same atomic batch — safe no-op if no draft exists,
+  guaranteed-intact draft if the batch fails to commit. Zero changes to
+  existing Product-creation, batch-numbering, or Timeline Event logic.
+- **Phase 4, partial — Add Stock UI state/logic (`AddStockView.tsx`):**
+  `rowToDraftLineItem`/`draftLineItemToRow` converters; full draft
+  lifecycle state (`supplierId`, `isSupplierDropdownOpen`,
+  `draftLoaded`, `draftSaveState`, `wasRestoredFromDraft`,
+  `loadedForBusinessId`, `skipNextAutosave` ref); three effects
+  (business-switch reset, draft-load-once, debounced 800ms autosave),
+  all directly modeled on `InitialStockCountView`'s proven pattern;
+  `handleDiscardDraft`/`handleSelectSupplier`/`handleChangeSupplier`
+  handlers; `handleSubmit` now passes `supplierId` and real
+  `supplierNotes` through (previously `notes` was hardcoded `''`), no
+  separate draft-clear call needed since finalization now clears it
+  atomically. New i18n keys (`addStock.supplier.searchPlaceholder`/
+  `existingTag`/`createNewShort`/`selectedHint`/`changeSupplier`, new
+  `addStock.draft.*` namespace) added to the shared type interface and
+  all three locale files (pt/en/fr).
 
-**Nothing has been committed or pushed** — per this task's explicit
-instruction not to commit/push. The three files above (one new, two
-modified) sit uncommitted in the working tree. A future session/
-engineer should either commit them (recommended commit message shape:
-`docs(module-4): Durable Purchase Capture and Reusable Suppliers
-Amendment`) or treat this section as the complete record of what to
-redo if they were somehow lost.
+**Phase 4 — NOT complete, this is the mid-flight boundary:** the
+actual JSX for the supplier section is still the OLD plain
+three-text-input markup. Every handler and piece of state the new
+autocomplete/selected-chip UI needs already exists and typechecks —
+the JSX swap itself (replacing the supplier `<div>` block around where
+`supplierName`/`supplierPhone` inputs currently render, adding the
+discard-draft button, the autosave status indicator, and the
+"restored from draft" banner) has not been done. **Functionally, the
+app currently behaves exactly as it did before this session** — the
+new state exists but nothing in the rendered UI reads or writes it yet
+except `handleSubmit`, which now passes `supplierId` (always
+`undefined` today, since nothing ever sets it) and `supplierNotes`
+(always `''`, since nothing ever sets it either) — i.e., **zero
+behavior change is live yet**, this is pure inert scaffolding until
+the JSX is swapped.
 
-**Explicitly not authorized by this amendment — do not start
-implementation from this state:**
+**Phases not started:**
 
-- No Rule 8 Assessment has been produced for either capability.
-- No Firestore collection, document shape, or security rule has been
-  designed at the implementation level (draft-scoping concurrency
-  — one-per-business vs. one-per-user vs. one-per-device — and
-  Supplier's exact field/validation shape are both explicitly left
-  open, per the amendment's Part 5/Part 6/Part 12).
-- No permission/role decision has been made (amendment Part 9) —
-  needs its own explicit resolution against Module #16/Architecture
-  6.3 before implementation.
-- The excluded payment/credit/supplier-debt track (amendment Part 11)
-  has not been started at all — it needs its own BDR first, addressing
+- **Phase 6 — `firestore.rules`:** `purchaseDrafts` and `suppliers`
+  match blocks, plus the additive `purchaseBatches` create-rule
+  field-shape check for `supplierId` — none written yet. **This means
+  the new collections have NO security rule at all right now** — not a
+  problem functionally yet (nothing in the UI writes to them, per the
+  paragraph above), but this must be done before Phase 4 is finished
+  and before any real Firestore write to `purchaseDrafts`/`suppliers`
+  is attempted, or every such write will be rejected outright by
+  Firestore's default-deny.
+- **Phase 7 — Backward-compatibility verification pass:** not started.
+- **Phase 8 — Tests:** not started. No new test file exists yet.
+- **Phase 9 — Full build/regression verification:** `tsc --noEmit` has
+  been run repeatedly and is clean; `npm run build` and
+  `npm run test:all` have NOT been re-run since this session's changes
+  began — required before this work is considered complete.
+
+**Exact next step for whoever picks this up:** finish Phase 4's JSX —
+replace the supplier section markup in `AddStockView.tsx` (currently
+still the old plain inputs) with the autocomplete/selected-chip design
+the handlers already support, then add the discard button + autosave
+indicator + restored-from-draft banner — then proceed to Phases 6–9 in
+order, per
+[`04-durable-purchase-capture-and-suppliers-implementation-plan.md`](./docs/engineering/04-durable-purchase-capture-and-suppliers-implementation-plan.md).
+
+## Prior status — Module #4 governance artifacts (superseded above, kept for continuity)
+
+Governance sequence completed and pushed to `main` across three prior
+sessions, in order: (1) investigation-only pass tracing the current Add
+Stock flow, supplier handling, persistence behavior, and valuation
+calculations; (2) the formal
+[`04-durable-purchase-capture-and-suppliers-amendment.md`](./docs/specs/04-durable-purchase-capture-and-suppliers-amendment.md)
+(✅ Approved — business specification), with `docs/specs/04-purchase-batches.md`
+bumped to Version 1.1 and `docs/specs/README.md` updated; (3) the
+[Rule 8 Assessment](./docs/engineering/04-durable-purchase-capture-and-suppliers-rule8-assessment.md)
+(Governance Readiness: Ready) and
+[Implementation Plan](./docs/engineering/04-durable-purchase-capture-and-suppliers-implementation-plan.md),
+resolving both decisions implementation needed: draft concurrency (one
+`PurchaseDraft` per `(businessId, uid)`, keyed by the owning user's own
+Firebase Auth `uid`) and access/permissions (reuses Module #16's
+existing Staff/Manager/Owner model verbatim, no new tier). All commits
+pushed; `git log` on `main`: `c70adad` (Rule 8 + plan), `96b3bd2`
+(amendment). Explicitly excludes all payment/cash/credit/supplier-debt/
+accounts-payable capability — a separate, not-yet-started governance
+track per the amendment's Part 11.
+
+## Prior status — Module #10 Initial Stock Valuation History implementation (superseded above, kept for continuity)
   the Worth-First Scope Test question the original investigation
   flagged as genuinely open (does supplier-payable tracking cross into
   the ERP/accounts-payable territory Architecture 1.8/2.2 excludes).

@@ -29,6 +29,9 @@ import {
   StockCountType,
   InitialStockDraft,
   InitialStockDraftItem,
+  PurchaseDraft,
+  PurchaseDraftLineItem,
+  SupplierRecord,
   Withdrawal,
   Closing,
   ClosedPeriod,
@@ -157,6 +160,9 @@ interface AppContextType {
   products: Product[];
   batches: StockBatch[];
   purchaseBatches: PurchaseBatch[];
+  // [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
+  // Supplier entities. Not a valuation input anywhere.
+  suppliers: SupplierRecord[];
   quebras: Quebra[];
   expenses: Expense[];
   stockCounts: StockCount[];
@@ -173,7 +179,15 @@ interface AppContextType {
   isBusinessProfileComplete: boolean;
   updateBusinessProfile: (profile: { name: string; category: string; contact: string; location: string; email: string }) => Promise<void>;
   addStockBatch: (params: AddStockParams) => Promise<{ productId: string; batchId: string }>;
-  addMultipleStockBatches: (items: AddStockParams[], supplier?: Supplier, notes?: string) => Promise<{ purchaseBatchId: string | null }>;
+  // [Durable Purchase Capture Amendment v1.0] supplierId is optional and
+  // additive — when provided, the purchase is linked to an existing
+  // reusable SupplierRecord (its current name/phone/notes become the
+  // historical snapshot written to supplier below, and the new
+  // PurchaseBatch.supplierId field is set). When omitted, behavior is
+  // completely unchanged from before this amendment: supplier is used
+  // as a one-off, free-text snapshot exactly as today. See Rule 8
+  // Assessment, Section 13.
+  addMultipleStockBatches: (items: AddStockParams[], supplier?: Supplier, notes?: string, supplierId?: string) => Promise<{ purchaseBatchId: string | null }>;
   archivePurchaseBatch: (id: string) => Promise<void>;
   unarchivePurchaseBatch: (id: string) => Promise<void>;
   addQuebra: (params: AddQuebraParams) => Promise<Quebra>;
@@ -215,6 +229,20 @@ interface AppContextType {
   initialStockDraftLoaded: boolean;
   saveInitialStockDraft: (items: InitialStockDraftItem[], date: string) => Promise<void>;
   clearInitialStockDraft: () => Promise<void>;
+  // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
+  // Purchase Draft — null until the current user starts one for this
+  // business, cleared automatically the moment it's finalized. NOT
+  // inventory — see the amendment's Part 10.
+  purchaseDraft: PurchaseDraft | null;
+  // Same "loaded" disambiguation as initialStockDraftLoaded above.
+  purchaseDraftLoaded: boolean;
+  savePurchaseDraft: (
+    items: PurchaseDraftLineItem[],
+    supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string },
+    date: string,
+    notes?: string
+  ) => Promise<void>;
+  clearPurchaseDraft: () => Promise<void>;
   // [Amendment v1.0, Part 2] Contagem's comparison baseline — Confirmed
   // Initial Capital + StockBatch cost value. NOT a Business Worth input;
   // see spec #2's own non-goals note for the boundary.
@@ -307,6 +335,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [products, setProducts] = useState<Product[]>([]);
   const [batches, setBatches] = useState<StockBatch[]>([]);
   const [purchaseBatches, setPurchaseBatches] = useState<PurchaseBatch[]>([]);
+  // [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
+  // Supplier entities — loaded in full per business and searched/matched
+  // client-side, exactly like `products` (Rule 8 Assessment, Section 7).
+  // Not a valuation input anywhere.
+  const [suppliers, setSuppliers] = useState<SupplierRecord[]>([]);
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
@@ -323,6 +356,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // on stale information. This flag disambiguates: false until the
   // listener's first callback (success OR error) has actually fired.
   const [initialStockDraftLoaded, setInitialStockDraftLoaded] = useState(false);
+  // [Durable Purchase Capture Amendment v1.0] Same "loaded flag"
+  // disambiguation as initialStockDraft above, for exactly the same
+  // reason — this is a per-user document (Rule 8 Assessment, Section 7),
+  // not per-business, but the race is identical.
+  const [purchaseDraft, setPurchaseDraft] = useState<PurchaseDraft | null>(null);
+  const [purchaseDraftLoaded, setPurchaseDraftLoaded] = useState(false);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [closings, setClosings] = useState<Closing[]>([]);
@@ -676,6 +715,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setProducts([]);
       setBatches([]);
       setPurchaseBatches([]);
+      setSuppliers([]);
       setQuebras([]);
       setExpenses([]);
       setStockCounts([]);
@@ -753,6 +793,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPurchaseBatches(list);
       },
       (err) => console.error('Error fetching purchase batches:', err)
+    );
+
+    // 3c. [Durable Purchase Capture Amendment v1.0] Suppliers collection —
+    // reusable, tenant-scoped supplier entities. Loaded in full and
+    // searched/matched client-side, exactly like Products (2, above).
+    // Not a valuation input anywhere.
+    const suppliersRef = collection(db, 'businesses', businessId, 'suppliers');
+    const unsubSuppliers = onSnapshot(
+      suppliersRef,
+      (snap) => {
+        const list: SupplierRecord[] = [];
+        snap.forEach((doc) => list.push(doc.data() as SupplierRecord));
+        list.sort((a, b) => a.name.localeCompare(b.name));
+        setSuppliers(list);
+      },
+      (err) => console.error('Error fetching suppliers:', err)
     );
 
     // 4. Quebras collection
@@ -914,6 +970,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubProducts();
       unsubBatches();
       unsubPurchaseBatches();
+      unsubSuppliers();
       unsubQuebras();
       unsubExpenses();
       unsubStockCounts();
@@ -927,6 +984,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubTimeline();
     };
   }, [activeBusinessId]);
+
+  // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
+  // Purchase Draft — a SEPARATE, isolated effect from the main
+  // business-scoped listener block above, deliberately: this is the
+  // only piece of state here that depends on WHICH team member is
+  // signed in (Rule 8 Assessment, Section 11 — one draft per
+  // (businessId, uid) pair, document ID == the owning user's own
+  // Firebase Auth uid). Keying the entire block above on
+  // [activeBusinessId, currentUser] would tear down and resubscribe
+  // every unrelated collection (products, batches, etc.) on every
+  // staff PIN quick-login switch, even when the business doesn't
+  // change — an unnecessary cost for those collections, which are
+  // tenant-wide, not user-specific. Isolating this effect avoids that
+  // while still correctly reacting to a user switch.
+  useEffect(() => {
+    // [Fix — draft load race, same class as initialStockDraft's own
+    // fix above] Reset unconditionally on every businessId/uid change,
+    // not only when either becomes falsy — otherwise a direct
+    // business switch or a PIN quick-login user switch could leave
+    // the PREVIOUS user's/business's already-loaded purchaseDraft
+    // sitting in state until the new listener's first snapshot
+    // arrives, momentarily misattributing it.
+    setPurchaseDraft(null);
+    setPurchaseDraftLoaded(false);
+
+    const uid = currentUser?.uid;
+    if (!activeBusinessId || !uid) {
+      return;
+    }
+
+    const draftRef = doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', uid);
+    const unsubPurchaseDraft = onSnapshot(
+      draftRef,
+      (snap) => {
+        setPurchaseDraft(snap.exists() ? (snap.data() as PurchaseDraft) : null);
+        setPurchaseDraftLoaded(true);
+      },
+      // A denied read (e.g. subscription-blocked, or mid-permission-
+      // change) is still Firestore's actual answer for this session,
+      // not an unknown/pending state — same reasoning as
+      // unsubInitialDraft's own error handler above.
+      () => {
+        setPurchaseDraft(null);
+        setPurchaseDraftLoaded(true);
+      }
+    );
+
+    return () => unsubPurchaseDraft();
+  }, [activeBusinessId, currentUser]);
 
   // Actions
   const setCurrencySymbol = async (symbol: string) => {
@@ -1214,7 +1320,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { productId: productId!, batchId: newBatchId };
   };
 
-  const addMultipleStockBatches = async (items: AddStockParams[], supplier?: Supplier, notes?: string) => {
+  const addMultipleStockBatches = async (items: AddStockParams[], supplier?: Supplier, notes?: string, supplierId?: string) => {
     if (!activeBusinessId || !items.length) return { purchaseBatchId: null };
     const businessId = activeBusinessId;
 
@@ -1227,6 +1333,62 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let totalInvestmentValue = 0;
     let totalMarketValue = 0;
     const lineItemSummaries: { productName: string; quantity: number; unit: string }[] = [];
+
+    // [Durable Purchase Capture Amendment v1.0] Supplier find-or-create,
+    // modeled directly on the Product find-or-create loop below it —
+    // same reasoning, same "create in the same batch, never before
+    // finalization" discipline (Rule 8 Assessment, Section 13). A
+    // brand-new SupplierRecord is only ever created here, at
+    // finalization — never while a draft is merely being typed, so an
+    // abandoned draft leaves no permanent Supplier behind.
+    let resolvedSupplierId: string | undefined = supplierId;
+    let resolvedSupplierName = (supplier?.name || '').trim();
+    let resolvedSupplierPhone = supplier?.phone?.trim() || undefined;
+    let resolvedSupplierNotes = supplier?.notes?.trim() || undefined;
+
+    if (resolvedSupplierId) {
+      // Caller selected an existing SupplierRecord — use its CURRENT
+      // fields as the historical snapshot (freshest data at the moment
+      // of purchase). If it can no longer be found (deleted/stale id),
+      // defensively fall through to the free-text path below instead
+      // of throwing — a stale reference must never block a purchase.
+      const existing = suppliers.find((s) => s.id === resolvedSupplierId);
+      if (existing) {
+        resolvedSupplierName = existing.name;
+        resolvedSupplierPhone = existing.phone;
+        resolvedSupplierNotes = existing.notes;
+      } else {
+        resolvedSupplierId = undefined;
+      }
+    } else if (resolvedSupplierName) {
+      // No explicit supplierId, but a supplier name was typed — same
+      // case-insensitive, trimmed find-or-create as Product uses just
+      // below, so retyping an existing supplier's name (different
+      // capitalization/whitespace) reuses it instead of creating a
+      // duplicate.
+      const existingByName = suppliers.find((s) => s.name.toLowerCase() === resolvedSupplierName.toLowerCase());
+      if (existingByName) {
+        resolvedSupplierId = existingByName.id;
+        resolvedSupplierName = existingByName.name;
+        resolvedSupplierPhone = existingByName.phone;
+        resolvedSupplierNotes = existingByName.notes;
+      } else {
+        const newSupplierId = 'supplier-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+        const newSupplierRecord: SupplierRecord = {
+          id: newSupplierId,
+          name: resolvedSupplierName,
+          phone: resolvedSupplierPhone,
+          notes: resolvedSupplierNotes,
+          createdAt: new Date().toISOString(),
+          createdByName: userProfile.name,
+        };
+        fsBatch.set(doc(db, 'businesses', businessId, 'suppliers', newSupplierId), newSupplierRecord);
+        resolvedSupplierId = newSupplierId;
+      }
+    }
+    // If neither a supplierId nor a name was given at all, resolvedSupplierId
+    // stays undefined and resolvedSupplierName stays '' — unchanged from
+    // today's behavior (falls through to 'Fornecedor Não Especificado' below).
 
     // Create the Purchase Batch envelope (the Investment Ledger entry) that
     // will group every line item created below under one supplier/date/
@@ -1241,10 +1403,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       batchSeq: newBatchSeq,
       date: items[0].dateEntered,
       supplier: {
-        name: (supplier?.name || '').trim() || 'Fornecedor Não Especificado',
-        phone: supplier?.phone?.trim() || undefined,
-        notes: supplier?.notes?.trim() || undefined,
+        name: resolvedSupplierName || 'Fornecedor Não Especificado',
+        phone: resolvedSupplierPhone,
+        notes: resolvedSupplierNotes,
       },
+      supplierId: resolvedSupplierId,
       notes: notes?.trim() || undefined,
       createdByName: userProfile.name,
       createdAt: new Date().toISOString(),
@@ -1309,6 +1472,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quantity: Number(item.quantity),
         unit: item.unit ? item.unit.trim() : 'un',
       });
+    }
+
+    // [Durable Purchase Capture Amendment v1.0] Clear the finalizing
+    // user's Purchase Draft in the SAME atomic batch as everything
+    // above — Firestore batch writes are all-or-nothing, so if this
+    // batch fails to commit, the draft is left completely untouched
+    // (Rule 8 Assessment, Section 12). Safe even when no draft
+    // document exists for this user (Firestore delete on a
+    // non-existent doc is a no-op within a batch, not an error) — this
+    // repository's Add Stock flow now always sources its rows from a
+    // draft, but this call remains correct even if invoked without one.
+    if (currentUser) {
+      fsBatch.delete(doc(db, 'businesses', businessId, 'purchaseDrafts', currentUser.uid));
     }
 
     await fsBatch.commit();
@@ -1809,6 +1985,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearInitialStockDraft = async () => {
     if (!activeBusinessId) return;
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'));
+  };
+
+  // [Durable Purchase Capture Amendment v1.0] Upserts the persistent,
+  // per-user Purchase Draft (Rule 8 Assessment, Section 3/12) — the
+  // Add Stock analogue of saveInitialStockDraft above. NOT inventory —
+  // never creates a Product, StockBatch, or PurchaseBatch, and never
+  // read by any valuation calculation (amendment Part 10). Overwrites
+  // the whole draft document each call, same reasoning as
+  // saveInitialStockDraft: small document, matches how AddStockView
+  // already holds the whole row list in local state before calling
+  // this.
+  const savePurchaseDraft = async (
+    items: PurchaseDraftLineItem[],
+    supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string },
+    date: string,
+    notes?: string
+  ) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão inválida.');
+    const draft: PurchaseDraft = {
+      items,
+      supplierId: supplier.supplierId,
+      supplierName: supplier.supplierName,
+      supplierPhone: supplier.supplierPhone,
+      supplierNotes: supplier.supplierNotes,
+      date,
+      notes,
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid), draft);
+  };
+
+  // Discards the draft without finalizing it — an explicit "start
+  // over"/discard path, distinct from finalization's automatic
+  // cleanup (addMultipleStockBatches deletes the draft atomically in
+  // the same Firestore batch as the real records it creates — see
+  // that function, below).
+  const clearPurchaseDraft = async () => {
+    if (!activeBusinessId || !currentUser) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid));
   };
 
   // A period is "closed" if any existing Closing of the same type shares
@@ -2445,6 +2661,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         products,
         batches,
         purchaseBatches,
+        suppliers,
         quebras,
         expenses,
         stockCounts,
@@ -2477,6 +2694,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockDraftLoaded,
         saveInitialStockDraft,
         clearInitialStockDraft,
+        purchaseDraft,
+        purchaseDraftLoaded,
+        savePurchaseDraft,
+        clearPurchaseDraft,
         expectedCurrentStockValue,
         latestStockCount,
         currentInventoryValue,

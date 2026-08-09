@@ -238,6 +238,11 @@ export interface TranslationDict {
       notesLabel: string;
       notesPlaceholder: string;
       unspecifiedHint: string;
+      searchPlaceholder: string;
+      existingTag: string;
+      createNewShort: string;
+      selectedHint: string;
+      changeSupplier: string;
     };
     table: {
       batch: string;
@@ -278,6 +283,13 @@ export interface TranslationDict {
       missingName: string;
       invalidQty: string;
       invalidPrice: string;
+    };
+    draft: {
+      savingIndicator: string;
+      savedIndicator: string;
+      restoredNotice: string;
+      discardButton: string;
+      discardConfirm: string;
     };
   };
   addQuebra: {
@@ -1096,6 +1108,11 @@ export const pt: TranslationDict = {
       notesLabel: 'Notas do Lote (opcional)',
       notesPlaceholder: 'Ex.: Compra à vista, entrega parcial...',
       unspecifiedHint: 'Se não indicar um fornecedor, este lote será guardado como "Fornecedor Não Especificado".',
+      searchPlaceholder: 'Pesquisar/criar fornecedor...',
+      existingTag: 'Existente',
+      createNewShort: '+ Criar "{{name}}"',
+      selectedHint: 'Fornecedor existente selecionado — para alterar os dados deste fornecedor, use "Trocar Fornecedor".',
+      changeSupplier: 'Trocar Fornecedor',
     },
     table: {
       batch: 'Lote',
@@ -1136,6 +1153,13 @@ export const pt: TranslationDict = {
       missingName: 'Por favor introduza o nome do produto no Lote #{{n}}.',
       invalidQty: 'Por favor introduza uma quantidade maior que zero no Lote #{{n}} ({{name}}).',
       invalidPrice: 'Por favor introduza preços válidos no Lote #{{n}} ({{name}}).',
+    },
+    draft: {
+      savingIndicator: 'A guardar rascunho...',
+      savedIndicator: 'Rascunho guardado',
+      restoredNotice: 'Continuou uma compra em curso — os produtos já guardados foram restaurados.',
+      discardButton: 'Descartar Rascunho',
+      discardConfirm: 'Tem a certeza que quer descartar este rascunho? Os produtos já guardados serão perdidos.',
     },
   },
   addQuebra: {

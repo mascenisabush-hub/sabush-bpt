@@ -270,6 +270,11 @@ export const en: TranslationDict = {
       notesLabel: 'Batch Notes (optional)',
       notesPlaceholder: 'e.g. Cash purchase, partial delivery...',
       unspecifiedHint: 'If you don\u2019t specify a supplier, this batch will be saved as "Unspecified Supplier".',
+      searchPlaceholder: 'Search/create supplier...',
+      existingTag: 'Existing',
+      createNewShort: '+ Create "{{name}}"',
+      selectedHint: 'Existing supplier selected \u2014 to change this supplier\u2019s details, use "Change Supplier".',
+      changeSupplier: 'Change Supplier',
     },
     table: {
       batch: 'Batch',
@@ -310,6 +315,13 @@ export const en: TranslationDict = {
       missingName: 'Please enter the product name for Batch #{{n}}.',
       invalidQty: 'Please enter a quantity greater than zero for Batch #{{n}} ({{name}}).',
       invalidPrice: 'Please enter valid prices for Batch #{{n}} ({{name}}).',
+    },
+    draft: {
+      savingIndicator: 'Saving draft...',
+      savedIndicator: 'Draft saved',
+      restoredNotice: 'Resumed a purchase in progress \u2014 the products you already saved were restored.',
+      discardButton: 'Discard Draft',
+      discardConfirm: 'Are you sure you want to discard this draft? The products you already saved will be lost.',
     },
   },
   addQuebra: {

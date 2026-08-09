@@ -270,6 +270,11 @@ export const fr: TranslationDict = {
       notesLabel: 'Notes du Lot (optionnel)',
       notesPlaceholder: 'Ex. : Achat comptant, livraison partielle...',
       unspecifiedHint: 'Si vous n\u2019indiquez pas de fournisseur, ce lot sera enregistré comme « Fournisseur Non Spécifié ».',
+      searchPlaceholder: 'Rechercher/créer un fournisseur...',
+      existingTag: 'Existant',
+      createNewShort: '+ Créer « {{name}} »',
+      selectedHint: 'Fournisseur existant sélectionné \u2014 pour modifier les informations de ce fournisseur, utilisez « Changer de Fournisseur ».',
+      changeSupplier: 'Changer de Fournisseur',
     },
     table: {
       batch: 'Lot',
@@ -310,6 +315,13 @@ export const fr: TranslationDict = {
       missingName: 'Veuillez saisir le nom du produit pour le Lot #{{n}}.',
       invalidQty: 'Veuillez saisir une quantité supérieure à zéro pour le Lot #{{n}} ({{name}}).',
       invalidPrice: 'Veuillez saisir des prix valides pour le Lot #{{n}} ({{name}}).',
+    },
+    draft: {
+      savingIndicator: 'Enregistrement du brouillon...',
+      savedIndicator: 'Brouillon enregistré',
+      restoredNotice: 'Achat en cours repris \u2014 les produits déjà enregistrés ont été restaurés.',
+      discardButton: 'Supprimer le Brouillon',
+      discardConfirm: 'Êtes-vous sûr de vouloir supprimer ce brouillon ? Les produits déjà enregistrés seront perdus.',
     },
   },
   addQuebra: {
