@@ -2,8 +2,13 @@ Business Domain Specification
 
 # Purchase Batches
 
-Version 1.0
-**Status:** ✅ Approved
+Version 1.1
+**Status:** ✅ Approved — amended by the
+[Durable Multi-Product Purchase Capture and Reusable Suppliers Amendment](./04-durable-purchase-capture-and-suppliers-amendment.md)
+(✅ Approved; business specification only — implementation not yet
+authorized). `[Durable Purchase Capture Amendment v1.0]`-tagged
+sections below carry that amendment's additions; everything else on
+this page is unchanged from Version 1.0.
 **Module #4 of 20 — Phase 1: Core Business Intelligence**
 **Architecture references:** [Section 3.5](../architecture/03-domain-architecture.md)
 (Purchase Batches domain), [Section 2.6](../architecture/02-core-product-principles.md)
@@ -116,6 +121,39 @@ in conversation or in a note, unlike a raw database ID.
   which reflects the batch's own stock-remaining lifecycle, not a
   separate delete action.
 
+**Purchase Draft is not inventory `[Durable Purchase Capture Amendment
+v1.0 — new]`**
+- A Purchase Draft is temporary, incomplete business-entry state —
+  never a `PurchaseBatch`, never a `StockBatch`, never a `Product`, and
+  never a contributor to Investment Value, Market Value, Embedded
+  Profit, Business Worth, or Capital Growth while unconfirmed. Only
+  explicit finalization creates real records. See the amendment's Part
+  2/Part 4 for the full rule and the rejected "premature real
+  inventory" alternative.
+- A Purchase Draft must survive interruption (browser crash, refresh,
+  network loss, device/power loss) and be resumable without re-entering
+  already-saved product lines or supplier information. Exact
+  persistence shape is implementation-level detail, reserved for the
+  later specification — see the amendment's Part 3.
+- Draft-scoping concurrency (one per business / one per user / one per
+  device) is explicitly not decided by the amendment — see its Part 5.
+
+**Reusable Supplier identity `[Durable Purchase Capture Amendment
+v1.0 — new]`**
+- Supplier is a reusable, tenant-scoped entity
+  (`businesses/{businessId}/suppliers/{supplierId}`), searchable and
+  selectable during purchase entry, with create-on-first-use for a new
+  supplier — mirroring this module's existing find-or-create-Product
+  pattern. See the amendment's Part 6.
+- Editing a reusable Supplier record never rewrites the supplier
+  snapshot already embedded on a historical `PurchaseBatch` — the two
+  represent different facts ("who is this supplier today" vs. "what
+  was recorded for this purchase") and are never conflated. No
+  migration of existing embedded supplier data is authorized or
+  required. See the amendment's Part 7.
+- `Product.supplier` (spec #3) is a separate, pre-existing, free-text
+  catalog field, untouched by this rule. See the amendment's Part 8.
+
 ## Functional Requirements
 
 *Exactly what the module must do.*
@@ -143,6 +181,19 @@ in conversation or in a note, unlike a raw database ID.
    has a visible gap for older data.
 7. Support archiving a Purchase Batch — distinct from any stock-status
    change on its underlying Stock Batches.
+8. **[Durable Purchase Capture Amendment v1.0 — new]** Persist an
+   in-progress, multi-product Purchase Draft durably enough to survive
+   an interrupted session, so previously entered product lines and
+   supplier information are never lost before finalization. Exact
+   persistence mechanism reserved for the later implementation
+   specification; business requirement only (amendment Part 3).
+9. **[Durable Purchase Capture Amendment v1.0 — new]** Offer supplier
+   autocomplete against a reusable, tenant-scoped Supplier entity
+   during purchase entry, with an inline "create new" option when no
+   match exists — the same pattern already required for Products
+   (Functional Requirement #2) — while preserving each finalized
+   Purchase Batch's own historical supplier snapshot unchanged
+   (amendment Part 6/Part 7).
 
 ## Non-functional Requirements
 
@@ -211,8 +262,17 @@ in conversation or in a note, unlike a raw database ID.
   it belongs to when that trigger fires.
 - **Supplier-level purchase history view** — grouping Purchase Batches
   by supplier over time, distinct from the current per-product Investment
-  Ledger view. Not currently requested or scoped; noted so a future ask
-  isn't silently designed around.
+  Ledger view. Still not scoped by this spec. Distinct from, and not
+  satisfied by, the `[Durable Purchase Capture Amendment v1.0]` reusable
+  Supplier entity above — that amendment makes supplier identity
+  reusable and searchable at entry time; a dedicated supplier-history
+  *view* remains a separate, unscoped future idea built on top of it.
+- **Supplier payment/cash/credit/debt tracking** — explicitly and
+  deliberately excluded from the `[Durable Purchase Capture Amendment
+  v1.0]` (see that document's Part 11). Would require its own separate
+  BDR before any specification work begins, given its proximity to the
+  ERP/accounts-payable boundary Architecture 1.8/2.2 excludes. Not
+  currently requested or scoped here.
 
 ## Acceptance Criteria
 
@@ -229,3 +289,16 @@ in conversation or in a note, unlike a raw database ID.
 - [ ] Every per-line-item and aggregate figure matches the Calculation
       Engine's own output exactly — verified by test, given how directly
       this feeds Business Worth (spec #2).
+- [ ] **[Durable Purchase Capture Amendment v1.0]** A multi-product
+      purchase entry in progress survives an interrupted session
+      (refresh, browser close, network loss) with no previously-saved
+      product line or supplier field lost.
+- [ ] **[Durable Purchase Capture Amendment v1.0]** A Purchase Draft
+      never appears as, or contributes to, Investment Value, Market
+      Value, Embedded Profit, Business Worth, or Capital Growth prior
+      to explicit finalization.
+- [ ] **[Durable Purchase Capture Amendment v1.0]** A supplier used on
+      one purchase can be found and reused on a later purchase without
+      retyping its details, while every previously finalized Purchase
+      Batch's own historical supplier snapshot remains unchanged by any
+      later edit to the reusable Supplier record.

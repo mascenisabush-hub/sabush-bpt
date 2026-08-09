@@ -34,7 +34,7 @@ intelligence), then build the platform capabilities around that.
 | 1 | [Dashboard](./01-dashboard.md) | ✅ Approved |
 | 2 | [Business Worth Engine](./02-business-worth-engine.md) | ✅ Approved |
 | 3 | [Products](./03-products.md) | ✅ Approved |
-| 4 | [Purchase Batches](./04-purchase-batches.md) | ✅ Approved |
+| 4 | [Purchase Batches](./04-purchase-batches.md) | ✅ Approved — **Version 1.1**, amended by the [Durable Multi-Product Purchase Capture and Reusable Suppliers Amendment](./04-durable-purchase-capture-and-suppliers-amendment.md) (✅ Approved — business specification only; implementation not yet authorized). Covers a durable, interruption-resilient purchase draft and a reusable, tenant-scoped Supplier entity. Explicitly excludes payment/cash/credit/supplier-debt capability, which remains a separate, not-yet-started governance track (see the amendment's Part 11). |
 | 5 | [Stock Batches](./05-stock-batches.md) | ✅ Approved |
 | 6 | [Embedded Profit Engine](./06-embedded-profit-engine.md) | ✅ Approved |
 

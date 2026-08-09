@@ -12,62 +12,70 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #10 (Stock Counts) — **Initial Stock Valuation
-History is fully implemented, governed, and verified.** This session
-performed a governance-compliance verification pass against the
-approved [`10-initial-stock-valuation-history-amendment.md`](./docs/specs/10-initial-stock-valuation-history-amendment.md)
-— **no further code changes were needed**; the implementation already
-conformed exactly (see Governance-Compliance Verification, below).
+**Status:** Module #4 (Purchase Batches) — **new governance-only work,
+not yet committed.** Across two sessions: (1) an investigation-only
+pass traced the current Add Stock flow, current supplier handling,
+current persistence/interruption behavior, and current valuation
+calculations directly against the code, and produced a governance
+proposal; (2) this session converted that proposal into the formal
+amendment. **No code was touched in either session** — this is
+documentation only, exactly as both task prompts instructed.
 
-> **Correction to the "Right now" text below (from the governance-only
-> session):** it stated "Nothing was committed or pushed this session"
-> and described the code/docs as sitting uncommitted. That was accurate
-> at the moment it was written, but both the governance docs (`08ceed8`)
-> and the code (`c85c7b3`) were committed and pushed to `main`
-> immediately afterward, in the same overall work session. The working
-> tree is clean as of this update — `git status` shows nothing pending,
-> `main` is up to date with `origin/main` at `c85c7b3`.
+**What exists now, uncommitted:**
 
-**Governance-compliance verification performed this session** (no code
-touched — every point below was checked against what's already on
-`main`, not re-implemented):
+- **New file:** [`docs/specs/04-durable-purchase-capture-and-suppliers-amendment.md`](./docs/specs/04-durable-purchase-capture-and-suppliers-amendment.md)
+  — ✅ Approved (business specification only; implementation NOT
+  authorized). Covers two capabilities: a durable, interruption-
+  resilient Purchase Draft for multi-product Add Stock entry (reusing
+  Module #10's already-shipped `stockCountDrafts` draft pattern as
+  precedent), and a reusable, tenant-scoped Supplier entity
+  (`businesses/{businessId}/suppliers/{supplierId}`) to replace
+  today's disposable, retyped-every-purchase `Supplier` value object.
+  **Explicitly excludes** all payment/cash/credit/supplier-debt/
+  accounts-payable capability — flagged as a separate, not-yet-started
+  governance track requiring its own BDR, per the amendment's Part 11
+  (this was a mandatory exclusion in the task prompt, not my own
+  scoping choice).
+- **Modified:** `docs/specs/04-purchase-batches.md` — bumped to
+  Version 1.1, `[Durable Purchase Capture Amendment v1.0]`-tagged
+  additions to Business Rules, Functional Requirements, Future
+  Enhancements, and Acceptance Criteria. Everything else on the page
+  unchanged from Version 1.0.
+- **Modified:** `docs/specs/README.md` — Module #4's row now points to
+  the new amendment, matching the style already used for Module #10's
+  two amendments.
+- **Not touched, confirmed by `git status --porcelain`:** spec #2
+  (Business Worth Engine — no boundary note needed, see the
+  amendment's Part 10, since no new valuation figure is introduced),
+  spec #3 (Products — `Product.supplier` is a separate, pre-existing
+  field, see the amendment's Part 8), any `src/`, `server/`,
+  `firestore.rules`, or `tests/` file, Module #17/#18/#19/#20.
 
-- **Adversarial diff review**, `git diff dbac91e..HEAD` (the last commit
-  before this entire feature began) — confirmed zero lines touching
-  `expectedCurrentStockValue`, `businessWorth = `, `capitalGrowth = `,
-  `capitalGrowthPct = `, or `totalEmbeddedProfitAllTime` anywhere in
-  `AppContext.tsx` or `calculations.ts`, across all three commits
-  combined. Full file-level diff (15 files, all within this module —
-  `types.ts`, `calculations.ts`, `AppContext.tsx`,
-  `InitialStockPriceChangeModal.tsx`, `DashboardView.tsx`,
-  `firestore.rules`, tests, docs) — no `StockBatch`, Add Stock, or
-  Module #17/#18/#19/#20 file appears anywhere in it.
-- **`AppContext.tsx` and `calculations.ts` are purely additive** across
-  the whole feature — the only removed lines in either file, in the
-  entire three-commit history, are the two `import` statements, each
-  replaced by an extended version with the same original names intact.
-- **Latest-event-only / correct fallback confirmed directly in code**
-  (`calculateInitialStockCurrentValuation`, `calculations.ts`): quantity/
-  cost/selling price come from `latestEvent` when one exists, else from
-  the original `StockCount` item — never summed, never inferred.
-- `npx tsc --noEmit -p .` — clean.
-- `npm run test:all` — **200/200 passing**, zero regressions.
-- `npm run test:initial-stock-price-change` (focused suite) —
-  **19/19 passing**.
-- `npm run build` — clean (same pre-existing non-blocking warnings:
-  CSS lint, chunk size, dynamic-import overlap).
-- Firestore rules emulator — attempted fresh this session,
-  **BLOCKED — environment limitation** (`storage.googleapis.com` not in
-  the sandbox's network egress allowlist, same as every prior session in
-  this file). Not claimed as passing.
+**Nothing has been committed or pushed** — per this task's explicit
+instruction not to commit/push. The three files above (one new, two
+modified) sit uncommitted in the working tree. A future session/
+engineer should either commit them (recommended commit message shape:
+`docs(module-4): Durable Purchase Capture and Reusable Suppliers
+Amendment`) or treat this section as the complete record of what to
+redo if they were somehow lost.
 
-**No code changes were made or needed this session** — the
-implementation already conformed to the governance record exactly.
-Nothing new was committed (nothing new to commit).
+**Explicitly not authorized by this amendment — do not start
+implementation from this state:**
 
-**Remaining governance gap, unchanged:** the `sellingPrice`-on-Stock-
-Count-items addition remains separately unformalized (see the amendment
-document's Part 12).
+- No Rule 8 Assessment has been produced for either capability.
+- No Firestore collection, document shape, or security rule has been
+  designed at the implementation level (draft-scoping concurrency
+  — one-per-business vs. one-per-user vs. one-per-device — and
+  Supplier's exact field/validation shape are both explicitly left
+  open, per the amendment's Part 5/Part 6/Part 12).
+- No permission/role decision has been made (amendment Part 9) —
+  needs its own explicit resolution against Module #16/Architecture
+  6.3 before implementation.
+- The excluded payment/credit/supplier-debt track (amendment Part 11)
+  has not been started at all — it needs its own BDR first, addressing
+  the Worth-First Scope Test question the original investigation
+  flagged as genuinely open (does supplier-payable tracking cross into
+  the ERP/accounts-payable territory Architecture 1.8/2.2 excludes).
 
 ## Prior status — Module #10 Initial Stock Valuation History implementation (superseded above, kept for continuity)
 
