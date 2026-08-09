@@ -13,128 +13,121 @@ here. This file is short-term memory only.
 ## Right now
 
 **Status:** Module #4 (Purchase Batches) — **Durable Purchase Capture
-and Reusable Suppliers implementation COMPLETE, all 9 phases of the
-approved Implementation Plan finished and verified, committed and
-pushed to `main`.** Governance (amendment, Rule 8 Assessment,
-Implementation Plan) was already on `main`; this session executed that
-plan end to end.
+and Reusable Suppliers is implemented AND a production bug discovered
+after that implementation shipped has been fixed, tested, and pushed
+to `main`.** Both pieces are done; nothing is mid-flight.
 
-**What shipped:**
+**What happened, in order:** (1) the Durable Purchase Capture &
+Reusable Suppliers implementation shipped (`9333689`, all 9 phases —
+full detail in the "Prior status" section immediately below, kept for
+continuity, not repeated here); (2) live use of Add Stock against real
+production Firestore surfaced `Function WriteBatch.set() called with
+invalid data. Unsupported field value: undefined (found in field phone
+in document businesses/{businessId}/suppliers/{supplierId})`; (3) a
+dedicated investigation traced the exact root cause and confirmed no
+data-model/architecture change was needed; (4) a surgical fix shipped
+(`0c71631`).
 
-- **Phase 1 (`src/types.ts`):** `SupplierRecord`, `PurchaseDraftLineItem`,
-  `PurchaseDraft` added; additive `PurchaseBatch.supplierId?: string`.
-  Existing `Supplier` value-object type (historical snapshot)
-  untouched.
-- **Phase 2 (`AppContext.tsx`):** `suppliers` state + business-scoped
-  listener, mirrors `products`.
-- **Phase 3 (`AppContext.tsx`):** `purchaseDraft`/`purchaseDraftLoaded`
-  state with an isolated `useEffect` keyed on
-  `[activeBusinessId, currentUser]` (deliberately separate from the
-  main listener block, so a per-user draft doesn't force-resubscribe
-  every unrelated collection on a staff PIN quick-login switch). Draft
-  doc ID is the signed-in user's own `uid` —
-  `purchaseDrafts/{uid}` — satisfying the approved one-draft-per-
-  `(businessId, uid)` concurrency decision. `savePurchaseDraft`/
-  `clearPurchaseDraft` modeled on `saveInitialStockDraft`/
-  `clearInitialStockDraft`, including the same business/user-switch
-  staleness fix already proven for Module #10.
-- **Phase 4 (`AddStockView.tsx`):** full draft lifecycle (business-
-  switch reset, load-once with the "don't clobber in-progress typing"
-  guard, 800ms debounced autosave — all directly modeled on
-  `InitialStockCountView`); supplier autocomplete replacing the old
-  plain text inputs (search existing, select-existing shows a
-  read-only chip with a "Trocar Fornecedor" escape hatch, or create-new
-  free text exactly like the Product autocomplete's own pattern);
-  discard-draft button with confirm dialog; autosave status indicator;
-  "draft restored" banner. New i18n keys in all three locales
-  (pt/en/fr) and the shared type interface.
-- **Phase 5 (`AppContext.tsx`):** `addMultipleStockBatches` extended
-  with an optional 4th param `supplierId?: string`; calls the new pure
-  `resolveSupplierForPurchase` (Phase 8, below) to decide existing-vs-
-  new-vs-unspecified, creates a new `SupplierRecord` in the SAME
-  Firestore batch when needed, and unconditionally
-  `fsBatch.delete()`s the finalizing user's own draft in that same
-  atomic batch (safe no-op if none exists; guaranteed-intact draft if
-  the batch fails to commit). Zero changes to existing Product-
-  creation, batch-numbering, or Timeline Event logic.
-- **Phase 6 (`firestore.rules`):** new `purchaseDrafts` match block
-  (`isMemberOf(businessId) && request.auth.uid == draftId`, matching
-  the approved per-user concurrency model exactly — no ownership field
-  needed, the doc ID itself is the boundary); new `suppliers` match
-  block (same tier as `products` — any team member reads/creates, only
-  Owner edits/deletes, per Module #16 reuse, no new permission tier
-  invented); one additive field-shape check on `purchaseBatches`'
-  existing create rule for optional `supplierId`. Brace-balance
-  verified (77/77); full file re-reviewed after two find/replace slips
-  during editing were caught and fixed (a dropped ternary opener in
-  `AddStockView.tsx`, three dropped comment lines in `firestore.rules`)
-  — both caught by `tsc`/direct review before this commit, not left in.
-- **Phase 7 (verification pass, no code):** confirmed by direct
-  inspection — `StocksView.tsx` reads only the unchanged
-  `PurchaseBatch.supplier` snapshot (never `supplierId` or the new
-  `suppliers` collection); `supplierId` appears nowhere unexpected in
-  the codebase; `calculations.ts` and `purchaseBatchCalculations.ts`'s
-  existing valuation functions are structurally untouched (confirmed
-  via `git diff`, not merely asserted).
-- **Phase 8 (tests):** extracted the supplier find-or-create
-  RESOLUTION logic (not the Firestore write) out of
-  `addMultipleStockBatches` into a new pure, exported function
-  `resolveSupplierForPurchase` (`src/utils/purchaseBatchCalculations.ts`)
-  specifically so it's testable without a live Firestore client — same
-  reason `generateBatchNumber`/`getNextBatchSeq` already live there.
-  New `tests/purchase-draft-and-suppliers.test.ts` (10 tests: resolve-
-  by-id, stale-id fallback, case-insensitive/trimmed name match and
-  dedup, new-supplier path, trimming, "nothing entered" path, tenant-
-  scoping-by-construction, `PurchaseDraft`/`PurchaseDraftLineItem`
-  JSON round-trip shape, structural valuation-boundary confirmation).
-  Wired into `package.json`'s `test:all`.
-- **Phase 9 (build/regression):** `npx tsc --noEmit -p .` — clean.
-  `npm run test:all` — **12 suites, 210/210 passing, zero regressions**
-  (200 pre-existing + 10 new). `npm run build` — clean, same
-  pre-existing non-blocking warnings only (CSS lint, chunk size,
-  dynamic-import overlap).
+**Root cause, confirmed against the SDK's own source, not assumed:**
+this repo's Firestore client uses default settings —
+`ignoreUndefinedProperties` is **not** enabled
+(`src/lib/firebase.ts`) — so `WriteBatch.set()`/`setDoc()` reject any
+field whose value is the literal `undefined`, synchronously, at call
+time. Several optional-field constructions used the `x || undefined`
+idiom, which produces exactly that forbidden value whenever the field
+is left blank.
 
-**Standing, unchanged limitation:** `firestore.rules` changes are
-typecheck/build-reviewed but **not emulator-verified** —
-`storage.googleapis.com` is not in this sandbox's network egress
-allowlist, same gap named in every prior session in this file. Not
-claimed as passing; owed as a manual step before production deploy,
-same as every other `firestore.rules` change in this repository's
-history.
+**Three write sites fixed, all in `AppContext.tsx`, all converted to
+this repo's own pre-existing conditional-spread convention**
+(`InitialStockPriceChangeEvent.reason`,
+`...(reason?.trim() ? { reason: reason.trim() } : {})`) — omitting the
+key when absent, never assigning `undefined`:
 
-**Deliberate, in-scope design decisions worth knowing about, not
-silent:**
+1. **`addMultipleStockBatches` — new `SupplierRecord` creation**
+   (`phone`, `notes`) — the exact site named in the reported error.
+2. **`addMultipleStockBatches` — `PurchaseBatch` construction**
+   (`supplier.phone`, `supplier.notes`, `supplierId`, top-level
+   `notes`). The bare `notes` field was a **pre-existing bug predating
+   this session's Module #4 work entirely** — `notes: notes?.trim() ||
+   undefined` already had this exact vulnerability before the
+   amendment ever touched this function. Fixed here as part of the
+   same narrowly-scoped correction, per direct authorization, since
+   this exact write path now exercises it.
+3. **`savePurchaseDraft`** — the most consequential instance. Autosave
+   fires automatically, in the background, on every meaningful change
+   — and the common case (no supplier selected yet, phone/notes/batch
+   notes still blank) was exactly the case that previously threw,
+   silently swallowed by the autosave effect's own `.catch()`. **The
+   draft was very likely never actually persisting in the common case**
+   — meaning the durability feature's core promise was likely not
+   being delivered before this fix. `savePurchaseDraft` now sanitizes
+   its own output regardless of what the caller passes.
 
-- A new `SupplierRecord` is created only at **finalization**, never
-  while a draft is merely being typed — an abandoned, never-finalized
-  draft leaves no permanent Supplier behind. Accepted trade-off: a
-  supplier "created" mid-draft by one user won't appear in a
-  *different*, concurrently in-progress draft's autocomplete until the
-  first draft is finalized (edge case, named in the Rule 8 Assessment
-  Section 13).
-- Editing an existing Supplier's own details (phone/notes) has **no
-  UI** in this implementation — `firestore.rules` supports Owner-only
-  edit/delete (matching `Product`'s own tier) for a future screen, but
-  no such screen was built now, deliberately, to avoid scope creep
-  beyond what the amendment/Rule 8 Assessment authorized.
-- `Supplier.notes` (the new field) has no dedicated input in
-  `AddStockView` either — fully supported at the data layer, simply
-  not exposed in this minimal UI, to keep the form recognizable rather
-  than growing it further.
+**Verified, fresh, this session (not just cited from the prior one):**
 
-**Explicitly still excluded, per the amendment's Part 11 (mandatory,
-not a session choice):** no payment, cash/credit, supplier-debt,
-supplier-payable, or accounts-payable field, type, or rule exists
-anywhere in this diff. `PurchaseBatch` gained exactly one new field —
-`supplierId?: string` — and nothing else.
+- Diff scope: exactly 2 files changed — `src/context/AppContext.tsx`,
+  `tests/purchase-draft-and-suppliers.test.ts`. Confirmed via
+  `git diff --stat 9333689..0c71631`. Nothing else touched —
+  `firestore.rules`, `types.ts`, `AddStockView.tsx`,
+  `purchaseBatchCalculations.ts` all untouched by this fix.
+- No remaining `undefined`-producing construction reaches any of the
+  three Firestore write sites — confirmed by direct grep against the
+  actual `fsBatch.set()`/`setDoc()` call sites, not just by reading the
+  diff. (Two unrelated `|| undefined` occurrences remain elsewhere in
+  the codebase — `StockCount.label` (Module #10) and
+  `handleSelectProductForTool`'s pure React row state
+  (`AddStockView.tsx`, pre-existing, never itself written to
+  Firestore) — both out of scope for this fix and confirmed to not
+  reach any Purchase Draft/Supplier/PurchaseBatch write.)
+- `npx tsc --noEmit -p .` — clean.
+- `npm run test:all` — **12 suites, 223/223 passing, zero regressions**
+  (210 pre-existing + 13 new regression tests in the new "Firestore
+  write-safety" describe block, explicitly distinguishing `undefined`
+  from `null` and `''`).
+- `npm run build` — clean, same pre-existing non-blocking warnings only.
+- Firestore rules emulator — attempted fresh, **not run** — failed
+  with `Error: download failed, status 403: Host not in allowlist:
+  storage.googleapis.com`. Not claimed as passing. This fix touches no
+  `firestore.rules` content at all (confirmed by diff), so this
+  limitation is unchanged and unrelated to what shipped here.
+- Working tree: clean. `main` at `0c71631`, confirmed `0` ahead / `0`
+  behind `origin/main` via fresh `git fetch`.
 
-**Next actionable item:** none required immediately — this closes the
-approved Implementation Plan in full. If/when the excluded payment/
-supplier-debt track (amendment Part 11) is ever picked up, it needs its
-own BDR first (Worth-First Scope Test question, per the original
-investigation), fully independent of this work.
+**Also corrected, same commit:** a materially incorrect comment in
+`tests/purchase-draft-and-suppliers.test.ts`'s own pre-existing JSON
+round-trip test, which had wrongly claimed "no undefined survives
+JSON — matching how Firestore itself serializes documents." That's
+false — `JSON.stringify` silently *drops* undefined keys, while the
+real Firestore SDK *throws* on them — and is exactly the false
+equivalence that let the original bug ship undetected through this
+repo's own test suite.
 
-## Prior status — Module #4 governance artifacts (superseded above, kept for continuity)
+**Explicitly not touched by this fix, on purpose (per direct, narrow
+scope authorization):** `PurchaseBatch` cardinality/redesign,
+multi-supplier purchase events, `Product.supplier`, batch numbering,
+Investment Ledger grouping, valuation formulas (`calculations.ts` has
+**zero** diff lines across this entire fix), Business Worth, any
+payment/credit/debt field.
+
+**Next actionable item — a real, separate, deliberately-deferred
+product question, not a bug:** the same investigation that found this
+bug also confirmed `PurchaseBatch` currently means "one supplier's
+delivery," not "one purchasing event" (an Owner buying from 3
+suppliers in one trip today creates 3 unrelated `PurchaseBatch`
+documents, with no way to group them as one trip). This is a genuine
+data-model question for the Product Architect — **not implemented, not
+started, deliberately kept separate from this bug fix** — and would
+require its own new Module #4 amendment + Rule 8 Assessment addressing
+historical-record compatibility, Investment Ledger grouping, and
+reporting impact, before any implementation. See the investigation's
+own report (in-conversation, not a repo file) for the full analysis:
+current cardinality, the UI's "Save N Batches" terminology conflation
+between `StockBatch` and `PurchaseBatch`, and the three architectural
+options considered (line-level supplier, new intermediate grouping,
+or leaving the current one-supplier-per-batch model as correct SME
+behavior after all).
+
+## Prior status — Module #4 Durable Purchase Capture implementation (superseded above, kept for continuity)
 
 Governance sequence completed and pushed to `main` across three prior
 sessions, in order: (1) investigation-only pass tracing the current Add
