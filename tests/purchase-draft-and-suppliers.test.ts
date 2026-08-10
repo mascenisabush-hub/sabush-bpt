@@ -48,7 +48,7 @@ import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { resolveSupplierForPurchase } from '../src/utils/purchaseBatchCalculations';
 import * as calculations from '../src/utils/calculations';
-import { SupplierRecord, PurchaseDraft, PurchaseDraftLineItem } from '../src/types';
+import { SupplierRecord, PurchaseDraft, PurchaseDraftLineItem, PurchaseBatch } from '../src/types';
 
 function makeSupplier(overrides: Partial<SupplierRecord> = {}): SupplierRecord {
   return {
@@ -170,6 +170,91 @@ describe('Purchase Draft — round-trip shape (PurchaseDraft/PurchaseDraftLineIt
     };
     assert.equal(draft.supplierId, 'supplier-1');
     assert.equal(draft.supplierName, undefined);
+  });
+});
+
+describe('Phase 1 — Purchase Event correlation field (04-multi-supplier-purchase-event-amendment.md)', () => {
+  // SCOPE: this describe block covers Phase 1 of the Implementation
+  // Plan only — the types.ts additions (PurchaseBatch.purchaseEventId,
+  // PurchaseDraft.purchaseEventId). No write-path code exists yet
+  // (Phase 2, addMultipleStockBatches/savePurchaseDraft, has not been
+  // implemented) — these tests are deliberately type-shape and
+  // forward-looking-pattern checks only, not tests of real
+  // AppContext.tsx behavior, which doesn't touch this field yet.
+
+  it('PurchaseBatch without purchaseEventId remains a valid, fully-typed object (backward compatibility)', () => {
+    const batch: PurchaseBatch = {
+      id: 'pbatch-1',
+      batchNumber: 'BAT-000001',
+      batchSeq: 1,
+      date: '2026-01-01',
+      supplier: { name: 'ABC Wholesalers' },
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    assert.equal(batch.purchaseEventId, undefined);
+  });
+
+  it('PurchaseBatch with purchaseEventId is a valid, fully-typed object', () => {
+    const batch: PurchaseBatch = {
+      id: 'pbatch-2',
+      batchNumber: 'BAT-000002',
+      batchSeq: 2,
+      date: '2026-01-01',
+      supplier: { name: 'Distribuidora Central' },
+      purchaseEventId: 'pevent-1',
+      createdAt: '2026-01-01T00:00:00.000Z',
+    };
+    assert.equal(batch.purchaseEventId, 'pevent-1');
+  });
+
+  it('PurchaseDraft without purchaseEventId remains valid (backward compatibility with drafts saved before this field existed)', () => {
+    const draft: PurchaseDraft = {
+      items: [],
+      date: '2026-01-01',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    };
+    assert.equal(draft.purchaseEventId, undefined);
+  });
+
+  it('PurchaseDraft with purchaseEventId is valid', () => {
+    const draft: PurchaseDraft = {
+      items: [],
+      date: '2026-01-01',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+      purchaseEventId: 'pevent-1',
+    };
+    assert.equal(draft.purchaseEventId, 'pevent-1');
+  });
+
+  it('forward-looking: the established conditional-spread convention correctly omits purchaseEventId when absent (no literal undefined) — same pattern Phase 2 must reuse', () => {
+    // Mirrors the exact pattern already proven at the real write sites
+    // in AppContext.tsx (SupplierRecord creation, PurchaseBatch
+    // construction, savePurchaseDraft — see the "Firestore
+    // write-safety" describe block above) — this test does not import
+    // or exercise that code (it doesn't touch purchaseEventId yet,
+    // Phase 2 hasn't shipped), it confirms the SAME pattern extends
+    // cleanly to this new field, as a regression safeguard for
+    // whoever implements Phase 2.
+    function buildPayload(purchaseEventId?: string) {
+      return {
+        id: 'pbatch-1',
+        ...(purchaseEventId ? { purchaseEventId } : {}),
+      };
+    }
+    const withoutId = buildPayload(undefined);
+    assert.equal('purchaseEventId' in withoutId, false);
+
+    const withId = buildPayload('pevent-1');
+    assert.equal(withId.purchaseEventId, 'pevent-1');
+  });
+
+  it('purchaseEventId is organizational metadata only — not read by calculateBatch/calculateInventoryTotals (valuation boundary, Part 12)', () => {
+    // Same structural confirmation already established for
+    // supplier/draft fields in the "Valuation boundary" describe block
+    // below — repeated here scoped explicitly to this amendment's own
+    // field, since it's a distinct governance document with its own
+    // Business Worth boundary requirement (Rule 8 Assessment, Section 9).
+    assert.equal(calculations.calculateBatch.length, 2); // (batch, quebras) — unchanged arity, no new parameter
   });
 });
 

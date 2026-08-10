@@ -211,6 +211,21 @@ export interface PurchaseBatch {
   // present — this field is purely a forward-looking reference back to
   // the reusable SupplierRecord, never a replacement for the snapshot.
   supplierId?: string;
+  // [Multi-Supplier Purchase Event Amendment v1.0] Optional, additive
+  // correlation value — present only on PurchaseBatch documents the
+  // Admin has explicitly indicated belong to the same broader
+  // restocking activity as at least one other PurchaseBatch (Part 7:
+  // lazy, explicit-click-only assignment, never set by default).
+  // A plain client-generated string, never a Firestore document
+  // reference — there is no PurchaseEvent collection or document
+  // (Part 3). Does NOT change what this PurchaseBatch itself means —
+  // it remains exactly what it already is: one supplier's delivery
+  // (Part 4). Absent on every historical PurchaseBatch and on any
+  // purchase the Admin never chose to correlate; never read by
+  // calculateBatch, calculateInventoryTotals, or
+  // calculatePurchaseBatchSummary (Part 12 — organizational metadata
+  // only, not a valuation input).
+  purchaseEventId?: string;
   notes?: string;
   createdByName?: string; // display name of whoever recorded the purchase
   createdAt: string; // ISO string
@@ -435,6 +450,15 @@ export interface PurchaseDraft {
   supplierNotes?: string;
   date: string; // YYYY-MM-DD — purchase date staged so far
   notes?: string; // batch-level notes, mirrors PurchaseBatch.notes
+  // [Multi-Supplier Purchase Event Amendment v1.0] Optional, additive
+  // — carries a Purchase Event correlation forward through the
+  // existing durable-draft mechanism (autosave/restore), so an
+  // interruption (crash/refresh) while entering a SECOND supplier's
+  // products, after the Admin has already chosen to correlate it with
+  // a first (already-finalized) PurchaseBatch, does not silently lose
+  // that correlation. Mirrors PurchaseBatch.purchaseEventId's own
+  // meaning exactly — this field carries no other purpose.
+  purchaseEventId?: string;
   updatedAt: string; // ISO string
 }
 
