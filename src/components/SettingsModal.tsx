@@ -12,6 +12,34 @@ interface SettingsModalProps {
 }
 
 export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenProfileEdit = false }) => {
+  // Pilot safety hardening — "Clear All Data" / "Load Sample Data" gate.
+  //
+  // import.meta.env.DEV is Vite's own built-in flag: automatically true
+  // only for a genuine local `vite dev` server, automatically false for
+  // ANY `vite build` output — including this app's own production/pilot
+  // deployment. There is nothing to configure and nothing a developer
+  // could forget to set for the default (local dev) case.
+  //
+  // VITE_ENABLE_DEMO_TOOLS is an explicit, opt-in escape hatch for a
+  // future deliberate demo/staging build that IS built via `vite build`
+  // but still wants these tools available — same VITE_*-prefixed,
+  // build-time-baked, client-visible convention already used for Firebase
+  // config (src/lib/firebase.ts). Client-visible is fine here: per the
+  // task's own framing, this flag's purpose is to prevent *accidental*
+  // production exposure, not to serve as an authorization boundary — the
+  // real authorization boundary (who can call clearAllData at all) is
+  // already `isOwner`, unchanged, and ultimately firestore.rules itself.
+  //
+  // Fail-safe by construction: if VITE_ENABLE_DEMO_TOOLS is missing,
+  // misspelled, or set to anything other than the literal string 'true',
+  // this condition is false — the tools are hidden. There is no code path
+  // where an unset/ambiguous flag results in the tools being shown; a
+  // real production build must both (a) not be a `vite dev` server, which
+  // it never is, and (b) not have this variable explicitly set to 'true'
+  // in its own build environment, which nobody would do for a real pilot
+  // deployment.
+  const demoToolsEnabled = import.meta.env.DEV || import.meta.env.VITE_ENABLE_DEMO_TOOLS === 'true';
+
   const {
     business,
     isOwner,
@@ -369,27 +397,40 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                 </div>
               </div>
 
-              {/* Demo actions */}
-              {isOwner && (
+              {/* Data actions. "Ações de Dados" itself may legitimately have
+                  something to show in production even with demo tooling
+                  disabled — the Closing backfill button below is a real,
+                  one-time production migration helper, not a demo/destructive
+                  action, and must remain visible on its own existing
+                  condition regardless of demoToolsEnabled. The section
+                  header/wrapper is therefore gated on "is there anything at
+                  all to show," not on demoToolsEnabled alone. */}
+              {isOwner && (demoToolsEnabled || closings.length > 0) && (
                 <div className="pt-4 border-t border-gray-200">
                   <h4 className="text-xs font-bold text-gray-700 mb-2">Ações de Dados</h4>
                   <div className="flex flex-wrap gap-2">
-                    <button
-                      type="button"
-                      onClick={async () => {
-                        if (confirm('Carregar dados de exemplo no seu negócio?')) {
-                          await loadSampleData();
-                        }
-                      }}
-                      className="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-700 text-xs font-semibold transition flex items-center gap-1.5"
-                    >
-                      <Sparkles className="w-3.5 h-3.5" />
-                      Carregar Dados de Exemplo
-                    </button>
+                    {/* [Pilot safety hardening] Demo-only — see demoToolsEnabled
+                        above. Never shown in a real production/pilot build. */}
+                    {demoToolsEnabled && (
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          if (confirm('Carregar dados de exemplo no seu negócio?')) {
+                            await loadSampleData();
+                          }
+                        }}
+                        className="px-3 py-2 rounded-xl bg-blue-600/20 hover:bg-blue-600/30 border border-blue-500/40 text-blue-700 text-xs font-semibold transition flex items-center gap-1.5"
+                      >
+                        <Sparkles className="w-3.5 h-3.5" />
+                        Carregar Dados de Exemplo
+                      </button>
+                    )}
                     {/* [Closing Integrity Amendment v1.0 — backfill decision]
                         Only relevant if there's at least one Closing that
                         might predate this amendment. Idempotent — safe to
-                        click more than once. */}
+                        click more than once. A real production feature, not
+                        demo tooling — intentionally NOT gated by
+                        demoToolsEnabled. */}
                     {closings.length > 0 && (
                       <button
                         type="button"
@@ -401,7 +442,11 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         {backfillLoading ? 'A aplicar...' : 'Aplicar Bloqueio a Fechos Anteriores'}
                       </button>
                     )}
-                    {products.length > 0 && (
+                    {/* [Pilot safety hardening] Demo-only, and destructive —
+                        see demoToolsEnabled above. Never shown in a real
+                        production/pilot build, regardless of how much real
+                        business data exists. */}
+                    {demoToolsEnabled && products.length > 0 && (
                       <button
                         type="button"
                         onClick={async () => {
