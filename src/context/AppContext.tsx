@@ -1858,8 +1858,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!countItems.length) throw new Error('Adicione pelo menos um produto válido à contagem.');
 
+    // [Fix #3 — Initial Stock Count Singleton] type === 'initial' now
+    // always writes to the same, fixed document id ('initial') instead
+    // of a fresh random one. This makes the singleton invariant ("a
+    // business may create an Initial Stock Count only if none already
+    // exists") race-proof and server-side: Firestore classifies a write
+    // to a path that already holds a document as an `update`, not a
+    // `create`, regardless of client method — and firestore.rules
+    // already refuses any update to a type: 'initial' document,
+    // unconditionally (Architecture 8.6's "no exceptions" tier). A
+    // second attempt (e.g. a retry after a dropped-connection false
+    // failure) now hits that existing rule directly instead of quietly
+    // creating a second, order-unstable baseline document. Periodic
+    // counts are completely untouched — they keep their prior random-id
+    // scheme; only the initial-count branch changes. Existing
+    // businesses' already-created initial counts keep their old random
+    // ids forever — this only affects the id assigned to a *new*
+    // initial count going forward, and nothing in this codebase reads,
+    // stores, or foreign-keys off that id (every consumer looks it up
+    // via `stockCounts.find(s => s.type === 'initial')`), so this is
+    // safe to change without any migration.
     const newCount: StockCount = {
-      id: (type === 'initial' ? 'stockcount-initial-' : 'stockcount-') + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      id: type === 'initial' ? 'initial' : 'stockcount-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       type,
       label: label?.trim() || undefined,
       date,

@@ -626,6 +626,23 @@ describe('stockCounts', () => {
     await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial'), { countedAt: new Date().toISOString() }));
     await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial')));
   });
+
+  // [Fix #3 — Initial Stock Count Singleton] The app-layer fix (a
+  // fixed document id — see AppContext.tsx's recordStockCount) relies
+  // entirely on this rule already refusing any write to an existing
+  // type: 'initial' document. This test proves the race is closed at
+  // the rules layer itself, independent of the client ever checking
+  // `hasInitialStockCount` first — a first write to the fixed path
+  // succeeds (create), and a second write to that SAME path, submitted
+  // as if a retry after a dropped-connection false failure, is denied
+  // (Firestore classifies it as an update against an existing type:
+  // 'initial' document, which the pre-existing rule above already
+  // refuses unconditionally, no exceptions).
+  it('A second write to the fixed Initial Stock Count path is denied — the singleton invariant holds even under a same-path retry', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
+  });
 });
 
 // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
