@@ -303,8 +303,17 @@ service cloud.firestore {
         // reference to a /suppliers document; not itself dereferenced
         // here, matching this file's existing "cheap, deterministic
         // checks, no second read" pattern for shape-only validation).
+        // [Multi-Supplier Purchase Event Amendment v1.0] purchaseEventId
+        // is likewise optional and additive — when present, must be a
+        // string (a client-generated correlation tag, not a document
+        // reference). Same shape-only, no-second-read pattern as
+        // supplierId above. The retroactive tagging of an
+        // already-finalized PurchaseBatch (Part 7/14 of that amendment)
+        // uses the update rule below, unmodified — this create-time
+        // check only covers a purchaseEventId supplied at creation.
         allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
-          (!('supplierId' in request.resource.data) || request.resource.data.supplierId is string);
+          (!('supplierId' in request.resource.data) || request.resource.data.supplierId is string) &&
+          (!('purchaseEventId' in request.resource.data) || request.resource.data.purchaseEventId is string);
         allow update: if isMemberOf(businessId);
         allow delete: if isOwnerOf(businessId);
       }
