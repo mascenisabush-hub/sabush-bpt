@@ -174,13 +174,17 @@ describe('Purchase Draft — round-trip shape (PurchaseDraft/PurchaseDraftLineIt
 });
 
 describe('Phase 1 — Purchase Event correlation field (04-multi-supplier-purchase-event-amendment.md)', () => {
-  // SCOPE: this describe block covers Phase 1 of the Implementation
-  // Plan only — the types.ts additions (PurchaseBatch.purchaseEventId,
-  // PurchaseDraft.purchaseEventId). No write-path code exists yet
-  // (Phase 2, addMultipleStockBatches/savePurchaseDraft, has not been
-  // implemented) — these tests are deliberately type-shape and
-  // forward-looking-pattern checks only, not tests of real
-  // AppContext.tsx behavior, which doesn't touch this field yet.
+  // SCOPE, updated at Phase 6: this describe block originally covered
+  // Phase 1 (types.ts) only, written before Phases 2-5 shipped — kept
+  // here unmodified as the original type-shape/backward-compatibility
+  // coverage. The comment below describing Phase 2 as "not yet
+  // implemented" is now historical, not current: Phases 2-5 have
+  // since shipped, and the "Firestore write-safety" describe block
+  // above has been extended with real purchaseEventId regression
+  // coverage mirroring the actual, now-shipped AppContext.tsx code —
+  // see the tests added there for the current, authoritative
+  // write-safety verification. This block's own tests remain valid
+  // and are not duplicated, just no longer the only coverage.
 
   it('PurchaseBatch without purchaseEventId remains a valid, fully-typed object (backward compatibility)', () => {
     const batch: PurchaseBatch = {
@@ -226,15 +230,13 @@ describe('Phase 1 — Purchase Event correlation field (04-multi-supplier-purcha
     assert.equal(draft.purchaseEventId, 'pevent-1');
   });
 
-  it('forward-looking: the established conditional-spread convention correctly omits purchaseEventId when absent (no literal undefined) — same pattern Phase 2 must reuse', () => {
-    // Mirrors the exact pattern already proven at the real write sites
-    // in AppContext.tsx (SupplierRecord creation, PurchaseBatch
-    // construction, savePurchaseDraft — see the "Firestore
-    // write-safety" describe block above) — this test does not import
-    // or exercise that code (it doesn't touch purchaseEventId yet,
-    // Phase 2 hasn't shipped), it confirms the SAME pattern extends
-    // cleanly to this new field, as a regression safeguard for
-    // whoever implements Phase 2.
+  it('forward-looking: the established conditional-spread convention correctly omits purchaseEventId when absent (no literal undefined) — same pattern Phase 2 reused', () => {
+    // Written at Phase 1, before Phase 2 shipped, as a preparatory
+    // regression safeguard. Phase 2 has since shipped and reused this
+    // exact pattern (confirmed directly in AppContext.tsx) — see the
+    // "Firestore write-safety" describe block above for the current,
+    // real-code-mirroring coverage. This local reconstruction remains
+    // here, unmodified, as the original historical safeguard.
     function buildPayload(purchaseEventId?: string) {
       return {
         id: 'pbatch-1',
@@ -289,7 +291,11 @@ describe('Firestore write-safety — no literal `undefined` field (regression, p
     };
   }
 
-  function buildPurchaseBatchPayload(resolution: { matchedSupplierId?: string; name: string; phone?: string; notes?: string }, batchNotes?: string) {
+  function buildPurchaseBatchPayload(
+    resolution: { matchedSupplierId?: string; name: string; phone?: string; notes?: string },
+    batchNotes?: string,
+    purchaseEventId?: string
+  ) {
     return {
       id: 'pbatch-1',
       batchNumber: 'BAT-000001',
@@ -301,13 +307,23 @@ describe('Firestore write-safety — no literal `undefined` field (regression, p
         ...(resolution.notes ? { notes: resolution.notes } : {}),
       },
       ...(resolution.matchedSupplierId ? { supplierId: resolution.matchedSupplierId } : {}),
+      // [Multi-Supplier Purchase Event Amendment v1.0] Mirrors
+      // AppContext.tsx's addMultipleStockBatches exactly:
+      // ...(purchaseEventId ? { purchaseEventId } : {}) placed between
+      // supplierId and notes, same conditional-spread discipline as
+      // every other optional field on this document.
+      ...(purchaseEventId ? { purchaseEventId } : {}),
       ...(batchNotes?.trim() ? { notes: batchNotes.trim() } : {}),
       createdByName: 'Owner',
       createdAt: '2026-01-01T00:00:00.000Z',
     };
   }
 
-  function buildPurchaseDraftPayload(supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string }, notes?: string) {
+  function buildPurchaseDraftPayload(
+    supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string },
+    notes?: string,
+    purchaseEventId?: string
+  ) {
     return {
       items: [],
       ...(supplier.supplierId ? { supplierId: supplier.supplierId } : {}),
@@ -316,6 +332,10 @@ describe('Firestore write-safety — no literal `undefined` field (regression, p
       ...(supplier.supplierNotes ? { supplierNotes: supplier.supplierNotes } : {}),
       date: '2026-01-01',
       ...(notes ? { notes } : {}),
+      // [Multi-Supplier Purchase Event Amendment v1.0] Mirrors
+      // AppContext.tsx's savePurchaseDraft exactly: purchaseEventId is
+      // conditionally spread last, after notes, before updatedAt.
+      ...(purchaseEventId ? { purchaseEventId } : {}),
       updatedAt: '2026-01-01T00:00:00.000Z',
     };
   }
@@ -438,6 +458,58 @@ describe('Firestore write-safety — no literal `undefined` field (regression, p
     const payload = buildPurchaseBatchPayload(resolution, '   '); // whitespace-only, trims to empty
     assertNoUndefinedFields(payload);
     assert.equal('notes' in payload, false);
+  });
+
+  // [Multi-Supplier Purchase Event Amendment v1.0, Rule 8 Assessment
+  // Section 12] purchaseEventId is a second optional field added to
+  // the same two write sites this describe block already covers
+  // (PurchaseBatch construction, savePurchaseDraft) — required
+  // regression coverage given both sites were already shown
+  // vulnerable to the undefined-field bug once.
+
+  it('PurchaseBatch: no purchaseEventId (the overwhelming majority case — a normal, unextended purchase) — safe, omitted', () => {
+    const resolution = resolveSupplierForPurchase([], { supplierName: 'ABC Wholesalers' });
+    const payload = buildPurchaseBatchPayload(resolution); // purchaseEventId omitted entirely, matching a normal handleSubmit call
+    assertNoUndefinedFields(payload);
+    assert.equal('purchaseEventId' in payload, false);
+  });
+
+  it('PurchaseBatch: purchaseEventId explicitly undefined (the exact value currentPurchaseEventId holds before "Add Another Supplier" is ever clicked) — safe, omitted', () => {
+    const resolution = resolveSupplierForPurchase([], { supplierName: 'ABC Wholesalers' });
+    const payload = buildPurchaseBatchPayload(resolution, undefined, undefined);
+    assertNoUndefinedFields(payload);
+    assert.equal('purchaseEventId' in payload, false);
+  });
+
+  it('PurchaseBatch: purchaseEventId populated (Admin has already clicked "Add Another Supplier") — present, alongside supplierId/notes', () => {
+    const resolution = resolveSupplierForPurchase([], { supplierName: 'ABC Wholesalers' });
+    const payload = buildPurchaseBatchPayload(resolution, 'Cash purchase', 'pevent-1');
+    assertNoUndefinedFields(payload);
+    assert.equal(payload.purchaseEventId, 'pevent-1');
+    assert.equal(payload.notes, 'Cash purchase');
+  });
+
+  it('PurchaseDraft: no purchaseEventId (a normal, unextended purchase draft) — safe, omitted', () => {
+    const payload = buildPurchaseDraftPayload({ supplierName: 'ABC Wholesalers' });
+    assertNoUndefinedFields(payload);
+    assert.equal('purchaseEventId' in payload, false);
+  });
+
+  it('PurchaseDraft: purchaseEventId populated (autosave mid-second-supplier-entry, carrying the correlation forward through an interruption) — present', () => {
+    const payload = buildPurchaseDraftPayload({ supplierName: 'Distribuidora Central' }, undefined, 'pevent-1');
+    assertNoUndefinedFields(payload);
+    assert.equal(payload.purchaseEventId, 'pevent-1');
+  });
+
+  it('PurchaseDraft: purchaseEventId populated alongside every other optional field simultaneously blank — still fully safe', () => {
+    // The exact combination the amendment's Part 6 exists to protect:
+    // supplier not yet re-selected/typed for the second purchase, but
+    // the correlation itself must survive.
+    const payload = buildPurchaseDraftPayload({}, undefined, 'pevent-1');
+    assertNoUndefinedFields(payload);
+    assert.equal('supplierId' in payload, false);
+    assert.equal('supplierName' in payload, false);
+    assert.equal(payload.purchaseEventId, 'pevent-1');
   });
 });
 
