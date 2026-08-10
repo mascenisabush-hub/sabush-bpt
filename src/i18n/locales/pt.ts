@@ -291,6 +291,9 @@ export interface TranslationDict {
       discardButton: string;
       discardConfirm: string;
     };
+    event: {
+      addAnotherSupplier: string;
+    };
   };
   addQuebra: {
     title: string;
@@ -1160,6 +1163,9 @@ export const pt: TranslationDict = {
       restoredNotice: 'Continuou uma compra em curso — os produtos já guardados foram restaurados.',
       discardButton: 'Descartar Rascunho',
       discardConfirm: 'Tem a certeza que quer descartar este rascunho? Os produtos já guardados serão perdidos.',
+    },
+    event: {
+      addAnotherSupplier: 'Adicionar Outro Fornecedor a Esta Compra',
     },
   },
   addQuebra: {

@@ -323,6 +323,9 @@ export const fr: TranslationDict = {
       discardButton: 'Supprimer le Brouillon',
       discardConfirm: 'Êtes-vous sûr de vouloir supprimer ce brouillon ? Les produits déjà enregistrés seront perdus.',
     },
+    event: {
+      addAnotherSupplier: 'Ajouter un Autre Fournisseur à Cet Achat',
+    },
   },
   addQuebra: {
     title: 'Enregistrer une Perte de Stock',

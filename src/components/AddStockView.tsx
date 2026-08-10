@@ -64,6 +64,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     purchaseDraftLoaded,
     savePurchaseDraft,
     clearPurchaseDraft,
+    attachPurchaseEventId,
     activeBusinessId,
   } = useApp();
   const { t } = useLanguage();
@@ -138,6 +139,29 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const [wasRestoredFromDraft, setWasRestoredFromDraft] = useState(false);
   const skipNextAutosave = useRef(false);
+  // [Multi-Supplier Purchase Event Amendment v1.0, Part 7] Purely
+  // local, in-memory correlation state for an in-progress multi-
+  // supplier chain — undefined until the Admin explicitly clicks "Add
+  // Another Supplier" for the first time (lazy assignment, amendment
+  // Part 7's central discipline: never assigned by default).
+  // currentPurchaseEventId, once set, is passed directly into every
+  // subsequent addMultipleStockBatches/savePurchaseDraft call in this
+  // same chain. justFinalizedPurchaseBatchId remembers the most
+  // recently finalized PurchaseBatch's id specifically so the FIRST
+  // "Add Another Supplier" click can retroactively tag that one
+  // already-created batch (it was created before any correlation
+  // decision existed, so it can't have received purchaseEventId at
+  // creation time the way every later batch in the chain can).
+  const [currentPurchaseEventId, setCurrentPurchaseEventId] = useState<string | undefined>(undefined);
+  const [justFinalizedPurchaseBatchId, setJustFinalizedPurchaseBatchId] = useState<string | undefined>(undefined);
+  // Holds the pending setTimeout(() => onComplete(), ...) handle from
+  // the success screen so "Add Another Supplier" can cancel it —
+  // without this, onComplete() would still fire on its own schedule
+  // and (for Owner/Manager) unmount this component mid-chain, silently
+  // discarding currentPurchaseEventId and any newly-typed rows. This
+  // is exactly the class of hazard the amendment's Part 7 findings
+  // warn about, applied to the timer specifically, not just routing.
+  const pendingCompleteTimeout = useRef<ReturnType<typeof setTimeout> | null>(null);
   // [Fix — business-switch draft staleness, Option B, mirrored from
   // InitialStockCountView] AddStockView is not remounted on a business
   // switch (selected only by activeTab), so this component's own
@@ -160,6 +184,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     setIsSaving(false);
     setDraftSaveState('idle');
     setWasRestoredFromDraft(false);
+    // [Multi-Supplier Purchase Event Amendment v1.0] A Purchase Event
+    // cannot span two businesses (PurchaseBatch is already business-
+    // scoped, amendment Part 7) — reset unconditionally, same as every
+    // other local field above. Also cancel any pending success-screen
+    // auto-redirect, since it captured the PREVIOUS business's onComplete
+    // closure.
+    setCurrentPurchaseEventId(undefined);
+    setJustFinalizedPurchaseBatchId(undefined);
+    if (pendingCompleteTimeout.current) {
+      clearTimeout(pendingCompleteTimeout.current);
+      pendingCompleteTimeout.current = null;
+    }
     skipNextAutosave.current = false;
     setDraftLoaded(false); // re-arms the load effect below for the new business
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -237,14 +273,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         rows.map(rowToDraftLineItem),
         { supplierId, supplierName: supplierName || undefined, supplierPhone: supplierPhone || undefined, supplierNotes: supplierNotes || undefined },
         date,
-        batchNotes || undefined
+        batchNotes || undefined,
+        // [Multi-Supplier Purchase Event Amendment v1.0, Part 6] carries
+        // the correlation forward through an interruption while
+        // entering a SECOND (or later) supplier's products — undefined
+        // for a normal, unextended purchase, matching today's behavior
+        // exactly.
+        currentPurchaseEventId
       )
         .then(() => setDraftSaveState('saved'))
         .catch(() => setDraftSaveState('idle'));
     }, 800);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded]);
+  }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded, currentPurchaseEventId]);
 
   // Explicit discard — clears the persisted draft and resets the form
   // to a single empty row, per the amendment's "must be discardable"
@@ -398,13 +440,22 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // this call fails/rejects, the draft is guaranteed to remain
     // exactly as it was (same Firestore batch atomicity), so the
     // catch block below deliberately does NOT touch the draft either.
+    //
+    // [Multi-Supplier Purchase Event Amendment v1.0] currentPurchaseEventId
+    // is undefined for a normal, unextended purchase (unchanged
+    // behavior) — set only once the Admin has already clicked "Add
+    // Another Supplier" earlier in this same chain, in which case this
+    // NEW batch is correlated at creation time directly (no retroactive
+    // tag needed for it — only the very first batch in a chain needs
+    // that, handled in handleAddAnotherSupplier below).
     setIsSaving(true);
     try {
-      await addMultipleStockBatches(
+      const result = await addMultipleStockBatches(
         itemsToSave,
         { name: supplierName, phone: supplierPhone, notes: supplierNotes },
         batchNotes,
-        supplierId
+        supplierId,
+        currentPurchaseEventId
       );
 
       const messageText =
@@ -413,6 +464,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           : t('addStock.successMessageMultiple', { count: itemsToSave.length });
 
       setSubmittedMessage(messageText);
+      setJustFinalizedPurchaseBatchId(result.purchaseBatchId ?? undefined);
       setSupplierId(undefined);
       setSupplierName('');
       setSupplierPhone('');
@@ -420,14 +472,89 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       setBatchNotes('');
       setWasRestoredFromDraft(false);
 
-      setTimeout(() => {
+      // [Multi-Supplier Purchase Event Amendment v1.0] The handle is
+      // stored so handleAddAnotherSupplier can cancel it — without
+      // this, onComplete() would still fire on its own schedule even
+      // after the Admin chooses to continue the purchase, and (for
+      // Owner/Manager, whose activeTab actually changes) unmount this
+      // component mid-chain. Extended from the pre-amendment 1200ms to
+      // give a human enough time to actually read and click the new
+      // "Add Another Supplier" action the success screen now shows —
+      // 1200ms was tuned for an auto-redirect with nothing to click;
+      // it is not long enough once there's a decision to make.
+      pendingCompleteTimeout.current = setTimeout(() => {
+        pendingCompleteTimeout.current = null;
         onComplete();
-      }, 1200);
+      }, 5000);
     } catch (err: any) {
       alert(err?.message || 'Erro ao registar a entrada de stock.');
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // [Multi-Supplier Purchase Event Amendment v1.0, Part 7] "Adicionar
+  // Outro Fornecedor a Esta Compra" — the ONLY way a purchaseEventId is
+  // ever assigned (lazy, explicit-click-only, never a default).
+  //
+  // CRITICAL, per the Rule 8 Assessment's own required review point:
+  // this performs a true IN-PLACE local reset. It must never call
+  // onComplete() or rely on tab navigation — that plumbing is proven
+  // unreliable for exactly this scenario (see the two findings recorded
+  // in the amendment's Part 7: Staff never unmount on the same-tab
+  // route, and submittedMessage is never otherwise reset for them).
+  const handleAddAnotherSupplier = async () => {
+    // Cancel the pending auto-redirect first — it captured this exact
+    // moment's onComplete() closure and must never fire now that the
+    // Admin has chosen to continue instead of finishing.
+    if (pendingCompleteTimeout.current) {
+      clearTimeout(pendingCompleteTimeout.current);
+      pendingCompleteTimeout.current = null;
+    }
+
+    let eventId = currentPurchaseEventId;
+    if (!eventId) {
+      // First extension in this chain — generate the correlation value
+      // (client-generated, matching this codebase's existing
+      // ID-generation convention) and retroactively tag the batch that
+      // was JUST finalized, since it was created before any
+      // correlation decision existed and so couldn't have received
+      // purchaseEventId at creation time the way every later batch in
+      // this same chain now will (passed directly into
+      // addMultipleStockBatches above).
+      eventId = 'pevent-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+      if (justFinalizedPurchaseBatchId) {
+        try {
+          await attachPurchaseEventId(justFinalizedPurchaseBatchId, eventId);
+        } catch (err) {
+          // Degraded, not data-losing: if this retroactive tag fails
+          // (transient network issue), the FIRST batch in the chain
+          // simply won't be correlated — it remains a fully valid,
+          // correctly-valued PurchaseBatch on its own, exactly as
+          // every PurchaseBatch already is (amendment Part 7's own "no
+          // unfinished event state" principle). Every batch from here
+          // on will still correlate correctly with each other, since
+          // eventId is now known locally regardless of whether this
+          // one retroactive write succeeded. Not surfaced as a
+          // blocking error — the Admin's intent (continue the
+          // purchase) still succeeds.
+        }
+      }
+      setCurrentPurchaseEventId(eventId);
+    }
+
+    // True in-place reset — no onComplete(), no tab navigation.
+    skipNextAutosave.current = true;
+    setSubmittedMessage(null);
+    setRows([createEmptyRow('')]);
+    setDate(getTodayDateString());
+    setSupplierId(undefined);
+    setSupplierName('');
+    setSupplierPhone('');
+    setSupplierNotes('');
+    setBatchNotes('');
+    setWasRestoredFromDraft(false);
+    setDraftSaveState('idle');
   };
 
   // Calculate totals across all rows (new batches, so remainingQuantity == quantity — no quebras yet)
@@ -523,12 +650,25 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         )}
 
         {submittedMessage ? (
-          <div className="py-10 text-center space-y-3">
+          <div className="py-10 text-center space-y-4">
             <div className="w-14 h-14 rounded-full bg-emerald-50 text-emerald-600 flex items-center justify-center mx-auto">
               <CheckCircle2 className="w-7 h-7" strokeWidth={2.25} />
             </div>
             <h3 className="text-lg font-bold text-[#111827]">{t('addStock.successTitle')}</h3>
             <p className="text-sm text-gray-500 max-w-md mx-auto">{submittedMessage}</p>
+            {/* [Multi-Supplier Purchase Event Amendment v1.0, Part 7/8]
+                The only place a Purchase Event correlation is ever
+                started — lazy, explicit-click-only. Not clicking this
+                simply lets the existing auto-redirect run its course,
+                exactly as before this amendment. */}
+            <button
+              type="button"
+              onClick={handleAddAnotherSupplier}
+              className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#B8952F] hover:underline"
+            >
+              <Truck className="w-3.5 h-3.5" strokeWidth={2.25} />
+              {t('addStock.event.addAnotherSupplier')}
+            </button>
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">

@@ -323,6 +323,9 @@ export const en: TranslationDict = {
       discardButton: 'Discard Draft',
       discardConfirm: 'Are you sure you want to discard this draft? The products you already saved will be lost.',
     },
+    event: {
+      addAnotherSupplier: 'Add Another Supplier to This Purchase',
+    },
   },
   addQuebra: {
     title: 'Record Stock Loss',
