@@ -41,9 +41,21 @@ Functions and no Blaze billing plan required.**
 3. Set the result as the `FIREBASE_SERVICE_ACCOUNT_BASE64` environment
    variable on your host (e.g. Railway → your service → Variables). Keep
    the raw JSON file out of git — it's a full-trust credential.
-4. Deploy the updated `firestore.rules` from the Firebase Console (Firestore
-   → Rules tab → paste the contents of `firestore.rules` → Publish). This
-   also requires no billing plan.
+4. Deploy `firestore.rules` and `firestore.indexes.json` with the project
+   explicitly named — never rely on whatever project the Firebase CLI
+   happens to have selected locally:
+   ```bash
+   FIREBASE_PROJECT_ID=your-real-project-id npm run deploy:firestore:rules
+   FIREBASE_PROJECT_ID=your-real-project-id npm run deploy:firestore:indexes
+   ```
+   Both commands refuse to run at all if `FIREBASE_PROJECT_ID` is unset —
+   this is deliberate: there is no `.firebaserc` in this repo and no
+   default/fallback project baked in anywhere, specifically so a deploy
+   can never silently target the wrong project. Find the correct project
+   ID in Firebase Console → Project Settings → General → Project ID (it's
+   also the value already set as `VITE_FIREBASE_PROJECT_ID` in this app's
+   Railway environment). Requires being signed in locally via
+   `npx firebase login` first. This also requires no billing plan.
 
 ### Local development
 

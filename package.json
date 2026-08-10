@@ -27,7 +27,9 @@
     "test:subscription-engine": "tsx --test tests/subscription-engine.test.ts",
     "test:payment-confirmation": "tsx --test tests/payment-confirmation.test.ts",
     "test:all": "npm run test:calculations && npm run test:expected-stock-value && npm run test:initial-stock-price-change && npm run test:purchase-draft-and-suppliers && npm run test:purchase-event-grouping && npm run test:initial-stock-confirmation && npm run test:notification-platform && npm run test:staff-notifications && npm run test:trial-notification-producer && npm run test:closing-notification-producer && npm run test:breakage-notification-producer && npm run test:subscription-engine && npm run test:payment-confirmation",
-    "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\""
+    "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\"",
+    "deploy:firestore:rules": "node scripts/require-firebase-project-id.js && firebase deploy --only firestore:rules --project \"$FIREBASE_PROJECT_ID\"",
+    "deploy:firestore:indexes": "node scripts/require-firebase-project-id.js && firebase deploy --only firestore:indexes --project \"$FIREBASE_PROJECT_ID\""
   },
   "dependencies": {
     "@google/genai": "^2.4.0",
