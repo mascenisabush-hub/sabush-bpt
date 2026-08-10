@@ -12,122 +12,81 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #4 (Purchase Batches) — **Durable Purchase Capture
-and Reusable Suppliers is implemented AND a production bug discovered
-after that implementation shipped has been fixed, tested, and pushed
-to `main`.** Both pieces are done; nothing is mid-flight.
+**Status:** Module #4 (Purchase Batches) — **the Multi-Supplier
+Purchase Event governance sequence is complete: investigation →
+amendment → Rule 8 Assessment → Implementation Plan, all approved,
+all committed and pushed. Implementation has NOT started — this is
+governance/documentation only, exactly as intended, and matches the
+established sequence for every prior Module #4 amendment.**
 
-**What happened, in order:** (1) the Durable Purchase Capture &
-Reusable Suppliers implementation shipped (`9333689`, all 9 phases —
-full detail in the "Prior status" section immediately below, kept for
-continuity, not repeated here); (2) live use of Add Stock against real
-production Firestore surfaced `Function WriteBatch.set() called with
-invalid data. Unsupported field value: undefined (found in field phone
-in document businesses/{businessId}/suppliers/{supplierId})`; (3) a
-dedicated investigation traced the exact root cause and confirmed no
-data-model/architecture change was needed; (4) a surgical fix shipped
-(`0c71631`).
+**What this closes:** the deliberately-deferred "next actionable item"
+from the previous session (see "Prior status" immediately below) —
+`PurchaseBatch` currently means one supplier's delivery, with no way
+to correlate several such deliveries as one broader restocking trip
+across multiple suppliers on the same day.
 
-**Root cause, confirmed against the SDK's own source, not assumed:**
-this repo's Firestore client uses default settings —
-`ignoreUndefinedProperties` is **not** enabled
-(`src/lib/firebase.ts`) — so `WriteBatch.set()`/`setDoc()` reject any
-field whose value is the literal `undefined`, synchronously, at call
-time. Several optional-field constructions used the `x || undefined`
-idiom, which produces exactly that forbidden value whenever the field
-is left blank.
+**Governance artifacts, all pushed to `main`:**
 
-**Three write sites fixed, all in `AppContext.tsx`, all converted to
-this repo's own pre-existing conditional-spread convention**
-(`InitialStockPriceChangeEvent.reason`,
-`...(reason?.trim() ? { reason: reason.trim() } : {})`) — omitting the
-key when absent, never assigning `undefined`:
+- [`docs/specs/04-multi-supplier-purchase-event-amendment.md`](./docs/specs/04-multi-supplier-purchase-event-amendment.md)
+  (✅ Approved — business specification only). **Model D**: an optional
+  `purchaseEventId?: string` correlation field on `PurchaseBatch` (and,
+  for interruption safety, `PurchaseDraft`) — no new Firestore
+  collection, no new document type. `PurchaseBatch`'s own existing
+  definition ("one supplier's delivery") is **unchanged** — confirmed
+  by direct precedent this session, not just principle: the prior
+  `supplierId` amendment, structurally identical in shape, touched no
+  architecture document either, and neither does this one.
+- [`docs/engineering/04-multi-supplier-purchase-event-rule8-assessment.md`](./docs/engineering/04-multi-supplier-purchase-event-rule8-assessment.md)
+  — Governance Readiness: **Ready**.
+- [`docs/engineering/04-multi-supplier-purchase-event-implementation-plan.md`](./docs/engineering/04-multi-supplier-purchase-event-implementation-plan.md)
+  — 7 phases.
+- `docs/specs/README.md` — Module #4 row updated for both amendments;
+  also corrected a stale note that had wrongly still said "implementation
+  not yet authorized" for the *first* amendment, which was in fact
+  implemented (`9333689`) and bug-fixed (`0c71631`) two sessions ago.
 
-1. **`addMultipleStockBatches` — new `SupplierRecord` creation**
-   (`phone`, `notes`) — the exact site named in the reported error.
-2. **`addMultipleStockBatches` — `PurchaseBatch` construction**
-   (`supplier.phone`, `supplier.notes`, `supplierId`, top-level
-   `notes`). The bare `notes` field was a **pre-existing bug predating
-   this session's Module #4 work entirely** — `notes: notes?.trim() ||
-   undefined` already had this exact vulnerability before the
-   amendment ever touched this function. Fixed here as part of the
-   same narrowly-scoped correction, per direct authorization, since
-   this exact write path now exercises it.
-3. **`savePurchaseDraft`** — the most consequential instance. Autosave
-   fires automatically, in the background, on every meaningful change
-   — and the common case (no supplier selected yet, phone/notes/batch
-   notes still blank) was exactly the case that previously threw,
-   silently swallowed by the autosave effect's own `.catch()`. **The
-   draft was very likely never actually persisting in the common case**
-   — meaning the durability feature's core promise was likely not
-   being delivered before this fix. `savePurchaseDraft` now sanitizes
-   its own output regardless of what the caller passes.
+**Two concrete findings from this session's own fresh code inspection
+materially shaped the design — not just carried over from the prior
+investigation:**
 
-**Verified, fresh, this session (not just cited from the prior one):**
+1. `App.tsx`'s `onComplete` routing sends Staff back to the *same*
+   `add-stock` tab value after a successful submit — React bails out
+   of re-rendering an unchanged state value, so `AddStockView` never
+   unmounts for a Staff member who stays on that screen.
+2. Direct consequence: `AddStockView.tsx`'s `submittedMessage` state is
+   set on success but **never reset to `null`** except by the business-
+   switch effect — meaning, for that same Staff member, the success
+   screen would remain stuck permanently displayed after one successful
+   submit, with no path back to the form short of a business switch.
 
-- Diff scope: exactly 2 files changed — `src/context/AppContext.tsx`,
-  `tests/purchase-draft-and-suppliers.test.ts`. Confirmed via
-  `git diff --stat 9333689..0c71631`. Nothing else touched —
-  `firestore.rules`, `types.ts`, `AddStockView.tsx`,
-  `purchaseBatchCalculations.ts` all untouched by this fix.
-- No remaining `undefined`-producing construction reaches any of the
-  three Firestore write sites — confirmed by direct grep against the
-  actual `fsBatch.set()`/`setDoc()` call sites, not just by reading the
-  diff. (Two unrelated `|| undefined` occurrences remain elsewhere in
-  the codebase — `StockCount.label` (Module #10) and
-  `handleSelectProductForTool`'s pure React row state
-  (`AddStockView.tsx`, pre-existing, never itself written to
-  Firestore) — both out of scope for this fix and confirmed to not
-  reach any Purchase Draft/Supplier/PurchaseBatch write.)
-- `npx tsc --noEmit -p .` — clean.
-- `npm run test:all` — **12 suites, 223/223 passing, zero regressions**
-  (210 pre-existing + 13 new regression tests in the new "Firestore
-  write-safety" describe block, explicitly distinguishing `undefined`
-  from `null` and `''`).
-- `npm run build` — clean, same pre-existing non-blocking warnings only.
-- Firestore rules emulator — attempted fresh, **not run** — failed
-  with `Error: download failed, status 403: Host not in allowlist:
-  storage.googleapis.com`. Not claimed as passing. This fix touches no
-  `firestore.rules` content at all (confirmed by diff), so this
-  limitation is unchanged and unrelated to what shipped here.
-- Working tree: clean. `main` at `0c71631`, confirmed `0` ahead / `0`
-  behind `origin/main` via fresh `git fetch`.
+**Consequence for the design:** the amendment's "Add Another Supplier"
+action (Part 7/8) is explicitly designed to never depend on
+`onComplete()`/tab navigation — it performs a true in-place local
+reset instead. The Rule 8 Assessment and Implementation Plan both
+flag this as a required review point for whoever implements Phase 3,
+specifically so it isn't silently rediscovered (or missed) later.
 
-**Also corrected, same commit:** a materially incorrect comment in
-`tests/purchase-draft-and-suppliers.test.ts`'s own pre-existing JSON
-round-trip test, which had wrongly claimed "no undefined survives
-JSON — matching how Firestore itself serializes documents." That's
-false — `JSON.stringify` silently *drops* undefined keys, while the
-real Firestore SDK *throws* on them — and is exactly the false
-equivalence that let the original bug ship undetected through this
-repo's own test suite.
+**Also corrected in the amendment itself:** the task prompt that
+requested this investigation included an illustrative Business Worth
+figure ("Expected Sales Value: 5,000" alongside "Investment: 45,000")
+that conflated `totalMarketValue` (the actual selling-value figure)
+with `totalEmbeddedProfit` (`totalMarketValue − totalInvestmentValue`)
+— flagged in the prompt itself as needing verification before use, and
+corrected in the amendment's Part 12 with a properly-derived example.
 
-**Explicitly not touched by this fix, on purpose (per direct, narrow
-scope authorization):** `PurchaseBatch` cardinality/redesign,
-multi-supplier purchase events, `Product.supplier`, batch numbering,
-Investment Ledger grouping, valuation formulas (`calculations.ts` has
-**zero** diff lines across this entire fix), Business Worth, any
-payment/credit/debt field.
+**Confirmed unchanged, structurally, this session:** `calculateBatch`,
+`calculateInventoryTotals`, `calculatePurchaseBatchSummary` — none
+read a supplier or event field today, and this amendment introduces no
+new read for any of them. No payment/credit/debt concept anywhere. No
+migration of any historical record required.
 
-**Next actionable item — a real, separate, deliberately-deferred
-product question, not a bug:** the same investigation that found this
-bug also confirmed `PurchaseBatch` currently means "one supplier's
-delivery," not "one purchasing event" (an Owner buying from 3
-suppliers in one trip today creates 3 unrelated `PurchaseBatch`
-documents, with no way to group them as one trip). This is a genuine
-data-model question for the Product Architect — **not implemented, not
-started, deliberately kept separate from this bug fix** — and would
-require its own new Module #4 amendment + Rule 8 Assessment addressing
-historical-record compatibility, Investment Ledger grouping, and
-reporting impact, before any implementation. See the investigation's
-own report (in-conversation, not a repo file) for the full analysis:
-current cardinality, the UI's "Save N Batches" terminology conflation
-between `StockBatch` and `PurchaseBatch`, and the three architectural
-options considered (line-level supplier, new intermediate grouping,
-or leaving the current one-supplier-per-batch model as correct SME
-behavior after all).
+**Next actionable item:** none required immediately at the governance
+layer — this closes the deferred product question in full at the
+specification level. The next step, whenever authorized, is
+Implementation Plan Phase 1 (types) — **not started, not authorized by
+this session.**
 
-## Prior status — Module #4 Durable Purchase Capture implementation (superseded above, kept for continuity)
+## Prior status — Module #4 Durable Purchase Capture implementation + undefined-field bug fix (superseded above, kept for continuity)
 
 Governance sequence completed and pushed to `main` across three prior
 sessions, in order: (1) investigation-only pass tracing the current Add
