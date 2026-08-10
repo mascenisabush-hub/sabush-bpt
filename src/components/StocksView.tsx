@@ -4,7 +4,9 @@ import { useLanguage } from '../context/LanguageContext';
 import {
   calculatePurchaseBatchSummary,
   buildPurchaseBatchTimeline,
+  groupSummariesByPurchaseEvent,
   PurchaseBatchSummary,
+  PurchaseEventGroup,
 } from '../utils/purchaseBatchCalculations';
 import { exportPurchaseBatchToPdf } from '../utils/batchPdfExport';
 import { formatCurrency, formatDate } from '../utils/formatters';
@@ -53,6 +55,12 @@ export const StocksView: React.FC = () => {
   const [supplierFilter, setSupplierFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | PurchaseBatchStatus>('all');
   const [showArchived, setShowArchived] = useState(false);
+  // [Multi-Supplier Purchase Event Amendment v1.0, Part 10] Opt-in —
+  // defaults to off, so the default view is byte-for-byte identical to
+  // today's for every business that has never used "Add Another
+  // Supplier." Purely a display toggle; changes nothing about what
+  // filteredSummaries contains or how it's computed.
+  const [groupByEvent, setGroupByEvent] = useState(false);
   const [selectedSummary, setSelectedSummary] = useState<PurchaseBatchSummary | null>(null);
   const [isExportingPdf, setIsExportingPdf] = useState(false);
 
@@ -148,6 +156,15 @@ export const StocksView: React.FC = () => {
     );
   }, [filteredSummaries]);
 
+  // [Multi-Supplier Purchase Event Amendment v1.0, Part 10] Computed
+  // from filteredSummaries (not allSummaries) specifically so existing
+  // filters (date/supplier/status/search/archived) still apply
+  // correctly to the grouped view — a filtered-out PurchaseBatch must
+  // not silently reappear inside an event group. No new calculation:
+  // groupSummariesByPurchaseEvent only sums figures
+  // calculatePurchaseBatchSummary already produced.
+  const groupedView = useMemo(() => groupSummariesByPurchaseEvent(filteredSummaries), [filteredSummaries]);
+
   const selectedTimeline = useMemo(() => {
     if (!selectedSummary) return [];
     return buildPurchaseBatchTimeline(selectedSummary, quebras);
@@ -164,6 +181,76 @@ export const StocksView: React.FC = () => {
   };
 
   const isLegacy = (s: PurchaseBatchSummary) => s.purchaseBatch.batchSeq < 0;
+
+  // Extracted, unmodified from the original single-list rendering, so
+  // it can be reused identically by both the default ungrouped view
+  // and the grouped-by-Purchase-Event view's member cards — same
+  // click behavior (opens the existing detail modal), same markup.
+  const renderSummaryCard = (s: PurchaseBatchSummary) => (
+    <button
+      key={s.purchaseBatch.id}
+      onClick={() => setSelectedSummary(s)}
+      className="w-full text-left bg-white border border-[#E5E7EB] rounded-2xl p-4 transition-all duration-150 hover:border-[#D4AF37]/40 hover:shadow-[0_8px_24px_-14px_rgba(11,31,58,0.18)] group"
+    >
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div className="flex items-start gap-3 min-w-0">
+          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+            <Package className="w-5 h-5" strokeWidth={2} />
+          </div>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2 flex-wrap">
+              <span className="type-number text-sm text-[#111827] group-hover:text-[#B8952F] transition-colors duration-150">
+                {s.purchaseBatch.batchNumber}
+              </span>
+              <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
+                {statusLabel(s.status)}
+              </span>
+              {isLegacy(s) && (
+                <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300">
+                  {t('stocksView.legacyBadge')}
+                </span>
+              )}
+            </div>
+            <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
+              <span className="flex items-center gap-1">
+                <Calendar className="w-3 h-3" /> {formatDate(s.purchaseBatch.date)}
+              </span>
+              <span className="flex items-center gap-1 truncate">
+                <Truck className="w-3 h-3 shrink-0" /> {s.purchaseBatch.supplier.name}
+              </span>
+              <span className="flex items-center gap-1">
+                <Package className="w-3 h-3" />{' '}
+                {s.productCount === 1
+                  ? t('stocksView.productCountOne', { count: s.productCount })
+                  : t('stocksView.productCountOther', { count: s.productCount })}
+              </span>
+            </div>
+          </div>
+        </div>
+
+        <div className="flex items-center gap-4 text-right font-mono">
+          <div>
+            <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
+            <span className="text-xs type-number text-[#111827]">
+              {formatCurrency(s.remainingInvestmentValue, currencySymbol)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
+            <span className="text-xs type-number text-gray-700">
+              {formatCurrency(s.remainingMarketValue, currencySymbol)}
+            </span>
+          </div>
+          <div>
+            <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
+            <span className={`text-xs type-number ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+              {formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}
+            </span>
+          </div>
+        </div>
+      </div>
+    </button>
+  );
 
   return (
     <div className="space-y-4 pb-12">
@@ -272,15 +359,27 @@ export const StocksView: React.FC = () => {
           </div>
         </div>
 
-        <label className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold select-none">
-          <input
-            type="checkbox"
-            checked={showArchived}
-            onChange={(e) => setShowArchived(e.target.checked)}
-            className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
-          />
-          {t('stocksView.showArchived')}
-        </label>
+        <div className="flex items-center gap-4 flex-wrap">
+          <label className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold select-none">
+            <input
+              type="checkbox"
+              checked={showArchived}
+              onChange={(e) => setShowArchived(e.target.checked)}
+              className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
+            />
+            {t('stocksView.showArchived')}
+          </label>
+          {/* [Multi-Supplier Purchase Event Amendment v1.0, Part 8/10] */}
+          <label className="flex items-center gap-1.5 text-[11px] text-gray-600 font-semibold select-none">
+            <input
+              type="checkbox"
+              checked={groupByEvent}
+              onChange={(e) => setGroupByEvent(e.target.checked)}
+              className="rounded border-gray-300 text-[#D4AF37] focus:ring-[#D4AF37]"
+            />
+            {t('stocksView.groupByEvent')}
+          </label>
+        </div>
       </div>
 
       {/* Batch List */}
@@ -289,74 +388,65 @@ export const StocksView: React.FC = () => {
           <Boxes className="w-8 h-8 text-gray-300 mx-auto mb-2" strokeWidth={1.75} />
           <p className="text-sm text-gray-500">{t('stocksView.emptyState')}</p>
         </div>
-      ) : (
-        <div className="space-y-2.5">
-          {filteredSummaries.map((s) => (
-            <button
-              key={s.purchaseBatch.id}
-              onClick={() => setSelectedSummary(s)}
-              className="w-full text-left bg-white border border-[#E5E7EB] rounded-2xl p-4 transition-all duration-150 hover:border-[#D4AF37]/40 hover:shadow-[0_8px_24px_-14px_rgba(11,31,58,0.18)] group"
-            >
-              <div className="flex flex-wrap items-start justify-between gap-3">
-                <div className="flex items-start gap-3 min-w-0">
-                  <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
-                    <Package className="w-5 h-5" strokeWidth={2} />
-                  </div>
+      ) : groupByEvent ? (
+        // [Multi-Supplier Purchase Event Amendment v1.0, Part 10] Every
+        // group renders its aggregate header, then its own member cards
+        // via the exact same renderSummaryCard used by the default view
+        // below — same click behavior, same detail modal, unchanged.
+        // ungrouped summaries (the overwhelming majority, by design —
+        // amendment Part 7) render exactly as the default view does,
+        // with no group header at all — the fallback the amendment's
+        // Part 10 requires.
+        <div className="space-y-4">
+          {groupedView.grouped.map((group) => (
+            <div key={group.purchaseEventId} className="space-y-2">
+              <div className="bg-[#0B1F3A]/[0.03] border border-[#0B1F3A]/10 rounded-2xl p-3.5">
+                <div className="flex flex-wrap items-start justify-between gap-3">
                   <div className="min-w-0">
-                    <div className="flex items-center gap-2 flex-wrap">
-                      <span className="type-number text-sm text-[#111827] group-hover:text-[#B8952F] transition-colors duration-150">
-                        {s.purchaseBatch.batchNumber}
-                      </span>
-                      <span className={`text-[10px] font-bold px-2 py-0.5 rounded-full border ${STATUS_STYLES[s.status]}`}>
-                        {statusLabel(s.status)}
-                      </span>
-                      {isLegacy(s) && (
-                        <span className="text-[10px] font-semibold px-2 py-0.5 rounded-full bg-gray-100 text-gray-500 border border-gray-300">
-                          {t('stocksView.legacyBadge')}
-                        </span>
-                      )}
-                    </div>
-                    <div className="flex items-center gap-3 mt-1 text-[11px] text-gray-500">
-                      <span className="flex items-center gap-1">
-                        <Calendar className="w-3 h-3" /> {formatDate(s.purchaseBatch.date)}
-                      </span>
-                      <span className="flex items-center gap-1 truncate">
-                        <Truck className="w-3 h-3 shrink-0" /> {s.purchaseBatch.supplier.name}
-                      </span>
-                      <span className="flex items-center gap-1">
-                        <Package className="w-3 h-3" />{' '}
-                        {s.productCount === 1
-                          ? t('stocksView.productCountOne', { count: s.productCount })
-                          : t('stocksView.productCountOther', { count: s.productCount })}
+                    <div className="flex items-center gap-2 text-[11px] font-bold text-[#0B1F3A]">
+                      <Calendar className="w-3.5 h-3.5" /> {formatDate(group.date)}
+                      <span className="text-gray-400 font-semibold">
+                        {group.summaries.length === 1
+                          ? t('stocksView.event.batchCountOne', { count: group.summaries.length })
+                          : t('stocksView.event.batchCountOther', { count: group.summaries.length })}
                       </span>
                     </div>
+                    <div className="flex items-center gap-1.5 mt-1 text-[11px] text-gray-500 flex-wrap">
+                      <Truck className="w-3 h-3 shrink-0" />
+                      {group.supplierNames.join(', ')}
+                    </div>
                   </div>
-                </div>
-
-                <div className="flex items-center gap-4 text-right font-mono">
-                  <div>
-                    <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
-                    <span className="text-xs type-number text-[#111827]">
-                      {formatCurrency(s.remainingInvestmentValue, currencySymbol)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
-                    <span className="text-xs type-number text-gray-700">
-                      {formatCurrency(s.remainingMarketValue, currencySymbol)}
-                    </span>
-                  </div>
-                  <div>
-                    <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
-                    <span className={`text-xs type-number ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
-                      {formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}
-                    </span>
+                  <div className="flex items-center gap-4 text-right font-mono">
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
+                      <span className="text-xs type-number text-[#111827]">
+                        {formatCurrency(group.remainingInvestmentValue, currencySymbol)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
+                      <span className="text-xs type-number text-gray-700">
+                        {formatCurrency(group.remainingMarketValue, currencySymbol)}
+                      </span>
+                    </div>
+                    <div>
+                      <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
+                      <span className={`text-xs type-number ${group.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                        {formatCurrency(group.remainingEmbeddedProfit, currencySymbol)}
+                      </span>
+                    </div>
                   </div>
                 </div>
               </div>
-            </button>
+              <div className="space-y-2.5 pl-3">{group.summaries.map((s) => renderSummaryCard(s))}</div>
+            </div>
           ))}
+          {groupedView.ungrouped.length > 0 && (
+            <div className="space-y-2.5">{groupedView.ungrouped.map((s) => renderSummaryCard(s))}</div>
+          )}
         </div>
+      ) : (
+        <div className="space-y-2.5">{filteredSummaries.map((s) => renderSummaryCard(s))}</div>
       )}
 
       {/* ============================================================ */}

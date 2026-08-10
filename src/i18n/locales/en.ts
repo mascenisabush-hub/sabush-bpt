@@ -430,6 +430,7 @@ export const en: TranslationDict = {
     allSuppliers: 'All Suppliers',
     allStatuses: 'All Statuses',
     showArchived: 'Show archived batches',
+    groupByEvent: 'Group by Purchase Event',
     emptyState: 'No batches found with the current filters.',
     legacyBadge: 'Legacy',
     productCountOne: '{{count}} product',
@@ -437,6 +438,10 @@ export const en: TranslationDict = {
     invested: 'Invested',
     market: 'Market',
     embeddedProfit: 'Embedded Profit',
+    event: {
+      batchCountOne: '\u00b7 {{count}} batch',
+      batchCountOther: '\u00b7 {{count}} batches',
+    },
     modal: {
       supplier: 'Supplier',
       createdBy: 'Created By',

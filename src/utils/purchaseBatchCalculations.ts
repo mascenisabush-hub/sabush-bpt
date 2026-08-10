@@ -209,6 +209,105 @@ export const PURCHASE_BATCH_STATUS_LABELS: Record<PurchaseBatchStatus, string> =
   archived: 'Arquivado',
 };
 
+// ============================================================
+// [Multi-Supplier Purchase Event Amendment v1.0, Part 10] Investment
+// Ledger grouping — opt-in, additive.
+// ============================================================
+// A pure aggregation over already-computed PurchaseBatchSummary[]
+// (extracted here, not inline in StocksView.tsx, for the same
+// testability reason resolveSupplierForPurchase was extracted —
+// non-trivial multi-summary aggregation logic, no Firestore
+// dependency). No new calculation function: every figure here is
+// addition performed on totalInvestmentValue/totalMarketValue/
+// totalEmbeddedProfit/remainingInvestmentValue/remainingMarketValue/
+// remainingEmbeddedProfit, all of which calculatePurchaseBatchSummary
+// already produces, unmodified. purchaseEventId is never itself a
+// valuation input — it is purely the grouping key.
+export interface PurchaseEventGroup {
+  purchaseEventId: string;
+  // Earliest date among the group's PurchaseBatches — a representative
+  // date for the restocking activity as a whole, not a new stored
+  // field anywhere.
+  date: string;
+  // Unique supplier names across the group, in first-seen order —
+  // display convenience only, reads the same immutable historical
+  // snapshot (purchaseBatch.supplier.name) every existing view already
+  // reads.
+  supplierNames: string[];
+  summaries: PurchaseBatchSummary[];
+  totalInvestmentValue: number;
+  totalMarketValue: number;
+  totalEmbeddedProfit: number;
+  remainingInvestmentValue: number;
+  remainingMarketValue: number;
+  remainingEmbeddedProfit: number;
+}
+
+export interface GroupedPurchaseBatchSummaries {
+  grouped: PurchaseEventGroup[];
+  // Every summary whose PurchaseBatch has no purchaseEventId — the
+  // fallback (amendment Part 10), rendered exactly as the ungrouped
+  // view already does. This includes every historical PurchaseBatch
+  // and every purchase the Admin never chose to correlate — the
+  // overwhelming majority, by design (amendment Part 7: lazy,
+  // explicit-click-only assignment).
+  ungrouped: PurchaseBatchSummary[];
+}
+
+export function groupSummariesByPurchaseEvent(summaries: PurchaseBatchSummary[]): GroupedPurchaseBatchSummaries {
+  const groupsById = new Map<string, PurchaseBatchSummary[]>();
+  const ungrouped: PurchaseBatchSummary[] = [];
+
+  summaries.forEach((s) => {
+    const eventId = s.purchaseBatch.purchaseEventId;
+    if (!eventId) {
+      ungrouped.push(s);
+      return;
+    }
+    const existing = groupsById.get(eventId) || [];
+    existing.push(s);
+    groupsById.set(eventId, existing);
+  });
+
+  const grouped: PurchaseEventGroup[] = Array.from(groupsById.entries()).map(([purchaseEventId, groupSummaries]) => {
+    const supplierNames: string[] = [];
+    const seenNames = new Set<string>();
+    groupSummaries.forEach((s) => {
+      const name = s.purchaseBatch.supplier.name;
+      if (!seenNames.has(name)) {
+        seenNames.add(name);
+        supplierNames.push(name);
+      }
+    });
+
+    const date = groupSummaries.reduce(
+      (earliest, s) => (s.purchaseBatch.date < earliest ? s.purchaseBatch.date : earliest),
+      groupSummaries[0].purchaseBatch.date
+    );
+
+    const sum = (key: keyof Pick<PurchaseBatchSummary, 'totalInvestmentValue' | 'totalMarketValue' | 'totalEmbeddedProfit' | 'remainingInvestmentValue' | 'remainingMarketValue' | 'remainingEmbeddedProfit'>) =>
+      groupSummaries.reduce((acc, s) => acc + s[key], 0);
+
+    return {
+      purchaseEventId,
+      date,
+      supplierNames,
+      summaries: groupSummaries,
+      totalInvestmentValue: sum('totalInvestmentValue'),
+      totalMarketValue: sum('totalMarketValue'),
+      totalEmbeddedProfit: sum('totalEmbeddedProfit'),
+      remainingInvestmentValue: sum('remainingInvestmentValue'),
+      remainingMarketValue: sum('remainingMarketValue'),
+      remainingEmbeddedProfit: sum('remainingEmbeddedProfit'),
+    };
+  });
+
+  // Most recent first, matching allSummaries' own existing sort order.
+  grouped.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+
+  return { grouped, ungrouped };
+}
+
 export interface BatchTimelineEvent {
   date: string; // ISO string, used for sorting
   type: 'created' | 'quebra' | 'archived';

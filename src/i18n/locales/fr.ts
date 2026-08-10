@@ -430,6 +430,7 @@ export const fr: TranslationDict = {
     allSuppliers: 'Tous les Fournisseurs',
     allStatuses: 'Tous les États',
     showArchived: 'Afficher les lots archivés',
+    groupByEvent: 'Regrouper par Événement d\u2019Achat',
     emptyState: 'Aucun lot trouvé avec les filtres actuels.',
     legacyBadge: 'Historique',
     productCountOne: '{{count}} produit',
@@ -437,6 +438,10 @@ export const fr: TranslationDict = {
     invested: 'Investi',
     market: 'Marché',
     embeddedProfit: 'Profit Intégré',
+    event: {
+      batchCountOne: '\u00b7 {{count}} lot',
+      batchCountOther: '\u00b7 {{count}} lots',
+    },
     modal: {
       supplier: 'Fournisseur',
       createdBy: 'Créé Par',

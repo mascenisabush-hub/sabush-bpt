@@ -398,6 +398,7 @@ export interface TranslationDict {
     allSuppliers: string;
     allStatuses: string;
     showArchived: string;
+    groupByEvent: string;
     emptyState: string;
     legacyBadge: string;
     productCountOne: string;
@@ -405,6 +406,10 @@ export interface TranslationDict {
     invested: string;
     market: string;
     embeddedProfit: string;
+    event: {
+      batchCountOne: string;
+      batchCountOther: string;
+    };
     modal: {
       supplier: string;
       createdBy: string;
@@ -1271,6 +1276,7 @@ export const pt: TranslationDict = {
     allSuppliers: 'Todos os Fornecedores',
     allStatuses: 'Todos os Estados',
     showArchived: 'Mostrar lotes arquivados',
+    groupByEvent: 'Agrupar por Evento de Compra',
     emptyState: 'Nenhum lote encontrado com os filtros atuais.',
     legacyBadge: 'Legado',
     productCountOne: '{{count}} produto',
@@ -1278,6 +1284,10 @@ export const pt: TranslationDict = {
     invested: 'Investido',
     market: 'Mercado',
     embeddedProfit: 'Lucro Embutido',
+    event: {
+      batchCountOne: '· {{count}} lote',
+      batchCountOther: '· {{count}} lotes',
+    },
     modal: {
       supplier: 'Fornecedor',
       createdBy: 'Criado Por',
