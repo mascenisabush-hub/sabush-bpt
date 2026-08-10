@@ -187,7 +187,30 @@ interface AppContextType {
   // completely unchanged from before this amendment: supplier is used
   // as a one-off, free-text snapshot exactly as today. See Rule 8
   // Assessment, Section 13.
-  addMultipleStockBatches: (items: AddStockParams[], supplier?: Supplier, notes?: string, supplierId?: string) => Promise<{ purchaseBatchId: string | null }>;
+  // [Multi-Supplier Purchase Event Amendment v1.0] purchaseEventId is
+  // optional and additive — when provided, carries a Purchase Event
+  // correlation onto the new PurchaseBatch (Part 5). Never assigned by
+  // default; passed only when the Admin has explicitly chosen to
+  // correlate this purchase with another (Part 7). Does not change
+  // PurchaseBatch's own meaning — see attachPurchaseEventId, below,
+  // for the retroactive-tagging counterpart used when the correlation
+  // decision is made only AFTER the first purchase in a Purchase Event
+  // was already finalized.
+  addMultipleStockBatches: (
+    items: AddStockParams[],
+    supplier?: Supplier,
+    notes?: string,
+    supplierId?: string,
+    purchaseEventId?: string
+  ) => Promise<{ purchaseBatchId: string | null }>;
+  // [Multi-Supplier Purchase Event Amendment v1.0] Retroactively tags
+  // an already-finalized PurchaseBatch with a Purchase Event
+  // correlation — a single-field, single-document update, reusing the
+  // existing, unmodified purchaseBatches update rule (isMemberOf-only,
+  // no subscription gate, same tier archive/unarchive already uses:
+  // organizing an already-real record doesn't create or change
+  // Business Worth). See the amendment's Part 7.
+  attachPurchaseEventId: (purchaseBatchId: string, purchaseEventId: string) => Promise<void>;
   archivePurchaseBatch: (id: string) => Promise<void>;
   unarchivePurchaseBatch: (id: string) => Promise<void>;
   addQuebra: (params: AddQuebraParams) => Promise<Quebra>;
@@ -240,7 +263,8 @@ interface AppContextType {
     items: PurchaseDraftLineItem[],
     supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string },
     date: string,
-    notes?: string
+    notes?: string,
+    purchaseEventId?: string
   ) => Promise<void>;
   clearPurchaseDraft: () => Promise<void>;
   // [Amendment v1.0, Part 2] Contagem's comparison baseline — Confirmed
@@ -1320,7 +1344,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { productId: productId!, batchId: newBatchId };
   };
 
-  const addMultipleStockBatches = async (items: AddStockParams[], supplier?: Supplier, notes?: string, supplierId?: string) => {
+  const addMultipleStockBatches = async (
+    items: AddStockParams[],
+    supplier?: Supplier,
+    notes?: string,
+    supplierId?: string,
+    purchaseEventId?: string
+  ) => {
     if (!activeBusinessId || !items.length) return { purchaseBatchId: null };
     const businessId = activeBusinessId;
 
@@ -1418,6 +1448,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...(resolvedSupplierNotes ? { notes: resolvedSupplierNotes } : {}),
       },
       ...(resolvedSupplierId ? { supplierId: resolvedSupplierId } : {}),
+      // [Multi-Supplier Purchase Event Amendment v1.0] Conditionally
+      // spread, same discipline as every other optional field on this
+      // document — never assigned `undefined` (Part 5).
+      ...(purchaseEventId ? { purchaseEventId } : {}),
       ...(notes?.trim() ? { notes: notes.trim() } : {}),
       createdByName: userProfile.name,
       createdAt: new Date().toISOString(),
@@ -1536,6 +1570,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     triggerTrialActivation(businessId);
     return { purchaseBatchId: newPurchaseBatchId };
+  };
+
+  // [Multi-Supplier Purchase Event Amendment v1.0] Retroactively tags
+  // an already-finalized PurchaseBatch with a Purchase Event
+  // correlation — the "Add Another Supplier" moment, when the Admin
+  // decides only AFTER finalizing the first purchase that a second one
+  // (a different supplier) belongs to the same restocking activity
+  // (amendment Part 7). A single-field, single-document update — never
+  // a batch, never touches StockBatch/Product/Supplier records, never
+  // touches any cost/price/valuation figure. Reuses the existing,
+  // unmodified purchaseBatches `update` rule (isMemberOf-only, no
+  // subscription gate) — the same tier archive/unarchive already uses,
+  // on the same reasoning: organizing an already-real record doesn't
+  // create or change Business Worth.
+  const attachPurchaseEventId = async (purchaseBatchId: string, purchaseEventId: string) => {
+    if (!activeBusinessId) return;
+    await updateDoc(doc(db, 'businesses', activeBusinessId, 'purchaseBatches', purchaseBatchId), {
+      purchaseEventId,
+    });
   };
 
   // Archiving is a reversible, explicit action (never automatic) that
@@ -2022,11 +2075,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Firestore-safe regardless of whether its caller passes `undefined`
   // or `''` for "not provided," so this fix holds even if a future
   // call site is less careful.
+  //
+  // [Multi-Supplier Purchase Event Amendment v1.0] purchaseEventId is
+  // optional and additive, same conditional-spread discipline as every
+  // other field here — carries a Purchase Event correlation forward
+  // through an interruption while entering a SECOND supplier's
+  // products, after the Admin has already chosen to correlate it with
+  // a first, already-finalized PurchaseBatch (amendment Part 6).
   const savePurchaseDraft = async (
     items: PurchaseDraftLineItem[],
     supplier: { supplierId?: string; supplierName?: string; supplierPhone?: string; supplierNotes?: string },
     date: string,
-    notes?: string
+    notes?: string,
+    purchaseEventId?: string
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!currentUser) throw new Error('Sessão inválida.');
@@ -2038,6 +2099,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(supplier.supplierNotes ? { supplierNotes: supplier.supplierNotes } : {}),
       date,
       ...(notes ? { notes } : {}),
+      ...(purchaseEventId ? { purchaseEventId } : {}),
       updatedAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid), draft);
@@ -2703,6 +2765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         updateBusinessProfile,
         addStockBatch,
         addMultipleStockBatches,
+        attachPurchaseEventId,
         archivePurchaseBatch,
         unarchivePurchaseBatch,
         addQuebra,
