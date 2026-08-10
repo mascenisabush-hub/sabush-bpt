@@ -12,79 +12,108 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Module #4 (Purchase Batches) — **the Multi-Supplier
-Purchase Event governance sequence is complete: investigation →
-amendment → Rule 8 Assessment → Implementation Plan, all approved,
-all committed and pushed. Implementation has NOT started — this is
-governance/documentation only, exactly as intended, and matches the
-established sequence for every prior Module #4 amendment.**
+**Status:** Module #4 (Purchase Batches) — **Multi-Supplier Purchase
+Event amendment: IMPLEMENTED, TESTED, VERIFIED, AND CLOSED.** All 7
+phases of the approved Implementation Plan are complete, committed,
+and pushed to `main`. Nothing is mid-flight.
 
-**What this closes:** the deliberately-deferred "next actionable item"
-from the previous session (see "Prior status" immediately below) —
-`PurchaseBatch` currently means one supplier's delivery, with no way
-to correlate several such deliveries as one broader restocking trip
-across multiple suppliers on the same day.
+**Phase status:**
 
-**Governance artifacts, all pushed to `main`:**
+| Phase | Status |
+|---|---|
+| Phase 1 — Types | ✅ COMPLETED |
+| Phase 2 — AppContext (finalization + carry-forward) | ✅ COMPLETED |
+| Phase 3 — Add Stock UI ("Add Another Supplier") | ✅ COMPLETED |
+| Phase 4 — Investment Ledger grouping | ✅ COMPLETED |
+| Phase 5 — Firestore security rules | ✅ COMPLETED |
+| Phase 6 — Regression tests | ✅ COMPLETED |
+| Phase 7 — Final closure | ✅ COMPLETED (this entry) |
 
-- [`docs/specs/04-multi-supplier-purchase-event-amendment.md`](./docs/specs/04-multi-supplier-purchase-event-amendment.md)
-  (✅ Approved — business specification only). **Model D**: an optional
-  `purchaseEventId?: string` correlation field on `PurchaseBatch` (and,
-  for interruption safety, `PurchaseDraft`) — no new Firestore
-  collection, no new document type. `PurchaseBatch`'s own existing
-  definition ("one supplier's delivery") is **unchanged** — confirmed
-  by direct precedent this session, not just principle: the prior
-  `supplierId` amendment, structurally identical in shape, touched no
-  architecture document either, and neither does this one.
-- [`docs/engineering/04-multi-supplier-purchase-event-rule8-assessment.md`](./docs/engineering/04-multi-supplier-purchase-event-rule8-assessment.md)
-  — Governance Readiness: **Ready**.
-- [`docs/engineering/04-multi-supplier-purchase-event-implementation-plan.md`](./docs/engineering/04-multi-supplier-purchase-event-implementation-plan.md)
-  — 7 phases.
-- `docs/specs/README.md` — Module #4 row updated for both amendments;
-  also corrected a stale note that had wrongly still said "implementation
-  not yet authorized" for the *first* amendment, which was in fact
-  implemented (`9333689`) and bug-fixed (`0c71631`) two sessions ago.
+**What shipped, briefly** (full detail in each phase's own commit —
+`git log` — and in the "Prior status" section below, kept for
+continuity):
 
-**Two concrete findings from this session's own fresh code inspection
-materially shaped the design — not just carried over from the prior
-investigation:**
+- **Model D**: an optional `purchaseEventId?: string` correlation
+  field on `PurchaseBatch` and `PurchaseDraft` — **no new Firestore
+  collection.** `PurchaseBatch`'s own meaning (one supplier's
+  delivery) is unchanged.
+- `attachPurchaseEventId` — retroactively tags an already-finalized
+  `PurchaseBatch`, reusing the existing, unmodified `purchaseBatches`
+  update rule.
+- The "Adicionar Outro Fornecedor a Esta Compra" action on Add Stock's
+  success screen — the only place a correlation is ever started
+  (lazy, explicit-click-only, never a default). Deliberately designed
+  around two code-discovered findings: Staff never unmount on the
+  same-tab route after a submit, and `submittedMessage` was never
+  otherwise reset for them — so this action performs a true in-place
+  local reset and cancels the pre-existing auto-redirect timeout,
+  never depending on `onComplete()`/tab navigation.
+- An opt-in "Agrupar por Evento de Compra" view in the Investment
+  Ledger — aggregate investment/market-value/embedded-profit summed
+  from already-computed `PurchaseBatchSummary` figures (no new
+  calculation function), with an ungrouped fallback for every
+  historical `PurchaseBatch`.
+- `firestore.rules`' `purchaseBatches` create rule validates
+  `purchaseEventId`'s shape additively, mirroring the existing
+  `supplierId` check.
 
-1. `App.tsx`'s `onComplete` routing sends Staff back to the *same*
-   `add-stock` tab value after a successful submit — React bails out
-   of re-rendering an unchanged state value, so `AddStockView` never
-   unmounts for a Staff member who stays on that screen.
-2. Direct consequence: `AddStockView.tsx`'s `submittedMessage` state is
-   set on success but **never reset to `null`** except by the business-
-   switch effect — meaning, for that same Staff member, the success
-   screen would remain stuck permanently displayed after one successful
-   submit, with no path back to the form short of a business switch.
+**Verification, fresh, this session:**
 
-**Consequence for the design:** the amendment's "Add Another Supplier"
-action (Part 7/8) is explicitly designed to never depend on
-`onComplete()`/tab navigation — it performs a true in-place local
-reset instead. The Rule 8 Assessment and Implementation Plan both
-flag this as a required review point for whoever implements Phase 3,
-specifically so it isn't silently rediscovered (or missed) later.
+- Governance re-read directly from the repo (amendment, Rule 8
+  Assessment, Implementation Plan, spec #4, `docs/specs/README.md`) —
+  no drift found between what's documented and what's implemented;
+  all six phases confirmed present in actual code, not just claimed
+  (`grep` against `types.ts`, `AppContext.tsx`, `AddStockView.tsx`,
+  `StocksView.tsx`, `purchaseBatchCalculations.ts`, `firestore.rules`,
+  and both test files).
+- `npm run test:all` — **13 suites, 243/243 passing, 0 failed, 0
+  skipped.**
+- `npx tsc --noEmit -p .` — clean.
+- `npm run build` — clean; only pre-existing, unrelated warnings
+  (chunk size, dynamic-import overlap) — none introduced by this
+  amendment, none touched.
+- Firestore emulator — attempted fresh, **ENVIRONMENT-BLOCKED**:
+  `403: Host not in allowlist: storage.googleapis.com`. Not claimed as
+  passing. Rules were statically/security-reviewed instead (Phase 5's
+  own commit, reconfirmed here) — this is the same standing sandbox
+  limitation named in every session since this repository's first
+  `firestore.rules` change.
 
-**Also corrected in the amendment itself:** the task prompt that
-requested this investigation included an illustrative Business Worth
-figure ("Expected Sales Value: 5,000" alongside "Investment: 45,000")
-that conflated `totalMarketValue` (the actual selling-value figure)
-with `totalEmbeddedProfit` (`totalMarketValue − totalInvestmentValue`)
-— flagged in the prompt itself as needing verification before use, and
-corrected in the amendment's Part 12 with a properly-derived example.
+**Security/data integrity, explicitly confirmed:** no migration or
+historical backfill performed; no new Firestore collection introduced;
+no payment/credit/debt logic anywhere; `PurchaseBatch.supplier`
+semantics unchanged; `purchaseDrafts` ownership/concurrency model
+unchanged; tenant isolation unchanged; `calculateBatch`,
+`calculateInventoryTotals`, `calculatePurchaseBatchSummary` — zero
+new reads, zero formula changes; `purchaseEventId` remains fully
+optional everywhere; malformed values are rejected by the Phase 5
+create-rule shape check; every legacy `PurchaseBatch` without
+`purchaseEventId` continues to load, calculate, and display exactly
+as before.
 
-**Confirmed unchanged, structurally, this session:** `calculateBatch`,
-`calculateInventoryTotals`, `calculatePurchaseBatchSummary` — none
-read a supplier or event field today, and this amendment introduces no
-new read for any of them. No payment/credit/debt concept anywhere. No
-migration of any historical record required.
+**Open, separate item — NOT part of this amendment, discovered
+live in production, not yet resolved:** a live "Missing or
+insufficient permissions" error was reported on `bpt.sabushtech.com`
+when using Add Stock. Investigation (this session, in-conversation,
+not yet a repo artifact) found no defect in this repository's own
+`firestore.rules` — the most likely cause is that the **live Firebase
+project's deployed rules are stale**, predating the `suppliers`/
+`purchaseDrafts` collections entirely: this repository has **no
+automated `firestore.rules`/`firestore.indexes.json` deployment step**
+(confirmed absent — no `.firebaserc`, no deploy script in
+`package.json` or CI), a gap already flagged once before in
+`docs/engineering/19-v1-completion-review-and-release-readiness-audit.md`
+§3c and never resolved. **Action needed, outside this repository:**
+someone with Firebase CLI access must run
+`firebase deploy --only firestore:rules` against current `HEAD`.
+Explicitly deferred by direct instruction — not investigated further
+or fixed as part of this Phase 7 closure.
 
-**Next actionable item:** none required immediately at the governance
-layer — this closes the deferred product question in full at the
-specification level. The next step, whenever authorized, is
-Implementation Plan Phase 1 (types) — **not started, not authorized by
-this session.**
+**Next actionable item:** the live rules-deployment gap above is the
+most concrete, real next step whenever picked up. At the governance
+layer, nothing further is queued for Module #4 — the excluded
+payment/credit/supplier-debt track (first amendment's Part 11) remains
+a separate, not-yet-started future decision, unrelated to this closure.
 
 ## Prior status — Module #4 Durable Purchase Capture implementation + undefined-field bug fix (superseded above, kept for continuity)
 
