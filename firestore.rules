@@ -651,7 +651,23 @@ service cloud.firestore {
         // unconditionally false above; this only closes the same
         // immutability net around a field that didn't exist yet when
         // that net was first drawn.
-        request.resource.data.importance == resource.data.importance &&
+        //
+        // [Fix #5] Null-safe .get() form, not direct dot access. The
+        // Amendment's own Migration Statement (§4) says existing Phase
+        // 1/2 notifications — written before this field existed —
+        // "remain valid as-is" and require no migration, and §5 says
+        // this Amendment "does not change firestore.rules' existing
+        // /notifications/{id} read/write rules". Direct dot access on a
+        // field that's genuinely absent on those documents throws a
+        // Rules evaluation error instead of a clean deny, which broke
+        // exactly the read/dismiss action §4/§5 promised would keep
+        // working unchanged. .get(field, null) restores that: absent on
+        // both sides compares null == null (passes, matching pre-
+        // Amendment behavior for legacy documents), present-and-
+        // unchanged still passes (the actual immutability guarantee
+        // this line exists for), present-and-changed still correctly
+        // fails.
+        request.resource.data.get('importance', null) == resource.data.get('importance', null) &&
         (request.resource.data.status == 'unread' || request.resource.data.status == 'read');
 
       allow delete: if false;

@@ -1046,6 +1046,48 @@ describe('notifications', () => {
     }));
   });
 
+  // [Fix #5] Regression coverage for the null-safe .get() form of the
+  // `importance` immutability check (firestore.rules, /notifications/
+  // {id} update rule). The three tests above already cover a document
+  // with no `importance` field at all (baseFields has none) — that's
+  // the pre-existing Phase 1/2 shape the Amendment's Migration
+  // Statement (§4) guarantees keeps working unchanged. These two cover
+  // the other side: a document that DOES have `importance` (the Phase
+  // 3+ shape) — proving the actual immutability guarantee this rule
+  // line exists for is real, not merely assumed, since no test
+  // previously exercised the field's presence in either direction.
+  it('permitted read-status update: a notification WITH importance set can still flip status unread -> read, importance unchanged', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', 'n-biz-importance'), {
+        ...baseFields,
+        scope: 'business',
+        businessId: BIZ,
+        userId: null,
+        importance: 'high',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(updateDoc(doc(ownerDb, 'notifications', 'n-biz-importance'), { status: 'read' }));
+  });
+
+  it('prohibited update: importance itself cannot be changed, alone or alongside a status update', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'notifications', 'n-biz-importance-2'), {
+        ...baseFields,
+        scope: 'business',
+        businessId: BIZ,
+        userId: null,
+        importance: 'high',
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'notifications', 'n-biz-importance-2'), { importance: 'low' }));
+    await assertFails(updateDoc(doc(ownerDb, 'notifications', 'n-biz-importance-2'), {
+      status: 'read',
+      importance: 'low',
+    }));
+  });
+
   it('prohibited update: a non-recipient cannot update status even if they somehow guess the document id', async () => {
     await seedBusinessScoped();
     const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
