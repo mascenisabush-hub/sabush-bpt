@@ -176,9 +176,32 @@ async function verifyStaffManagementAction(
   // account created after Stage 2 shipped got 403 permission-denied on
   // every privileged staff-management endpoint (delete, suspend,
   // reactivate, reset-pin, set-tier) — not just a UI gap.
+  //
+  // [Fix #6 — multi-shop staff-management authorization] An Owner/Admin's
+  // legacy singular `businessId` only ever points at their first shop
+  // (addShop, server/index.ts, never updates it — only `businessIds[]`
+  // grows). Checking `requesterProfile.businessId === businessId` alone
+  // therefore 403'd a legitimate Owner managing staff on any second-or-
+  // later shop. Re-derive the owner's full shop list the same way
+  // /api/provisioning/business (addShop) and /api/subscriptions/
+  // activate-trial already do — never trusted from the client, always
+  // re-read from the requester's own Firestore profile — and check
+  // membership against that list instead of the single legacy field.
+  const ownedBusinessIds: string[] =
+    Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+      ? requesterProfile.businessIds
+      : requesterProfile.businessId
+        ? [requesterProfile.businessId]
+        : [];
   const isAdmin =
     (requesterProfile.role === 'owner' || requesterProfile.role === 'admin') &&
-    requesterProfile.businessId === businessId;
+    ownedBusinessIds.includes(businessId);
+  // Managers are always single-shop (BDS #16 — a Manager is a staff
+  // account, never itself a multi-shop owner), so this stays scoped to
+  // the requester's own legacy `businessId` exactly as before. Deliberately
+  // NOT widened to `ownedBusinessIds` — a Manager must never gain reach
+  // into a business merely because the *Owner's* `businessIds[]` shape
+  // happens to be checked elsewhere in this function.
   const isGrantedManager =
     !options.adminOnly &&
     requesterProfile.role === 'staff' &&
