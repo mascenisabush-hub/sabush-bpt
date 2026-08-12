@@ -480,6 +480,41 @@ describe('parseProviderExtractionResponse', () => {
 });
 
 // ------------------------------------------------------------------
+// [Post-deployment fix — real production symptom: every scan showed
+// "Scanning isn't available right now" regardless of API key
+// configuration] Root cause: the model 'gemini-2.0-flash' this
+// integration originally targeted has since been retired by Google —
+// every real API call failed outright. This is a structural, source-
+// level guard against the specific retired identifier silently
+// reappearing; it is NOT a live check of which model is currently
+// valid (that requires network access this test suite deliberately
+// never has — see this file's own header on provider-call testing
+// scope). Whoever next changes the model string should re-verify
+// against Google's current documentation, not just satisfy this test.
+// ------------------------------------------------------------------
+describe('AI provider model configuration', () => {
+  const smartStockEntrySrc = readFileSync(new URL('../server/smartStockEntry.ts', import.meta.url), 'utf-8');
+
+  it("does not reference the retired 'gemini-2.0-flash' model", () => {
+    assert.ok(
+      !smartStockEntrySrc.includes("model: 'gemini-2.0-flash'"),
+      "'gemini-2.0-flash' was retired by Google (confirmed post-deployment, mid-2026) — every real extraction call using it fails outright."
+    );
+  });
+
+  it('references a model string in the currently-documented gemini-3.x or gemini-2.5.x family', () => {
+    const modelMatch = smartStockEntrySrc.match(/model: '(gemini-[\d.]+-[\w-]+)'/);
+    assert.ok(modelMatch, 'Could not find the configured model string.');
+    const model = modelMatch![1];
+    assert.match(
+      model,
+      /^gemini-(2\.5|3(\.\d+)?)-/,
+      `Model "${model}" is not in a currently-supported generation as of this fix — verify against Google's current model documentation before deploying.`
+    );
+  });
+});
+
+// ------------------------------------------------------------------
 // [Verification phase, requested review] A single "deliberately
 // difficult receipt" composite case — combining several real-world
 // messiness conditions in ONE synthetic provider response, mirroring

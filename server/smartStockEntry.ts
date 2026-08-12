@@ -392,7 +392,23 @@ export async function callVisionExtractionProvider(
   try {
     response = await Promise.race([
       ai.models.generateContent({
-        model: 'gemini-2.0-flash',
+        // [Post-deployment fix] 'gemini-2.0-flash' (the model this
+        // integration originally targeted) has since been retired by
+        // Google. 'gemini-3.5-flash-lite' is Google's own current,
+        // stable, production-recommended replacement specifically for
+        // "high-volume extraction, routing, or classification" tasks —
+        // exactly this route's job — verified directly against
+        // Google's current documentation, not carried over from
+        // training-data assumptions. The request/response shape below
+        // (ai.models.generateContent with responseMimeType/
+        // responseSchema) is unchanged and remains the correct, stable
+        // API surface for this SDK version.
+        //
+        // Model availability is not this codebase's to control —
+        // whoever next touches this integration should re-verify the
+        // current recommended model against Google's own docs rather
+        // than assuming this string stays valid indefinitely.
+        model: 'gemini-3.5-flash-lite',
         contents: [createPartFromBase64(imageBase64, mimeType), EXTRACTION_PROMPT],
         config: {
           responseMimeType: 'application/json',
