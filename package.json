@@ -27,7 +27,8 @@
     "test:breakage-notification-producer": "tsx --test tests/breakage-notification-producer.test.ts",
     "test:subscription-engine": "tsx --test tests/subscription-engine.test.ts",
     "test:payment-confirmation": "tsx --test tests/payment-confirmation.test.ts",
-    "test:all": "npm run test:calculations && npm run test:expected-stock-value && npm run test:initial-stock-price-change && npm run test:purchase-draft-and-suppliers && npm run test:purchase-event-grouping && npm run test:initial-stock-confirmation && npm run test:notification-platform && npm run test:staff-notifications && npm run test:staff-management-multishop-authorization && npm run test:trial-notification-producer && npm run test:closing-notification-producer && npm run test:breakage-notification-producer && npm run test:subscription-engine && npm run test:payment-confirmation",
+    "test:delete-product-plan": "tsx --test tests/delete-product-plan.test.ts",
+    "test:all": "npm run test:calculations && npm run test:expected-stock-value && npm run test:initial-stock-price-change && npm run test:purchase-draft-and-suppliers && npm run test:purchase-event-grouping && npm run test:initial-stock-confirmation && npm run test:notification-platform && npm run test:staff-notifications && npm run test:staff-management-multishop-authorization && npm run test:trial-notification-producer && npm run test:closing-notification-producer && npm run test:breakage-notification-producer && npm run test:subscription-engine && npm run test:payment-confirmation && npm run test:delete-product-plan",
     "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\"",
     "deploy:firestore:rules": "node scripts/require-firebase-project-id.js firestore:rules",
     "deploy:firestore:indexes": "node scripts/require-firebase-project-id.js firestore:indexes"

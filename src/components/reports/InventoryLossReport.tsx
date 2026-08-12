@@ -192,7 +192,25 @@ export const InventoryLossReport: React.FC<Props> = ({ onBack }) => {
                 </div>
                 <div className="flex items-center gap-3 report-no-print">
                   <span className="type-number text-rose-600 text-sm">{formatCurrency(value, currencySymbol)}</span>
-                  <button onClick={() => deleteQuebra(quebra.id)} className="text-[10px] text-gray-400 hover:text-rose-600 transition">
+                  <button
+                    onClick={() => {
+                      // [Fix #7 — Destructive Operations Safety] Previously
+                      // fired deleteQuebra with no confirmation at all —
+                      // removing a loss record increases the batch's
+                      // calculated remaining stock (and therefore its
+                      // Investment/Market Value), so a stray tap here
+                      // silently inflated Business Worth. Now explicit
+                      // about which record is being removed, matching the
+                      // existing confirm+catch pattern already used by
+                      // ExpenseReport/WithdrawalReport's delete buttons.
+                      const productLabel = product?.name || productRemoved;
+                      if (!window.confirm(
+                        `Tem a certeza que pretende eliminar este registo de perda — ${productLabel}, ${quebra.quantityLost} ${t('reports.inventoryLosses.unitsSuffix')} em ${formatDate(quebra.date)} (${quebra.reason})? Esta ação não pode ser desfeita.`
+                      )) return;
+                      deleteQuebra(quebra.id).catch((err: any) => alert(err?.message || 'Erro ao remover.'));
+                    }}
+                    className="text-[10px] text-gray-400 hover:text-rose-600 transition"
+                  >
                     {t('reports.common.delete')}
                   </button>
                 </div>

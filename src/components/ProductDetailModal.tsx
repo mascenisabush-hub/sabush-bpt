@@ -225,7 +225,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                                   </span>
                                 </div>
                                 <button
-                                  onClick={() => deleteQuebra(q.id)}
+                                  onClick={() => {
+                                    // [Fix #7 — Destructive Operations Safety]
+                                    // Previously fired deleteQuebra with no
+                                    // confirmation — removing a loss record
+                                    // increases this batch's remaining stock
+                                    // (and therefore its Investment/Market
+                                    // Value), so a stray tap here silently
+                                    // inflated Business Worth. Now explicit
+                                    // about which record is being removed,
+                                    // matching InventoryLossReport's fix.
+                                    if (!window.confirm(
+                                      `Tem a certeza que pretende eliminar este registo de perda — ${q.quantityLost} unidades em ${formatDate(q.date)} (${q.reason})? Esta ação não pode ser desfeita.`
+                                    )) return;
+                                    deleteQuebra(q.id).catch((err: any) => alert(err?.message || 'Erro ao remover.'));
+                                  }}
                                   className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-rose-600 hover:bg-rose-50 transition-colors duration-150"
                                   title="Eliminar registo de perda"
                                 >

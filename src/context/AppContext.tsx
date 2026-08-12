@@ -16,6 +16,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
+import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -2405,21 +2406,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateDoc(doc(db, 'businesses', businessId, 'products', id), payload as any);
   };
 
+  // [Fix #7 — Destructive Operations Safety] Previously a sequence of
+  // independently-awaited deleteDoc calls (product, then each batch, then
+  // each quebra) — if any call in the middle failed (lost connectivity,
+  // tab closed), the product doc was already gone while its batches
+  // remained, and calculateInventoryTotals sums ALL batches/quebras in
+  // state regardless of whether their product still exists, so those
+  // orphaned batches kept silently inflating Business Worth. Now built
+  // from planDeleteProduct() (src/utils/deleteProductPlan.ts — see that
+  // file and tests/delete-product-plan.test.ts for the full contract):
+  // the common case (product + its batches + its quebras <= 500 Firestore
+  // ops, true for the overwhelming majority of real businesses) commits
+  // as a single atomic writeBatch, exactly matching deleteExpense/
+  // deleteWithdrawal's existing all-or-nothing shape. Only a business
+  // whose product has accumulated more history than that ever needs more
+  // than one commit — Firestore's writeBatch has a hard 500-operation
+  // ceiling, which no client-side code can raise — and even then the
+  // product doc is only ever deleted in the LAST commit, after every
+  // batch/quebra commit has already succeeded, so a mid-cascade failure
+  // never orphans a batch/quebra under a deleted product; it just leaves
+  // the product visible with some history still attached, safely
+  // retryable, never a misleading Business Worth figure.
   const deleteProduct = async (id: string) => {
     if (!activeBusinessId) return;
     const businessId = activeBusinessId;
 
-    await deleteDoc(doc(db, 'businesses', businessId, 'products', id));
+    const prodBatchIds = batches.filter((b) => b.productId === id).map((b) => b.id);
+    const prodQuebraIds = quebras.filter((q) => q.productId === id).map((q) => q.id);
+    const chunks = planDeleteProduct(id, prodBatchIds, prodQuebraIds);
 
-    // Delete associated batches and quebras
-    const prodBatches = batches.filter((b) => b.productId === id);
-    for (const b of prodBatches) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'batches', b.id));
-    }
+    const collectionFor = (kind: 'product' | 'batch' | 'quebra') =>
+      kind === 'product' ? 'products' : kind === 'batch' ? 'batches' : 'quebras';
 
-    const prodQuebras = quebras.filter((q) => q.productId === id);
-    for (const q of prodQuebras) {
-      await deleteDoc(doc(db, 'businesses', businessId, 'quebras', q.id));
+    for (const chunk of chunks) {
+      const fsBatch = createFirestoreBatch(db);
+      for (const op of chunk) {
+        fsBatch.delete(doc(db, 'businesses', businessId, collectionFor(op.kind), op.id));
+      }
+      await fsBatch.commit();
     }
   };
 
