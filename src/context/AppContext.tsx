@@ -206,6 +206,13 @@ interface AppContextType {
   canManagerCloseBooks: boolean;
   canManagerManageStaff: boolean;
   products: Product[];
+  // [Stock Count Simplification Amendment v1.0, Part 21] Set only by
+  // the products onSnapshot listener's own error callback below —
+  // never inferred from `products.length === 0`, so a genuinely empty
+  // catalog and a failed load remain distinguishable to any screen
+  // (e.g. PeriodicStockCountView) that needs to tell them apart.
+  // Cleared on every successful snapshot and on business switch.
+  productsError: boolean;
   batches: StockBatch[];
   purchaseBatches: PurchaseBatch[];
   // [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
@@ -414,6 +421,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
 
   const [products, setProducts] = useState<Product[]>([]);
+  const [productsError, setProductsError] = useState(false);
   const [batches, setBatches] = useState<StockBatch[]>([]);
   const [purchaseBatches, setPurchaseBatches] = useState<PurchaseBatch[]>([]);
   // [Durable Purchase Capture Amendment v1.0] Reusable, tenant-scoped
@@ -794,6 +802,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!activeBusinessId) {
       setBusiness(null);
       setProducts([]);
+      setProductsError(false);
       setBatches([]);
       setPurchaseBatches([]);
       setSuppliers([]);
@@ -844,8 +853,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         snap.forEach((doc) => list.push(doc.data() as Product));
         list.sort((a, b) => a.name.localeCompare(b.name));
         setProducts(list);
+        setProductsError(false);
       },
-      (err) => console.error('Error fetching products:', err)
+      (err) => {
+        console.error('Error fetching products:', err);
+        setProductsError(true);
+      }
     );
 
     // 3. Batches collection
@@ -3045,6 +3058,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         canManagerCloseBooks,
         canManagerManageStaff,
         products,
+        productsError,
         batches,
         purchaseBatches,
         suppliers,

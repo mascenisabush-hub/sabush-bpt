@@ -74,3 +74,119 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
 
   return { items: normalized, totalValue: Number(totalValue.toFixed(2)) };
 }
+
+// ------------------------------------------------------------------
+// [Stock Count Simplification Amendment v1.0 — 10-stock-counts-
+// simplification-amendment.md] Blank vs. zero, and Counted vs. Not
+// Counted — pure, dependency-free so the central "blank must never
+// silently become zero" rule (BDR-0009 Part 4) is directly unit
+// testable, matching this file's existing normalizeStockCountItems
+// and this repository's established pattern (restockObservation.ts,
+// openBatchSupersession.ts).
+//
+// This is the ONLY place that decides whether a working-list row
+// counts as "counted" (contributes a StockCountItem + totals) or "not
+// counted" (contributes only its name to the report's Not Counted
+// list, per Amendment Part 15's forbidden-language rule — no
+// quantity, price, value, or implied zero is ever attached to it).
+// ------------------------------------------------------------------
+
+/** One row of the Periodic Contagem working list — whether it came
+ * from auto-populating the product catalog or from the existing
+ * manual "add product" affordance. `quantity` is a raw string because
+ * it mirrors a controlled `<input type="number">`'s value directly:
+ * '' is the only representation of "not yet counted"; any other
+ * string (including '0') is an operator-entered physical count. */
+export interface StockCountWorkingRow {
+  productId?: string;
+  productName: string;
+  quantity: string;
+  unit: string;
+  costPrice: string;
+  sellingPrice: string;
+  // Operator explicitly removed this pre-populated catalog row from
+  // the working list this session (Amendment Part 10) — distinct from
+  // a still-blank quantity only in how it got here, never in outcome:
+  // both land in Not Counted, never in Counted, never as an implied
+  // zero.
+  removed?: boolean;
+}
+
+export interface StockCountTallyItem {
+  productName: string;
+  quantity: number;
+  unit: string;
+  costPrice: number;
+  sellingPrice: number;
+  purchaseValue: number; // quantity * costPrice
+  sellingValue: number; // quantity * sellingPrice
+}
+
+export interface StockCountTallyResult {
+  countedItems: StockCountTallyItem[];
+  notCountedProductNames: string[];
+  totalPhysicalUnits: number;
+  totalPurchaseValue: number;
+  totalSellingValue: number;
+}
+
+/**
+ * Splits a working list of rows into Counted vs. Not Counted, per
+ * BDR-0009 Part 4 and the Amendment's Part 8–10/14: a row with a
+ * non-blank quantity (including the literal string '0') is Counted;
+ * a blank-quantity row, an explicitly removed row, or a row with an
+ * unparseable quantity is Not Counted and contributes nothing but its
+ * name — never a quantity, price, value, or implied zero. A row with
+ * no product name at all (an untouched empty template row) is dropped
+ * entirely, matching this file's existing normalizeStockCountItems
+ * behavior for blank product names.
+ */
+export function tallyStockCountRows(rows: StockCountWorkingRow[]): StockCountTallyResult {
+  const countedItems: StockCountTallyItem[] = [];
+  const notCountedProductNames: string[] = [];
+  let totalPhysicalUnits = 0;
+  let totalPurchaseValue = 0;
+  let totalSellingValue = 0;
+
+  for (const row of rows) {
+    const trimmedName = row.productName.trim();
+    if (!trimmedName) continue;
+
+    const rawQuantity = row.quantity.trim();
+    const parsedQuantity = rawQuantity === '' ? NaN : Number(rawQuantity);
+    const isBlank = row.removed === true || rawQuantity === '' || Number.isNaN(parsedQuantity);
+
+    if (isBlank) {
+      notCountedProductNames.push(trimmedName);
+      continue;
+    }
+
+    const quantity = parsedQuantity;
+    const costPrice = Number(row.costPrice) || 0;
+    const sellingPrice = Number(row.sellingPrice) || 0;
+    const purchaseValue = Number((quantity * costPrice).toFixed(2));
+    const sellingValue = Number((quantity * sellingPrice).toFixed(2));
+
+    countedItems.push({
+      productName: trimmedName,
+      quantity,
+      unit: row.unit.trim() || 'un',
+      costPrice,
+      sellingPrice,
+      purchaseValue,
+      sellingValue,
+    });
+
+    totalPhysicalUnits += quantity;
+    totalPurchaseValue += purchaseValue;
+    totalSellingValue += sellingValue;
+  }
+
+  return {
+    countedItems,
+    notCountedProductNames,
+    totalPhysicalUnits: Number(totalPhysicalUnits.toFixed(2)),
+    totalPurchaseValue: Number(totalPurchaseValue.toFixed(2)),
+    totalSellingValue: Number(totalSellingValue.toFixed(2)),
+  };
+}

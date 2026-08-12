@@ -2,10 +2,8 @@ Business Domain Specification — Amendment
 
 # Stock Count Simplification Amendment
 
-Version 1.0 (Draft)
-**Status:** Drafted, awaiting Product Architect approval. Governance
-and specification only — **implementation is not authorized by this
-document.** See Implementation Status, below.
+Version 1.0 (Approved)
+**Status:** Approved. See Implementation Status, below.
 **Amends:** [Stock Counts (spec #10)](./10-stock-counts.md), further to
 the [Expected Current Stock Value & Persistent Initial Stock
 Amendment](./10-expected-stock-value-amendment.md) (v1.0, Approved) and
@@ -304,13 +302,12 @@ sees pre-filled on the form; it does not change who may submit it.
 
 ## Part 14 — Implementation Status
 
-**Not implemented. Not authorized.** Per the originating governance
-task's explicit Implementation Gate: no application code, Firestore
-rule, calculation, test, or package file has been modified as part of
-producing this document, the Discovery Report, or BDR-0009. Nothing
-has been committed or pushed. A separate, explicit authorization from
-the Product Architect is required before any of Parts 1–12 above may
-be built.
+**Approved for implementation.** Product Architect approval received
+for the governance package (this document, the Discovery Report, and
+BDR-0009). Implementation of Parts 1–12 above proceeds under a
+separate, controlled implementation task, subject to that task's own
+build/typecheck/test/scope-audit gates before anything is committed or
+pushed.
 
 ## Part 15 — Explicit Non-Goals of This Amendment
 

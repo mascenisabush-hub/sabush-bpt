@@ -2,8 +2,7 @@ Business Decision Record
 
 # BDR-0009 — Stock Count as a Physical Observation Event
 
-**Status:** Drafted, awaiting Product Architect approval. Not yet
-approved. Nothing in this document authorizes implementation.
+**Status:** Approved.
 **Type:** Business Decision Record — a strategic, long-lived decision
 about why this capability exists and what boundary it may never cross,
 per the category [19-governance-bdr-policy-framework.md](./19-governance-bdr-policy-framework.md)
