@@ -287,6 +287,27 @@ service cloud.firestore {
         allow delete: if isOwnerOf(businessId);
       }
 
+      // [Fix #10 — transactional open-batch supersession] Per-product
+      // concurrency anchor for addStockBatch's runTransaction. Not a
+      // valuation input, not surfaced anywhere in the app UI, and read
+      // by no code path other than the transaction that writes it — see
+      // AppContext.tsx addStockBatch for the full reasoning. Access
+      // mirrors /batches exactly (same staff/owner tier: staff can
+      // create/update alongside an owner, matching that Stock Entry is
+      // already a staff-permitted action per docs/specs/05-stock-batches.md),
+      // since this doc is written in the same transaction as a batch
+      // write and must never be gated more strictly than the batch write
+      // itself. Never deleted — a stale/orphaned lock is harmless (the
+      // transaction always re-validates the pointed-to batch's actual
+      // `status` via a fresh read before trusting it, never the lock
+      // doc's existence alone).
+      match /openBatchLocks/{productId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
+        allow update: if isMemberOf(businessId);
+        allow delete: if false;
+      }
+
       // Purchase Batches (Investment Ledger) — the envelope grouping one or
       // more /batches line items into a single purchase/investment event.
       // Same access pattern as /batches: any team member can read/create,

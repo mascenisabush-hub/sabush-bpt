@@ -12,11 +12,13 @@ import {
   collection,
   onSnapshot,
   writeBatch as createFirestoreBatch,
+  runTransaction,
   deleteField,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
+import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -1284,11 +1286,66 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       isNewProduct = true;
     }
 
-    // Close any active open batch for this product
-    const openBatches = batches.filter((b) => b.productId === productId && b.status === 'open');
-    for (const b of openBatches) {
-      await updateDoc(doc(db, 'businesses', businessId, 'batches', b.id), { status: 'closed' });
-    }
+    // [Fix #10 — transactional open-batch supersession] Enforces the
+    // existing Stock Batch spec rule (docs/specs/05-stock-batches.md:
+    // "only one batch per product can be 'open' at a time... every
+    // previously-open batch for that same product is automatically
+    // closed") atomically, so two concurrent addStockBatch calls for the
+    // same product (two staff, two tabs, a retried request) can never
+    // both observe "no open batch" and both leave their own batch open.
+    //
+    // The Firebase Web SDK's Transaction.get() only accepts a single
+    // DocumentReference — it has no Query overload (verified directly
+    // against node_modules/@firebase/firestore's own type declarations;
+    // this is a real SDK constraint, not a stylistic choice), so "find
+    // all open batches for this product" cannot be read transactionally
+    // via a query. `openBatchLocks/{productId}` exists purely to give
+    // every addStockBatch transaction for the same product a single,
+    // known document to read and write — the concrete anchor Firestore's
+    // optimistic-concurrency control needs to actually serialize two
+    // concurrent transactions against each other.
+    //
+    // IMPORTANT: this document is a concurrency-control mechanism, not
+    // business data. It exists solely to provide a deterministic
+    // transaction read/write anchor for the single-open-batch invariant
+    // — it is written by this function only, read by no other code path
+    // in this app, is not a valuation input, and never appears in
+    // Business Worth, Stock Value, or any report. Do not extend it into
+    // an application-facing collection.
+    //
+    // Because Firestore's transaction conflict-detection is based on
+    // every path a transaction reads via tx.get() — including a read
+    // that finds nothing there yet — two transactions that both read
+    // this SAME lock path are serialized by Firestore even on a
+    // product's very first-ever write, before either one has created the
+    // lock document: whichever commits first invalidates the other's
+    // read of that (until-then-nonexistent) path, and the SDK retries
+    // the second automatically, at which point it sees the first
+    // transaction's now-written lock and correctly closes that batch
+    // before creating its own. This is the general Firestore transaction
+    // guarantee, not something specific to documents that already exist.
+    //
+    // Bootstrap caveat (the real residual gap, distinct from the above):
+    // for a legacy product that already has an open batch predating this
+    // fix (so no lock doc exists yet), the first post-fix transaction's
+    // candidate list of "what to check" comes from AppContext's live
+    // `batches` listener (client state) — used only to decide *which
+    // documents to tx.get()*, never as authority on what's open (that
+    // decision is always made from the fresh tx.get() snapshot itself).
+    // If that client snapshot is missing/stale and doesn't include the
+    // legacy open batch's id, that legacy batch is not part of this
+    // transaction's read set at all, so it is never closed and the lock
+    // is still created pointing at the new batch — leaving the legacy
+    // batch open indefinitely as an orphan, not serialized. This does
+    // NOT undermine serialization of concurrent post-fix writes (the
+    // lock-based conflict detection above holds regardless); it is a
+    // one-time legacy-data cleanup risk, distinct from a live-concurrency
+    // race, and is called out as an explicit residual risk in the Fix #10
+    // report rather than solved here.
+    const lockRef = doc(db, 'businesses', businessId, 'openBatchLocks', productId!);
+    const candidateOpenBatchIds = isNewProduct
+      ? []
+      : batches.filter((b) => b.productId === productId && b.status === 'open').map((b) => b.id);
 
     // Create new batch
     const newBatchId = 'batch-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
@@ -1303,8 +1360,42 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       status: 'open',
       createdAt: new Date().toISOString(),
     };
+    const newBatchRef = doc(db, 'businesses', businessId, 'batches', newBatchId);
 
-    await setDoc(doc(db, 'businesses', businessId, 'batches', newBatchId), newBatch);
+    await runTransaction(db, async (tx) => {
+      // ---- READS (all before any write — required by Firestore) ----
+      const lockSnap = await tx.get(lockRef);
+      const lockData = lockSnap.exists() ? (lockSnap.data() as { openBatchId?: string | null }) : null;
+      const lockOpenBatchId = lockData?.openBatchId ?? null;
+
+      const idsToCheck = computeBatchIdsToCheck(lockSnap.exists(), lockOpenBatchId, candidateOpenBatchIds);
+
+      const checkedBatches: CheckedBatchSnapshot[] = [];
+      const batchRefsById = new Map<string, ReturnType<typeof doc>>();
+      for (const id of idsToCheck) {
+        const ref = doc(db, 'businesses', businessId, 'batches', id);
+        batchRefsById.set(id, ref);
+        const snap = await tx.get(ref);
+        checkedBatches.push({
+          id,
+          exists: snap.exists(),
+          status: snap.exists() ? (snap.data() as { status?: string }).status : undefined,
+        });
+      }
+
+      // ---- WRITES (only after every read above has completed) ----
+      const idsToClose = computeBatchesToClose(checkedBatches);
+      for (const id of idsToClose) {
+        tx.update(batchRefsById.get(id)!, { status: 'closed' });
+      }
+
+      tx.set(newBatchRef, newBatch);
+      tx.set(lockRef, {
+        productId,
+        openBatchId: newBatchId,
+        updatedAt: new Date().toISOString(),
+      });
+    });
 
     if (isNewProduct) {
       await logTimelineEvent({
