@@ -326,6 +326,13 @@ export const fr: TranslationDict = {
     event: {
       addAnotherSupplier: 'Ajouter un Autre Fournisseur à Cet Achat',
     },
+    restockObservation: {
+      label: 'Stock restant avant ce réapprovisionnement',
+      optional: 'facultatif',
+      placeholder: 'Ex. : 8',
+      dontKnow: 'Je ne sais pas',
+      helperText: 'Ceci aide à comprendre le mouvement de stock entre les réapprovisionnements. Cela ne représente pas des ventes \u2014 cela peut inclure des ventes, des pertes, un usage interne ou d\u2019autres sorties.',
+    },
   },
   addQuebra: {
     title: 'Enregistrer une Perte de Stock',

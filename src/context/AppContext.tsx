@@ -55,6 +55,7 @@ import {
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
+import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
 
@@ -65,6 +66,13 @@ interface AddStockParams {
   unit?: string;
   costPrice: number;
   sellingPrice: number;
+  // [Restock Observation Amendment v1.0] The operator's optional,
+  // explicit "how much was physically left before this restock"
+  // observation. `undefined`/blank means "I don't know" — never
+  // treated as 0. Only meaningful (and only ever produces a persisted
+  // restockObservation) when this product already has a prior batch to
+  // compare against — see computeRestockObservation.
+  previousRemainingQuantity?: number | string;
 }
 
 interface AddQuebraParams {
@@ -1265,7 +1273,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice }: AddStockParams) => {
+  const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice, previousRemainingQuantity }: AddStockParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const businessId = activeBusinessId;
@@ -1274,6 +1282,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let product = products.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
     let productId = product?.id;
     let isNewProduct = false;
+
+    // [Restock Observation Amendment v1.0] The most recent PRIOR batch
+    // for this product (if any) is this restock's "previous cycle" —
+    // the same batch whose price already prefills the form client-side
+    // (AddStockView's own `productBatches[0]`). `undefined` for a
+    // brand-new product — there is no prior cycle to compare against.
+    const previousBatchForProduct = !product
+      ? undefined
+      : findMostRecentBatchForProduct(batches, productId!);
+    const restockObservation = computeRestockObservation(
+      previousBatchForProduct?.quantity,
+      previousRemainingQuantity,
+      new Date().toISOString()
+    );
 
     if (!product) {
       productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
@@ -1359,6 +1381,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       sellingPrice: Number(sellingPrice),
       status: 'open',
       createdAt: new Date().toISOString(),
+      // [Restock Observation Amendment v1.0] Conditionally spread, same
+      // undefined-field discipline this codebase already applies to
+      // every other optional field (see `purchaseBatchId` on this same
+      // type, and the Durable Purchase Capture Amendment's own
+      // supplier/notes fields elsewhere in this file) — never written
+      // when no valid observation could be computed.
+      ...(restockObservation ? { restockObservation } : {}),
     };
     const newBatchRef = doc(db, 'businesses', businessId, 'batches', newBatchId);
 
@@ -1571,6 +1600,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         newlyCreatedProductNames.push(trimmedName);
       }
 
+      // [Restock Observation Amendment v1.0] Resolve the "previous
+      // cycle" (most recent EXISTING batch for this product) BEFORE
+      // this item's own new batch is pushed into tempBatches below —
+      // otherwise a product name repeated across two rows in the same
+      // submission would see its own not-yet-committed sibling row as
+      // its "previous cycle," which is never correct. `product` is the
+      // pre-loop lookup above, so this is `undefined` exactly when the
+      // product is brand-new to this submission.
+      const previousBatchForProduct = !product
+        ? undefined
+        : findMostRecentBatchForProduct(tempBatches, productId!);
+      const restockObservation = computeRestockObservation(
+        previousBatchForProduct?.quantity,
+        item.previousRemainingQuantity,
+        new Date().toISOString()
+      );
+
       // Close open batches for this product
       const openBatches = tempBatches.filter((b) => b.productId === productId && b.status === 'open');
       for (const b of openBatches) {
@@ -1592,6 +1638,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unit: item.unit ? item.unit.trim() : 'un',
         costPrice: Number(item.costPrice),
         sellingPrice: Number(item.sellingPrice),
+        // [Restock Observation Amendment v1.0] Same undefined-field
+        // discipline as addStockBatch above — never written when no
+        // valid observation could be computed.
+        ...(restockObservation ? { restockObservation } : {}),
         status: 'open',
         createdAt: new Date().toISOString(),
         purchaseBatchId: newPurchaseBatchId,

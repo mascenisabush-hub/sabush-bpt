@@ -136,6 +136,29 @@ export interface Quebra {
   createdAt: string; // ISO string
 }
 
+// [Restock Observation Amendment v1.0 — 05-restock-observation-amendment.md]
+// A purely informational, owner-provided physical observation recorded
+// at the moment an EXISTING product is restocked: how much of it was
+// physically left immediately before this new batch arrived. NEVER a
+// sales record — `movement` may reflect sales, spoilage, internal use,
+// theft, transfer, or counting error, and the system never attributes
+// it to any single cause. NEVER read by calculateBatch,
+// calculateInventoryTotals, businessWorth, capitalGrowth, or any other
+// calculation in calculations.ts (amendment Part 6) — an information
+// layer only. `previousRemainingQuantity` is the Owner's own explicit,
+// entered-at-restock-time figure, the same "authoritative input, never
+// inferred" discipline as InitialStockPriceChangeEvent.quantityRemaining
+// above — unknown must remain unknown; the system never defaults this
+// (or the resulting `movement`) to 0.
+export interface StockBatchRestockObservation {
+  previousRemainingQuantity: number;
+  // previousCycleQuantity - previousRemainingQuantity, computed only
+  // when both operands are known — see addStockBatch/
+  // addMultipleStockBatches. Never itself a valuation input.
+  movement: number;
+  observedAt: string; // ISO string, same convention as StockBatch.createdAt
+}
+
 export interface StockBatch {
   id: string;
   productId: string;
@@ -152,6 +175,12 @@ export interface StockBatch {
   // those are still shown in the Investment Ledger, just grouped by date
   // instead, so no historical data is ever lost or hidden.
   purchaseBatchId?: string;
+  // [Restock Observation Amendment v1.0] Absent on every batch created
+  // before this amendment and on any batch where the operator declined
+  // to provide the observation — never backfilled, and never present
+  // for a brand-new product's first-ever batch (there is no previous
+  // cycle to compare against). See the amendment doc for full rules.
+  restockObservation?: StockBatchRestockObservation;
 }
 
 // ============================================================
@@ -432,6 +461,13 @@ export interface PurchaseDraftLineItem {
   unit?: string;
   costPrice: number;
   sellingPrice: number;
+  // [Restock Observation Amendment v1.0] Optional, draft-only mirror of
+  // the same field on AddStockParams — carried through autosave/restore
+  // so an interruption while filling this in isn't silently lost.
+  // Absent (not 0) means "not yet entered" / "I don't know" for this
+  // draft row, same "never invent 0" discipline as the finalized
+  // observation itself.
+  previousRemainingQuantity?: number;
 }
 
 export interface PurchaseDraft {

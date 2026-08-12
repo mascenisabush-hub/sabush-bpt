@@ -22,7 +22,33 @@ interface StockRowItem {
   sellingPrice: string;
   isDropdownOpen?: boolean;
   isUnitPopoverOpen?: boolean;
+  // [Restock Observation Amendment v1.0] Optional, existing-product-only
+  // field: "how much was physically left before this restock". Empty
+  // string means "not entered" / "I don't know" — NEVER treated as 0.
+  // `previousCycleQuantity` is the most recent prior batch's quantity
+  // for the selected product, resolved client-side purely to drive this
+  // field's visibility and its explanatory copy — it is never itself
+  // submitted; AppContext re-resolves it server-side from `batches`
+  // before computing the actual observation.
+  previousRemainingQuantity: string;
+  previousCycleQuantity?: number;
 }
+
+// [Restock Observation Amendment v1.0] The one sentinel value the
+// "previous remaining quantity" input can hold besides a numeric
+// string or blank — set only by the explicit "I don't know" toggle
+// below. Centralized here so every place that checks/clears it stays
+// in sync with the toggle's own behavior.
+const UNKNOWN_PREVIOUS_REMAINING = 'unknown';
+
+// True only when the operator has actually typed a real (attempted)
+// quantity — i.e. neither blank ("not yet entered") nor the explicit
+// "I don't know" sentinel. Both of the latter mean the same thing to
+// AppContext (no observation persisted) but are kept visually distinct
+// in the UI so a genuinely blank field doesn't look like a deliberate
+// "I don't know" choice.
+const hasKnownPreviousRemainingInput = (value: string): boolean =>
+  value.trim() !== '' && value !== UNKNOWN_PREVIOUS_REMAINING;
 
 // [Durable Purchase Capture Amendment v1.0] Row <-> draft-line-item
 // converters, directly modeled on InitialStockCountView's own
@@ -36,6 +62,13 @@ const rowToDraftLineItem = (row: StockRowItem): PurchaseDraftLineItem => ({
   unit: row.unit,
   costPrice: parseFloat(row.costPrice) || 0,
   sellingPrice: parseFloat(row.sellingPrice) || 0,
+  // [Restock Observation Amendment v1.0] Blank input, and the explicit
+  // "I don't know" sentinel, never become 0 (or NaN) in the draft
+  // either — "not yet entered"/"unknown" must survive a save/restore
+  // cycle as such, never silently turn into a real number.
+  ...(hasKnownPreviousRemainingInput(row.previousRemainingQuantity)
+    ? { previousRemainingQuantity: parseFloat(row.previousRemainingQuantity) }
+    : {}),
 });
 
 const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
@@ -48,6 +81,12 @@ const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
   sellingPrice: item.sellingPrice ? String(item.sellingPrice) : '',
   isDropdownOpen: false,
   isUnitPopoverOpen: false,
+  previousRemainingQuantity:
+    item.previousRemainingQuantity != null ? String(item.previousRemainingQuantity) : '',
+  // previousCycleQuantity is deliberately NOT restored from the draft —
+  // it's always freshly re-resolved against the live `products`/
+  // `batches` state right after restore (see the draft-load effect
+  // below), since it may have changed since the draft was saved.
 });
 
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
@@ -93,6 +132,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       }
     }
 
+    // [Restock Observation Amendment v1.0] Only set for an existing
+    // product that already has at least one prior batch — that batch's
+    // quantity is the "previous cycle" the optional field below
+    // compares against. undefined for a brand-new product, which is
+    // exactly what hides the field for it further down.
+    const previousCycleQuantity = resolvePreviousCycleQuantity(productName);
+
     return {
       id: 'row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
       productName,
@@ -103,7 +149,24 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       sellingPrice: initialSell || '3.00',
       isDropdownOpen: false,
       isUnitPopoverOpen: false,
+      previousRemainingQuantity: '',
+      previousCycleQuantity,
     };
+  };
+
+  // [Restock Observation Amendment v1.0] Shared resolver for
+  // `previousCycleQuantity` — the most recent prior batch's quantity
+  // for an existing product, purely to drive the optional field's
+  // visibility client-side (see StockRowItem's own comment). Used by
+  // createEmptyRow, handleSelectProductForTool, and the draft-restore
+  // effect below, so all three stay in sync with the same rule: only
+  // an existing product with at least one prior batch gets a value.
+  const resolvePreviousCycleQuantity = (productName: string): number | undefined => {
+    if (!productName) return undefined;
+    const match = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
+    if (!match) return undefined;
+    const productBatches = batches.filter(b => b.productId === match.id);
+    return productBatches.length > 0 ? productBatches[0].quantity : undefined;
   };
 
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
@@ -235,7 +298,19 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     if (!userHasStartedTyping) {
       skipNextAutosave.current = true;
       if (purchaseDraft.items.length > 0) {
-        setRows(purchaseDraft.items.map(draftLineItemToRow));
+        // [Restock Observation Amendment v1.0] previousCycleQuantity is
+        // never itself stored in the draft (see PurchaseDraftLineItem's
+        // own comment) — re-resolve it fresh against current products/
+        // batches right after restore, so the field's visibility is
+        // always based on live data, not a possibly-stale snapshot.
+        setRows(
+          purchaseDraft.items
+            .map(draftLineItemToRow)
+            .map(row => ({
+              ...row,
+              previousCycleQuantity: resolvePreviousCycleQuantity(row.productName),
+            }))
+        );
         setWasRestoredFromDraft(true);
       }
       setDate(purchaseDraft.date);
@@ -347,12 +422,22 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       }
     }
 
+    // [Restock Observation Amendment v1.0] See createEmptyRow's own
+    // comment — resolved identically here so re-selecting a different
+    // existing product mid-form updates the field's availability too.
+    const previousCycleQuantity = resolvePreviousCycleQuantity(name);
+
     updateRow(rowId, {
       productName: name,
       costPrice: newCost || undefined,
       sellingPrice: newSell || undefined,
       unit: newUnit || undefined,
       isDropdownOpen: false,
+      // Switching products resets any previously-entered observation —
+      // it was physically describing the OLD product's prior cycle and
+      // must never carry over as if it described the new one.
+      previousRemainingQuantity: '',
+      previousCycleQuantity,
     });
   };
 
@@ -416,6 +501,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         unit: row.unit || 'un',
         costPrice: numCost,
         sellingPrice: numSell,
+        // [Restock Observation Amendment v1.0] Blank input and the
+        // explicit "I don't know" sentinel are both passed through as
+        // "no field at all", never coerced to 0 or forwarded as the
+        // literal string "unknown" — AppContext treats their absence
+        // as "I don't know" and persists no observation for this line
+        // item. Only meaningful when this row is for an existing
+        // product with a prior cycle in the first place
+        // (row.previousCycleQuantity), which the UI already gates the
+        // field's visibility on.
+        ...(hasKnownPreviousRemainingInput(row.previousRemainingQuantity)
+          ? { previousRemainingQuantity: row.previousRemainingQuantity.trim() }
+          : {}),
       });
     }
 
@@ -1042,6 +1139,65 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           )}
                         </div>
                       </div>
+
+                      {/* [Restock Observation Amendment v1.0] Optional,
+                          existing-product-only physical observation.
+                          Shown for any existing product with a known
+                          prior cycle — never for a brand-new product
+                          (row.previousCycleQuantity stays undefined for
+                          those), and never required. Spans full width,
+                          shared by both the desktop and mobile layouts
+                          above/below, so this markup isn't duplicated
+                          per breakpoint. */}
+                      {row.previousCycleQuantity != null && (
+                        <div className="mt-2 pt-2 border-t border-[#E5E7EB]/70">
+                          <label className="block type-label mb-1">
+                            {t('addStock.restockObservation.label')}
+                            <span className="ml-1 text-gray-400 font-normal normal-case">
+                              ({t('addStock.restockObservation.optional')})
+                            </span>
+                          </label>
+                          <div className="flex items-center gap-2">
+                            <input
+                              type="number"
+                              min="0"
+                              step="1"
+                              placeholder={t('addStock.restockObservation.placeholder')}
+                              value={
+                                row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING
+                                  ? ''
+                                  : row.previousRemainingQuantity
+                              }
+                              disabled={row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING}
+                              onChange={e =>
+                                updateRow(row.id, { previousRemainingQuantity: e.target.value })
+                              }
+                              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1.5 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums disabled:opacity-50 disabled:bg-[#F5F7FA]"
+                            />
+                            <button
+                              type="button"
+                              onClick={() =>
+                                updateRow(row.id, {
+                                  previousRemainingQuantity:
+                                    row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING
+                                      ? ''
+                                      : UNKNOWN_PREVIOUS_REMAINING,
+                                })
+                              }
+                              className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-[10px] border transition-colors duration-150 shrink-0 ${
+                                row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING
+                                  ? 'bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#B8952F]'
+                                  : 'bg-white border-[#E5E7EB] text-gray-500 hover:text-[#111827] hover:border-gray-300'
+                              }`}
+                            >
+                              {t('addStock.restockObservation.dontKnow')}
+                            </button>
+                          </div>
+                          <p className="mt-1 text-[10.5px] leading-relaxed text-gray-400">
+                            {t('addStock.restockObservation.helperText')}
+                          </p>
+                        </div>
+                      )}
 
                       {/* Mobile Compact Card/Row Layout (below md breakpoint) */}
                       <div className="md:hidden space-y-2 text-xs">

@@ -326,6 +326,13 @@ export const en: TranslationDict = {
     event: {
       addAnotherSupplier: 'Add Another Supplier to This Purchase',
     },
+    restockObservation: {
+      label: 'Stock remaining before this restock',
+      optional: 'optional',
+      placeholder: 'e.g. 8',
+      dontKnow: "I don't know",
+      helperText: 'This helps show stock movement between restocks. It does not represent sales \u2014 it may include sales, breakage, internal use, or other stock leaving.',
+    },
   },
   addQuebra: {
     title: 'Record Stock Loss',

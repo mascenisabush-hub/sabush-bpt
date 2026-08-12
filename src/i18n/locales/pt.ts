@@ -294,6 +294,14 @@ export interface TranslationDict {
     event: {
       addAnotherSupplier: string;
     };
+    // [Restock Observation Amendment v1.0]
+    restockObservation: {
+      label: string;
+      optional: string;
+      placeholder: string;
+      dontKnow: string;
+      helperText: string;
+    };
   };
   addQuebra: {
     title: string;
@@ -1172,6 +1180,13 @@ export const pt: TranslationDict = {
     },
     event: {
       addAnotherSupplier: 'Adicionar Outro Fornecedor a Esta Compra',
+    },
+    restockObservation: {
+      label: 'Stock restante antes desta reposição',
+      optional: 'opcional',
+      placeholder: 'Ex.: 8',
+      dontKnow: 'Não sei',
+      helperText: 'Isto ajuda a entender o movimento de stock entre reposições. Não representa vendas — pode incluir vendas, quebras, uso interno ou outras saídas.',
     },
   },
   addQuebra: {
