@@ -2,10 +2,11 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck } from 'lucide-react';
+import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { PurchaseDraftLineItem } from '../types';
+import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -32,6 +33,22 @@ interface StockRowItem {
   // before computing the actual observation.
   previousRemainingQuantity: string;
   previousCycleQuantity?: number;
+  // [Smart Stock Entry — Tier 1] Present ONLY for a row populated by a
+  // scan proposal, purely to drive the Review Extraction status strip
+  // below (BDR-0008's Trust Test — uncertainty must stay visible).
+  // Deliberately absent from rowToDraftLineItem/draftLineItemToRow
+  // (below) and never sent to addMultipleStockBatches — per the ADR's
+  // Decision 2a and BDR-0008 §1a, AI leaves no trace once a row is
+  // edited/confirmed like any other. A row this came from is, from that
+  // point on, indistinguishable in persisted data from one typed by hand.
+  smartEntrySource?: 'ai';
+  smartEntryFieldStatus?: {
+    productName: 'detected' | 'review' | 'not_found';
+    quantity: 'detected' | 'review' | 'not_found';
+    unit: 'detected' | 'review' | 'not_found';
+    costPrice: 'detected' | 'review' | 'not_found';
+  };
+  smartEntryProductMatchStatus?: 'confident' | 'uncertain' | 'no_match';
 }
 
 // [Restock Observation Amendment v1.0] The one sentinel value the
@@ -105,6 +122,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     clearPurchaseDraft,
     attachPurchaseEventId,
     activeBusinessId,
+    scanPurchaseDocument,
   } = useApp();
   const { t } = useLanguage();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
@@ -173,6 +191,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [date, setDate] = useState(getTodayDateString());
   const [isSaving, setIsSaving] = useState(false);
+
+  // [Smart Stock Entry — Tier 1] Scan state — purely local UI state, never
+  // persisted. 'idle' | 'processing' | 'error'. On success, rows are
+  // merged directly into `rows` above (see handleFileSelected) and this
+  // resets to 'idle' — there is no separate "review extraction" screen
+  // model to keep in sync; the review surface IS AddStockView's existing
+  // form, exactly per the ADR.
+  const [scanState, setScanState] = useState<'idle' | 'processing' | 'error'>('idle');
+  const [scanErrorReason, setScanErrorReason] = useState<SmartStockEntryFailureReason | null>(null);
+  const scanFileInputRef = useRef<HTMLInputElement>(null);
 
   // Supplier applies to the whole purchase (batch), not to individual
   // product rows — every item added in this session was bought from the
@@ -440,6 +468,188 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       previousCycleQuantity,
     });
   };
+
+  // [Smart Stock Entry — Tier 1] Builds one StockRowItem from a single
+  // proposed line item. This is the ONLY place scan results turn into
+  // row fields — the same shape every other row already has, so nothing
+  // downstream (updateRow, handleSubmit, autosave) needs to know this
+  // row came from a scan at all.
+  //
+  // Product matching rule (per governance): the server already decided
+  // 'confident' (exact case-insensitive match) or 'no_match' — this
+  // function NEVER re-guesses or loosens that decision client-side. A
+  // 'confident' match additionally reuses Product Memory's EXISTING
+  // prefill behavior (latest batch price/unit) — the exact same logic
+  // handleSelectProductForTool already applies for manual selection,
+  // not a new prefill path invented for scanning.
+  const buildRowFromProposalLineItem = (item: SmartStockEntryLineItemProposal): StockRowItem => {
+    let productName = item.productName.value || '';
+    let costPrice = item.costPrice.value != null ? String(item.costPrice.value) : '';
+    let unit = item.unit.value || (suggestedUnits[0] || 'un');
+    const quantity = item.quantity.value != null ? String(item.quantity.value) : '';
+    // Selling price is NEVER proposed by the scan (governance's explicit
+    // rule) — it is only ever filled from Product Memory's own existing
+    // history, exactly as a manual selection would, never invented here.
+    let sellingPrice = '';
+    let previousCycleQuantity: number | undefined;
+
+    if (item.productMatch.status === 'confident' && item.productMatch.productId) {
+      const matched = products.find(p => p.id === item.productMatch.productId);
+      if (matched) {
+        // Use the catalog's own canonical name, not the raw OCR text, once
+        // matched — identical to what selecting an existing product from
+        // the autocomplete already does.
+        productName = matched.name;
+        const productBatches = batches.filter(b => b.productId === matched.id);
+        if (productBatches.length > 0) {
+          const latest = productBatches[0];
+          sellingPrice = String(latest.sellingPrice);
+          if (!item.unit.value) unit = latest.unit || unit;
+          if (!costPrice) costPrice = String(latest.costPrice);
+          previousCycleQuantity = latest.quantity;
+        } else {
+          if (!costPrice && matched.costPrice != null) costPrice = String(matched.costPrice);
+          if (matched.sellingPrice != null) sellingPrice = String(matched.sellingPrice);
+        }
+      }
+    }
+
+    return {
+      id: 'row-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+      productName,
+      dateEntered: getTodayDateString(),
+      quantity,
+      unit,
+      costPrice,
+      sellingPrice,
+      isDropdownOpen: false,
+      isUnitPopoverOpen: false,
+      previousRemainingQuantity: '',
+      previousCycleQuantity,
+      smartEntrySource: 'ai',
+      smartEntryFieldStatus: {
+        productName: item.productName.status,
+        quantity: item.quantity.status,
+        unit: item.unit.status,
+        costPrice: item.costPrice.status,
+      },
+      smartEntryProductMatchStatus: item.productMatch.status,
+    };
+  };
+
+  // [Smart Stock Entry — Tier 1] Reads the chosen file, calls the
+  // server's extraction route, and — on success — merges the proposal
+  // directly into `rows`. This function NEVER writes to purchaseDrafts
+  // itself (ADR Decision 2a): it only calls setRows, the exact same
+  // state manual typing already mutates, and the existing autosave
+  // effect (unchanged) persists the result from there.
+  //
+  // Any failure (unsupported file, network error, provider unavailable,
+  // unreadable document) is handled gracefully — rows are left exactly
+  // as they were, and the user can always continue manually. Nothing is
+  // ever written to Firestore by this function.
+  const handleFileSelected = async (file: File | undefined | null) => {
+    if (!file) return;
+    setScanState('processing');
+    setScanErrorReason(null);
+
+    let base64: string;
+    try {
+      base64 = await new Promise<string>((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = () => {
+          const result = reader.result;
+          if (typeof result !== 'string') {
+            reject(new Error('unreadable'));
+            return;
+          }
+          // Strip the "data:<mime>;base64," prefix — the server expects
+          // raw base64 only.
+          const commaIndex = result.indexOf(',');
+          resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1));
+        };
+        reader.onerror = () => reject(new Error('unreadable'));
+        reader.readAsDataURL(file);
+      });
+    } catch {
+      setScanState('error');
+      setScanErrorReason('unreadable');
+      return;
+    }
+
+    const result = await scanPurchaseDocument(base64, file.type || 'application/octet-stream');
+
+    if (result.success === false) {
+      setScanState('error');
+      setScanErrorReason(result.reason);
+      return;
+    }
+
+    const newRows = result.proposal.lineItems.map(buildRowFromProposalLineItem);
+    setRows(prev => {
+      // Drop any still-pristine, never-typed-into default row before
+      // appending the scan's rows, so a fresh Add Stock screen doesn't
+      // end up with one useless empty row alongside the real ones —
+      // but never drop a row the user has already started filling in.
+      const kept = prev.filter(
+        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '1.50' || r.sellingPrice !== '3.00'
+      );
+      return [...kept, ...newRows];
+    });
+
+    // [Smart Stock Entry — Tier 1] Supplier/date, when the document
+    // clearly contained them — free-text only, never an existing
+    // SupplierRecord auto-selected (that remains a separate, explicit
+    // user action via the existing supplier autocomplete below).
+    if (result.proposal.supplierName.value && !supplierId && !supplierName.trim()) {
+      setSupplierName(result.proposal.supplierName.value);
+    }
+    if (result.proposal.documentDate.value && /^\d{4}-\d{2}-\d{2}$/.test(result.proposal.documentDate.value)) {
+      setDate(result.proposal.documentDate.value);
+    }
+
+    setScanState('idle');
+  };
+
+  // Explicit "reject this scan" — removes only the AI-sourced rows,
+  // never anything the user typed manually. Per governance: rejecting
+  // the extraction must always fall through cleanly to normal manual
+  // Add Stock, never leave the user stuck.
+  const handleRejectScan = () => {
+    setRows(prev => {
+      const remaining = prev.filter(r => r.smartEntrySource !== 'ai');
+      return remaining.length > 0 ? remaining : [createEmptyRow('')];
+    });
+    setScanState('idle');
+    setScanErrorReason(null);
+  };
+
+  // [Smart Stock Entry — Tier 1] Small, shared status icon for the
+  // ✓ Detected / ⚠ Review / — Not found states (BDR-0008's Trust
+  // Test) — used by the per-row status strip below. Never a numeric
+  // percentage, per the ADR's own explicit instruction against
+  // fabricated precision.
+  const renderFieldStatusBadge = (label: string, status: 'detected' | 'review' | 'not_found') => (
+    <span
+      key={label}
+      className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md ${
+        status === 'detected'
+          ? 'text-emerald-700 bg-emerald-50'
+          : status === 'review'
+          ? 'text-amber-700 bg-amber-50'
+          : 'text-gray-400 bg-gray-50'
+      }`}
+    >
+      {status === 'detected' ? (
+        <CheckCircle className="w-3 h-3" />
+      ) : status === 'review' ? (
+        <AlertTriangle className="w-3 h-3" />
+      ) : (
+        <MinusCircle className="w-3 h-3" />
+      )}
+      {label}
+    </span>
+  );
 
   // [Durable Purchase Capture Amendment v1.0] Selecting an existing
   // SupplierRecord fills name/phone/notes from its current data and
@@ -769,6 +979,83 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
+            {/* [Smart Stock Entry — Tier 1] Optional scan entry point.
+                Always sits alongside manual entry, never replaces it —
+                per BDR-0008, a failed/rejected scan must fall straight
+                through to the exact same form below with zero friction. */}
+            <div className="bg-[#FAFBFC] border border-dashed border-[#E5E7EB] rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
+              <div className="flex items-center gap-2.5 min-w-0">
+                <div className="w-9 h-9 rounded-lg bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+                  <ScanLine className="w-4.5 h-4.5" strokeWidth={2} />
+                </div>
+                <div className="min-w-0">
+                  <p className="text-[12.5px] font-bold text-[#111827]">{t('addStock.smartEntry.title')}</p>
+                  <p className="text-[11px] text-gray-500">{t('addStock.smartEntry.subtitle')}</p>
+                </div>
+              </div>
+              <div className="flex items-center gap-2 shrink-0">
+                {rows.some(r => r.smartEntrySource === 'ai') && (
+                  <button
+                    type="button"
+                    onClick={handleRejectScan}
+                    className="text-[11.5px] font-semibold text-gray-500 hover:text-rose-600 transition-colors duration-150"
+                  >
+                    {t('addStock.smartEntry.rejectScan')}
+                  </button>
+                )}                <input
+                  ref={scanFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  capture="environment"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    handleFileSelected(file);
+                    e.target.value = '';
+                  }}
+                />
+                <button
+                  type="button"
+                  disabled={scanState === 'processing'}
+                  onClick={() => scanFileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
+                >
+                  {scanState === 'processing' ? (
+                    <>
+                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                      {t('addStock.smartEntry.processing')}
+                    </>
+                  ) : (
+                    <>
+                      <ScanLine className="w-3.5 h-3.5 text-[#B8952F]" />
+                      {t('addStock.smartEntry.scanButton')}
+                    </>
+                  )}
+                </button>
+              </div>
+            </div>
+
+            {/* [Smart Stock Entry — Tier 1] Graceful failure banner.
+                Never blocks the form below — manual entry is already
+                right there, unaffected. */}
+            {scanState === 'error' && scanErrorReason && (
+              <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-start justify-between gap-2.5">
+                <div className="flex items-start gap-2.5">
+                  <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+                  <p className="text-[11.5px] leading-relaxed text-amber-800">
+                    {t(`addStock.smartEntry.errors.${scanErrorReason}`)}
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  onClick={() => { setScanState('idle'); setScanErrorReason(null); }}
+                  className="text-amber-600 hover:text-amber-800 shrink-0"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            )}
+
             {/* SUPPLIER (applies to this whole purchase / batch) */}
             <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
@@ -1139,6 +1426,33 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           )}
                         </div>
                       </div>
+
+                      {/* [Smart Stock Entry — Tier 1] Review Extraction
+                          status strip — shown ONLY for a row that came
+                          from a scan (row.smartEntrySource === 'ai').
+                          This is the visible-uncertainty surface BDR-0008
+                          §1b's Trust Test requires: every extracted
+                          field's ✓/⚠/— state, plus the product-match
+                          outcome, spelled out in plain language rather
+                          than implied by styling alone. A manually-typed
+                          row never shows this — it has nothing to report. */}
+                      {row.smartEntrySource === 'ai' && row.smartEntryFieldStatus && (
+                        <div className="mt-2 pt-2 border-t border-[#E5E7EB]/70 flex items-center justify-between gap-2 flex-wrap">
+                          <div className="flex items-center gap-1.5 flex-wrap">
+                            <ScanLine className="w-3 h-3 text-[#B8952F] shrink-0" />
+                            {renderFieldStatusBadge(t('addStock.smartEntry.fields.product'), row.smartEntryFieldStatus.productName)}
+                            {renderFieldStatusBadge(t('addStock.smartEntry.fields.quantity'), row.smartEntryFieldStatus.quantity)}
+                            {renderFieldStatusBadge(t('addStock.smartEntry.fields.unit'), row.smartEntryFieldStatus.unit)}
+                            {renderFieldStatusBadge(t('addStock.smartEntry.fields.costPrice'), row.smartEntryFieldStatus.costPrice)}
+                            {row.smartEntryProductMatchStatus === 'no_match' && (
+                              <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md text-amber-700 bg-amber-50">
+                                <AlertTriangle className="w-3 h-3" />
+                                {t('addStock.smartEntry.noConfidentMatch')}
+                              </span>
+                            )}
+                          </div>
+                        </div>
+                      )}
 
                       {/* [Restock Observation Amendment v1.0] Optional,
                           existing-product-only physical observation.

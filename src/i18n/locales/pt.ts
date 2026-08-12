@@ -302,6 +302,29 @@ export interface TranslationDict {
       dontKnow: string;
       helperText: string;
     };
+    // [Smart Stock Entry — Tier 1]
+    smartEntry: {
+      title: string;
+      subtitle: string;
+      scanButton: string;
+      processing: string;
+      rejectScan: string;
+      noConfidentMatch: string;
+      fields: {
+        product: string;
+        quantity: string;
+        unit: string;
+        costPrice: string;
+      };
+      errors: {
+        invalid_upload: string;
+        too_large: string;
+        unsupported_type: string;
+        provider_unavailable: string;
+        unreadable: string;
+        network_error: string;
+      };
+    };
   };
   addQuebra: {
     title: string;
@@ -1187,6 +1210,28 @@ export const pt: TranslationDict = {
       placeholder: 'Ex.: 8',
       dontKnow: 'Não sei',
       helperText: 'Isto ajuda a entender o movimento de stock entre reposições. Não representa vendas — pode incluir vendas, quebras, uso interno ou outras saídas.',
+    },
+    smartEntry: {
+      title: 'Digitalizar Documento de Compra',
+      subtitle: 'Tire uma foto de um recibo ou fatura para preencher esta entrada automaticamente.',
+      scanButton: 'Digitalizar Documento',
+      processing: 'A analisar documento...',
+      rejectScan: 'Rejeitar digitalização',
+      noConfidentMatch: 'Não foi possível confirmar o produto — escolha um existente ou crie um novo',
+      fields: {
+        product: 'Produto',
+        quantity: 'Quantidade',
+        unit: 'Unidade',
+        costPrice: 'Preço de Compra',
+      },
+      errors: {
+        invalid_upload: 'Não foi possível ler o ficheiro enviado. Tente novamente ou continue manualmente.',
+        too_large: 'A imagem é demasiado grande. Tente uma foto mais pequena ou continue manualmente.',
+        unsupported_type: 'Este tipo de ficheiro não é suportado. Use uma foto JPEG, PNG ou WebP, ou continue manualmente.',
+        provider_unavailable: 'A digitalização não está disponível neste momento. Pode continuar a adicionar o stock manualmente.',
+        unreadable: 'Não conseguimos ler este documento com confiança. Pode continuar a adicionar o stock manualmente.',
+        network_error: 'Sem ligação ao servidor. Verifique a sua internet ou continue manualmente.',
+      },
     },
   },
   addQuebra: {

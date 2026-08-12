@@ -59,6 +59,43 @@ import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib
 import { getTodayDateString } from '../utils/formatters';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
 
+// [Smart Stock Entry — Tier 1] Client-side mirror of the server's
+// FieldState<T>/proposal shapes (server/smartStockEntry.ts) — duplicated
+// deliberately rather than imported, since src/ and server/ are separate
+// build targets in this repository (no shared package) and this shape is
+// small and stable. `status` drives the ✓ Detected / ⚠ Review / — Not
+// found indicator; `value` is null whenever status is 'not_found'.
+export interface SmartStockEntryFieldState<T> {
+  value: T | null;
+  status: 'detected' | 'review' | 'not_found';
+}
+
+export interface SmartStockEntryLineItemProposal {
+  productName: SmartStockEntryFieldState<string>;
+  quantity: SmartStockEntryFieldState<number>;
+  unit: SmartStockEntryFieldState<string>;
+  costPrice: SmartStockEntryFieldState<number>;
+  productMatch: { status: 'confident' | 'uncertain' | 'no_match'; productId: string | null };
+}
+
+export interface SmartStockEntryProposal {
+  lineItems: SmartStockEntryLineItemProposal[];
+  supplierName: SmartStockEntryFieldState<string>;
+  documentDate: SmartStockEntryFieldState<string>;
+}
+
+export type SmartStockEntryFailureReason =
+  | 'invalid_upload'
+  | 'too_large'
+  | 'unsupported_type'
+  | 'provider_unavailable'
+  | 'unreadable'
+  | 'network_error';
+
+export type SmartStockEntryScanResult =
+  | { success: true; proposal: SmartStockEntryProposal }
+  | { success: false; reason: SmartStockEntryFailureReason };
+
 interface AddStockParams {
   productName: string;
   dateEntered: string;
@@ -278,6 +315,15 @@ interface AppContextType {
     purchaseEventId?: string
   ) => Promise<void>;
   clearPurchaseDraft: () => Promise<void>;
+  // [Smart Stock Entry — Tier 1] Calls the server's extraction route for
+  // one photographed purchase document. Returns a transient proposal
+  // ONLY — this function never writes to purchaseDrafts, never creates a
+  // Product/StockBatch, and the caller (AddStockView) is responsible for
+  // merging the result into its own local `rows` state, exactly as
+  // manual typing already populates it. See docs/architecture/
+  // 10-smart-stock-entry-adr.md Decision 2a for why this boundary is
+  // load-bearing, not stylistic.
+  scanPurchaseDocument: (imageBase64: string, mimeType: string) => Promise<SmartStockEntryScanResult>;
   // [Amendment v1.0, Part 2] Contagem's comparison baseline — Confirmed
   // Initial Capital + StockBatch cost value. NOT a Business Worth input;
   // see spec #2's own non-goals note for the boundary.
@@ -2277,6 +2323,73 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid));
   };
 
+  // [Smart Stock Entry — Tier 1] See the interface's own comment above —
+  // this NEVER touches purchaseDrafts and NEVER writes anything. It is a
+  // thin wrapper around one privileged server call, following the exact
+  // same authenticated-fetch pattern as deleteStaffMember/_staffActionRequest
+  // above (Bearer ID token, JSON body, businessId re-verified server-side —
+  // never trusted from this call alone). A network failure or any
+  // non-2xx response is mapped to a graceful `{ success: false, reason:
+  // 'network_error' }` rather than thrown — per the amendment's own
+  // "AI failure must never block stock entry" rule, the caller
+  // (AddStockView) is expected to fall back to manual entry on any
+  // failure result, never to treat this as an unhandled exception.
+  const scanPurchaseDocument = async (
+    imageBase64: string,
+    mimeType: string
+  ): Promise<SmartStockEntryScanResult> => {
+    if (!activeBusinessId || !currentUser) {
+      return { success: false, reason: 'network_error' };
+    }
+
+    let idToken: string;
+    try {
+      idToken = await currentUser.getIdToken();
+    } catch {
+      return { success: false, reason: 'network_error' };
+    }
+
+    let response: Response;
+    try {
+      response = await fetch('/api/smart-stock-entry/extract', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          businessId: activeBusinessId,
+          imageBase64,
+          mimeType,
+        }),
+      });
+    } catch {
+      return { success: false, reason: 'network_error' };
+    }
+
+    if (!response.ok) {
+      return { success: false, reason: 'network_error' };
+    }
+
+    try {
+      const body = await response.json();
+      if (body?.success === true && body?.proposal) {
+        return { success: true, proposal: body.proposal as SmartStockEntryProposal };
+      }
+      const reason: SmartStockEntryFailureReason =
+        body?.reason === 'too_large' ||
+        body?.reason === 'unsupported_type' ||
+        body?.reason === 'provider_unavailable' ||
+        body?.reason === 'unreadable' ||
+        body?.reason === 'invalid_upload'
+          ? body.reason
+          : 'unreadable';
+      return { success: false, reason };
+    } catch {
+      return { success: false, reason: 'network_error' };
+    }
+  };
+
   // A period is "closed" if any existing Closing of the same type shares
   // its exact start/end range. Prevents accidentally closing the same
   // month or year twice.
@@ -2972,6 +3085,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         purchaseDraftLoaded,
         savePurchaseDraft,
         clearPurchaseDraft,
+        scanPurchaseDocument,
         expectedCurrentStockValue,
         latestStockCount,
         currentInventoryValue,

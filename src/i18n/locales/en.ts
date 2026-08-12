@@ -333,6 +333,28 @@ export const en: TranslationDict = {
       dontKnow: "I don't know",
       helperText: 'This helps show stock movement between restocks. It does not represent sales \u2014 it may include sales, breakage, internal use, or other stock leaving.',
     },
+    smartEntry: {
+      title: 'Scan Purchase Document',
+      subtitle: 'Take a photo of a receipt or invoice to fill this entry automatically.',
+      scanButton: 'Scan Document',
+      processing: 'Reading document...',
+      rejectScan: 'Reject scan',
+      noConfidentMatch: "Couldn't confidently match this product \u2014 choose an existing one or create a new one",
+      fields: {
+        product: 'Product',
+        quantity: 'Quantity',
+        unit: 'Unit',
+        costPrice: 'Purchase Price',
+      },
+      errors: {
+        invalid_upload: "We couldn't read the uploaded file. Try again or continue manually.",
+        too_large: 'That image is too large. Try a smaller photo or continue manually.',
+        unsupported_type: 'That file type isn\u2019t supported. Use a JPEG, PNG, or WebP photo, or continue manually.',
+        provider_unavailable: "Scanning isn't available right now. You can still add this stock manually.",
+        unreadable: "We couldn't read this document reliably. You can still add this stock manually.",
+        network_error: "Couldn't reach the server. Check your connection or continue manually.",
+      },
+    },
   },
   addQuebra: {
     title: 'Record Stock Loss',

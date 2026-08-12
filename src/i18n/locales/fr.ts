@@ -333,6 +333,28 @@ export const fr: TranslationDict = {
       dontKnow: 'Je ne sais pas',
       helperText: 'Ceci aide à comprendre le mouvement de stock entre les réapprovisionnements. Cela ne représente pas des ventes \u2014 cela peut inclure des ventes, des pertes, un usage interne ou d\u2019autres sorties.',
     },
+    smartEntry: {
+      title: 'Numériser un Document d\u2019Achat',
+      subtitle: 'Prenez une photo d\u2019un reçu ou d\u2019une facture pour remplir cette entrée automatiquement.',
+      scanButton: 'Numériser le Document',
+      processing: 'Analyse du document...',
+      rejectScan: 'Rejeter la numérisation',
+      noConfidentMatch: 'Impossible de confirmer ce produit \u2014 choisissez un produit existant ou créez-en un nouveau',
+      fields: {
+        product: 'Produit',
+        quantity: 'Quantité',
+        unit: 'Unité',
+        costPrice: 'Prix d\u2019Achat',
+      },
+      errors: {
+        invalid_upload: 'Impossible de lire le fichier envoyé. Réessayez ou continuez manuellement.',
+        too_large: 'Cette image est trop grande. Essayez une photo plus petite ou continuez manuellement.',
+        unsupported_type: 'Ce type de fichier n\u2019est pas prise en charge. Utilisez une photo JPEG, PNG ou WebP, ou continuez manuellement.',
+        provider_unavailable: 'La numérisation n\u2019est pas disponible pour le moment. Vous pouvez toujours ajouter ce stock manuellement.',
+        unreadable: 'Nous n\u2019avons pas pu lire ce document de manière fiable. Vous pouvez toujours ajouter ce stock manuellement.',
+        network_error: 'Impossible de contacter le serveur. Vérifiez votre connexion ou continuez manuellement.',
+      },
+    },
   },
   addQuebra: {
     title: 'Enregistrer une Perte de Stock',

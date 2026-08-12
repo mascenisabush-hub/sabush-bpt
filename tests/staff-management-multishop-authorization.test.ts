@@ -181,14 +181,15 @@ describe('Fix #6 — all five staff endpoints remain routed through the single s
 describe('Fix #6 — ownedBusinessIds derivation matches the existing trusted pattern (addShop, activate-trial)', () => {
   it('the same Array.isArray(...businessIds)... fallback shape already used in addShop is not reinvented differently here', () => {
     const occurrences = SOURCE.match(/Array\.isArray\(requesterProfile\.businessIds\) && requesterProfile\.businessIds\.length > 0/g) || [];
-    // Three sites total: addShop (provisioning/business), activate-trial,
-    // and now verifyStaffManagementAction. Never trusted from the
-    // client in any of them — always re-read from the requester's own
-    // server-fetched Firestore profile.
+    // Four sites total: addShop (provisioning/business), activate-trial,
+    // verifyStaffManagementAction (Fix #6), and now the Smart Stock
+    // Entry extraction route's own membership check — each re-reads the
+    // requester's own server-fetched Firestore profile and is never
+    // trusted from the client, in all four.
     assert.equal(
       occurrences.length,
-      3,
-      'Expected this exact derivation guard in three places: addShop, activate-trial, and (after this fix) verifyStaffManagementAction.'
+      4,
+      'Expected this exact derivation guard in four places: addShop, activate-trial, verifyStaffManagementAction, and the Smart Stock Entry extraction route.'
     );
   });
 });
