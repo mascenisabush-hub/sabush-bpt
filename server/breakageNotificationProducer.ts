@@ -91,6 +91,7 @@
 
 import type { NotificationPlatform, BusinessEvent, Language } from './notificationPlatform';
 import { t } from './notificationPlatform';
+import { reportCriticalFailure } from './alerting';
 
 const BREAKAGE_EVENT_TYPE = 'inventory.risk.breakage';
 
@@ -220,9 +221,15 @@ export function createBreakageNotificationProducer(db: BreakageSweepDb, platform
       // server, the sweep just silently does nothing until both
       // collection-group indexes (firestore.indexes.json) are
       // deployed.
-      console.error('[breakage-notification-producer] collection-group query failed (index missing?)', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      // Fix #8: this used to be a silent `return` — the sweep produces
+      // zero breakage-risk notifications for the entire cycle and
+      // nothing upstream ever learned why. Escalated here since this
+      // is the one place that knows.
+      reportCriticalFailure(
+        '[breakage-notification-producer]',
+        'collection-group query failed (index missing?) — sweep produced zero notifications this cycle',
+        { error: err instanceof Error ? err.message : String(err) },
+      );
       return;
     }
 

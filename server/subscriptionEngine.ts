@@ -52,6 +52,8 @@
 // code, which works with untyped Firestore documents directly rather
 // than importing SubscriptionStatus/Subscription.
 
+import { reportCriticalFailure } from './alerting';
+
 const GRACE_PERIOD_DURATION_MS = 7 * 24 * 60 * 60 * 1000; // POL-19-004 — 7 consecutive calendar days
 // POL-19-011's monthly billing cadence, approximated as a flat 30 days
 // — the same "calendar month as 30 days" convention already
@@ -334,9 +336,15 @@ export function createSubscriptionEngine(db: SubscriptionEngineDb) {
         .where('gracePeriodEndsAt', '<=', nowIso)
         .get();
     } catch (err) {
-      console.error('[subscription-lifecycle-engine] grace-period-expiry query failed (composite index missing?)', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      // Fix #8: this used to be a silent `return` — the sweep expires
+      // zero grace-period subscriptions for the entire cycle and
+      // nothing upstream ever learned why. Escalated here since this
+      // is the one place that knows.
+      reportCriticalFailure(
+        '[subscription-lifecycle-engine]',
+        'grace-period-expiry query failed (composite index missing?) — sweep processed zero subscriptions this cycle',
+        { error: err instanceof Error ? err.message : String(err) },
+      );
       return;
     }
 

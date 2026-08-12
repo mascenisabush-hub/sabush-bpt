@@ -12,6 +12,109 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Fix #8 (Production Observability) — **IMPLEMENTED, TESTED,
+VERIFIED, AND CLOSED.** Committed and pushed to `main`. Nothing is
+mid-flight.
+
+**Objective:** answer one question — "if something important breaks
+for a pilot customer, will SABUSH know about it and have enough
+information to diagnose it?" — with the smallest change that does so.
+Deliberately NOT an observability platform: no Sentry/Datadog/etc., no
+analytics, no dashboards, no per-request telemetry pipeline.
+
+**What shipped:**
+
+- `server/alerting.ts` (new) — the one alerting primitive.
+  `reportCriticalFailure(tag, message, meta)` always logs in the exact
+  structured shape every other module already uses
+  (`console.error('[tag] message', meta)`, so Railway's existing log
+  ingestion is unaffected), and additionally POSTs `{ text: ... }` to
+  `ALERT_WEBHOOK_URL` if that env var is set (any Slack- or
+  Discord-compatible incoming webhook — zero new npm dependency, uses
+  Node's global `fetch`). Unset → pure no-op, zero deploy risk. A
+  per-failure-signature cooldown (`ALERT_COOLDOWN_MS`, default 15 min)
+  stops a repeatedly-failing job from paging on every tick.
+- Wired into the **4 confirmed swallowed sweep-level query failures**
+  (`trialNotificationProducer.ts`, `closingNotificationProducer.ts`,
+  `breakageNotificationProducer.ts`, `subscriptionEngine.ts`'s
+  grace-period sweep) — each previously caught its top-level Firestore
+  query error, logged it, and `return`ed with nothing upstream ever
+  told the whole sweep produced nothing that cycle.
+  `subscriptionEngine.ts` uses the same direct
+  `import { reportCriticalFailure } from './alerting'` as the other
+  three producers — no injected callback, no new dependency-inversion
+  layer; its file-local, dependency-free-of-other-modules convention
+  (documented in its own header) is unchanged.
+- `backgroundWorker.ts`'s single job-run-failed catch — one generic
+  wiring point covering any registered job's `execute()` throwing,
+  current or future.
+- `server/index.ts`: `process.on('uncaughtException')` (alerts, then
+  `exit(1)` so Railway restarts cleanly) and `process.on(
+  'unhandledRejection')` (alerts only, matches this codebase's
+  existing per-failure isolation principle); a final 4-arg Express
+  error-handling middleware as a backstop only — no existing
+  route-level try/catch touched, so expected `401`/`403` auth
+  rejections are unaffected and do not generate alert noise.
+- `POST /api/client-error` (new endpoint, unauthenticated by design —
+  a crash can happen before a session exists) — a fixed relay into
+  `reportCriticalFailure`, not a generic proxy: it accepts no
+  destination/URL/header from the caller, every field is length-capped
+  before touching a log line, and nothing is persisted to Firestore.
+- Client: `src/components/ErrorBoundary.tsx` (new) wraps `<App/>` in
+  `src/main.tsx`; `window.addEventListener('error'/'unhandledrejection'
+  , ...)` also added in `main.tsx` for the two crash classes a React
+  Error Boundary structurally can't catch. Both report through
+  `src/lib/reportClientError.ts` (new) — `sendBeacon`-based, capped at
+  5 reports per browser session, never throws.
+- `.env.example` documents `ALERT_WEBHOOK_URL` / `ALERT_COOLDOWN_MS`.
+
+**Explicitly NOT part of this fix, by design:** no deliberate
+test-alert HTTP trigger/endpoint exists — testing the alert path is a
+controlled, manual, out-of-band step (e.g. configure
+`ALERT_WEBHOOK_URL` against a real webhook and cause one of the wired
+failures deliberately), not a shipped production endpoint.
+
+**Verification, this session:**
+
+- `npx tsc --noEmit -p .` — clean.
+- `npm run test:all` — **15 suites, 262/262 passing, 0 failed, 0
+  skipped.**
+- `npm run build` — clean; only pre-existing, unrelated warnings (a
+  CSS dangling-combinator notice and a >500kB chunk-size notice) —
+  neither touches any file this fix changed.
+- `git diff --check` — clean, no whitespace errors.
+- Firestore emulator (`test:rules:emulator`) — attempted fresh,
+  **ENVIRONMENT-BLOCKED**: `403: Host not in allowlist:
+  storage.googleapis.com`, the same standing sandbox limitation named
+  in prior sessions. Not claimed as passing. The non-emulator
+  `test:rules` (pure logic, no live Firestore) already ran clean as
+  part of `test:all`, and this fix touches no `firestore.rules` or
+  `firestore.indexes.json` content at all.
+- Diff audited file-by-file: no secrets/tokens/webhook URLs/PINs
+  committed (`.env.example`'s webhook line is a placeholder,
+  `XXX/YYY/ZZZ`, commented out); `package-lock.json`/`bun.lock`
+  unchanged (a local `npm install` only populated the gitignored
+  `node_modules/`); no Firestore rules/indexes changed; no production
+  data touched; no unrelated refactoring.
+
+**Production configuration remaining, explicitly:**
+`ALERT_WEBHOOK_URL` must still be configured in the production
+environment before external alerts become operational. Implementation
+being complete and tested does **not** mean production alerting is
+active — every alert path degrades to "logged to stdout only" (exactly
+today's pre-Fix-#8 behavior) until that env var is set on Railway, and
+a controlled test of the live path (deliberately triggering one of the
+wired failures against a real webhook) is a separate, not-yet-done
+operational step.
+
+**Next actionable item:** configure `ALERT_WEBHOOK_URL` in the
+production Railway environment, then perform one controlled real-world
+test of the alert path (e.g. temporarily point a test webhook at it and
+trigger a known sweep/job failure) before relying on it for a real
+pilot-customer incident.
+
+## Prior status — Module #4 Multi-Supplier Purchase Event amendment (superseded above, kept for continuity)
+
 **Status:** Module #4 (Purchase Batches) — **Multi-Supplier Purchase
 Event amendment: IMPLEMENTED, TESTED, VERIFIED, AND CLOSED.** All 7
 phases of the approved Implementation Plan are complete, committed,

@@ -64,6 +64,7 @@
 
 import type { NotificationPlatform, BusinessEvent, Language } from './notificationPlatform';
 import { t } from './notificationPlatform';
+import { reportCriticalFailure } from './alerting';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -275,9 +276,15 @@ export function createClosingNotificationProducer(db: ClosingSweepDb, platform: 
       // "composite index missing?" handling — never crashes the
       // server, the sweep just silently does nothing until the index
       // is deployed.
-      console.error('[closing-notification-producer] collection-group query failed (index missing?)', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      // Fix #8: this used to be a silent `return` — the sweep produces
+      // zero closing-integrity notifications for the entire cycle and
+      // nothing upstream ever learned why. Escalated here since this
+      // is the one place that knows.
+      reportCriticalFailure(
+        '[closing-notification-producer]',
+        'collection-group query failed (index missing?) — sweep produced zero notifications this cycle',
+        { error: err instanceof Error ? err.message : String(err) },
+      );
       return;
     }
 

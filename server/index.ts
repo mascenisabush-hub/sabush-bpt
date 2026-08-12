@@ -27,8 +27,46 @@ import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationPro
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
 import { createSubscriptionEngine } from './subscriptionEngine';
+import { reportCriticalFailure } from './alerting';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
+
+// ------------------------------------------------------------------
+// Fix #8 — Production Observability. Process-level safety net for the
+// one failure class no route-level try/catch can ever cover: an error
+// that escapes every route handler and every awaited call entirely.
+// Previously this either crashed the process with nothing but a raw
+// stack trace in Railway's logs (uncaughtException) or, depending on
+// the specific Promise involved, sometimes did nothing visible at all
+// (unhandledRejection). Neither told anyone.
+//
+// uncaughtException: alert, then exit. The process is in a state Node
+// itself considers unrecoverable — trying to keep serving requests
+// after one is a well-known way to end up in worse, harder-to-diagnose
+// trouble than just restarting cleanly (Railway's process supervisor
+// restarts it immediately).
+// ------------------------------------------------------------------
+process.on('uncaughtException', (err) => {
+  reportCriticalFailure('[server]', 'uncaughtException — process will exit and restart', {
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  process.exit(1);
+});
+
+// unhandledRejection: alert only, no exit. Unlike an uncaught
+// exception, a rejected promise nobody awaited doesn't leave shared
+// process state in a known-bad way — it's almost always one specific
+// operation (e.g. a missed .catch() on a Firestore call) that already
+// failed on its own, isolated terms. Matches this codebase's existing
+// isolation principle (one failure must never take down unrelated
+// work) rather than restarting the whole server for it.
+process.on('unhandledRejection', (reason) => {
+  reportCriticalFailure('[server]', 'unhandledRejection', {
+    reason: reason instanceof Error ? reason.message : String(reason),
+    stack: reason instanceof Error ? reason.stack : undefined,
+  });
+});
 
 // ------------------------------------------------------------------
 // Firebase Admin init — credentials come from a service account key,
@@ -1331,12 +1369,73 @@ backgroundWorker.registerJob({
 });
 
 // ------------------------------------------------------------------
+// POST /api/client-error
+// Body: { message?, stack?, componentStack?, source?, url?, userAgent?, userId?, businessId? }
+//
+// Fix #8 — Production Observability. Relay endpoint for the client's
+// ErrorBoundary and window error/unhandledrejection listeners
+// (src/main.tsx, src/components/ErrorBoundary.tsx,
+// src/lib/reportClientError.ts). Deliberately unauthenticated — a
+// crash can happen before the user ever has a valid session (e.g.
+// during initial auth), and requiring a token here would silently
+// drop exactly the reports that matter most. Every field is
+// length-capped before it touches a log line or the alert channel;
+// nothing here is persisted to Firestore, and reportClientError()
+// already caps report volume per browser session so this can't be
+// used to spam the server or the alert channel from one crashing tab.
+// ------------------------------------------------------------------
+expressApp.post('/api/client-error', (req: Request, res: Response) => {
+  const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
+  const cap = (value: unknown, maxLength: number): string | undefined =>
+    typeof value === 'string' && value.length > 0 ? value.slice(0, maxLength) : undefined;
+
+  const message = cap(body.message, 500) || '(no message)';
+  const meta = {
+    stack: cap(body.stack, 4000),
+    componentStack: cap(body.componentStack, 4000),
+    source: cap(body.source, 64) || 'unknown',
+    url: cap(body.url, 500),
+    userAgent: cap(body.userAgent, 300),
+    userId: cap(body.userId, 128),
+    businessId: cap(body.businessId, 128),
+  };
+
+  reportCriticalFailure('[client-error]', message, meta);
+  // 204: the client already gave up on this request mattering to its
+  // own control flow (sendBeacon has no response at all); no reason to
+  // make it wait on or parse a body.
+  res.status(204).end();
+});
+
+// ------------------------------------------------------------------
 // Serve the built SPA for everything else.
 // ------------------------------------------------------------------
 const distPath = path.resolve(__dirname, 'dist');
 expressApp.use(express.static(distPath));
 expressApp.get('*', (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
+});
+
+// ------------------------------------------------------------------
+// Fix #8 — Production Observability. Final Express error-handling
+// middleware (4-arg signature is what makes Express treat this as an
+// error handler, not a normal route). This is a backstop only — every
+// route above already has its own try/catch and already reports its
+// own failures in its own way; this exists solely to catch a route
+// that throws synchronously, or a future route that forgets try/catch
+// entirely, so a bug there degrades to a reported 500 instead of the
+// request hanging or the process crashing with no report at all.
+// ------------------------------------------------------------------
+expressApp.use((err: unknown, req: Request, res: Response, _next: NextFunction) => {
+  reportCriticalFailure('[server]', 'unhandled request error', {
+    path: req.path,
+    method: req.method,
+    error: err instanceof Error ? err.message : String(err),
+    stack: err instanceof Error ? err.stack : undefined,
+  });
+  if (!res.headersSent) {
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro interno. A equipa foi notificada.' });
+  }
 });
 
 const PORT = process.env.PORT || 8080;

@@ -50,6 +50,7 @@
 
 import type { NotificationPlatform, BusinessEvent, Language } from './notificationPlatform';
 import { t } from './notificationPlatform';
+import { reportCriticalFailure } from './alerting';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -168,9 +169,17 @@ export function createTrialNotificationProducer(db: TrialSweepDb, platform: Noti
       // Same composite index as runTrialLifecycleSweep (status ASC,
       // trialEndsAt ASC) — already required by that job, not a new
       // deploy dependency introduced here.
-      console.error('[trial-notification-producer] query failed (composite index missing?)', {
-        error: err instanceof Error ? err.message : String(err),
-      });
+      //
+      // Fix #8: this used to be a silent `return` — the sweep produces
+      // zero trial notifications for the entire cycle and nothing
+      // upstream (backgroundWorker's own catch never sees this; the
+      // query error never leaves this function) ever learned why.
+      // Escalated here since this is the one place that knows.
+      reportCriticalFailure(
+        '[trial-notification-producer]',
+        'query failed (composite index missing?) — sweep produced zero notifications this cycle',
+        { error: err instanceof Error ? err.message : String(err) },
+      );
       return;
     }
 

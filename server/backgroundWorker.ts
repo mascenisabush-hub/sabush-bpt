@@ -17,7 +17,15 @@
  * retry, watermark (future), isolation, and generic job-agnostic
  * logging. What it does NOT own: any business logic — that lives
  * entirely inside each job's own `execute`.
+ *
+ * Fix #8 — Production Observability. This is the one place every
+ * registered job's execute() failure funnels through regardless of
+ * which module registered it, so it's also the single generic point
+ * where a job failure gets escalated beyond a console.error nobody is
+ * watching. See server/alerting.ts for what "escalated" means and why
+ * it's safe to call unconditionally.
  */
+import { reportCriticalFailure } from './alerting';
 
 // Same pattern the original Trial Lifecycle Worker used: run once
 // shortly after boot rather than waiting a full interval for the
@@ -85,7 +93,7 @@ class PlatformBackgroundWorker {
         // job's/module's concern, not a platform-wide outage, and must
         // not prevent other registered jobs' scheduled ticks from
         // running (ADR-0003).
-        console.error('[background-worker] job run failed', {
+        reportCriticalFailure('[background-worker]', 'job run failed', {
           jobType: config.jobType,
           durationMs: Date.now() - startedAt,
           error: err instanceof Error ? err.message : String(err),
