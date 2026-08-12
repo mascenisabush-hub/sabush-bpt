@@ -47,12 +47,12 @@ describe('Smart Stock Entry extraction route — never writes Firestore (structu
     const marker = "expressApp.post(\n  '/api/smart-stock-entry/extract',";
     const start = serverIndexSrc.indexOf(marker);
     assert.notEqual(start, -1, 'Could not locate the Smart Stock Entry route — has it been renamed/restructured?');
-    // Bounded to the next top-level route registration, the same
-    // "next sibling route" convention this repo's other source-guard
+    // Bounded to the next top-level middleware/route registration, the
+    // same "next sibling" convention this repo's other source-guard
     // tests already use (see tests/delete-product-plan.test.ts).
-    const nextRouteIndex = serverIndexSrc.indexOf("expressApp.post('/api/client-error'", start);
-    assert.notEqual(nextRouteIndex, -1);
-    const handlerBody = serverIndexSrc.slice(start, nextRouteIndex);
+    const nextIndex = serverIndexSrc.indexOf("expressApp.use(express.json());", start);
+    assert.notEqual(nextIndex, -1);
+    const handlerBody = serverIndexSrc.slice(start, nextIndex);
 
     for (const writeCall of ['.set(', '.update(', '.delete(', '.add(', '.commit(', 'runTransaction(']) {
       assert.ok(
@@ -65,6 +65,45 @@ describe('Smart Stock Entry extraction route — never writes Firestore (structu
       handlerBody.includes("db.collection('businesses').doc(businessId).collection('products').get()"),
       "Expected the route to re-read this business's own Products server-side for matching."
     );
+  });
+
+  // [BUG FIX, post-deployment — real production symptom: every scan,
+  // camera or upload, failed with "Couldn't reach the server."] Root
+  // cause, confirmed by direct inspection of Express's middleware
+  // ordering: the app-wide express.json() (default ~100kb limit) was
+  // registered BEFORE this route's own 12mb parser, so it consumed and
+  // size-limited every request body first — a real phone photo's
+  // base64 payload (easily 500KB-2MB) never reached this route's own
+  // larger parser at all. This test proves the fix holds structurally,
+  // so this specific regression can't silently reappear if the route
+  // is ever moved again.
+  it("this route (and its own 12mb parser) is registered BEFORE the app-wide express.json() — the exact ordering bug that caused every scan to fail with a 413 in production", () => {
+    const routeIndex = serverIndexSrc.indexOf("expressApp.post(\n  '/api/smart-stock-entry/extract',");
+    const parserIndex = serverIndexSrc.indexOf('const smartStockEntryJsonParser = express.json(');
+    const globalJsonIndex = serverIndexSrc.indexOf('expressApp.use(express.json());');
+    const appCreatedIndex = serverIndexSrc.indexOf('const expressApp = express();');
+
+    assert.notEqual(routeIndex, -1);
+    assert.notEqual(parserIndex, -1);
+    assert.notEqual(globalJsonIndex, -1);
+    assert.notEqual(appCreatedIndex, -1);
+
+    assert.ok(appCreatedIndex < parserIndex, 'expressApp must be created before the route-specific parser is built.');
+    assert.ok(
+      parserIndex < globalJsonIndex,
+      "The route's own 12mb parser must be defined BEFORE the app-wide express.json() — otherwise the app-wide parser's small default limit consumes every request body first, and this route's larger limit never takes effect."
+    );
+    assert.ok(
+      routeIndex < globalJsonIndex,
+      'The Smart Stock Entry route itself must be registered BEFORE the app-wide express.json(), so Express matches this exact path+method first and the app-wide parser is never reached for this route.'
+    );
+  });
+
+  it("the route's own express.json() limit is genuinely larger than Express's default (~100kb) — large enough for a real phone-camera photo's base64 payload", () => {
+    const parserLine = serverIndexSrc.match(/const smartStockEntryJsonParser = express\.json\(\{ limit: '(\d+)mb' \}\);/);
+    assert.ok(parserLine, 'Could not find the route-specific json parser limit configuration.');
+    const limitMb = Number(parserLine![1]);
+    assert.ok(limitMb >= 8, `Expected a limit of at least 8mb to comfortably fit a base64-encoded phone photo under MAX_IMAGE_BYTES; found ${limitMb}mb.`);
   });
 });
 

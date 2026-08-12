@@ -127,6 +127,155 @@ registerBreakageNotificationPolicyAndTemplates(notificationPlatform);
 const breakageNotificationProducer = createBreakageNotificationProducer(db, notificationPlatform);
 
 const expressApp = express();
+
+// ------------------------------------------------------------------
+// [Smart Stock Entry — Tier 1 — BUG FIX, post-deployment]
+// POST /api/smart-stock-entry/extract
+// Body: { businessId: string, imageBase64: string }
+//
+// GOVERNANCE: implements docs/specs/04-smart-stock-entry-amendment.md
+// (Tier 1), docs/architecture/10-smart-stock-entry-adr.md (Decisions
+// 2/2a/2b/3), and docs/specs/BDR-0008-smart-stock-entry-ai-advisory-boundary.md.
+//
+// This route NEVER writes to Firestore. It returns a transient proposal
+// only — the client merges it into AddStockView's local `rows` state
+// (never into the `purchaseDrafts` document directly, per ADR Decision
+// 2a). No StockBatch, PurchaseBatch, or Product document is ever
+// created or modified by this route.
+//
+// [BUG FIX] This route — and specifically its own larger-limit
+// express.json() parser below — MUST be registered before the app-wide
+// `expressApp.use(express.json())` a few lines down. Express runs
+// middleware/routes in registration order; the app-wide parser
+// (default ~100kb limit) would otherwise consume and size-limit every
+// request body FIRST, including this route's, before this route's own
+// 12mb parser ever got a chance to run — silently rejecting any real
+// phone-camera photo (easily 500KB-2MB as base64) with a 413 at the
+// global layer, before this route's own logic (or its graceful
+// {success:false, reason} responses) ever executed. This is exactly
+// why the original deploy showed "Couldn't reach the server" for
+// every scan/upload attempt, camera and file-picker alike — confirmed
+// by direct inspection of Express's middleware-ordering behavior, not
+// guessed. Registering this route (and its own parser) BEFORE the
+// app-wide `express.json()` below means Express matches this exact
+// path+method first, runs its own larger parser, and — since the
+// handler always ends by sending a response without calling next() —
+// the app-wide parser below is never reached for this route at all.
+// The app-wide parser's small default limit is therefore still exactly
+// as small as before for every OTHER route, unchanged.
+//
+// No CORS-ordering concern: `/api/*` is proxied by Vite in dev
+// (vite.config.ts) and same-origin in production, so this route never
+// needs the `cors()` middleware (registered further below) to function
+// correctly regardless of where it sits in the stack.
+// ------------------------------------------------------------------
+const smartStockEntryJsonParser = express.json({ limit: '12mb' });
+
+expressApp.post(
+  '/api/smart-stock-entry/extract',
+  smartStockEntryJsonParser,
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const uid = req.callerUid!;
+    const businessId = String(req.body?.businessId || '').trim();
+    const imageBase64 = req.body?.imageBase64;
+
+    if (!businessId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+      return;
+    }
+
+    try {
+      // Membership check — same re-derivation pattern as
+      // /api/subscriptions/activate-trial above: never trust the
+      // client's claim, re-read the caller's own profile. Covers both
+      // an Owner (possibly multi-shop, `businessIds[]`) and Staff
+      // (single-shop, legacy `businessId` field only — spec #16).
+      const requesterSnap = await db.collection('users').doc(uid).get();
+      const requesterProfile = requesterSnap.data();
+      if (!requesterSnap.exists || !requesterProfile) {
+        res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
+        return;
+      }
+      const ownedBusinessIds: string[] =
+        Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+          ? requesterProfile.businessIds
+          : requesterProfile.businessId
+            ? [requesterProfile.businessId]
+            : [];
+      const isMember = requesterProfile.businessId === businessId || ownedBusinessIds.includes(businessId);
+      if (!isMember) {
+        res.status(403).json({ error: 'permission-denied', message: 'Este utilizador não pertence a este negócio.' });
+        return;
+      }
+
+      // Upload validation — server-side, never trusting the client's
+      // declared file type alone (ADR Decision 3). A failure here is an
+      // ordinary, expected outcome, not a server error.
+      const validation = validateExtractionUpload({ imageBase64 });
+      if (!validation.ok) {
+        const reason =
+          validation.error === 'too_large'
+            ? 'too_large'
+            : validation.error === 'unsupported_type'
+              ? 'unsupported_type'
+              : 'invalid_upload';
+        res.json({ success: false, reason });
+        return;
+      }
+
+      // Re-read this business's REAL Products via the Admin SDK — never
+      // trust a client-supplied product list for matching (Principle
+      // 2.9). This is the one Firestore read this route ever performs;
+      // it writes nothing.
+      const productsSnap = await db.collection('businesses').doc(businessId).collection('products').get();
+      const existingProducts = productsSnap.docs.map((d) => ({
+        id: d.id,
+        name: String(d.data().name || ''),
+      }));
+
+      let rawProviderOutput: unknown;
+      try {
+        rawProviderOutput = await callVisionExtractionProvider(String(imageBase64), validation.mimeType!);
+      } catch (err) {
+        if (err instanceof ProviderNotConfiguredError) {
+          res.json({ success: false, reason: 'provider_unavailable' });
+          return;
+        }
+        if (err instanceof ProviderCallFailedError) {
+          console.error('[smart-stock-entry] provider call failed', {
+            uid,
+            businessId,
+            error: err.message,
+          });
+          res.json({ success: false, reason: 'provider_unavailable' });
+          return;
+        }
+        throw err;
+      }
+
+      const proposal = parseProviderExtractionResponse(rawProviderOutput, existingProducts);
+      if (!proposal) {
+        // Covers both a malformed/unexpected shape (Failure Mode E) and a
+        // genuinely empty extraction (Failure Mode: "Empty extraction") —
+        // both are the same graceful outcome from the client's point of
+        // view: fall back to manual entry.
+        res.json({ success: false, reason: 'unreadable' });
+        return;
+      }
+
+      res.json({ success: true, proposal });
+    } catch (err) {
+      console.error('[smart-stock-entry/extract] unexpected failure', {
+        uid,
+        businessId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível processar o documento. Tente novamente ou continue manualmente.' });
+    }
+  }
+);
+
 expressApp.use(express.json());
 
 // Duplicated from src/context/AppContext.tsx's MAX_SHOPS_PER_OWNER —
@@ -1391,132 +1540,6 @@ backgroundWorker.registerJob({
 // already caps report volume per browser session so this can't be
 // used to spam the server or the alert channel from one crashing tab.
 // ------------------------------------------------------------------
-// ------------------------------------------------------------------
-// [Smart Stock Entry — Tier 1] POST /api/smart-stock-entry/extract
-// Body: { businessId: string, imageBase64: string }
-//
-// GOVERNANCE: implements docs/specs/04-smart-stock-entry-amendment.md
-// (Tier 1), docs/architecture/10-smart-stock-entry-adr.md (Decisions
-// 2/2a/2b/3), and docs/specs/BDR-0008-smart-stock-entry-ai-advisory-boundary.md.
-//
-// This route NEVER writes to Firestore. It returns a transient proposal
-// only — the client merges it into AddStockView's local `rows` state
-// (never into the `purchaseDrafts` document directly, per ADR Decision
-// 2a). No StockBatch, PurchaseBatch, or Product document is ever
-// created or modified by this route.
-//
-// A dedicated, larger express.json() body-size limit is applied to THIS
-// ROUTE ONLY (via the third middleware argument below) — the app-wide
-// `expressApp.use(express.json())` above keeps its small default limit
-// for every other route, so this one feature's image-upload need doesn't
-// loosen the body-size posture of every other privileged endpoint.
-// ------------------------------------------------------------------
-const smartStockEntryJsonParser = express.json({ limit: '12mb' });
-
-expressApp.post(
-  '/api/smart-stock-entry/extract',
-  smartStockEntryJsonParser,
-  requireAuth,
-  async (req: AuthedRequest, res: Response) => {
-    const uid = req.callerUid!;
-    const businessId = String(req.body?.businessId || '').trim();
-    const imageBase64 = req.body?.imageBase64;
-
-    if (!businessId) {
-      res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
-      return;
-    }
-
-    try {
-      // Membership check — same re-derivation pattern as
-      // /api/subscriptions/activate-trial above: never trust the
-      // client's claim, re-read the caller's own profile. Covers both
-      // an Owner (possibly multi-shop, `businessIds[]`) and Staff
-      // (single-shop, legacy `businessId` field only — spec #16).
-      const requesterSnap = await db.collection('users').doc(uid).get();
-      const requesterProfile = requesterSnap.data();
-      if (!requesterSnap.exists || !requesterProfile) {
-        res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
-        return;
-      }
-      const ownedBusinessIds: string[] =
-        Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
-          ? requesterProfile.businessIds
-          : requesterProfile.businessId
-            ? [requesterProfile.businessId]
-            : [];
-      const isMember = requesterProfile.businessId === businessId || ownedBusinessIds.includes(businessId);
-      if (!isMember) {
-        res.status(403).json({ error: 'permission-denied', message: 'Este utilizador não pertence a este negócio.' });
-        return;
-      }
-
-      // Upload validation — server-side, never trusting the client's
-      // declared file type alone (ADR Decision 3). A failure here is an
-      // ordinary, expected outcome, not a server error.
-      const validation = validateExtractionUpload({ imageBase64 });
-      if (!validation.ok) {
-        const reason =
-          validation.error === 'too_large'
-            ? 'too_large'
-            : validation.error === 'unsupported_type'
-              ? 'unsupported_type'
-              : 'invalid_upload';
-        res.json({ success: false, reason });
-        return;
-      }
-
-      // Re-read this business's REAL Products via the Admin SDK — never
-      // trust a client-supplied product list for matching (Principle
-      // 2.9). This is the one Firestore read this route ever performs;
-      // it writes nothing.
-      const productsSnap = await db.collection('businesses').doc(businessId).collection('products').get();
-      const existingProducts = productsSnap.docs.map((d) => ({
-        id: d.id,
-        name: String(d.data().name || ''),
-      }));
-
-      let rawProviderOutput: unknown;
-      try {
-        rawProviderOutput = await callVisionExtractionProvider(String(imageBase64), validation.mimeType!);
-      } catch (err) {
-        if (err instanceof ProviderNotConfiguredError) {
-          res.json({ success: false, reason: 'provider_unavailable' });
-          return;
-        }
-        if (err instanceof ProviderCallFailedError) {
-          console.error('[smart-stock-entry] provider call failed', {
-            uid,
-            businessId,
-            error: err.message,
-          });
-          res.json({ success: false, reason: 'provider_unavailable' });
-          return;
-        }
-        throw err;
-      }
-
-      const proposal = parseProviderExtractionResponse(rawProviderOutput, existingProducts);
-      if (!proposal) {
-        // Covers both a malformed/unexpected shape (Failure Mode E) and a
-        // genuinely empty extraction (Failure Mode: "Empty extraction") —
-        // both are the same graceful outcome from the client's point of
-        // view: fall back to manual entry.
-        res.json({ success: false, reason: 'unreadable' });
-        return;
-      }
-
-      res.json({ success: true, proposal });
-    } catch (err) {
-      console.error('[smart-stock-entry/extract] unexpected failure', {
-        uid,
-        businessId,
-        error: err instanceof Error ? err.message : String(err),
-      });
-      res.status(500).json({ error: 'internal', message: 'Não foi possível processar o documento. Tente novamente ou continue manualmente.' });
-    }
-  }
-);
 
 expressApp.post('/api/client-error', (req: Request, res: Response) => {
   const body = (req.body && typeof req.body === 'object' ? req.body : {}) as Record<string, unknown>;
