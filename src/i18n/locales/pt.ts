@@ -306,7 +306,8 @@ export interface TranslationDict {
     smartEntry: {
       title: string;
       subtitle: string;
-      scanButton: string;
+      takePictureButton: string;
+      uploadButton: string;
       processing: string;
       rejectScan: string;
       noConfidentMatch: string;
@@ -1212,9 +1213,10 @@ export const pt: TranslationDict = {
       helperText: 'Isto ajuda a entender o movimento de stock entre reposições. Não representa vendas — pode incluir vendas, quebras, uso interno ou outras saídas.',
     },
     smartEntry: {
-      title: 'Digitalizar Documento de Compra',
-      subtitle: 'Tire uma foto de um recibo ou fatura para preencher esta entrada automaticamente.',
-      scanButton: 'Digitalizar Documento',
+      title: 'Adicionar Documento de Compra',
+      subtitle: 'Tire uma foto ou carregue um recibo/fatura para preencher esta entrada automaticamente.',
+      takePictureButton: 'Tirar Foto',
+      uploadButton: 'Carregar Documento',
       processing: 'A analisar documento...',
       rejectScan: 'Rejeitar digitalização',
       noConfidentMatch: 'Não foi possível confirmar o produto — escolha um existente ou crie um novo',

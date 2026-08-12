@@ -334,9 +334,10 @@ export const en: TranslationDict = {
       helperText: 'This helps show stock movement between restocks. It does not represent sales \u2014 it may include sales, breakage, internal use, or other stock leaving.',
     },
     smartEntry: {
-      title: 'Scan Purchase Document',
-      subtitle: 'Take a photo of a receipt or invoice to fill this entry automatically.',
-      scanButton: 'Scan Document',
+      title: 'Add Purchase Document',
+      subtitle: 'Take a photo or upload a receipt/invoice to fill this entry automatically.',
+      takePictureButton: 'Take a Picture',
+      uploadButton: 'Upload Document',
       processing: 'Reading document...',
       rejectScan: 'Reject scan',
       noConfidentMatch: "Couldn't confidently match this product \u2014 choose an existing one or create a new one",

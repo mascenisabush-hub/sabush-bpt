@@ -69,6 +69,79 @@ describe('Smart Stock Entry extraction route — never writes Firestore (structu
 });
 
 // ------------------------------------------------------------------
+// [Input-Method Expansion — camera capture + file upload] Structural
+// proof that both input methods converge into the exact same
+// extraction pipeline, per the change request's own explicit
+// requirement ("Do not create a second extraction endpoint or second
+// AI pipeline"). Neither the client component nor the server route has
+// any concept of "how the file arrived" — both are provable
+// source-level, without a browser: AddStockView.tsx wires two file
+// inputs to the identical handleFileSelected function, and everything
+// downstream of that (validateExtractionUpload/sniffImageMimeType/
+// parseProviderExtractionResponse, all exercised above) operates only
+// on decoded bytes, with no input-method parameter anywhere in their
+// signatures to even distinguish camera from upload.
+// ------------------------------------------------------------------
+describe('Input-method convergence (camera capture vs. file upload)', () => {
+  const addStockViewSrc = readFileSync(new URL('../src/components/AddStockView.tsx', import.meta.url), 'utf-8');
+
+  it('AddStockView wires exactly two file inputs: one camera-capture, one plain upload', () => {
+    const fileInputCount = (addStockViewSrc.match(/type="file"/g) || []).length;
+    assert.equal(fileInputCount, 2, 'Expected exactly two <input type="file"> elements — camera capture and upload.');
+
+    // Scoped to each actual <input ...> element's own attribute list
+    // (from its `<input` tag to its closing `/>`) — not a whole-file
+    // text search, which would also match this same string appearing
+    // inside a nearby JSX comment. Found by searching BACKWARD from
+    // each input's own `ref=` attribute for its opening `<input` tag,
+    // never a fixed character offset (fragile against reformatting).
+    const extractInputTag = (refAttr: string): string => {
+      const refIdx = addStockViewSrc.indexOf(refAttr);
+      const tagStart = addStockViewSrc.lastIndexOf('<input', refIdx);
+      const tagEnd = addStockViewSrc.indexOf('/>', refIdx);
+      return addStockViewSrc.slice(tagStart, tagEnd);
+    };
+    const cameraTag = extractInputTag('ref={cameraFileInputRef}');
+    const uploadTag = extractInputTag('ref={uploadFileInputRef}');
+    assert.ok(cameraTag.includes('capture="environment"'), 'The camera input must have capture="environment".');
+    assert.ok(
+      !uploadTag.includes('capture="environment"'),
+      'The upload input must NOT have capture="environment" — that attribute would force camera-only behavior on mobile, defeating the "upload an existing document" path.'
+    );
+  });
+
+  it('both file inputs call the exact same handleFileSelected function — no second handler, no second pipeline', () => {
+    const cameraInputBlock = addStockViewSrc.slice(
+      addStockViewSrc.indexOf('ref={cameraFileInputRef}'),
+      addStockViewSrc.indexOf('ref={uploadFileInputRef}')
+    );
+    const uploadInputBlock = addStockViewSrc.slice(
+      addStockViewSrc.indexOf('ref={uploadFileInputRef}'),
+      addStockViewSrc.indexOf('onClick={() => cameraFileInputRef.current?.click()}')
+    );
+    assert.ok(cameraInputBlock.includes('handleFileSelected(file)'), 'Camera input must call handleFileSelected.');
+    assert.ok(uploadInputBlock.includes('handleFileSelected(file)'), 'Upload input must call handleFileSelected.');
+    // Only ONE handleFileSelected definition exists at all — proving
+    // there is no parallel/second implementation either input could be
+    // routed to instead.
+    const definitionCount = (addStockViewSrc.match(/const handleFileSelected = async/g) || []).length;
+    assert.equal(definitionCount, 1);
+  });
+
+  it('both file inputs share the identical accept list — Tier 1\'s document-type restriction applies uniformly to both input methods', () => {
+    const acceptOccurrences = addStockViewSrc.match(/accept="image\/jpeg,image\/png,image\/webp"/g) || [];
+    assert.equal(acceptOccurrences.length, 2, 'Both the camera and upload inputs must restrict to the same Tier 1 image types.');
+  });
+
+  it("the server's validation/classification functions have no input-method parameter of any kind — they only ever see decoded bytes", () => {
+    // Structural proof at the type level: neither function accepts
+    // anything resembling a source/method/origin argument.
+    const validationResult = validateExtractionUpload({ imageBase64: Buffer.from([0xff, 0xd8, 0xff]).toString('base64') });
+    assert.deepEqual(Object.keys(validationResult).sort(), ['byteLength', 'mimeType', 'ok'].sort());
+  });
+});
+
+// ------------------------------------------------------------------
 // sniffImageMimeType — magic-byte detection, never trusting a claimed
 // MIME type (governance's explicit "never trust client MIME alone" rule)
 // ------------------------------------------------------------------

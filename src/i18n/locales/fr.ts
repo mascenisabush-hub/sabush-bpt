@@ -334,9 +334,10 @@ export const fr: TranslationDict = {
       helperText: 'Ceci aide à comprendre le mouvement de stock entre les réapprovisionnements. Cela ne représente pas des ventes \u2014 cela peut inclure des ventes, des pertes, un usage interne ou d\u2019autres sorties.',
     },
     smartEntry: {
-      title: 'Numériser un Document d\u2019Achat',
-      subtitle: 'Prenez une photo d\u2019un reçu ou d\u2019une facture pour remplir cette entrée automatiquement.',
-      scanButton: 'Numériser le Document',
+      title: 'Ajouter un Document d\u2019Achat',
+      subtitle: 'Prenez une photo ou téléchargez un reçu/facture pour remplir cette entrée automatiquement.',
+      takePictureButton: 'Prendre une Photo',
+      uploadButton: 'Télécharger un Document',
       processing: 'Analyse du document...',
       rejectScan: 'Rejeter la numérisation',
       noConfidentMatch: 'Impossible de confirmer ce produit \u2014 choisissez un produit existant ou créez-en un nouveau',

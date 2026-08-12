@@ -2,7 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle } from 'lucide-react';
+import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { PurchaseDraftLineItem } from '../types';
@@ -200,7 +200,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // form, exactly per the ADR.
   const [scanState, setScanState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [scanErrorReason, setScanErrorReason] = useState<SmartStockEntryFailureReason | null>(null);
-  const scanFileInputRef = useRef<HTMLInputElement>(null);
+  // [Smart Stock Entry — Tier 1, input-method expansion] Two separate
+  // hidden file inputs, not one — the ONLY difference between them is
+  // the `capture` attribute (camera vs. normal file/gallery picker).
+  // Both wire to the exact same handleFileSelected below, which is
+  // already input-agnostic (it only ever sees a File object) — this is
+  // an input-method UI change, not a new pipeline.
+  const cameraFileInputRef = useRef<HTMLInputElement>(null);
+  const uploadFileInputRef = useRef<HTMLInputElement>(null);
 
   // Supplier applies to the whole purchase (batch), not to individual
   // product rows — every item added in this session was bought from the
@@ -979,10 +986,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5">
-            {/* [Smart Stock Entry — Tier 1] Optional scan entry point.
-                Always sits alongside manual entry, never replaces it —
-                per BDR-0008, a failed/rejected scan must fall straight
-                through to the exact same form below with zero friction. */}
+            {/* [Smart Stock Entry — Tier 1] Optional document entry
+                point. Always sits alongside manual entry, never
+                replaces it — per BDR-0008, a failed/rejected scan must
+                fall straight through to the exact same form below with
+                zero friction. Two input methods (camera capture, file
+                upload) — both converge into the exact same
+                handleFileSelected -> existing extraction pipeline
+                below; the distinction is input-method only. */}
             <div className="bg-[#FAFBFC] border border-dashed border-[#E5E7EB] rounded-xl p-4 flex items-center justify-between gap-3 flex-wrap">
               <div className="flex items-center gap-2.5 min-w-0">
                 <div className="w-9 h-9 rounded-lg bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
@@ -993,7 +1004,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   <p className="text-[11px] text-gray-500">{t('addStock.smartEntry.subtitle')}</p>
                 </div>
               </div>
-              <div className="flex items-center gap-2 shrink-0">
+              <div className="flex items-center gap-2 shrink-0 flex-wrap">
                 {rows.some(r => r.smartEntrySource === 'ai') && (
                   <button
                     type="button"
@@ -1002,8 +1013,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   >
                     {t('addStock.smartEntry.rejectScan')}
                   </button>
-                )}                <input
-                  ref={scanFileInputRef}
+                )}
+                {/* Camera capture input — `capture="environment"` is
+                    honored by mobile browsers that support it and
+                    harmlessly ignored by desktop browsers, which fall
+                    back to a normal file dialog (per the request's own
+                    "may use camera capture where available" wording). */}
+                <input
+                  ref={cameraFileInputRef}
                   type="file"
                   accept="image/jpeg,image/png,image/webp"
                   capture="environment"
@@ -1014,24 +1031,52 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     e.target.value = '';
                   }}
                 />
+                {/* Upload input — no `capture` attribute, so this always
+                    opens the device's normal file/gallery picker,
+                    regardless of platform. Same accept list, same
+                    handler — the existing extraction pipeline treats
+                    both identically once a File reaches
+                    handleFileSelected. */}
+                <input
+                  ref={uploadFileInputRef}
+                  type="file"
+                  accept="image/jpeg,image/png,image/webp"
+                  className="hidden"
+                  onChange={e => {
+                    const file = e.target.files?.[0];
+                    handleFileSelected(file);
+                    e.target.value = '';
+                  }}
+                />
                 <button
                   type="button"
                   disabled={scanState === 'processing'}
-                  onClick={() => scanFileInputRef.current?.click()}
+                  onClick={() => cameraFileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
                   {scanState === 'processing' ? (
-                    <>
-                      <Loader2 className="w-3.5 h-3.5 animate-spin" />
-                      {t('addStock.smartEntry.processing')}
-                    </>
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
-                    <>
-                      <ScanLine className="w-3.5 h-3.5 text-[#B8952F]" />
-                      {t('addStock.smartEntry.scanButton')}
-                    </>
+                    <Camera className="w-3.5 h-3.5 text-[#B8952F]" />
                   )}
+                  {t('addStock.smartEntry.takePictureButton')}
                 </button>
+                <button
+                  type="button"
+                  disabled={scanState === 'processing'}
+                  onClick={() => uploadFileInputRef.current?.click()}
+                  className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
+                >
+                  {scanState === 'processing' ? (
+                    <Loader2 className="w-3.5 h-3.5 animate-spin" />
+                  ) : (
+                    <Upload className="w-3.5 h-3.5 text-[#B8952F]" />
+                  )}
+                  {t('addStock.smartEntry.uploadButton')}
+                </button>
+                {scanState === 'processing' && (
+                  <span className="text-[11px] text-gray-500">{t('addStock.smartEntry.processing')}</span>
+                )}
               </div>
             </div>
 

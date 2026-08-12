@@ -77,7 +77,9 @@ untouched.
   something this amendment can resolve unilaterally.
 
 **Exact integration point:** a new, optional entry into `AddStockView`
-("Scan Document") that, on a successful extraction, merges proposed
+("Add Purchase Document" — offering "Take a Picture" and "Upload
+Document" as two equally-valid input methods, per the Input-Method
+Expansion below) that, on a successful extraction, merges proposed
 line items into `AddStockView`'s existing local `rows` state — the
 same state hand-typed rows already live in — never a direct write to
 the `PurchaseDraft` Firestore document (see Part C's verified finding
@@ -280,8 +282,10 @@ from the originating review):**
 
 ```
 Add Stock
-  → [new] "Scan Document" button, alongside existing manual entry
-  → Camera/upload picker
+  → [new] "Add Purchase Document" section, alongside existing manual entry
+  → "Take a Picture" (camera capture) OR "Upload Document" (file picker)
+    — both converge into the identical extraction pipeline immediately
+    after the file is selected; there is no second pipeline
   → Processing (spinner; explicit "this may take a moment" — no
     fabricated progress percentage)
   → Review Extraction screen:
