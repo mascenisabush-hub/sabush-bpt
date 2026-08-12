@@ -334,6 +334,7 @@ export const fr: TranslationDict = {
     successMessageOne: 'Perte de {{count}} unité enregistrée sur le lot.',
     successMessageOther: 'Perte de {{count}} unités enregistrée sur le lot.',
     emptyState: 'Aucun produit enregistré. Ajoutez d\u2019abord un lot de stock avant d\u2019enregistrer des pertes.',
+    loadingAfterShopSwitch: 'Mise à jour des données de la boutique...',
     selectProduct: 'Sélectionner un Produit',
     selectBatch: 'Sélectionner un Lot',
     noBatchesForProduct: 'Aucun lot de stock enregistré pour ce produit.',

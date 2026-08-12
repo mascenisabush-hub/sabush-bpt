@@ -302,6 +302,7 @@ export interface TranslationDict {
     successMessageOne: string;
     successMessageOther: string;
     emptyState: string;
+    loadingAfterShopSwitch: string;
     selectProduct: string;
     selectBatch: string;
     noBatchesForProduct: string;
@@ -1180,6 +1181,7 @@ export const pt: TranslationDict = {
     successMessageOne: 'Registada perda de {{count}} unidade no lote.',
     successMessageOther: 'Registada perda de {{count}} unidades no lote.',
     emptyState: 'Nenhum produto cadastrado. Adicione primeiro um lote de stock antes de registar quebras.',
+    loadingAfterShopSwitch: 'A atualizar dados da loja...',
     selectProduct: 'Selecionar Produto',
     selectBatch: 'Selecionar Lote',
     noBatchesForProduct: 'Nenhum lote de stock registado para este produto.',

@@ -334,6 +334,7 @@ export const en: TranslationDict = {
     successMessageOne: 'Recorded a loss of {{count}} unit on the batch.',
     successMessageOther: 'Recorded a loss of {{count}} units on the batch.',
     emptyState: 'No products registered yet. Add a stock batch first before recording losses.',
+    loadingAfterShopSwitch: 'Updating shop data...',
     selectProduct: 'Select Product',
     selectBatch: 'Select Batch',
     noBatchesForProduct: 'No stock batch registered for this product.',

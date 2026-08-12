@@ -1,10 +1,11 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { calculateBatch, isQuebraExceedingWarning } from '../utils/calculations';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
+import { detectShopSwitch, isBusinessDataReady, isSelectionSafeToSubmit } from '../lib/shopSwitchGuard';
 
 interface AddQuebraViewProps {
   initialProductId?: string;
@@ -24,7 +25,7 @@ const COMMON_REASON_KEYS = [
 ];
 
 export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, onComplete }) => {
-  const { products, batches, quebras, addQuebra, currencySymbol, subscriptionBlocksNewRecords } = useApp();
+  const { products, batches, quebras, addQuebra, activeBusinessId, currencySymbol, subscriptionBlocksNewRecords } = useApp();
   const { t } = useLanguage();
 
   const [selectedProductId, setSelectedProductId] = useState<string>('');
@@ -36,17 +37,61 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
 
-  // Set initial product and batch
+  // [Fix #9 — multi-shop stale product/batch reference protection]
+  // `products`/`batches` are shared AppContext state, subscribed to
+  // whichever business is currently active. This view is not remounted
+  // on a direct Owner shop switch (ShopSwitcher -> switchShop()), so a
+  // selectedProductId/selectedBatchId chosen under Business A must never
+  // remain usable once activeBusinessId moves to Business B — including
+  // during the window before Business B's onSnapshot listeners have
+  // delivered their first real snapshot, while `products`/`batches` here
+  // still hold Business A's data. See src/lib/shopSwitchGuard.ts for the
+  // pure logic and its own reasoning; this is a state-lifecycle fix at
+  // this component's own boundary, not an AppContext change.
+  const [loadedForBusinessId, setLoadedForBusinessId] = useState<string | null>(activeBusinessId ?? null);
+  const productsAtSwitchRef = useRef<typeof products | null>(null);
+  const batchesAtSwitchRef = useRef<typeof batches | null>(null);
+
   useEffect(() => {
+    const result = detectShopSwitch(activeBusinessId ?? null, loadedForBusinessId);
+    if (!result.shouldResetSelection) return;
+    setLoadedForBusinessId(result.loadedForBusinessId);
+    setSelectedProductId('');
+    setSelectedBatchId('');
+    // Capture the (still Business-A) array references at the exact
+    // moment the switch is observed — isBusinessDataReady() below treats
+    // these as "known stale" until AppContext's listeners for the new
+    // business replace them with a genuinely new array.
+    productsAtSwitchRef.current = products;
+    batchesAtSwitchRef.current = batches;
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusinessId]);
+
+  // True once both `products` and `batches` have delivered at least one
+  // fresh snapshot since the most recent switch (trivially true otherwise,
+  // e.g. on first mount). Every auto-selection below is held back while
+  // this is false — auto-selecting from a still-stale array would just
+  // reintroduce the bug this fix closes, one step removed.
+  const businessDataReady =
+    isBusinessDataReady(products, productsAtSwitchRef.current) &&
+    isBusinessDataReady(batches, batchesAtSwitchRef.current);
+
+  // Set initial product and batch — gated on businessDataReady so this
+  // never auto-selects out of a still-stale `products` array right after
+  // a switch (selectedProductId is already '' at that point from the
+  // effect above, so there is nothing to preserve by waiting).
+  useEffect(() => {
+    if (!businessDataReady) return;
     if (initialProductId && products.some(p => p.id === initialProductId)) {
       setSelectedProductId(initialProductId);
     } else if (products.length > 0 && !selectedProductId) {
       setSelectedProductId(products[0].id);
     }
-  }, [initialProductId, products]);
+  }, [initialProductId, products, businessDataReady]);
 
   // When product changes, auto-select its active open batch, or latest batch
   useEffect(() => {
+    if (!businessDataReady) return;
     if (selectedProductId) {
       const productBatches = batches.filter(b => b.productId === selectedProductId);
       const active = productBatches.find(b => b.status === 'open');
@@ -58,7 +103,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
         setSelectedBatchId('');
       }
     }
-  }, [selectedProductId, batches]);
+  }, [selectedProductId, batches, businessDataReady]);
 
   // Product batches
   const availableBatches = batches.filter(b => b.productId === selectedProductId);
@@ -82,6 +127,17 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
     e.preventDefault();
 
     if (!selectedProductId || !selectedBatchId) {
+      alert(t('addQuebra.errors.selectProductBatch'));
+      return;
+    }
+
+    // [Fix #9 defense-in-depth] Re-validate at the point of write, against
+    // the CURRENT products/batches arrays, that both ids still genuinely
+    // resolve — independent of whatever the UI state managed to keep in
+    // sync. No extra Firestore read (these arrays are already subscribed).
+    // The UI-side guard above should already make this unreachable, but
+    // this is the actual invariant guarantee, not a UI nicety.
+    if (!isSelectionSafeToSubmit(selectedProductId, selectedBatchId, products, batches)) {
       alert(t('addQuebra.errors.selectProductBatch'));
       return;
     }
@@ -156,6 +212,10 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             </div>
             <h3 className="text-lg font-bold text-[#111827]">{t('addQuebra.registeredTitle')}</h3>
             <p className="text-sm text-gray-500 max-w-md mx-auto">{submittedMessage}</p>
+          </div>
+        ) : !businessDataReady ? (
+          <div className="py-8 text-center text-gray-500 text-sm">
+            {t('addQuebra.loadingAfterShopSwitch')}
           </div>
         ) : products.length === 0 ? (
           <div className="py-8 text-center text-gray-500 text-sm">
@@ -308,7 +368,7 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
             <div className="flex items-center pt-1">
               <button
                 type="submit"
-                disabled={!selectedBatchId || isSaving}
+                disabled={!selectedBatchId || isSaving || !businessDataReady}
                 className="w-full min-h-[52px] py-3.5 px-5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white font-bold text-sm transition-all duration-150 shadow-[0_10px_24px_-8px_rgba(225,29,72,0.35)] flex items-center justify-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed active:scale-[0.98]"
               >
                 <span>{isSaving ? '...' : t('addQuebra.submitButton')}</span>
