@@ -6,7 +6,7 @@ import type { PaymentMethod } from '../types';
 // UI/code"). Temporary bridge values — not read from any processor,
 // since none is integrated yet.
 
-export const SUBSCRIPTION_PLAN_PRICE_MZN = 750; // POL-19-011 — V1's single paid plan
+export const SUBSCRIPTION_PLAN_PRICE_MZN = 699; // POL-19-011 — V1's single paid plan (price updated per POL-19-011 Commercial Policy Update, 750 -> 699 MZN/month)
 export const SUBSCRIPTION_PLAN_CURRENCY = 'MZN' as const;
 
 export interface PaymentMethodConfig {

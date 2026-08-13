@@ -1,5 +1,17 @@
 Decision Record
 
+> **Superseded in part — see
+> [POL-19-014](./19-pol-014-commercial-price-amendment.md).**
+> §1's price below (750 MZN/month) has been replaced by a simpler
+> figure: the V1 commercial price is now **699 MZN/month**. Everything
+> else in §1 — one plan, no tiers, monthly billing, single business
+> per subscription — is otherwise confirmed as unchanged by that same
+> record. §2 (Payment Processor Selection) and §3 (Voluntary
+> Cancellation — V1 Deferral) below remain unchanged and in effect.
+> This document's own text below is preserved as the original
+> historical record and is **not** edited to reflect the amendment;
+> read POL-19-014 for the current price.
+
 # POL-19-011 — V1 Commercial Plan, Payment Processor & Voluntary
 Cancellation Decision
 

@@ -109,6 +109,7 @@ with it, that prompt is wrong about repo state, not this table.
 | POL-19-011 | [V1 Commercial Plan, Payment Processor & Voluntary Cancellation Decision](./19-pol-011-v1-commercial-plan-processor-cancellation-decision.md) | Approved |
 | POL-19-012 | Business-Lifecycle / Subscription-Status Interaction (candidate topic — per `19-subscriptions.md`'s State Mapping cross-reference and its Explicitly Left Open item 7) | **Recommended, not assigned.** No file exists. Do not use this number for any other topic without an explicit Product Architect decision. |
 | POL-19-013 | [Payment Reversal Policy Amendment — Grace Period Reversal Simplification](./19-pol-013-payment-reversal-grace-period-reset-amendment.md) | Approved |
+| POL-19-014 | [Commercial Policy Amendment — V1 Subscription Price Change](./19-pol-014-commercial-price-amendment.md) | Approved |
 
 No identifier above POL-19-008 may be renumbered or reused for a
 different topic than the one recorded in this ledger without an

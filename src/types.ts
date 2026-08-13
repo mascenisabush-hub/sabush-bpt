@@ -330,7 +330,7 @@ export type PaymentMethod = 'mpesa' | 'emola' | 'bim';
 export interface Payment {
   id: string;
   businessId: string;
-  amount: number; // MZN — 750 for V1's single plan (POL-19-011)
+  amount: number; // MZN — 699 for V1's single plan (POL-19-011)
   currency: 'MZN';
   method: PaymentMethod;
   // Customer-provided evidence of the external payment — an M-Pesa/
