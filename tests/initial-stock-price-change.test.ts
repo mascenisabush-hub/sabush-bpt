@@ -16,8 +16,8 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { calculateInitialStockCurrentValuation, calculateInitialStockValuationChange } from '../src/utils/calculations';
-import { StockCount, InitialStockPriceChangeEvent } from '../src/types';
+import { calculateInitialStockCurrentValuation, calculateInitialStockValuationChange } from '../apps/tenant/src/utils/calculations';
+import { StockCount, InitialStockPriceChangeEvent } from '../apps/tenant/src/types';
 
 function makeInitialStockCount(overrides: Partial<StockCount> = {}): StockCount {
   return {

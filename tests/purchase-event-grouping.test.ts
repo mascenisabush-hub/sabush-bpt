@@ -21,8 +21,8 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { calculatePurchaseBatchSummary, groupSummariesByPurchaseEvent } from '../src/utils/purchaseBatchCalculations';
-import { PurchaseBatch, StockBatch } from '../src/types';
+import { calculatePurchaseBatchSummary, groupSummariesByPurchaseEvent } from '../apps/tenant/src/utils/purchaseBatchCalculations';
+import { PurchaseBatch, StockBatch } from '../apps/tenant/src/types';
 
 function makePurchaseBatch(overrides: Partial<PurchaseBatch> = {}): PurchaseBatch {
   return {

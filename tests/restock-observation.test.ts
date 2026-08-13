@@ -27,8 +27,8 @@ import {
   computeRestockObservation,
   parsePreviousRemainingQuantity,
   findMostRecentBatchForProduct,
-} from '../src/lib/restockObservation';
-import type { StockBatch } from '../src/types';
+} from '../apps/tenant/src/lib/restockObservation';
+import type { StockBatch } from '../apps/tenant/src/types';
 
 // ------------------------------------------------------------------
 // parsePreviousRemainingQuantity — "unknown must stay unknown" rule
@@ -248,7 +248,7 @@ describe('Restock Observation — scenario coverage (task requirements)', () => 
 // ------------------------------------------------------------------
 describe('AppContext.tsx source guards', () => {
   const appContextSrc = readFileSync(
-    new URL('../src/context/AppContext.tsx', import.meta.url),
+    new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url),
     'utf-8'
   );
 
@@ -365,7 +365,7 @@ describe('AppContext.tsx source guards', () => {
 // ------------------------------------------------------------------
 describe('Business Worth / calculations.ts isolation (amendment Part 6/14)', () => {
   it('calculations.ts never references restockObservation', () => {
-    const calcSrc = readFileSync(new URL('../src/utils/calculations.ts', import.meta.url), 'utf-8');
+    const calcSrc = readFileSync(new URL('../apps/tenant/src/utils/calculations.ts', import.meta.url), 'utf-8');
     assert.ok(
       !calcSrc.includes('restockObservation'),
       'restockObservation must never be read by any Business Worth / Embedded Profit / Stock Value calculation.'

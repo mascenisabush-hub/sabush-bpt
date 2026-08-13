@@ -16,8 +16,8 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { tabTitleKey } from '../src/hooks/useDocumentTitle';
-import { NAV_TABS, TabType } from '../src/data/navigationTabs';
+import { tabTitleKey } from '../apps/tenant/src/hooks/useDocumentTitle';
+import { NAV_TABS, TabType } from '../apps/tenant/src/data/navigationTabs';
 
 const ALL_TAB_TYPES: TabType[] = [
   'dashboard', 'stocks', 'add-stock', 'add-quebra', 'add-expense',

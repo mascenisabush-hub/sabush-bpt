@@ -21,7 +21,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { planDeleteProduct, FIRESTORE_BATCH_OP_LIMIT } from '../src/utils/deleteProductPlan';
+import { planDeleteProduct, FIRESTORE_BATCH_OP_LIMIT } from '../apps/tenant/src/utils/deleteProductPlan';
 
 describe('planDeleteProduct — small/typical product (fits in one Firestore writeBatch)', () => {
   it('puts the product + all batches + all quebras into a single chunk', () => {
@@ -128,7 +128,7 @@ describe('planDeleteProduct — large history (exceeds 500 total ops)', () => {
 // under a deleted product and silently inflate Business Worth — see the
 // Fix #7 investigation report).
 describe('deleteProduct() source guard', () => {
-  const appContextSrc = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf-8');
+  const appContextSrc = readFileSync(new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url), 'utf-8');
 
   it('deleteProduct calls planDeleteProduct and commits via writeBatch, not a sequential deleteDoc loop', () => {
     const fnMarker = 'const deleteProduct = async (id: string) => {';

@@ -122,7 +122,7 @@ describe('Smart Stock Entry extraction route — never writes Firestore (structu
 // signatures to even distinguish camera from upload.
 // ------------------------------------------------------------------
 describe('Input-method convergence (camera capture vs. file upload)', () => {
-  const addStockViewSrc = readFileSync(new URL('../src/components/AddStockView.tsx', import.meta.url), 'utf-8');
+  const addStockViewSrc = readFileSync(new URL('../apps/tenant/src/components/AddStockView.tsx', import.meta.url), 'utf-8');
 
   it('AddStockView wires exactly two file inputs: one camera-capture, one plain upload', () => {
     const fileInputCount = (addStockViewSrc.match(/type="file"/g) || []).length;

@@ -26,7 +26,7 @@ import {
   computeBatchIdsToCheck,
   computeBatchesToClose,
   type CheckedBatchSnapshot,
-} from '../src/lib/openBatchSupersession';
+} from '../apps/tenant/src/lib/openBatchSupersession';
 
 describe('computeBatchIdsToCheck — Test 1: no existing open batch (new product / fresh lock)', () => {
   it('with no lock doc and no candidates, checks nothing', () => {

@@ -46,7 +46,7 @@
 // running is unconditionally safe by construction.
 
 import type { SubscriptionLifecycleEvent, SubscriptionTransitionResult } from './subscriptionEngine';
-import type { PaymentMethod, PaymentStatus } from '../src/types';
+import type { PaymentMethod, PaymentStatus } from '../apps/tenant/src/types';
 
 interface PaymentDocSnapshot {
   exists: boolean;

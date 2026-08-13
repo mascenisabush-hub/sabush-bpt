@@ -18,7 +18,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { tallyStockCountRows, StockCountWorkingRow } from '../src/utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow } from '../apps/tenant/src/utils/stockCount';
 
 const row = (overrides: Partial<StockCountWorkingRow>): StockCountWorkingRow => ({
   productId: 'p1',
@@ -151,7 +151,7 @@ describe('tallyStockCountRows — unit and price handling', () => {
 // hasn't silently reverted to the old fully-manual free-text form.
 // ------------------------------------------------------------------
 describe('PeriodicStockCountView.tsx — source-level wiring guards', () => {
-  const source = readFileSync(new URL('../src/components/PeriodicStockCountView.tsx', import.meta.url), 'utf-8');
+  const source = readFileSync(new URL('../apps/tenant/src/components/PeriodicStockCountView.tsx', import.meta.url), 'utf-8');
 
   it('auto-populates working rows from the products catalog', () => {
     assert.match(source, /useEffect/);
@@ -183,7 +183,7 @@ describe('PeriodicStockCountView.tsx — source-level wiring guards', () => {
 });
 
 describe('AppContext.tsx — productsError wiring guard', () => {
-  const source = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf-8');
+  const source = readFileSync(new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url), 'utf-8');
 
   it('sets productsError on the products listener error callback and clears it on success', () => {
     assert.match(source, /setProductsError\(true\)/);

@@ -46,9 +46,9 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { resolveSupplierForPurchase } from '../src/utils/purchaseBatchCalculations';
-import * as calculations from '../src/utils/calculations';
-import { SupplierRecord, PurchaseDraft, PurchaseDraftLineItem, PurchaseBatch } from '../src/types';
+import { resolveSupplierForPurchase } from '../apps/tenant/src/utils/purchaseBatchCalculations';
+import * as calculations from '../apps/tenant/src/utils/calculations';
+import { SupplierRecord, PurchaseDraft, PurchaseDraftLineItem, PurchaseBatch } from '../apps/tenant/src/types';
 
 function makeSupplier(overrides: Partial<SupplierRecord> = {}): SupplierRecord {
   return {

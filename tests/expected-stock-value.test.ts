@@ -25,8 +25,8 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
-import { calculateInventoryTotals } from '../src/utils/calculations';
-import { StockBatch, Quebra } from '../src/types';
+import { calculateInventoryTotals } from '../apps/tenant/src/utils/calculations';
+import { StockBatch, Quebra } from '../apps/tenant/src/types';
 
 function makeBatch(overrides: Partial<StockBatch> = {}): StockBatch {
   return {

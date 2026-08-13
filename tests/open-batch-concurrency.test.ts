@@ -70,7 +70,7 @@ import {
   computeBatchIdsToCheck,
   computeBatchesToClose,
   type CheckedBatchSnapshot,
-} from '../src/lib/openBatchSupersession';
+} from '../apps/tenant/src/lib/openBatchSupersession';
 
 const PROJECT_ID = 'sabush-bpt-rules-test'; // same project id tests/firestore-rules.test.ts already uses
 const OWNER_UID = 'concurrency-owner1';

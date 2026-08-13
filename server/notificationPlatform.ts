@@ -62,9 +62,9 @@
 // own "controlled tests or stubs" requirement created room for, not
 // scope creep beyond it.
 
-import { pt, type TranslationDict } from '../src/i18n/locales/pt';
-import { en } from '../src/i18n/locales/en';
-import { fr } from '../src/i18n/locales/fr';
+import { pt, type TranslationDict } from '../apps/tenant/src/i18n/locales/pt';
+import { en } from '../apps/tenant/src/i18n/locales/en';
+import { fr } from '../apps/tenant/src/i18n/locales/fr';
 
 // ------------------------------------------------------------------
 // Minimal Firestore surface this module needs. Matches the shape of

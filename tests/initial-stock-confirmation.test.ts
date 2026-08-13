@@ -30,7 +30,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { normalizeStockCountItems } from '../src/utils/stockCount';
+import { normalizeStockCountItems } from '../apps/tenant/src/utils/stockCount';
 
 describe('normal confirmation', () => {
   it('normalizes a valid submitted item list into the exact persisted shape', () => {
@@ -150,7 +150,7 @@ describe('failed confirmation preserves the draft — source-level regression gu
   // would break "a failed confirmation leaves the draft intact," since
   // that guarantee currently rests entirely on both writes being queued
   // on the SAME Firestore WriteBatch before a single commit()).
-  const appContextSrc = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf-8');
+  const appContextSrc = readFileSync(new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url), 'utf-8');
 
   function extractFunctionBody(source: string, signatureMarker: string): string {
     const start = source.indexOf(signatureMarker);
@@ -227,7 +227,7 @@ describe('business-switch draft staleness — source-level regression guard', ()
   // where Business A's draft could read as Business B's during a
   // direct shop switch — not testable at runtime without a DOM harness
   // this repo doesn't have, so this checks the source structure instead.
-  const appContextSrc = readFileSync(new URL('../src/context/AppContext.tsx', import.meta.url), 'utf-8');
+  const appContextSrc = readFileSync(new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url), 'utf-8');
 
   it('setInitialStockDraft/setInitialStockDraftLoaded reset calls appear before the `if (!activeBusinessId)` early return in the listener effect', () => {
     const effectMarker = "// Listen to Business and Subcollections when userProfile and businessId exist\n  useEffect(() => {";

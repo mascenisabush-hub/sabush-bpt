@@ -14,7 +14,7 @@ import {
   detectShopSwitch,
   isBusinessDataReady,
   isSelectionSafeToSubmit,
-} from '../src/lib/shopSwitchGuard';
+} from '../apps/tenant/src/lib/shopSwitchGuard';
 
 // Minimal fixtures — two businesses, each with one product and one batch,
 // with genuinely distinct, non-overlapping ids (mirrors how real ids are
