@@ -1187,21 +1187,99 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
 // read scope depends on Module #18's role model, not yet built) — every
 // write goes through server/index.ts via the Admin SDK.
 // ---------------------------------------------------------------------
+// ---------------------------------------------------------------------
+// platform_operators — Architecture §7.4/§9.1, first real population by
+// the SuperAdmin Payment Operations V1 Launch Slice (ADR-0005). See
+// isPlatformOperator() in firestore.rules.
+// ---------------------------------------------------------------------
+describe('platform_operators', () => {
+  const OPERATOR_UID = 'operator1';
+  const OTHER_OPERATOR_UID = 'operator2';
+
+  const seedOperator = async (uid: string, platformRole: string) => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_operators', uid), { platformRole });
+    });
+  };
+
+  it('A platform operator can read their own platform_operators document', async () => {
+    await seedOperator(OPERATOR_UID, 'superadmin');
+    const operatorDb = ctxFor(OPERATOR_UID).firestore();
+    await assertSucceeds(getDoc(doc(operatorDb, 'platform_operators', OPERATOR_UID)));
+  });
+
+  it('A platform operator cannot read another platform_operators document', async () => {
+    await seedOperator(OPERATOR_UID, 'superadmin');
+    await seedOperator(OTHER_OPERATOR_UID, 'superadmin');
+    const operatorDb = ctxFor(OPERATOR_UID).firestore();
+    await assertFails(getDoc(doc(operatorDb, 'platform_operators', OTHER_OPERATOR_UID)));
+  });
+
+  it('The read rule is purely uid-based — a tenant Owner uid provisioned into platform_operators (never done by this app in practice; provisioning is Admin-SDK-only) would read like any other operator, which is exactly why correct provisioning discipline (never a tenant uid) matters, not the rule shape itself', async () => {
+    await seedOperator(OWNER_UID, 'superadmin');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'platform_operators', OWNER_UID)));
+  });
+
+  it('No client, including an existing platform operator, can write platform_operators (provisioning is Admin-SDK-only)', async () => {
+    const operatorDb = ctxFor(OPERATOR_UID).firestore();
+    await assertFails(setDoc(doc(operatorDb, 'platform_operators', OPERATOR_UID), { platformRole: 'superadmin' }));
+    await seedOperator(OPERATOR_UID, 'superadmin');
+    await assertFails(updateDoc(doc(operatorDb, 'platform_operators', OPERATOR_UID), { platformRole: 'developer' }));
+    await assertFails(deleteDoc(doc(operatorDb, 'platform_operators', OPERATOR_UID)));
+  });
+
+  it('A tenant account cannot promote itself to platform operator by writing its own uid into platform_operators', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'platform_operators', OWNER_UID), { platformRole: 'superadmin' }));
+  });
+});
+
 describe('platform_audit_log', () => {
-  it('No role can read, create, update, or delete an audit event from the client', async () => {
+  const OPERATOR_UID = 'operator1';
+
+  const seedAuditEvent = async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'platform_audit_log', 'evt1'), {
-        eventType: 'trial_activated',
-        businessId: BIZ,
-        subscriptionId: BIZ,
-        occurredAt: '2026-01-01T00:00:00.000Z',
+        actorUid: OPERATOR_UID,
+        actorRole: 'superadmin',
+        actionType: 'payment.confirmed',
+        targetBusinessId: BIZ,
+        timestamp: '2026-01-01T00:00:00.000Z',
       });
     });
+  };
+
+  it('A verified platform operator can read platform_audit_log', async () => {
+    await seedAuditEvent();
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_operators', OPERATOR_UID), { platformRole: 'superadmin' });
+    });
+    const operatorDb = ctxFor(OPERATOR_UID).firestore();
+    await assertSucceeds(getDoc(doc(operatorDb, 'platform_audit_log', 'evt1')));
+  });
+
+  it('A tenant Owner (no platform_operators document) cannot read platform_audit_log', async () => {
+    await seedAuditEvent();
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertFails(getDoc(doc(ownerDb, 'platform_audit_log', 'evt1')));
-    await assertFails(setDoc(doc(ownerDb, 'platform_audit_log', 'evt2'), { eventType: 'trial_activated' }));
-    await assertFails(updateDoc(doc(ownerDb, 'platform_audit_log', 'evt1'), { eventType: 'trial_completed' }));
-    await assertFails(deleteDoc(doc(ownerDb, 'platform_audit_log', 'evt1')));
+  });
+
+  it('An authenticated user with no platform_operators document at all cannot read platform_audit_log', async () => {
+    await seedAuditEvent();
+    const randomDb = ctxFor('some-random-authenticated-uid').firestore();
+    await assertFails(getDoc(doc(randomDb, 'platform_audit_log', 'evt1')));
+  });
+
+  it('No role, including a verified platform operator, can create, update, or delete an audit event from the client', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_operators', OPERATOR_UID), { platformRole: 'superadmin' });
+    });
+    const operatorDb = ctxFor(OPERATOR_UID).firestore();
+    await assertFails(setDoc(doc(operatorDb, 'platform_audit_log', 'evt2'), { actionType: 'payment.confirmed' }));
+    await seedAuditEvent();
+    await assertFails(updateDoc(doc(operatorDb, 'platform_audit_log', 'evt1'), { actionType: 'payment.rejected' }));
+    await assertFails(deleteDoc(doc(operatorDb, 'platform_audit_log', 'evt1')));
   });
 });
 

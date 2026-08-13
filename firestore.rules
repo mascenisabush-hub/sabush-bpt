@@ -6,6 +6,17 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    // [SuperAdmin Payment Operations V1 Launch Slice — ADR-0005]
+    // platform_operators/{uid} is a structurally separate identity space
+    // from users/{uid} (Architecture §7.4) — this helper never touches
+    // myProfile() and myProfile() never touches this. Used only by the
+    // platform_operators and platform_audit_log rules below; no
+    // tenant-facing rule in this file reads it.
+    function isPlatformOperator() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/platform_operators/$(request.auth.uid));
+    }
+
     // The signed-in user's own profile document (contains role + businessId,
     // and for owners with more than one shop, businessIds[] + activeBusinessId).
     // Used by nearly every rule below to establish membership/ownership.
@@ -695,26 +706,64 @@ service cloud.firestore {
     }
 
     // ==========================================================
+    // /platform_operators/{uid} — Architecture §7.4/§9.1, first real
+    // population by the SuperAdmin Payment Operations V1 Launch Slice
+    // (ADR-0005). Structurally separate identity space from
+    // users/{uid} — see isPlatformOperator() above.
+    //
+    // - read: an operator may read only their OWN document — needed for
+    //   the SuperAdmin app shell to gate its own nav at load (§9.1's
+    //   "reads platform_operators/{uid}.platformRole once at load"
+    //   principle). Never a list/scan of other operators from the
+    //   client — §9.12's own internal-account-management screen (not
+    //   part of this slice) is where that capability, if ever needed,
+    //   is separately designed and gated.
+    // - write: always false. Provisioning is Admin-SDK-only (§7.4:
+    //   "provisioned by an existing SuperAdmin... never self-service
+    //   signup") — no client, including an existing platform operator,
+    //   may write this collection. A tenant account can never promote
+    //   itself to platform operator through this rule, by construction.
+    // ==========================================================
+    match /platform_operators/{uid} {
+      allow read: if isSignedIn() && request.auth.uid == uid;
+      allow write: if false;
+    }
+
+
+    // ==========================================================
     // /platform_audit_log/{eventId} - append-only, system-written only.
     // Module #19 Phase 2 (Trial Engine), Decision 4 — automatic
     // lifecycle transitions (trial activated/completed, and future
     // grace-period/expiry/renewal events) are audited the same way
     // Business Rule 8 already requires for SuperAdmin overrides.
     //
-    // Architecture §9.6 scopes read access to platform-operator roles
-    // (Support/Developer/SuperAdmin) — but that role model
-    // (`platformRole` on a user profile) is Module #18, not yet built.
-    // Rather than invent a role check ahead of #18's own design, this
-    // collection is entirely client-inaccessible for now: no client
-    // read, no client write (every write goes through server/index.ts
-    // via the Admin SDK, same guarantee as /subscriptions above). Read
-    // access for platform operators is added when #18 builds the actual
-    // role model — tracked, not silently deferred.
+    // [SuperAdmin Payment Operations V1 Launch Slice — ADR-0005 §5,
+    // BDS FR-7/NFR-2] Architecture §9.6 scopes read access to
+    // platform-operator roles (Support/Developer/SuperAdmin). Until
+    // this slice, that role model didn't exist yet in this rules file,
+    // so read was unconditionally false for everyone — read access is
+    // now granted, narrowly, to any verified platform_operators/{uid}
+    // (isPlatformOperator(), above). This is NOT scoped further to
+    // 'superadmin' specifically at the rules layer: §9.6 itself says
+    // Support/Developer/SuperAdmin all have at least partial read
+    // access to this log (Support: own actions only — a filter this
+    // rules layer cannot express per-entry without a second read per
+    // document, so V1's actual UI-level restriction to SuperAdmin-only
+    // — BDS §3/§11 — is enforced by the privileged server's
+    // requireSuperAdmin, not by this rule; a non-SuperAdmin platform
+    // operator with read access at the rules layer but no route that
+    // will serve them anything is the deliberately narrower, safer
+    // side to be wrong on, consistent with defense-in-depth). Every
+    // write still goes through server/index.ts via the Admin SDK,
+    // which bypasses these rules entirely, same guarantee as
+    // /subscriptions above — allow write remains unconditionally false
+    // for every client, platform operator included.
     // ==========================================================
     match /platform_audit_log/{eventId} {
-      allow read: if false;
+      allow read: if isPlatformOperator();
       allow write: if false;
     }
+
 
     // ==========================================================
     // /platform_event_dedupe/{dedupeKey} — Module #20 Phase 3

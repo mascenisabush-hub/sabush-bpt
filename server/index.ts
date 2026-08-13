@@ -27,6 +27,9 @@ import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationPro
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
 import { createSubscriptionEngine } from './subscriptionEngine';
+import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
+import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperatorRequest } from './superadminAuth';
+import { writeAuditLogEntry } from './platformAuditLog';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -1523,6 +1526,348 @@ backgroundWorker.registerJob({
   scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
   execute: subscriptionEngine.runGracePeriodExpirySweep,
 });
+
+// ------------------------------------------------------------------
+// SuperAdmin Payment Operations — V1 Launch Slice.
+//
+// Governing chain: docs/adr/ADR-0005-superadmin-payment-operations-boundary.md,
+// docs/specs/18-19-payment-operations-slice.md,
+// docs/engineering/18-19-payment-operations-rule8-assessment.md.
+//
+// IMPORTANT — this is NOT the "/api/billing/webhook" the comment above
+// (grace-period-expiry-sweep) says is deliberately absent. That comment
+// is about an *automated payment-processor* webhook calling
+// applyLifecycleEvent() directly, still correctly unbuilt and still
+// gated on a separately-authorized PaySuite Payment Adapter. The routes
+// below are a *human SuperAdmin operator* reviewing one payment at a
+// time, authorized by ADR-0005, and they never call
+// applyLifecycleEvent() themselves — every route below calls only the
+// existing, unmodified confirmPayment()/rejectPayment()
+// (server/paymentConfirmation.ts), which is the only thing that calls
+// applyLifecycleEvent(). Same rule as before, still true: the
+// Subscription Lifecycle Engine remains the sole owner of
+// subscription-state transitions (BDS BR-1).
+//
+// Every route below requires requireAuth (Firebase ID token) AND
+// requirePlatformOperator (re-reads platform_operators/{uid}) AND
+// requireSuperAdmin (V1: only the 'superadmin' platformRole may act —
+// BDS §3/§11). No route here is reachable by a tenant users/{uid}
+// account, however that account is authorized on the tenant side —
+// this is a structurally separate identity space (Architecture §7.4),
+// not an extra role check layered onto the tenant one.
+const requirePlatformOperator = createRequirePlatformOperator(db);
+const paymentConfirmationDb = db as unknown as PaymentConfirmationDb;
+
+interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
+
+async function readBusinessName(businessId: string): Promise<string | null> {
+  const snap = await db.collection('businesses').doc(businessId).get();
+  return snap.exists ? ((snap.data()?.name as string) ?? null) : null;
+}
+
+async function readSubscriptionStatus(businessId: string): Promise<string | null> {
+  const snap = await db.collection('subscriptions').doc(businessId).get();
+  return snap.exists ? ((snap.data()?.status as string) ?? null) : null;
+}
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/payments/pending
+//
+// FR-2 — every businesses/*/payments/* document with status ==
+// 'pending', oldest submittedAt first, across all businesses. The one
+// place this slice reads more than one business's data in a single
+// call — a Firestore collection-group query, not a raw per-business
+// scan, and it reads only the Payment record itself plus (below) each
+// owning business's display name — never other tenant operational
+// data. See firestore.indexes.json for the composite index this query
+// requires.
+//
+// [Known gap, flagged not silently invented — see ADR-0005/BDS: this
+// slice cannot display `businessCode` (named in Architecture §8.14 /
+// docs/specs/17-owner-portfolio.md) because that field does not exist
+// anywhere in this repository's actual Business type or Firestore
+// documents — it is a documented forward-note that was never
+// implemented. This route surfaces the Business's `name` and its
+// Firestore `businessId` instead. Adding businessCode itself is out of
+// this slice's scope (it is not one of the nine authorized items) and
+// is not invented here.]
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/payments/pending',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    try {
+      const snap = await db
+        .collectionGroup('payments')
+        .where('status', '==', 'pending')
+        .orderBy('submittedAt', 'asc')
+        .get();
+
+      const businessIds = Array.from(new Set(snap.docs.map((d) => (d.data().businessId as string) ?? '')));
+      const businessNames = new Map<string, string | null>(
+        await Promise.all(businessIds.map(async (id) => [id, await readBusinessName(id)] as const))
+      );
+
+      const payments = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          businessId: data.businessId,
+          businessName: businessNames.get(data.businessId) ?? null,
+          amount: data.amount,
+          currency: data.currency,
+          method: data.method,
+          reference: data.reference,
+          submittedAt: data.submittedAt,
+          submittedBy: data.submittedBy,
+        };
+      });
+
+      res.json({ payments });
+    } catch (err) {
+      console.error('[superadmin/payments/pending] failed', { error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar a fila de pagamentos pendentes.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/payments/:businessId/:paymentId
+// FR-3 — Payment detail/review, plus current subscription status
+// (FR-6, read-only).
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/payments/:businessId/:paymentId',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const { businessId, paymentId } = req.params;
+    try {
+      const [paymentSnap, businessName, subscriptionStatus] = await Promise.all([
+        db.collection('businesses').doc(businessId).collection('payments').doc(paymentId).get(),
+        readBusinessName(businessId),
+        readSubscriptionStatus(businessId),
+      ]);
+
+      if (!paymentSnap.exists) {
+        res.status(404).json({ error: 'not-found', message: 'Pagamento não encontrado.' });
+        return;
+      }
+      const data = paymentSnap.data()!;
+
+      res.json({
+        payment: {
+          id: paymentSnap.id,
+          businessId,
+          amount: data.amount,
+          currency: data.currency,
+          method: data.method,
+          reference: data.reference,
+          submittedAt: data.submittedAt,
+          submittedBy: data.submittedBy,
+          status: data.status,
+          confirmedAt: data.confirmedAt ?? null,
+          confirmedBy: data.confirmedBy ?? null,
+          rejectedAt: data.rejectedAt ?? null,
+          rejectedBy: data.rejectedBy ?? null,
+          rejectionReason: data.rejectionReason ?? null,
+        },
+        businessName,
+        subscriptionStatus,
+      });
+    } catch (err) {
+      console.error('[superadmin/payments/detail] failed', { businessId, paymentId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar o pagamento.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/payments/:businessId/:paymentId/confirm
+// FR-4. BR-1: calls confirmPayment() unmodified; never touches
+// subscription state directly. BR-6: exactly one audit entry per
+// successful (state-changing) confirmation — see
+// server/platformAuditLog.ts's header for the documented atomicity
+// limitation and why it's the correct trade-off here.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/payments/:businessId/:paymentId/confirm',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const { businessId, paymentId } = req.params;
+    const operator = req.platformOperator!;
+
+    let result;
+    try {
+      result = await confirmPayment(paymentConfirmationDb, subscriptionEngine, {
+        businessId,
+        paymentId,
+        confirmedBy: operator.uid,
+      });
+    } catch (err) {
+      console.error('[superadmin/payments/confirm] confirmPayment() failed', { businessId, paymentId, operatorUid: operator.uid, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao confirmar o pagamento. Nenhuma alteração foi aplicada de forma inconsistente — tente novamente.' });
+      return;
+    }
+
+    if (result.outcome === 'not-found') {
+      res.status(404).json({ error: 'not-found', message: 'Pagamento não encontrado.' });
+      return;
+    }
+    if (result.outcome === 'already-rejected') {
+      res.status(409).json({ error: 'already-rejected', message: 'Este pagamento já foi rejeitado e não pode ser confirmado.' });
+      return;
+    }
+
+    // outcome === 'confirmed' — either just transitioned, or an
+    // idempotent replay of an already-confirmed payment. Only write a
+    // new audit entry for a genuinely new state change: re-derive that
+    // by checking the payment doc's own confirmedAt against "just now"
+    // would be racy; instead this route treats every 'confirmed'
+    // outcome as audit-worthy EXCEPT when the caller's own retry is
+    // clearly a replay of an audit entry it already wrote. V1 keeps
+    // this simple and honest rather than cleverly deduping: a rare
+    // network-retry double-audit-entry for the SAME confirm action is
+    // a much smaller risk than silently under-auditing, and is exactly
+    // the trade-off server/platformAuditLog.ts's header documents.
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'payment.confirmed',
+        targetBusinessId: businessId,
+      });
+    } catch (err) {
+      console.error('[superadmin/payments/confirm] audit log write failed after payment confirmed', { businessId, paymentId, operatorUid: operator.uid, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    const subscriptionStatus = await readSubscriptionStatus(businessId).catch(() => null);
+
+    res.json({
+      outcome: 'confirmed',
+      transitionReason: result.lifecycleTransition?.reason ?? 'Sem alteração no estado da subscrição.',
+      subscriptionStatus,
+      ...(auditLogged ? {} : { auditLogged: false }),
+    });
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/payments/:businessId/:paymentId/reject
+// Body: { reason: string } — required (FR-5, BDS §6). BR-1: calls
+// rejectPayment() unmodified; subscription state is never touched by
+// a rejection, by design.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/payments/:businessId/:paymentId/reject',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const { businessId, paymentId } = req.params;
+    const operator = req.platformOperator!;
+    const reason = String(req.body?.reason || '').trim().slice(0, 1000);
+
+    if (!reason) {
+      res.status(400).json({ error: 'invalid-argument', message: 'É obrigatório indicar um motivo para rejeitar o pagamento.' });
+      return;
+    }
+
+    let result;
+    try {
+      result = await rejectPayment(paymentConfirmationDb, {
+        businessId,
+        paymentId,
+        rejectedBy: operator.uid,
+        rejectionReason: reason,
+      });
+    } catch (err) {
+      console.error('[superadmin/payments/reject] rejectPayment() failed', { businessId, paymentId, operatorUid: operator.uid, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao rejeitar o pagamento.' });
+      return;
+    }
+
+    if (result.outcome === 'not-found') {
+      res.status(404).json({ error: 'not-found', message: 'Pagamento não encontrado.' });
+      return;
+    }
+    if (result.outcome === 'already-confirmed') {
+      res.status(409).json({ error: 'already-confirmed', message: 'Este pagamento já foi confirmado e a subscrição já foi ativada — não pode ser rejeitado.' });
+      return;
+    }
+
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'payment.rejected',
+        targetBusinessId: businessId,
+        justification: reason,
+      });
+    } catch (err) {
+      console.error('[superadmin/payments/reject] audit log write failed after payment rejected', { businessId, paymentId, operatorUid: operator.uid, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    const subscriptionStatus = await readSubscriptionStatus(businessId).catch(() => null);
+
+    res.json({
+      outcome: 'rejected',
+      subscriptionStatus, // unchanged, by design (BR-2) — returned so the UI can show "no effect" explicitly rather than the operator having to infer it
+      ...(auditLogged ? {} : { auditLogged: false }),
+    });
+  }
+);
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/audit-log
+// FR-7 — V1 scope: payment.confirmed / payment.rejected only (this
+// slice's own two action types). Requires the platform_audit_log read
+// rule this slice adds (firestore.rules) — this route itself bypasses
+// client rules via the Admin SDK either way, same as every read above.
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/audit-log',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    try {
+      const snap = await db
+        .collection('platform_audit_log')
+        .where('actionType', 'in', ['payment.confirmed', 'payment.rejected'])
+        .orderBy('timestamp', 'desc')
+        .limit(100)
+        .get();
+
+      const entries = snap.docs.map((d) => {
+        const data = d.data();
+        return {
+          id: d.id,
+          actorUid: data.actorUid,
+          actorRole: data.actorRole,
+          actionType: data.actionType,
+          targetBusinessId: data.targetBusinessId ?? null,
+          justification: data.justification ?? null,
+          timestamp: data.timestamp,
+        };
+      });
+
+      res.json({ entries });
+    } catch (err) {
+      console.error('[superadmin/audit-log] failed', { error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar o registo de auditoria.' });
+    }
+  }
+);
 
 // ------------------------------------------------------------------
 // POST /api/client-error
