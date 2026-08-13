@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { AppProvider, useApp } from './context/AppContext';
-import { LanguageProvider } from './context/LanguageContext';
+import { LanguageProvider, useLanguage } from './context/LanguageContext';
 import { NotificationProvider } from './context/NotificationContext';
 import { Header } from './components/Header';
 import { NavigationTabs, TabType } from './components/NavigationTabs';
@@ -21,9 +21,11 @@ import { QuickLoginScreen } from './components/QuickLoginScreen';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import { SubscriptionStatusBanner } from './components/SubscriptionStatusBanner';
 import { Product } from './types';
+import { useDocumentTitle, tabTitleKey } from './hooks/useDocumentTitle';
 
 function MainApp() {
   const { currentUser, isAuthLoading, isStaff, pairedDevice } = useApp();
+  const { t } = useLanguage();
   const [activeTab, setActiveTab] = useState<TabType>('dashboard');
   // A paired device defaults to the PIN quick-login screen when logged
   // out; this lets the owner (or anyone who needs a full email/password
@@ -58,6 +60,13 @@ function MainApp() {
     window.addEventListener('navigate-tab', handleCustomNav);
     return () => window.removeEventListener('navigate-tab', handleCustomNav);
   }, [isStaff]);
+
+  // Browser tab title. While logged out, AuthView / QuickLoginScreen own
+  // the title themselves (they know which auth screen is showing); passing
+  // '' here leaves whatever they've set alone instead of overwriting it.
+  useDocumentTitle(
+    isAuthLoading ? t('common.loading') : !currentUser ? '' : t(tabTitleKey(activeTab))
+  );
 
   if (isAuthLoading) {
     return <AppLoadingScreen message="A carregar dados do negócio..." />;
