@@ -13,6 +13,7 @@ import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface AuthViewProps {
   onBackToQuickLogin?: () => void;
@@ -87,6 +88,8 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
   const { t } = useLanguage();
   const [mode, setMode] = useState<'login' | 'register'>('login');
   const [roleMode, setRoleMode] = useState<'owner' | 'staff'>('owner');
+
+  useDocumentTitle(t(mode === 'login' ? 'auth.tabs.login' : 'auth.tabs.register'));
 
   // Form states
   const [email, setEmail] = useState('');

@@ -5,6 +5,7 @@ import { useApp } from '../context/AppContext';
 import { Store, User, ArrowLeft, Delete, ShieldCheck, Loader2, KeyRound, Info } from 'lucide-react';
 import { useLanguage } from '../context/LanguageContext';
 import { LanguageSwitcher } from './LanguageSwitcher';
+import { useDocumentTitle } from '../hooks/useDocumentTitle';
 
 interface QuickLoginScreenProps {
   onUseOwnerLogin: () => void;
@@ -18,6 +19,9 @@ interface QuickLoginScreenProps {
 export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLogin }) => {
   const { pairedDevice } = useApp();
   const { t } = useLanguage();
+
+  useDocumentTitle(t('auth.tabs.login'));
+
   const [selected, setSelected] = useState<{ uid: string; name: string; email: string } | null>(null);
   const [pin, setPin] = useState('');
   const [loading, setLoading] = useState(false);

@@ -19,6 +19,7 @@ export const en: TranslationDict = {
       jan: 'Jan', feb: 'Feb', mar: 'Mar', apr: 'Apr', may: 'May', jun: 'Jun',
       jul: 'Jul', aug: 'Aug', sep: 'Sep', oct: 'Oct', nov: 'Nov', dec: 'Dec',
     },
+    loading: 'Loading…',
   },
   auth: {
     subtitle: 'Smart batch profit management and control for your business',
@@ -219,6 +220,7 @@ export const en: TranslationDict = {
       reports: { label: 'Reports', shortLabel: 'Reports' },
       timeline: { label: 'Timeline', shortLabel: 'History' },
     },
+    initialStockTitle: 'Initial Stock Count',
   },
   header: {
     myBusiness: 'My Business',

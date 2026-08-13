@@ -15,6 +15,7 @@ export interface TranslationDict {
       jan: string; feb: string; mar: string; apr: string; may: string; jun: string;
       jul: string; aug: string; sep: string; oct: string; nov: string; dec: string;
     };
+    loading: string;
   };
   auth: {
     subtitle: string;
@@ -187,6 +188,9 @@ export interface TranslationDict {
       reports: { label: string; shortLabel: string };
       timeline: { label: string; shortLabel: string };
     };
+    /** Browser-tab title for the initial stock count onboarding flow — not
+     * one of the 11 NAV_TABS bar entries, so it lives outside `tabs`. */
+    initialStockTitle: string;
   };
   header: {
     myBusiness: string;
@@ -898,6 +902,7 @@ export const pt: TranslationDict = {
       jan: 'Jan', feb: 'Fev', mar: 'Mar', apr: 'Abr', may: 'Mai', jun: 'Jun',
       jul: 'Jul', aug: 'Ago', sep: 'Set', oct: 'Out', nov: 'Nov', dec: 'Dez',
     },
+    loading: 'A carregar…',
   },
   auth: {
     subtitle: 'Gestão inteligente e controlo de lucro por lote para o seu negócio',
@@ -1098,6 +1103,7 @@ export const pt: TranslationDict = {
       reports: { label: 'Relatórios', shortLabel: 'Relatórios' },
       timeline: { label: 'Linha do Tempo', shortLabel: 'Histórico' },
     },
+    initialStockTitle: 'Contagem de Stock Inicial',
   },
   header: {
     myBusiness: 'Meu Negócio',

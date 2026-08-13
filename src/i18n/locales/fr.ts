@@ -19,6 +19,7 @@ export const fr: TranslationDict = {
       jan: 'Jan', feb: 'Fév', mar: 'Mar', apr: 'Avr', may: 'Mai', jun: 'Juin',
       jul: 'Juil', aug: 'Août', sep: 'Sep', oct: 'Oct', nov: 'Nov', dec: 'Déc',
     },
+    loading: 'Chargement…',
   },
   auth: {
     subtitle: "Gestion intelligente et contrôle du profit par lot pour votre entreprise",
@@ -219,6 +220,7 @@ export const fr: TranslationDict = {
       reports: { label: 'Rapports', shortLabel: 'Rapports' },
       timeline: { label: 'Chronologie', shortLabel: 'Historique' },
     },
+    initialStockTitle: 'Comptage de Stock Initial',
   },
   header: {
     myBusiness: 'Mon Entreprise',
