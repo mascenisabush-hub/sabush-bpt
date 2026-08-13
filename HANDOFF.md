@@ -12,9 +12,102 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Fix #8 (Production Observability) — **IMPLEMENTED, TESTED,
-VERIFIED, AND CLOSED.** Committed and pushed to `main`. Nothing is
-mid-flight.
+**Status:** SuperAdmin Payment Operations V1 Launch Slice (ADR-0005 /
+`docs/specs/18-19-payment-operations-slice.md`) — **IMPLEMENTED across
+4 checkpoint commits, full typecheck/test/build verification passing.
+NOT YET production-deployed. Nothing mid-flight; working tree clean.**
+
+**What this is:** a narrow, authorized vertical slice of Module #18
+(SuperAdmin) — NOT the full module. Replaces the CLI-only
+`server/scripts/confirmPayment.ts` as the primary way a real Sabush
+operator confirms/rejects a customer's manually-submitted payment,
+without touching the existing, unmodified Module #19 payment/
+subscription engine.
+
+**Checkpoints (in order, `7c11ad0`..`15154c8`):**
+1. `7c11ad0` — ADR-0005, BDS, Rule 8 Assessment (docs only).
+2. `daabdc2` — Migrated `src/`, `index.html`, `vite.config.ts`,
+   `tsconfig.json` to `apps/tenant/` (git mv, history preserved).
+   `server/` and `tests/` stayed at the repo root (shared
+   infrastructure per Architecture §4.13/9.1, not tenant-owned). Build
+   output paths (`dist/`, `server.js`) unchanged — Railway's existing
+   deploy is unaffected.
+3. `c00d784` — Extracted `packages/shared-types` (Payment/Subscription/
+   PlatformOperator/PlatformAuditLogEntry shapes); `apps/tenant/src/types.ts`
+   now re-exports rather than redefines.
+4. `2cc76b9` — `server/superadminAuth.ts` (platform-operator
+   authorization, re-read from Firestore every request),
+   `server/platformAuditLog.ts` (the one audit-write primitive), five
+   `/api/superadmin/payments/*` + `/audit-log` routes in
+   `server/index.ts` — every one calling the **unmodified**
+   `confirmPayment()`/`rejectPayment()`, never touching subscription
+   state directly. `firestore.rules`: new `platform_operators` block,
+   `platform_audit_log` read narrowed from `false` to verified-operator-
+   only. Two new composite indexes. New rules tests + a new server-side
+   test file (12 tests, all passing).
+5. `15154c8` — `apps/superadmin`, a physically separate Vite app
+   (sign-in, pending queue, payment detail with guarded confirm/reject,
+   audit trail). `server/scripts/provisionPlatformOperator.ts` (one-time
+   Admin-SDK provisioning — §9.12's real UI is out of scope for this
+   slice, a named gap not silently assumed away).
+
+**Verified this session, honestly:**
+- `tsc --noEmit` clean across all three independent programs
+  (`apps/tenant`, root/`server`+`tests`, `apps/superadmin`).
+- `npm run test:all` — 22 suites, 0 failures (was 21 pre-slice; added
+  `tests/superadmin-payment-operations.test.ts`).
+- `npm run build:all` (fresh, `rm -rf dist dist-superadmin server.js`
+  first) — all three artifacts build clean.
+- **Bundle-leak check run against the actual built output**, not just
+  source structure: `dist/` contains zero SuperAdmin-specific strings;
+  `dist-superadmin/` contains zero tenant-app-specific strings.
+- `git diff --check` clean; secret-pattern scan on every changed file
+  clean.
+- Scope audit: `subscriptionEngine.ts` — 0 lines changed all session.
+  `paymentConfirmation.ts` — exactly one line changed, an import path,
+  zero logic. `AppContext.tsx` — byte-identical to pre-migration,
+  confirmed by direct diff. No new direct subscription-document write
+  anywhere in the new code. No webhook route added. No feature-flags/
+  analytics/CRM/unrelated-module file touched.
+- `firestore.rules`' emulator-backed test (`npm run test:rules` /
+  `test:rules:emulator`) is **CONFIRMED ENVIRONMENT-BLOCKED** in this
+  sandbox — `fetch failed` connecting to the Firestore emulator, the
+  same standing limitation prior sessions already documented (network
+  egress here excludes Google's emulator infrastructure). **Not claimed
+  as passing.** GitHub Actions CI (`.github/workflows/ci.yml`) has the
+  Java 21 + `firebase-tools` step that actually runs this — that has
+  not executed against this branch yet as of this commit.
+
+**Known, flagged gaps (not silently routed around):**
+- `businessCode` (named in Architecture §8.14 / `docs/specs/17-owner-portfolio.md`)
+  does not exist anywhere in the actual codebase — verified by direct
+  search. The new SuperAdmin UI/routes use business `name` + Firestore
+  `businessId` instead; `businessCode` itself was not invented.
+- `apps/superadmin`'s build output (`dist-superadmin/`) has no
+  deployment target wired in this repository — Railway currently hosts
+  one service (`apps/tenant` + the shared server). Provisioning a
+  second hosting target (a second Railway service, or Firebase
+  Hosting against the same project) is an infrastructure/ops step this
+  sandbox cannot perform (no Railway/Firebase CLI network access) and
+  is NOT done. Until that exists, `apps/superadmin` is built and
+  correct but not reachable by a real operator in production.
+- `server/scripts/confirmPayment.ts` (the CLI bridge) is deliberately
+  left in place as a documented break-glass fallback, per the BDS's own
+  §11 — not retired by this slice.
+- Firestore emulator verification of the new/changed rules (see above)
+  still needs to run in CI (or any environment with emulator access)
+  before this is production-safe to deploy.
+
+**Next actionable items, in order:** (1) get CI green on this branch —
+specifically `test:rules:emulator`, the one gate this sandbox could not
+run; (2) provision the first real `platform_operators/{uid}` record via
+`server/scripts/provisionPlatformOperator.ts` against production
+Firestore; (3) decide and provision `apps/superadmin`'s actual
+deployment target; (4) one controlled end-to-end test against a real
+pending payment before relying on this for a real pilot-customer
+payment.
+
+## Prior status — Fix #8 (Production Observability) — superseded above, kept for continuity
 
 **Objective:** answer one question — "if something important breaks
 for a pilot customer, will SABUSH know about it and have enough

@@ -97,7 +97,7 @@ told where to go next.
 |---|---|---|
 | 16 | Staff & Roles | ✅ Approved & implemented |
 | 17 | Multi-Shop | Not started |
-| 18 | SuperAdmin | Not started |
+| 18 | SuperAdmin | Payment Operations V1 slice implemented (ADR-0005); rest not started |
 | 19 | Subscriptions | Not started |
 | 20 | Notifications | Not started |
 
