@@ -70,34 +70,13 @@ export interface Business {
 // These six values, and no others, are approved (POL-19-005). Phase 1
 // only ever produces 'trial_pending' — the remaining five are reachable
 // starting Phase 2 (Trial Engine) and Phase 3 (Subscription Lifecycle).
-export type SubscriptionStatus =
-  | 'trial_pending'
-  | 'trial_active'
-  | 'trial_completed'
-  | 'active'
-  | 'grace_period'
-  | 'expired';
-
-// One document per Business (subscriptions/{businessId} — subscriptionId
-// === businessId, per the spec's Data Model). Created exclusively by the
-// server's Business Provisioning Orchestrator (server/index.ts) via the
-// Admin SDK — never client-writable (see firestore.rules). Business
-// Rule 7: no payment-instrument field exists here, ever.
-export interface Subscription {
-  businessId: string; // required, immutable after creation
-  planId: string; // Phase 1: a single placeholder V1 plan id; Plan catalogue is out of scope
-  status: SubscriptionStatus;
-  trialActivatedAt: string | null; // null until Phase 2's activation trigger fires (POL-19-001)
-  trialEndsAt: string | null; // set at activation; trialActivatedAt + 30 days (POL-19-002)
-  gracePeriodEndsAt: string | null; // set on entry to grace_period; +7 days (POL-19-004)
-  renewalDate: string | null;
-  entitlements: {
-    business_limit: number;
-    feature_flags: { [featureKey: string]: boolean };
-  };
-  createdAt: string;
-  updatedAt: string;
-}
+//
+// [ADR-0005 / SuperAdmin Payment Operations migration] SubscriptionStatus
+// and Subscription now live in packages/shared-types (the single source
+// of truth both apps/tenant and apps/superadmin read) — re-exported here
+// unchanged so nothing importing them from './types' (or '../types',
+// etc.) anywhere in this app needed to change.
+export type { SubscriptionStatus, Subscription } from '@sabush/shared-types';
 
 export interface StaffMember {
   uid: string;
@@ -327,30 +306,13 @@ export interface Expense {
 export type PaymentStatus = 'pending' | 'confirmed' | 'rejected';
 export type PaymentMethod = 'mpesa' | 'emola' | 'bim';
 
-export interface Payment {
-  id: string;
-  businessId: string;
-  amount: number; // MZN — 699 for V1's single plan (POL-19-011)
-  currency: 'MZN';
-  method: PaymentMethod;
-  // Customer-provided evidence of the external payment — an M-Pesa/
-  // e-Mola transaction ID, or a bank transfer reference. Free text;
-  // never validated against a real processor (there is none, by
-  // design, in this bridge).
-  reference: string;
-  submittedAt: string; // ISO
-  submittedBy: string; // uid of the Owner who submitted it
-  status: PaymentStatus;
-  // Set only by the server-side confirmation mechanism — never
-  // client-writable (firestore.rules: allow update: if false on this
-  // collection, matching /subscriptions' own pattern).
-  confirmedAt?: string; // ISO
-  confirmedBy?: string; // free-text identifier of who ran the confirmation — no platform-operator role exists yet (Module #18 gap), so this is a human-readable name/note, not a Firebase Auth uid
-  rejectedAt?: string; // ISO
-  rejectedBy?: string;
-  rejectionReason?: string;
-  notes?: string;
-}
+// [ADR-0005 migration] Payment now lives in packages/shared-types too —
+// see the SubscriptionStatus/Subscription re-export above for why. The
+// PaymentStatus/PaymentMethod literal unions above are kept as local
+// aliases (identical values) rather than re-exports, since a handful of
+// files in this app reference them as standalone types independent of
+// Payment itself; no behavior difference either way.
+export type { Payment } from '@sabush/shared-types';
 
 // [Closing Integrity Amendment v1.0 — Option B] Same lock-field pattern
 // as Expense, above — see that comment for the full rule.

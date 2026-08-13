@@ -15,7 +15,12 @@
     "moduleDetection": "force",
     "allowJs": true,
     "allowImportingTsExtensions": true,
-    "noEmit": true
+    "noEmit": true,
+    "paths": {
+      "@sabush/shared-types": [
+        "./packages/shared-types/index.ts"
+      ]
+    }
   },
   "include": [
     "server/**/*.ts",
