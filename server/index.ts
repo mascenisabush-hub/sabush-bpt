@@ -22,6 +22,7 @@ import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
 import { backgroundWorker } from './backgroundWorker';
+import { resolveServiceMode, isTenantMode, createTenantOnlyMiddleware } from './serviceMode';
 import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
@@ -132,6 +133,24 @@ const breakageNotificationProducer = createBreakageNotificationProducer(db, noti
 const expressApp = express();
 
 // ------------------------------------------------------------------
+// Service mode — lets this exact server.js run as either the Railway
+// tenant service (today's unchanged default) or a second, separate
+// Railway SuperAdmin service, without duplicating any server code.
+// Default is 'tenant' so the existing Railway tenant service needs no
+// env var changes at all. SuperAdmin mode's Railway service must set
+// SERVICE_MODE=superadmin (and STATIC_DIST_DIR=dist-superadmin, used
+// below where the SPA is served). Not an architecture change — the
+// tenant/SuperAdmin physical-separation boundary (ADR-0005 §9.1)
+// still holds: this only decides which routes/jobs THIS process
+// registers, it never lets one bundle serve the other's frontend.
+// Decision logic lives in server/serviceMode.ts (see that file's
+// header for why) — unit-tested in tests/service-mode.test.ts.
+// ------------------------------------------------------------------
+const SERVICE_MODE = resolveServiceMode(process.env);
+const tenantMode = isTenantMode(SERVICE_MODE);
+const tenantOnly = createTenantOnlyMiddleware(tenantMode);
+
+// ------------------------------------------------------------------
 // [Smart Stock Entry — Tier 1 — BUG FIX, post-deployment]
 // POST /api/smart-stock-entry/extract
 // Body: { businessId: string, imageBase64: string }
@@ -176,6 +195,7 @@ const smartStockEntryJsonParser = express.json({ limit: '12mb' });
 
 expressApp.post(
   '/api/smart-stock-entry/extract',
+  tenantOnly,
   smartStockEntryJsonParser,
   requireAuth,
   async (req: AuthedRequest, res: Response) => {
@@ -446,7 +466,7 @@ async function verifyStaffManagementAction(
 // POST /api/staff/delete
 // Body: { staffUid: string, businessId: string, reason?: string }
 // ------------------------------------------------------------------
-expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/staff/delete', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const startedAt = new Date().toISOString();
 
@@ -599,7 +619,7 @@ expressApp.post('/api/staff/delete', requireAuth, async (req: AuthedRequest, res
 // all of the staff member's entered data (batches, expenses, etc.,
 // which live under the business, not under their own uid) is untouched.
 // ------------------------------------------------------------------
-expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/staff/suspend', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const startedAt = new Date().toISOString();
 
@@ -719,7 +739,7 @@ expressApp.post('/api/staff/suspend', requireAuth, async (req: AuthedRequest, re
 // POST /api/staff/reactivate
 // Body: { staffUid: string, businessId: string }
 // ------------------------------------------------------------------
-expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/staff/reactivate', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const startedAt = new Date().toISOString();
 
@@ -846,7 +866,7 @@ expressApp.post('/api/staff/reactivate', requireAuth, async (req: AuthedRequest,
 // a numeric pad instead of a text field), so this reuses updateUser
 // exactly like a password reset.
 // ------------------------------------------------------------------
-expressApp.post('/api/staff/reset-pin', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/staff/reset-pin', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const startedAt = new Date().toISOString();
 
@@ -943,7 +963,7 @@ expressApp.get('/api/health', (_req, res) => res.json({ ok: true }));
 // permission left dangling on a demoted account, even if it later gets
 // re-promoted, would be a stale-grant hole.
 // ------------------------------------------------------------------
-expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/staff/set-tier', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const requesterUid = req.callerUid!;
   const startedAt = new Date().toISOString();
 
@@ -1114,7 +1134,7 @@ expressApp.post('/api/staff/set-tier', requireAuth, async (req: AuthedRequest, r
 // reconciliation sweep (Architecture §4.8, not yet built — tracked as
 // an accepted interim risk for Phase 1, not a blocker).
 // ------------------------------------------------------------------
-expressApp.post('/api/provisioning/business', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/provisioning/business', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const uid = req.callerUid!;
   const startedAt = new Date().toISOString();
 
@@ -1306,7 +1326,7 @@ function newAuditEventRef() {
 // endpoint is a best-effort trigger, never a precondition the caller's
 // own action depends on succeeding.
 // ------------------------------------------------------------------
-expressApp.post('/api/subscriptions/activate-trial', requireAuth, async (req: AuthedRequest, res: Response) => {
+expressApp.post('/api/subscriptions/activate-trial', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
   const uid = req.callerUid!;
   const businessId = String(req.body?.businessId || '').trim();
 
@@ -1461,71 +1481,82 @@ async function runTrialLifecycleSweep(): Promise<void> {
 // Scheduling (initial-run delay, interval, failure isolation, generic
 // job-run logging) is now owned by backgroundWorker.ts; this job's own
 // execute() — runTrialLifecycleSweep — is untouched.
-backgroundWorker.registerJob({
-  jobType: 'trial-lifecycle-sweep',
-  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
-  execute: runTrialLifecycleSweep,
-});
-
-// Module #20 Phase 3 Checkpoint 3 — Trial Engine Producer
-// (server/trialNotificationProducer.ts). A second, independent
-// registered job — not folded into runTrialLifecycleSweep() above,
-// which keeps sole ownership of the trial_active -> trial_completed
-// transition (Module #19 Phase 2, Decision 3), unmodified by this
-// checkpoint. Reuses the same schedule interval; the two jobs are
-// isolated from each other by the Background Worker (ADR-0003) — a
-// failure in one never blocks the other's own tick.
-backgroundWorker.registerJob({
-  jobType: 'trial-notification-sweep',
-  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
-  execute: trialNotificationProducer.runTrialNotificationSweep,
-});
-
-// Module #20 Phase 3 Checkpoint 4 — Closing Integrity Producer
-// (server/closingNotificationProducer.ts). A third, independent
-// registered job — reuses the same schedule interval as the two Trial
-// jobs above (BDR-0007's 3-day thresholds don't need finer-grained
-// polling than the existing hourly cadence). Isolated from every other
-// registered job by the Background Worker (ADR-0003) — a failure here
-// never blocks Trial or a future Breakage producer's own tick.
-backgroundWorker.registerJob({
-  jobType: 'closing-notification-sweep',
-  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
-  execute: closingNotificationProducer.runClosingNotificationSweep,
-});
-
-// Module #20 Phase 3 Checkpoint 5 — Breakage Producer
-// (server/breakageNotificationProducer.ts). A fourth, independent
-// registered job — reuses the same schedule interval as the others.
-// This is the final producer named by the Phase 3 Implementation
-// Authorization §2 (closing.approaching/due/overdue,
-// trial.ending_soon/ending_tomorrow, inventory.risk.breakage — six
-// eventTypes, three producers, all now wired). Isolated from every
-// other registered job by the Background Worker (ADR-0003).
-backgroundWorker.registerJob({
-  jobType: 'breakage-notification-sweep',
-  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
-  execute: breakageNotificationProducer.runBreakageNotificationSweep,
-});
-
-// Module #19 V1 Subscription Lifecycle Engine
-// (server/subscriptionEngine.ts) — the one governed transition with no
-// triggering event: grace_period -> expired once 7 days elapse with no
-// recovery (POL-19-004, POL-19-005). Reuses the same schedule interval;
-// isolated from every other registered job by the Background Worker
-// (ADR-0003). Per the signed Implementation Authorization
-// (docs/engineering/19-v1-subscription-lifecycle-engine-implementation-authorization.md),
-// this is the ONLY wiring this Authorization permits — applyLifecycleEvent()
-// (the event-triggered half of the Engine) is deliberately NOT called
-// from any HTTP route here. No /api/billing/webhook exists, and none
-// may be added until a verified PaySuite Payment Adapter is separately
-// authorized (Authorization §3).
+//
+// [Railway SuperAdmin split] Every registerJob() call below is gated
+// behind isTenantMode. registerJob() schedules a setTimeout/setInterval
+// immediately (backgroundWorker.ts), so this is the one place that
+// actually prevents a second, duplicate production worker if the
+// SuperAdmin Railway service (SERVICE_MODE=superadmin) ever runs this
+// same server.js — see HANDOFF.md for why that's a hard safety
+// requirement, not a nice-to-have. Nothing about job scheduling itself,
+// or any job's own execute() logic, is touched.
 const subscriptionEngine = createSubscriptionEngine(db);
-backgroundWorker.registerJob({
-  jobType: 'grace-period-expiry-sweep',
-  scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
-  execute: subscriptionEngine.runGracePeriodExpirySweep,
-});
+if (tenantMode) {
+  backgroundWorker.registerJob({
+    jobType: 'trial-lifecycle-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: runTrialLifecycleSweep,
+  });
+
+  // Module #20 Phase 3 Checkpoint 3 — Trial Engine Producer
+  // (server/trialNotificationProducer.ts). A second, independent
+  // registered job — not folded into runTrialLifecycleSweep() above,
+  // which keeps sole ownership of the trial_active -> trial_completed
+  // transition (Module #19 Phase 2, Decision 3), unmodified by this
+  // checkpoint. Reuses the same schedule interval; the two jobs are
+  // isolated from each other by the Background Worker (ADR-0003) — a
+  // failure in one never blocks the other's own tick.
+  backgroundWorker.registerJob({
+    jobType: 'trial-notification-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: trialNotificationProducer.runTrialNotificationSweep,
+  });
+
+  // Module #20 Phase 3 Checkpoint 4 — Closing Integrity Producer
+  // (server/closingNotificationProducer.ts). A third, independent
+  // registered job — reuses the same schedule interval as the two Trial
+  // jobs above (BDR-0007's 3-day thresholds don't need finer-grained
+  // polling than the existing hourly cadence). Isolated from every other
+  // registered job by the Background Worker (ADR-0003) — a failure here
+  // never blocks Trial or a future Breakage producer's own tick.
+  backgroundWorker.registerJob({
+    jobType: 'closing-notification-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: closingNotificationProducer.runClosingNotificationSweep,
+  });
+
+  // Module #20 Phase 3 Checkpoint 5 — Breakage Producer
+  // (server/breakageNotificationProducer.ts). A fourth, independent
+  // registered job — reuses the same schedule interval as the others.
+  // This is the final producer named by the Phase 3 Implementation
+  // Authorization §2 (closing.approaching/due/overdue,
+  // trial.ending_soon/ending_tomorrow, inventory.risk.breakage — six
+  // eventTypes, three producers, all now wired). Isolated from every
+  // other registered job by the Background Worker (ADR-0003).
+  backgroundWorker.registerJob({
+    jobType: 'breakage-notification-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: breakageNotificationProducer.runBreakageNotificationSweep,
+  });
+
+  // Module #19 V1 Subscription Lifecycle Engine
+  // (server/subscriptionEngine.ts) — the one governed transition with no
+  // triggering event: grace_period -> expired once 7 days elapse with no
+  // recovery (POL-19-004, POL-19-005). Reuses the same schedule interval;
+  // isolated from every other registered job by the Background Worker
+  // (ADR-0003). Per the signed Implementation Authorization
+  // (docs/engineering/19-v1-subscription-lifecycle-engine-implementation-authorization.md),
+  // this is the ONLY wiring this Authorization permits — applyLifecycleEvent()
+  // (the event-triggered half of the Engine) is deliberately NOT called
+  // from any HTTP route here. No /api/billing/webhook exists, and none
+  // may be added until a verified PaySuite Payment Adapter is separately
+  // authorized (Authorization §3).
+  backgroundWorker.registerJob({
+    jobType: 'grace-period-expiry-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: subscriptionEngine.runGracePeriodExpirySweep,
+  });
+}
 
 // ------------------------------------------------------------------
 // SuperAdmin Payment Operations — V1 Launch Slice.
@@ -1912,7 +1943,7 @@ expressApp.post('/api/client-error', (req: Request, res: Response) => {
 // ------------------------------------------------------------------
 // Serve the built SPA for everything else.
 // ------------------------------------------------------------------
-const distPath = path.resolve(__dirname, 'dist');
+const distPath = path.resolve(__dirname, process.env.STATIC_DIST_DIR || 'dist');
 expressApp.use(express.static(distPath));
 expressApp.get('*', (_req, res) => {
   res.sendFile(path.join(distPath, 'index.html'));
