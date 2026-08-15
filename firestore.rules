@@ -55,8 +55,32 @@ service cloud.firestore {
     // this file inherits the suspension check automatically, with no
     // per-collection rule edits — the same "one change, many
     // consumers" pattern isMemberOf/isOwnerOf themselves already are.
+    //
+    // [Post-launch fix, real Firestore-emulator-verified defect] The
+    // original version of this function called
+    // `get(path).data.get('suspended', false)` unconditionally. Many
+    // existing tests (and, structurally, plenty of real subcollection
+    // writes) never require the parent businesses/{businessId}
+    // document to exist at all — isMemberOf/isOwnerOf historically
+    // only ever read the caller's own profile. When businessId points
+    // at a document that doesn't exist, `.data` is null, and calling
+    // `.get(...)` on that null value throws ("Null value error"),
+    // which the Rules engine surfaces as a PERMISSION_DENIED
+    // evaluation error — silently breaking every isMemberOf/isOwnerOf
+    // consumer whose businessId happens not to have a businesses/{id}
+    // document, not just this function's own callers. This was never
+    // caught by this repo's in-memory fake-based unit tests (Phase
+    // A/B/C's own test suites), since the fake `db` never models
+    // get()-on-a-nonexistent-document behavior — only a real Firestore
+    // engine enforces this null-safety strictness. Fixed here by
+    // binding the read to a local `let` and short-circuiting on null,
+    // the same single-read cost as before, following the file's own
+    // existing `let`-binding idiom (see isDateInsideClosedPeriod
+    // above) rather than doubling the read cost with a separate
+    // exists() call.
     function isBusinessSuspended(businessId) {
-      return get(/databases/$(database)/documents/businesses/$(businessId)).data.get('suspended', false) == true;
+      let businessData = get(/databases/$(database)/documents/businesses/$(businessId)).data;
+      return businessData != null && businessData.get('suspended', false) == true;
     }
 
     function isMemberOf(businessId) {
