@@ -1363,6 +1363,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     } catch (err) {
       console.error('Error logging timeline event:', err);
     }
+    // SuperAdmin V1 Operational Control Plane, Phase E (BDR-0010,
+    // POL-18-001) — the approved server-authoritative lastActivityAt
+    // mechanism (BDR-0010 Part 5). Deliberately its own, independent
+    // try/catch — the qualifying activity itself (the stock/expense/
+    // etc. write this function is always called after) has already
+    // happened regardless of whether the timelineEvents write above
+    // succeeded, so this fires unconditionally, not nested inside that
+    // block. Best-effort, fire-and-forget in spirit: never blocks this
+    // function's return, never surfaces to the caller, never retried
+    // here — matching BDR-0010 Part 6's explicit "never block the
+    // underlying business action" requirement. The server-side
+    // /api/business/touch-activity endpoint itself also never returns
+    // a failure status for this reason — see server/index.ts's own
+    // comment at that route for the matching half of this contract.
+    try {
+      const idToken = await currentUser?.getIdToken();
+      if (idToken) {
+        await fetch('/api/business/touch-activity', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ businessId: activeBusinessId }),
+        });
+      }
+    } catch (err) {
+      console.error('Error touching business activity:', err);
+    }
   };
 
   // Report exports have no other collection to hook into — the Reports

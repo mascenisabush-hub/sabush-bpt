@@ -160,26 +160,52 @@ interface FakeSubscription {
   updatedAt?: string;
 }
 
+// Phase E (BDR-0010) — the subscriptionStatusCache mirror target.
+// Kept separate from subscriptions to make it trivially obvious in any
+// test assertion which store a given ref actually touches.
+interface FakeBusiness {
+  subscriptionStatusCache?: string;
+}
+
 interface FakeSubscriptionRef {
+  __kind: 'subscription';
   __businessId: string;
   get(): Promise<{ exists: boolean; data(): Record<string, unknown> | undefined }>;
 }
 
-function makeFakeDb(subscriptionsByBusiness: Record<string, FakeSubscription>): SubscriptionEngineDb & {
+// Phase E (BDR-0010) — write-only, matching server/subscriptionEngine.ts's
+// own BusinessDocRef's deliberate minimalism (that module never reads
+// this ref, only updates it).
+interface FakeBusinessRef {
+  __kind: 'business';
+  __businessId: string;
+}
+
+function makeFakeDb(
+  subscriptionsByBusiness: Record<string, FakeSubscription>,
+  businessesByBusiness: Record<string, FakeBusiness> = {},
+): SubscriptionEngineDb & {
   dump(): Record<string, FakeSubscription>;
+  dumpBusinesses(): Record<string, FakeBusiness>;
   auditLog(): Record<string, unknown>[];
 } {
   const subs: Record<string, FakeSubscription> = { ...subscriptionsByBusiness };
+  const bizs: Record<string, FakeBusiness> = { ...businessesByBusiness };
   const audit: Record<string, unknown>[] = [];
 
   function makeSubscriptionRef(businessId: string): FakeSubscriptionRef {
     return {
+      __kind: 'subscription',
       __businessId: businessId,
       async get() {
         const data = subs[businessId];
         return { exists: !!data, data: () => (data ? { ...data } : undefined) };
       },
     };
+  }
+
+  function makeBusinessRef(businessId: string): FakeBusinessRef {
+    return { __kind: 'business', __businessId: businessId };
   }
 
   function makeSubscriptionsCollection(filters: { field: string; op: string; value: unknown }[] = []): ReturnType<SubscriptionEngineDb['collection']> {
@@ -206,9 +232,18 @@ function makeFakeDb(subscriptionsByBusiness: Record<string, FakeSubscription>): 
     } as never;
   }
 
+  function makeBusinessesCollection() {
+    return {
+      doc(businessId: string) {
+        return makeBusinessRef(businessId) as never;
+      },
+    } as never;
+  }
+
   return {
     collection(name: string) {
       if (name === 'subscriptions') return makeSubscriptionsCollection() as never;
+      if (name === 'businesses') return makeBusinessesCollection() as never;
       if (name === 'platform_audit_log') {
         return { doc: () => ({}) } as never;
       }
@@ -219,7 +254,11 @@ function makeFakeDb(subscriptionsByBusiness: Record<string, FakeSubscription>): 
         async get(ref: FakeSubscriptionRef) {
           return ref.get();
         },
-        update(ref: FakeSubscriptionRef, data: Record<string, unknown>) {
+        update(ref: FakeSubscriptionRef | FakeBusinessRef, data: Record<string, unknown>) {
+          if (ref.__kind === 'business') {
+            bizs[ref.__businessId] = { ...bizs[ref.__businessId], ...data } as FakeBusiness;
+            return;
+          }
           subs[ref.__businessId] = { ...subs[ref.__businessId], ...data } as FakeSubscription;
         },
         set(_ref: unknown, data: Record<string, unknown>) {
@@ -230,6 +269,9 @@ function makeFakeDb(subscriptionsByBusiness: Record<string, FakeSubscription>): 
     },
     dump() {
       return { ...subs };
+    },
+    dumpBusinesses() {
+      return { ...bizs };
     },
     auditLog() {
       return audit;
@@ -390,5 +432,77 @@ describe('historical data preservation (POL-19-010 Guiding Principle)', () => {
 
     const finalKeys = Object.keys(db.dump()['biz-1']).sort();
     assert.deepEqual(finalKeys, ['gracePeriodEndsAt', 'renewalDate', 'status', 'updatedAt']);
+  });
+});
+
+// ------------------------------------------------------------------
+// Part 3 — SuperAdmin V1 Operational Control Plane, Phase E
+// (BDR-0010). subscriptionStatusCache mirror: proves the cache stays
+// synchronized with the authoritative status on every transition path
+// that writes status, and that the canonical subscriptions document
+// itself is never altered by this addition (BR-0010's own "never a
+// second source of truth" requirement).
+// ------------------------------------------------------------------
+describe('Phase E (BDR-0010) — subscriptionStatusCache mirror', () => {
+  it('applyLifecycleEvent mirrors the new status onto businesses/{businessId}.subscriptionStatusCache, same transaction', async () => {
+    const db = makeFakeDb(
+      { 'biz-1': { status: 'trial_completed', gracePeriodEndsAt: null, renewalDate: null } },
+      { 'biz-1': {} },
+    );
+    const engine = createSubscriptionEngine(db);
+    await engine.applyLifecycleEvent('biz-1', { type: 'payment_success', occurredAt: iso(0) });
+
+    assert.equal(db.dump()['biz-1'].status, 'active');
+    assert.equal(db.dumpBusinesses()['biz-1'].subscriptionStatusCache, 'active');
+  });
+
+  it('a no-op transition (e.g. active + payment_success) writes neither the subscription nor the cache', async () => {
+    const db = makeFakeDb(
+      { 'biz-1': { status: 'active', gracePeriodEndsAt: null, renewalDate: iso(10 * DAY_MS) } },
+      { 'biz-1': { subscriptionStatusCache: 'active' } },
+    );
+    const engine = createSubscriptionEngine(db);
+    const result = await engine.applyLifecycleEvent('biz-1', { type: 'payment_success', occurredAt: iso(0) });
+
+    assert.equal(result, null);
+    assert.equal(db.dumpBusinesses()['biz-1'].subscriptionStatusCache, 'active'); // unchanged
+  });
+
+  it('applyLifecycleEvent never writes any field on the business document other than subscriptionStatusCache', async () => {
+    const db = makeFakeDb(
+      { 'biz-1': { status: 'trial_completed', gracePeriodEndsAt: null, renewalDate: null } },
+      { 'biz-1': {} },
+    );
+    const engine = createSubscriptionEngine(db);
+    await engine.applyLifecycleEvent('biz-1', { type: 'payment_success', occurredAt: iso(0) });
+
+    assert.deepEqual(Object.keys(db.dumpBusinesses()['biz-1']), ['subscriptionStatusCache']);
+  });
+
+  it('runGracePeriodExpirySweep mirrors "expired" onto the cache alongside the authoritative transition', async () => {
+    const boundary = iso(0);
+    const db = makeFakeDb(
+      { 'biz-1': { status: 'grace_period', gracePeriodEndsAt: boundary, renewalDate: null } },
+      { 'biz-1': { subscriptionStatusCache: 'grace_period' } },
+    );
+    const engine = createSubscriptionEngine(db);
+    await engine.runGracePeriodExpirySweep(new Date(boundary));
+
+    assert.equal(db.dump()['biz-1'].status, 'expired');
+    assert.equal(db.dumpBusinesses()['biz-1'].subscriptionStatusCache, 'expired');
+  });
+
+  it('the canonical subscriptions document is never affected by the cache mirror — BDR-0010\'s "never a second source of truth" requirement, proven directly', async () => {
+    const db = makeFakeDb(
+      { 'biz-1': { status: 'trial_completed', gracePeriodEndsAt: null, renewalDate: null } },
+      { 'biz-1': {} },
+    );
+    const engine = createSubscriptionEngine(db);
+    await engine.applyLifecycleEvent('biz-1', { type: 'payment_success', occurredAt: iso(0) });
+
+    // The subscription document's own field set is exactly what it was
+    // before this session's Phase E changes — no new field leaked onto
+    // the canonical record itself.
+    assert.deepEqual(Object.keys(db.dump()['biz-1']).sort(), ['gracePeriodEndsAt', 'renewalDate', 'status', 'updatedAt']);
   });
 });

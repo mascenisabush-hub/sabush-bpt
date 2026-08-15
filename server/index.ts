@@ -34,6 +34,7 @@ import { writeAuditLogEntry } from './platformAuditLog';
 import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
 import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
 import { suspendBusiness, reactivateBusiness, type BusinessSuspensionDb } from './businessSuspension';
+import { touchBusinessActivity, type ActivityTouchDb } from './activityTouch';
 import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
 import { reportCriticalFailure } from './alerting';
 import {
@@ -1205,6 +1206,10 @@ expressApp.post('/api/provisioning/business', tenantOnly, requireAuth, async (re
         category,
         currencySymbol,
         createdAt: startedAt,
+        // Phase E (BDR-0010) — mirrors initialSubscription.status at
+        // creation, the same "same transaction, same moment" rule
+        // every other subscriptionStatusCache write site follows.
+        subscriptionStatusCache: initialSubscription.status,
       };
       const userProfile = {
         uid,
@@ -1268,6 +1273,8 @@ expressApp.post('/api/provisioning/business', tenantOnly, requireAuth, async (re
       category,
       currencySymbol,
       createdAt: startedAt,
+      // Phase E (BDR-0010) — same rule as the register flow above.
+      subscriptionStatusCache: initialSubscription.status,
     };
 
     await db.runTransaction(async (tx) => {
@@ -1387,6 +1394,9 @@ expressApp.post('/api/subscriptions/activate-trial', tenantOnly, requireAuth, as
         trialEndsAt,
         updatedAt: trialActivatedAt,
       });
+      // Phase E (BDR-0010) — subscriptionStatusCache mirror, same
+      // transaction, same moment as the authoritative status write.
+      tx.update(db.collection('businesses').doc(businessId), { subscriptionStatusCache: 'trial_active' });
       tx.set(newAuditEventRef(), {
         eventType: 'trial_activated',
         businessId,
@@ -1407,6 +1417,69 @@ expressApp.post('/api/subscriptions/activate-trial', tenantOnly, requireAuth, as
       error: err instanceof Error ? err.message : String(err),
     });
     res.status(500).json({ error: 'internal', message: 'Não foi possível processar a ativação do período experimental.' });
+  }
+});
+
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase E (BDR-0010, POL-18-001).
+// POST /api/business/touch-activity — a TENANT-facing (not SuperAdmin)
+// route. Called by the client from AppContext.tsx's logTimelineEvent()
+// as a best-effort side effect after that function's own Firestore
+// write already succeeded. This is the approved mechanism from
+// BDR-0010 Part 5: server-authoritative, Admin-SDK-backed, works
+// identically for Owner and Staff — the client never writes
+// lastActivityAt directly, and the timestamp is always generated here,
+// never trusted from the request. Membership check reuses the exact
+// pattern already proven by /api/subscriptions/activate-trial above —
+// re-read the caller's own profile server-side, never trust the
+// client's claim of which business it belongs to.
+// ------------------------------------------------------------------
+expressApp.post('/api/business/touch-activity', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const uid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+
+  if (!businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+    return;
+  }
+
+  try {
+    const requesterSnap = await db.collection('users').doc(uid).get();
+    const requesterProfile = requesterSnap.data();
+    if (!requesterSnap.exists || !requesterProfile) {
+      res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
+      return;
+    }
+    const ownedBusinessIds: string[] =
+      Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+        ? requesterProfile.businessIds
+        : requesterProfile.businessId
+          ? [requesterProfile.businessId]
+          : [];
+    const isMember = requesterProfile.businessId === businessId || ownedBusinessIds.includes(businessId);
+    if (!isMember) {
+      res.status(403).json({ error: 'permission-denied', message: 'Este utilizador não pertence a este negócio.' });
+      return;
+    }
+
+    // Best-effort, per BDR-0010 Part 6 — a failure here is reported
+    // (200 with auditLogged-style outcome flag, not a 4xx/5xx) since
+    // the caller (the client) must never treat this as something to
+    // retry-block on; the underlying business action this call follows
+    // has already succeeded independently of this endpoint's outcome.
+    const result = await touchBusinessActivity(activityTouchDb, businessId);
+    res.json({ outcome: result.outcome });
+  } catch (err) {
+    // Even an unexpected error here resolves to a 200 'failed' outcome,
+    // not a 500 — this endpoint must never look like something the
+    // client needs to react to or retry; it is metadata, not the
+    // action itself.
+    console.error('[business/touch-activity] unexpected failure', {
+      uid,
+      businessId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    res.json({ outcome: 'failed' });
   }
 });
 
@@ -1461,6 +1534,9 @@ async function runTrialLifecycleSweep(): Promise<void> {
         if (data.status !== 'trial_active' || !(data.trialEndsAt <= nowIso)) return;
 
         tx.update(subscriptionRef, { status: 'trial_completed', updatedAt: nowIso });
+        // Phase E (BDR-0010) — subscriptionStatusCache mirror, same
+        // transaction as the authoritative status write.
+        tx.update(db.collection('businesses').doc(businessId), { subscriptionStatusCache: 'trial_completed' });
         tx.set(newAuditEventRef(), {
           eventType: 'trial_completed',
           businessId,
@@ -1594,6 +1670,7 @@ const requirePlatformOperator = createRequirePlatformOperator(db);
 const paymentConfirmationDb = db as unknown as PaymentConfirmationDb;
 const businessVisibilityDb = db as unknown as BusinessVisibilityDb;
 const businessSuspensionDb = db as unknown as BusinessSuspensionDb;
+const activityTouchDb = db as unknown as ActivityTouchDb;
 const auditLogDb = db as unknown as AuditLogDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}

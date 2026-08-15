@@ -206,6 +206,17 @@ interface SubscriptionDocRef {
   get(): Promise<SubscriptionDocSnapshot>;
 }
 
+// Phase E (BDR-0010) — the subscriptionStatusCache mirror target.
+// Deliberately empty: this module only ever calls .update() on this
+// ref, never .get() — an interface with zero required members is
+// trivially satisfied by the real Firestore Admin SDK's
+// DocumentReference (or any object), preserving structural
+// compatibility with the real `db` instance this module is
+// instantiated against directly in server/index.ts (no `as unknown as`
+// cast at that call site — this interface must genuinely match).
+// eslint-disable-next-line @typescript-eslint/no-empty-interface
+interface BusinessDocRef {}
+
 interface AuditLogDocRef {
   // matches the real Admin SDK's own auto-id doc() shape closely enough
   // that a real Firestore instance satisfies this structurally.
@@ -213,7 +224,7 @@ interface AuditLogDocRef {
 
 interface Transaction {
   get(ref: SubscriptionDocRef): Promise<SubscriptionDocSnapshot>;
-  update(ref: SubscriptionDocRef, data: Record<string, unknown>): void;
+  update(ref: SubscriptionDocRef | BusinessDocRef, data: Record<string, unknown>): void;
   set(ref: AuditLogDocRef, data: Record<string, unknown>): void;
 }
 
@@ -230,9 +241,16 @@ interface AuditLogCollectionLike {
   doc(): AuditLogDocRef;
 }
 
+// Phase E (BDR-0010) — write-only collection accessor, same
+// deliberate minimalism as BusinessDocRef above.
+interface BusinessesCollectionLike {
+  doc(businessId: string): BusinessDocRef;
+}
+
 export interface SubscriptionEngineDb {
   collection(name: 'subscriptions'): SubscriptionsCollectionLike;
   collection(name: 'platform_audit_log'): AuditLogCollectionLike;
+  collection(name: 'businesses'): BusinessesCollectionLike;
   runTransaction<T>(fn: (tx: Transaction) => Promise<T>): Promise<T>;
 }
 
@@ -289,6 +307,9 @@ export function createSubscriptionEngine(db: SubscriptionEngineDb) {
         renewalDate: transition.renewalDate,
         updatedAt: nowIso,
       });
+      // Phase E (BDR-0010) — subscriptionStatusCache mirror, same
+      // transaction, same moment as the authoritative status write.
+      tx.update(db.collection('businesses').doc(businessId), { subscriptionStatusCache: transition.status });
       // Decision 4 (audit scope, approved) — every automatic lifecycle
       // transition writes one platform_audit_log entry, in the same
       // transaction as the state change itself, matching
@@ -366,6 +387,8 @@ export function createSubscriptionEngine(db: SubscriptionEngineDb) {
           }
 
           tx.update(subscriptionRef, { status: 'expired', updatedAt: nowIso });
+          // Phase E (BDR-0010) — subscriptionStatusCache mirror.
+          tx.update(db.collection('businesses').doc(businessId), { subscriptionStatusCache: 'expired' });
           tx.set(db.collection('platform_audit_log').doc(), {
             eventType: 'subscription_lifecycle_transition',
             businessId,

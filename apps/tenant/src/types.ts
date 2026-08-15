@@ -76,7 +76,18 @@ export interface Business {
   // folded into isMemberOf()), so an Owner/Staff can still sign in and
   // see a clear suspended-state message; only business-scoped reads
   // and writes are denied.
-  suspended?: boolean;
+  // SuperAdmin V1 Operational Control Plane, Phase E (BDR-0010,
+  // POL-18-001) — Business Directory. Both fields optional/additive,
+  // same "missing = default" convention already proven for `suspended`
+  // (Phase C). Set exclusively by privileged server code (never
+  // client-writable, matching the same principle) — `lastActivityAt`
+  // via the new /api/business/touch-activity tenant-authenticated
+  // endpoint (server/activityTouch.ts), `subscriptionStatusCache` via
+  // the same already-server-side write sites that already set
+  // subscriptions/{businessId}.status (server/subscriptionEngine.ts,
+  // server/index.ts) — never a second source of truth for either.
+  lastActivityAt?: string;
+  subscriptionStatusCache?: string;
 }
 
 // Module #19 (Subscriptions), Phase 1 — Business State Model's technical
