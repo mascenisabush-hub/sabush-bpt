@@ -161,13 +161,36 @@ plan's own recommendation), verified green before Phase C starts.
 
 ## Phase C — Business Suspend/Reactivate
 
-**Implemented.** Gap 1 (business-suspension data model) was
-Product-Architect-confirmed prior to implementation — see the Gap
-Resolutions document's Gap 1 status line and the Phase C
+**Implemented and Rules-emulator-verified.** Gap 1 (business-suspension
+data model) was Product-Architect-confirmed prior to implementation —
+see the Gap Resolutions document's Gap 1 status line and the Phase C
 Pre-Implementation Verification's own gate check. Idempotency (§6 of
 that verification) was confirmed as Option B (reject repeated
 transitions with a controlled error, never a silent no-op). This plan
 was written against exactly that confirmed design.
+
+**Firestore Rules emulator result: PASS.** Run 2026-08-15, locally
+(`npm run test:rules:emulator`, real Firestore emulator via
+`firebase-tools`/JVM, not this repository's own sandboxes — those
+remain environment-blocked from `storage.googleapis.com`, unchanged).
+**104 tests, 27 suites, 0 failures, 0 cancelled, 0 skipped**, including
+the full `business suspension — Phase C` group (active-baseline
+regression, suspended-denial across `products`/`expenses`/`stockCounts`
+for Owner, `products` for Staff, `closings` for Manager; field-guard
+proof on both a suspended and an active business; unrelated-business
+non-interference; missing-field-defaults-to-active; `users/{uid}`
+self-access exception; `subscriptions/{businessId}` denial). This
+confirms `isMemberOf()`'s modification — the widest-blast-radius rules
+change in this repository's history — behaves exactly as the Phase C
+Pre-Implementation Verification's blast-radius analysis (§3 of that
+document) predicted, against a real rules engine, not merely a
+typecheck. **Phase C's `firestore.rules` change is verified
+production-ready** as of this result; the standing blocker recorded in
+the Phase C implementation commit (`3333fb5`) and its own final report
+is now resolved. Production deployment (`firebase deploy --only
+firestore:rules --project sabush-bpt`) remains a separate, not-yet-
+performed, explicit action — this result clears the verification
+prerequisite for that step, it does not itself deploy anything.
 
 ### Files
 - `apps/tenant/src/types.ts` — add `suspended?: boolean` to `Business`,
