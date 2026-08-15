@@ -107,6 +107,50 @@ export async function rejectPaymentAction(businessId: string, paymentId: string,
   })) as RejectPaymentResult;
 }
 
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase A (ADR-0006).
+// Internal Account Management. Thin wrappers, same shape as every
+// function above — no new fetch pattern introduced.
+// ------------------------------------------------------------------
+
+export type PlatformRole = 'support' | 'developer' | 'superadmin';
+
+export interface OperatorRow {
+  uid: string;
+  platformRole: PlatformRole;
+}
+
+export async function fetchOperators(): Promise<OperatorRow[]> {
+  const body = (await authedFetch('/operators')) as { operators: OperatorRow[] };
+  return body.operators;
+}
+
+export interface ProvisionOperatorResult {
+  outcome: 'provisioned';
+  uid: string;
+  platformRole: PlatformRole;
+  auditLogged?: false;
+}
+
+export async function provisionOperator(uid: string, platformRole: PlatformRole): Promise<ProvisionOperatorResult> {
+  return (await authedFetch('/operators', {
+    method: 'POST',
+    body: JSON.stringify({ uid, platformRole }),
+  })) as ProvisionOperatorResult;
+}
+
+export interface RevokeOperatorResult {
+  outcome: 'revoked';
+  uid: string;
+  auditLogged?: false;
+}
+
+export async function revokeOperator(uid: string): Promise<RevokeOperatorResult> {
+  return (await authedFetch(`/operators/${encodeURIComponent(uid)}/revoke`, {
+    method: 'POST',
+  })) as RevokeOperatorResult;
+}
+
 export interface AuditLogEntryRow {
   id: string;
   actorUid: string;

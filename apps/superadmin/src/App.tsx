@@ -6,6 +6,7 @@ import SignIn from './pages/SignIn';
 import PendingPaymentsQueue from './pages/PendingPaymentsQueue';
 import PaymentDetail from './pages/PaymentDetail';
 import AuditTrail from './pages/AuditTrail';
+import Operators from './pages/Operators';
 
 type AuthPhase =
   | { kind: 'loading' }
@@ -14,7 +15,7 @@ type AuthPhase =
   | { kind: 'not-superadmin'; platformRole: string }
   | { kind: 'superadmin' };
 
-type View = { name: 'queue' } | { name: 'detail'; businessId: string; paymentId: string } | { name: 'audit' };
+type View = { name: 'queue' } | { name: 'detail'; businessId: string; paymentId: string } | { name: 'audit' } | { name: 'operators' };
 
 // FR-1 / Architecture §9.1: "the shell reads platform_operators/{uid}.
 // platformRole once at load and builds the nav from it." A screen a
@@ -92,6 +93,7 @@ export default function App() {
           <strong>Sabush SuperAdmin</strong>
           <NavLink active={view.name === 'queue'} onClick={() => setView({ name: 'queue' })}>Fila de Pagamentos</NavLink>
           <NavLink active={view.name === 'audit'} onClick={() => setView({ name: 'audit' })}>Auditoria</NavLink>
+          <NavLink active={view.name === 'operators'} onClick={() => setView({ name: 'operators' })}>Operadores</NavLink>
         </div>
         <SignOutButton />
       </header>
@@ -103,6 +105,7 @@ export default function App() {
           <PaymentDetail businessId={view.businessId} paymentId={view.paymentId} onBack={() => setView({ name: 'queue' })} />
         )}
         {view.name === 'audit' && <AuditTrail />}
+        {view.name === 'operators' && <Operators />}
       </main>
     </div>
   );

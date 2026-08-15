@@ -31,6 +31,7 @@ import { createSubscriptionEngine } from './subscriptionEngine';
 import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
 import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperatorRequest } from './superadminAuth';
 import { writeAuditLogEntry } from './platformAuditLog';
+import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -1855,6 +1856,135 @@ expressApp.post(
       subscriptionStatus, // unchanged, by design (BR-2) — returned so the UI can show "no effect" explicitly rather than the operator having to infer it
       ...(auditLogged ? {} : { auditLogged: false }),
     });
+  }
+);
+
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase A (ADR-0006).
+// Internal Account Management. Every route below is a thin wrapper —
+// all business/authorization logic lives in server/operatorManagement.ts
+// (see that file's header for why), mirroring how the payments routes
+// above delegate to server/paymentConfirmation.ts. BR-2 (no
+// self-escalation) and BR-3 (last-SuperAdmin lockout, computed fresh at
+// request time) are enforced entirely inside that module, not here.
+// ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/operators
+// FR-A1. Body: { uid, platformRole }.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/operators',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const targetUid = String(req.body?.uid || '');
+    const platformRole = String(req.body?.platformRole || '');
+
+    let result;
+    try {
+      result = await provisionOperator(db, { targetUid, platformRole, requesterUid: operator.uid });
+    } catch (err) {
+      console.error('[superadmin/operators/provision] failed', { requesterUid: operator.uid, targetUid, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao provisionar o operador.' });
+      return;
+    }
+
+    if (result.outcome === 'invalid-argument' || result.outcome === 'self-target') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'operator.provisioned',
+        targetUid: result.uid,
+      });
+    } catch (err) {
+      console.error('[superadmin/operators/provision] audit log write failed after provisioning', { requesterUid: operator.uid, targetUid: result.uid, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    res.json({ outcome: 'provisioned', uid: result.uid, platformRole: result.platformRole, ...(auditLogged ? {} : { auditLogged: false }) });
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/operators/:uid/revoke
+// FR-A2.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/operators/:uid/revoke',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const targetUid = req.params.uid;
+
+    let result;
+    try {
+      result = await revokeOperator(db, { targetUid, requesterUid: operator.uid });
+    } catch (err) {
+      console.error('[superadmin/operators/revoke] failed', { requesterUid: operator.uid, targetUid, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao revogar o operador.' });
+      return;
+    }
+
+    if (result.outcome === 'self-target') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+    if (result.outcome === 'not-found') {
+      res.status(404).json({ error: 'not-found', message: result.message });
+      return;
+    }
+    if (result.outcome === 'last-superadmin') {
+      res.status(409).json({ error: 'last-superadmin', message: result.message });
+      return;
+    }
+
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'operator.revoked',
+        targetUid: result.uid,
+      });
+    } catch (err) {
+      console.error('[superadmin/operators/revoke] audit log write failed after revocation', { requesterUid: operator.uid, targetUid: result.uid, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    res.json({ outcome: 'revoked', uid: result.uid, ...(auditLogged ? {} : { auditLogged: false }) });
+  }
+);
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/operators
+// FR-A3. Read-only — no audit entry (same tier as
+// GET /api/superadmin/payments/pending, which also doesn't audit its
+// own read).
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/operators',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (_req: SuperAdminRequest, res: Response) => {
+    try {
+      const operators = await listOperators(db);
+      res.json({ operators });
+    } catch (err) {
+      console.error('[superadmin/operators] failed', { error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar os operadores.' });
+    }
   }
 );
 
