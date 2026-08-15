@@ -2,12 +2,16 @@ Business Domain Specification — Slice
 
 # SuperAdmin — Business Directory (Phase E)
 
-**Version 1.1** — updated with the five-item resolution log (§23),
-resolved prior to Rule 8, per explicit Product Architect direction.
-**Status:** Drafted, substantially Rule 8-ready (§24). One narrow,
-precisely-scoped empirical verification remains for Rule 8 itself to
-perform (§13) — not a further product decision blocking the
-assessment from beginning.
+**Version 1.2** — the two-field range query (§13, Resolution Log Item
+2) has been confirmed against a real Firestore emulator: 6/6 tests
+passed, including the critical combined-range shape and both the
+14-day and 45-day POL-18-001 boundaries. This was the sole remaining
+blocker on the prior Rule 8 Assessment's `ENVIRONMENT BLOCKED`
+verdict.
+**Status:** Drafted, Rule 8-ready (§24). No stored bucket field, no
+fallback field, no remaining technical uncertainty in the query design.
+A formal Rule 8 re-affirmation recording this result is the next
+governance step, prior to implementation authorization.
 **Governing decisions:** [BDR-0010](./BDR-0010-superadmin-business-directory.md)
 (Approved), [POL-18-001](./18-pol-001-operational-activity-state-model.md)
 (Approved), [ADR-0006](../adr/ADR-0006-superadmin-v1-operational-control-plane.md)
@@ -346,22 +350,19 @@ This is a clean design surface, not a legacy constraint. Per Phase D's
 own hard-won lesson: **index requirements must be enumerated from the
 final, settled query implementation, not guessed in advance.**
 
-**The one governing verification this specification requires before
-Rule 8 finalizes any index list:** confirm, against a real Firestore
-emulator, whether a query combining inequality/range filters on two
-different fields (`createdAt` and `lastActivityAt` together, as Item 2
-of §23's resolution log requires) actually executes. This project has
-zero existing precedent for this specific pattern — every prior
-range-query usage in this codebase is single-field. If it works, the
-Operational Activity filter needs no new stored field and the index
-list stays close to what §12's matrix already sketches. If it does not
-work, the fallback (a single static `businessAgeExpiresAt` field,
-computed once at creation, not a recomputed bucket) changes the index
-shape for that one filter only — everything else in this specification
-is unaffected either way. This is a **Rule 8-stage empirical
-verification task, not a product decision** — it belongs to whoever
-performs the Rule 8 Assessment, using the same real-emulator discipline
-this project has already proven necessary twice.
+**The governing verification this specification required before Rule 8
+could finalize any index list — CONFIRMED, real Firestore emulator,
+this session:** a query combining inequality/range filters on two
+different fields (`createdAt` and `lastActivityAt` together, Item 2 of
+§23's resolution log) genuinely executes. Six tests, including the
+exact combined-range shape and both the 14-day and 45-day boundary
+values from POL-18-001, all passed against a real engine — not
+analytical reasoning, not an in-memory fake. **The Operational
+Activity filter needs no new stored field.** No fallback
+(`businessAgeExpiresAt`) is required. The index list stays close to
+what §12's matrix already sketches — exact enumeration remains a Rule
+8 implementation-stage task, but the design uncertainty that
+previously blocked it is resolved.
 
 ## 14. Authorization
 
@@ -528,15 +529,15 @@ log, not silently folded into the sections above without a trace.
    proportionate, and consistent with the "monitoring surface, not
    operational subsystem" principle.
 2. **Whether Operational Activity needs a denormalized bucket field —
-   RESOLVED, with one remaining empirical verification.** No stored
-   bucket field — the preferred, lightest-weight design is a compound
-   range query directly on `createdAt` and `lastActivityAt`, computed
-   fresh at query time, with no background aging process required.
-   **This specific query shape (inequality filters on two different
-   fields in one query) has zero precedent anywhere in this codebase**
-   and must be verified against a real Firestore engine before Rule 8
-   finalizes the index list (§13) — the design direction is settled,
-   its Firestore feasibility is not yet proven.
+   RESOLVED, CONFIRMED by real Firestore emulator this session.** No
+   stored bucket field — the compound range query directly on
+   `createdAt` and `lastActivityAt`, computed fresh at query time, with
+   no background aging process required, genuinely works. Six tests
+   run against a real engine, including the exact combined-range shape
+   and both the 14-day and 45-day boundary values from POL-18-001, all
+   passed. This specific query shape had zero precedent anywhere in
+   this codebase before this verification — it is no longer merely a
+   preferred, unproven design; it is a proven one.
 3. **Whether search combines with filters — RESOLVED.** Search
    combines with Suspension and Subscription (equality) filters in one
    server-side query — a standard, already-precedented shape (Phase
@@ -576,17 +577,19 @@ log, not silently folded into the sections above without a trace.
 
 ## 24. Rule 8 Readiness
 
-**This specification is substantially Rule 8-ready.** Four of the five
-originally-open items are fully resolved with no remaining technical
-uncertainty. **One narrow, precisely-scoped empirical verification
-remains** (Item 2/5's two-field range-query question, §13) — this is a
-Rule 8-stage verification task belonging to whoever performs that
-assessment, not a further product or architecture decision blocking
-the assessment from beginning. Rule 8 may proceed on the understanding
-that its own process will confirm or redirect the Operational Activity
-query design as its first concrete verification step, exactly
-mirroring how Phase D's own Rule 8 Assessment resolved its index count
-only once real query code existed to derive it from.
+**This specification is Rule 8-ready — all five originally-open items
+are fully resolved, including the one empirical verification.** A Rule
+8 Assessment was performed against this specification (this session);
+its verdict was `ENVIRONMENT BLOCKED` pending exactly one real-Firestore
+verification (the two-field range query, §13). That verification has
+since been run against a real Firestore emulator, on a machine with
+unrestricted network access: **6/6 tests passed**, including the
+critical combined-range shape and both governing boundary values
+(14/45 days). No open technical or product uncertainty remains. A
+follow-up Rule 8 Assessment (or a documented re-affirmation of the
+prior one) should record this result formally before implementation
+begins — this specification alone does not constitute that
+re-affirmation.
 
 ---
 
@@ -594,11 +597,14 @@ only once real query code existed to derive it from.
 
 This specification does not implement code, modify runtime behavior,
 edit application logic, or change any `firestore.rules`,
-`firestore.indexes.json`, `src/`, `apps/`, `server/`, `tests/`, or
-`package.json` file. None were touched to produce it. It does not
-alter BDR-0010 or POL-18-001 — every threshold, state, and requirement
-those documents establish is cited, not restated with variation. The
-next controlled step is Product Architect review of this specification
-and explicit resolution of §23's open questions — only then does a
-Rule 8 Assessment proceed, per this repository's established
-governance sequence.
+`firestore.indexes.json`, `src/`, `apps/`, `server/`, or `package.json`
+file. A temporary, throwaway `tests/` file was created and used solely
+to obtain the real-Firestore verification recorded in §13/§23 above,
+then deleted — its creation and deletion are both recorded in this
+repository's commit history, and no trace of it remains in the working
+tree. This specification does not alter BDR-0010 or POL-18-001 — every
+threshold, state, and requirement those documents establish is cited,
+not restated with variation. The next controlled step is a formal Rule
+8 re-affirmation recording this session's verification result, followed
+by explicit implementation authorization — neither is granted by this
+specification update alone.
