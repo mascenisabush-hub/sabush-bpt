@@ -233,17 +233,50 @@ export async function reactivateBusiness(businessId: string, justification: stri
   })) as ReactivateBusinessResult;
 }
 
+// SuperAdmin V1 Operational Control Plane — Phase D (ADR-0006). Audit
+// Center Filtering. targetUid added to the response shape (Decision C
+// — operator-related events target a uid, not a business). Filters
+// mirror server/auditLogQuery.ts's AuditLogFilters exactly.
 export interface AuditLogEntryRow {
   id: string;
   actorUid: string;
   actorRole: string;
   actionType: string;
   targetBusinessId: string | null;
+  targetUid: string | null;
   justification: string | null;
   timestamp: string;
 }
 
-export async function fetchAuditLog(): Promise<AuditLogEntryRow[]> {
-  const body = (await authedFetch('/audit-log')) as { entries: AuditLogEntryRow[] };
+// Single source of truth for the SuperAdmin UI's action-type filter —
+// reuses the exact same closed list server/auditLogQuery.ts validates
+// against, so the two can never drift.
+export const KNOWN_ACTION_TYPES = [
+  'payment.confirmed',
+  'payment.rejected',
+  'operator.provisioned',
+  'operator.revoked',
+  'business.viewed',
+  'business.suspended',
+  'business.reactivated',
+] as const;
+
+export interface AuditLogFilters {
+  businessId?: string;
+  actorUid?: string;
+  actionType?: string;
+  from?: string;
+  to?: string;
+}
+
+export async function fetchAuditLog(filters: AuditLogFilters = {}): Promise<AuditLogEntryRow[]> {
+  const params = new URLSearchParams();
+  if (filters.businessId) params.set('businessId', filters.businessId);
+  if (filters.actorUid) params.set('actorUid', filters.actorUid);
+  if (filters.actionType) params.set('actionType', filters.actionType);
+  if (filters.from) params.set('from', filters.from);
+  if (filters.to) params.set('to', filters.to);
+  const qs = params.toString();
+  const body = (await authedFetch(`/audit-log${qs ? `?${qs}` : ''}`)) as { entries: AuditLogEntryRow[] };
   return body.entries;
 }

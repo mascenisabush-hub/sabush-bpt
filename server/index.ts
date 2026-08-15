@@ -34,6 +34,7 @@ import { writeAuditLogEntry } from './platformAuditLog';
 import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
 import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
 import { suspendBusiness, reactivateBusiness, type BusinessSuspensionDb } from './businessSuspension';
+import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -1593,6 +1594,7 @@ const requirePlatformOperator = createRequirePlatformOperator(db);
 const paymentConfirmationDb = db as unknown as PaymentConfirmationDb;
 const businessVisibilityDb = db as unknown as BusinessVisibilityDb;
 const businessSuspensionDb = db as unknown as BusinessSuspensionDb;
+const auditLogDb = db as unknown as AuditLogDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -2197,10 +2199,12 @@ expressApp.post(
 
 // ------------------------------------------------------------------
 // GET /api/superadmin/audit-log
-// FR-7 — V1 scope: payment.confirmed / payment.rejected only (this
-// slice's own two action types). Requires the platform_audit_log read
-// rule this slice adds (firestore.rules) — this route itself bypasses
-// client rules via the Admin SDK either way, same as every read above.
+// Phase D (ADR-0006) — extended with server-side filtering. FR-D1.
+// Thin wrapper — all query-building/validation logic lives in
+// server/auditLogQuery.ts. No firestore.rules change (Admin-SDK-
+// mediated, same as every other SuperAdmin read). No actionType
+// restriction by default (Decision B) — the prior hardcoded
+// payment-only allowlist is removed, not merely made optional.
 // ------------------------------------------------------------------
 expressApp.get(
   '/api/superadmin/audit-log',
@@ -2209,27 +2213,20 @@ expressApp.get(
   requireSuperAdmin,
   async (req: SuperAdminRequest, res: Response) => {
     try {
-      const snap = await db
-        .collection('platform_audit_log')
-        .where('actionType', 'in', ['payment.confirmed', 'payment.rejected'])
-        .orderBy('timestamp', 'desc')
-        .limit(100)
-        .get();
-
-      const entries = snap.docs.map((d) => {
-        const data = d.data();
-        return {
-          id: d.id,
-          actorUid: data.actorUid,
-          actorRole: data.actorRole,
-          actionType: data.actionType,
-          targetBusinessId: data.targetBusinessId ?? null,
-          justification: data.justification ?? null,
-          timestamp: data.timestamp,
-        };
+      const result = await queryAuditLog(auditLogDb, {
+        businessId: typeof req.query.businessId === 'string' ? req.query.businessId : undefined,
+        actorUid: typeof req.query.actorUid === 'string' ? req.query.actorUid : undefined,
+        actionType: typeof req.query.actionType === 'string' ? req.query.actionType : undefined,
+        from: typeof req.query.from === 'string' ? req.query.from : undefined,
+        to: typeof req.query.to === 'string' ? req.query.to : undefined,
       });
 
-      res.json({ entries });
+      if (result.outcome === 'invalid') {
+        res.status(400).json({ error: 'invalid-argument', message: result.message });
+        return;
+      }
+
+      res.json({ entries: result.entries });
     } catch (err) {
       console.error('[superadmin/audit-log] failed', { error: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar o registo de auditoria.' });
