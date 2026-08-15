@@ -22,7 +22,6 @@
     "test:rules": "tsx --test tests/firestore-rules.test.ts",
     "test:open-batch-concurrency": "tsx --test tests/open-batch-concurrency.test.ts",
     "test:audit-log-firestore-query": "tsx --test tests/superadmin-audit-log-firestore-query.test.ts",
-    "test:rule8-directory-query-gate": "tsx --test tests/TEMP-rule8-directory-query-gate.test.ts",
     "test:calculations": "tsx --test tests/calculations.test.ts",
     "test:expected-stock-value": "tsx --test tests/expected-stock-value.test.ts",
     "test:initial-stock-price-change": "tsx --test tests/initial-stock-price-change.test.ts",
@@ -54,7 +53,6 @@
     "test:rules:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rules\"",
     "test:open-batch-concurrency:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:open-batch-concurrency\"",
     "test:audit-log-firestore-query:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:audit-log-firestore-query\"",
-    "test:rule8-directory-query-gate:emulator": "firebase emulators:exec --only firestore --project sabush-bpt-rules-test \"npm run test:rule8-directory-query-gate\"",
     "deploy:firestore:rules": "node scripts/require-firebase-project-id.js firestore:rules",
     "deploy:firestore:indexes": "node scripts/require-firebase-project-id.js firestore:indexes"
   },
