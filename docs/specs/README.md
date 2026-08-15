@@ -103,7 +103,7 @@ intelligence), then build the platform capabilities around that.
 |---|---|---|
 | 16 | [Staff & Roles](./16-staff-roles.md) | ✅ Approved |
 | 17 | [Owner Portfolio](./17-owner-portfolio.md) | ✅ Approved (docs & business rules; implementation not yet authorized) |
-| 18 | [SuperAdmin](./18-superadmin.md) | ✅ Accepted (documentation & business rules; implementation not authorized) — **except** the narrow [Payment Operations V1 Launch Slice](./18-19-payment-operations-slice.md), separately authorized ([ADR-0005](../adr/ADR-0005-superadmin-payment-operations-boundary.md)) and implemented; see that BDS and `HANDOFF.md`'s "Right now" section for status. The rest of Module #18 (Tenant Management, §9.4 overrides, Feature Flags, Platform Analytics, platform Notifications, Impersonation, System Health, §9.12 Internal Account Management UI) remains not authorized. |
+| 18 | [SuperAdmin](./18-superadmin.md) | ✅ Accepted (documentation & business rules; implementation not authorized) — **except** two separately-authorized slices, both implemented and deployed: the [Payment Operations V1 Launch Slice](./18-19-payment-operations-slice.md) ([ADR-0005](../adr/ADR-0005-superadmin-payment-operations-boundary.md)) and the [SuperAdmin V1 Operational Control Plane](./18-superadmin-v1-operational-control-plane-slice.md) ([ADR-0006](../adr/ADR-0006-superadmin-v1-operational-control-plane.md)) — four phases (Internal Account Management, Business Visibility, Business Suspend/Reactivate, Audit Center Filtering), all implemented, tested, `firestore.rules`/`firestore.indexes.json` deployed and verified against a real Firestore engine, and production-verified in a real browser against real data. See `HANDOFF.md`'s "Right now" section for the exact commit trail. The rest of Module #18 (Tenant Management, §9.4 subscription overrides, Feature Flags, Platform Analytics, platform Notifications, Impersonation, System Health, the full §9.12 Internal Account Management UI beyond what the Operational Control Plane's narrower slice already covers) remains not authorized. |
 | 19 | [Subscriptions](./19-subscriptions.md) | ✅ Accepted; Phase 1 (Foundations) and Phase 2 (Trial Engine) implemented & closed (see `19-milestone-review-phases-1-2.md`); POL-19-010/011/013 recorded; V1 Subscription Lifecycle Engine implemented & tested (`server/subscriptionEngine.ts`, 27 tests) per `19-v1-subscription-lifecycle-engine-implementation-authorization.md`; V1 Manual Payment Bridge implemented (`server/paymentConfirmation.ts`, `server/scripts/confirmPayment.ts`, 11 tests) — a temporary, processor-independent confirmation path; PaySuite/PayTED automated processor integration remains deferred pending vendor capability verification (`19-v1-payment-adapter-contract-and-test-matrix.md`) |
 | 20 | [Notifications](./20-notifications.md) | ✅ Accepted; Phase 1 (Foundations), Phase 2 (Privileged-Server Creation Path), and Phase 3 (Background Worker Scheduled Triggers) all implemented & closed (`20-phase3-closeout.md`, commit `32bafbf`); Phase 4 (Tenant User Experience) not yet authorized |
 
@@ -267,6 +267,14 @@ intelligence), then build the platform capabilities around that.
 > the BDS's own "Product Architect Acceptance" section. Implementation
 > is not authorized by this Acceptance. No `src/`, `server/`,
 > `firestore.rules`, collection, schema, or migration has been touched.
+
+> **Addendum, post-documentation-acceptance:** two specific slices of
+> Module #18 have since been separately authorized and implemented —
+> see the table row above for the exact scope of each. This
+> documentation-acceptance note describes the state at the time
+> Module #18's *specification* was accepted; it does not describe the
+> module's current implementation status, which is tracked in the
+> table row above and in `HANDOFF.md`.
 
 > **Note on build order (#18/#19/#20):** the discrepancy flagged
 > previously — a prior HANDOFF.md version stating `#17 → #18 → #19 →

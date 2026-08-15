@@ -12,100 +12,101 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** SuperAdmin Payment Operations V1 Launch Slice (ADR-0005 /
-`docs/specs/18-19-payment-operations-slice.md`) — **IMPLEMENTED across
-4 checkpoint commits, full typecheck/test/build verification passing.
-NOT YET production-deployed. Nothing mid-flight; working tree clean.**
+**Status:** SuperAdmin V1 — both authorized slices are implemented, tested,
+deployed, and production-verified. **Nothing mid-flight; working tree
+clean.**
 
-**What this is:** a narrow, authorized vertical slice of Module #18
-(SuperAdmin) — NOT the full module. Replaces the CLI-only
-`server/scripts/confirmPayment.ts` as the primary way a real Sabush
-operator confirms/rejects a customer's manually-submitted payment,
-without touching the existing, unmodified Module #19 payment/
-subscription engine.
+**Slice 1 — Payment Operations V1 Launch Slice** (ADR-0005,
+`docs/specs/18-19-payment-operations-slice.md`). Implemented across
+checkpoints `7c11ad0`..`15154c8`. Replaces the CLI-only
+`server/scripts/confirmPayment.ts` as the primary way an operator
+confirms/rejects a customer's manually-submitted payment, without
+touching the existing, unmodified Module #19 payment/subscription
+engine.
 
-**Checkpoints (in order, `7c11ad0`..`15154c8`):**
-1. `7c11ad0` — ADR-0005, BDS, Rule 8 Assessment (docs only).
-2. `daabdc2` — Migrated `src/`, `index.html`, `vite.config.ts`,
-   `tsconfig.json` to `apps/tenant/` (git mv, history preserved).
-   `server/` and `tests/` stayed at the repo root (shared
-   infrastructure per Architecture §4.13/9.1, not tenant-owned). Build
-   output paths (`dist/`, `server.js`) unchanged — Railway's existing
-   deploy is unaffected.
-3. `c00d784` — Extracted `packages/shared-types` (Payment/Subscription/
-   PlatformOperator/PlatformAuditLogEntry shapes); `apps/tenant/src/types.ts`
-   now re-exports rather than redefines.
-4. `2cc76b9` — `server/superadminAuth.ts` (platform-operator
-   authorization, re-read from Firestore every request),
-   `server/platformAuditLog.ts` (the one audit-write primitive), five
-   `/api/superadmin/payments/*` + `/audit-log` routes in
-   `server/index.ts` — every one calling the **unmodified**
-   `confirmPayment()`/`rejectPayment()`, never touching subscription
-   state directly. `firestore.rules`: new `platform_operators` block,
-   `platform_audit_log` read narrowed from `false` to verified-operator-
-   only. Two new composite indexes. New rules tests + a new server-side
-   test file (12 tests, all passing).
-5. `15154c8` — `apps/superadmin`, a physically separate Vite app
-   (sign-in, pending queue, payment detail with guarded confirm/reject,
-   audit trail). `server/scripts/provisionPlatformOperator.ts` (one-time
-   Admin-SDK provisioning — §9.12's real UI is out of scope for this
-   slice, a named gap not silently assumed away).
+**Slice 2 — SuperAdmin V1 Operational Control Plane** (ADR-0006,
+`docs/specs/18-superadmin-v1-operational-control-plane-slice.md`). Four
+phases, all implemented and deployed:
 
-**Verified this session, honestly:**
-- `tsc --noEmit` clean across all three independent programs
-  (`apps/tenant`, root/`server`+`tests`, `apps/superadmin`).
-- `npm run test:all` — 22 suites, 0 failures (was 21 pre-slice; added
-  `tests/superadmin-payment-operations.test.ts`).
-- `npm run build:all` (fresh, `rm -rf dist dist-superadmin server.js`
-  first) — all three artifacts build clean.
-- **Bundle-leak check run against the actual built output**, not just
-  source structure: `dist/` contains zero SuperAdmin-specific strings;
-  `dist-superadmin/` contains zero tenant-app-specific strings.
-- `git diff --check` clean; secret-pattern scan on every changed file
-  clean.
-- Scope audit: `subscriptionEngine.ts` — 0 lines changed all session.
-  `paymentConfirmation.ts` — exactly one line changed, an import path,
-  zero logic. `AppContext.tsx` — byte-identical to pre-migration,
-  confirmed by direct diff. No new direct subscription-document write
-  anywhere in the new code. No webhook route added. No feature-flags/
-  analytics/CRM/unrelated-module file touched.
-- `firestore.rules`' emulator-backed test (`npm run test:rules` /
-  `test:rules:emulator`) is **CONFIRMED ENVIRONMENT-BLOCKED** in this
-  sandbox — `fetch failed` connecting to the Firestore emulator, the
-  same standing limitation prior sessions already documented (network
-  egress here excludes Google's emulator infrastructure). **Not claimed
-  as passing.** GitHub Actions CI (`.github/workflows/ci.yml`) has the
-  Java 21 + `firebase-tools` step that actually runs this — that has
-  not executed against this branch yet as of this commit.
+1. **Internal Account Management** (`8a8c5ce`) — provision/revoke
+   `platform_operators` records in-app; self-escalation and
+   last-SuperAdmin lockout enforced server-side; `server/operatorManagement.ts`.
+2. **Business Visibility** (`1d8442e`) — audited, justification-gated
+   business lookup; `server/businessVisibility.ts`; owner email
+   exposed only in single-business detail, never in search results.
+3. **Business Suspend/Reactivate** (`3333fb5`, real-defect fix
+   `65acf8a`→`b40d685`, Rules-emulator PASS recorded `0a35132`) —
+   `businesses/{businessId}.suspended`, `isBusinessSuspended()` folded
+   into `isMemberOf()`, `server/businessSuspension.ts`. **A real
+   production defect was found and fixed here**: the first version of
+   `isBusinessSuspended()` threw on a missing business document
+   (`get()` fails outright on a nonexistent path — not merely returns
+   null); the corrected version guards with `exists()` first, matching
+   `hasSubscription()`'s already-proven pattern. Confirmed via a real
+   Firestore emulator run: 119 tests, 28 suites, 0 failures.
+4. **Audit Center Filtering** (`0e774ff`) — `server/auditLogQuery.ts`,
+   filterable by business/actor/action-type/date-range, all
+   combinable; 7 new composite indexes in `firestore.indexes.json`.
+   Query-verified against a real Firestore engine: 14/14 passing
+   (`tests/superadmin-audit-log-firestore-query.test.ts`, commit
+   `b3a78ed`).
 
-**Known, flagged gaps (not silently routed around):**
-- `businessCode` (named in Architecture §8.14 / `docs/specs/17-owner-portfolio.md`)
-  does not exist anywhere in the actual codebase — verified by direct
-  search. The new SuperAdmin UI/routes use business `name` + Firestore
-  `businessId` instead; `businessCode` itself was not invented.
-- `apps/superadmin`'s build output (`dist-superadmin/`) has no
-  deployment target wired in this repository — Railway currently hosts
-  one service (`apps/tenant` + the shared server). Provisioning a
-  second hosting target (a second Railway service, or Firebase
-  Hosting against the same project) is an infrastructure/ops step this
-  sandbox cannot perform (no Railway/Firebase CLI network access) and
-  is NOT done. Until that exists, `apps/superadmin` is built and
-  correct but not reachable by a real operator in production.
-- `server/scripts/confirmPayment.ts` (the CLI bridge) is deliberately
-  left in place as a documented break-glass fallback, per the BDS's own
-  §11 — not retired by this slice.
-- Firestore emulator verification of the new/changed rules (see above)
-  still needs to run in CI (or any environment with emulator access)
-  before this is production-safe to deploy.
+**Production deployment — completed and independently verified, not
+assumed:**
+- `firestore.rules` deployed to `sabush-bpt`, confirmed live via
+  Firebase Console (the corrected `isBusinessSuspended()` visible in
+  the published ruleset).
+- `firestore.indexes.json`'s 7 new `platform_audit_log` composite
+  indexes deployed; all 7 confirmed `Enabled` in Console (not just
+  "deploy command succeeded" — build status checked separately, since
+  a successful deploy does not mean immediately queryable).
+- Railway (`sabush-bpt-superadmin` service) confirmed running this
+  exact code — verified via the deployed commit's message matching
+  `b3a78ed` exactly in Railway's own deployment metadata, not inferred
+  from GitHub sync status.
+- **Real production browser verification performed** (not source-code
+  inspection, not automated tests): suspended a real test business via
+  SuperAdmin → confirmed the tenant-side suspension banner and blocked
+  writes ("Missing or insufficient permissions") → confirmed the
+  `business.suspended` audit entry → reactivated → confirmed recovery
+  (a write succeeded immediately after) → confirmed the
+  `business.reactivated` audit entry. No stop-condition failures.
 
-**Next actionable items, in order:** (1) get CI green on this branch —
-specifically `test:rules:emulator`, the one gate this sandbox could not
-run; (2) provision the first real `platform_operators/{uid}` record via
-`server/scripts/provisionPlatformOperator.ts` against production
-Firestore; (3) decide and provision `apps/superadmin`'s actual
-deployment target; (4) one controlled end-to-end test against a real
-pending payment before relying on this for a real pilot-customer
-payment.
+**Known, non-blocking open items:**
+- `docs/specs/README.md` and this file were both stale on SuperAdmin's
+  actual status until this update — corrected now; watch for the same
+  drift recurring after future phases.
+- A same-tab business-switch UX observation surfaced during production
+  testing (dashboard figures didn't refresh without a hard reload when
+  switching businesses via the in-app switcher) — code review of the
+  reactive chain (`switchShop()` → live `users/{uid}` listener →
+  `activeBusinessId`-keyed effect) found nothing wrong on paper;
+  unresolved, needs its own dedicated investigation, not blocking.
+- `npm audit`: 14 vulnerabilities (11 moderate, 3 high) in `xlsx`
+  (SheetJS), no upstream fix available. Confirmed via code inspection:
+  used only to *generate* Excel exports from trusted internal data,
+  never to *parse* untrusted input — both known CVEs are parse-time
+  vulnerabilities, so real exploitability is low, but tracked, not
+  dismissed.
+- **Phase E (proposed, not authorized): Business Directory.** Design
+  discussion only so far — four-dimension model (Operational
+  Activity / Subscription State / Suspension / Plan, each independent,
+  not one overloaded status field), and a real technical constraint
+  already surfaced: making "Operational Activity" server-side
+  filterable/sortable requires denormalizing a `lastActivityAt` field
+  onto `businesses/{businessId}`, and the naive approach (write it
+  from the existing client-side `logTimelineEvent()`) is confirmed
+  broken by two findings — Staff have no write path to that document
+  at all today (Owner-only `firestore.rules`), and the client-supplied
+  `createdAt` timestamp is an untrusted local device clock, not
+  server-authoritative. Two viable mechanisms identified (a narrow
+  additive `firestore.rules` clause with monotonicity checked at the
+  rules layer, or a new small server-side "touch activity" endpoint);
+  no decision made yet. Nothing coded. Five product decisions
+  (operational states, thresholds, activity source mechanism,
+  directory fields, search/filter/sort behavior) remain open, to be
+  settled via a BDR/spec sequence before any Phase E implementation
+  begins.
 
 ## Prior status — Fix #8 (Production Observability) — superseded above, kept for continuity
 
