@@ -191,6 +191,7 @@ export interface BusinessDetailResponse {
   staff: BusinessDetailStaffRow[];
   subscriptionStatus: string | null;
   recentPayments: BusinessDetailPaymentRow[];
+  suspended: boolean;
   auditLogged?: false;
 }
 
@@ -198,6 +199,38 @@ export async function fetchBusinessDetail(businessId: string, justification: str
   return (await authedFetch(
     `/business/${encodeURIComponent(businessId)}?justification=${encodeURIComponent(justification)}`
   )) as BusinessDetailResponse;
+}
+
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase C (ADR-0006, Gap 1
+// CONFIRMED). Business Suspend/Reactivate. Thin wrappers, same shape
+// as every function above — no new fetch pattern introduced.
+// ------------------------------------------------------------------
+
+export interface SuspendBusinessResult {
+  outcome: 'suspended';
+  businessId: string;
+  auditLogged?: false;
+}
+
+export async function suspendBusiness(businessId: string, justification: string): Promise<SuspendBusinessResult> {
+  return (await authedFetch(`/business/${encodeURIComponent(businessId)}/suspend`, {
+    method: 'POST',
+    body: JSON.stringify({ justification }),
+  })) as SuspendBusinessResult;
+}
+
+export interface ReactivateBusinessResult {
+  outcome: 'reactivated';
+  businessId: string;
+  auditLogged?: false;
+}
+
+export async function reactivateBusiness(businessId: string, justification: string): Promise<ReactivateBusinessResult> {
+  return (await authedFetch(`/business/${encodeURIComponent(businessId)}/reactivate`, {
+    method: 'POST',
+    body: JSON.stringify({ justification }),
+  })) as ReactivateBusinessResult;
 }
 
 export interface AuditLogEntryRow {

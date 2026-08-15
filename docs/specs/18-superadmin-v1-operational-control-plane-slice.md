@@ -372,15 +372,17 @@ target.*
 **Authorized to proceed through governance, this session** (see
 [ADR-0006](../adr/ADR-0006-superadmin-v1-operational-control-plane.md) for
 the full architecture decision): the four-phase scope in ADR-0006 §3
-applies without modification. The Architecture Gap Resolutions
-(business-suspension model, Business Visibility read model, owner-email
-scope) are recorded as **recommended**, pending explicit confirmation,
-and this BDS's Functional Requirements are written against those
-recommendations as the working assumption for the Rule 8 Assessment and
-Implementation Plan that follow.
+applies without modification. **Update:** the Architecture Gap
+Resolutions (business-suspension model — Gap 1, Business Visibility
+read model — Gap 2, owner-email scope — Gap 3) were all subsequently
+**Product-Architect-confirmed** across the sessions that implemented
+Phases A, B, and C — see
+[the Gap Resolutions document](../engineering/18-superadmin-v1-architecture-gap-resolutions.md)
+for each gap's individual confirmation record. This BDS's Functional
+Requirements, written against those designs as a working assumption,
+are now confirmed final, not merely recommended.
 
-**Status:** Drafted. Per ADR-0006 §16 and the governing session's
-explicit stop condition, reaching this point does **not** authorize
-Code — a separate, explicit implementation authorization is required
-after this governance package (ADR-0006, this BDS, the Gap Resolutions,
-the Rule 8 Assessment, and the Implementation Plan) is reviewed in full.
+**Status:** Phases A (Internal Account Management), B (Business
+Visibility), and C (Business Suspend/Reactivate) implemented — see
+their respective commits and verification reports. Phase D (Audit
+Center) remains not yet implemented.

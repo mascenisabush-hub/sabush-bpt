@@ -1331,6 +1331,172 @@ describe('suspended member', () => {
 });
 
 // ---------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase C (ADR-0006, Gap 1,
+// Product-Architect-confirmed). isBusinessSuspended() folded into
+// isMemberOf() — the widest-reaching rules change in this file's
+// history (Rule 8 Assessment §6/§13, Pre-Implementation Verification
+// §2). Representative collections chosen per that verification's own
+// §3/§13 analysis: `products` (any-member-create tier), `expenses`
+// (subscription-gated create tier), `stockCounts` (owner-only-write
+// tier) — together spanning every distinct isMemberOf/isOwnerOf
+// consumer shape already proven elsewhere in this file, not an
+// exhaustive per-collection sweep (deliberately, per that
+// verification's own instruction not to duplicate tests for every
+// collection sharing one helper).
+// ---------------------------------------------------------------------
+describe('business suspension — Phase C', () => {
+  it('Active Owner performs a normal write (regression baseline)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'products', 'p-active'), { id: 'p-active', name: 'Widget' }));
+  });
+
+  it('Active Staff performs a normal write (regression baseline)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p-active-2'), { id: 'p-active-2', name: 'Widget 2' }));
+  });
+
+  it('Suspended Owner cannot write to products', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'products', 'p-susp'), { id: 'p-susp', name: 'Widget' }));
+  });
+
+  it('Suspended Owner cannot write to expenses', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'e-susp'), {
+        id: 'e-susp', date: '2026-07-15', description: 'Rent', amount: 100, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('Suspended Owner cannot write to stockCounts', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-susp'), { id: 'sc-susp', countedAt: new Date().toISOString() }));
+  });
+
+  it('Suspended Staff cannot write to a representative business-scoped collection', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'products', 'p-susp-staff'), { id: 'p-susp-staff', name: 'Widget' }));
+  });
+
+  it('Suspended Manager does not retain business-scoped access through manager privileges', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const managerDb = ctxFor(MANAGER_WITH_CLOSINGS_UID).firestore();
+    await assertFails(
+      setDoc(doc(managerDb, 'businesses', BIZ, 'closings', 'c-susp'), {
+        id: 'c-susp', period: '2026-07', status: 'closed', endDate: '2026-07-31',
+      })
+    );
+  });
+
+  it('Owner cannot set suspended=true on the business document directly', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ), { suspended: true }));
+  });
+
+  it('Owner cannot set suspended=false on an already-suspended business document directly', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    // Suspended, so isOwnerOf(businessId) itself is already false here —
+    // this proves the field is unreachable for a second, independent
+    // reason (both the suspension gate AND the field-guard), not just
+    // one. A more targeted proof that the FIELD GUARD ITSELF (not just
+    // suspension) blocks this exists in the next test, on an ACTIVE
+    // business, where isOwnerOf(businessId) is otherwise true.
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ), { suspended: false }));
+  });
+
+  it('Owner cannot flip suspended on an ACTIVE business either — proves the field-guard invariant itself, independent of suspension state', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    // isOwnerOf(businessId) is true here (active business) — so a
+    // failure below is attributable ONLY to the field-guard clause,
+    // not to isBusinessSuspended() also being in play.
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ), { suspended: true }));
+    // A normal, permitted field update (never touching suspended)
+    // still succeeds on the same active, non-suspended document —
+    // confirms the guard doesn't collaterally block ordinary writes.
+    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ), { currencySymbol: 'USD' }));
+  });
+
+  it('Staff has no write path to the business document at all, suspended or not (regression, unrelated to Phase C)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(updateDoc(doc(staffDb, 'businesses', BIZ), { suspended: true }));
+    await assertFails(updateDoc(doc(staffDb, 'businesses', BIZ), { currencySymbol: 'EUR' }));
+  });
+
+  it('A non-suspended (unrelated) business remains completely unaffected by another business being suspended', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+      await setDoc(doc(db, 'businesses', OTHER_BIZ), { id: OTHER_BIZ, ownerUid: OTHER_OWNER_UID, name: 'Biz Two' });
+    });
+    const otherOwnerDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertSucceeds(
+      setDoc(doc(otherOwnerDb, 'businesses', OTHER_BIZ, 'products', 'p-other'), { id: 'p-other', name: 'Unaffected Widget' })
+    );
+  });
+
+  it('A missing suspended field behaves identically to suspended=false (default-value proof)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      // Deliberately no `suspended` key at all — not even `suspended: false`.
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'products', 'p-default'), { id: 'p-default', name: 'Widget' }));
+  });
+
+  it('users/{uid} self-read/self-update remains available for a suspended business\'s Owner — an existing rule boundary, not part of Phase C\'s business-scoped lockout', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'users', OWNER_UID)));
+    await assertSucceeds(updateDoc(doc(ownerDb, 'users', OWNER_UID), { name: 'Updated Name' }));
+  });
+
+  it('subscriptions/{businessId} read is denied for a suspended business — a separate, top-level collection gated the same way (also folded through isMemberOf/isOwnerOf), explicitly verified since it is not business-nested', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One', suspended: true });
+      await setDoc(doc(db, 'subscriptions', BIZ), { businessId: BIZ, status: 'active' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(getDoc(doc(ownerDb, 'subscriptions', BIZ)));
+  });
+});
+
+// ---------------------------------------------------------------------
 // Query-based leakage — a collection-group query spans every business's
 // subcollection of the same name; confirm the rules engine refuses an
 // out-of-tenant caller's broad query rather than silently filtering it.

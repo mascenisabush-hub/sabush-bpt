@@ -31,6 +31,7 @@ interface FakeBusiness {
   currencySymbol?: string;
   createdAt?: string;
   ownerUid?: string;
+  suspended?: boolean;
 }
 interface FakeUser {
   name?: string;
@@ -235,9 +236,9 @@ describe('fetchBusinessDetail', () => {
     assert.equal(result.outcome, 'not-found');
   });
 
-  it('assembles exactly the curated field set — BR-5, structural allowlist proof', async () => {
+  it('assembles exactly the curated field set — BR-5, structural allowlist proof (extended, Phase C — ADR-0006, Gap 1: `suspended` is an explicitly-authorized single-field addition, not scope creep — see BusinessDoc.suspended\'s own comment in server/businessVisibility.ts)', async () => {
     const db = makeFakeDb({
-      businesses: { 'biz-1': { name: 'Loja Central', category: 'retail', currencySymbol: 'MZN', createdAt: '2026-01-01T00:00:00.000Z', ownerUid: 'owner-1' } },
+      businesses: { 'biz-1': { name: 'Loja Central', category: 'retail', currencySymbol: 'MZN', createdAt: '2026-01-01T00:00:00.000Z', ownerUid: 'owner-1', suspended: false } },
       users: { 'owner-1': { name: 'Dono Teste', email: 'owner@example.com', createdAt: '2025-01-01T00:00:00.000Z' } },
       staff: { 'biz-1': { 'staff-1': { name: 'Funcionário A', suspended: false } } },
       payments: { 'biz-1': { 'pmt-1': { amount: 699, currency: 'MZN', method: 'mpesa', reference: 'TXN-1', submittedAt: '2026-02-01T00:00:00.000Z', status: 'confirmed' } } },
@@ -248,8 +249,9 @@ describe('fetchBusinessDetail', () => {
 
     assert.deepEqual(
       Object.keys(result.detail).sort(),
-      ['businessId', 'category', 'createdAt', 'currencySymbol', 'name', 'owner', 'recentPayments', 'staff', 'subscriptionStatus'].sort()
+      ['businessId', 'category', 'createdAt', 'currencySymbol', 'name', 'owner', 'recentPayments', 'staff', 'subscriptionStatus', 'suspended'].sort()
     );
+    assert.equal(result.detail.suspended, false);
     assert.deepEqual(Object.keys(result.detail.owner!).sort(), ['createdAt', 'email', 'name']);
     assert.deepEqual(Object.keys(result.detail.staff[0]).sort(), ['name', 'suspended']);
     assert.deepEqual(

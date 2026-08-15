@@ -161,11 +161,13 @@ plan's own recommendation), verified green before Phase C starts.
 
 ## Phase C — Business Suspend/Reactivate
 
-**Fully blocked** on explicit Product Architect confirmation of Gap 1
-(business-suspension data model) — restated from the Rule 8 Assessment
-§17. This plan is written against Gap 1's recommended design; the
-coding step must not begin until that recommendation is confirmed, not
-merely proposed.
+**Implemented.** Gap 1 (business-suspension data model) was
+Product-Architect-confirmed prior to implementation — see the Gap
+Resolutions document's Gap 1 status line and the Phase C
+Pre-Implementation Verification's own gate check. Idempotency (§6 of
+that verification) was confirmed as Option B (reject repeated
+transitions with a controlled error, never a silent no-op). This plan
+was written against exactly that confirmed design.
 
 ### Files
 - `apps/tenant/src/types.ts` — add `suspended?: boolean` to `Business`,

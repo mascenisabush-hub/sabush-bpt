@@ -63,6 +63,20 @@ export interface Business {
   contact?: string;
   location?: string;
   email?: string;
+  // SuperAdmin V1 Operational Control Plane, Phase C (ADR-0006, Gap 1 —
+  // Product-Architect-confirmed). Set exclusively by the privileged
+  // server (server/index.ts's business-suspension routes, via the
+  // Admin SDK — firestore.rules blocks any client-side write to this
+  // field, even by the business's own Owner). Missing/absent means
+  // NOT suspended — same "optional field, false default" convention
+  // already used by UserProfile.suspended (BDS #16), applied one level
+  // up from staff to the whole business. Unlike UserProfile.suspended,
+  // this never disables a Firebase Auth account — it is enforced
+  // purely at the Firestore Rules layer (isBusinessSuspended(),
+  // folded into isMemberOf()), so an Owner/Staff can still sign in and
+  // see a clear suspended-state message; only business-scoped reads
+  // and writes are denied.
+  suspended?: boolean;
 }
 
 // Module #19 (Subscriptions), Phase 1 — Business State Model's technical

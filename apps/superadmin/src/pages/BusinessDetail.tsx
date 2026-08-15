@@ -1,5 +1,11 @@
 import { useState } from 'react';
-import { fetchBusinessDetail, type BusinessDetailResponse, SuperAdminApiError } from '../lib/superadminApi';
+import {
+  fetchBusinessDetail,
+  suspendBusiness,
+  reactivateBusiness,
+  type BusinessDetailResponse,
+  SuperAdminApiError,
+} from '../lib/superadminApi';
 
 interface Props {
   businessId: string;
@@ -11,11 +17,23 @@ interface Props {
 // kind, anywhere — not disabled, simply never rendered. BR-7:
 // justification is required before the detail loads at all — the
 // input gates the fetch itself, not a passive field alongside it.
+// SuperAdmin V1 Operational Control Plane — Phase C (ADR-0006, Gap 1
+// CONFIRMED) adds the suspend/reactivate actions below. This page
+// remains read-only otherwise — no other field is ever writable from
+// here, no subscription/payment control, no deletion.
+type PendingAction = null | 'suspend' | 'reactivate';
+
 export default function BusinessDetail({ businessId, onBack }: Props) {
   const [justification, setJustification] = useState('');
   const [data, setData] = useState<BusinessDetailResponse | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
+
+  const [pendingAction, setPendingAction] = useState<PendingAction>(null);
+  const [actionJustification, setActionJustification] = useState('');
+  const [actionBusy, setActionBusy] = useState(false);
+  const [actionError, setActionError] = useState<string | null>(null);
+  const [actionResult, setActionResult] = useState<string | null>(null);
 
   async function handleLoad() {
     if (!justification.trim()) {
@@ -30,6 +48,54 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
       setError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao carregar o negócio.');
     } finally {
       setBusy(false);
+    }
+  }
+
+  async function handleSuspend() {
+    if (!actionJustification.trim()) {
+      setActionError('É obrigatório indicar uma justificação.');
+      return;
+    }
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      await suspendBusiness(businessId, actionJustification.trim());
+      setActionResult('Negócio suspenso com sucesso.');
+      setPendingAction(null);
+      setActionJustification('');
+      await fetchBusinessDetail(businessId, justification.trim()).then(setData);
+    } catch (err) {
+      if (err instanceof SuperAdminApiError && err.status === 409) {
+        setActionError('Este negócio já está suspenso.');
+      } else {
+        setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao suspender o negócio.');
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  async function handleReactivate() {
+    if (!actionJustification.trim()) {
+      setActionError('É obrigatório indicar uma justificação.');
+      return;
+    }
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      await reactivateBusiness(businessId, actionJustification.trim());
+      setActionResult('Negócio reativado com sucesso.');
+      setPendingAction(null);
+      setActionJustification('');
+      await fetchBusinessDetail(businessId, justification.trim()).then(setData);
+    } catch (err) {
+      if (err instanceof SuperAdminApiError && err.status === 409) {
+        setActionError('Este negócio já está ativo.');
+      } else {
+        setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao reativar o negócio.');
+      }
+    } finally {
+      setActionBusy(false);
     }
   }
 
@@ -60,7 +126,21 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
 
       {data && (
         <div style={{ background: '#1e293b', borderRadius: 8, padding: 24, maxWidth: 560 }}>
-          <h2 style={{ fontSize: 16, marginTop: 0 }}>{data.name ?? '(sem nome)'}</h2>
+          <h2 style={{ fontSize: 16, marginTop: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+            {data.name ?? '(sem nome)'}
+            <span
+              style={{
+                fontSize: 11,
+                fontWeight: 600,
+                padding: '2px 8px',
+                borderRadius: 4,
+                background: data.suspended ? '#7f1d1d' : '#14532d',
+                color: data.suspended ? '#fca5a5' : '#a7f3d0',
+              }}
+            >
+              {data.suspended ? 'SUSPENSO' : 'ATIVO'}
+            </span>
+          </h2>
 
           {data.auditLogged === false && (
             <p style={{ fontSize: 12, color: '#fbbf24' }}>
@@ -115,6 +195,63 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
               </tbody>
             </table>
           )}
+
+          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>Suspensão</h3>
+
+          {actionResult && (
+            <p style={{ fontSize: 13, color: '#a7f3d0', background: '#14532d', padding: 10, borderRadius: 6, marginBottom: 8 }}>
+              {actionResult}
+            </p>
+          )}
+
+          {pendingAction === null && (
+            <button
+              onClick={() => { setPendingAction(data.suspended ? 'reactivate' : 'suspend'); setActionError(null); setActionResult(null); }}
+              style={data.suspended ? confirmBtn : rejectBtn}
+            >
+              {data.suspended ? 'Reativar negócio' : 'Suspender negócio'}
+            </button>
+          )}
+
+          {pendingAction === 'suspend' && (
+            <div style={dialogBox}>
+              <p style={{ marginTop: 0 }}>
+                Suspender <strong>{data.name ?? businessId}</strong>? O dono e a equipa deixarão de conseguir ler ou escrever dados do negócio de imediato. É obrigatório indicar uma justificação.
+              </p>
+              <textarea
+                value={actionJustification}
+                onChange={(e) => setActionJustification(e.target.value)}
+                placeholder="Motivo da suspensão…"
+                rows={3}
+                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+              />
+              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleSuspend} disabled={actionBusy} style={rejectBtn}>{actionBusy ? 'A suspender…' : 'Sim, suspender'}</button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} style={cancelBtn}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {pendingAction === 'reactivate' && (
+            <div style={dialogBox}>
+              <p style={{ marginTop: 0 }}>
+                Reativar <strong>{data.name ?? businessId}</strong>? O acesso normal será restaurado de imediato. É obrigatório indicar uma justificação.
+              </p>
+              <textarea
+                value={actionJustification}
+                onChange={(e) => setActionJustification(e.target.value)}
+                placeholder="Motivo da reativação…"
+                rows={3}
+                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+              />
+              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleReactivate} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A reativar…' : 'Sim, reativar'}</button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} style={cancelBtn}>Cancelar</button>
+              </div>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -133,3 +270,6 @@ function Row({ label, value }: { label: string; value: string }) {
 const th: React.CSSProperties = { padding: '6px 8px' };
 const td: React.CSSProperties = { padding: '6px 8px' };
 const confirmBtn: React.CSSProperties = { background: '#16a34a', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
+const rejectBtn: React.CSSProperties = { background: '#dc2626', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
+const cancelBtn: React.CSSProperties = { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 14px', borderRadius: 4 };
+const dialogBox: React.CSSProperties = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: 16, marginTop: 8 };

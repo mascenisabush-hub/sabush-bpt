@@ -837,6 +837,13 @@ export const fr: TranslationDict = {
         contactButton: 'Contacter le support',
       },
     },
+    businessSuspension: {
+      banner: {
+        title: 'Cette entreprise a été suspendue',
+        message: 'L\'accès aux données et opérations de cette entreprise est temporairement indisponible.',
+        contactHint: 'Contactez le support Sabush pour plus d\'informations.',
+      },
+    },
     blockedNotice: {
       title: 'Les nouveaux enregistrements sont suspendus',
       trialCompletedMessage: 'Votre essai gratuit est terminé. Vos données et votre historique restent disponibles, mais vous ne pouvez pas créer de nouveaux enregistrements avant de vous abonner.',

@@ -33,6 +33,7 @@ import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperator
 import { writeAuditLogEntry } from './platformAuditLog';
 import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
 import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
+import { suspendBusiness, reactivateBusiness, type BusinessSuspensionDb } from './businessSuspension';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -1591,6 +1592,7 @@ if (tenantMode) {
 const requirePlatformOperator = createRequirePlatformOperator(db);
 const paymentConfirmationDb = db as unknown as PaymentConfirmationDb;
 const businessVisibilityDb = db as unknown as BusinessVisibilityDb;
+const businessSuspensionDb = db as unknown as BusinessSuspensionDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -2072,6 +2074,124 @@ expressApp.get(
     }
 
     res.json({ ...result.detail, ...(auditLogged ? {} : { auditLogged: false }) });
+  }
+);
+
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase C (ADR-0006, Gap 1
+// CONFIRMED). Business Suspend/Reactivate. Both routes are thin
+// wrappers — all logic lives in server/businessSuspension.ts. No
+// Firebase Auth account is ever disabled by either route; no
+// subscription or payment document is ever touched.
+// ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/business/:businessId/suspend
+// Body: { justification }. Idempotency — CONFIRMED Option B: an
+// already-suspended business returns 409, no write, no audit entry.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/business/:businessId/suspend',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const { businessId } = req.params;
+    const justification = String(req.body?.justification || '');
+
+    let result;
+    try {
+      result = await suspendBusiness(businessSuspensionDb, businessId, justification);
+    } catch (err) {
+      console.error('[superadmin/business/suspend] failed', { operatorUid: operator.uid, businessId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao suspender o negócio.' });
+      return;
+    }
+
+    if (result.outcome === 'missing-justification') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+    if (result.outcome === 'not-found') {
+      res.status(404).json({ error: 'not-found', message: result.message });
+      return;
+    }
+    if (result.outcome === 'already-suspended') {
+      res.status(409).json({ error: 'already-suspended', message: result.message });
+      return;
+    }
+
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'business.suspended',
+        targetBusinessId: result.businessId,
+        justification,
+      });
+    } catch (err) {
+      console.error('[superadmin/business/suspend] audit log write failed after successful suspension', { operatorUid: operator.uid, businessId, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    res.json({ outcome: 'suspended', businessId: result.businessId, ...(auditLogged ? {} : { auditLogged: false }) });
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/business/:businessId/reactivate
+// Body: { justification }. Idempotency — CONFIRMED Option B: an
+// already-active business returns 409, no write, no audit entry.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/business/:businessId/reactivate',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const { businessId } = req.params;
+    const justification = String(req.body?.justification || '');
+
+    let result;
+    try {
+      result = await reactivateBusiness(businessSuspensionDb, businessId, justification);
+    } catch (err) {
+      console.error('[superadmin/business/reactivate] failed', { operatorUid: operator.uid, businessId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao reativar o negócio.' });
+      return;
+    }
+
+    if (result.outcome === 'missing-justification') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+    if (result.outcome === 'not-found') {
+      res.status(404).json({ error: 'not-found', message: result.message });
+      return;
+    }
+    if (result.outcome === 'already-active') {
+      res.status(409).json({ error: 'already-active', message: result.message });
+      return;
+    }
+
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'business.reactivated',
+        targetBusinessId: result.businessId,
+        justification,
+      });
+    } catch (err) {
+      console.error('[superadmin/business/reactivate] audit log write failed after successful reactivation', { operatorUid: operator.uid, businessId, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    res.json({ outcome: 'reactivated', businessId: result.businessId, ...(auditLogged ? {} : { auditLogged: false }) });
   }
 );
 

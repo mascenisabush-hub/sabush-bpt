@@ -47,6 +47,13 @@ interface BusinessDoc {
   currencySymbol?: string;
   createdAt?: string;
   ownerUid?: string;
+  // [Phase C — ADR-0006, Gap 1] Added to this module's read shape only
+  // so the SuperAdmin BusinessDetail screen can show current
+  // suspension state and gate its suspend/reactivate actions — an
+  // explicitly-scoped, one-field addition to the curated response
+  // (BR-5), not a broadening of what this module reads or returns
+  // beyond that single field.
+  suspended?: boolean;
 }
 
 interface UserDoc {
@@ -156,6 +163,8 @@ export interface BusinessDetail {
   staff: BusinessDetailStaffRow[];
   subscriptionStatus: string | null;
   recentPayments: BusinessDetailPaymentRow[];
+  // [Phase C — ADR-0006, Gap 1] See BusinessDoc.suspended above.
+  suspended: boolean;
 }
 
 export type FetchBusinessDetailResult =
@@ -212,6 +221,7 @@ export async function fetchBusinessDetail(
       : null,
     staff: staffSnap.docs.map((d) => ({ name: d.data()?.name ?? '', suspended: d.data()?.suspended === true })),
     subscriptionStatus,
+    suspended: businessData?.suspended === true,
     recentPayments: paymentsSnap.docs.map((d) => {
       const data = d.data();
       return {

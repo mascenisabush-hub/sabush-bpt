@@ -837,6 +837,13 @@ export const en: TranslationDict = {
         contactButton: 'Contact Support',
       },
     },
+    businessSuspension: {
+      banner: {
+        title: 'This business has been suspended',
+        message: 'Access to this business\'s data and operations is temporarily unavailable.',
+        contactHint: 'Contact Sabush support for more information.',
+      },
+    },
     blockedNotice: {
       title: 'New records are paused',
       trialCompletedMessage: 'Your trial has ended. Your data and history remain available, but you can\'t create new records until you subscribe to a plan.',

@@ -392,6 +392,17 @@ interface AppContextType {
   unpairDevice: () => void;
   suspensionNotice: string | null;
   clearSuspensionNotice: () => void;
+  // SuperAdmin V1 Operational Control Plane, Phase C (ADR-0006, Gap 1).
+  // Distinct from suspensionNotice above — that one is a one-shot,
+  // sign-out-triggering message for a suspended STAFF account
+  // (Firebase Auth is disabled, the message is shown once on the
+  // login screen). This is a persistent, reactive flag for a
+  // suspended BUSINESS: the user's own Firebase Auth account is never
+  // touched and they are never signed out — only business-scoped
+  // reads/writes are denied at the Firestore Rules layer, so this
+  // stays true for as long as the active business remains suspended,
+  // driven by the existing businesses/{businessId} listener below.
+  businessSuspended: boolean;
   // Multi-shop support (owners only, up to MAX_SHOPS_PER_OWNER shops).
   // `activeBusinessId` is the shop currently being viewed/operated on —
   // every other field/action in this context (business, products,
@@ -416,6 +427,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // logout itself (unlike userProfile, which gets cleared) so the login
   // screen can show *why* they were logged out, then it's cleared once shown.
   const [suspensionNotice, setSuspensionNotice] = useState<string | null>(null);
+  // Phase C — see the AppContextType field's own comment for why this
+  // is a distinct, persistent flag rather than a reuse of
+  // suspensionNotice. Reset to false whenever activeBusinessId changes
+  // (below, alongside every other per-business reset) so switching
+  // shops never carries a stale suspended state from the prior one.
+  const [businessSuspended, setBusinessSuspended] = useState(false);
   const [business, setBusiness] = useState<Business | null>(null);
   const [subscription, setSubscription] = useState<Subscription | null>(null);
   const [isAuthLoading, setIsAuthLoading] = useState<boolean>(true);
@@ -798,6 +815,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // this specific fix's scope.
     setInitialStockDraft(null);
     setInitialStockDraftLoaded(false);
+    // Phase C — same "reset unconditionally on every switch" reasoning
+    // as the two lines above: a direct Business A -> Business B switch
+    // must never carry A's suspended state into B's screen for the
+    // brief window before B's own listener delivers its first event.
+    setBusinessSuspended(false);
 
     if (!activeBusinessId) {
       setBusiness(null);
@@ -825,9 +847,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (snap) => {
         if (snap.exists()) {
           setBusiness(snap.data() as Business);
+          // A successful read is only possible for a non-suspended
+          // business (isBusinessSuspended() denies the read itself,
+          // firestore.rules) — clears any stale suspended state left
+          // over from before a reactivation's listener re-fires.
+          setBusinessSuspended(false);
         }
       },
-      (err) => console.error('Error fetching business:', err)
+      (err) => {
+        console.error('Error fetching business:', err);
+        // [Phase C — ADR-0006, Gap 1] isBusinessSuspended() denies
+        // *reads* of this exact document, not only writes — so a
+        // permission-denied error here, for a document this same
+        // listener could read a moment ago, is the live signal a
+        // business was just suspended (see the Pre-Implementation
+        // Verification's §9/§14: the client cannot always positively
+        // read business.suspended === true after suspension, since
+        // the read itself becomes denied — the error callback is the
+        // boundary, not the data). Firestore's permission-denied
+        // error code is 'permission-denied' for every rules-layer
+        // rejection; a network/offline error uses a different code
+        // ('unavailable', etc.), so this narrows to the suspension
+        // case specifically rather than treating every listener error
+        // as a suspension.
+        if (err.code === 'permission-denied') {
+          setBusinessSuspended(true);
+        }
+      }
     );
 
     // 1a. Subscription doc listener — top-level collection, doc ID ==
@@ -3134,6 +3180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unpairDevice,
         suspensionNotice,
         clearSuspensionNotice: () => setSuspensionNotice(null),
+        businessSuspended,
         ownedBusinesses,
         activeBusinessId,
         maxShopsPerOwner: MAX_SHOPS_PER_OWNER,

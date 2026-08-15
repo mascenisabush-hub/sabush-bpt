@@ -43,8 +43,24 @@ service cloud.firestore {
       return myProfile().get('suspended', false) == true;
     }
 
+    // [SuperAdmin V1 Operational Control Plane, Phase C — ADR-0006,
+    // Gap 1, Product-Architect-confirmed] Business-level counterpart to
+    // isSuspended() above — same shape, one level up: a live get() on
+    // the business document rather than the caller's own profile. Set
+    // exclusively by the privileged server (server/index.ts's
+    // business-suspension routes, via the Admin SDK, which bypasses
+    // these rules entirely) — never writable by the client (see the
+    // businesses/{businessId} update rule below). Folded into
+    // isMemberOf() so every existing isMemberOf/isOwnerOf consumer in
+    // this file inherits the suspension check automatically, with no
+    // per-collection rule edits — the same "one change, many
+    // consumers" pattern isMemberOf/isOwnerOf themselves already are.
+    function isBusinessSuspended(businessId) {
+      return get(/databases/$(database)/documents/businesses/$(businessId)).data.get('suspended', false) == true;
+    }
+
     function isMemberOf(businessId) {
-      return isSignedIn() && !isSuspended() && (
+      return isSignedIn() && !isSuspended() && !isBusinessSuspended(businessId) && (
         myProfile().businessId == businessId ||
         businessId in ownedBusinessIds()
       );
@@ -262,7 +278,18 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.auth.uid == request.resource.data.ownerUid;
 
       // Only the owner can change business settings (currency, category, name).
-      allow update: if isOwnerOf(businessId);
+      // [Phase C — ADR-0006, Gap 1] `suspended` is excluded from what
+      // this write can touch, in either direction — an Owner can
+      // continue updating every field this rule already permitted
+      // (currency, category, name, contact, location, email) but can
+      // never set suspended:true (self-suspend, pointless but also not
+      // a privilege-escalation risk) or suspended:false (self-
+      // reactivate, the actual risk this guard exists to close).
+      // Mirrors users/{userId}'s identical field-immutability idiom
+      // for its own suspended/staffTier/managerPermissions fields.
+      // Staff have no write path to this document at all, unaffected.
+      allow update: if isOwnerOf(businessId) &&
+        request.resource.data.get('suspended', false) == resource.data.get('suspended', false);
       allow delete: if false;
 
       // ----------------------------------------------------------

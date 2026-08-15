@@ -792,6 +792,19 @@ export interface TranslationDict {
         contactButton: string;
       };
     };
+    // SuperAdmin V1 Operational Control Plane, Phase C (ADR-0006, Gap
+    // 1). Distinct from the trial/grace/expired states above — this is
+    // a platform operator having suspended the business directly, not
+    // a billing state. Deliberately does not say the user's own
+    // account/login was affected (it wasn't — see AppContext.tsx's
+    // businessSuspended field comment for why).
+    businessSuspension: {
+      banner: {
+        title: string;
+        message: string;
+        contactHint: string;
+      };
+    };
     blockedNotice: {
       title: string;
       trialCompletedMessage: string;
@@ -1718,6 +1731,13 @@ export const pt: TranslationDict = {
       expired: {
         title: 'O seu negócio está atualmente em modo só de leitura',
         contactButton: 'Contactar Suporte',
+      },
+    },
+    businessSuspension: {
+      banner: {
+        title: 'Este negócio foi suspenso',
+        message: 'O acesso aos dados e operações deste negócio está temporariamente indisponível.',
+        contactHint: 'Contacte o suporte Sabush para mais informações.',
       },
     },
     blockedNotice: {
