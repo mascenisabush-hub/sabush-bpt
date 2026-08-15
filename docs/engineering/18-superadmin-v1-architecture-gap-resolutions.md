@@ -187,10 +187,19 @@ within the single-business, audited diagnostic view (Gap 2's Option B) —
 | 2 — Business Visibility read model | Narrow, audited, server-mediated single-business diagnostic endpoint (curated response shape) — not the full Support Session credential mechanism. |
 | 3 — Owner email | Exposed, but only in the single-business audited detail view, never in list/search results. |
 
-**Status:** Gap 1 remains Recommended, pending confirmation (deferred to
-Phase C). **Gap 2 and Gap 3 were explicitly confirmed by Product
-Architect decision** in the session that authorized and implemented
-Phase B — see the Phase B commit's own message for the confirmation
-record. This document's Gap 2/Gap 3 text above is retained unchanged as
-the analysis that produced the confirmed decision, not as an open
-recommendation.
+**Status:** **Gap 1 is Product-Architect-confirmed.** The recommended
+design above (`suspended?: boolean` field on `businesses/{businessId}`,
+missing field means not-suspended, `isBusinessSuspended()` folded into
+`isMemberOf()`, field-protected against tenant self-modification,
+exclusively server/Admin-SDK-writable, non-destructive/reversible, no
+Firebase Auth disable, no subscription/payment mutation, justification
+required, exactly one audit entry per accepted mutation, SuperAdmin
+platform operations unaffected) is confirmed as the approved
+architecture decision for Phase C. This confirmation authorizes the
+architecture decision only — it does not by itself authorize Phase C
+implementation; that remains a separate, explicit go-ahead per the
+governance sequence every other phase in this slice has followed.
+
+Gap 2 and Gap 3 were explicitly confirmed by Product Architect decision
+in the session that authorized and implemented Phase B — see the Phase
+B commit's own message for the confirmation record.
