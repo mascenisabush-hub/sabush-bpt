@@ -1210,6 +1210,16 @@ expressApp.post('/api/provisioning/business', tenantOnly, requireAuth, async (re
         // creation, the same "same transaction, same moment" rule
         // every other subscriptionStatusCache write site follows.
         subscriptionStatusCache: initialSubscription.status,
+        // Phase E (BDR-0010, POL-18-001) — lastActivityAt is always
+        // present from creation, initialized to createdAt itself
+        // (never absent) so the Operational Activity range-query
+        // filter (server/businessDirectory.ts) can always find a
+        // never-yet-active business once it exits its New window —
+        // Firestore cannot range-query a field's absence. Only the
+        // approved server-side touch mechanism
+        // (server/activityTouch.ts) ever moves this value forward
+        // from here.
+        lastActivityAt: startedAt,
       };
       const userProfile = {
         uid,
@@ -1275,6 +1285,7 @@ expressApp.post('/api/provisioning/business', tenantOnly, requireAuth, async (re
       createdAt: startedAt,
       // Phase E (BDR-0010) — same rule as the register flow above.
       subscriptionStatusCache: initialSubscription.status,
+      lastActivityAt: startedAt,
     };
 
     await db.runTransaction(async (tx) => {
