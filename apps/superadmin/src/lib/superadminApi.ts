@@ -151,6 +151,55 @@ export async function revokeOperator(uid: string): Promise<RevokeOperatorResult>
   })) as RevokeOperatorResult;
 }
 
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase B (ADR-0006).
+// Business Visibility. Thin wrappers, same shape as every function
+// above — no new fetch pattern introduced.
+// ------------------------------------------------------------------
+
+export interface BusinessSearchRow {
+  businessId: string;
+  name: string;
+}
+
+export async function searchBusinesses(q: string): Promise<BusinessSearchRow[]> {
+  const body = (await authedFetch(`/businesses?q=${encodeURIComponent(q)}`)) as { businesses: BusinessSearchRow[] };
+  return body.businesses;
+}
+
+export interface BusinessDetailStaffRow {
+  name: string;
+  suspended: boolean;
+}
+
+export interface BusinessDetailPaymentRow {
+  amount: number | null;
+  currency: string | null;
+  method: string | null;
+  reference: string | null;
+  submittedAt: string | null;
+  status: string | null;
+}
+
+export interface BusinessDetailResponse {
+  businessId: string;
+  name: string | null;
+  category: string | null;
+  currencySymbol: string | null;
+  createdAt: string | null;
+  owner: { name: string | null; email: string | null; createdAt: string | null } | null;
+  staff: BusinessDetailStaffRow[];
+  subscriptionStatus: string | null;
+  recentPayments: BusinessDetailPaymentRow[];
+  auditLogged?: false;
+}
+
+export async function fetchBusinessDetail(businessId: string, justification: string): Promise<BusinessDetailResponse> {
+  return (await authedFetch(
+    `/business/${encodeURIComponent(businessId)}?justification=${encodeURIComponent(justification)}`
+  )) as BusinessDetailResponse;
+}
+
 export interface AuditLogEntryRow {
   id: string;
   actorUid: string;

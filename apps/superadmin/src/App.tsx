@@ -7,6 +7,8 @@ import PendingPaymentsQueue from './pages/PendingPaymentsQueue';
 import PaymentDetail from './pages/PaymentDetail';
 import AuditTrail from './pages/AuditTrail';
 import Operators from './pages/Operators';
+import BusinessSearch from './pages/BusinessSearch';
+import BusinessDetail from './pages/BusinessDetail';
 
 type AuthPhase =
   | { kind: 'loading' }
@@ -15,7 +17,7 @@ type AuthPhase =
   | { kind: 'not-superadmin'; platformRole: string }
   | { kind: 'superadmin' };
 
-type View = { name: 'queue' } | { name: 'detail'; businessId: string; paymentId: string } | { name: 'audit' } | { name: 'operators' };
+type View = { name: 'queue' } | { name: 'detail'; businessId: string; paymentId: string } | { name: 'audit' } | { name: 'operators' } | { name: 'businesses' } | { name: 'businessDetail'; businessId: string };
 
 // FR-1 / Architecture §9.1: "the shell reads platform_operators/{uid}.
 // platformRole once at load and builds the nav from it." A screen a
@@ -94,6 +96,7 @@ export default function App() {
           <NavLink active={view.name === 'queue'} onClick={() => setView({ name: 'queue' })}>Fila de Pagamentos</NavLink>
           <NavLink active={view.name === 'audit'} onClick={() => setView({ name: 'audit' })}>Auditoria</NavLink>
           <NavLink active={view.name === 'operators'} onClick={() => setView({ name: 'operators' })}>Operadores</NavLink>
+          <NavLink active={view.name === 'businesses' || view.name === 'businessDetail'} onClick={() => setView({ name: 'businesses' })}>Negócios</NavLink>
         </div>
         <SignOutButton />
       </header>
@@ -106,6 +109,12 @@ export default function App() {
         )}
         {view.name === 'audit' && <AuditTrail />}
         {view.name === 'operators' && <Operators />}
+        {view.name === 'businesses' && (
+          <BusinessSearch onOpenBusiness={(businessId) => setView({ name: 'businessDetail', businessId })} />
+        )}
+        {view.name === 'businessDetail' && (
+          <BusinessDetail businessId={view.businessId} onBack={() => setView({ name: 'businesses' })} />
+        )}
       </main>
     </div>
   );

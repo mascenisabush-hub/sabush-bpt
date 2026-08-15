@@ -32,6 +32,7 @@ import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './pay
 import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperatorRequest } from './superadminAuth';
 import { writeAuditLogEntry } from './platformAuditLog';
 import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
+import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -1589,6 +1590,7 @@ if (tenantMode) {
 // not an extra role check layered onto the tenant one.
 const requirePlatformOperator = createRequirePlatformOperator(db);
 const paymentConfirmationDb = db as unknown as PaymentConfirmationDb;
+const businessVisibilityDb = db as unknown as BusinessVisibilityDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -1985,6 +1987,91 @@ expressApp.get(
       console.error('[superadmin/operators] failed', { error: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar os operadores.' });
     }
+  }
+);
+
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase B (ADR-0006).
+// Business Visibility. Strictly read-only (BR-4) — no route below ever
+// writes to any tenant collection. Both routes are thin wrappers; all
+// logic lives in server/businessVisibility.ts (see that file's header
+// for why). Gap 2 (CONFIRMED, Option B): no Support Session credential,
+// every read is server-mediated via the Admin SDK, re-verified through
+// the same requireAuth + requirePlatformOperator + requireSuperAdmin
+// chain as every other /api/superadmin/* route — zero firestore.rules
+// change for this phase.
+// ------------------------------------------------------------------
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/businesses?q=
+// FR-B1. BR-6: returns businessId + name only — never audited (list
+// read, same tier as GET /api/superadmin/operators/payments/pending).
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/businesses',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    try {
+      const q = String(req.query.q || '');
+      const results = await searchBusinesses(businessVisibilityDb, q);
+      res.json({ businesses: results });
+    } catch (err) {
+      console.error('[superadmin/businesses] failed', { error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao pesquisar negócios.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/business/:businessId?justification=
+// FR-B2. BR-5 (curated response only), BR-7 (justification required,
+// audited exactly once as business.viewed).
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/business/:businessId',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const { businessId } = req.params;
+    const justification = String(req.query.justification || '');
+
+    let result;
+    try {
+      result = await fetchBusinessDetail(businessVisibilityDb, businessId, justification, readSubscriptionStatus);
+    } catch (err) {
+      console.error('[superadmin/business] failed', { operatorUid: operator.uid, businessId, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar o negócio.' });
+      return;
+    }
+
+    if (result.outcome === 'missing-justification') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+    if (result.outcome === 'not-found') {
+      res.status(404).json({ error: 'not-found', message: result.message });
+      return;
+    }
+
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'business.viewed',
+        targetBusinessId: businessId,
+        justification,
+      });
+    } catch (err) {
+      console.error('[superadmin/business] audit log write failed after successful read', { operatorUid: operator.uid, businessId, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    res.json({ ...result.detail, ...(auditLogged ? {} : { auditLogged: false }) });
   }
 );
 
