@@ -1,0 +1,532 @@
+Implementation Task — Derived from a Frozen Specification
+
+# Stock Count Data-Loss Resilience — Implementation Task
+
+**Status:** Frozen — Implementation Task → Implementation authorized.
+Two review passes were run before freezing, matching the frozen spec's
+own two-pass discipline: **Pass 1** (during drafting) surfaced a
+substantive gap — the deterministic-id idempotency mechanism (§3) was
+initially paired with a resurrection-protection design (§4) that
+cancelled/discarded any unflushed draft write, including one carrying
+the just-generated submission identity, right before the finalization
+network call; a crash in the resulting ambiguous window would have
+caused a retry to generate a fresh identity and create a second
+logical count, defeating §8a's entire purpose. Fixed by splitting §4
+into 4a (ordinary row content — safe to discard, since finalization
+reads live component state, not the draft) and 4b (the submission
+identity — written immediately and non-debounced via a dedicated
+`establishSubmissionIdentity`, always awaited, never cancelled, before
+finalization begins). **Pass 2** (after the fix) re-read the full
+document against the frozen spec's §1–§14 and the actual source files
+again, and additionally caught three citation-accuracy errors — an
+inconsistent self-reference ("Section 5" used to mean the frozen
+spec's §5 rather than this document's own Section 5) and two
+off-by-a-few-lines source citations (`firestore.rules`'
+`stockCountDrafts` block cited as lines 449–459, actually 450–464; the
+periodic-create-rule citation given as line 439, actually line 441,
+matching what the frozen spec itself cites) — all corrected. No further
+contradiction, drift, or citation error found on this second pass.
+**Depends on:** the frozen [Stock Count Data-Loss Resilience
+Specification](./stock-count-data-loss-resilience-specification.md)
+(commit `2306c85`, confirmed present on `origin/main` with Status
+"Frozen — Specification → Implementation authorized" as of this
+drafting session); `apps/tenant/src/components/PeriodicStockCountView.tsx`;
+`apps/tenant/src/components/InitialStockCountView.tsx` (read-only —
+cited as prior art, not modified); `apps/tenant/src/context/AppContext.tsx`
+(`recordStockCount`, `saveInitialStockDraft`, `logTimelineEvent`,
+`triggerTrialActivation`); `firestore.rules`
+(`stockCountDrafts/{draftId}`, lines 450–464); `tests/initial-stock-confirmation.test.ts`;
+`tests/firestore-rules.test.ts`; `tests/stock-count-simplification.test.ts`.
+**What this document is:** a concrete engineering resolution of the
+frozen spec's §13 open decisions, plus a file-by-file change plan and
+the literal, checkable exit conditions carried forward from §14. It does
+not reopen anything the spec already settled in §1–§12; where this
+document restates a spec requirement, it is restating, not
+re-deciding.
+
+---
+
+## 0. Self-Review (contradiction check against the frozen spec)
+
+Performed while drafting, before presenting this document:
+
+- Re-read `stock-count-data-loss-resilience-specification.md` §1–§14 in
+  full (not from summary) and cross-checked every factual claim in it
+  against the actual current source: `PeriodicStockCountView.tsx` (all
+  835 lines), `recordStockCount`/`logTimelineEvent`/`triggerTrialActivation`
+  in `AppContext.tsx`, `InitialStockCountView.tsx`'s autosave effect,
+  the `stockCountDrafts/{draftId}` rules block, and the two test-tier
+  precedent files. All claims held — no drift between the frozen spec
+  and the current repo state was found.
+- Checked this document's own §13 resolutions below against §12's
+  non-goals: none of them touch `InitialStockCountView.tsx`,
+  `saveInitialStockDraft`, introduce IndexedDB, add a navigation guard,
+  extract a shared draft hook, touch `addMultipleStockBatches`/
+  `purchaseDrafts`, or invent a business rule beyond BDR-0009/the
+  Simplification Amendment.
+- Checked the doc-id/scoping decision (§13 bullet 1, resolved in §1
+  below) against §11: it lands inside the existing generic
+  `stockCountDrafts/{draftId}` rule, so §11's "no rules change
+  required" branch applies, not the "divergence must be called out"
+  branch.
+- Checked the idempotency mechanism (§13 bullet 3, resolved in §3
+  below) against §8a and §8b specifically: confirmed it produces the
+  observable-outcome requirement in §8b without claiming
+  cross-collection atomicity it doesn't need to claim.
+- No remaining contradiction or unresolved specification-level decision
+  found.
+
+---
+
+## 1. Resolved: Draft document id / scoping
+
+**Decision:** a new, second per-business singleton document,
+`stockCountDrafts/periodic`, sibling to the existing
+`stockCountDrafts/initial`. Not per-user, not per-count.
+
+**Why this satisfies the spec's constraint (§5, §11):** periodic
+`stockCounts` creation is already Owner-only at the rules layer today
+(confirmed: `firestore.rules` line 441, matching the frozen spec's
+own citation of this same line in §5,
+`allow create: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId)`,
+no type-specific carve-out) — the spec explicitly notes this means the
+draft does not need to support concurrent multi-user editing of the
+same periodic count, so a single per-business slot is sufficient. A
+singleton also means the existing `stockCountDrafts/{draftId}` rule
+block (confirmed generic and Owner-only at read/create/update/delete
+today, `firestore.rules` lines 450–464) already covers `periodic`
+exactly as it already covers `initial`, with zero rule-text changes —
+satisfying §11's stated preference and closing §13 bullet 1.
+
+**Consequence, stated explicitly so it isn't silently assumed:** only
+one in-progress periodic count can be drafted per business at a time.
+Starting a new periodic count while a different one's draft is still
+unresolved overwrites that slot. This matches the current UI reality
+(one `PeriodicStockCountView` screen, one working list at a time) and
+is not a behavior change from today — today there is no draft at all,
+so there is nothing to conflict with.
+
+## 2. Resolved: Debounce interval and document-size sizing check
+
+**Decision:** 800ms debounce, matching the existing
+`saveInitialStockDraft` precedent (the frozen spec's §5, "starting
+point: the existing 800ms pattern") — whole-document overwrite,
+coalesced by a single trailing timer per change, not per keystroke.
+
+**Sizing check (performed here, not deferred):** a periodic draft row
+carries `productId?`, `productName`, `quantity` (string), `unit`,
+`costPrice` (string), `sellingPrice` (string), and `removed?` (bool) —
+structurally identical in shape to the fields already persisted per
+row in `InitialStockDraftItem`. A representative JSON-encoded row at
+realistic field lengths (e.g. `productName: "Arroz Tio João 5kg"`,
+numeric fields as decimal strings) serializes to roughly 180–260 bytes
+including field-name overhead. At 300 rows that is ~54–78 KB; at a
+generous 1,000 rows (well beyond this repo's stated "300+" scale) it is
+~180–260 KB. Firestore's per-document ceiling is 1 MiB (1,048,576
+bytes). This leaves more than 4x headroom even at the generous
+estimate, so no chunking, no per-row subcollection, and no additional
+size guard is required by this task.
+**This estimate must still be confirmed empirically during
+implementation** (e.g. logging `JSON.stringify(draft).length` against a
+synthetic 300-row draft in dev), because an estimate is not the same as
+a measurement — but no design decision here is contingent on that
+number changing materially; it is a verification step, not an open
+question.
+
+## 3. Resolved: Idempotent finalization mechanism
+
+**Decision:** deterministic document ids for both `stockCounts` and
+`timelineEvents`, derived from the submission identity (§7) — the first
+option the spec lists in §8a, and the same shape `recordStockCount`
+already uses for `type === 'initial'` (a fixed id instead of a random
+one), extended with a submission-identity suffix for the periodic case
+since (unlike `initial`) more than one periodic count will exist over a
+business's lifetime.
+
+- `stockCounts` id: `'stockcount-periodic-' + submissionId` (submission
+  identity is a client-generated UUID per §7, created once when the
+  operator enters the `pendingTally` confirmation step, persisted as
+  part of the draft, and reused on every retry).
+- **Required, not optional: the submission identity must be durably
+  written to `stockCountDrafts/periodic` at the moment it is generated,
+  independently of the general row-content autosave, and that write
+  must be confirmed complete before the finalization commit is issued.**
+  This is a distinct requirement from "the draft persists row content"
+  (§5) — without it, the entire deterministic-id mechanism above is
+  defeated. Concretely: if the identity exists only in component state
+  (a `useRef`/`useState`) and the debounced draft write that would have
+  carried it to Firestore is discarded rather than flushed (see §4
+  below for exactly this failure mode), then a crash occurring after
+  the finalization network call has been sent but before the client
+  observes a result leaves the persisted draft without the identity
+  that attempt actually used. Resuming after such a crash would
+  generate a *new* identity and retry under a *different* deterministic
+  id — producing a second, genuinely distinct `stockCounts` document
+  even though the mechanism's entire purpose is to prevent exactly
+  that. §4 below specifies the concrete fix: an immediate, non-debounced,
+  awaited write of the identity, issued at generation time and
+  confirmed before finalization begins — never merely scheduled and
+  potentially discarded like ordinary row-content autosave.
+- `timelineEvents` id: `'tl-periodic-' + submissionId` (currently
+  `logTimelineEvent` always generates a random `'tl-' + Date.now() + ...'`
+  id — confirmed in `AppContext.tsx`; this task adds an optional
+  explicit-id parameter to `logTimelineEvent`, used only by the
+  periodic finalization call site, leaving every other caller
+  unaffected and still randomly-id'd).
+- `triggerTrialActivation`: **not gated**, called unconditionally on
+  every successful periodic finalization attempt, exactly as it already
+  is for every other call site today. This is a deliberate choice
+  among the options §8b lists as non-exhaustive: the spec itself
+  states the server-side transition (`trial_pending → trial_active`) is
+  already a one-way, idempotent no-op on a second call. Since that
+  guarantee already exists server-side, client-side gating would add
+  complexity (tracking "was this the first commit") without changing
+  the observable outcome §8a requires. If this assumption is wrong —
+  i.e. if `triggerTrialActivation`'s server endpoint is not actually
+  safe to call twice — that is a pre-existing condition of every other
+  call site in this codebase, not something introduced by this task,
+  and is out of scope to fix here.
+
+**Why deterministic ids alone satisfy §8a without a transaction or
+existence-check:** because the id is stable across retries of the same
+submission, a retry's `fsBatch.set(...)` on `stockCounts` and the
+`setDoc(...)` on `timelineEvents` land on the *same* document each
+time. Firestore's `set()` (non-merge, full overwrite) on an existing
+document with materially identical content is a no-op in effect — it
+does not create a second document. This produces exactly the
+"observable outcome" §8b requires (exactly one `stockCounts` document,
+exactly one `timelineEvents` document per submission identity) without
+claiming database-level atomicity across the two, which §8b explicitly
+does not require.
+**Batch-atomicity requirement carried forward unchanged:** per §8b, the
+periodic `stockCounts` write and its draft-cleanup delete
+(`stockCountDrafts/periodic`) are queued on the same `fsBatch` before a
+single `commit()` — the same pattern `recordStockCount` already uses
+for `type === 'initial'`, extended to the periodic branch (today the
+periodic branch has no draft to delete at all, since no draft exists
+yet).
+
+## 4. Resolved: Resurrection protection (closing the Initial Count bug's exact shape, per §6)
+
+**Root cause of the existing bug, confirmed by reading
+`InitialStockCountView.tsx` directly:** the autosave `useEffect`'s
+`setTimeout` handle is only ever cancelled by the effect's own React
+cleanup, which only runs when the effect re-fires — and the effect's
+dependency array (`[rows, date, draftLoaded, hasInitialStockCount]`)
+omits `isSaving` and `savedMessage`. When `handleSubmit` sets
+`isSaving`, the effect does not re-run, so a timer already pending from
+the last keystroke before submission is never cancelled and can fire
+`setDoc` after the confirmation batch has already deleted the draft.
+
+**Design decision for the periodic draft, structurally different from
+the buggy pattern (not merely "different code that looks different"):**
+imperative timer/promise tracking held in `useRef`, not inside a
+`useEffect` cleanup that depends on a dependency array being complete.
+This task draws a hard distinction between two kinds of pending draft
+write, because they fail differently if mishandled — collapsing them
+into one "just cancel it" path is exactly the mistake §3 above warns
+against:
+
+### 4a. Ordinary row-content autosave — safe to discard on confirm
+
+- `draftDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)`
+- `draftInFlightSaveRef = useRef<Promise<void> | null>(null)`
+- `scheduleDraftSave()` (called from row-change handlers —
+  `updateCatalogRow`, `updateManualRow`, `handleRemoveCatalogRow`,
+  `handleRestoreCatalogRow`, `handleAddManualRow`,
+  `handleRemoveManualRow` — never from a `useEffect`) clears any
+  existing `draftDebounceTimerRef.current`, sets a new one; the timer
+  callback issues the `setDoc(...)`, stores its promise in
+  `draftInFlightSaveRef.current`, and clears that ref in `.finally()`.
+- Discarding an unflushed row-content write here is safe **because
+  `recordStockCount` never reads the Firestore draft for finalization
+  content** — `handleRequestConfirmation` computes `pendingTally` from
+  live `allWorkingRows` component state, and `handleConfirmSave` passes
+  that same live-state tally to `recordStockCount`. This is the exact
+  contract `tests/initial-stock-confirmation.test.ts` already proves
+  for the Initial Count (`normalizeStockCountItems` has no parameter
+  for draft state at all) — the periodic path is built the same way.
+  A stale or missing draft on Firestore therefore cannot cause
+  finalization to commit the wrong row content; worst case, the draft
+  is one edit behind right up until finalization deletes it anyway.
+
+### 4b. Submission identity write — never discarded, always flushed and awaited
+
+The identity is not ordinary row content — per Section 3 above, it is
+the one field a post-crash retry depends on, so it gets its own,
+separate, non-debounced write path:
+
+- `establishSubmissionIdentity(id: string)` — a new, dedicated
+  function, distinct from `scheduleDraftSave`. Called exactly once, at
+  the same moment the identity is generated (entry into `pendingTally`,
+  i.e. inside the existing `handleRequestConfirmation`). Issues an
+  immediate `setDoc` (merge: true) writing `{ submissionId: id }` into
+  `stockCountDrafts/periodic` — no debounce, no coalescing.
+- Its promise is stored in a separate
+  `identityWriteRef = useRef<Promise<void> | null>(null)`.
+- `handleConfirmSave`, before calling `recordStockCount`, does, in
+  order:
+  1. `if (draftDebounceTimerRef.current) clearTimeout(draftDebounceTimerRef.current)`
+     — discard any pending ordinary row-content save (safe, per §4a).
+  2. `if (draftInFlightSaveRef.current) await draftInFlightSaveRef.current`
+     — let any already-in-flight ordinary row-content save finish
+     (harmless either way, but avoids an unnecessary write-order
+     conflict with the delete about to be queued).
+  3. `await identityWriteRef.current` — **always awaited, never
+     cancelled.** By the time this resolves, the submission identity is
+     confirmed durable in Firestore. Only after this completes does
+     `handleConfirmSave` call `recordStockCount`.
+
+**Explicit ordering, carried forward from the frozen spec's Section 6
+requirement that this be closed "by design, not by convention":**
+
+```text
+editing
+  ↓
+saving (debounced row-content autosave, cancellable — §4a)
+  ↓
+operator requests confirmation → pendingTally
+  ↓
+submission identity generated → establishSubmissionIdentity()
+  fired immediately, NOT debounced
+  ↓
+operator clicks "Confirmar Contagem" → handleConfirmSave
+  ↓
+cancel/await any pending §4a row-content save (safe — draft content
+  is never read by finalization)
+  ↓
+await identityWriteRef.current (never cancelled — must complete)
+  ↓
+finalization: recordStockCount()
+  ↓
+atomic fsBatch: stockCounts write (deterministic id) +
+  stockCountDrafts/periodic delete, single commit()
+  ↓
+saved / finalized
+```
+
+**Why a late write cannot recreate `stockCountDrafts/periodic` after
+finalization:** by the time `recordStockCount`'s `fsBatch.commit()` is
+even queued, every draft-write promise this component could have in
+flight has already either been cancelled-because-harmless (§4a) or
+awaited-to-completion (§4b's identity write). No code path issues a new
+`setDoc` to `stockCountDrafts/periodic` after that point — the
+component's next render (on `recordStockCount` resolving) transitions
+to the `savedMessage` screen, which renders none of the row-editing
+inputs `scheduleDraftSave` is wired to, so no further draft-write can
+even be triggered by user interaction. This is the same "structurally
+impossible," not merely conventionally avoided, property §6 requires.
+
+**Regression guard for this property is §14 item 1** — see Section 7
+below, and note item 1 must now cover *two* orderings, not one: (a)
+the §4a cancel/await sequence precedes `recordStockCount`, and (b) the
+§4b identity-write await precedes it as well, with the identity write
+itself sourced from `establishSubmissionIdentity`, not from
+`scheduleDraftSave`.
+
+## 5. Resolved: Stale-draft UX pattern
+
+**Decision:** an explicit, dismissible resume banner — never a silent
+auto-load (§6's requirement).
+
+- On mount, after the periodic draft listener's first snapshot resolves
+  (mirroring the existing `initialStockDraftLoaded` gating pattern in
+  `InitialStockCountView.tsx`, applied to a new
+  `periodicStockDraftLoaded` flag), if a non-empty draft exists for the
+  active business, a banner is shown above the count form: *"Existe uma
+  contagem [tipo] por terminar de [data] — Retomar ou Começar de novo?"*
+  with two explicit actions.
+- **Retomar:** loads the draft's rows (catalog + manual + `removed`
+  flags) and its persisted submission identity into working state, then
+  dismisses the banner. The catalog-merge `useEffect` (existing,
+  `[products]`-keyed) is unaffected — draft rows populate the same
+  `catalogRows`/`manualRows` state the merge effect already reads from,
+  so a product added to the catalog after the draft was saved still
+  merges in correctly.
+- **Começar de novo:** deletes `stockCountDrafts/periodic` outright and
+  proceeds with the existing catalog-derived default state, discarding
+  the stale submission identity (a fresh one is generated at the next
+  `pendingTally` step, per §7).
+- No action is taken automatically. The form does not render its normal
+  editable state until one of the two actions is chosen, closing the
+  same "operator unaware recovered data is being shown" risk §6 names.
+
+---
+
+## 6. File-by-file change plan
+
+**`apps/tenant/src/context/AppContext.tsx`**
+- Add `savePeriodicStockDraft(items, type, label, date, submissionId)`
+  — new function, own code path, analogous in *shape* to
+  `saveInitialStockDraft` but not shared code with it (per §5's
+  explicit non-authorization of a shared hook). Writes
+  `stockCountDrafts/periodic`. Used by §4a's debounced autosave.
+- Add `establishSubmissionIdentity(submissionId)` — separate, smaller
+  function, `setDoc(..., { merge: true })` writing only
+  `{ submissionId }` immediately, no debounce. Used exclusively by §4b;
+  never called from the debounced autosave path, so it can never be
+  cancelled/coalesced away by `scheduleDraftSave`'s own timer logic.
+- Add `clearPeriodicStockDraft()` — analogous to
+  `clearInitialStockDraft`, own code path.
+- Add a `periodicStockDraft` / `periodicStockDraftLoaded` listener pair
+  in the existing business-subcollections listener effect, mirroring
+  the existing `initialStockDraft` listener at line 1011 (new
+  `onSnapshot` on `stockCountDrafts/periodic`, not a modification of
+  the existing `initial` listener).
+- Extend `recordStockCount`'s periodic branch only: deterministic id
+  (Section 3 above), queue the `stockCountDrafts/periodic` delete on
+  the same `fsBatch` as the `stockCounts` set (mirroring the existing
+  `type === 'initial'` branch immediately above it), pass the
+  deterministic id through to `logTimelineEvent`.
+- Extend `logTimelineEvent`'s signature with an optional `id?: string`
+  parameter, defaulting to the existing random-id behavior when
+  omitted — every existing call site is unaffected; only the new
+  periodic finalization call site passes an explicit id.
+- No changes to `saveInitialStockDraft`, `clearInitialStockDraft`,
+  the `initial` branch of `recordStockCount`, or `triggerTrialActivation`'s
+  own body.
+
+**`apps/tenant/src/components/PeriodicStockCountView.tsx`**
+- Add the draft lifecycle state (§4's `editing`/`saving`/`saved`/
+  `save-failed`), rendered distinctly from the existing
+  `isSaving`/`savedMessage` finalization-status state — never the same
+  UI signal (§1a).
+- Add the submission-identity ref, generated once on first entry into
+  `pendingTally` (existing `handleRequestConfirmation`), immediately
+  and durably persisted via `establishSubmissionIdentity` at that same
+  moment (§4b — not merely held in component state), regenerated only
+  on the existing "back out and materially edit" path (§7) —
+  `pendingTally`'s existing `setPendingTally(null)` back-out already
+  exists at line 360; this task adds identity-regeneration (and a
+  fresh `establishSubmissionIdentity` call) to that same handler only
+  when rows have changed since the identity was generated.
+- Add the imperative debounce/cancel machinery from §4a and the
+  separate immediate identity-write path from §4b.
+- Add the stale-draft resume banner from Section 5 above.
+- No change to the catalog-merge effect, the tally computation, the
+  Counted/Not Counted confirmation screen's structure, or any pricing/
+  quantity business logic.
+
+**`apps/tenant/src/components/InitialStockCountView.tsx`** — no
+changes (§12).
+
+**`firestore.rules`** — no changes (Section 1 above; confirmed the
+existing `stockCountDrafts/{draftId}` block already covers `periodic`).
+
+---
+
+## 6a. Convergence guarantees, restated explicitly (not left implicit across Sections 3–4)
+
+Four properties this task's mechanism must hold together, stated
+plainly in one place so review doesn't have to reassemble them from
+separate sections:
+
+1. **`stockCounts` write and `stockCountDrafts/periodic` deletion
+   remain in the same Firestore batch, single `commit()`** — §3's
+   "batch-atomicity requirement carried forward unchanged," §6's
+   `recordStockCount` extension.
+2. **`timelineEvents` deduplication is independently guaranteed** — not
+   via the same batch (§8b of the spec does not require that), but via
+   its own deterministic id (`'tl-periodic-' + submissionId`) so a
+   retry's write to it is a harmless overwrite, never a second
+   document.
+3. **`triggerTrialActivation` needs no client-side deduplication** —
+   the server-side `trial_pending → trial_active` transition is already
+   a one-way no-op on a second call (stated in the frozen spec's §2),
+   so calling it unconditionally on every finalization attempt cannot
+   produce a harmful duplicate effect; gating it would add complexity
+   without changing the observable outcome §8a requires.
+4. **A retry after an ambiguous result must not create a second
+   logical count** — this is the composite property, and it holds only
+   because of *both* §3 (deterministic ids make a retry's writes land
+   on the same documents) *and* §4b (the identity those deterministic
+   ids are derived from is itself durable before the ambiguous network
+   call is even made). §3 alone is not sufficient — a retry that
+   generates a *new* identity because the old one wasn't persisted
+   would still be idempotent per-attempt while producing two distinct
+   "logical" counts overall. Both halves are required simultaneously.
+
+---
+
+## 7. Acceptance criteria — carried forward from §14, literal and checkable
+
+1. **Late draft write after finalization → draft remains deleted, and
+   the submission identity is durable before finalization begins.**
+   Source-level regression guard, matching
+   `tests/initial-stock-confirmation.test.ts`'s tier and technique
+   (source-inspection via `readFileSync` + string/regex assertions on
+   `PeriodicStockCountView.tsx`, not a component-test harness). New
+   file `tests/periodic-stock-draft-resurrection.test.ts` asserts, in
+   source order, all of:
+   - `handleConfirmSave` contains `clearTimeout(draftDebounceTimerRef...)`
+     before the call to `recordStockCount` (§4a);
+   - `handleConfirmSave` contains `await draftInFlightSaveRef.current`
+     before the call to `recordStockCount` (§4a);
+   - `handleConfirmSave` contains `await identityWriteRef.current`
+     before the call to `recordStockCount` (§4b) — a separate
+     assertion from the two above, since this guards a different
+     failure mode (identity durability, not draft-content resurrection);
+   - `establishSubmissionIdentity` is called from
+     `handleRequestConfirmation` (where the identity is generated),
+     never from `scheduleDraftSave` or its timer callback — guarding
+     against a future edit accidentally folding the identity write back
+     into the debounced/cancellable path this section exists to keep
+     it out of.
+2. **Ambiguous commit + retry → exactly one logical result.** Genuine
+   Firestore-emulator-backed test, matching `tests/firestore-rules.test.ts`'s
+   tier. New `describe` block in that file (or a new
+   `tests/periodic-stock-finalization.test.ts` using the same emulator
+   harness that file already sets up):
+   - commit a periodic `stockCounts` document at the deterministic id
+     for a fixed submission identity, then attempt the same write again
+     under the same identity; assert exactly one document exists at
+     that id and its content matches; repeat for the `timelineEvents`
+     id (proves §3);
+   - additionally: write `{ submissionId }` to `stockCountDrafts/periodic`
+     via the emulator (simulating `establishSubmissionIdentity` having
+     already completed), then simulate a client reload by reading the
+     draft back and confirming the same `submissionId` is what a retry
+     would reuse — proving §4b's contribution to the composite property
+     in 6a item 4, not just §3's contribution in isolation.
+3. **Draft persists and is recoverable across simulated reload/remount
+   with 300+ rows,** including `removed` catalog rows and manual rows —
+   Firestore-emulator-backed test: write a 300+-row
+   `stockCountDrafts/periodic` document via the emulator, read it back,
+   assert row count, `removed` flags, and manual rows all round-trip
+   unchanged.
+4. **Blank quantity never coerced to zero, and vice versa, anywhere in
+   the draft-save/recovery path** — extends
+   `tests/stock-count-simplification.test.ts` (currently in-memory-tally
+   only) with cases that round-trip a blank-quantity row and a
+   zero-quantity row through `savePeriodicStockDraft` → emulator read →
+   back into working-row shape, asserting the distinction survives.
+5. **Security-rules coverage for `stockCountDrafts/periodic`,** same
+   pattern as the existing `stockCountDrafts/initial` block in
+   `tests/firestore-rules.test.ts` (lines 649–666, 1142–1156): Owner
+   read/create/update succeed, Staff/other-business reads and writes
+   fail, delete succeeds for Owner regardless of subscription state.
+6. **`tests/initial-stock-confirmation.test.ts` is unaffected** — run
+   unchanged as part of this task's own verification; any diff in its
+   output is a regression per §12 and blocks this task's completion.
+
+---
+
+## 8. What this document does not authorize
+
+Same non-goals as the frozen spec's §12, restated for this task
+specifically since they bound the file-by-file plan above: no
+IndexedDB, no app-wide navigation guard, no change to
+`InitialStockCountView.tsx` or `saveInitialStockDraft`, no shared-hook
+extraction between the initial and periodic draft mechanisms, no change
+to `addMultipleStockBatches`/`purchaseDrafts`, no new business rule
+beyond BDR-0009 and the Simplification Amendment, and no new
+component-test harness (jsdom/testing-library/React-DOM) — every test
+above uses either the existing source-level-regression tier or the
+existing Firestore-emulator tier.
+
+---
+
+**This document is a frozen Implementation Task.** Per this project's
+established discipline, it is committed and pushed next, then verified
+on `origin/main` — only after that verification is actual
+implementation (code, rules, or test files) authorized.
