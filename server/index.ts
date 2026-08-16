@@ -35,6 +35,7 @@ import { provisionOperator, revokeOperator, listOperators } from './operatorMana
 import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
 import { suspendBusiness, reactivateBusiness, type BusinessSuspensionDb } from './businessSuspension';
 import { touchBusinessActivity, type ActivityTouchDb } from './activityTouch';
+import { queryBusinessDirectory, type BusinessDirectoryDb } from './businessDirectory';
 import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
 import { reportCriticalFailure } from './alerting';
 import {
@@ -1680,6 +1681,7 @@ if (tenantMode) {
 const requirePlatformOperator = createRequirePlatformOperator(db);
 const paymentConfirmationDb = db as unknown as PaymentConfirmationDb;
 const businessVisibilityDb = db as unknown as BusinessVisibilityDb;
+const businessDirectoryDb = db as unknown as BusinessDirectoryDb;
 const businessSuspensionDb = db as unknown as BusinessSuspensionDb;
 const activityTouchDb = db as unknown as ActivityTouchDb;
 const auditLogDb = db as unknown as AuditLogDb;
@@ -2112,6 +2114,66 @@ expressApp.get(
     } catch (err) {
       console.error('[superadmin/businesses] failed', { error: err instanceof Error ? err.message : String(err) });
       res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao pesquisar negócios.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// GET /api/superadmin/businesses/directory
+// SuperAdmin V1 Operational Control Plane — Phase E (BDR-0010,
+// POL-18-001, docs/specs/18-superadmin-business-directory-slice.md
+// v1.2, Rule 8: READY). Same auth chain and Admin-SDK-mediated read
+// pattern as every SuperAdmin route since Payment Operations — no
+// firestore.rules change for this phase.
+//
+// This route answers "what does a SuperAdmin need to know about
+// businesses" — not "how does the frontend query Firestore." Query
+// parameters are business-level concepts (an activity-state name, a
+// subscription-state name, a suspended boolean, a named sort field, an
+// opaque pagination cursor) — never raw Firestore field names or
+// operators. The response is exactly server/businessDirectory.ts's
+// own curated DirectoryRow shape, unmodified — no duplicated
+// business logic lives in this route; it is a thin wrapper, matching
+// every prior Phase A-D route.
+//
+// Never audited (list read), same tier as GET /api/superadmin/businesses
+// and GET /api/superadmin/operators — matching the existing,
+// unmodified Phase B precedent (this route introduces no new audit
+// event; docs/specs/18-superadmin-business-directory-slice.md §22).
+// ------------------------------------------------------------------
+expressApp.get(
+  '/api/superadmin/businesses/directory',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    try {
+      const search = typeof req.query.search === 'string' ? req.query.search : undefined;
+      const operationalActivity =
+        typeof req.query.operationalActivity === 'string' ? (req.query.operationalActivity as 'new' | 'active' | 'inactive' | 'dormant') : undefined;
+      const subscriptionState = typeof req.query.subscriptionState === 'string' ? req.query.subscriptionState : undefined;
+      const suspended = req.query.suspended === 'true' ? true : req.query.suspended === 'false' ? false : undefined;
+      const sortBy = typeof req.query.sortBy === 'string' ? (req.query.sortBy as 'lastActivityAt' | 'createdAt' | 'name') : undefined;
+      const cursor = typeof req.query.cursor === 'string' ? req.query.cursor : undefined;
+
+      const result = await queryBusinessDirectory(businessDirectoryDb, {
+        search,
+        operationalActivity,
+        subscriptionState,
+        suspended,
+        sortBy,
+        cursor,
+      });
+
+      if (result.outcome === 'invalid') {
+        res.status(400).json({ error: 'invalid-argument', message: result.message });
+        return;
+      }
+
+      res.json({ rows: result.rows, nextCursor: result.nextCursor });
+    } catch (err) {
+      console.error('[superadmin/businesses/directory] failed', { error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao carregar o directório de negócios.' });
     }
   }
 );

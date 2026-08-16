@@ -167,6 +167,69 @@ export async function searchBusinesses(q: string): Promise<BusinessSearchRow[]> 
   return body.businesses;
 }
 
+// ------------------------------------------------------------------
+// SuperAdmin V1 Operational Control Plane — Phase E (BDR-0010,
+// POL-18-001). Business Directory. Same thin-wrapper shape as every
+// function above — request/response are business-level concepts
+// (an activity-state name, a subscription-state name, a suspended
+// boolean, a named sort field, an opaque pagination cursor), never
+// raw Firestore query mechanics.
+// ------------------------------------------------------------------
+
+export type DirectoryOperationalActivity = 'New' | 'Active' | 'Inactive' | 'Dormant';
+export type DirectoryOperationalActivityFilter = 'new' | 'active' | 'inactive' | 'dormant';
+export type DirectorySortField = 'lastActivityAt' | 'createdAt' | 'name';
+
+// Reuses the exact six POL-19-005-approved values (server/businessDirectory.ts
+// validates against this same closed set) — not redefined here.
+export const DIRECTORY_SUBSCRIPTION_STATES = [
+  'trial_pending',
+  'trial_active',
+  'trial_completed',
+  'active',
+  'grace_period',
+  'expired',
+] as const;
+
+export interface DirectoryFilters {
+  search?: string;
+  operationalActivity?: DirectoryOperationalActivityFilter;
+  subscriptionState?: string;
+  suspended?: boolean;
+  sortBy?: DirectorySortField;
+  cursor?: string;
+}
+
+export interface DirectoryRow {
+  businessId: string;
+  name: string | null;
+  operationalActivity: DirectoryOperationalActivity;
+  daysSinceActivity: number | null;
+  lastActivityAt: string | null;
+  subscriptionState: string | null;
+  suspended: boolean;
+  createdAt: string | null;
+  ownerUid: string | null;
+}
+
+export interface DirectoryPage {
+  rows: DirectoryRow[];
+  nextCursor: string | null;
+}
+
+export async function fetchBusinessDirectory(filters: DirectoryFilters = {}): Promise<DirectoryPage> {
+  const params = new URLSearchParams();
+  if (filters.search) params.set('search', filters.search);
+  if (filters.operationalActivity) params.set('operationalActivity', filters.operationalActivity);
+  if (filters.subscriptionState) params.set('subscriptionState', filters.subscriptionState);
+  if (filters.suspended !== undefined) params.set('suspended', String(filters.suspended));
+  if (filters.sortBy) params.set('sortBy', filters.sortBy);
+  if (filters.cursor) params.set('cursor', filters.cursor);
+  const qs = params.toString();
+  const body = (await authedFetch(`/businesses/directory${qs ? `?${qs}` : ''}`)) as DirectoryPage;
+  return body;
+}
+
 export interface BusinessDetailStaffRow {
   name: string;
   suspended: boolean;
