@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatDate } from '../utils/formatters';
@@ -23,7 +23,7 @@ interface SubscriptionContactModalProps {
 // any way. Confirmation happens entirely outside the client, via
 // server/scripts/confirmPayment.ts.
 export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> = ({ onClose }) => {
-  const { payments, submitPayment } = useApp();
+  const { payments, submitPayment, subscription } = useApp();
   const { t } = useLanguage();
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
@@ -32,6 +32,37 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justSubmitted, setJustSubmitted] = useState(false);
+
+  // [Track B — Payment Activation UX correctness fix] Auto-close on a
+  // genuine transition to 'active' while this modal is mounted mid
+  // pending-payment workflow. `justSubmitted` (above) never resets on
+  // its own — once a payment is submitted, this modal would otherwise
+  // keep showing "aguardando confirmação" forever for the remaining
+  // lifetime of this mounted instance, even long after the backend has
+  // actually confirmed the payment and activated the subscription. The
+  // realtime `subscription` listener (AppContext) is the authoritative
+  // signal that resolves this: once it reports 'active', the pending
+  // workflow this modal exists for is genuinely finished.
+  //
+  // Deliberately a TRANSITION check, not a "current value" check —
+  // `previousStatusRef` tracks the status as of this modal's own prior
+  // render, so opening the modal while the business is already 'active'
+  // (whatever future call site might do that) does NOT auto-close it;
+  // only an actual non-active -> active change observed while mounted
+  // does. `previousStatus == null` covers both "not yet loaded" and
+  // "this is the first render" — neither counts as a real prior
+  // non-active state, so a subscription that resolves to 'active' on
+  // its very first snapshot (no prior known status) is correctly
+  // treated the same as "already active when opened," not as a
+  // transition.
+  const previousStatusRef = useRef(subscription?.status);
+  useEffect(() => {
+    const previousStatus = previousStatusRef.current;
+    previousStatusRef.current = subscription?.status;
+    if (previousStatus != null && previousStatus !== 'active' && subscription?.status === 'active') {
+      onClose();
+    }
+  }, [subscription?.status, onClose]);
 
   // Most recent submission drives the view — payments is already
   // sorted newest-first by AppContext's own listener.
