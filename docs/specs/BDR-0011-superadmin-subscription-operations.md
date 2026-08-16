@@ -2,10 +2,10 @@ Business Decision Record
 
 # BDR-0011 — SuperAdmin Subscription Operations: Legitimate Observation and Intervention Boundaries
 
-**Status:** Approved (investigation and framing only — see Part 13).
-Does not authorize implementation. Does not select among the four
-outcomes Part 13 names (A–D) — that selection remains a separate,
-subsequent Product Architect decision.
+**Status:** Approved. Outcome selected (Part 14, addendum): **B —
+Monitor first.** Not implemented; not deferred indefinitely — a
+defined, evidence-based revisit condition governs when this is
+reconsidered, per Part 14.
 **Type:** Business Decision Record — a strategic decision about
 whether and how SuperAdmin may observe or intervene in
 business-critical subscription state, per the category
@@ -374,7 +374,75 @@ BDR's approval, on its own, authorizes none of A–D** — it authorizes
 only that the investigation and framing above are accepted as accurate
 and sufficient to make that separate selection from.
 
-## 14. What This Decision Does Not Do
+## 14. Outcome Addendum — B: Monitor First
+
+**Date of this addendum:** 2026-08-16.
+**Outcome selected from Part 13's four paths: B — Monitor first.** Not
+A, not C, not D. This addendum records that selection and the
+conditions under which it should be revisited — it does not reopen or
+re-litigate Parts 1–13 above, which remain the governing analysis.
+
+**Why A is not justified yet, stated plainly:** Part 2 already
+established that no operational incident data exists to establish how
+often the identified gap (§1) actually occurs. Building a correction
+capability now would mean giving SuperAdmin a new privileged power on
+the strength of a structural gap alone, before knowing whether that
+gap manifests in practice. Sabush BPT is approaching launch; the more
+disciplined move is to observe real subscription operations first,
+not to add capability in anticipation of a problem that may or may not
+materialize the way this record's investigation imagines.
+
+**The observation mechanism already exists — no new capability is
+required to monitor.** Business Directory (BDR-0010), already
+implemented and live, filters by Subscription State
+(`grace_period`, `trial_completed`, `expired`) today. This is a real,
+working proxy for "businesses that may need attention" — Business
+Directory already does double duty as B's own observation layer;
+choosing B does not mean choosing to build nothing at all, it means
+recognizing that the relevant observation tool already shipped as part
+of a different, already-justified decision.
+
+**What counts as evidence, for the purpose of eventually revisiting
+this outcome:**
+- A real, specific business whose subscription state is genuinely
+  wrong, confirmed by direct investigation, not merely showing an
+  unusual filter result in Business Directory (an unusual result is a
+  prompt to investigate, not evidence on its own).
+- Any occurrence of the existing break-glass mechanism
+  (`server/scripts/confirmPayment.ts`) being reached for **outside**
+  its actual designed scope (confirming/rejecting a real, existing
+  `payments` document) — i.e., any manual Firestore edit performed
+  because no sanctioned mechanism existed for the situation. Each such
+  occurrence is itself exactly the operational evidence Part 2 found
+  absent — this decision does not treat that gap as static; it
+  accumulates evidence toward a future, better-grounded answer.
+- A customer-facing incident (an Owner losing access, being
+  incorrectly billed, or being incorrectly granted access) that traces
+  back to an uncorrected wrong subscription state.
+
+**Explicit revisit triggers, evidence-based rather than a manufactured
+count:** revisit this outcome when **the first meaningful operational
+incident demonstrates that the existing governed subscription model
+cannot safely resolve the situation**, or when **repeated manual
+intervention establishes a recurring operational pattern** — not at a
+predetermined number of occurrences chosen without grounding. A single
+sufficiently serious incident can justify revisiting on its own;
+several minor, easily-explained anomalies may not.
+
+**What this addendum does not authorize:** no POL, no specification,
+no implementation, no Firestore change, no new server route, no UI
+change. It records a decision to wait and observe, using a mechanism
+that already exists, with a defined (not indefinite) condition for
+reconsidering — not an open-ended deferral that quietly becomes
+permanent by never being revisited.
+
+**Governing rule for whatever happens next:** any future subscription
+intervention proposal — however it arises — must be evaluated against
+this BDR (Parts 1–13, and this addendum) rather than assumed,
+re-derived from scratch, or treated as a fresh decision unconnected to
+the analysis already done here.
+
+## 15. What This Decision Does Not Do
 
 - Does not authorize any subscription override capability, narrow or
   broad — see §13.
