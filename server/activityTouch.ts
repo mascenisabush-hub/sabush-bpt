@@ -37,15 +37,19 @@ export type TouchBusinessActivityResult =
 
 /**
  * Sets businesses/{businessId}.lastActivityAt to a server-generated
- * timestamp (new Date().toISOString(), the same server-clock idiom
- * every other privileged write in this codebase already uses — never
- * a client-supplied value). Never throws — a failure here must never
- * propagate as a failure of whatever business action triggered it, so
- * this function itself absorbs the error and reports 'failed' rather
- * than rejecting.
+ * timestamp (new Date().toISOString() by default, the same
+ * server-clock idiom every other privileged write in this codebase
+ * already uses — never a client-supplied value). `now` is injected
+ * (defaults to the real clock) for deterministic testing, matching
+ * the same DI pattern already established elsewhere in this codebase
+ * (runGracePeriodExpirySweep(), businessDirectory.ts's
+ * classifyOperationalActivity()/queryBusinessDirectory()). Never
+ * throws — a failure here must never propagate as a failure of
+ * whatever business action triggered it, so this function itself
+ * absorbs the error and reports 'failed' rather than rejecting.
  */
-export async function touchBusinessActivity(db: ActivityTouchDb, businessId: string): Promise<TouchBusinessActivityResult> {
-  const timestamp = new Date().toISOString();
+export async function touchBusinessActivity(db: ActivityTouchDb, businessId: string, now: Date = new Date()): Promise<TouchBusinessActivityResult> {
+  const timestamp = now.toISOString();
   try {
     await db.collection('businesses').doc(businessId).update({ lastActivityAt: timestamp });
     return { outcome: 'touched', businessId, timestamp };
