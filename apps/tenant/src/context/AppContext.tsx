@@ -2303,15 +2303,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } else {
       await logTimelineEvent({
-        // [Implementation Task, Section 3/6a] Deterministic id derived
-        // from the same submissionId as the stockCounts document above
-        // — a retry's write here is a harmless overwrite of the same
-        // timelineEvents document, never a second one. Independent of
-        // the stockCounts+draft-delete batch's atomicity (this call
-        // happens after that batch commits, matching every other
-        // logTimelineEvent call site in this file) — the frozen spec's
-        // §8b explicitly does not require cross-collection atomicity
-        // here, only this convergent, deterministic-id outcome.
+        // [Implementation Task, Section 3/6a — corrected during
+        // implementation, see below] Deterministic id derived from the
+        // same submissionId as the stockCounts document above.
+        //
+        // [CORRECTION] This does NOT converge via "harmless overwrite"
+        // as originally described in the Implementation Task — confirmed
+        // by `npm run test:periodic-stock-finalization:emulator`
+        // actually catching this. `timelineEvents`' own rule
+        // (firestore.rules) is `allow update: if false` — entries are
+        // unconditionally append-only, by a pre-existing, deliberate
+        // design this task does not touch. Firestore classifies a write
+        // to a path that already holds a document as an `update`, so a
+        // retry's write here is REJECTED outright by that rule, not
+        // silently accepted as a no-op overwrite.
+        //
+        // This still converges to exactly one document, just via a
+        // different mechanism: logTimelineEvent's own pre-existing
+        // try/catch (a few lines up in this file, already in place for
+        // every call site, not added by this task) swallows that
+        // rejection — so this call never throws into recordStockCount
+        // regardless of whether the write was the first (succeeds, a
+        // genuine create) or a retry (fails closed, silently absorbed).
+        // Net effect: exactly one timelineEvents document ever exists at
+        // this id — whichever attempt's write reached Firestore first —
+        // satisfying the frozen spec's §8b requirement via the existing
+        // immutability rule acting as a rules-enforced "existence check
+        // preceding the write" (one of §8a's explicitly listed,
+        // non-exhaustive mechanism options), not via idempotent
+        // overwrite. Independent of the stockCounts+draft-delete batch's
+        // atomicity (this call happens after that batch commits,
+        // matching every other logTimelineEvent call site in this file)
+        // — §8b does not require cross-collection atomicity, only this
+        // convergent outcome.
         id: 'tl-periodic-' + submissionId,
         type: 'stock-verification',
         date,

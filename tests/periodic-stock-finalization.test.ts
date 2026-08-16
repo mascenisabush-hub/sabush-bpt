@@ -48,6 +48,7 @@ import { before, after, beforeEach, describe, it } from 'node:test';
 import {
   initializeTestEnvironment,
   assertSucceeds,
+  assertFails,
   type RulesTestEnvironment,
 } from '@firebase/rules-unit-testing';
 import { doc, setDoc, getDoc, getDocs, collection, writeBatch } from 'firebase/firestore';
@@ -148,7 +149,17 @@ describe('§14 item 2 — ambiguous commit + retry converges to exactly one logi
     assert.equal(allCounts.size, 1, `Expected exactly 1 stockCounts document after a retry under the same submissionId, found ${allCounts.size}.`);
   });
 
-  it('a retried timelineEvents write under the same submissionId-derived id produces exactly one document, not two', async () => {
+  it('a retried timelineEvents write under the same submissionId-derived id converges to exactly one document — via rejection, not overwrite', async () => {
+    // [Correction found by this very test, see Implementation Task §9]
+    // timelineEvents' own rule (firestore.rules) is `allow update: if
+    // false` — unconditionally append-only, pre-existing, untouched by
+    // this task. A write to an id that already holds a document is
+    // classified by Firestore as an UPDATE, so the retry below is
+    // correctly expected to be REJECTED, not accepted as a no-op
+    // overwrite. This still produces the required observable outcome —
+    // exactly one document — because AppContext.tsx's logTimelineEvent
+    // already swallows this exact rejection in its own pre-existing
+    // try/catch, so recordStockCount never throws because of it.
     const db = ownerDbFor();
     const submissionId = 'sub-test-002';
     const eventId = timelineEventId(submissionId);
@@ -164,11 +175,19 @@ describe('§14 item 2 — ambiguous commit + retry converges to exactly one logi
     };
 
     await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'timelineEvents', eventId), eventBody));
-    // Retry — same deterministic id, same content.
-    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'timelineEvents', eventId), eventBody));
+    // Retry — same deterministic id, same content. This MUST fail
+    // (rejected by the append-only rule) — a passing assertSucceeds
+    // here would mean the rule had silently changed to allow edits,
+    // which would be a far more serious, unrelated regression.
+    await assertFails(setDoc(doc(db, 'businesses', BIZ, 'timelineEvents', eventId), eventBody));
 
     const allEvents = await getDocs(collection(db, 'businesses', BIZ, 'timelineEvents'));
     assert.equal(allEvents.size, 1, `Expected exactly 1 timelineEvents document after a retry under the same submissionId, found ${allEvents.size}.`);
+    // The one surviving document is attempt 1's — rejection of the
+    // retry never touched or corrupted it.
+    const snap = await getDoc(doc(db, 'businesses', BIZ, 'timelineEvents', eventId));
+    assert.equal(snap.exists(), true);
+    assert.equal(snap.data()?.title, eventBody.title);
   });
 
   it('two DIFFERENT submissionIds (two genuinely separate periodic counts) produce two separate stockCounts documents — the mechanism does not over-collapse unrelated counts', async () => {

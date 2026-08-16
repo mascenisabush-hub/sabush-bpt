@@ -526,6 +526,58 @@ existing Firestore-emulator tier.
 
 ---
 
+## 9. Post-Freeze Correction (found during Verification)
+
+**This section is appended, not a silent edit of the frozen text
+above** — §6a item 2's claim above ("a retry's write to it is a
+harmless overwrite, never a second document") is factually wrong and is
+preserved as-written for the historical record, corrected here instead.
+
+**What was found:** running `npm run test:periodic-stock-finalization:emulator`
+against a real Firestore emulator (Verification stage, not caught by
+`tsc --noEmit` or any source-level test, since this is a genuine
+Firestore-rules-level property) surfaced that `timelineEvents`' own
+rule (`firestore.rules`, pre-existing, untouched by this task) is
+`allow update: if false` — entries are unconditionally append-only.
+Firestore classifies a write to a path that already holds a document as
+an `update`, so a retry's write to the deterministic `tl-periodic-`
+id — which the first successful attempt already created — is REJECTED
+by this rule, not accepted as a no-op overwrite. §6a item 2 as
+originally written assumed the same "overwrite is harmless" shape as
+`stockCounts` (Item 1), without having checked `timelineEvents`' own
+rule text first, which is exactly the kind of unverified assumption
+this project's governance discipline exists to catch — it simply wasn't
+caught until Verification instead of at this freeze, because it's a
+Firestore-rules property no earlier stage's tooling (`tsc`, source
+inspection) can see.
+
+**Why this does not require reopening the specification or this task:**
+the OBSERVABLE OUTCOME §8a/§8b actually require — exactly one
+`timelineEvents` document per submission identity, ever — still holds,
+just via a different mechanism than described. `logTimelineEvent`'s own
+pre-existing try/catch (already in place for every call site in
+`AppContext.tsx`, not added by this task) swallows the rejected
+retry's error, so `recordStockCount` never throws because of it. Net
+effect: exactly one document ever exists at the deterministic id —
+whichever attempt's write reached Firestore first — which is §8a's
+"an existence check preceding the write" option, enforced by the
+pre-existing rule rather than by explicit application code. No code
+change was required; only the misleading comment in
+`AppContext.tsx`'s `recordStockCount` (periodic branch's
+`logTimelineEvent` call) and the test's assertion (`assertFails`
+instead of `assertSucceeds` on the retry, then asserting exactly one
+document still exists) were corrected. See the corresponding commit for
+the exact diff.
+
+**Process note carried forward:** this is the reason
+`npm run test:periodic-stock-finalization:emulator` and
+`npm run test:rules:emulator` were called out as the actual acceptance
+gate, not this document's freeze or a clean `tsc --noEmit` — a
+Firestore-rules-level property can only be verified against Firestore
+rules themselves.
+
+---
+
 **This document is a frozen Implementation Task.** Per this project's
 established discipline, it is committed and pushed next, then verified
 on `origin/main` — only after that verification is actual
