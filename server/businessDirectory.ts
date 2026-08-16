@@ -167,9 +167,9 @@ export function classifyOperationalActivity(
   return { state: 'Dormant', daysSinceActivity: activityDays };
 }
 
-function mapDoc(doc: DocSnap): DirectoryRow {
+function mapDoc(doc: DocSnap, now: Date): DirectoryRow {
   const data = doc.data() ?? {};
-  const classification = classifyOperationalActivity(data.createdAt, data.lastActivityAt);
+  const classification = classifyOperationalActivity(data.createdAt, data.lastActivityAt, now);
   return {
     businessId: doc.id,
     name: data.name ?? null,
@@ -190,7 +190,11 @@ function mapDoc(doc: DocSnap): DirectoryRow {
  *   - search absent -> a single, fully server-side filtered/sorted/
  *     paginated query, including the now-proven Activity range filter
  */
-export async function queryBusinessDirectory(db: BusinessDirectoryDb, filters: DirectoryFilters): Promise<DirectoryQueryResult> {
+export async function queryBusinessDirectory(
+  db: BusinessDirectoryDb,
+  filters: DirectoryFilters,
+  now: Date = new Date(),
+): Promise<DirectoryQueryResult> {
   if (filters.subscriptionState !== undefined && !(KNOWN_SUBSCRIPTION_STATUSES as readonly string[]).includes(filters.subscriptionState)) {
     return { outcome: 'invalid', message: `subscriptionState inválido: ${filters.subscriptionState}` };
   }
@@ -205,9 +209,9 @@ export async function queryBusinessDirectory(db: BusinessDirectoryDb, filters: D
 
   const searchTerm = filters.search?.trim();
   if (searchTerm) {
-    return queryWithSearch(db, searchTerm, filters);
+    return queryWithSearch(db, searchTerm, filters, now);
   }
-  return queryWithoutSearch(db, filters, sortBy, pageSize);
+  return queryWithoutSearch(db, filters, sortBy, pageSize, now);
 }
 
 /**
@@ -220,12 +224,12 @@ export async function queryBusinessDirectory(db: BusinessDirectoryDb, filters: D
  * bounded post-filter on the already-fetched, already-small result
  * set — never the full-population scan BDR-0010 prohibits.
  */
-async function queryWithSearch(db: BusinessDirectoryDb, searchTerm: string, filters: DirectoryFilters): Promise<DirectoryQueryResult> {
+async function queryWithSearch(db: BusinessDirectoryDb, searchTerm: string, filters: DirectoryFilters, now: Date): Promise<DirectoryQueryResult> {
   const results = new Map<string, DirectoryRow>();
 
   const exactSnap = await db.collection('businesses').doc(searchTerm).get();
   if (exactSnap.exists && matchesEqualityFilters(exactSnap.data(), filters)) {
-    results.set(exactSnap.id, mapDoc(exactSnap));
+    results.set(exactSnap.id, mapDoc(exactSnap, now));
   }
 
   let prefixQuery: QueryLike = db.collection('businesses').where('name', '>=', searchTerm).where('name', '<=', searchTerm + '\uf8ff');
@@ -233,7 +237,7 @@ async function queryWithSearch(db: BusinessDirectoryDb, searchTerm: string, filt
   if (filters.subscriptionState !== undefined) prefixQuery = prefixQuery.where('subscriptionStatusCache', '==', filters.subscriptionState);
   const prefixSnap = await prefixQuery.limit(SEARCH_RESULT_LIMIT).get();
   for (const doc of prefixSnap.docs) {
-    if (!results.has(doc.id)) results.set(doc.id, mapDoc(doc));
+    if (!results.has(doc.id)) results.set(doc.id, mapDoc(doc, now));
   }
 
   let rows = Array.from(results.values()).slice(0, SEARCH_RESULT_LIMIT);
@@ -276,6 +280,7 @@ async function queryWithoutSearch(
   filters: DirectoryFilters,
   sortBy: SortField,
   pageSize: number,
+  now: Date,
 ): Promise<DirectoryQueryResult> {
   let query: QueryLike = db.collection('businesses');
 
@@ -283,7 +288,6 @@ async function queryWithoutSearch(
   if (filters.subscriptionState !== undefined) query = query.where('subscriptionStatusCache', '==', filters.subscriptionState);
 
   if (filters.operationalActivity !== undefined) {
-    const now = new Date();
     const ageCutoff = new Date(now.getTime() - NEW_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const activeCutoff = new Date(now.getTime() - ACTIVE_WINDOW_DAYS * 24 * 60 * 60 * 1000).toISOString();
     const dormantCutoff = new Date(now.getTime() - DORMANT_THRESHOLD_DAYS * 24 * 60 * 60 * 1000).toISOString();
@@ -323,7 +327,7 @@ async function queryWithoutSearch(
   query = query.limit(pageSize);
 
   const snap = await query.get();
-  const rows = snap.docs.map(mapDoc);
+  const rows = snap.docs.map((d) => mapDoc(d, now));
   const lastRow = rows[rows.length - 1];
   const nextCursor = rows.length === pageSize && lastRow ? String(lastRow[sortBy] ?? '') : null;
 
