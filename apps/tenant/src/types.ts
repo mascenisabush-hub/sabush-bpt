@@ -427,6 +427,48 @@ export interface InitialStockDraft {
   updatedAt: string; // ISO string
 }
 
+// [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
+// Persistent, per-business Periodic Contagem draft. Sibling to
+// InitialStockDraft above, deliberately NOT sharing code with it (the
+// frozen specification's §5 explicitly does not authorize a shared
+// hook/utility between the initial and periodic draft mechanisms).
+// Single document per business (fixed id 'periodic', matching
+// `initial`'s own singleton shape) — periodic `stockCounts` creation is
+// already Owner-only, so this does not need to support concurrent
+// multi-user editing of the same periodic count (frozen spec §5).
+// Never itself a StockCount; never read by any valuation calculation.
+export interface PeriodicStockDraftItem {
+  // Mirrors StockCountWorkingRow's shape (utils/stockCount.ts) as
+  // persisted — optional fields are omitted entirely when absent,
+  // never written as literal `undefined` (Firestore rejects that; see
+  // savePurchaseDraft's own documented fix for this exact class of bug).
+  productId?: string;
+  productName: string;
+  quantity: string;
+  unit: string;
+  costPrice: string;
+  sellingPrice: string;
+  removed?: boolean;
+}
+
+export interface PeriodicStockDraft {
+  items: PeriodicStockDraftItem[];
+  type: StockCountType;
+  label?: string;
+  date: string;
+  // [Implementation Task, Section 3/4b] The stable submission identity
+  // every retry of the same logical finalization attempt reuses.
+  // Present once the operator has entered the mandatory Counted/Not
+  // Counted confirmation step at least once; absent while still
+  // editing. This field's durability (written immediately, not
+  // debounced, before finalization begins) is what makes the
+  // deterministic-id idempotency mechanism survive a crash-and-retry —
+  // see the Implementation Task's §3/§4b for why this is required, not
+  // merely convenient.
+  submissionId?: string;
+  updatedAt: string; // ISO string
+}
+
 // [Durable Purchase Capture Amendment v1.0] A persistent, per-user,
 // pre-finalization Purchase Draft — the Add Stock analogue of
 // InitialStockDraft above, deliberately modeled on it. NOT inventory —

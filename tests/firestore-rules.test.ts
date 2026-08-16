@@ -665,6 +665,58 @@ describe('stockCountDrafts', () => {
     await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
     await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
   });
+
+  // [Stock Count Data-Loss Resilience — Implementation Task, Section 1/§14
+  // item 5] Same coverage as the 'initial' doc id above, run against the
+  // NEW 'periodic' doc id — proving the Implementation Task's own claim
+  // that the existing generic `stockCountDrafts/{draftId}` rule block
+  // already covers `periodic` with zero rule-text changes, rather than
+  // just asserting that in prose.
+  it('Owner can read/create/update/delete their own PERIODIC draft; Staff and other businesses cannot', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    const periodicDraftBody = { items: [], type: 'monthly', date: '2026-08-01', updatedAt: new Date().toISOString() };
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), periodicDraftBody));
+    await assertSucceeds(getDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), { updatedAt: new Date().toISOString() }));
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(getDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+    await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), periodicDraftBody));
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCountDrafts', 'periodic'), periodicDraftBody);
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+  });
+
+  // [Implementation Task §11] Delete is never subscription-gated — same
+  // invariant the 'initial' draft already holds (tested elsewhere in this
+  // file for 'initial'), proven here for 'periodic' too: even with a
+  // blocked subscription, deleting/clearing (e.g. the "Começar de novo"
+  // path) must still succeed for the Owner.
+  it('Owner can delete their own periodic draft even when the business subscription blocks new records', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      const db = ctx.firestore();
+      await setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), {
+        items: [], type: 'monthly', date: '2026-08-01', updatedAt: new Date().toISOString(),
+      });
+      // subscriptionAllowsNewRecords(businessId) reads the TOP-LEVEL
+      // subscriptions/{businessId} document (not a business subcollection)
+      // — matches every other subscription-blocked test in this file.
+      await setDoc(doc(db, 'subscriptions', BIZ), { status: 'expired' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    // create/update are blocked while subscription-blocked (matching the
+    // 'initial' draft's own already-tested restriction)...
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), {
+      items: [], type: 'monthly', date: '2026-08-02', updatedAt: new Date().toISOString(),
+    }));
+    // ...but delete is never subscription-gated.
+    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+  });
 });
 
 // [Initial Stock Valuation History] Immutable, append-only price-change

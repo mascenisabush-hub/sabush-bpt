@@ -190,3 +190,72 @@ export function tallyStockCountRows(rows: StockCountWorkingRow[]): StockCountTal
     totalSellingValue: Number(totalSellingValue.toFixed(2)),
   };
 }
+
+// ------------------------------------------------------------------
+// [Stock Count Data-Loss Resilience — Implementation Task, Section 6]
+// Working-row <-> persisted-draft-item conversion — pure, dependency-
+// free (no Firestore, no React), same reasoning as this file's own
+// tallyStockCountRows/normalizeStockCountItems above: the property that
+// actually matters ("a blank quantity is never coerced to zero, and a
+// zero quantity is never coerced to blank, anywhere in the draft-save/
+// recovery path" — frozen spec §14 item 4) lives entirely in this JS
+// transformation layer, not in Firestore itself (which stores strings
+// faithfully, with no numeric coercion of its own) — so this is the
+// correct, and only necessary, place to prove that property, without
+// needing a live Firestore/emulator dependency for this specific
+// concern. Used by PeriodicStockCountView's autosave/resume path.
+// ------------------------------------------------------------------
+
+/** Converts a working row to its Firestore-safe persisted shape.
+ * Optional fields are omitted entirely when absent, never written as
+ * literal `undefined` (Firestore rejects that — matches
+ * savePurchaseDraft's own documented fix, AppContext.tsx, for this
+ * exact class of bug). `quantity` is passed through as the exact
+ * string the operator typed (including '', which is the only
+ * representation of "not yet counted") — never parsed, coerced, or
+ * defaulted here. */
+export function workingRowToDraftItem(row: StockCountWorkingRow): {
+  productId?: string;
+  productName: string;
+  quantity: string;
+  unit: string;
+  costPrice: string;
+  sellingPrice: string;
+  removed?: boolean;
+} {
+  return {
+    ...(row.productId ? { productId: row.productId } : {}),
+    productName: row.productName,
+    quantity: row.quantity,
+    unit: row.unit,
+    costPrice: row.costPrice,
+    sellingPrice: row.sellingPrice,
+    ...(row.removed !== undefined ? { removed: row.removed } : {}),
+  };
+}
+
+/** The exact inverse of workingRowToDraftItem — used when resuming a
+ * recovered draft. `quantity` (and every other string field) is copied
+ * through verbatim, never re-parsed or re-coerced; this is what
+ * guarantees a recovered '' round-trips back to '' (Not Counted) and a
+ * recovered '0' round-trips back to '0' (Counted, physically zero),
+ * never crossing into the other's meaning. */
+export function draftItemToWorkingRow(item: {
+  productId?: string;
+  productName: string;
+  quantity: string;
+  unit: string;
+  costPrice: string;
+  sellingPrice: string;
+  removed?: boolean;
+}): StockCountWorkingRow {
+  return {
+    productId: item.productId,
+    productName: item.productName,
+    quantity: item.quantity,
+    unit: item.unit,
+    costPrice: item.costPrice,
+    sellingPrice: item.sellingPrice,
+    removed: item.removed,
+  };
+}

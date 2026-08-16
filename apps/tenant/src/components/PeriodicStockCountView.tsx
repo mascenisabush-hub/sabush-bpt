@@ -1,10 +1,10 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
-import { StockCountType } from '../types';
+import { StockCountType, PeriodicStockDraft } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
-import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult } from '../utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -23,6 +23,7 @@ import {
   Search,
   AlertTriangle,
   RotateCw,
+  Undo2,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -67,6 +68,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     products,
     batches,
     productsError,
+    periodicStockDraft,
+    periodicStockDraftLoaded,
+    savePeriodicStockDraft,
+    clearPeriodicStockDraft,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -121,6 +126,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // working list at the moment "Confirmar Contagem" was first pressed.
   const [pendingTally, setPendingTally] = useState<StockCountTallyResult | null>(null);
 
+  // [Stock Count Data-Loss Resilience — Implementation Task] Draft
+  // lifecycle state (frozen spec §4) — rendered distinctly from
+  // isSaving/savedMessage above (§1a: draft durability and finalization
+  // status are never the same UI signal).
+  const [draftSaveState, setDraftSaveState] = useState<'editing' | 'saving' | 'saved' | 'save-failed'>('editing');
+  // Whether the operator has already resolved the stale-draft resume
+  // banner this mount (Retomar or Começar de novo) — gates the main
+  // form per §5/§6 ("never silently auto-loaded").
+  const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+
+  // §4a — ordinary row-content autosave: a not-yet-fired timer handle,
+  // and the in-flight write's own promise once it has fired. Safe to
+  // discard on confirm (finalization reads live component state, never
+  // this draft) — see handleConfirmSave.
+  const draftDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  const draftInFlightSaveRef = useRef<Promise<void> | null>(null);
+  // §4b — the one write that must NEVER be discarded: the immediate,
+  // non-debounced write that establishes the submission identity
+  // (issued from handleRequestConfirmation), always awaited in full by
+  // handleConfirmSave before finalization begins.
+  const identityWriteRef = useRef<Promise<void> | null>(null);
+  // The submission identity itself (frozen spec §7): generated once on
+  // first entry into pendingTally, reused across every retry, cleared
+  // by every row/type/date/label-change handler below so that backing
+  // out and materially editing regenerates it on the next confirmation
+  // attempt, per §7's "last-second edit wins" principle.
+  const submissionIdRef = useRef<string | null>(null);
+
   // Auto-populate: every Product currently in the catalog gets a
   // working row (BDR-0009 Part 3 — "active" = exists in `products`).
   // Merge-only: a product already represented in `catalogRows` is left
@@ -154,8 +187,63 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // context below), but no longer feeds `comparisonBaseline`.
   const comparisonBaseline = expectedCurrentStockValue;
 
+  // [Implementation Task, Section 2/6] Firestore-safe conversion —
+  // extracted to utils/stockCount.ts as a pure function (workingRowToDraftItem)
+  // so the "blank never becomes zero" property can be proven with a
+  // real, runnable unit test rather than only an emulator test.
+
+  // [Implementation Task, Section 4a] Ordinary row-content autosave —
+  // called directly from row/type/date/label-change handlers below,
+  // never from a useEffect keyed on component state, so cancellation at
+  // confirmation time (handleConfirmSave) never depends on an effect's
+  // dependency array staying complete — the exact shape of the existing
+  // Initial Count bug this task exists to not repeat. Every argument is
+  // passed explicitly by the caller (the just-computed next value, not
+  // read from this closure's own state) so a call made synchronously
+  // right after a setState call always schedules the CURRENT edit, not
+  // a stale pre-update snapshot.
+  const scheduleDraftSave = (
+    nextCatalogRows: CatalogRowState,
+    nextManualRows: StockCountWorkingRow[],
+    nextType: StockCountType,
+    nextLabel: string,
+    nextDate: string
+  ) => {
+    if (draftDebounceTimerRef.current) clearTimeout(draftDebounceTimerRef.current);
+    // `editing`: local changes exist, not yet acknowledged by Firestore
+    // (frozen spec §4) — set immediately, before the delay, distinct
+    // from `saving` which is reserved for once the write is actually
+    // in flight.
+    setDraftSaveState('editing');
+    draftDebounceTimerRef.current = setTimeout(() => {
+      draftDebounceTimerRef.current = null;
+      setDraftSaveState('saving');
+      const allRows = [...Object.values(nextCatalogRows), ...nextManualRows].map(workingRowToDraftItem);
+      const savePromise = savePeriodicStockDraft(
+        allRows,
+        nextType,
+        nextLabel.trim() || undefined,
+        nextDate,
+        submissionIdRef.current || undefined
+      )
+        .then(() => setDraftSaveState('saved'))
+        .catch(() => setDraftSaveState('save-failed'))
+        .finally(() => {
+          draftInFlightSaveRef.current = null;
+        });
+      draftInFlightSaveRef.current = savePromise;
+    }, 800);
+  };
+
   const updateCatalogRow = (productId: string, fields: Partial<StockCountWorkingRow>) => {
-    setCatalogRows((prev) => (prev[productId] ? { ...prev, [productId]: { ...prev[productId], ...fields } } : prev));
+    if (!catalogRows[productId]) return;
+    // [§7] Any edit after at least one confirmation attempt invalidates
+    // the identity that attempt used — the next confirmation generates
+    // a fresh one. A no-op before the first attempt (already null).
+    submissionIdRef.current = null;
+    const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...fields } };
+    setCatalogRows(nextCatalogRows);
+    scheduleDraftSave(nextCatalogRows, manualRows, type, label, date);
   };
 
   // Not a delete — flips `removed`, so the product stays represented
@@ -170,13 +258,91 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   };
 
   const updateManualRow = (index: number, fields: Partial<StockCountWorkingRow>) => {
-    setManualRows((prev) => prev.map((row, i) => (i === index ? { ...row, ...fields } : row)));
+    submissionIdRef.current = null;
+    const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...fields } : row));
+    setManualRows(nextManualRows);
+    scheduleDraftSave(catalogRows, nextManualRows, type, label, date);
   };
 
-  const handleAddManualRow = () => setManualRows((prev) => [...prev, createManualRow()]);
+  const handleAddManualRow = () => {
+    submissionIdRef.current = null;
+    const nextManualRows = [...manualRows, createManualRow()];
+    setManualRows(nextManualRows);
+    scheduleDraftSave(catalogRows, nextManualRows, type, label, date);
+  };
 
   const handleRemoveManualRow = (index: number) => {
-    setManualRows((prev) => prev.filter((_, i) => i !== index));
+    submissionIdRef.current = null;
+    const nextManualRows = manualRows.filter((_, i) => i !== index);
+    setManualRows(nextManualRows);
+    scheduleDraftSave(catalogRows, nextManualRows, type, label, date);
+  };
+
+  const handleTypeChange = (nextType: StockCountType) => {
+    submissionIdRef.current = null;
+    setType(nextType);
+    scheduleDraftSave(catalogRows, manualRows, nextType, label, date);
+  };
+
+  const handleLabelChange = (nextLabel: string) => {
+    submissionIdRef.current = null;
+    setLabel(nextLabel);
+    scheduleDraftSave(catalogRows, manualRows, type, nextLabel, date);
+  };
+
+  const handleDateChange = (nextDate: string) => {
+    submissionIdRef.current = null;
+    setDate(nextDate);
+    scheduleDraftSave(catalogRows, manualRows, type, label, nextDate);
+  };
+
+  // [Implementation Task, Section 5] Stale-draft resume banner actions.
+  // Retomar loads the persisted draft's rows and submission identity
+  // into working state; the catalog-merge effect above (keyed on
+  // [products]) is unaffected — a product added to the catalog after
+  // this draft was last saved simply isn't in `periodicStockDraft.items`
+  // yet, so it's merged in here as a fresh blank row, same reasoning as
+  // that effect's own merge-only behavior.
+  const handleResumeDraft = () => {
+    if (!periodicStockDraft) return;
+    const nextCatalogRows: CatalogRowState = {};
+    const nextManualRows: StockCountWorkingRow[] = [];
+    for (const item of periodicStockDraft.items) {
+      const row: StockCountWorkingRow = draftItemToWorkingRow(item);
+      if (item.productId) {
+        nextCatalogRows[item.productId] = row;
+      } else {
+        nextManualRows.push(row);
+      }
+    }
+    for (const product of products) {
+      if (!nextCatalogRows[product.id]) {
+        nextCatalogRows[product.id] = buildCatalogRow(product);
+      }
+    }
+    setCatalogRows(nextCatalogRows);
+    setManualRows(nextManualRows);
+    setType(periodicStockDraft.type);
+    setLabel(periodicStockDraft.label || '');
+    setDate(periodicStockDraft.date);
+    submissionIdRef.current = periodicStockDraft.submissionId || null;
+    setDraftSaveState('saved');
+    setDraftBannerDismissed(true);
+  };
+
+  // Começar de novo — explicit "start over" path (Implementation Task,
+  // Section 5), distinct from finalization's own automatic cleanup
+  // inside recordStockCount.
+  const handleDiscardDraft = async () => {
+    setDraftBannerDismissed(true);
+    submissionIdRef.current = null;
+    try {
+      await clearPeriodicStockDraft();
+    } catch {
+      // Best-effort — if this fails, the stale draft is simply
+      // overwritten by the next autosave, or the banner reappears next
+      // mount; not a blocking error for the operator's current session.
+    }
   };
 
   const visibleCatalogEntries = useMemo(() => {
@@ -210,7 +376,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // Step 1 of 2: validate + compute the tally and hand off to the
   // mandatory Counted/Not Counted confirmation screen (Amendment Part
   // 9) — nothing is saved yet.
-  const handleRequestConfirmation = (e: React.FormEvent) => {
+  //
+  // [Implementation Task, Section 3/4b/7] This is also where the
+  // submission identity is generated (once per logical confirmation
+  // attempt, reused across retries — regenerated only if
+  // submissionIdRef.current was nulled by an edit since the last
+  // attempt, per every row/type/date/label handler above) and
+  // immediately, durably persisted — never left to the debounced §4a
+  // path, which is the one thing handleConfirmSave below is allowed to
+  // discard.
+  const handleRequestConfirmation = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
 
@@ -231,16 +406,75 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
     }
 
+    if (!submissionIdRef.current) {
+      submissionIdRef.current = 'submission-' + Date.now() + '-' + Math.random().toString(36).substr(2, 8);
+    }
+
+    // §4a: any not-yet-fired ordinary autosave is about to be
+    // superseded by the immediate write below regardless — clear it so
+    // it can't fire a second, now-redundant write moments later.
+    if (draftDebounceTimerRef.current) {
+      clearTimeout(draftDebounceTimerRef.current);
+      draftDebounceTimerRef.current = null;
+    }
+
+    // [Race guard] Sequence this identity-establishing write strictly
+    // after any write already in flight — an ordinary §4a autosave that
+    // had already fired before being cancelled above, or a PRIOR
+    // identity write from an earlier confirm → back out → edit →
+    // reconfirm cycle within this same session. Without this, two
+    // overlapping writes to the same draft document could complete out
+    // of order, letting a stale one land after the fresh one and
+    // silently revert the persisted identity/content — which would
+    // defeat §4b's durability guarantee for a crash occurring in that
+    // exact narrow window. Both referenced promises already swallow
+    // their own errors internally (see their `.catch` handlers below
+    // and in scheduleDraftSave), so awaiting them here never throws.
+    if (draftInFlightSaveRef.current) {
+      await draftInFlightSaveRef.current;
+    }
+    if (identityWriteRef.current) {
+      await identityWriteRef.current;
+    }
+
+    // §4b: immediate, non-debounced, full draft write INCLUDING the
+    // identity — this is the write handleConfirmSave will always await
+    // in full before finalization, never cancel.
+    setDraftSaveState('saving');
+    const allRows = allWorkingRows.map(workingRowToDraftItem);
+    identityWriteRef.current = savePeriodicStockDraft(allRows, type, label.trim() || undefined, date, submissionIdRef.current)
+      .then(() => setDraftSaveState('saved'))
+      .catch(() => setDraftSaveState('save-failed'));
+
     setPendingTally(tally);
   };
 
   // Step 2 of 2: the operator has seen "N contados / M não contados"
   // and explicitly confirmed — now it actually saves.
+  //
+  // [Implementation Task, Section 4] Ordering, exactly as specified:
+  // cancel/await any pending ordinary row-content save (§4a, safe —
+  // finalization reads live component state, never the draft), THEN
+  // await the identity write in full (§4b, never cancelled), and only
+  // then call recordStockCount. By the time fsBatch.commit() is even
+  // queued inside recordStockCount, no draft-write promise this
+  // component could have in flight remains unresolved.
   const handleConfirmSave = async () => {
     if (!pendingTally) return;
     setIsSaving(true);
     setError(null);
     try {
+      if (draftDebounceTimerRef.current) {
+        clearTimeout(draftDebounceTimerRef.current);
+        draftDebounceTimerRef.current = null;
+      }
+      if (draftInFlightSaveRef.current) {
+        await draftInFlightSaveRef.current;
+      }
+      if (identityWriteRef.current) {
+        await identityWriteRef.current;
+      }
+
       const saved = await recordStockCount({
         type,
         label: type === 'custom' ? label.trim() : undefined,
@@ -253,15 +487,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           sellingPrice: item.sellingPrice,
         })),
         expectedValueAtCount: expectedCurrentStockValue,
+        submissionId: submissionIdRef.current || undefined,
       });
       setSavedTotal(saved.totalValue);
       setSavedTally(pendingTally);
       setSavedMessage(`Contagem ${TYPE_LABELS[type]} registada com sucesso!`);
       setPendingTally(null);
+      // [Implementation Task, Section 4b] Finalized — this identity has
+      // done its job. A future periodic count (after onComplete moves
+      // the operator away from this screen) needs a fresh one; leaving
+      // this set would otherwise let a later, entirely unrelated count
+      // collide with this one's deterministic stockCounts id.
+      submissionIdRef.current = null;
       setTimeout(() => onComplete(), 2200);
     } catch (err: any) {
       setError(err.message || 'Erro ao registar a contagem de stock.');
       setPendingTally(null);
+      // Deliberately NOT clearing submissionIdRef.current here — a
+      // failed or ambiguous attempt must remain retryable under the
+      // SAME identity (§3/§4b). The operator returns to the editing
+      // screen; if they click "Rever e Confirmar Contagem" again
+      // without editing anything, handleRequestConfirmation reuses this
+      // identity rather than generating a new one.
     } finally {
       setIsSaving(false);
     }
@@ -387,8 +634,76 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const fieldLabelClass = 'block type-label mb-1';
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_112px_120px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
+  // [Implementation Task, Section 5] A draft only counts as "worth
+  // resuming" if it actually holds operator-entered content — an empty
+  // draft (e.g. one that only ever got as far as an identity-only
+  // write, or was created and abandoned before any quantity was typed)
+  // isn't worth interrupting the operator's flow with a banner over.
+  const draftHasMeaningfulContent = (draft: PeriodicStockDraft | null): boolean =>
+    !!draft && draft.items.some((item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== ''));
+
+  // Gate the main form on resolving the stale-draft banner (§6: never
+  // silently auto-loaded) — but only when there's actually something to
+  // resolve. `periodicStockDraftLoaded` disambiguates "we don't know
+  // yet" (still waiting on Firestore's first snapshot) from "confirmed:
+  // no draft," same reasoning as initialStockDraftLoaded.
+  const draftDecisionPending =
+    periodicStockDraftLoaded && draftHasMeaningfulContent(periodicStockDraft) && !draftBannerDismissed;
+
   if (subscriptionBlocksNewRecords) {
     return <SubscriptionBlockedNotice />;
+  }
+
+  if (!periodicStockDraftLoaded) {
+    return (
+      <div className="max-w-5xl mx-auto pb-12">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-8 text-center text-sm text-gray-400">
+          A verificar contagens por terminar...
+        </div>
+      </div>
+    );
+  }
+
+  if (draftDecisionPending && periodicStockDraft) {
+    return (
+      <div className="max-w-2xl mx-auto py-16 space-y-5">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-5">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
+              <Undo2 className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="type-title">Contagem por Terminar Encontrada</h2>
+              <p className="text-[12px] text-gray-500 mt-0.5">
+                Existe uma contagem {TYPE_LABELS[periodicStockDraft.type]} por terminar de{' '}
+                {formatDate(periodicStockDraft.date)}.
+              </p>
+            </div>
+          </div>
+          <p className="text-[13px] text-gray-600 leading-relaxed">
+            Pode retomar de onde parou, ou começar uma contagem nova a partir do zero — os dados desta contagem
+            por terminar serão descartados permanentemente.
+          </p>
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={handleDiscardDraft}
+              className="btn-secondary flex-1 py-3 px-4 text-sm"
+            >
+              <span>Começar de Novo</span>
+            </button>
+            <button
+              type="button"
+              onClick={handleResumeDraft}
+              className="btn-primary flex-1 py-3 px-4 text-sm"
+            >
+              <span>Retomar Contagem</span>
+              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (
@@ -399,12 +714,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
             <ClipboardList className="w-5 h-5" strokeWidth={2} />
           </div>
-          <div className="min-w-0">
+          <div className="min-w-0 flex-1">
             <h2 className="type-title">Contagem de Stock Periódica</h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               Registe uma nova contagem física para acompanhar a evolução do seu capital.
             </p>
           </div>
+          {/* [Implementation Task, Section 4/§1a] Draft durability status —
+              a deliberately distinct UI signal from isSaving/savedMessage
+              below, never collapsed into the same indicator (frozen spec
+              §1a: "the user's work is durable" and "the final business
+              transaction has been committed" must never share a signal). */}
+          {draftSaveState !== 'editing' && (
+            <span className="text-[11px] text-gray-400 shrink-0 font-medium">
+              {draftSaveState === 'saving' && 'A guardar rascunho…'}
+              {draftSaveState === 'saved' && 'Rascunho guardado'}
+              {draftSaveState === 'save-failed' && (
+                <span className="text-rose-500">Falha ao guardar rascunho</span>
+              )}
+            </span>
+          )}
         </div>
 
         {!hasInitialStockCount && (
@@ -458,7 +787,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               <label className={fieldLabelClass}>Tipo de Contagem</label>
               <select
                 value={type}
-                onChange={(e) => setType(e.target.value as StockCountType)}
+                onChange={(e) => handleTypeChange(e.target.value as StockCountType)}
                 className={`${fieldClass} font-semibold`}
               >
                 {TYPE_OPTIONS.map((opt) => (
@@ -475,7 +804,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 type="date"
                 required
                 value={date}
-                onChange={(e) => setDate(e.target.value)}
+                onChange={(e) => handleDateChange(e.target.value)}
                 className={`${fieldClass} font-mono tabular-nums`}
               />
             </div>
@@ -487,7 +816,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   type="text"
                   placeholder="Ex: Antes do Natal"
                   value={label}
-                  onChange={(e) => setLabel(e.target.value)}
+                  onChange={(e) => handleLabelChange(e.target.value)}
                   className={fieldClass}
                 />
               </div>

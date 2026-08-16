@@ -18,7 +18,7 @@
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
 import { readFileSync } from 'node:fs';
-import { tallyStockCountRows, StockCountWorkingRow } from '../apps/tenant/src/utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow, workingRowToDraftItem, draftItemToWorkingRow } from '../apps/tenant/src/utils/stockCount';
 
 const row = (overrides: Partial<StockCountWorkingRow>): StockCountWorkingRow => ({
   productId: 'p1',
@@ -194,3 +194,71 @@ describe('AppContext.tsx — productsError wiring guard', () => {
     assert.match(source, /\n\s*productsError,\n/);
   });
 });
+
+// ------------------------------------------------------------------
+// [Stock Count Data-Loss Resilience — Implementation Task §14 item 4]
+// "A blank quantity is never coerced to zero, and a zero quantity is
+// never coerced to blank, anywhere in the draft-save/recovery path."
+//
+// The draft-save/recovery path's actual coercion risk lives entirely in
+// workingRowToDraftItem/draftItemToWorkingRow (utils/stockCount.ts) —
+// pure functions, no Firestore, no React — because Firestore itself
+// stores strings faithfully with no numeric coercion of its own. This
+// is therefore a genuine, runnable proof of the property, not merely a
+// source-inspection guard: it actually round-trips a blank-quantity row
+// and a zero-quantity row through both conversion directions and checks
+// the string value survives byte-for-byte.
+// ------------------------------------------------------------------
+describe('workingRowToDraftItem / draftItemToWorkingRow — blank vs. zero round-trip (Implementation Task §14 item 4)', () => {
+  it('a blank quantity ("") survives conversion to a draft item and back as "", never "0"', () => {
+    const original: StockCountWorkingRow = { productId: 'p1', productName: 'Arroz', quantity: '', unit: 'kg', costPrice: '50', sellingPrice: '80' };
+    const draftItem = workingRowToDraftItem(original);
+    assert.equal(draftItem.quantity, '');
+    const restored = draftItemToWorkingRow(draftItem);
+    assert.equal(restored.quantity, '');
+    assert.notEqual(restored.quantity, '0');
+  });
+
+  it('a literal zero quantity ("0") survives conversion to a draft item and back as "0", never ""', () => {
+    const original: StockCountWorkingRow = { productId: 'p1', productName: 'Arroz', quantity: '0', unit: 'kg', costPrice: '50', sellingPrice: '80' };
+    const draftItem = workingRowToDraftItem(original);
+    assert.equal(draftItem.quantity, '0');
+    const restored = draftItemToWorkingRow(draftItem);
+    assert.equal(restored.quantity, '0');
+    assert.notEqual(restored.quantity, '');
+  });
+
+  it('round-tripping a full 300-row working list preserves every blank and every zero exactly, with no cross-contamination', () => {
+    const rows: StockCountWorkingRow[] = [];
+    for (let i = 0; i < 300; i++) {
+      // Alternate blank / zero / positive so a coercion bug in either
+      // direction would show up as a mismatch somewhere in the list,
+      // not be averaged away.
+      const quantity = i % 3 === 0 ? '' : i % 3 === 1 ? '0' : String(i);
+      rows.push({ productId: 'p' + i, productName: 'Produto ' + i, quantity, unit: 'un', costPrice: '10', sellingPrice: '15' });
+    }
+    const draftItems = rows.map(workingRowToDraftItem);
+    const restored = draftItems.map(draftItemToWorkingRow);
+    assert.equal(restored.length, 300);
+    for (let i = 0; i < 300; i++) {
+      assert.equal(restored[i].quantity, rows[i].quantity, `row ${i}: expected quantity "${rows[i].quantity}", got "${restored[i].quantity}"`);
+    }
+  });
+
+  it('omits productId from the persisted draft item for a manual (non-catalog) row, never writing it as literal undefined', () => {
+    const manualRow: StockCountWorkingRow = { productName: 'Produto Manual', quantity: '5', unit: 'un', costPrice: '10', sellingPrice: '15' };
+    const draftItem = workingRowToDraftItem(manualRow);
+    assert.equal('productId' in draftItem, false, 'productId key must be entirely absent, not present with value undefined — Firestore rejects a literal undefined field value');
+    const restored = draftItemToWorkingRow(draftItem);
+    assert.equal(restored.productId, undefined);
+  });
+
+  it('preserves an explicit removed: false the same as removed: true — never silently drops the flag either way', () => {
+    const restoredRow: StockCountWorkingRow = { productId: 'p1', productName: 'Arroz', quantity: '', unit: 'kg', costPrice: '50', sellingPrice: '80', removed: false };
+    const draftItem = workingRowToDraftItem(restoredRow);
+    assert.equal(draftItem.removed, false);
+    const restored = draftItemToWorkingRow(draftItem);
+    assert.equal(restored.removed, false);
+  });
+});
+

@@ -32,6 +32,8 @@ import {
   StockCountType,
   InitialStockDraft,
   InitialStockDraftItem,
+  PeriodicStockDraft,
+  PeriodicStockDraftItem,
   PurchaseDraft,
   PurchaseDraftLineItem,
   SupplierRecord,
@@ -153,6 +155,14 @@ interface RecordStockCountParams {
   // Never set for type === 'initial' (it has no baseline to compare
   // against yet).
   expectedValueAtCount?: number;
+  // [Stock Count Data-Loss Resilience — Implementation Task, Section 3]
+  // The stable submission identity (client-generated, established and
+  // persisted durably before this call — see PeriodicStockDraft's own
+  // comment) that every retry of the same logical periodic finalization
+  // reuses. Required for type !== 'initial' (enforced below); never set
+  // for type === 'initial', which keeps its own pre-existing fixed-id
+  // scheme untouched.
+  submissionId?: string;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -307,6 +317,24 @@ interface AppContextType {
   initialStockDraftLoaded: boolean;
   saveInitialStockDraft: (items: InitialStockDraftItem[], date: string) => Promise<void>;
   clearInitialStockDraft: () => Promise<void>;
+  // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
+  // Persistent Periodic Contagem draft — null until an Owner starts one,
+  // cleared automatically the moment it's finalized. NOT a StockCount.
+  periodicStockDraft: PeriodicStockDraft | null;
+  // Same "loaded" disambiguation as initialStockDraftLoaded above.
+  periodicStockDraftLoaded: boolean;
+  // Full-document overwrite (Implementation Task §2's debounced
+  // autosave path — the caller debounces, this function never does).
+  // submissionId is optional so ordinary row-content saves during
+  // `editing` (before the identity exists yet) don't require one.
+  savePeriodicStockDraft: (
+    items: PeriodicStockDraftItem[],
+    type: StockCountType,
+    label: string | undefined,
+    date: string,
+    submissionId?: string
+  ) => Promise<void>;
+  clearPeriodicStockDraft: () => Promise<void>;
   // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
   // Purchase Draft — null until the current user starts one for this
   // business, cleared automatically the moment it's finalized. NOT
@@ -462,6 +490,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // on stale information. This flag disambiguates: false until the
   // listener's first callback (success OR error) has actually fired.
   const [initialStockDraftLoaded, setInitialStockDraftLoaded] = useState(false);
+  // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
+  // Same shape/reasoning as initialStockDraft/initialStockDraftLoaded
+  // above, for the sibling `stockCountDrafts/periodic` singleton — kept
+  // as its own separate state pair (not merged with the initial draft's)
+  // since the two are never read together and the frozen spec §5/§12
+  // explicitly keeps the two mechanisms un-shared.
+  const [periodicStockDraft, setPeriodicStockDraft] = useState<PeriodicStockDraft | null>(null);
+  const [periodicStockDraftLoaded, setPeriodicStockDraftLoaded] = useState(false);
   // [Durable Purchase Capture Amendment v1.0] Same "loaded flag"
   // disambiguation as initialStockDraft above, for exactly the same
   // reason — this is a per-user document (Rule 8 Assessment, Section 7),
@@ -753,6 +789,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setStockCounts([]);
         setInitialStockDraft(null);
         setInitialStockDraftLoaded(false);
+        setPeriodicStockDraft(null);
+        setPeriodicStockDraftLoaded(false);
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
@@ -815,6 +853,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // this specific fix's scope.
     setInitialStockDraft(null);
     setInitialStockDraftLoaded(false);
+    // [Stock Count Data-Loss Resilience — Implementation Task, Section 6]
+    // Same staleness-avoidance reasoning as the two lines above, applied
+    // to the sibling periodic draft — otherwise Business A's
+    // already-loaded periodicStockDraft could momentarily read as
+    // Business B's during a direct switch, same class of bug as the fix
+    // this effect already exists to prevent for the initial draft.
+    setPeriodicStockDraft(null);
+    setPeriodicStockDraftLoaded(false);
     // Phase C — same "reset unconditionally on every switch" reasoning
     // as the two lines above: a direct Business A -> Business B switch
     // must never carry A's suspended state into B's screen for the
@@ -1025,6 +1071,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
+    // [Stock Count Data-Loss Resilience — Implementation Task, Section
+    // 6] Persistent Periodic Contagem draft — single doc, id
+    // 'periodic'. Own separate onSnapshot from the initial draft's
+    // above (not a modification of it), same Owner-only-per-rules
+    // reasoning.
+    const periodicDraftRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic');
+    const unsubPeriodicDraft = onSnapshot(
+      periodicDraftRef,
+      (snap) => {
+        setPeriodicStockDraft(snap.exists() ? (snap.data() as PeriodicStockDraft) : null);
+        setPeriodicStockDraftLoaded(true);
+      },
+      () => {
+        setPeriodicStockDraft(null);
+        setPeriodicStockDraftLoaded(true);
+      }
+    );
+
     // 5c. Withdrawals collection (money the owner has taken out — NOT an expense)
     const withdrawalsRef = collection(db, 'businesses', businessId, 'withdrawals');
     const unsubWithdrawals = onSnapshot(
@@ -1116,6 +1180,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStockCounts();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
+      unsubPeriodicDraft();
       unsubWithdrawals();
       unsubPayments();
       unsubClosings();
@@ -1341,10 +1406,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supplierName?: string;
     batchNumber?: string;
     expenseCategory?: string;
+    // [Stock Count Data-Loss Resilience — Implementation Task, Section
+    // 3] Optional explicit id, used only by the periodic finalization
+    // call site so a retry's write lands on the same document instead
+    // of creating a second one. Every other existing call site omits
+    // this and keeps the random-id behavior below unchanged.
+    id?: string;
   }) => {
     if (!activeBusinessId) return;
     const newEvent: TimelineEvent = {
-      id: 'tl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
+      id: input.id || 'tl-' + Date.now() + '-' + Math.random().toString(36).substr(2, 5),
       type: input.type,
       date: input.date,
       createdAt: new Date().toISOString(),
@@ -2076,12 +2147,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
     if (type === 'initial' && hasInitialStockCount) {
       throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
+    }
+    // [Stock Count Data-Loss Resilience — Implementation Task, Section 3]
+    // Periodic finalization's idempotency mechanism is entirely
+    // dependent on the caller always supplying the same stable
+    // submissionId across retries — enforced here so a future call site
+    // cannot silently regress to the old random-id behavior by simply
+    // omitting the parameter.
+    if (type !== 'initial' && !submissionId) {
+      throw new Error('Identificador de submissão em falta para esta contagem periódica.');
     }
 
     const businessId = activeBusinessId;
@@ -2145,17 +2225,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // unconditionally (Architecture 8.6's "no exceptions" tier). A
     // second attempt (e.g. a retry after a dropped-connection false
     // failure) now hits that existing rule directly instead of quietly
-    // creating a second, order-unstable baseline document. Periodic
-    // counts are completely untouched — they keep their prior random-id
-    // scheme; only the initial-count branch changes. Existing
+    // creating a second, order-unstable baseline document. Existing
     // businesses' already-created initial counts keep their old random
     // ids forever — this only affects the id assigned to a *new*
     // initial count going forward, and nothing in this codebase reads,
     // stores, or foreign-keys off that id (every consumer looks it up
     // via `stockCounts.find(s => s.type === 'initial')`), so this is
     // safe to change without any migration.
+    //
+    // [Stock Count Data-Loss Resilience — Implementation Task, Section
+    // 3] Periodic counts now ALSO use a deterministic id — no longer
+    // the old `'stockcount-' + Date.now() + ...` random scheme this
+    // comment previously described as untouched. The id is derived from
+    // `submissionId` (validated non-empty above), which the caller
+    // establishes once and reuses across every retry of the same
+    // logical finalization attempt (see PeriodicStockCountView's
+    // handleConfirmSave and PeriodicStockDraft.submissionId). Because
+    // the id is stable across retries, a retry's `fsBatch.set()` below
+    // lands on the SAME document — Firestore classifies it as an
+    // `update` (existing periodic-type documents are Owner-updatable
+    // unconditionally per firestore.rules, unchanged by this task), and
+    // writing materially identical content again is a no-op in effect,
+    // never a second document. This is what makes §14 acceptance
+    // criterion 2 ("ambiguous commit + retry → exactly one logical
+    // result") hold without a transaction or a pre-write existence
+    // check. Existing periodic counts recorded before this task keep
+    // their old random ids forever — nothing reads or foreign-keys off
+    // this id either, matching the 'initial' id's own safety argument
+    // above.
     const newCount: StockCount = {
-      id: type === 'initial' ? 'initial' : 'stockcount-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      id: type === 'initial' ? 'initial' : 'stockcount-periodic-' + submissionId,
       type,
       label: label?.trim() || undefined,
       date,
@@ -2179,6 +2278,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // so the draft is left intact, exactly as specified.
     if (type === 'initial') {
       fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial'));
+    } else {
+      // [Implementation Task, Section 3] Same atomicity guarantee,
+      // extended to the periodic draft — a retry that lands on this
+      // batch again (same deterministic stockCounts id) harmlessly
+      // re-issues this delete against a document that may already be
+      // gone; Firestore's batched delete on a non-existent document is
+      // a no-op, not an error.
+      fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic'));
     }
     await fsBatch.commit();
 
@@ -2196,6 +2303,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } else {
       await logTimelineEvent({
+        // [Implementation Task, Section 3/6a] Deterministic id derived
+        // from the same submissionId as the stockCounts document above
+        // — a retry's write here is a harmless overwrite of the same
+        // timelineEvents document, never a second one. Independent of
+        // the stockCounts+draft-delete batch's atomicity (this call
+        // happens after that batch commits, matching every other
+        // logTimelineEvent call site in this file) — the frozen spec's
+        // §8b explicitly does not require cross-collection atomicity
+        // here, only this convergent, deterministic-id outcome.
+        id: 'tl-periodic-' + submissionId,
         type: 'stock-verification',
         date,
         title: 'Verificação de Stock Concluída',
@@ -2210,6 +2327,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    // [Implementation Task, Section 3] Deliberately NOT gated on "was
+    // this the first successful commit" — triggerTrialActivation's own
+    // server-side transition (trial_pending -> trial_active) is already
+    // a one-way, idempotent no-op on a second call (see this function's
+    // own comment below), so calling it unconditionally on every
+    // finalization attempt — exactly as every other call site in this
+    // file already does — cannot produce a harmful duplicate effect.
+    // Gating it would add complexity without changing the observable
+    // outcome the frozen spec's §8a requires.
     triggerTrialActivation(businessId);
     return newCount;
   };
@@ -2344,6 +2470,61 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const clearInitialStockDraft = async () => {
     if (!activeBusinessId) return;
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'));
+  };
+
+  // [Stock Count Data-Loss Resilience — Implementation Task, Section 6]
+  // Persistent Periodic Contagem draft — own code path, deliberately
+  // NOT sharing code with saveInitialStockDraft above (frozen spec §5's
+  // explicit non-authorization of a shared hook between the two
+  // mechanisms). Full-document overwrite each call, same reasoning as
+  // saveInitialStockDraft: the caller already holds the whole working
+  // list in memory before calling this, so a partial/incremental write
+  // would only add complexity without a durability benefit.
+  //
+  // `items` are expected already Firestore-safe (no literal `undefined`
+  // field values) — the caller (PeriodicStockCountView's
+  // scheduleDraftSave) is responsible for that, matching
+  // savePurchaseDraft's own documented discipline for this exact class
+  // of bug (optional fields conditionally included, never assigned
+  // `undefined` directly).
+  //
+  // `submissionId` is optional: absent during ordinary `editing`-state
+  // autosaves (no identity has been generated yet), present once the
+  // operator has entered `pendingTally` at least once. When present,
+  // this function does NOT merge — it writes the full document
+  // including the identity, which is what makes the identity durable
+  // by construction rather than needing a separate merge-only write
+  // path (see §4b of the Implementation Task for why the identity must
+  // be durable before finalization; this function's full-overwrite
+  // shape is what `establishSubmissionIdentity`-equivalent calls below
+  // rely on to avoid ever persisting a document with the identity but
+  // missing row content, or vice versa).
+  const savePeriodicStockDraft = async (
+    items: PeriodicStockDraftItem[],
+    type: StockCountType,
+    label: string | undefined,
+    date: string,
+    submissionId?: string
+  ) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    const draft: PeriodicStockDraft = {
+      items,
+      type,
+      ...(label ? { label } : {}),
+      date,
+      ...(submissionId ? { submissionId } : {}),
+      updatedAt: new Date().toISOString(),
+    };
+    await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'), draft);
+  };
+
+  // Discards the periodic draft without finalizing it — the explicit
+  // "Começar de novo" path on the stale-draft resume banner
+  // (Implementation Task, Section 5), distinct from finalization's
+  // automatic atomic cleanup inside recordStockCount below.
+  const clearPeriodicStockDraft = async () => {
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
   };
 
   // [Durable Purchase Capture Amendment v1.0] Upserts the persistent,
@@ -3170,6 +3351,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockDraftLoaded,
         saveInitialStockDraft,
         clearInitialStockDraft,
+        periodicStockDraft,
+        periodicStockDraftLoaded,
+        savePeriodicStockDraft,
+        clearPeriodicStockDraft,
         purchaseDraft,
         purchaseDraftLoaded,
         savePurchaseDraft,
