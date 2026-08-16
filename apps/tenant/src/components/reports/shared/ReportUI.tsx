@@ -37,7 +37,7 @@ export const ReportKpiCard: React.FC<ReportKpiProps> = ({ icon: Icon, label, val
     </div>
     <div>
       <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500 leading-tight">{label}</p>
-      <p className={`text-lg sm:text-xl font-extrabold font-mono mt-0.5 leading-tight truncate ${TONE_CLASSES[tone]}`}>
+      <p className={`type-number text-[20px] sm:text-[24px] mt-0.5 leading-tight truncate ${TONE_CLASSES[tone]}`}>
         {value}
       </p>
     </div>
@@ -58,7 +58,7 @@ export const InsightBanner: React.FC<{ insights: string[] }> = ({ insights }) =>
       </div>
       <div className="space-y-1">
         {insights.map((line, i) => (
-          <p key={i} className="text-xs text-gray-700 leading-relaxed">{line}</p>
+          <p key={i} className="type-body">{line}</p>
         ))}
       </div>
     </div>

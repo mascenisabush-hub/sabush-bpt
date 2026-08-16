@@ -153,7 +153,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
           {formatCurrency(businessWorth, currencySymbol)}
         </div>
         {hasInitialStockCount ? (
-          <div className={`inline-flex items-center gap-1 mt-2 text-xs font-bold ${capitalGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <div className={`inline-flex items-center gap-1 mt-2 text-base font-bold ${capitalGrowth >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {capitalGrowth >= 0 ? <TrendingUp className="w-3.5 h-3.5" /> : <TrendingDown className="w-3.5 h-3.5" />}
             {capitalGrowth >= 0 ? '+' : ''}{formatCurrency(capitalGrowth, currencySymbol)} ({capitalGrowthPct >= 0 ? '+' : ''}{capitalGrowthPct.toFixed(1)}%) {t('businessWorth.heroSinceInitial')}
           </div>
@@ -183,7 +183,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
             { label: t('businessWorth.kpiEmbeddedProfit'), value: Math.max(totalEmbeddedProfitAllTime, 0) },
           ]}
         />
-        <p className="text-[11px] text-gray-400">
+        <p className="type-body text-[13px]">
           {t('businessWorth.compositionNote')}
         </p>
       </ReportSection>
@@ -193,7 +193,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
 
       <ReportSection title={`${t('businessWorth.expensesInPeriod')} (${periodExpenses.length})`} icon={Receipt}>
         {periodExpenses.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-4">{t('businessWorth.noExpensesInPeriod')}</p>
+          <p className="type-body text-[13px] text-center py-4">{t('businessWorth.noExpensesInPeriod')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="table-clean w-full text-xs">
@@ -211,14 +211,14 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
                     <td className="py-2 pr-2 text-gray-600">{formatDate(e.date)}</td>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{e.description}</td>
                     <td className="py-2 pr-2 text-gray-500">{e.category || t('reports.common.generalCategory')}</td>
-                    <td className="py-2 pr-2 text-right type-number text-rose-600">{formatCurrency(e.amount, currencySymbol)}</td>
+                    <td className="py-2 pr-2 text-right type-number text-[14px] text-rose-600">{formatCurrency(e.amount, currencySymbol)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
                   <td colSpan={3} className="pt-2 font-bold text-gray-700">{t('reports.common.totalCol')}</td>
-                  <td className="pt-2 text-right font-mono font-black text-rose-600">{formatCurrency(periodExpenseTotal, currencySymbol)}</td>
+                  <td className="pt-2 text-right type-number text-[14px] text-rose-600">{formatCurrency(periodExpenseTotal, currencySymbol)}</td>
                 </tr>
               </tfoot>
             </table>
@@ -228,7 +228,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
 
       <ReportSection title={`${t('businessWorth.withdrawalsInPeriod')} (${periodWithdrawals.length})`} icon={HandCoins}>
         {periodWithdrawals.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-4">{t('businessWorth.noWithdrawalsInPeriod')}</p>
+          <p className="type-body text-[13px] text-center py-4">{t('businessWorth.noWithdrawalsInPeriod')}</p>
         ) : (
           <div className="overflow-x-auto">
             <table className="table-clean w-full text-xs">
@@ -244,14 +244,14 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
                   <tr key={w.id}>
                     <td className="py-2 pr-2 text-gray-600">{formatDate(w.date)}</td>
                     <td className="py-2 pr-2 font-semibold text-gray-800">{w.reason || t('reports.common.unspecified')}</td>
-                    <td className="py-2 pr-2 text-right type-number text-rose-600">{formatCurrency(w.amount, currencySymbol)}</td>
+                    <td className="py-2 pr-2 text-right type-number text-[14px] text-rose-600">{formatCurrency(w.amount, currencySymbol)}</td>
                   </tr>
                 ))}
               </tbody>
               <tfoot>
                 <tr>
                   <td colSpan={2} className="pt-2 font-bold text-gray-700">{t('reports.common.totalCol')}</td>
-                  <td className="pt-2 text-right font-mono font-black text-rose-600">{formatCurrency(periodWithdrawalTotal, currencySymbol)}</td>
+                  <td className="pt-2 text-right type-number text-[14px] text-rose-600">{formatCurrency(periodWithdrawalTotal, currencySymbol)}</td>
                 </tr>
               </tfoot>
             </table>

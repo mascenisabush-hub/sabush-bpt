@@ -208,11 +208,12 @@ heading font.
 |---|---|---|
 | `.type-title-lg` | Screen-level headings | 800 / 22px |
 | `.type-title` | Section/card/modal headings | 700 / 17px |
-| `.type-number` | Any *recorded* data figure — KPIs, table cells, totals | 800, tabular figures |
+| `.type-number` | Any *recorded* data figure — KPIs, table cells, totals. Size is contextual, not fixed — see size-context table below. | 800, tabular figures |
+| `.type-body` *(Typography Hierarchy Specification, `93da326`)* | Normal business-readable content: table cells (non-numeric), form values, descriptions, insight-banner prose | 500 / 14px, ~1.5 line-height, `var(--foreground)` |
 | `.type-label` | Captions/field labels | 600 / 10px, uppercase, tracked |
 
-Three tiers, used consistently, instead of hand-rolled `text-lg font-bold`
-combinations repeated per file. If a fourth tier feels needed, that's a
+Four tiers, used consistently, instead of hand-rolled `text-lg font-bold`
+combinations repeated per file. If a fifth tier feels needed, that's a
 sign the layout needs simplifying, not a new class.
 
 **`.type-number` is reserved for facts, never predictions.** A Capital
@@ -221,6 +222,44 @@ Forecasting range or a Business Worth Prediction (Architecture Section
 Closing figure — see [Notifications](#notifications) for the distinct AI
 Insight treatment this requires. This is the typography-level enforcement
 of the same rule stated under Non-negotiable Rules above.
+
+**`.type-number` size contexts *(Typography Hierarchy Specification,
+`93da326`)*.** `.type-number` communicates *what* the content is — a
+recorded figure — never *how prominently* it's shown. Presentation
+context sets the size; a hero figure, a KPI-grid figure, and an inline
+table figure are all still `.type-number`, just at a different,
+documented size. Pair `.type-number` with the size utility for the
+context it appears in — do not invent a new size ad hoc, and do not
+introduce a competing class (`.type-number-lg`, `.type-kpi-number`, etc.)
+to express size:
+
+| Context | Use | Size |
+|---|---|---|
+| Hero | The single dominant figure on a screen (Business Worth hero, Dashboard's flagship metric) | 32–36px responsive |
+| KPI-grid | A recorded figure shown alongside others in a grid (e.g. Business Worth Report's KPI cards) | 24px desktop / 20px mobile |
+| Inline/table | A figure inside a table cell or inline sentence | 14px |
+
+**`.type-body` size variant.** The 13px "secondary readable content"
+size (composition notes, empty states, less-critical full-sentence
+captions) is a documented Tailwind utility (`text-[13px]`) paired with
+`.type-body`'s same weight/color discipline — a size variant of the one
+class, not a second named class.
+
+**Important supporting statement (e.g. a growth-delta line).** A single
+sentence conveying a real business fact, more prominent than ordinary
+body text but not a KPI figure itself, renders at 700 / 16px (a plain
+Tailwind utility, e.g. `text-base font-bold`) — a documented size, not a
+new class, sitting between `.type-body` and the KPI-grid context.
+
+**Full size ladder**, smallest exception aside: 32–36px (dominant
+figure) → 24px (KPI-grid figure) → 16px (important supporting statement)
+→ 14px (normal business content / inline `.type-number`) → 13px
+(secondary readable content) → 10px (`.type-label`, deliberately
+designed — weight, case, and tracking compensate for size).
+
+**Financial-figure floor:** see [Mobile rules](#mobile-rules) — financial
+figures never render below 13px at any breakpoint. This is a pre-existing
+rule, not new.
 
 ---
 

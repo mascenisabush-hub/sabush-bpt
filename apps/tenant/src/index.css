@@ -233,12 +233,28 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
 }
 
 /* ==========================================================================
-   Typography hierarchy — Inter everywhere; three tiers used consistently
+   Typography hierarchy — Inter everywhere; four tiers used consistently
    instead of hand-rolled text-lg/font-bold combos repeated per file.
      .type-title    → section/card/modal headings: bold, comfortably large
      .type-title-lg → screen-level headings: extra bold, larger still
      .type-number   → any data figure (KPIs, table cells, totals): extra
-                      bold + tabular figures so digits never jitter width
+                      bold + tabular figures so digits never jitter width.
+                      No fixed font-size — size is a contextual property
+                      applied at the call site, documented per
+                      Typography Hierarchy Specification (93da326):
+                        hero context        → 32–36px responsive
+                        KPI-grid context     → 24px desktop / 20px mobile
+                        inline/table context → 14px
+                      Pair with the size utility for the context in use;
+                      do not invent a new size ad hoc, and do not add a
+                      competing class (.type-number-lg, .type-kpi-number,
+                      etc.) to express size.
+     .type-body     → normal business-readable content (table cells,
+                      form values, descriptions, insight-banner prose):
+                      500 / 14px. A documented 13px secondary-size variant
+                      (text-[13px] type-body) covers less-critical
+                      full-sentence content — composition notes, empty
+                      states — without a second named class.
      .type-label    → captions/field labels: small, muted, uppercase
    ========================================================================== */
 .type-title {
@@ -260,6 +276,12 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
   font-variant-numeric: tabular-nums;
   font-feature-settings: 'tnum' 1;
   letter-spacing: -0.01em;
+}
+.type-body {
+  color: var(--foreground);
+  font-weight: 500;
+  font-size: 0.875rem; /* 14px */
+  line-height: 1.5;
 }
 .type-label {
   color: #6B7280;
