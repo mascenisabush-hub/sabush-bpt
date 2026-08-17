@@ -9,7 +9,7 @@ pre-committed storage schema; computation-path wording tightened;
 stale/missing cache fallback made explicit). Added an acceptance
 criterion confirming Owner Portfolio is unavailable to Staff/Manager
 roles. No change to scope, security model, or Non-Goals.
-**Addendum to:** [17-multi-shop.md](./17-multi-shop.md) (v1.0, Drafted — awaiting approval)
+**Addendum to:** [17-owner-portfolio.md](./17-owner-portfolio.md) (v1.0, ✅ Approved — documentation alignment & business rules; formerly `17-multi-shop.md`)
 **Module #17 of 20 — Phase 4: Platform**
 **Architecture references:** [Section 2.8](../architecture/02-core-product-principles.md)
 (Tenant Isolation Is Non-Negotiable), [Section 3.2](../architecture/03-domain-architecture.md)
@@ -21,16 +21,27 @@ roles. No change to scope, security model, or Non-Goals.
 
 ## Status Note
 
-This addendum is a proposal only. It is not merged into `17-multi-shop.md`,
-not reflected in `docs/specs/README.md`, and confers no approval on Module
-#17 or on this addition. Per the recovery sequence agreed on, the order is:
+**Correction (documentation-only — does not alter this addendum's
+substantive proposal below):** since this addendum was written, the
+base Module #17 specification it targets was renamed from
+`17-multi-shop.md` to `17-owner-portfolio.md` and was separately
+accepted (documentation alignment & business rules only — see that
+spec's own "Product Architect Acceptance" section) — independently of
+this addendum, which was never reviewed, merged, or approved as part
+of that acceptance. The recovery sequence below is updated to reflect
+that the base module's own approval has already happened; this
+addendum's own governance sequence is otherwise unchanged in intent.
+
+This addendum is a proposal only. It is not merged into
+`17-owner-portfolio.md`, not reflected in `docs/specs/README.md` as
+approved, and confers no approval of its own content. Per the recovery
+sequence agreed on, the order is:
 
 1. This file exists and is reviewed on its own merits (current step).
 2. If approved as an addendum, its content is merged into
-   `17-multi-shop.md` as v1.1 — spec status remains "Drafted — awaiting
-   approval" until Module #17 itself is separately approved.
-3. Only then does `README.md` / `HANDOFF.md` change to reflect Module #17
-   as Approved.
+   `17-owner-portfolio.md` as a new revision.
+3. `README.md` / `HANDOFF.md` are updated to reflect the Owner
+   Portfolio view/cache specifically, once that merge happens.
 4. Only then does a Rule 8 implementation assessment begin.
 
 Nothing in this file authorizes any code change.
