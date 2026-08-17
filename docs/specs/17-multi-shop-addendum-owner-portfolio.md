@@ -91,11 +91,18 @@ Worth is calculated, stored, or authorized anywhere else in the system.
   those continue reading live `businessWorth` exactly as today,
   unchanged.
 - Behavior is read-time and lazy: a fresh cache entry may be used as the
-  Portfolio display source. A stale or missing entry triggers
-  recalculation through the approved Business Worth Engine path, which
-  then updates the Current Worth Cache through the approved
-  implementation path. Never a background job, scheduled recompute, or
-  write-triggered hook.
+  Portfolio display source. A stale or missing entry is never
+  recalculated automatically, by the act of viewing it, or by any
+  background, scheduled, or write-triggered mechanism. Recalculation
+  occurs only through an **explicit, per-shop refresh action the Admin
+  takes on the Owner Portfolio screen itself** — never initiated by the
+  Portfolio's own load/render, and never spanning more than one shop
+  per action. That action invokes the existing Business Worth Engine
+  calculation path for that one shop only, then updates the Current
+  Worth Cache through the approved implementation path. [Amendment —
+  see [`17-owner-portfolio-addendum-currentworth-refresh-amendment.md`](./17-owner-portfolio-addendum-currentworth-refresh-amendment.md),
+  Accepted 2026-08-17, for the governance record of this change and
+  the language it replaces.]
 - Freshness threshold is a configurable implementation parameter, to be
   set during a future implementation assessment — not fixed by this
   addendum.
@@ -159,6 +166,27 @@ Worth is calculated, stored, or authorized anywhere else in the system.
       verified by confirming none of them reference `currentWorth`.
 - [ ] Owner Portfolio access is unavailable to Staff and Manager roles,
       even when those users belong to shops owned by the Admin.
+- [ ] The Owner Portfolio provides an explicit, per-shop refresh
+      action — never a bulk or cross-shop refresh, never automatic.
+- [ ] A refresh action invokes the existing Business Worth Engine
+      calculation path for that one shop only — no alternate or
+      duplicate formula, matching this addendum's own pre-existing
+      Cache Definition requirement.
+- [ ] `currentWorth` remains, at all times, explicitly non-authoritative
+      — this amendment does not change that status, and no UI
+      introduced by it may present the value as though it were.
+- [ ] The Portfolio visibly communicates each entry's freshness (using
+      `calculatedAt`) to the Admin — a stale or missing value must be
+      distinguishable from a fresh one, never presented
+      indistinguishably.
+- [ ] A failed refresh (network failure, calculation failure, or
+      persistence failure) does not corrupt the cache, does not block
+      or corrupt the underlying business operation of any shop, and
+      leaves the previously-cached value (if any) intact and still
+      correctly labeled by its own prior `calculatedAt`.
+      [Amendment — the five items above added per
+      [`17-owner-portfolio-addendum-currentworth-refresh-amendment.md`](./17-owner-portfolio-addendum-currentworth-refresh-amendment.md),
+      Accepted 2026-08-17.]
 
 ## Future Enhancements (explicitly out of scope here)
 
