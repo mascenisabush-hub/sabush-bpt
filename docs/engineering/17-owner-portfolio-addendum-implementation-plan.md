@@ -5,19 +5,27 @@ addendum concept into a structured implementation roadmap. **Does not
 authorize implementation.**
 **Lifecycle status:** Designed → Accepted (base module) → Concept
 Approved (this addendum, commit `115c94c`) → Planned (this document,
-`8365236`) → Assessed (Rule 8, `READY AFTER DECISIONS`) → **Amended**
-(this revision, incorporating the post-Rule-8 Product Architecture
-decision — see the `[Stage 6 Amendment]`-marked blocks throughout §5.5,
-§5.6, §5.8, §5.10, §5.11, §5.16 below). Not Authorized, not Implemented, not
-Executed. **Reaching "Amended" is not itself authorization to begin
-implementation** — that remains a separate, explicit Product Architect
-decision, per Rule 8 and the Platform Engineering Governance Standard.
+`8365236`) → Assessed (Rule 8, `READY AFTER DECISIONS`) → Amended
+(incorporating the post-Rule-8 Product Architecture decision — see the
+`[Stage 6 Amendment]`-marked blocks throughout §5.5, §5.6, §5.8, §5.10,
+§5.11, §5.16) → **Corrected** (a further, separate `[Stage 6 Amendment
+— Correction]`-marked pass through §5.5, §5.8, and §5.11, made after a
+dedicated Business Worth Engine feasibility check found the first
+Amendment's "active-shop-only" refresh constraint was an erroneous
+inference, not an actual technical or governance limitation). Not
+Authorized, not Implemented, not Executed. **Reaching "Corrected" is
+not itself authorization to begin implementation** — that remains a
+separate, explicit Product Architect decision, per Rule 8 and the
+Platform Engineering Governance Standard, and per this specific
+correction, requires a fresh Authorization Readiness Assessment before
+proceeding, since the signed Stage 8 Authorization's basis has changed.
 **Amendment note, stated for chronology:** every `[Stage 6 Amendment]`
-block in this document is an *addition*, appended after the original
-text it clarifies — the original text is preserved unedited in every
-case, as the historical record of what this plan proposed before Rule
-8 and the subsequent Product Architecture decision. Nothing below
-implies the resolved architecture was known or decided at this
+and `[Stage 6 Amendment — Correction]` block in this document is an
+*addition*, appended after the text it clarifies or corrects — no
+original or previously-amended text is ever deleted or rewritten in
+place; each remains as the historical record of what this plan
+proposed at that point. Nothing below implies the resolved architecture
+was known or decided at this
 document's original drafting time (`8365236`).
 **Basis:** [`17-owner-portfolio.md`](../specs/17-owner-portfolio.md)
 (v1.0, ✅ Approved), [`17-multi-shop-addendum-owner-portfolio.md`](../specs/17-multi-shop-addendum-owner-portfolio.md)
@@ -255,6 +263,30 @@ never visited since this feature ships. The UI must render both states
 explicitly (§5.10) rather than hide them — this is a direct,
 unavoidable consequence of §5.4's finding, not a design preference.
 
+**[Stage 6 Amendment — Correction, post-feasibility-check]** The
+paragraph above is preserved unedited as the historical record of an
+earlier, erroneous reading of this plan's own §5.4 finding — it is
+**superseded**, not merely clarified, by the correction below.
+
+A dedicated Business Worth Engine feasibility check (performed after
+this plan's first Stage 6 Amendment, in direct response to this
+execution-time discovery) established that the "can only be refreshed
+when recently active" constraint does not follow from anything in
+§5.4's actual evidence — it was an unwarranted inference. A refresh
+action may target **any** owned shop, active or not, via a **one-time**
+read (not a live listener) of that shop's `batches`, `quebras`,
+`expenses`, and `withdrawals` collections, scoped exclusively to that
+one `businessId` — every one of those four collections' `allow read`
+rules is evaluated per-`businessId` (`isMemberOf`/`isOwnerOf`), never
+against which business is "active" in the caller's session, confirmed
+directly against current `firestore.rules`. The corrected, full
+mechanism is stated in §5.8's own Correction block below; this
+paragraph's practical consequence changes accordingly: a shop shows
+**stale or missing** `currentWorth` only until the Admin explicitly
+refreshes it — not "only until visited," and never permanently, since
+every owned shop's refresh is now available directly from the
+Portfolio screen.
+
 ## 5.6 Data Model (planning-level only — not a schema commitment)
 
 Per the addendum's own explicit deferral, this section describes
@@ -486,6 +518,66 @@ user-facing retry** — the Admin may simply take the same action again;
 no new retry mechanism beyond re-invoking the same action is needed or
 proposed.
 
+**[Stage 6 Amendment — Correction, post-feasibility-check]** The
+diagram above is preserved unedited as the historical record of this
+plan's first resolution of the write/refresh path. One step in it is
+now corrected, not merely clarified: the phrase *"the same live-computed
+`businessWorth`"* incorrectly implied the value must already exist
+from an active session — it does not. **The corrected mechanism:**
+
+```
+Owner Portfolio screen (displaying cached, possibly stale or absent,
+  currentWorth for every owned shop, active or not)
+        ↓
+Admin takes an explicit, per-shop refresh action, targeting exactly
+  one owned shop — regardless of whether that shop is the currently
+  active business
+        ↓
+One-time reads (getDocs, not onSnapshot) of that one shop's
+  batches, quebras, expenses, and withdrawals collections — scoped
+  exclusively to that one businessId; no other businessId is read
+  in this operation
+        ↓
+The existing calculateInventoryTotals(batches, quebras) function,
+  called against this freshly-fetched data, plus the same
+  businessWorth formula (totalMarketValue - totalExpensesAllTime -
+  totalWithdrawalsAllTime) already used everywhere else — the same
+  calculation path, not a new or alternate one, since the function
+  and formula are identical regardless of whether their inputs came
+  from a live listener or a one-time fetch
+        ↓
+currentWorth cache write (client-side, existing owner-write
+  permission on businesses/{businessId} — unchanged from the
+  original diagram above; already confirmed to apply per-businessId,
+  not per "active" status)
+        ↓
+calculatedAt updated to the write's own timestamp
+        ↓
+Portfolio re-renders that one row with the fresh value and its
+  updated freshness indicator; the fetched operational data is
+  discarded, never retained as a new listener or cached state
+```
+
+**Evidence this correction is grounded in, not assumed:** a dedicated
+feasibility check confirmed (1) `batches`/`quebras`/`expenses`'
+`allow read` rules use `isMemberOf(businessId)` and `withdrawals`'
+uses `isOwnerOf(businessId)` — both evaluated per-`businessId`, never
+against session state, so an Admin already has read access to every
+owned shop's operational data today, with zero rules change required;
+(2) `calculateInventoryTotals` is a pure function with no browser-API
+or live-state dependency, so it produces identical output whether its
+inputs come from a live listener or a one-time fetch; (3) four
+sequential single-`businessId` reads (one per collection, all for the
+same target shop) never spans more than one `businessId` in a single
+call, satisfying the Security Constraint exactly as written.
+
+**What remains unchanged by this correction, restated explicitly per
+the scope of this Amendment:** the trigger is still never automatic,
+never a background job, never scheduled, never write-triggered — only
+this one execution detail (which shop's data may be fetched, and how)
+changes. The failure-handling and retry paragraphs immediately above
+this correction remain accurate as written and are not altered by it.
+
 ## 5.9 Security Model
 
 - **Access to the Portfolio itself:** unchanged from the addendum —
@@ -604,6 +696,16 @@ has now happened. **Checkpoint 2, as resolved:**
 | # | Objective | Likely files | Prerequisite | Verification |
 |---|---|---|---|---|
 | 2 (resolved) | Client-side refresh mechanism: an explicit, per-shop refresh action invoking the existing Business Worth Engine for that one shop, writing `currentWorth`/`calculatedAt` to `businesses/{businessId}` | `AppContext.tsx` (the refresh function itself) and the new Portfolio component (the triggering UI control, per §5.10's Amendment) — no server module, no new route | Checkpoint 1 | Unit tests proving: (a) the write never throws to its caller; (b) the written value never diverges from the live-computed `businessWorth` for that shop at write time; (c) a failed write leaves the prior cached value and `calculatedAt` untouched; (d) the mechanism never reads more than one `businessId`'s operational data in a single call |
+
+**[Stage 6 Amendment — Correction, post-feasibility-check]** The row
+above is preserved unedited as this plan's first resolution of
+Checkpoint 2. It is corrected only in the "Objective" and "Likely
+files" columns, per §5.8's own Correction block — the "Verification"
+column's four criteria remain accurate and are not restated:
+
+| # | Objective | Likely files |
+|---|---|---|
+| 2 (corrected) | Client-side refresh mechanism targeting **any one owned shop, active or not**: on explicit Admin action, issue one-time `getDocs()` reads of that shop's `batches`/`quebras`/`expenses`/`withdrawals` (never a new live listener), compute worth via the existing `calculateInventoryTotals` and worth formula against that fetched data, then write `currentWorth`/`calculatedAt` to that shop's `businesses/{businessId}` document | `AppContext.tsx` (the refresh function, including the one-time-fetch logic) and `apps/tenant/src/utils/calculations.ts` (imported, not modified) and the new Portfolio component (the triggering UI control) — still no server module, no new route |
 
 Checkpoint 4's "freshness/unavailable states" also now includes the
 loading and failure/retry states §5.10's Amendment describes — no
