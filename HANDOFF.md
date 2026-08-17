@@ -88,25 +88,15 @@ assumed:**
   never to *parse* untrusted input — both known CVEs are parse-time
   vulnerabilities, so real exploitability is low, but tracked, not
   dismissed.
-- **Phase E (proposed, not authorized): Business Directory.** Design
-  discussion only so far — four-dimension model (Operational
-  Activity / Subscription State / Suspension / Plan, each independent,
-  not one overloaded status field), and a real technical constraint
-  already surfaced: making "Operational Activity" server-side
-  filterable/sortable requires denormalizing a `lastActivityAt` field
-  onto `businesses/{businessId}`, and the naive approach (write it
-  from the existing client-side `logTimelineEvent()`) is confirmed
-  broken by two findings — Staff have no write path to that document
-  at all today (Owner-only `firestore.rules`), and the client-supplied
-  `createdAt` timestamp is an untrusted local device clock, not
-  server-authoritative. Two viable mechanisms identified (a narrow
-  additive `firestore.rules` clause with monotonicity checked at the
-  rules layer, or a new small server-side "touch activity" endpoint);
-  no decision made yet. Nothing coded. Five product decisions
-  (operational states, thresholds, activity source mechanism,
-  directory fields, search/filter/sort behavior) remain open, to be
-  settled via a BDR/spec sequence before any Phase E implementation
-  begins.
+- **Module #18 Phase E (Business Directory) — CLOSED.** Implemented
+  across checkpoints `542d53f`..`933ee85`; retrospectively accepted
+  into the governed baseline via `18-superadmin-business-directory-retrospective-acceptance.md`
+  (implementation began before the required Rule 8/Authorization gates
+  completed — that historical fact is preserved as written, not
+  erased); verified (81 non-emulator tests + 18/18 emulator tests) and
+  confirmed live via direct production behavioral verification
+  (`adminbpt.sabushtech.com`'s "Directório" page). Full record:
+  `docs/engineering/18-superadmin-business-directory-closeout.md`.
 
 ## Prior status — Fix #8 (Production Observability) — superseded above, kept for continuity
 
