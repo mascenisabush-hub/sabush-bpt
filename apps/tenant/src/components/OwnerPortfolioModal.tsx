@@ -1,11 +1,25 @@
 import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
-import { RefreshCw, X, Store, Check, AlertCircle } from 'lucide-react';
+import { RefreshCw, X, Store, Check, AlertCircle, Clock } from 'lucide-react';
 import { formatCurrency } from '../utils/formatters';
 
 interface OwnerPortfolioModalProps {
   onClose: () => void;
 }
+
+// [Module #17 Owner Portfolio v0.2 addendum — AC #11 corrective fix]
+// The freshness threshold value was explicitly deferred by the
+// addendum's own text ("a configurable implementation parameter...
+// not fixed by this addendum") and confirmed as engineering-level
+// discretion, not a reopened product decision, by both the
+// Implementation Plan (§5.16 item 4) and the signed Authorization §2's
+// "Explicitly-deferred implementation choices" list. 24 hours is a
+// deliberately simple, conservative default consistent with the
+// addendum's own framing of staleness as the expected common case for
+// a shop the Admin hasn't recently visited — not a business-rule
+// judgment call, and trivially adjustable if a future governance
+// record changes it.
+const FRESHNESS_THRESHOLD_MS = 24 * 60 * 60 * 1000;
 
 // [Module #17 Owner Portfolio v0.2 addendum — Stage 8 Authorization
 // signed 2026-08-17, corrected 2026-08-17] Presentation-only: one
@@ -56,6 +70,17 @@ export const OwnerPortfolioModal: React.FC<OwnerPortfolioModalProps> = ({ onClos
     return d.toLocaleString('pt-PT', { day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit' });
   };
 
+  // [AC #11 corrective fix] Fresh vs. stale, using the same
+  // client-supplied calculatedAt the write path already produces — no
+  // new field, no data-model change. A malformed/unparseable
+  // calculatedAt is treated as stale rather than fresh, so a data
+  // anomaly can never silently present as current.
+  const isStale = (iso: string): boolean => {
+    const d = new Date(iso);
+    if (Number.isNaN(d.getTime())) return true;
+    return Date.now() - d.getTime() > FRESHNESS_THRESHOLD_MS;
+  };
+
   return (
     <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
       <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-[90vh]">
@@ -83,6 +108,7 @@ export const OwnerPortfolioModal: React.FC<OwnerPortfolioModalProps> = ({ onClos
             const isRefreshing = refreshingIds.has(b.id);
             const failureMessage = failedIds[b.id];
             const cached = b.currentWorth;
+            const stale = cached ? isStale(cached.calculatedAt) : false;
 
             return (
               <div
@@ -98,15 +124,37 @@ export const OwnerPortfolioModal: React.FC<OwnerPortfolioModalProps> = ({ onClos
 
                   {cached ? (
                     <div className="flex items-baseline gap-2 mt-0.5">
-                      <span className="text-[15px] font-bold text-[#0B1F3A] font-mono">
+                      <span
+                        className={`text-[15px] font-bold font-mono ${
+                          stale ? 'text-amber-700' : 'text-[#0B1F3A]'
+                        }`}
+                      >
                         {formatCurrency(cached.value, b.currencySymbol)}
                       </span>
-                      <span className="text-[10px] text-gray-400">
-                        em {formatCalculatedAt(cached.calculatedAt)}
-                      </span>
+                      {/* [AC #11] Fresh vs. stale must be visually
+                          distinguishable, never presented
+                          indistinguishably — amber + a clock icon +
+                          explicit "desatualizado" label for stale,
+                          matching this codebase's existing
+                          amber/warning severity convention used
+                          elsewhere for non-urgent warning states,
+                          plain gray for fresh. */}
+                      {stale ? (
+                        <span className="text-[10px] text-amber-700 flex items-center gap-1">
+                          <Clock className="w-3 h-3 shrink-0" />
+                          desatualizado — em {formatCalculatedAt(cached.calculatedAt)}
+                        </span>
+                      ) : (
+                        <span className="text-[10px] text-gray-400">
+                          em {formatCalculatedAt(cached.calculatedAt)}
+                        </span>
+                      )}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-gray-400 mt-0.5">Ainda não calculado</p>
+                    <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+                      <AlertCircle className="w-3 h-3 shrink-0" />
+                      Ainda não calculado
+                    </p>
                   )}
 
                   {failureMessage && (

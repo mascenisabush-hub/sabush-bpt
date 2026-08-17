@@ -120,6 +120,42 @@ describe('OwnerPortfolioModal.tsx — UI structure', () => {
   });
 });
 
+describe('OwnerPortfolioModal.tsx — AC #11 corrective fix: fresh vs. stale vs. missing', () => {
+  it('defines a freshness threshold as a named, engineering-level constant — not a magic number inline, not sourced from a new spec field', () => {
+    assert.match(modalSrc, /const FRESHNESS_THRESHOLD_MS = 24 \* 60 \* 60 \* 1000;/);
+  });
+
+  it('derives staleness from the existing calculatedAt field only — no new data-model field, no new write path', () => {
+    const isStaleFnStart = modalSrc.indexOf('const isStale = (iso: string)');
+    assert.notEqual(isStaleFnStart, -1);
+    const isStaleFnBody = modalSrc.slice(isStaleFnStart, modalSrc.indexOf('\n  };', isStaleFnStart));
+    assert.match(isStaleFnBody, /Date\.now\(\) - d\.getTime\(\) > FRESHNESS_THRESHOLD_MS/);
+  });
+
+  it('a malformed/unparseable calculatedAt is treated as stale, never as fresh', () => {
+    const isStaleFnStart = modalSrc.indexOf('const isStale = (iso: string)');
+    const isStaleFnBody = modalSrc.slice(isStaleFnStart, modalSrc.indexOf('\n  };', isStaleFnStart));
+    assert.match(isStaleFnBody, /if \(Number\.isNaN\(d\.getTime\(\)\)\) return true;/);
+  });
+
+  it('a fresh value and a stale value render with different, non-overlapping visual treatment (color class)', () => {
+    assert.match(modalSrc, /stale \? 'text-amber-700' : 'text-\[#0B1F3A\]'/);
+  });
+
+  it('the stale state carries an explicit textual label, never relying on color alone', () => {
+    assert.match(modalSrc, /desatualizado/);
+  });
+
+  it('the missing state remains distinct from both fresh and stale ("Ainda não calculado")', () => {
+    assert.match(modalSrc, /Ainda não calculado/);
+  });
+
+  it('does not introduce a bulk or automatic recalculation as a side effect of staleness — isStale only affects rendering, refreshShopWorth is still only called from handleRefresh', () => {
+    const refreshCalls = modalSrc.match(/refreshShopWorth\(/g) ?? [];
+    assert.equal(refreshCalls.length, 1, 'refreshShopWorth must still be invoked from exactly one place (handleRefresh) — the freshness fix must not add a second, automatic call site.');
+  });
+});
+
 describe('Header.tsx — entry point gating', () => {
   it('the Owner Portfolio trigger is gated on ownedBusinesses.length > 1, the same condition ShopSwitcher\'s own chevron uses', () => {
     assert.match(headerSrc, /ownedBusinesses\.length > 1 && \(/);
