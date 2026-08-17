@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown, Bell, Search } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
+import { OwnerPortfolioModal } from './OwnerPortfolioModal';
 import { ShopSwitcher } from './ShopSwitcher';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
 import { LanguageSwitcher } from './LanguageSwitcher';
@@ -42,6 +43,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     businessCategory,
     isBusinessProfileComplete,
     logout,
+    ownedBusinesses,
   } = useApp();
 
   const { t } = useLanguage();
@@ -50,6 +52,10 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
   const [showCurrencyModal, setShowCurrencyModal] = useState(false);
   const [showSettingsModal, setShowSettingsModal] = useState(false);
+  // [Module #17 Owner Portfolio v0.2] Reachable only when the Admin
+  // owns more than one shop — same gate ShopSwitcher's own chevron
+  // already uses (ownedBusinesses.length > 1), not a new condition.
+  const [showOwnerPortfolio, setShowOwnerPortfolio] = useState(false);
   const [settingsAutoOpenProfileEdit, setSettingsAutoOpenProfileEdit] = useState(false);
   const [showHelpModal, setShowHelpModal] = useState(false);
   const [showProfileMenu, setShowProfileMenu] = useState(false);
@@ -100,7 +106,20 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             {business?.name ? (
               <div className="min-w-0 shrink-0">
                 {isOwner ? (
-                  <ShopSwitcher />
+                  <div className="flex items-center gap-2.5">
+                    <ShopSwitcher />
+                    {/* [Module #17 Owner Portfolio v0.2] Same gate as
+                        ShopSwitcher's own chevron — reachable only when
+                        the Admin owns more than one shop. */}
+                    {ownedBusinesses.length > 1 && (
+                      <button
+                        onClick={() => setShowOwnerPortfolio(true)}
+                        className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-[#0B1F3A] transition-colors mb-0.5"
+                      >
+                        Portefólio
+                      </button>
+                    )}
+                  </div>
                 ) : (
                   <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#D4AF37] mb-1">
                     {t('header.myBusiness')}
@@ -332,6 +351,11 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
           onClose={() => setShowSettingsModal(false)}
           autoOpenProfileEdit={settingsAutoOpenProfileEdit}
         />
+      )}
+
+      {/* Owner Portfolio Modal — Module #17 v0.2 */}
+      {showOwnerPortfolio && (
+        <OwnerPortfolioModal onClose={() => setShowOwnerPortfolio(false)} />
       )}
 
       {/* Currency Modal */}

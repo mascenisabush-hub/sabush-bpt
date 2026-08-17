@@ -10,6 +10,7 @@ import {
   updateDoc,
   deleteDoc,
   collection,
+  getDocs,
   onSnapshot,
   writeBatch as createFirestoreBatch,
   runTransaction,
@@ -440,6 +441,10 @@ interface AppContextType {
   maxShopsPerOwner: number;
   addShop: (businessName: string, category: string, currencySymbol?: string) => Promise<void>;
   switchShop: (businessId: string) => Promise<void>;
+  // [Module #17 Owner Portfolio v0.2] Explicit, per-shop refresh only —
+  // see the function's own implementation comment for the full
+  // governance basis. Never throws; reports outcome via return value.
+  refreshShopWorth: (businessId: string) => Promise<{ success: boolean; error?: string }>;
   logout: () => Promise<void>;
   loadSampleData: () => Promise<void>;
   clearAllData: () => Promise<void>;
@@ -1384,6 +1389,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateDoc(doc(db, 'users', currentUser.uid), {
       activeBusinessId: businessId,
     });
+  };
+
+  // [Module #17 Owner Portfolio v0.2 addendum, currentWorth refresh
+  // amendment — Accepted 2026-08-17; Stage 8 Authorization signed
+  // 2026-08-17, corrected 2026-08-17 per a dedicated feasibility check]
+  //
+  // Refreshes exactly ONE owned shop's currentWorth cache, on an
+  // explicit Admin action only — never automatic, never scheduled,
+  // never a side effect of any other write. May target ANY owned
+  // shop, active or not — confirmed safe by the governance chain's own
+  // feasibility check: batches/quebras/expenses' read rules use
+  // isMemberOf(businessId), withdrawals' uses isOwnerOf(businessId) —
+  // both evaluated per-businessId, never against which business is
+  // "active" in this session, so an Admin already has read access to
+  // every owned shop's operational data today.
+  //
+  // Deliberately one-time reads (getDocs), never a new onSnapshot
+  // listener — the fetched data is used once, to compute a single
+  // value, then discarded. This is NOT a new live subscription for a
+  // non-active shop; nothing about this function changes what data is
+  // continuously synced for the app.
+  //
+  // Reuses calculateInventoryTotals and the exact same businessWorth
+  // formula AppContext.tsx already computes for the active shop above
+  // (totalMarketValue - totalExpensesAllTime - totalWithdrawalsAllTime)
+  // — the same calculation path, not a new or alternate one. Producing
+  // a different number here than what the Dashboard would show for
+  // this same shop, at this same moment, would be a bug, not a design
+  // choice.
+  //
+  // Never throws to its caller in a way that corrupts anything — a
+  // failed refresh (network, read, or write failure) simply means the
+  // Firestore document is never touched, so any previously-cached
+  // currentWorth/calculatedAt is left exactly as it was. The caller
+  // (the Owner Portfolio UI) is responsible for surfacing success/
+  // failure to the Admin; this function reports that outcome via its
+  // return value rather than by throwing, so a failure here can never
+  // propagate into breaking anything else in the app.
+  const refreshShopWorth = async (businessId: string): Promise<{ success: boolean; error?: string }> => {
+    if (!currentUser || !isOwner) {
+      return { success: false, error: 'Apenas o dono do negócio pode atualizar este valor.' };
+    }
+    if (!ownedBusinessIds.includes(businessId)) {
+      return { success: false, error: 'Essa loja não pertence a esta conta.' };
+    }
+
+    try {
+      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap] = await Promise.all([
+        getDocs(collection(db, 'businesses', businessId, 'batches')),
+        getDocs(collection(db, 'businesses', businessId, 'quebras')),
+        getDocs(collection(db, 'businesses', businessId, 'expenses')),
+        getDocs(collection(db, 'businesses', businessId, 'withdrawals')),
+      ]);
+
+      const shopBatches: StockBatch[] = [];
+      batchesSnap.forEach((d) => shopBatches.push(d.data() as StockBatch));
+      const shopQuebras: Quebra[] = [];
+      quebrasSnap.forEach((d) => shopQuebras.push(d.data() as Quebra));
+      const shopExpenses: Expense[] = [];
+      expensesSnap.forEach((d) => shopExpenses.push(d.data() as Expense));
+      const shopWithdrawals: Withdrawal[] = [];
+      withdrawalsSnap.forEach((d) => shopWithdrawals.push(d.data() as Withdrawal));
+
+      const { totalMarketValue } = calculateInventoryTotals(shopBatches, shopQuebras);
+      const shopTotalExpenses = shopExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
+      const shopTotalWithdrawals = shopWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
+      const value = totalMarketValue - shopTotalExpenses - shopTotalWithdrawals;
+
+      await updateDoc(doc(db, 'businesses', businessId), {
+        currentWorth: {
+          value: Number(value.toFixed(2)),
+          calculatedAt: new Date().toISOString(),
+        },
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error refreshing shop worth:', businessId, err);
+      return { success: false, error: err.message || 'Erro ao atualizar o valor desta loja.' };
+    }
   };
 
   // ============================================================
@@ -3424,6 +3509,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         maxShopsPerOwner: MAX_SHOPS_PER_OWNER,
         addShop,
         switchShop,
+        refreshShopWorth,
         logout,
         loadSampleData,
         clearAllData,

@@ -88,6 +88,28 @@ export interface Business {
   // server/index.ts) — never a second source of truth for either.
   lastActivityAt?: string;
   subscriptionStatusCache?: string;
+  // [Module #17 Owner Portfolio v0.2 addendum, currentWorth refresh
+  // amendment — Accepted 2026-08-17, Stage 8 Authorization signed]
+  // Non-authoritative, point-in-time cache of this shop's Business
+  // Worth, read only by the Owner Portfolio screen — never by
+  // Dashboard, Reports, the Business Worth Engine, Closings, or any
+  // other module. Client-writable (unlike lastActivityAt/
+  // subscriptionStatusCache above): the underlying computation is
+  // itself entirely client-side (calculateInventoryTotals + the same
+  // formula AppContext.tsx already uses for `businessWorth`), and
+  // nothing outside the Portfolio ever reads this field, so a
+  // client-supplied value carries none of the trust/security
+  // implications those two server-only fields exist to guard against.
+  // Populated only via an explicit, per-shop Admin refresh action —
+  // never automatically, never on a schedule, never as a side effect
+  // of any write. `value` is always the same figure the Business
+  // Worth Engine would compute live for this shop, as of
+  // `calculatedAt` — never a different or approximated formula.
+  currentWorth?: {
+    value: number;
+    calculatedAt: string;
+    sourceRevision?: string;
+  };
 }
 
 // Module #19 (Subscriptions), Phase 1 — Business State Model's technical

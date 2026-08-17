@@ -24,6 +24,7 @@
     "test:open-batch-concurrency": "tsx --test tests/open-batch-concurrency.test.ts",
     "test:audit-log-firestore-query": "tsx --test tests/superadmin-audit-log-firestore-query.test.ts",
     "test:calculations": "tsx --test tests/calculations.test.ts",
+    "test:owner-portfolio-currentworth": "tsx --test tests/owner-portfolio-currentworth.test.ts",
     "test:subscription-contact-modal-autoclose": "tsx --test tests/subscription-contact-modal-autoclose.test.ts",
     "test:expected-stock-value": "tsx --test tests/expected-stock-value.test.ts",
     "test:initial-stock-price-change": "tsx --test tests/initial-stock-price-change.test.ts",
