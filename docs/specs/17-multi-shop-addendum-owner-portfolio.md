@@ -3,7 +3,10 @@ Business Domain Specification — Addendum
 # Multi-Shop Addendum: Owner Portfolio
 
 Version 0.2
-**Status:** Proposed — not approved
+**Status:** ✅ Concept/Specification Approved — documentation and
+business-rule content only. **Implementation is NOT authorized by this
+status.** See "Addendum Concept Acceptance" at the end of this
+document.
 **Revision (v0.2):** Clarified Current Worth Cache boundaries (no
 pre-committed storage schema; computation-path wording tightened;
 stale/missing cache fallback made explicit). Added an acceptance
@@ -167,3 +170,74 @@ Worth is calculated, stored, or authorized anywhere else in the system.
   extension inferred from this module.
 - **Multi-shop Manager scope** — already flagged as future, out-of-scope
   work in spec #16; unaffected by this addendum.
+
+---
+
+## Addendum Concept Acceptance
+
+**Accepted as concept/specification.** Scope of this acceptance, as
+explicitly granted:
+
+- The Owner Portfolio presentation-layer view and its `currentWorth`
+  read-time cache concept, exactly as defined in "Owner Portfolio
+  Definition" and "Current Worth Cache Definition" above.
+- The Security Constraints, Non-Goals, and Acceptance Criteria above,
+  unchanged from this document's own content — this acceptance does
+  not alter, loosen, or reinterpret any of them.
+- Confirmed by direct review against the current repository (`main`
+  @ `c775503`, this addendum branch @ `864a3c4`), not assumed from the
+  proposal's own wording alone: no cross-business aggregation, no
+  consolidation of Business Worth, no new authoritative Business Worth
+  calculation, no new tenant-isolation boundary, no change to
+  `ShopSwitcher`'s existing behavior, and no subscription-related
+  behavior are introduced by this addendum.
+- The Business Worth Engine's actual calculated output (`businessWorth`
+  in `AppContext.tsx`) is confirmed unchanged since this addendum was
+  written — two amendments to `02-business-worth-engine.md` since then
+  (Expected Current Stock Value; Initial Stock Valuation History) both
+  explicitly state they do not modify `businessWorth` and are never fed
+  back into its formula, and a separate performance optimization to
+  `calculateInventoryTotals` is confirmed to change cost shape only,
+  not output. This addendum's core assumption — that `currentWorth`
+  would mirror "the existing Business Worth Engine calculation path" —
+  remains accurate.
+
+**This approval does not constitute implementation authorization.**
+Per this repository's Platform Engineering Governance Standard, the
+remaining sequence is:
+
+```
+Concept approved (this record)
+        ↓
+Implementation Plan required
+        ↓
+Rule 8 Assessment required
+        ↓
+Explicit, signed Implementation Authorization required
+        ↓
+Implementation may begin
+```
+
+**Not included in this acceptance:** any source code implementation;
+any Firestore schema, collection, or field-storage commitment for
+`currentWorth` (this addendum's own "Owner Portfolio Definition"
+section explicitly defers that to implementation planning, and this
+acceptance does not resolve it either); any change to
+`firestore.rules` or `firestore.indexes.json`.
+
+**One substantive technical question flagged for the Implementation
+Plan / Rule 8 stage, not resolved by this acceptance:** today's
+`businessWorth` is computed entirely client-side, in-memory, for the
+currently *active* business only (`AppContext.tsx`) — no existing
+mechanism computes or reads a worth figure for an Admin's *other*,
+non-active shops. This addendum correctly defers `currentWorth`'s
+storage/computation mechanism to implementation planning rather than
+solving it here; this note records that the mechanism is a genuinely
+open technical question the future Rule 8 Assessment must address as a
+first-order concern, not a settled one this acceptance is silently
+assuming away.
+
+**Merge note:** per this document's own "Status Note" recovery
+sequence (step 2), the next step — merging this content into
+`17-owner-portfolio.md` as a new revision — is a separate, subsequent
+action, not performed by this acceptance record.
