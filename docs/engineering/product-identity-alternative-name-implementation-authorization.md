@@ -5,20 +5,23 @@
 that engineering governance is complete and implementation is
 authorized to begin.
 **Status:** 🟡 **Proposed, pending Product Architect signature.** Not yet
-Authorized. **This document cannot be signed until the [Terminology
+Authorized. **Precondition satisfied:** the [Terminology
 Amendment](../specs/product-identity-alternative-name-terminology-amendment.md)
-is itself Accepted** — signature §5 below is blocked on that precondition
-and is left unsigned in this draft.
+reached ✅ Accepted (Product Architect acceptance recorded there). This
+document may now be signed — signature §5 below remains explicitly
+unsigned in this revision, per the Product Architect's own instruction
+to provide it separately.
 **Basis:** [`BDR-0013`](../specs/BDR-0013-product-identity-alternative-name-memory.md)
 (Approved, all nine §5 items ACCEPT), [`POL-0007`](../specs/POL-0007-supplier-wording-recognition-confirmation-conflict-policy.md)
 (Approved), [Specification](../specs/product-identity-alternative-name-specification.md)
 (✅ Accepted, 2026-08-19), [Terminology Amendment](../specs/product-identity-alternative-name-terminology-amendment.md)
-(🟡 Proposed — precondition for this document's own signature), [Rule 8
+(✅ Accepted), [Rule 8
 Assessment](./product-identity-alternative-name-rule8-assessment.md)
 (✅ Assessed — READY).
-**Repository state at drafting:** `main` HEAD `01d3522` — the Rule 8
-Assessment is the latest commit on `main`; the Terminology Amendment and
-this document exist locally, not yet committed/pushed.
+**Repository state at this revision:** local `main` HEAD `e354a1b`
+(Terminology Amendment acceptance) — one commit ahead of
+`origin/main` (`01d3522`); this document and the Terminology Amendment
+exist locally, not yet pushed.
 **Nothing has been modified in `src/`, `server/`, `firestore.rules`,
 `firestore.indexes.json`, `BDR-0013`, or `POL-0007` to produce this
 document.**
@@ -35,7 +38,7 @@ Authorization (this document) → Implementation → Close-out**
 | Business Decision | `BDR-0013` | ✅ Approved (all nine §5 items ACCEPT) |
 | Policy | `POL-0007` | ✅ Approved |
 | Specification | `product-identity-alternative-name-specification.md` | ✅ Accepted (2026-08-19) |
-| Specification Amendment | Terminology Amendment (§3 step 1 / §3a) | 🟡 Proposed — **must reach ✅ Accepted before this Authorization can be signed** |
+| Specification Amendment | Terminology Amendment (§3 step 1 / §3a) | ✅ Accepted |
 | Rule 8 | `product-identity-alternative-name-rule8-assessment.md` | ✅ Assessed — READY |
 | **Authorization** | **This document** | 🟡 Proposed, unsigned |
 | Implementation | — | Not begun |
@@ -142,11 +145,15 @@ governance record before implementation proceeds on the changed basis.
 
 ## 5. Signature
 
-**Not yet signed.** This Authorization is blocked on the Terminology
-Amendment reaching ✅ Accepted (§1, above). Once accepted, this section
-will record the Product Architect's explicit sign-off verbatim,
-following this repository's established signature pattern (Module #20
-Phase 1 Authorization precedent), and only from that point does Stage 9
+**Not yet signed.** The precondition that previously blocked this
+section (Terminology Amendment reaching ✅ Accepted) is now satisfied.
+**This section remains unsigned by the Product Architect's own explicit
+instruction** — acceptance of the Terminology Amendment is not to be
+treated as authorization to implement, and the Product Architect
+signature for this Authorization will be provided separately. Once
+provided, this section will record it verbatim, following this
+repository's established signature pattern (Module #20 Phase 1
+Authorization precedent), and only from that point does Stage 9
 (Incremental Implementation) begin.
 
 ---
@@ -164,7 +171,7 @@ Phase 1 Authorization precedent), and only from that point does Stage 9
 - This record does not pre-authorize `BDR-0013` item 9 or any future
   phase of this capability's own possible extensions.
 
-**Lifecycle:** Designed → Proposed. **Not Assessed-to-Authorized** — no
-engineering work is authorized by this document in its current status,
-and it cannot become Authorized until the Terminology Amendment is
-Accepted.
+**Lifecycle:** Designed → Proposed. **Not yet Authorized** — the
+Terminology Amendment precondition is satisfied, but no engineering
+work is authorized by this document until the Product Architect
+separately provides the signature in §5.
