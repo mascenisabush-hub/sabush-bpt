@@ -104,6 +104,13 @@ BDR is checked against this framing.
     simplified Stock Count screen displays each product's existing,
     already-recorded unit string unchanged — it neither converts
     between units nor invents a canonical unit representation.
+    `[Cross-reference — 2026-08-18]` This exclusion is narrowly
+    superseded, within the scope `BDR-0012` itself authorizes, by the
+    accepted
+    [Product Unit-of-Measure & Product Memory Reconciliation Amendment](./product-unit-of-measure-reconciliation-amendment.md).
+    This decision's original text is preserved above, unmodified; see
+    the reconciliation amendment for the full, narrow scope of what
+    is now superseded and what remains unaffected.
 12. **Multi-shop isolation is mandatory and unchanged.** The default
     product list, the count itself, and the resulting report are
     strictly scoped to the currently active business, using the
@@ -219,7 +226,10 @@ boundary Part 5 sets.
   see Part 5's exception.
 - Does not introduce a Product archive/soft-delete capability — see
   Part 3.
-- Does not introduce unit-of-measure conversion.
+- Does not introduce unit-of-measure conversion. `[Cross-reference —
+  2026-08-18]` Narrowly superseded by the accepted
+  [Product Unit-of-Measure & Product Memory Reconciliation Amendment](./product-unit-of-measure-reconciliation-amendment.md)
+  — see Decision 11, above, and that amendment for the full scope.
 - Does not change Business Worth, Capital Growth, or Embedded Profit.
 - Does not authorize implementation — see Status, above, and the
   originating task's explicit Implementation Gate (its Part 22).

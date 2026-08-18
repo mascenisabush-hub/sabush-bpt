@@ -258,7 +258,14 @@ from the originating review):**
   has used before), never silently converted to an assumed bottle
   count. Unit-of-measure conversion is explicitly **not** part of this
   amendment (Part 8's own instruction) — a future, separate capability
-  if ever pursued.
+  if ever pursued. `[Cross-reference — 2026-08-18]` This exclusion is
+  narrowly superseded, within the scope `BDR-0012` itself authorizes,
+  by the accepted
+  [Product Unit-of-Measure & Product Memory Reconciliation Amendment](./product-unit-of-measure-reconciliation-amendment.md).
+  This amendment's original text is preserved above, unmodified —
+  extraction here remains reading what a document literally states,
+  never inferring or converting a unit from it; see the reconciliation
+  amendment for the full, narrow scope of what is now superseded.
 
 **Restock Observation compatibility (Part 9):**
 - Smart Stock Entry **never** populates
@@ -393,6 +400,10 @@ See the companion ADR in full. Summary:
   purely a physical, user-entered observation).
 - Any edit to a historical/already-created `StockBatch`.
 - Unit-of-measure conversion (carton→bottle, sack→kilogram, etc.).
+  `[Cross-reference — 2026-08-18]` Narrowly superseded by the accepted
+  [Product Unit-of-Measure & Product Memory Reconciliation Amendment](./product-unit-of-measure-reconciliation-amendment.md)
+  — see the "Quantity/units" business rule, above, and that amendment
+  for the full scope.
 - Persistent storage of the original uploaded document (deferred, not
   decided).
 - Numeric "confidence percentage" UI (deferred, not decided).
