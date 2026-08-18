@@ -64,20 +64,22 @@ These remain three distinct things, per Decisions 3 and 15 above, and must not b
 
 ## 5. Open Decisions, Classified by Governance Layer
 
-The following remain genuinely undecided by this document. None is answered here, and none should be inferred as answered elsewhere in this document.
+At the time this BDR was originally filed, none of the following was answered by this document. Following formal Product Architect review and explicit ratification (recorded in §5.A's Resolution Log below), a subset of the §5.A items has since been resolved. Every remaining item — including the retained open sub-questions within partially-resolved §5.A items, and all of §5.B — remains genuinely undecided; none should be inferred as answered beyond what the Resolution Log explicitly states.
 
-### 5.A — Remaining Business/Philosophy Decisions
+### 5.A — Business/Philosophy Decisions
 
-*(Questions affecting the business meaning or scope of this capability — must be resolved at the BDR/business-decision level before technical architecture proceeds.)*
+*(Questions affecting the business meaning or scope of this capability — must be resolved at the BDR/business-decision level before technical architecture proceeds. Status shown per item; resolved items are recorded decisions of this BDR, not merely recommendations.)*
 
-1. **Reconfiguration/historical application** — when an existing product's unit relationship is defined or changed, does it apply only going forward, or can the owner apply it to existing records in some way? This includes whether a newly confirmed or changed configuration affects the calculated current value of stock still remaining from a batch recorded before that configuration existed. (No decision made; prior investigation evidence noted a prospective-only approach as lower-risk, but this document does not adopt that as a decision.)
-2. **Whether arbitrary/non-linear unit relationships are in scope**, or only strictly-ordered chains (as in every worked example so far).
-3. **Whether a single product can have more than one independent unit-relationship family at once** (for example, valued for selling purposes sometimes by volume and sometimes by weight, independently).
-4. **Whether purchase unit is restricted to a specific level** (e.g., only the largest/"top" configured unit) or may be any unit in the product's configuration.
-5. **Whether selling unit and count unit are required to be the same value**, or may genuinely differ for the same product.
-6. **What business posture applies when a product's configuration is incomplete** — should entry be blocked, allowed with a warning, or allowed to silently fall back to unconverted behavior?
-7. **Historical-data posture given the confirmed absence of real production-data evidence** — proceed on a deliberately conservative assumption, or commission a data-access mechanism first.
-8. **Governance treatment** — how this capability's eventual specification work should be categorized and sequenced relative to the specific existing artifacts named in §4, beyond the reconciliation requirement §4 already establishes.
+1. **Reconfiguration/historical application — RESOLVED.** Once a product's unit-relationship configuration is confirmed, it applies prospectively: from the moment of confirmation, all current and future interpretation of quantities for that product — including stock still on hand from batches recorded before the configuration existed — uses the confirmed configuration. The historical record of each batch (its originally recorded quantity, unit, and price) is never rewritten, consistent with Decisions 15–16. The Product Architect has explicitly reviewed and accepted the valuation risk this mechanism carries for pre-existing stock, notwithstanding that real-world historical mixed-unit prevalence remains genuinely unmeasured (Discovery Report §13) — this risk is knowingly and explicitly carried forward, not resolved by evidence.
+2. **Arbitrary/non-linear unit relationships — RESOLVED.** Initial business scope is strictly-ordered unit-relationship chains only (as in every worked example evidenced to date). This is scope-as-evidenced, not a permanent ceiling: no non-linear scenario has been documented, and this decision should be revisited if one is.
+3. **Multiple independent unit-relationship families — REMAINS OPEN.** No evidence exists in either direction; no real business scenario requiring this has been documented. Requires further business input before any decision.
+4. **Purchase-unit level restriction — REMAINS OPEN.** The only evidence available is a single illustrative worked example (§3), which is not a business rule. Whether real receipts this business processes ever state a purchase at a non-top unit is unresolved and requires either direct business input or further targeted discovery.
+5. **Selling unit vs. count unit — RESOLVED.** Selling unit and count unit are not required to be the same value; they may genuinely differ for the same product. This follows directly from already-established Decisions 6–7, which require the system to interpret and combine multiple different units within a single count for one product — a capability that only coheres if unit interpretation is decoupled from which unit is the selling unit.
+6. **Incomplete product configuration — PARTIALLY RESOLVED.** Silent fallback to unconverted behavior is ruled out, for consistency with the "never resolve ambiguity silently" pattern already established by Decisions 10–12. Whether an incomplete configuration should block entry entirely or allow entry with a warning **remains open** — both are consistent with the silent-fallback prohibition, and no evidence distinguishes between them.
+7. **Historical-data posture — REMAINS OPEN.** Discovery Report §12–13 confirm both that real production data cannot be inspected from this environment and that historical mixed-unit prevalence is genuinely unmeasured — not classifiable as low/moderate/high risk. Choosing between proceeding on a conservative assumption and commissioning a data-access mechanism first is a risk-tolerance decision that has not yet been made, and is explicitly not inferred from the evidence's absence.
+8. **Governance treatment — RESOLVED.** No additional business-level governance decision is required beyond the sequence already established in §9 (BDR approval → §5.A → §5.B → formal reconciliation of `BDR-0009` and `04-smart-stock-entry-amendment.md` → Specification → Rule 8 → Implementation Authorization → Implementation). The narrower question of reconciliation document mechanics (one combined amendment vs. several; which specs receive companion amendments) is deferred to when that reconciliation work is actually undertaken, and is not a live §5.A item.
+
+**§5.A Resolution Log** — Decisions on items 1, 2, 5, 6 (silent-fallback prohibition only), and 8 above were made via formal Product Architect review and explicit ratification in this project's governance thread. Items 3, 4, 6 (block-vs-warn sub-question), and 7 remain genuinely open and are carried forward as this BDR's live open items.
 
 ### 5.B — Deferred Operational/Policy Decisions
 
@@ -155,6 +157,6 @@ Implementation Authorization
         ↓
 Implementation
 
-**None of these later gates has occurred.** This document represents only the first step in that sequence, and only in draft form.
+**Current status:** BDR approval has occurred (see Status, above). §5.A is now partially resolved — items 1, 2, 5, 6 (silent-fallback prohibition only), and 8 are resolved per the Resolution Log in §5.A; items 3, 4, 6 (block-vs-warn), and 7 remain open. No §5.B Policy artifact, reconciliation/amendment of `BDR-0009` or `04-smart-stock-entry-amendment.md`, technical architecture, Specification, Rule 8 Assessment, or Implementation Authorization has occurred.
 
 ---
