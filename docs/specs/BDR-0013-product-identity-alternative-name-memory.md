@@ -2,7 +2,7 @@ Business Decision Record
 
 # BDR-0013 — Product Identity, Name Correction & Alternative-Name Memory — Business Decision Record
 
-**Status:** DRAFT — proposed for Product Architect review. Not accepted. Not authorized for implementation.
+**Status:** Approved.
 **BDR number:** `BDR-0013` — explicit Product Architect assignment, per this repository's established discipline (`BDR-0012`'s own numbering, `POL-0005`/`POL-0006`) that a BDR number requires explicit assignment and is never inferred from the highest existing number. This assignment was made only after a fresh, exhaustive numbering investigation established that the apparent gapless sequence (`BDR-0001`–`BDR-0012`) was not, by itself, a legitimate basis for assignment — matching the same standard already applied to `BDR-0012`'s own numbering.
 **Location note:** Filed in `docs/specs/`, unprefixed — this capability is cross-cutting (Product Catalog, Add Stock, Initial Stock, Periodic Contagem, Smart Stock Entry), following the same unprefixed naming pattern already established for cross-cutting artifacts in this repository (`BDR-0004`, `BDR-0008`, `BDR-0009`, `BDR-0012`, and this same broader initiative's own Discovery Report, Specification, and reconciliation amendment).
 **Depends on:** [`product-identity-alternative-name-discovery.md`](./product-identity-alternative-name-discovery.md) (Investigation only; findings accepted as the basis for this draft, per its §15).
