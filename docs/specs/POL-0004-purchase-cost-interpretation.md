@@ -2,7 +2,7 @@ Decision Record
 
 # POL-0004 — Purchase Cost Interpretation
 
-**Status:** DRAFT — proposed for Product Architect review. Not approved. Not authorized for implementation.
+**Status:** Approved.
 **Type:** Policy document, per the category established in [`19-governance-bdr-policy-framework.md`](./19-governance-bdr-policy-framework.md) §2. Operationalizes an approved Business Decision Record; does not itself decide strategic philosophy and does not itself define a technical implementation.
 **Location note:** Filed in `docs/specs/`, unprefixed, under the cross-cutting `POL-NNNN` namespace established in [`19-governance-bdr-policy-framework.md`](./19-governance-bdr-policy-framework.md)'s Numbering Ledger addendum, following the pattern `POL-0001` established.
 **Depends on:** [`BDR-0012`](./BDR-0012-product-unit-of-measure-product-memory.md) (Product Unit-of-Measure & Product Memory) — specifically §5.B item 6, and §3's worked example, which explicitly declined to resolve this question itself.

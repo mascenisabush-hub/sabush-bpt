@@ -2,7 +2,7 @@ Decision Record
 
 # POL-0001 — Fractional Quantity Handling
 
-**Status:** DRAFT — proposed for Product Architect review. Not approved. Not authorized for implementation.
+**Status:** Approved.
 **Type:** Policy document, per the category established in [`19-governance-bdr-policy-framework.md`](./19-governance-bdr-policy-framework.md) §2. Operationalizes an approved Business Decision Record; does not itself decide strategic philosophy and does not itself define a technical implementation.
 **Location note:** Filed in `docs/specs/`, unprefixed, under the cross-cutting `POL-NNNN` namespace established in [`19-governance-bdr-policy-framework.md`](./19-governance-bdr-policy-framework.md)'s Numbering Ledger addendum. This is the first document to be filed under that namespace — it establishes the `POL-NNNN` filing pattern in practice, the same way `POL-19-001` once established the module-prefixed pattern for its own series.
 **Depends on:** [`BDR-0012`](./BDR-0012-product-unit-of-measure-product-memory.md) (Product Unit-of-Measure & Product Memory) — specifically §5.B item 1, and §2 Decision 1 (BPT must understand confirmed unit relationships) and the already-resolved §5.A item 2 (unit relationships are strictly-ordered chains, initial scope).
