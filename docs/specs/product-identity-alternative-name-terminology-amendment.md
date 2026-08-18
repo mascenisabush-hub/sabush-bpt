@@ -2,8 +2,7 @@ Business Domain Specification — Terminology Amendment
 
 # Supplier-Wording Recognition, Confirmation & Conflict — Initial Stock Terminology Amendment
 
-**Status:** 🟡 Proposed, pending Product Architect acceptance. See "Product
-Architect Acceptance," below.
+**Status:** ✅ Accepted. See "Product Architect Acceptance," below.
 **Amends:** [`product-identity-alternative-name-specification.md`](./product-identity-alternative-name-specification.md)
 (✅ Accepted, 2026-08-19) §3 step 1 and §3a only — narrowly, exactly the
 wording identified in §1 below. No other section of the Specification is
@@ -187,7 +186,34 @@ in §3.1/§3.2, above.
 
 ## Product Architect Acceptance
 
-**Status:** 🟡 Proposed — pending explicit Product Architect review and
-acceptance. Not yet Accepted. This amendment does not take effect, and
-the Specification's §3 step 1/§3a wording remains as originally
-Accepted, until acceptance is recorded here.
+**Status:** ✅ Accepted (2026-08-19).
+
+> I have reviewed the Stage 2 Specification Terminology Amendment. I
+> ACCEPT the amendment as Product Architect. The corrected terminology
+> is authoritative:
+> - "Initial Stock" means the initial-capital stock-count workflow that
+>   establishes the business's starting inventory and product/reference
+>   names.
+> - "Supplier stock entry" means subsequent stock-receipt/purchase-entry
+>   workflows where stock is received from suppliers.
+> - Initial Stock does not require supplier selection or supplier
+>   capture.
+> - Supplier-specific alternative-name relationships are established
+>   during supplier stock entry after owner confirmation.
+> - Initial Stock remains within the business-level scope established
+>   by BDR-0013 Item 8 because its products provide the primary/
+>   reference product identity, but it is not a supplier-wording
+>   recognition/confirmation surface.
+> - The amendment does not add any new business rule or technical
+>   architecture.
+
+This acceptance takes effect immediately: the corrected §3 step 1 and
+§3a text in §3.1/§3.2, above, is now the authoritative Specification
+text for those two passages, superseding the originally-Accepted
+wording quoted in §1. No other part of the Specification, `BDR-0013`,
+or `POL-0007` is affected. This acceptance does not authorize Rule 8
+rework (none is required — the Rule 8 Assessment already built its
+findings against this corrected meaning), does not authorize
+implementation, and does not authorize or sign the separate
+Implementation Authorization, which remains its own, separate,
+required Product Architect gate.
