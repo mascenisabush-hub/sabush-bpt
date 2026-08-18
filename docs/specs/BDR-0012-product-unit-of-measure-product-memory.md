@@ -6,7 +6,7 @@ Business Decision Record
 
 **Type:** Business Decision Record — a strategic, long-lived decision about why this capability exists and what boundary it may never cross, per the category `19-governance-bdr-policy-framework.md` establishes. Not a Policy (no "how, specifically" operational rule is fixed here) and not a Business Domain Specification (no functional requirement or acceptance criterion for implementation is fixed here).
 
-**Location note:** Not yet filed. If approved, the repository's existing precedent (`BDR-0004`, `BDR-0008`, `BDR-0009` are all filed without a module prefix, in `docs/specs/`, because each is cross-cutting rather than belonging to a single existing module) suggests this decision — which touches Products (#3), Stock Batches (#5), Stock Counts (#10), Smart Stock Entry (amendment to #4/#5), and the Business Worth Engine (#2) — would follow the same unprefixed `docs/specs/` filing pattern. This document does not decide that placement; it only notes the applicable precedent.
+**Location note:** Filed at `docs/specs/BDR-0012-product-unit-of-measure-product-memory.md`, following `BDR-0004`, `BDR-0008`, and `BDR-0009`'s precedent — filed without a module prefix, in `docs/specs/`, because this decision is cross-cutting rather than belonging to a single existing module.
 
 **Depends on:** `docs/specs/product-unit-of-measure-discovery.md` — the committed, filed Discovery Report (commit `a32de3c`) covering the current data model, product matching, the Smart Stock Entry OCR pipeline's non-conversion boundary, Periodic Stock Count's one-quantity-one-unit shape, and the Business Worth calculation engine's unit-unawareness. This BDR is grounded in that report, consistent with the repository's existing precedent of a BDR citing a filed Discovery Report by name in its own `Depends on` field (e.g. `BDR-0009` citing `docs/specs/stock-count-simplification-discovery.md`).
 
@@ -137,7 +137,7 @@ At the time this BDR was originally filed, none of the following was answered by
 
 ## 9. Next Governance Step
 
-If this BDR is approved, the governance sequence is, in order:
+This BDR has been approved. The governance sequence, in order, is:
 
 BDR approval
         ↓
