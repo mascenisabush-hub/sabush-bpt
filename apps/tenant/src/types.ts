@@ -297,6 +297,30 @@ export interface PurchaseBatch {
 // This keeps historical batches accurate even if the reference price
 // on the product is edited later.
 // ============================================================
+// Supplier-Wording Recognition, Confirmation & Conflict (BDR-0013,
+// POL-0007, product-identity-alternative-name-specification.md,
+// Terminology Amendment, Rule 8 Assessment — all governance docs at
+// docs/specs/ and docs/engineering/). Represents one confirmed
+// relationship between a specific supplier's own wording for a product
+// and that product's identity. Established only during Add Stock or
+// Smart Stock Entry ("supplier stock entry" — Rule 8 Assessment §0);
+// never during Initial Stock, which has no supplier concept and is not
+// a target of this type. `confirmedAt` is required for correctness
+// (Rule 8 Finding 19 — distinguishes "confirmed" from "merely
+// proposed," needed by future reuse-matching logic). `provenance` and
+// `confirmedByName` are optional, implementation-time-discretion
+// metadata per the same finding — not required by any accepted
+// business rule. This type introduces no matching, normalization, or
+// confirmation-flow behavior itself (all deferred to a later,
+// separately-authorized checkpoint).
+export interface SupplierWordingRelationship {
+  supplierRecordId: string; // SupplierRecord.id — reusable, forward-looking identity (Rule 8 Finding 2), not PurchaseBatch.supplier's immutable snapshot
+  wording: string; // the supplier's own wording, as confirmed
+  confirmedAt: string; // ISO string — required, see note above
+  provenance?: 'system-proposed' | 'owner-initiated'; // optional, POL-0007 governs both identically once established
+  confirmedByName?: string; // optional, display convenience only — mirrors SupplierRecord.createdByName/PurchaseBatch.createdByName; not audit-log-grade
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -308,6 +332,18 @@ export interface Product {
   barcode?: string;
   costPrice?: number; // reference price only, see note above
   sellingPrice?: number; // reference price only, see note above
+  // Supplier-Wording Recognition (BDR-0013/POL-0007/Specification, see
+  // SupplierWordingRelationship above). A product may have zero or more
+  // confirmed relationships, one per (supplier, wording) pair, each
+  // pointing back to this same product. This field is strictly
+  // additive — `name` above remains the single primary/reference name
+  // (BDR-0013 item 2); nothing here replaces or renames it. Inline
+  // array, not a subcollection (Rule 8 Finding 1) — deletes atomically
+  // with the parent Product document, requiring no change to
+  // deleteProductPlan.ts. Populated only by a later, separately
+  // authorized checkpoint — this field's presence alone implements no
+  // matching, candidate-detection, or confirmation behavior.
+  supplierWordings?: SupplierWordingRelationship[];
 }
 
 // [Closing Integrity Amendment v1.0 — Option B] closingId/lockedAt are
