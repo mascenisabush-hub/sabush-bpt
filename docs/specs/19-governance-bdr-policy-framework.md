@@ -116,6 +116,43 @@ different topic than the one recorded in this ledger without an
 explicit Product Architect decision — the same discipline that governs
 the original Planned Policy Series applies here.
 
+### Cross-Cutting Policy Namespace (`POL-NNNN`)
+
+The Numbering Ledger above governs module-scoped `POL-19-NNN`
+identifiers only. It does not, and was never intended to, cover a
+Policy whose subject matter is genuinely cross-cutting — spanning
+multiple modules with no single home — the same situation that led
+`BDR-0004`, `BDR-0008`, `BDR-0009`, and `BDR-0012` to be filed
+unprefixed rather than under any one module's numbering.
+
+**A separate, independent identifier space, `POL-NNNN` (unprefixed,
+filed directly in `docs/specs/`), is established for exactly this
+case.** It is distinct from, and not derived from, any module-scoped
+`POL-NN-NNN` sequence — starting a new sequence at 1 mirrors how the
+unprefixed BDR sequence itself began at `BDR-0001` rather than
+borrowing a number from any module-scoped source.
+
+This namespace begins at **`POL-0001`**, confirmed collision-free
+against repository files, filenames, git history, branches, and tags
+at the time of this addendum.
+
+**Assignment authority:** until a more formal, repository-wide
+numbering rule is established, assigning a `POL-NNNN` number requires
+an explicit Product Architect decision, made each time — the same
+discipline `BDR-0012`'s own numbering required, and the same
+discipline this Ledger's own module-scoped entries above already
+apply (see the `POL-19-012` row: "Do not use this number for any
+other topic without an explicit Product Architect decision"). No
+`POL-NNNN` number may be inferred from repository state, from the
+highest previously-assigned number, or from any other document's
+convention.
+
+**Origin:** this namespace was established for the cross-cutting
+Policy work operationalizing `BDR-0012` (Product Unit-of-Measure &
+Product Memory) — specifically its §5.B items — the first Policy-
+adjacent capability in this repository's history without a single
+module home.
+
 ## 3. Governance Relationship
 
 The following hierarchy is recorded as approved. Each level must derive
