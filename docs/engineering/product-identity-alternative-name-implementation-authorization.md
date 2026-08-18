@@ -4,13 +4,10 @@
 `platform-engineering-governance-standard.md` §2) — the formal record
 that engineering governance is complete and implementation is
 authorized to begin.
-**Status:** 🟡 **Proposed, pending Product Architect signature.** Not yet
-Authorized. **Precondition satisfied:** the [Terminology
-Amendment](../specs/product-identity-alternative-name-terminology-amendment.md)
-reached ✅ Accepted (Product Architect acceptance recorded there). This
-document may now be signed — signature §5 below remains explicitly
-unsigned in this revision, per the Product Architect's own instruction
-to provide it separately.
+**Status:** ✅ **Authorized.** Signed by the Product Architect — see
+"Signature," below. Implementation of the Supplier-Wording Recognition,
+Confirmation & Conflict capability, exactly as scoped by §2, is
+authorized to begin.
 **Basis:** [`BDR-0013`](../specs/BDR-0013-product-identity-alternative-name-memory.md)
 (Approved, all nine §5 items ACCEPT), [`POL-0007`](../specs/POL-0007-supplier-wording-recognition-confirmation-conflict-policy.md)
 (Approved), [Specification](../specs/product-identity-alternative-name-specification.md)
@@ -40,7 +37,7 @@ Authorization (this document) → Implementation → Close-out**
 | Specification | `product-identity-alternative-name-specification.md` | ✅ Accepted (2026-08-19) |
 | Specification Amendment | Terminology Amendment (§3 step 1 / §3a) | ✅ Accepted |
 | Rule 8 | `product-identity-alternative-name-rule8-assessment.md` | ✅ Assessed — READY |
-| **Authorization** | **This document** | 🟡 Proposed, unsigned |
+| **Authorization** | **This document** | ✅ **Authorized** — signed 2026-08-19 |
 | Implementation | — | Not begun |
 | Close-out | — | Not begun |
 
@@ -145,16 +142,43 @@ governance record before implementation proceeds on the changed basis.
 
 ## 5. Signature
 
-**Not yet signed.** The precondition that previously blocked this
-section (Terminology Amendment reaching ✅ Accepted) is now satisfied.
-**This section remains unsigned by the Product Architect's own explicit
-instruction** — acceptance of the Terminology Amendment is not to be
-treated as authorization to implement, and the Product Architect
-signature for this Authorization will be provided separately. Once
-provided, this section will record it verbatim, following this
-repository's established signature pattern (Module #20 Phase 1
-Authorization precedent), and only from that point does Stage 9
-(Incremental Implementation) begin.
+**Signed.** Product Architect decision, recorded verbatim:
+
+> "I, SABUSHIMIKE Masceni, as Product Architect, have reviewed the
+> amended Specification, the completed Rule 8 Assessment, and the
+> Implementation Authorization. I ACCEPT and SIGN the Implementation
+> Authorization. I confirm that the governance process for this
+> capability is complete and I formally authorize engineering
+> implementation strictly within the scope, constraints, acceptance
+> criteria, and technical decisions recorded in the Implementation
+> Authorization. Engineering may now proceed. Do not expand the
+> authorized scope or introduce decisions outside the recorded
+> Specification, Rule 8 Assessment, and Implementation Authorization
+> without returning through the appropriate governance gate."
+
+**Date:** August 19, 2026.
+
+**Authorization scope, as explicitly stated at signature:** applies
+only to the implementation scope defined in §2 of this document, itself
+bound to the Rule 8 Assessment's findings and the amended Specification
+(Terminology Amendment, ✅ Accepted). Implementation shall remain
+strictly within the approved boundaries in §2/§3, above. No additional
+functionality, architectural redesign, feature expansion, `BDR-0013`
+item 9 work, semantic/AI matching, or Initial Stock change is
+authorized.
+
+**Governance requirements attached to this authorization, in effect for
+the duration of implementation:**
+- Any newly discovered architectural ambiguity shall be reported
+  immediately, not resolved silently.
+- Any scope expansion shall return to Product Architect review before
+  proceeding.
+- No business rule may be changed during implementation.
+- No specification, policy, amendment, or Rule 8 Assessment may be
+  modified unless separately authorized.
+
+Claude begins changing the runtime files listed in §2 following this
+signature.
 
 ---
 
@@ -171,7 +195,6 @@ Authorization precedent), and only from that point does Stage 9
 - This record does not pre-authorize `BDR-0013` item 9 or any future
   phase of this capability's own possible extensions.
 
-**Lifecycle:** Designed → Proposed. **Not yet Authorized** — the
-Terminology Amendment precondition is satisfied, but no engineering
-work is authorized by this document until the Product Architect
-separately provides the signature in §5.
+**Lifecycle:** Designed → Proposed → **Authorized (signed)**. Stage 9
+(Incremental Implementation) may now begin, strictly within the
+boundaries this document records.
