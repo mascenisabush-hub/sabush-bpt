@@ -2,7 +2,7 @@ Business Decision Record
 
 # BDR-0012 — Product Unit-of-Measure & Product Memory
 
-**Status:** DRAFT — proposed for Product Architect review. Not approved. Not authorized for implementation. Assigned as `BDR-0012` by explicit Product Architect decision.
+**Status:** Approved.
 
 **Type:** Business Decision Record — a strategic, long-lived decision about why this capability exists and what boundary it may never cross, per the category `19-governance-bdr-policy-framework.md` establishes. Not a Policy (no "how, specifically" operational rule is fixed here) and not a Business Domain Specification (no functional requirement or acceptance criterion for implementation is fixed here).
 
