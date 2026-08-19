@@ -321,6 +321,37 @@ export interface SupplierWordingRelationship {
   confirmedByName?: string; // optional, display convenience only — mirrors SupplierRecord.createdByName/PurchaseBatch.createdByName; not audit-log-grade
 }
 
+// Product Unit-of-Measure & Product Memory (BDR-0012, POL-0001-0006,
+// product-unit-of-measure-specification.md §2 "Model B", Rule 8
+// Assessment at docs/engineering/product-memory-purchase-selling-valuation-rule8-assessment.md
+// Finding 5, Implementation Authorization Increment A — signed 2026-08-19
+// by Product Architect SABUSHIMIKE MASCENI). Represents an owner-confirmed
+// unit-of-measure relationship for one product — a single, strictly-
+// ordered chain (BDR-0012 §5.A Item 3: exactly one relationship family
+// per product; no family selector/identifier exists or is introduced).
+// `units[0]` is the top-level/default unit (BDR-0012 §5.A Item 4);
+// `factorFromPrevious` on `units[0]` is unused/ignored. `sellingUnit`,
+// when set, MUST be one of `units[].unit` (POL-0005's minimum-
+// configuration threshold) — see isValidUnitRelationship in
+// lib/unitRelationship.ts, which is the single source of truth for this
+// validation. Absence of `unitRelationship` on a Product means no
+// confirmed configuration exists — the exact condition BDR-0012 §5.A
+// Item 6 (warn, allow entry) and POL-0005 govern; this is NOT an error
+// state. This type carries ONLY the unit relationship and selling unit —
+// it is deliberately NOT where a remembered selling price lives; that
+// remains Product.sellingPrice (the pre-existing "reference price"
+// field, given meaning by unitRelationship.sellingUnit once confirmed —
+// see Product.sellingPrice's own comment above). This type introduces no
+// conversion arithmetic, no multi-hop composition, and no transaction-
+// derived valuation of any kind — those remain Increment B's Concept C
+// scope (product-memory-purchase-selling-valuation-specification.md
+// §13-15), explicitly not implemented by Increment A.
+export interface UnitRelationship {
+  units: Array<{ unit: string; factorFromPrevious: number }>;
+  sellingUnit?: string; // must be a member of units[].unit, per POL-0005 — validated by isValidUnitRelationship, never trusted un-checked
+  confirmedAt: string; // ISO string — set only by the owner's explicit confirmation action (UOM Specification §3 steps 3-4); never written speculatively
+}
+
 export interface Product {
   id: string;
   name: string;
@@ -344,6 +375,18 @@ export interface Product {
   // authorized checkpoint — this field's presence alone implements no
   // matching, candidate-detection, or confirmation behavior.
   supplierWordings?: SupplierWordingRelationship[];
+  // Product Unit-of-Measure & Product Memory (see UnitRelationship
+  // above). Written ONLY by the owner's explicit confirmation action
+  // (Recognition proposal accepted, or manual entry confirmed) — never
+  // inferred, never silently populated, never overwritten by a routine
+  // purchase/count entry. Once set, reused automatically on every
+  // future entry for this product (BDR-0012 Decision 13); Recognition
+  // is never re-run for a product that already has this field
+  // (UOM Specification §3 step 5). A purchase/count entry against a
+  // product with no unitRelationship is warned, not blocked (BDR-0012
+  // §5.A Item 6) — this field's absence is an ordinary, fully
+  // anticipated state, not an error.
+  unitRelationship?: UnitRelationship;
 }
 
 // [Closing Integrity Amendment v1.0 — Option B] closingId/lockedAt are

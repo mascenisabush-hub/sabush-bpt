@@ -26,6 +26,7 @@ import {
   buildProductCreatedTimelineEventContent,
   type CheckedProductWordingSnapshot,
 } from '../lib/supplierWordingConfirmation';
+import { isValidUnitRelationship, confirmUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -61,6 +62,7 @@ import {
   PaymentMethod,
   InitialStockPriceChangeEvent,
   SupplierWordingRelationship,
+  UnitRelationship,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation } from '../utils/calculations';
@@ -159,6 +161,23 @@ interface AddStockParams {
   // quoted verbatim as a binding technical decision in the
   // Implementation Authorization's own §2 — not a new business rule.
   distinguishingInfo?: string;
+  // [Product Memory / UOM — Increment A] Set only when this line's
+  // productName resolves to a GENUINELY NEW product (no existing
+  // Product matched) AND the owner has explicitly confirmed a unit
+  // relationship for it in the same entry flow — e.g. via a UOM
+  // Recognition proposal accepted, or manual entry, per the accepted
+  // UOM Specification §3 steps 3-4. Deliberately absent whenever the
+  // line resolves to an EXISTING product: an existing product's
+  // unitRelationship, confirmed or not, is NEVER touched by this
+  // field (BDR-0012 Decision 17's "never re-run/never silently
+  // overwrite" rule) — addStockBatch/addMultipleStockBatches below
+  // enforce this by only ever reading this field inside the
+  // brand-new-product creation branch. Re-validated via
+  // isValidUnitRelationship before being written; an invalid or
+  // missing value simply results in no unitRelationship being set on
+  // the new Product (BDR-0012 §5.A Item 6's warn-not-block condition),
+  // never a thrown error and never a partial/invalid write.
+  unitRelationship?: UnitRelationship;
 }
 
 interface AddQuebraParams {
@@ -189,6 +208,17 @@ interface RecordStockCountItemInput {
   unit?: string;
   costPrice: number;
   sellingPrice?: number;
+  // [Product Memory / UOM — Increment A] Same rule as
+  // AddStockParams.unitRelationship, above: read ONLY when this row's
+  // productName resolves to a genuinely new product within
+  // recordStockCount's own product-creation branch; never touches an
+  // existing product's configuration. Initial Stock is frequently the
+  // very first time a product is entered at all (UOM Specification §4,
+  // "Initial Stock" — the general first-time-entry trigger applies here
+  // too), so this is the primary surface this field exists for; it
+  // applies identically for a genuinely new product introduced during
+  // Periodic Contagem.
+  unitRelationship?: UnitRelationship;
 }
 
 interface RecordStockCountParams {
@@ -448,6 +478,11 @@ interface AppContextType {
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  // [Product Memory / UOM — Increment A] BDR-0012 Decision 14's explicit
+  // owner-reconfiguration action — see the function's own comment in the
+  // provider body for the full contract. Throws if `candidate` fails
+  // POL-0005 validation; never silently discards an invalid value.
+  confirmProductUnitRelationship: (productId: string, candidate: UnitRelationshipProposal) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addStaffMember: (name: string, email: string, password: string) => Promise<void>;
   deleteStaffMember: (staffUid: string, reason?: string) => Promise<void>;
@@ -1609,7 +1644,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice, previousRemainingQuantity }: AddStockParams) => {
+  const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice, previousRemainingQuantity, unitRelationship }: AddStockParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const businessId = activeBusinessId;
@@ -1635,10 +1670,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     if (!product) {
       productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+      // [Product Memory / UOM — Increment A] Only ever reached for a
+      // genuinely NEW product (this whole block is inside `if
+      // (!product)`) — an existing product's unitRelationship is never
+      // read or touched here. Re-validated via isValidUnitRelationship
+      // regardless of what the caller passed, since this is the actual
+      // Firestore write path, not merely a UI-layer check; an invalid
+      // or absent value simply means the new product starts with no
+      // confirmed configuration (BDR-0012 §5.A Item 6's ordinary,
+      // fully-anticipated warn-not-block state), never an error.
       const newProd: Product = {
         id: productId,
         name: trimmedName,
         createdAt: new Date().toISOString(),
+        ...(unitRelationship && isValidUnitRelationship(unitRelationship) ? { unitRelationship } : {}),
       };
       await setDoc(doc(db, 'businesses', businessId, 'products', productId), newProd);
       isNewProduct = true;
@@ -2018,10 +2063,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!product) {
         productId = 'prod-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).substr(2, 4);
+        // [Product Memory / UOM — Increment A] Same "genuinely new
+        // product only, re-validated at the actual write path" rule as
+        // addStockBatch's own product-creation branch, above.
         const newProd: Product = {
           id: productId,
           name: trimmedName,
           createdAt: new Date().toISOString(),
+          ...(item.unitRelationship && isValidUnitRelationship(item.unitRelationship) ? { unitRelationship: item.unitRelationship } : {}),
         };
         const prodRef = doc(db, 'businesses', businessId, 'products', productId);
         fsBatch.set(prodRef, newProd);
@@ -2465,6 +2514,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // side-channel. See tests/initial-stock-confirmation.test.ts.
     const { items: normalizedItems } = normalizeStockCountItems(items);
 
+    // [Product Memory / UOM — Increment A] normalizeStockCountItems()
+    // above is a pure, independently-tested function whose own
+    // NormalizedStockCountItem shape deliberately carries only
+    // productName/quantity/unit/costPrice/sellingPrice/totalValue — it
+    // is NOT touched by this feature, to keep that heavily-tested
+    // module's contract exactly as it already is. unitRelationship is
+    // therefore correlated back to each normalized row by trimmed,
+    // lowercased productName, from the raw `items` this function
+    // received directly — the same key normalizeStockCountItems itself
+    // trims to build NormalizedStockCountItem.productName. Last
+    // matching raw entry wins for a repeated name (mirrors ordinary
+    // "last edit wins" expectations for a single submission); a blank
+    // productName is never a key here since normalizeStockCountItems
+    // already drops those rows entirely.
+    const unitRelationshipByProductName = new Map<string, UnitRelationship>();
+    for (const raw of items) {
+      const key = raw.productName.trim().toLowerCase();
+      if (key && raw.unitRelationship && isValidUnitRelationship(raw.unitRelationship)) {
+        unitRelationshipByProductName.set(key, raw.unitRelationship);
+      }
+    }
+
     const countItems: StockCount['items'] = [];
     let totalValue = 0;
 
@@ -2478,10 +2549,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       if (!product) {
         productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+        // [Product Memory / UOM — Increment A] Only ever reached for a
+        // genuinely NEW product (this whole block is inside `if
+        // (!product)`) — an existing product's unitRelationship is
+        // never read or touched here, matching addStockBatch's and
+        // addMultipleStockBatches's identical guarantee.
         const newProd: Product = {
           id: productId,
           name: norm.productName,
           createdAt: new Date().toISOString(),
+          ...(unitRelationshipByProductName.has(norm.productName.toLowerCase())
+            ? { unitRelationship: unitRelationshipByProductName.get(norm.productName.toLowerCase())! }
+            : {}),
         };
         fsBatch.set(doc(db, 'businesses', businessId, 'products', productId), newProd);
         tempProducts.push(newProd);
@@ -3267,6 +3346,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateDoc(doc(db, 'businesses', businessId, 'products', id), payload as any);
   };
 
+  // [Product Memory / UOM — Increment A] The single explicit-confirmation
+  // write path for a product's unit relationship — BDR-0012 Decision 14's
+  // "the owner may review or edit any remembered Product Memory
+  // configuration at any time" action, distinct from the automatic
+  // new-product-creation paths in addStockBatch/addMultipleStockBatches/
+  // recordStockCount above (which only ever set unitRelationship at the
+  // moment a brand-new Product is created, never on an existing one).
+  // This function is the ONLY code path in this file that can change an
+  // EXISTING product's unitRelationship — reusing the existing,
+  // unmodified updateProduct above rather than introducing a second
+  // Firestore write mechanism. Always re-validates via
+  // isValidUnitRelationship immediately before writing (never trusts a
+  // caller-supplied value, UI-layer validation notwithstanding) and
+  // throws rather than silently proceeding or silently discarding an
+  // invalid candidate — consistent with confirmUnitRelationship's own
+  // "never persists an invalid configuration" contract in
+  // lib/unitRelationship.ts. Callers are responsible for invoking this
+  // only in response to an explicit, deliberate owner action (e.g. a
+  // catalog "confirm unit relationship" screen) — this function has no
+  // way to distinguish a deliberate reconfiguration from an accidental
+  // call, so that discipline lives entirely in the caller, exactly as
+  // it already does for updateProduct itself.
+  const confirmProductUnitRelationship = async (productId: string, candidate: UnitRelationshipProposal) => {
+    const confirmed = confirmUnitRelationship(candidate);
+    if (!confirmed) {
+      throw new Error('Relação de unidades inválida — verifique a unidade de venda e a estrutura de unidades.');
+    }
+    await updateProduct(productId, { unitRelationship: confirmed });
+  };
+
   // [Fix #7 — Destructive Operations Safety] Previously a sequence of
   // independently-awaited deleteDoc calls (product, then each batch, then
   // each quebra) — if any call in the middle failed (lost connectivity,
@@ -3720,6 +3829,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteQuebra,
         deleteExpense,
         updateProduct,
+        confirmProductUnitRelationship,
         deleteProduct,
         addStaffMember,
         deleteStaffMember,
