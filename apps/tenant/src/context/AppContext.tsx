@@ -23,6 +23,7 @@ import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapsho
 import {
   planSupplierWordingConfirmation,
   SupplierWordingConflictError,
+  buildProductCreatedTimelineEventContent,
   type CheckedProductWordingSnapshot,
 } from '../lib/supplierWordingConfirmation';
 import { initializeApp, deleteApp } from 'firebase/app';
@@ -144,6 +145,20 @@ interface AddStockParams {
     // caught, not silently overwritten (Rule 8 Finding 13).
     conflictCheckProductIds: string[];
   };
+  // [Supplier-Wording Recognition — Checkpoint 5, POL-0007 "Conflicting
+  // Supplier Wording"] Present only for a row where the owner declined a
+  // candidate that already carried an established alternative-wording
+  // relationship to a DIFFERENT product (AddStockView.tsx's
+  // supplierWordingConflictPending gate) and is therefore creating a
+  // genuinely new product in response to that conflict. Captured on the
+  // resulting product-created timeline event (TimelineEvent.details is
+  // already a free-form Record<string, string | number | undefined> —
+  // no new Product field, no new collection, no schema change of any
+  // kind). Field shape and persistence mechanism are implementation-time
+  // engineering judgment, explicitly authorized by Rule 8 Finding 9 and
+  // quoted verbatim as a binding technical decision in the
+  // Implementation Authorization's own §2 — not a new business rule.
+  distinguishingInfo?: string;
 }
 
 interface AddQuebraParams {
@@ -1876,7 +1891,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Track products updated/created in this loop
     const tempProducts = [...products];
     const tempBatches = [...batches];
-    const newlyCreatedProductNames: string[] = [];
+    // [Supplier-Wording Recognition — Checkpoint 5] Extended from a plain
+    // string[] to carry each new product's optional distinguishing
+    // information (POL-0007's mandatory-on-conflict requirement) through
+    // to its own product-created timeline event, below. Absent for the
+    // overwhelming majority of new products (no conflict was involved).
+    const newlyCreatedProductNames: Array<{ name: string; distinguishingInfo?: string }> = [];
     let totalInvestmentValue = 0;
     let totalMarketValue = 0;
     const lineItemSummaries: { productName: string; quantity: number; unit: string }[] = [];
@@ -2006,7 +2026,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const prodRef = doc(db, 'businesses', businessId, 'products', productId);
         fsBatch.set(prodRef, newProd);
         tempProducts.push(newProd);
-        newlyCreatedProductNames.push(trimmedName);
+        newlyCreatedProductNames.push({
+          name: trimmedName,
+          ...(item.distinguishingInfo?.trim() ? { distinguishingInfo: item.distinguishingInfo.trim() } : {}),
+        });
       } else if (item.pendingSupplierWording) {
         // [Supplier-Wording Recognition — Checkpoint 3] `product` is an
         // EXISTING product (this branch only runs when `!product` above
@@ -2141,14 +2164,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
-    for (const newProductName of newlyCreatedProductNames) {
+    for (const newProduct of newlyCreatedProductNames) {
+      const { description, details } = buildProductCreatedTimelineEventContent(
+        newProduct.name,
+        newProduct.distinguishingInfo
+      );
       await logTimelineEvent({
         type: 'product-created',
         date: items[0].dateEntered,
         title: 'Produto Criado',
-        description: `"${newProductName}" foi adicionado como novo produto.`,
-        productName: newProductName,
-        details: { productName: newProductName },
+        description,
+        productName: newProduct.name,
+        details,
       });
     }
 

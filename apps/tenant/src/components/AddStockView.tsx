@@ -956,6 +956,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               },
             }
           : {}),
+        // [Supplier-Wording Recognition — Checkpoint 5, POL-0007
+        // "Conflicting Supplier Wording"] Only ever set alongside the
+        // conflict gate validated above — a row reaching this point with
+        // supplierWordingConflictPending true is, by construction,
+        // creating a genuinely NEW product (the owner declined the
+        // conflicting candidate), never one carrying pendingSupplierWording.
+        ...(row.supplierWordingConflictPending && row.supplierWordingDistinguishingInfo?.trim()
+          ? { distinguishingInfo: row.supplierWordingDistinguishingInfo.trim() }
+          : {}),
       });
     }
 

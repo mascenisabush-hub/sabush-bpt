@@ -124,3 +124,57 @@ export class SupplierWordingConflictError extends Error {
     this.conflictingProductId = conflictingProductId;
   }
 }
+
+// ---------------------------------------------------------------------
+// [Checkpoint 5] Distinguishing-information capture (POL-0007
+// "Conflicting Supplier Wording — Distinguishing Information: ACCEPT,
+// Mandatory"; Rule 8 Finding 9)
+// ---------------------------------------------------------------------
+//
+// Finding 9 fixes only the REQUIREMENT (a new product created in
+// response to a flagged wording conflict must be gated on
+// distinguishing information being provided) — AddStockView.tsx's
+// existing, unmodified supplierWordingConflictPending validation
+// already enforces that gate (Checkpoint 3). Finding 9 explicitly
+// leaves the FIELD SHAPE to "ordinary implementation-time engineering
+// judgment, not requiring further authorization at any governance
+// layer" — a determination the Implementation Authorization's own §2
+// quotes verbatim as one of its binding technical decisions, not merely
+// a Rule 8 recommendation sitting outside it.
+//
+// Chosen shape (Checkpoint 5): captured on the resulting product's
+// EXISTING product-created TimelineEvent, whose `details` field is
+// already a free-form Record<string, string | number | undefined>
+// (types.ts) — no new Product field, no new collection, no
+// firestore.rules/indexes change, no migration. This is the pure,
+// independently-testable construction of that event's description/
+// details; AppContext.tsx's addMultipleStockBatches calls it once per
+// newly-created product carrying distinguishing information.
+
+export interface ProductCreatedTimelineEventContent {
+  description: string;
+  details: { productName: string; distinguishingInfo?: string };
+}
+
+/**
+ * Builds the description/details for a product-created TimelineEvent,
+ * appending the owner's distinguishing information when present (a
+ * conflict-path new product, POL-0007) — identical, ordinary-new-product
+ * wording otherwise, unchanged from this codebase's pre-existing
+ * behavior.
+ */
+export function buildProductCreatedTimelineEventContent(
+  productName: string,
+  distinguishingInfo?: string
+): ProductCreatedTimelineEventContent {
+  const trimmedInfo = distinguishingInfo?.trim();
+  return {
+    description: trimmedInfo
+      ? `"${productName}" foi adicionado como novo produto. Distinção: ${trimmedInfo}`
+      : `"${productName}" foi adicionado como novo produto.`,
+    details: {
+      productName,
+      ...(trimmedInfo ? { distinguishingInfo: trimmedInfo } : {}),
+    },
+  };
+}
