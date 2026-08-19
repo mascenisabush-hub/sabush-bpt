@@ -20,6 +20,11 @@ import { auth, db, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
+import {
+  planSupplierWordingConfirmation,
+  SupplierWordingConflictError,
+  type CheckedProductWordingSnapshot,
+} from '../lib/supplierWordingConfirmation';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -54,6 +59,7 @@ import {
   Payment,
   PaymentMethod,
   InitialStockPriceChangeEvent,
+  SupplierWordingRelationship,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation } from '../utils/calculations';
@@ -113,6 +119,31 @@ interface AddStockParams {
   // restockObservation) when this product already has a prior batch to
   // compare against — see computeRestockObservation.
   previousRemainingQuantity?: number | string;
+  // [Supplier-Wording Recognition — Checkpoint 3] Set only when this
+  // line item's `productName` was rewritten, client-side, from a
+  // supplier's own wording to an existing product's canonical
+  // `Product.name` (a candidate confirmation, a reuse-match, or an
+  // owner-initiated declaration — AddStockView.tsx). `wording` preserves
+  // exactly what was originally typed/received, for the relationship
+  // record (SupplierWordingRelationship.wording); `productName` above
+  // has ALREADY been rewritten to the matched product's name by the
+  // time this reaches addMultipleStockBatches, so this field never
+  // changes which product the batch itself attaches to — it only tells
+  // addMultipleStockBatches a NEW relationship needs to be confirmed
+  // (via confirmSupplierWordingRelationship, transaction-protected —
+  // Rule 8 Finding 13) once the supplier's own identity is resolved.
+  // Deliberately absent for a silent reuse-match (no NEW relationship to
+  // write — POL-0007's automatic-reuse-without-reconfirmation) and for
+  // any row with no recognition involved at all.
+  pendingSupplierWording?: {
+    wording: string;
+    provenance: 'system-proposed' | 'owner-initiated';
+    // Other candidate productIds the owner was shown for this same
+    // wording (if any) — re-checked fresh inside the confirmation
+    // transaction so a concurrent confirmation onto one of THEM is
+    // caught, not silently overwritten (Rule 8 Finding 13).
+    conflictCheckProductIds: string[];
+  };
 }
 
 interface AddQuebraParams {
@@ -1755,6 +1786,81 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return { productId: productId!, batchId: newBatchId };
   };
 
+  // [Supplier-Wording Recognition — Checkpoint 3] Confirms one
+  // supplier-wording-to-product relationship (Checkpoint 1's
+  // SupplierWordingRelationship, appended to Product.supplierWordings),
+  // transaction-protected per Rule 8 Finding 13. Internal helper, not
+  // exposed on the context value — called only from
+  // addMultipleStockBatches below, after the stock/product write has
+  // already committed and the supplier's own identity is known.
+  //
+  // Reads the TARGET product plus every `conflictCheckProductId` FRESH,
+  // inside the transaction (never from stale client state — see
+  // supplierWordingConfirmation.ts's own module comment for the full
+  // reasoning behind this specific mechanism, and its one acknowledged
+  // residual gap). Throws SupplierWordingConflictError if a different
+  // product already independently claims this exact
+  // (supplierRecordId, wording) pair; resolves silently (no write) if
+  // the target already holds it (idempotent retry); otherwise appends
+  // the new relationship.
+  const confirmSupplierWordingRelationship = async (
+    businessId: string,
+    targetProductId: string,
+    supplierRecordId: string,
+    wording: string,
+    conflictCheckProductIds: string[],
+    provenance: 'system-proposed' | 'owner-initiated'
+  ): Promise<void> => {
+    const trimmedWording = wording.trim();
+    if (!trimmedWording) return;
+
+    const idsToCheck = Array.from(new Set([targetProductId, ...conflictCheckProductIds]));
+
+    await runTransaction(db, async (tx) => {
+      // ---- READS (all before any write — required by Firestore) ----
+      const snapshots: CheckedProductWordingSnapshot[] = [];
+      const refsById = new Map<string, ReturnType<typeof doc>>();
+      for (const id of idsToCheck) {
+        const ref = doc(db, 'businesses', businessId, 'products', id);
+        refsById.set(id, ref);
+        const snap = await tx.get(ref);
+        const data = snap.exists() ? (snap.data() as Product) : undefined;
+        snapshots.push({
+          productId: id,
+          exists: snap.exists(),
+          supplierWordings: (data?.supplierWordings ?? []).map((r) => ({
+            supplierRecordId: r.supplierRecordId,
+            wording: r.wording,
+          })),
+        });
+      }
+
+      const plan = planSupplierWordingConfirmation(targetProductId, supplierRecordId, trimmedWording, snapshots);
+
+      if (plan.conflict) {
+        throw new SupplierWordingConflictError(plan.conflict.productId);
+      }
+      if (!plan.shouldWrite) {
+        // Either already-confirmed (idempotent no-op) or the target
+        // product no longer exists (nothing safe to write to).
+        return;
+      }
+
+      // ---- WRITES (only after every read above has completed) ----
+      const targetSnapshot = snapshots.find((s) => s.productId === targetProductId)!;
+      const newRelationship: SupplierWordingRelationship = {
+        supplierRecordId,
+        wording: trimmedWording,
+        confirmedAt: new Date().toISOString(),
+        provenance,
+        ...(userProfile?.name ? { confirmedByName: userProfile.name } : {}),
+      };
+      tx.update(refsById.get(targetProductId)!, {
+        supplierWordings: [...targetSnapshot.supplierWordings, newRelationship],
+      });
+    });
+  };
+
   const addMultipleStockBatches = async (
     items: AddStockParams[],
     supplier?: Supplier,
@@ -1774,6 +1880,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let totalInvestmentValue = 0;
     let totalMarketValue = 0;
     const lineItemSummaries: { productName: string; quantity: number; unit: string }[] = [];
+    // [Supplier-Wording Recognition — Checkpoint 3] Collected during the
+    // per-item loop below, resolved AFTER fsBatch.commit() succeeds (see
+    // after the loop) — each entry pairs a resolved existing productId
+    // with the NEW relationship that must be confirmed for it. Never
+    // populated for a brand-new product (Specification §4 — no
+    // relationship, wording IS the new Product.name) or for a silent
+    // reuse-match (no new relationship, nothing to write).
+    const pendingSupplierWordingConfirmations: Array<{
+      productId: string;
+      wording: string;
+      provenance: 'system-proposed' | 'owner-initiated';
+      conflictCheckProductIds: string[];
+    }> = [];
 
     // [Durable Purchase Capture Amendment v1.0] Supplier find-or-create.
     // Resolution itself is a pure function
@@ -1888,6 +2007,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         fsBatch.set(prodRef, newProd);
         tempProducts.push(newProd);
         newlyCreatedProductNames.push(trimmedName);
+      } else if (item.pendingSupplierWording) {
+        // [Supplier-Wording Recognition — Checkpoint 3] `product` is an
+        // EXISTING product (this branch only runs when `!product` above
+        // was false) and this item carries a pending relationship —
+        // AddStockView.tsx already rewrote `item.productName` to this
+        // exact product's canonical name before calling us (a candidate
+        // confirmation or an owner-initiated declaration), so `productId`
+        // above already resolved correctly via ordinary name matching;
+        // nothing about batch/product creation changes. Collected here,
+        // resolved into an actual write only AFTER fsBatch.commit()
+        // succeeds, below — never before (Specification §8: nothing is
+        // persisted to Product until this entry's own finalization
+        // commit actually succeeds).
+        pendingSupplierWordingConfirmations.push({
+          productId: productId!,
+          wording: item.pendingSupplierWording.wording,
+          provenance: item.pendingSupplierWording.provenance,
+          conflictCheckProductIds: item.pendingSupplierWording.conflictCheckProductIds,
+        });
       }
 
       // [Restock Observation Amendment v1.0] Resolve the "previous
@@ -1964,6 +2102,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     await fsBatch.commit();
+
+    // [Supplier-Wording Recognition — Checkpoint 3] Run AFTER the stock/
+    // product write has already committed, and only if a real supplier
+    // identity now exists (a relationship must be keyed to
+    // SupplierRecord.id per Rule 8 Finding 2 — this is always true here
+    // by construction, since AddStockView.tsx only ever populates
+    // pendingSupplierWording once a candidate/reuse/declaration already
+    // exists, which only ever fires alongside a resolvable supplier, but
+    // guarded defensively regardless). Each confirmation is its own
+    // transaction (Rule 8 Finding 13) — sequential, not parallel, so two
+    // rows in the SAME submission that happen to reference each other as
+    // conflictCheckProductIds are still checked against each other's
+    // already-committed result, not a stale pre-loop snapshot.
+    //
+    // Deliberately best-effort past this point: the stock itself is
+    // already durably recorded (the value that matters most). If a
+    // relationship confirmation fails (conflict, transient network
+    // issue), that ONE relationship simply isn't remembered this time —
+    // exactly Specification §10's "owner abandons confirmation mid-flow"
+    // failure mode, not a reason to make the caller believe their stock
+    // entry itself failed. Never surfaced via the blocking alert() the
+    // catch block around this whole call would otherwise show.
+    if (resolvedSupplierId) {
+      for (const pending of pendingSupplierWordingConfirmations) {
+        try {
+          await confirmSupplierWordingRelationship(
+            businessId,
+            pending.productId,
+            resolvedSupplierId,
+            pending.wording,
+            pending.conflictCheckProductIds,
+            pending.provenance
+          );
+        } catch (err) {
+          console.error('[supplierWordingRelationship] confirmation failed, non-blocking', err);
+        }
+      }
+    }
 
     for (const newProductName of newlyCreatedProductNames) {
       await logTimelineEvent({

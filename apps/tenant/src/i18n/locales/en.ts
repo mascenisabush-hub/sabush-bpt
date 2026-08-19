@@ -358,6 +358,17 @@ export const en: TranslationDict = {
         network_error: "Couldn't reach the server. Check your connection or continue manually.",
       },
     },
+    supplierWording: {
+      candidateTitle: 'This might already be a known product',
+      candidateHint: 'The supplier may use a different name for a product already in your catalog. Confirm whether it\u2019s the same product:',
+      confirmButton: 'Yes, same product',
+      noneOfTheseButton: 'No, this is a new product',
+      reusedNotice: 'Automatically recognized as an existing product, based on a previously confirmed match for this supplier.',
+      conflictWarning: 'This wording is already linked to another product. If you confirm it\u2019s different, explain what sets it apart.',
+      distinguishingInfoLabel: 'What makes this product different?',
+      distinguishingInfoPlaceholder: 'E.g., 500g pack instead of 400g',
+      distinguishingInfoRequiredError: 'Explain what makes this product different before continuing (row {n}).',
+    },
   },
   addQuebra: {
     title: 'Record Stock Loss',

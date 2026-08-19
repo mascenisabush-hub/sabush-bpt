@@ -330,6 +330,18 @@ export interface TranslationDict {
         network_error: string;
       };
     };
+    // [Supplier-Wording Recognition — Checkpoint 3]
+    supplierWording: {
+      candidateTitle: string;
+      candidateHint: string;
+      confirmButton: string;
+      noneOfTheseButton: string;
+      reusedNotice: string;
+      conflictWarning: string;
+      distinguishingInfoLabel: string;
+      distinguishingInfoPlaceholder: string;
+      distinguishingInfoRequiredError: string;
+    };
   };
   addQuebra: {
     title: string;
@@ -1253,6 +1265,17 @@ export const pt: TranslationDict = {
         unreadable: 'Não conseguimos ler este documento com confiança. Pode continuar a adicionar o stock manualmente.',
         network_error: 'Sem ligação ao servidor. Verifique a sua internet ou continue manualmente.',
       },
+    },
+    supplierWording: {
+      candidateTitle: 'Este pode ser um produto já existente',
+      candidateHint: 'O fornecedor pode usar um nome diferente para um produto que já tem no catálogo. Confirme se é o mesmo produto:',
+      confirmButton: 'Sim, é o mesmo produto',
+      noneOfTheseButton: 'Não, é um produto novo',
+      reusedNotice: 'Reconhecido automaticamente como um produto já existente, com base numa correspondência anterior confirmada para este fornecedor.',
+      conflictWarning: 'Este nome já está associado a outro produto. Se confirmar que é diferente, explique o que os distingue.',
+      distinguishingInfoLabel: 'O que torna este produto diferente?',
+      distinguishingInfoPlaceholder: 'Ex.: embalagem de 500g em vez de 400g',
+      distinguishingInfoRequiredError: 'Explique o que torna este produto diferente antes de continuar (linha {n}).',
     },
   },
   addQuebra: {

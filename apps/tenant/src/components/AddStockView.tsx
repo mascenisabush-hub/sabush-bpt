@@ -7,6 +7,8 @@ import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { PurchaseDraftLineItem } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
+import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
+import { resolveSupplierWordingRecognition } from '../lib/supplierWordingRecognition';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -49,6 +51,50 @@ interface StockRowItem {
     costPrice: 'detected' | 'review' | 'not_found';
   };
   smartEntryProductMatchStatus?: 'confident' | 'uncertain' | 'no_match';
+
+  // [Supplier-Wording Recognition — Checkpoint 3, BDR-0013/POL-0007]
+  // Set only when this row's typed productName resolved — via a silent
+  // reuse-match, an owner-confirmed candidate, or an owner-initiated
+  // declaration (all three governed identically once established,
+  // POL-0007) — to an EXISTING product whose canonical name differs
+  // from what was actually typed/received. `productName` above is
+  // rewritten to that product's canonical name the moment this is set,
+  // so every other part of this form (price/unit prefill, submission,
+  // exact-match checks) keeps working completely unchanged — this field
+  // exists solely to carry the ORIGINAL wording through to finalization,
+  // where the actual relationship write happens (Specification §8 —
+  // nothing persisted to Product before finalization). `origin: 'reused'`
+  // never produces a new write (already confirmed previously); the other
+  // two do, transaction-protected (Rule 8 Finding 13).
+  pendingSupplierWording?: {
+    wording: string;
+    productId: string;
+    origin: 'reused' | 'confirmed' | 'owner-initiated';
+    // The OTHER candidate productIds shown alongside this one, if any —
+    // re-checked fresh at finalization so a conflicting concurrent
+    // confirmation onto one of them is caught (Rule 8 Finding 13).
+    conflictCheckProductIds: string[];
+  };
+  // Plausible existing-product candidates currently being offered to the
+  // owner for this row's typed wording (Specification §3 steps 2–4) —
+  // cleared the moment the owner confirms one, declines all of them, or
+  // the typed text changes again. Undefined whenever no candidates are
+  // being shown (including once resolved either way).
+  supplierWordingCandidates?: SupplierWordingCandidate[];
+  // True once the owner has explicitly declined every candidate offered
+  // for the CURRENT productName value (Specification §4 — New-Product
+  // Path) — suppresses re-showing the same candidates for the same text.
+  // Never itself persists anything (POL-0007 requirement 6 — no
+  // "rejected alias" concept of any kind).
+  supplierWordingDeclined?: boolean;
+  // [POL-0007 — Conflicting Supplier Wording, mandatory distinguishing
+  // information] Set true only when the owner declined a candidate whose
+  // proposed grounds included an already-confirmed alternative-wording
+  // match — i.e. this exact wording is already an established name for
+  // that other product (BDR-0013 item 5's conflict). Gates submission
+  // for this row until distinguishingInfo (below) is non-empty.
+  supplierWordingConflictPending?: boolean;
+  supplierWordingDistinguishingInfo?: string;
 }
 
 // [Restock Observation Amendment v1.0] The one sentinel value the
@@ -462,6 +508,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // existing product mid-form updates the field's availability too.
     const previousCycleQuantity = resolvePreviousCycleQuantity(name);
 
+    // [Supplier-Wording Recognition — Checkpoint 3, Owner-Initiated
+    // Declaration, POL-0007 Business Requirement 3] If the owner had
+    // typed a WORDING that did not already exactly match any product
+    // (genuinely a supplier's own wording, not just re-picking an
+    // already-correct name) and then picked an existing product from
+    // this very dropdown, that action itself is the owner directly
+    // identifying that the wording refers to this product — no
+    // system-proposed candidate is required for this authorization
+    // (Specification §3a, as corrected by the accepted Terminology
+    // Amendment: Add Stock only). Captured here; the actual relationship
+    // write happens at finalization once the supplier's identity is
+    // resolved (Specification §8) — see handleSubmit.
+    const row = rows.find(r => r.id === rowId);
+    const typedWording = row?.productName?.trim();
+    const typedWordingAlreadyExactMatch =
+      !typedWording || products.some(p => p.name.toLowerCase() === typedWording.toLowerCase());
+
     updateRow(rowId, {
       productName: name,
       costPrice: newCost || undefined,
@@ -473,6 +536,120 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       // must never carry over as if it described the new one.
       previousRemainingQuantity: '',
       previousCycleQuantity,
+      pendingSupplierWording:
+        typedWording && !typedWordingAlreadyExactMatch && match
+          ? {
+              wording: typedWording,
+              productId: match.id,
+              origin: 'owner-initiated',
+              conflictCheckProductIds: (row?.supplierWordingCandidates ?? [])
+                .map(c => c.productId)
+                .filter(id => id !== match.id),
+            }
+          : undefined,
+      supplierWordingCandidates: undefined,
+      supplierWordingDeclined: false,
+      supplierWordingConflictPending: false,
+      supplierWordingDistinguishingInfo: undefined,
+    });
+  };
+
+  // [Supplier-Wording Recognition — Checkpoint 3] Re-evaluates recognition
+  // for a row every time its typed productName changes — called from
+  // BOTH the desktop and mobile productName onChange handlers below, so
+  // the two layouts never drift out of sync. The actual decision (which
+  // of the four recognition states applies) is delegated entirely to the
+  // pure, independently-tested resolveSupplierWordingRecognition
+  // (supplierWordingRecognition.ts) — this function only translates that
+  // decision into React state.
+  const applySupplierWordingCheck = (rowId: string, newName: string) => {
+    const trimmed = newName.trim();
+    const cleared: Partial<StockRowItem> = {
+      productName: newName,
+      isDropdownOpen: true,
+      pendingSupplierWording: undefined,
+      supplierWordingCandidates: undefined,
+      supplierWordingDeclined: false,
+      supplierWordingConflictPending: false,
+      supplierWordingDistinguishingInfo: undefined,
+    };
+
+    const outcome = resolveSupplierWordingRecognition(trimmed, supplierId, products);
+
+    switch (outcome.type) {
+      case 'none':
+      case 'no-candidates':
+        updateRow(rowId, cleared);
+        return;
+      case 'reused': {
+        const matchedProduct = products.find(p => p.id === outcome.productId);
+        if (!matchedProduct) {
+          // Defensive only — resolveSupplierWordingRecognition derived
+          // this id from the SAME `products` array, so this can't
+          // actually diverge; falls back to ordinary behavior if it ever did.
+          updateRow(rowId, cleared);
+          return;
+        }
+        updateRow(rowId, {
+          ...cleared,
+          productName: matchedProduct.name,
+          previousCycleQuantity: resolvePreviousCycleQuantity(matchedProduct.name),
+          pendingSupplierWording: {
+            wording: trimmed,
+            productId: matchedProduct.id,
+            origin: 'reused',
+            conflictCheckProductIds: [],
+          },
+        });
+        return;
+      }
+      case 'candidates':
+        updateRow(rowId, { ...cleared, supplierWordingCandidates: outcome.candidates });
+        return;
+    }
+  };
+
+  const handleConfirmSupplierWordingCandidate = (rowId: string, productId: string) => {
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    const matchedProduct = products.find(p => p.id === productId);
+    if (!matchedProduct) return;
+    const wording = row.productName.trim();
+    const previousCycleQuantity = resolvePreviousCycleQuantity(matchedProduct.name);
+    updateRow(rowId, {
+      productName: matchedProduct.name,
+      previousCycleQuantity,
+      pendingSupplierWording: {
+        wording,
+        productId: matchedProduct.id,
+        origin: 'confirmed',
+        conflictCheckProductIds: (row.supplierWordingCandidates ?? [])
+          .map(c => c.productId)
+          .filter(id => id !== productId),
+      },
+      supplierWordingCandidates: undefined,
+      supplierWordingDeclined: false,
+    });
+  };
+
+  // [POL-0007 requirement 6 — no "rejected alias" concept] Declining
+  // simply proceeds to the ordinary new-product path (Specification §4)
+  // — nothing is recorded about the decline itself. The one exception is
+  // the mandatory-distinguishing-information gate (POL-0007,
+  // "Conflicting Supplier Wording"): if ANY declined candidate's
+  // proposed grounds included an already-confirmed alternative wording
+  // (i.e. this exact wording already names a different product), this
+  // specific occurrence is the conflict BDR-0013 item 5 describes, and
+  // the new product's creation is gated on distinguishing information.
+  const handleDeclineSupplierWordingCandidates = (rowId: string) => {
+    const row = rows.find(r => r.id === rowId);
+    const hadWordingConflict = (row?.supplierWordingCandidates ?? []).some(c =>
+      c.grounds.includes('existing-alternative-wording')
+    );
+    updateRow(rowId, {
+      supplierWordingCandidates: undefined,
+      supplierWordingDeclined: true,
+      supplierWordingConflictPending: hadWordingConflict,
     });
   };
 
@@ -711,6 +888,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         return;
       }
 
+      // [POL-0007 — Conflicting Supplier Wording, mandatory distinguishing
+      // information] The new product's creation does not complete until
+      // this is provided (Specification §5) — enforced here as an
+      // ordinary required-field creation-gate (Rule 8 Finding 9), same
+      // pattern as every other row-level validation above.
+      if (row.supplierWordingConflictPending && !row.supplierWordingDistinguishingInfo?.trim()) {
+        alert(t('addStock.supplierWording.distinguishingInfoRequiredError', { n: i + 1 }));
+        return;
+      }
+
       itemsToSave.push({
         productName: trimmedName,
         dateEntered: row.dateEntered,
@@ -729,6 +916,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // field's visibility on.
         ...(hasKnownPreviousRemainingInput(row.previousRemainingQuantity)
           ? { previousRemainingQuantity: row.previousRemainingQuantity.trim() }
+          : {}),
+        // [Supplier-Wording Recognition — Checkpoint 3] A silent reuse
+        // (origin 'reused') needs no NEW write at all — already
+        // confirmed previously — so it's deliberately excluded here;
+        // only a genuinely new relationship (owner-confirmed or
+        // owner-initiated) is forwarded to AppContext.
+        ...(row.pendingSupplierWording && row.pendingSupplierWording.origin !== 'reused'
+          ? {
+              pendingSupplierWording: {
+                wording: row.pendingSupplierWording.wording,
+                provenance:
+                  row.pendingSupplierWording.origin === 'owner-initiated'
+                    ? ('owner-initiated' as const)
+                    : ('system-proposed' as const),
+                conflictCheckProductIds: row.pendingSupplierWording.conflictCheckProductIds,
+              },
+            }
           : {}),
       });
     }
@@ -1284,12 +1488,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               placeholder={t('addStock.productSearchPlaceholder')}
                               value={row.productName}
                               onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
-                              onChange={e =>
-                                updateRow(row.id, {
-                                  productName: e.target.value,
-                                  isDropdownOpen: true,
-                                })
-                              }
+                              onChange={e => applySupplierWordingCheck(row.id, e.target.value)}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-medium pr-7"
                             />
                             <Search className="w-3 h-3 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
@@ -1595,12 +1794,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               placeholder={t('addStock.productSearchPlaceholder')}
                               value={row.productName}
                               onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
-                              onChange={e =>
-                                updateRow(row.id, {
-                                  productName: e.target.value,
-                                  isDropdownOpen: true,
-                                })
-                              }
+                              onChange={e => applySupplierWordingCheck(row.id, e.target.value)}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                             />
                             {row.isDropdownOpen && (
@@ -1711,6 +1905,93 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
                         </div>
                       </div>
+
+                      {/* [Supplier-Wording Recognition — Checkpoint 3]
+                          One shared panel for both the desktop and mobile
+                          layouts above — POL-0007's Confirmation
+                          Experience minimum shape: each candidate shown
+                          with, at minimum, its current Product.name;
+                          exactly two resolutions; no default action. */}
+                      {row.supplierWordingCandidates && row.supplierWordingCandidates.length > 0 && (
+                        <div className="mt-2 bg-[#FFFBEA] border border-[#D4AF37]/30 rounded-xl px-3 py-2.5 space-y-2">
+                          <div className="flex items-start gap-2">
+                            <Sparkles className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[2px]" strokeWidth={2.25} />
+                            <div>
+                              <p className="text-[11.5px] font-bold text-[#0B1F3A]">
+                                {t('addStock.supplierWording.candidateTitle')}
+                              </p>
+                              <p className="text-[11px] text-gray-600 mt-0.5">
+                                {t('addStock.supplierWording.candidateHint')}
+                              </p>
+                            </div>
+                          </div>
+                          <div className="space-y-1.5">
+                            {row.supplierWordingCandidates.map(candidate => {
+                              const candidateProduct = products.find(p => p.id === candidate.productId);
+                              if (!candidateProduct) return null;
+                              return (
+                                <div
+                                  key={candidate.productId}
+                                  className="flex items-center justify-between gap-2 bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5"
+                                >
+                                  <span className="text-[12px] font-semibold text-[#111827] truncate">
+                                    {candidateProduct.name}
+                                  </span>
+                                  <button
+                                    type="button"
+                                    onClick={() => handleConfirmSupplierWordingCandidate(row.id, candidate.productId)}
+                                    className="shrink-0 text-[11px] font-bold text-white bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 rounded-md px-2.5 py-1 transition-colors duration-150"
+                                  >
+                                    {t('addStock.supplierWording.confirmButton')}
+                                  </button>
+                                </div>
+                              );
+                            })}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleDeclineSupplierWordingCandidates(row.id)}
+                            className="text-[11px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+                          >
+                            {t('addStock.supplierWording.noneOfTheseButton')}
+                          </button>
+                        </div>
+                      )}
+
+                      {row.pendingSupplierWording?.origin === 'reused' && (
+                        <div className="mt-2 flex items-start gap-2 bg-[#F0FDF4] border border-emerald-200 rounded-xl px-3 py-2">
+                          <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
+                          <p className="text-[11px] text-emerald-800 leading-snug">
+                            {t('addStock.supplierWording.reusedNotice')}
+                          </p>
+                        </div>
+                      )}
+
+                      {row.supplierWordingConflictPending && (
+                        <div className="mt-2 bg-[#FEF2F2] border border-rose-200 rounded-xl px-3 py-2.5 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
+                            <p className="text-[11px] text-rose-800 leading-snug">
+                              {t('addStock.supplierWording.conflictWarning')}
+                            </p>
+                          </div>
+                          <div>
+                            <label className="block text-[10.5px] font-bold text-rose-900 mb-1">
+                              {t('addStock.supplierWording.distinguishingInfoLabel')}
+                            </label>
+                            <input
+                              type="text"
+                              required
+                              placeholder={t('addStock.supplierWording.distinguishingInfoPlaceholder')}
+                              value={row.supplierWordingDistinguishingInfo || ''}
+                              onChange={e =>
+                                updateRow(row.id, { supplierWordingDistinguishingInfo: e.target.value })
+                              }
+                              className="w-full bg-white border border-rose-200 rounded-lg px-2.5 py-1.5 text-[12px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
+                            />
+                          </div>
+                        </div>
+                      )}
                     </div>
                   );
                 })}

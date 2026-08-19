@@ -358,6 +358,17 @@ export const fr: TranslationDict = {
         network_error: 'Impossible de contacter le serveur. Vérifiez votre connexion ou continuez manuellement.',
       },
     },
+    supplierWording: {
+      candidateTitle: 'Il pourrait s\u2019agir d\u2019un produit déjà existant',
+      candidateHint: 'Le fournisseur peut utiliser un nom différent pour un produit déjà présent dans votre catalogue. Confirmez s\u2019il s\u2019agit du même produit :',
+      confirmButton: 'Oui, même produit',
+      noneOfTheseButton: 'Non, c\u2019est un nouveau produit',
+      reusedNotice: 'Reconnu automatiquement comme un produit déjà existant, sur la base d\u2019une correspondance déjà confirmée pour ce fournisseur.',
+      conflictWarning: 'Ce libellé est déjà associé à un autre produit. Si vous confirmez qu\u2019il s\u2019agit d\u2019un produit différent, expliquez ce qui le distingue.',
+      distinguishingInfoLabel: 'Qu\u2019est-ce qui rend ce produit différent ?',
+      distinguishingInfoPlaceholder: 'Ex. : paquet de 500g au lieu de 400g',
+      distinguishingInfoRequiredError: 'Expliquez ce qui rend ce produit différent avant de continuer (ligne {n}).',
+    },
   },
   addQuebra: {
     title: 'Enregistrer une Perte de Stock',
