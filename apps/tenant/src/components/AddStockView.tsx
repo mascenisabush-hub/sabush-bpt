@@ -8,7 +8,7 @@ import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { PurchaseDraftLineItem } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
-import { resolveSupplierWordingRecognition } from '../lib/supplierWordingRecognition';
+import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -677,12 +677,32 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     let sellingPrice = '';
     let previousCycleQuantity: number | undefined;
 
-    if (item.productMatch.status === 'confident' && item.productMatch.productId) {
-      const matched = products.find(p => p.id === item.productMatch.productId);
+    // [Supplier-Wording Recognition — Checkpoint 4] The server's own
+    // exact-name match (item.productMatch) has no knowledge of
+    // supplier-wording candidates or reuse (Checkpoint 3), which live
+    // entirely client-side. resolveScanRowSupplierWording (pure,
+    // independently tested — supplierWordingRecognition.ts) decides,
+    // from EITHER the server's match or a client-side recognition
+    // outcome, which product (if any) this row should be treated as
+    // matching — composing the SAME resolveSupplierWordingRecognition
+    // manual entry uses, never a second implementation of it.
+    const decision = resolveScanRowSupplierWording(
+      item.productName.value || '',
+      item.productMatch,
+      supplierId,
+      products
+    );
+    const pendingSupplierWording = decision.pendingSupplierWording;
+    const supplierWordingCandidates = decision.supplierWordingCandidates;
+
+    if (decision.matchedProductId) {
+      const matched = products.find(p => p.id === decision.matchedProductId);
       if (matched) {
-        // Use the catalog's own canonical name, not the raw OCR text, once
-        // matched — identical to what selecting an existing product from
-        // the autocomplete already does.
+        // Use the catalog's own canonical name, not the raw OCR text,
+        // once matched — identical to what selecting an existing product
+        // from the autocomplete (or a manual-entry reuse match) already
+        // does. Applies uniformly whether the match came from the
+        // server's exact-name check or a client-side reuse match.
         productName = matched.name;
         const productBatches = batches.filter(b => b.productId === matched.id);
         if (productBatches.length > 0) {
@@ -718,6 +738,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         costPrice: item.costPrice.status,
       },
       smartEntryProductMatchStatus: item.productMatch.status,
+      pendingSupplierWording,
+      supplierWordingCandidates,
     };
   };
 

@@ -92,3 +92,104 @@ export function resolveSupplierWordingRecognition(
 
   return { type: 'no-candidates' };
 }
+
+// ---------------------------------------------------------------------
+// [Checkpoint 4] Smart Stock Entry scan-row integration
+// ---------------------------------------------------------------------
+//
+// PROBLEM (discovered during Checkpoint 4's baseline investigation): a
+// manually typed Add Stock row runs through resolveSupplierWordingRecognition
+// above (via AddStockView's applySupplierWordingCheck), but a row built
+// from a Smart Stock Entry extraction proposal (AddStockView's
+// buildRowFromProposalLineItem) previously used ONLY the server's own
+// exact-name match (matchProductByExactName, server/smartStockEntry.ts)
+// — which has no knowledge of supplier-wording candidates or reuse. A
+// scanned wording could therefore reach Add Stock's finalization path
+// without ever being checked for recognition, even though it flows
+// through the exact same `rows` state and the exact same
+// handleSubmit → addMultipleStockBatches path Checkpoint 3 already
+// covers for manual entry.
+//
+// FIX: this function is the pure decision for a scan-sourced row,
+// composing resolveSupplierWordingRecognition above — never
+// reimplementing it — exactly the same way AddStockView's own
+// applySupplierWordingCheck already composes it for manual entry. The
+// ONLY new decision here is which productId (if any) the row should be
+// treated as matching, given TWO possible sources of a match: the
+// server's own exact-name check (item.productMatch), or a client-side
+// supplier-wording recognition outcome — with the server's exact match
+// taking priority (Specification §3 step 1: recognition never fires
+// once text already exactly names a product).
+
+export interface ScanRowSupplierWordingDecision {
+  /** The product this row should be treated as matching, if any — from
+   * EITHER the server's own exact-name match or a client-side reuse
+   * match. Undefined means neither source found a match. */
+  matchedProductId: string | undefined;
+  /** Set only for a genuinely NEW relationship the row should carry
+   * through to finalization (silent reuse) — never for the server's
+   * own ordinary exact-name match, which needs no relationship at all. */
+  pendingSupplierWording:
+    | { wording: string; productId: string; origin: 'reused'; conflictCheckProductIds: string[] }
+    | undefined;
+  /** Candidates to present via the SAME confirm/decline panel manual
+   * entry already uses — never a scan-specific UI concept. */
+  supplierWordingCandidates: SupplierWordingCandidate[] | undefined;
+}
+
+/**
+ * Resolves the supplier-wording decision for one scan-extracted line
+ * item, given the server's own exact-name match result alongside the
+ * same recognition inputs manual entry uses. Pure — no Firestore
+ * access, no UI, no row construction; AddStockView.tsx's
+ * buildRowFromProposalLineItem calls this and applies the result to the
+ * row it's building.
+ */
+export function resolveScanRowSupplierWording(
+  rawProductName: string,
+  serverProductMatch: { status: 'confident' | 'uncertain' | 'no_match'; productId: string | null },
+  supplierId: string | undefined,
+  existingProducts: RecognitionProduct[]
+): ScanRowSupplierWordingDecision {
+  if (serverProductMatch.status === 'confident' && serverProductMatch.productId) {
+    // Ordinary exact match — identical treatment to a manually typed
+    // exact match (resolveSupplierWordingRecognition's own 'none' case):
+    // no recognition needed, no candidates, no new relationship.
+    return {
+      matchedProductId: serverProductMatch.productId,
+      pendingSupplierWording: undefined,
+      supplierWordingCandidates: undefined,
+    };
+  }
+
+  const trimmed = rawProductName.trim();
+  if (!trimmed) {
+    return { matchedProductId: undefined, pendingSupplierWording: undefined, supplierWordingCandidates: undefined };
+  }
+
+  const outcome = resolveSupplierWordingRecognition(trimmed, supplierId, existingProducts);
+
+  switch (outcome.type) {
+    case 'reused':
+      return {
+        matchedProductId: outcome.productId,
+        pendingSupplierWording: {
+          wording: trimmed,
+          productId: outcome.productId,
+          origin: 'reused',
+          conflictCheckProductIds: [],
+        },
+        supplierWordingCandidates: undefined,
+      };
+    case 'candidates':
+      return {
+        matchedProductId: undefined,
+        pendingSupplierWording: undefined,
+        supplierWordingCandidates: outcome.candidates,
+      };
+    case 'none':
+    case 'no-candidates':
+    default:
+      return { matchedProductId: undefined, pendingSupplierWording: undefined, supplierWordingCandidates: undefined };
+  }
+}
