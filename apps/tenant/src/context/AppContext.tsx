@@ -2341,11 +2341,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const newCount: StockCount = {
       id: type === 'initial' ? 'initial' : 'stockcount-periodic-' + submissionId,
       type,
-      label: label?.trim() || undefined,
       date,
       items: countItems,
       totalValue: Number(totalValue.toFixed(2)),
       createdAt: new Date().toISOString(),
+      // [Fix — undefined field crash] `label` must be conditionally
+      // included, never assigned literal `undefined` directly — the
+      // exact same class of bug this repository has fixed repeatedly
+      // elsewhere (savePurchaseDraft, periodic/initial stock drafts):
+      // Firestore's WriteBatch.set()/setDoc() reject a document
+      // containing any field whose value is literal `undefined`,
+      // synchronously, before the write is ever queued. Every caller
+      // of recordStockCount except a 'custom'-type periodic count
+      // never supplies a label at all (InitialStockCountView.tsx
+      // passes none; PeriodicStockCountView.tsx explicitly passes
+      // `undefined` for every non-'custom' type) — meaning the
+      // previous `label: label?.trim() || undefined` line assigned a
+      // literal `undefined` value directly, on every single
+      // confirmation of every type except 'custom', unconditionally.
+      // This is not a rare edge case — it is the default, universal
+      // path for Initial Stock Count and every non-custom periodic
+      // count, confirmed by directly reading both calling components.
+      ...(label?.trim() ? { label: label.trim() } : {}),
       // [Amendment v1.0, Part 5] Only ever set for periodic counts — the
       // 'initial' count has no baseline to compare against, and the
       // caller (recordStockCount's own callers) never passes it for
@@ -2429,7 +2446,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         financialImpact: [{ label: 'Valor Contado', amount: newCount.totalValue, tone: 'neutral' }],
         details: {
           countType: type,
-          label: label?.trim(),
+          // [Fix — same undefined-field bug as newCount.label above]
+          // label?.trim() is undefined for every non-'custom' type;
+          // Record<string, string | number | undefined>'s type
+          // signature permits this, but Firestore rejects it at any
+          // nesting depth, not just top-level fields. This write is
+          // wrapped in logTimelineEvent's own try/catch (below), so
+          // this specific instance was never user-blocking — it
+          // silently failed the timeline entry only, logged to
+          // console. Still a real bug: fixed the same way.
+          ...(label?.trim() ? { label: label.trim() } : {}),
           productCount: countItems.length,
           totalValue: newCount.totalValue,
         },
