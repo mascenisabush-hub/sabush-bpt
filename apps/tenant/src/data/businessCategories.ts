@@ -168,7 +168,7 @@ export const BUSINESS_CATEGORY_GROUPS: CategoryGroup[] = [
 const ALL_CATEGORIES: string[] = BUSINESS_CATEGORY_GROUPS.flatMap(g => g.categories).filter(c => c !== 'Outro');
 
 /** Strip accents and lowercase, for forgiving keyword matching. */
-function normalize(text: string): string {
+export function normalize(text: string): string {
   return text
     .toLowerCase()
     .normalize('NFD')
