@@ -20,7 +20,24 @@
 // firebase.json). Single-command way to get both:
 //   npm run test:supplier-wording-confirmation-concurrency:emulator
 //
-// *** IMPORTANT, READ BEFORE TRUSTING THIS FILE'S RESULTS ***
+// *** VERIFICATION STATUS ***
+//
+// Confirmed PASSING against a live Firestore emulator: 20/20 (Scenario
+// A: 10/10, Scenario B: 10/10), 0 failures, run to completion with a
+// clean emulator shutdown. Not executed by Claude directly — this
+// sandbox's network egress allowlist blocks storage.googleapis.com,
+// which `firebase emulators:exec` needs to download the emulator JAR on
+// first run (confirmed: direct request to that host returns 403, no
+// cached JAR available). Executed and confirmed by the repository owner
+// on their own machine, 2026-08-19, via
+// `npm run test:supplier-wording-confirmation-concurrency:emulator`
+// (screenshot evidence: tests 20, suites 2, pass 20, fail 0, cancelled
+// 0, skipped 0, todo 0, duration_ms 36710.5143, "Script exited
+// successfully (code 0)"). This is a self-reported result, not
+// independently re-run by Claude in this environment — if the
+// transaction body in AppContext.tsx changes after this note was
+// written, this file's mirror (below) must be re-verified, not assumed
+// still accurate on the strength of this note alone.
 //
 // This test does NOT and CANNOT call the actual production
 // `confirmSupplierWordingRelationship()` from AppContext.tsx directly —
