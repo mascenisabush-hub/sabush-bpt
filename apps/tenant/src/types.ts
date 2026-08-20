@@ -1,3 +1,15 @@
+// [Initial Stock Accidental Confirmation Recovery ("Void & Redo") —
+// Implementation Authorization, §2 item 1] Only this file's
+// StockCount.confirmedAt field (below) uses the SDK's Timestamp type
+// rather than this file's usual ISO-string convention (see the
+// Notifications block's own note on that convention). This is a
+// deliberate, isolated departure: confirmedAt must be a server-
+// enforced value comparable against `request.time` in firestore.rules
+// (Rule 8 Assessment Finding B1) — a client-generated ISO string
+// cannot be trusted for that purpose, since a manipulated client clock
+// could otherwise extend an apparent recovery window.
+import type { Timestamp } from 'firebase/firestore';
+
 // [Phase 0 Stage 2 Compatibility Correction] Includes 'admin' alongside
 // the legacy 'owner' value — both are owner-level, per the Phase 0
 // owner->admin migration. New self-registrations write 'admin'
@@ -567,6 +579,72 @@ export interface StockCount {
   // Periodic Contagem has no equivalent of "Initial Capital" and gains
   // no basis-choice concept from this feature (BDR-0014 Decision 7).
   initialCapitalBasis?: InitialCapitalBasis;
+  // [Void & Redo — Implementation Authorization §2 item 1; Rule 8
+  // Finding B1] Server-enforced confirmation timestamp, written with
+  // the SDK's serverTimestamp() sentinel at confirm time — never a
+  // client-generated value. This is the "confirmation event's own
+  // timestamp" BDR-0015 Decision B / POL-0008 Rule B measures a
+  // recovery window from. ONLY present on a `type: 'initial'`
+  // confirmation created under this feature (original or redo); absent
+  // on every 'initial' count confirmed before this capability existed
+  // and on every periodic-type count (this feature has no bearing on
+  // Periodic Contagem — POL-0008 Terminology). A record with this field
+  // absent is, by construction, never eligible for Void & Redo (Rule 8
+  // §11 — no migration, no backfill, no default-into-eligibility).
+  confirmedAt?: Timestamp;
+  // [Void & Redo — Implementation Authorization §2 item 1; Rule 8
+  // Finding E1] This confirmation event's position in its Initial Stock
+  // chain: 1 for the original confirmation, 2/3/4 for a first/second/
+  // third redo. Present only alongside confirmedAt (i.e. only for a
+  // confirmation created under this feature). A business may have at
+  // most one confirmation at each position, and at most 4 positions
+  // ever (POL-0008 Decision 5). chainPosition === 4 is the ceiling
+  // marker: Void & Redo is unavailable against that confirmation, even
+  // though its own 30-minute window is still computed and displayed
+  // exactly like every other confirmation's (Specification §21).
+  chainPosition?: 1 | 2 | 3 | 4;
+  // [Void & Redo — Implementation Authorization §2 item 1] Present only
+  // on a redo confirmation (chainPosition 2, 3, or 4) — the id of the
+  // confirmation event it replaces (i.e. the confirmation voided to
+  // produce this one). Absent on the original confirmation
+  // (chainPosition 1, which redoes nothing). Purely a lineage pointer
+  // for audit/history display (FR-9) — never read by any calculation
+  // (initialCapitalValue resolution reads only the active confirmation,
+  // Rule 8 Finding F1, independent of this field).
+  redoesConfirmationId?: string;
+}
+
+// [Void & Redo — Implementation Authorization §2 item 2; Rule 8 Finding
+// G1, Direction 2 (adopted)] The additive, create-only artifact
+// recording that a given `initial` StockCount confirmation has been
+// voided via Void & Redo — WITHOUT ever mutating the original
+// confirmation document. This is the entire mechanism by which
+// BDR-0015 Decision D / POL-0008 Rule D ("the original confirmation is
+// never edited or deleted... explicitly marked as voided") is
+// satisfied while leaving firestore.rules' existing unconditional
+// `type == 'initial'` update/delete refusal completely untouched
+// (Architecture 8.6's "no exceptions" immutability tier — see that
+// rule's own in-code comment).
+//
+// One document per successful void, ever. Never updated after
+// creation (POL-0008 Rule I — no historical fact of a voided
+// confirmation, including its voided marker, is ever rewritten).
+// `initialStockCount` derivation treats a `type: 'initial'` StockCount
+// as voided if, and only if, a VoidRecord exists whose
+// voidedConfirmationId equals that StockCount's id (Rule 8 Finding F1).
+export interface VoidRecord {
+  id: string;
+  // The id of the `type: 'initial'` StockCount this record voids.
+  // Exactly one VoidRecord may ever exist per voidedConfirmationId —
+  // enforced at the firestore.rules layer (a create precondition that
+  // no VoidRecord already exists for this target), not by this type.
+  voidedConfirmationId: string;
+  // Server-enforced, exactly like StockCount.confirmedAt above and for
+  // the identical reason (Rule 8 Finding B1) — the moment the void
+  // itself was recorded. Informational only; the governing timestamp
+  // for window/ceiling enforcement remains the voided confirmation's
+  // own confirmedAt, never this field.
+  voidedAt: Timestamp;
 }
 
 // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1] A
