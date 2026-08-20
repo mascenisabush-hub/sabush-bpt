@@ -2,9 +2,10 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
-import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck } from 'lucide-react';
+import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
-import { InitialStockDraftItem } from '../types';
+import { InitialStockDraftItem, UnitRelationship } from '../types';
+import { isValidUnitRelationship } from '../lib/unitRelationship';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -18,6 +19,24 @@ interface CountRowItem {
   unit: string;
   costPrice: string;
   sellingPrice: string;
+  // [Product Memory / UOM — Increment A, Checkpoint 2] UI-only fields,
+  // never persisted to InitialStockDraftItem/the autosaved draft (see
+  // rowToDraftItem/draftItemToRow, below — neither reads or writes
+  // these two fields). Deliberately scoped to a single, optional
+  // second unit (a two-level relationship: this row's own `unit` as
+  // the top-level/purchase unit, plus one further "selling" unit and
+  // how many of it make one `unit`) — not an arbitrary N-level chain
+  // builder. This is a genuine, real, working subset of the accepted
+  // UOM Specification's data model (Product.unitRelationship already
+  // supports N levels — see types.ts), not a different concept; a
+  // longer chain remains something the owner can add later via a
+  // product-catalog "confirm/edit unit relationship" action (Decision
+  // 14), still to be built. Both fields are blank/unused whenever this
+  // row's productName already matches an existing product — see
+  // isGenuinelyNewProductName below, which gates whether this row's
+  // optional unit-relationship section is even shown.
+  newProductSellingUnit: string;
+  newProductSellingUnitFactor: string;
 }
 
 const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
@@ -27,6 +46,11 @@ const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
   unit: row.unit,
   costPrice: parseFloat(row.costPrice) || 0,
   sellingPrice: parseFloat(row.sellingPrice) || 0,
+  // [Product Memory / UOM — Increment A, Checkpoint 2] Deliberately NOT
+  // included — newProductSellingUnit/newProductSellingUnitFactor are
+  // UI-only, never part of the persisted draft (see CountRowItem's own
+  // comment above). InitialStockDraftItem's shape is completely
+  // unchanged by this checkpoint.
 });
 
 const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
@@ -39,7 +63,90 @@ const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
   // draft saved before this field existed simply has no selling price
   // to restore, so the field starts blank, same as any other unset row.
   sellingPrice: item.sellingPrice ? String(item.sellingPrice) : '',
+  // [Product Memory / UOM — Increment A, Checkpoint 2] Always starts
+  // blank on load — this optional sub-config was never persisted
+  // (see rowToDraftItem above), so there is nothing to restore.
+  newProductSellingUnit: '',
+  newProductSellingUnitFactor: '',
 });
+
+// [Product Memory / UOM — Increment A, Checkpoint 2] A small, self-
+// contained, collapsible optional-input row — deliberately its own
+// component (not inlined) so its collapsed/expanded state is
+// independent per product row, and so this checkpoint's scope (a
+// single optional second unit, per CountRowItem's own comment above)
+// stays visibly contained to one place. Starts collapsed, matching this
+// screen's existing "calm until needed" pattern (the delete button's
+// hover-reveal treatment, immediately above in the JSX this renders
+// alongside). Purely a controlled, presentational component — it holds
+// no state of its own beyond the collapse toggle, and never calls
+// recordStockCount or any context function directly; the parent
+// (InitialStockCountView) owns and validates the actual values via
+// onChange, exactly like every other row field.
+const UnitRelationshipRow: React.FC<{
+  purchaseUnit: string;
+  sellingUnit: string;
+  factor: string;
+  onChange: (sellingUnit: string, factor: string) => void;
+}> = ({ purchaseUnit, sellingUnit, factor, onChange }) => {
+  const [expanded, setExpanded] = useState(!!(sellingUnit || factor));
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
+      >
+        <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
+        <span>Produto novo — configurar relação de unidades (opcional)</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
+      <button
+        type="button"
+        onClick={() => setExpanded(false)}
+        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+      >
+        <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
+        <span>Relação de unidades para este produto novo (opcional)</span>
+      </button>
+      <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+        <span className="text-gray-500 pb-2">
+          1 <strong className="text-[#111827]">{purchaseUnit || 'un'}</strong> =
+        </span>
+        <div>
+          <label className="block type-label mb-1">Quantidade</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={factor}
+            onChange={(e) => onChange(sellingUnit, e.target.value)}
+            placeholder="Ex: 24"
+            className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+        <div>
+          <label className="block type-label mb-1">Unidade de venda</label>
+          <input
+            type="text"
+            value={sellingUnit}
+            onChange={(e) => onChange(e.target.value, factor)}
+            placeholder="Ex: Un"
+            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-400 leading-relaxed">
+        Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
+      </p>
+    </div>
+  );
+};
 
 export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ onComplete, onSkip }) => {
   const {
@@ -52,6 +159,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     initialStockDraftLoaded,
     saveInitialStockDraft,
     activeBusinessId,
+    products,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -62,6 +170,8 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     unit: suggestedUnits[0] || 'un',
     costPrice: '',
     sellingPrice: '',
+    newProductSellingUnit: '',
+    newProductSellingUnitFactor: '',
   });
 
   const [date, setDate] = useState(getTodayDateString());
@@ -189,6 +299,26 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     setRows((prev) => prev.filter((row) => row.id !== id));
   };
 
+  // [Product Memory / UOM — Increment A, Checkpoint 2] "Genuinely new"
+  // means no existing Product matches this name (case-insensitive) —
+  // the exact same lookup addStockBatch/recordStockCount themselves use
+  // to decide whether to create a new Product document (AppContext.tsx).
+  // A row whose name already matches an existing product NEVER shows
+  // the optional unit-relationship section below, regardless of
+  // whether that existing product has confirmed Product Memory yet —
+  // reconfiguring (or configuring for the first time) an EXISTING
+  // product is Decision 14's separate, explicit-owner-action path
+  // (confirmProductUnitRelationship, Checkpoint 1), not something this
+  // screen silently offers or infers. This also means Recognition
+  // (proposeUnitRelationshipRecognition) is correctly never invoked for
+  // an already-known product, matching UOM Specification §3 step 5's
+  // "never re-run" rule.
+  const isGenuinelyNewProductName = (name: string): boolean => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return false;
+    return !products.some((p) => p.name.toLowerCase() === trimmed);
+  };
+
   const totalCapital = rows.reduce((acc, row) => {
     const q = parseFloat(row.quantity) || 0;
     const c = parseFloat(row.costPrice) || 0;
@@ -227,12 +357,50 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         return;
       }
 
+      // [Product Memory / UOM — Increment A, Checkpoint 2] Built ONLY
+      // when this row's product is genuinely new AND the owner actually
+      // filled in the optional second-unit fields — an empty/untouched
+      // section contributes nothing (no unitRelationship key at all),
+      // which is exactly the same "no confirmed configuration, warn
+      // later, never block" state a product created without this
+      // section already has today (BDR-0012 §5.A Item 6). PURCHASE
+      // FACTS ARE NEVER TOUCHED BY THIS: row.unit, row.quantity, and
+      // row.costPrice above are read completely unchanged, before and
+      // after this block — this only ever ADDS an optional
+      // unitRelationship candidate for a brand-new product to the item
+      // being sent to recordStockCount; it never rewrites anything
+      // already collected above.
+      let unitRelationship: UnitRelationship | undefined;
+      if (isGenuinelyNewProductName(trimmedName)) {
+        const sellingUnit = row.newProductSellingUnit.trim();
+        const factor = parseFloat(row.newProductSellingUnitFactor);
+        if (sellingUnit && Number.isFinite(factor) && factor > 0) {
+          const candidate: UnitRelationship = {
+            units: [
+              { unit: row.unit || 'un', factorFromPrevious: 0 },
+              { unit: sellingUnit, factorFromPrevious: factor },
+            ],
+            sellingUnit,
+            confirmedAt: new Date().toISOString(),
+          };
+          // Re-validated here, at the actual point of use — never
+          // trusted merely because the UI fields were non-empty
+          // (POL-0005's threshold is the single source of truth,
+          // enforced identically to every other write path from
+          // Checkpoint 1).
+          if (isValidUnitRelationship(candidate)) {
+            unitRelationship = candidate;
+          }
+        }
+      }
+
       itemsToSave.push({
         productName: trimmedName,
         quantity: numQty,
         unit: row.unit || 'un',
         costPrice: numCost,
         sellingPrice: numSelling,
+        ...(unitRelationship ? { unitRelationship } : {}),
       });
     }
 
@@ -352,9 +520,11 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             </div>
 
             <div className="space-y-1">
-              {rows.map((row, idx) => (
+              {rows.map((row, idx) => {
+                const showUnitRelationshipSection = isGenuinelyNewProductName(row.productName);
+                return (
+                <React.Fragment key={row.id}>
                 <div
-                  key={row.id}
                   className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
                 >
                   <div className="col-span-2 sm:col-span-1">
@@ -435,7 +605,34 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                     )}
                   </div>
                 </div>
-              ))}
+
+                {/* [Product Memory / UOM — Increment A, Checkpoint 2]
+                    Shown ONLY for a row whose product name doesn't
+                    match anything already in the catalog — never shown,
+                    never asked again, for an already-known product
+                    (isGenuinelyNewProductName, above). Entirely
+                    optional: leaving it blank saves the product with no
+                    confirmed Product Memory, exactly as already happens
+                    today (BDR-0012 §5.A Item 6's warn-not-block state).
+                    This never edits row.unit/quantity/costPrice — the
+                    purchase-equivalent facts for Initial Stock — it only
+                    ever ADDS an optional, separate unitRelationship
+                    candidate alongside them. */}
+                {showUnitRelationshipSection && (
+                  <div className="col-span-2 sm:col-span-7 -mt-1 mb-1 pl-1">
+                    <UnitRelationshipRow
+                      purchaseUnit={row.unit || 'un'}
+                      sellingUnit={row.newProductSellingUnit}
+                      factor={row.newProductSellingUnitFactor}
+                      onChange={(sellingUnit, factor) =>
+                        updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                      }
+                    />
+                  </div>
+                )}
+                </React.Fragment>
+              );
+              })}
             </div>
           </div>
 
