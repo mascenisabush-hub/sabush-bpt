@@ -2,13 +2,14 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload } from 'lucide-react';
+import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
-import { PurchaseDraftLineItem } from '../types';
+import { PurchaseDraftLineItem, UnitRelationship } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
+import { isValidUnitRelationship } from '../lib/unitRelationship';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -95,6 +96,25 @@ interface StockRowItem {
   // for this row until distinguishingInfo (below) is non-empty.
   supplierWordingConflictPending?: boolean;
   supplierWordingDistinguishingInfo?: string;
+  // [Product Memory / UOM — Increment A, Checkpoint 2b] UI-only fields,
+  // never persisted (see rowToDraftLineItem, below — deliberately
+  // excludes both, same "UI-only, never persisted" treatment as
+  // isDropdownOpen/isUnitPopoverOpen already receive). Deliberately
+  // scoped to a single optional second unit (a two-level relationship:
+  // this row's own `unit` as the top-level/purchase unit, plus one
+  // further "selling" unit and how many of it make one `unit`) — the
+  // identical scoping InitialStockCountView.tsx's own Checkpoint 2a
+  // already established for this same concept; see that file's
+  // CountRowItem for the fuller rationale, unchanged here. This
+  // capability is STRICTLY SEPARATE from supplierWordingCandidates/
+  // pendingSupplierWording above — one identifies which existing
+  // Product a wording refers to (BDR-0013/POL-0007); this establishes
+  // a genuinely NEW product's unit-of-measure structure (BDR-0012) —
+  // they are never merged, and this section is only ever shown for a
+  // row that is NOT resolving to an existing product at all (see
+  // exactMatchExists in the row-render closure, below).
+  newProductSellingUnit?: string;
+  newProductSellingUnitFactor?: string;
 }
 
 // [Restock Observation Amendment v1.0] The one sentinel value the
@@ -151,6 +171,79 @@ const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
   // `batches` state right after restore (see the draft-load effect
   // below), since it may have changed since the draft was saved.
 });
+
+// [Product Memory / UOM — Increment A, Checkpoint 2b] Identical
+// component/behavior to InitialStockCountView.tsx's own
+// UnitRelationshipRow (Checkpoint 2a) — deliberately duplicated rather
+// than extracted into a shared file in this checkpoint, so each
+// already-committed surface's own tested behavior is never put at risk
+// by a shared-dependency refactor. A future cleanup checkpoint may
+// consolidate these; that is a pure refactor with no business-rule
+// content and is not performed here.
+const UnitRelationshipRow: React.FC<{
+  purchaseUnit: string;
+  sellingUnit: string;
+  factor: string;
+  onChange: (sellingUnit: string, factor: string) => void;
+}> = ({ purchaseUnit, sellingUnit, factor, onChange }) => {
+  const [expanded, setExpanded] = useState(!!(sellingUnit || factor));
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="mt-2 flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
+      >
+        <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
+        <span>Produto novo — configurar relação de unidades (opcional)</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="mt-2 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
+      <button
+        type="button"
+        onClick={() => setExpanded(false)}
+        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+      >
+        <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
+        <span>Relação de unidades para este produto novo (opcional)</span>
+      </button>
+      <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+        <span className="text-gray-500 pb-2">
+          1 <strong className="text-[#111827]">{purchaseUnit || 'un'}</strong> =
+        </span>
+        <div>
+          <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Quantidade</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={factor}
+            onChange={(e) => onChange(sellingUnit, e.target.value)}
+            placeholder="Ex: 24"
+            className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+        <div>
+          <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de venda</label>
+          <input
+            type="text"
+            value={sellingUnit}
+            onChange={(e) => onChange(e.target.value, factor)}
+            placeholder="Ex: Un"
+            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-400 leading-relaxed">
+        Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
+      </p>
+    </div>
+  );
+};
 
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
   const {
@@ -920,6 +1013,38 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         return;
       }
 
+      // [Product Memory / UOM — Increment A, Checkpoint 2b] Built ONLY
+      // when no existing product currently matches this row's name —
+      // re-checked HERE at the point of use, not merely trusted from
+      // whatever the UI section happened to show (the same discipline
+      // every other write path from Checkpoint 1 already follows).
+      // PURCHASE FACTS ARE NEVER TOUCHED BY THIS: row.unit/quantity/
+      // costPrice above are read completely unchanged; this only ever
+      // ADDS an optional unitRelationship candidate for a brand-new
+      // product to the item being sent to addMultipleStockBatches — see
+      // AddStockParams.unitRelationship's own comment (AppContext.tsx,
+      // Checkpoint 1) for the backend guarantee that this is never read
+      // for an existing product's creation branch.
+      let unitRelationship: UnitRelationship | undefined;
+      const rowResolvesToExistingProduct = products.some((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+      if (!rowResolvesToExistingProduct) {
+        const sellingUnit = (row.newProductSellingUnit || '').trim();
+        const factor = parseFloat(row.newProductSellingUnitFactor || '');
+        if (sellingUnit && Number.isFinite(factor) && factor > 0) {
+          const candidate: UnitRelationship = {
+            units: [
+              { unit: row.unit || 'un', factorFromPrevious: 0 },
+              { unit: sellingUnit, factorFromPrevious: factor },
+            ],
+            sellingUnit,
+            confirmedAt: new Date().toISOString(),
+          };
+          if (isValidUnitRelationship(candidate)) {
+            unitRelationship = candidate;
+          }
+        }
+      }
+
       itemsToSave.push({
         productName: trimmedName,
         dateEntered: row.dateEntered,
@@ -965,6 +1090,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         ...(row.supplierWordingConflictPending && row.supplierWordingDistinguishingInfo?.trim()
           ? { distinguishingInfo: row.supplierWordingDistinguishingInfo.trim() }
           : {}),
+        // [Product Memory / UOM — Increment A, Checkpoint 2b]
+        ...(unitRelationship ? { unitRelationship } : {}),
       });
     }
 
@@ -2022,6 +2149,29 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             />
                           </div>
                         </div>
+                      )}
+
+                      {/* [Product Memory / UOM — Increment A, Checkpoint
+                          2b] Shown ONLY for a row that does NOT resolve
+                          to an existing product (exactMatchExists,
+                          computed per-row above) — never re-shown, never
+                          re-asked, for an already-known product (UOM
+                          Specification §3 step 5's "never re-run" rule).
+                          Strictly separate from the supplier-wording
+                          blocks immediately above — identifying which
+                          product a wording refers to is not the same
+                          question as establishing a brand-new product's
+                          unit relationship. Entirely optional: leaving
+                          it blank changes nothing from today's behavior. */}
+                      {row.productName.trim() && !exactMatchExists && (
+                        <UnitRelationshipRow
+                          purchaseUnit={row.unit || 'un'}
+                          sellingUnit={row.newProductSellingUnit || ''}
+                          factor={row.newProductSellingUnitFactor || ''}
+                          onChange={(sellingUnit, factor) =>
+                            updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                          }
+                        />
                       )}
                     </div>
                   );
