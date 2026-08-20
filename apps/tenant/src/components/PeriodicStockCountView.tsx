@@ -6,6 +6,7 @@ import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { computePortionLabels } from '../lib/stockCountPortionGrouping';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -457,6 +458,36 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   );
 
   const liveTally = useMemo(() => tallyStockCountRows(allWorkingRows), [allWorkingRows]);
+
+  // [Increment B, Checkpoint B6 — Consolidated Specification §17] Purely
+  // presentational, identical reasoning and helper as Checkpoint B5's
+  // InitialStockCountView.tsx: identifies which rows share a product
+  // name with another row in THIS count (across visible catalog rows
+  // AND manual rows combined — a multi-portion product may be split
+  // between an auto-populated catalog row and one or more manually
+  // added rows, or entirely among manual rows), so they can be visually
+  // labeled as portions of one product's count rather than reading as
+  // an accidental duplicate. Reuses computePortionLabels unchanged —
+  // it is name-based, not productId-based, so it already works
+  // correctly across this surface's two-array (catalogRows + manualRows)
+  // model with zero changes to the helper itself. Deliberately keyed
+  // over `visibleCatalogEntries` (not raw `catalogRows`/`allWorkingRows`)
+  // for the catalog half — a removed catalog row is hidden from the
+  // main grid entirely (shown only as a small "restore" chip elsewhere)
+  // and is always Not Counted, so it is not a live valuation "portion"
+  // to label. Manual rows are indexed by their array position for this
+  // computation only — never persisted, never compared across renders,
+  // recomputed fresh every time exactly like catalog ids are read fresh
+  // from `visibleCatalogEntries` every render. Feeds NOTHING into
+  // liveTally above, workingRowToDraftItem, or any Firestore write —
+  // see stockCountPortionGrouping.ts's own header comment.
+  const portionLabels = useMemo(() => {
+    const rowsForGrouping = [
+      ...visibleCatalogEntries.map(([productId, row]) => ({ id: productId, productName: row.productName })),
+      ...manualRows.map((row, idx) => ({ id: `manual-${idx}`, productName: row.productName })),
+    ];
+    return computePortionLabels(rowsForGrouping);
+  }, [visibleCatalogEntries, manualRows]);
 
   const diff = liveTally.totalPurchaseValue - comparisonBaseline;
   const diffPct = comparisonBaseline > 0 ? (diff / comparisonBaseline) * 100 : 0;
@@ -989,6 +1020,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     const isBlank = row.quantity.trim() === '';
                     const q = isBlank ? 0 : Number(row.quantity) || 0;
                     const c = Number(row.costPrice) || 0;
+                    const portionLabel = portionLabels.get(productId) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                     return (
                       <div
                         key={productId}
@@ -997,6 +1029,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <div className="col-span-2 sm:col-span-1 flex items-center">
                           <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
                         </div>
+                        {/* [Increment B, Checkpoint B6 — Consolidated
+                            Specification §17] Shown ONLY when this
+                            product also has a manually-added portion
+                            elsewhere in this same count — makes clear
+                            this row is one portion of that product's
+                            count, each with its own unit/price basis,
+                            never an accidental duplicate. Purely
+                            informational; see portionLabels above. */}
+                        {portionLabel.isMultiPortion && (
+                          <div className="col-span-2 sm:col-span-7 -mt-1 mb-0.5">
+                            <p className="text-[10.5px] text-[#B8952F] font-medium leading-snug">
+                              Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
+                            </p>
+                          </div>
+                        )}
 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
@@ -1095,7 +1142,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <div>
               <p className="text-[12.5px] font-bold text-[#111827] mb-2">Adicionados Manualmente</p>
               <div className="space-y-1">
-                {manualRows.map((row, idx) => (
+                {manualRows.map((row, idx) => {
+                  const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+                  return (
                   <React.Fragment key={idx}>
                   <div
                     className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
@@ -1109,6 +1158,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         onChange={(e) => updateManualRow(idx, { productName: e.target.value })}
                         className={fieldClass}
                       />
+                      {/* [Increment B, Checkpoint B6 — Consolidated
+                          Specification §17] Same informational-only
+                          label as the catalog-row loop above — shown
+                          whenever this manual row shares a product
+                          name with another row (catalog or manual)
+                          in this same count. */}
+                      {portionLabel.isMultiPortion && (
+                        <p className="mt-1 text-[10.5px] text-[#B8952F] font-medium leading-snug">
+                          Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
+                        </p>
+                      )}
                     </div>
 
                     <div>
@@ -1194,7 +1254,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     />
                   )}
                   </React.Fragment>
-                ))}
+                  );
+                })}
               </div>
             </div>
           )}
