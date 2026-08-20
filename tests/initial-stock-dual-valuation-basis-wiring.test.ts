@@ -63,7 +63,22 @@ describe('InitialStockCountView.tsx — draft autosave/resurrection survival', (
 
 describe('InitialStockCountView.tsx — passed through to confirmation', () => {
   it('recordStockCount is called with initialCapitalBasis at final submit', () => {
-    assert.match(viewSource, /recordStockCount\(\{ type: 'initial', date, items: itemsToSave, initialCapitalBasis \}\)/);
+    // [Void & Redo — Implementation Authorization §2 items 5-6] Widened
+    // from the original single-line call to the multi-line shape this
+    // feature introduced (adds a conditional redoesConfirmationId
+    // spread) — the tested intent (initialCapitalBasis is passed
+    // through) is unchanged; only the exact source formatting is.
+    const callBlockMatch = viewSource.match(/await recordStockCount\(\{[\s\S]*?\}\);/);
+    assert.ok(callBlockMatch, 'expected to find the recordStockCount call in handleSubmit');
+    const callBlock = callBlockMatch![0];
+    assert.match(callBlock, /type: 'initial',/);
+    assert.match(callBlock, /date,/);
+    assert.match(callBlock, /items: itemsToSave,/);
+    assert.match(callBlock, /initialCapitalBasis,/);
+  });
+
+  it('recordStockCount is called with a conditional redoesConfirmationId spread (Void & Redo)', () => {
+    assert.match(viewSource, /\.\.\.\(redoingConfirmationId \? \{ redoesConfirmationId: redoingConfirmationId \} : \{\}\)/);
   });
 });
 

@@ -5,6 +5,7 @@ import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { InitialStockDraftItem, UnitRelationship, InitialCapitalBasis } from '../types';
+import { resolveInitialCapitalValue } from '../utils/calculations';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 
@@ -155,6 +156,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     currencySymbol,
     recordStockCount,
     hasInitialStockCount,
+    initialStockCount,
+    initialCapitalValue,
+    // [Void & Redo — Implementation Authorization §2 items 5, 8-9]
+    voidInitialStockConfirmation,
+    initialStockVoidEligibility,
+    initialStockConfirmationChain,
+    voidRecords,
     subscriptionBlocksNewRecords,
     initialStockDraft,
     initialStockDraftLoaded,
@@ -198,6 +206,23 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
   const skipNextAutosave = useRef(false);
 
+  // [Void & Redo — Implementation Authorization §2 item 9; FR-5] Set
+  // ONLY after a successful Void, to the id of the confirmation just
+  // voided — this is what routes handleSubmit below into producing a
+  // REDO confirmation instead of an original one. Cleared on a
+  // successful reconfirm (via onComplete's own navigation, same as the
+  // original-confirmation flow) or on a business switch (the reset
+  // effect below).
+  const [redoingConfirmationId, setRedoingConfirmationId] = useState<string | null>(null);
+  const [isVoiding, setIsVoiding] = useState(false);
+  const [voidError, setVoidError] = useState<string | null>(null);
+  // [FR-19] Explicit secondary confirmation step — the Confirm button's
+  // first click reveals this inline panel instead of submitting
+  // directly; only the panel's own second, explicit "Sim, confirmar"
+  // action actually submits the form.
+  const [showConfirmStep, setShowConfirmStep] = useState(false);
+  const [showVoidConfirmStep, setShowVoidConfirmStep] = useState(false);
+
   // [Fix — business-switch draft staleness, Option B] Tracks which
   // business the component's current local state (rows/date/draftLoaded)
   // actually belongs to. InitialStockCountView is never remounted on a
@@ -233,6 +258,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     setDraftSaveState('idle');
     skipNextAutosave.current = false;
     setDraftLoaded(false); // re-arms the load effect below for the new business
+    // [Void & Redo] A new business has no bearing on the previous
+    // business's void/redo flow — never carried across a switch.
+    setRedoingConfirmationId(null);
+    setIsVoiding(false);
+    setVoidError(null);
+    setShowConfirmStep(false);
+    setShowVoidConfirmStep(false);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -418,7 +450,26 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     e.preventDefault();
     setError(null);
 
-    if (hasInitialStockCount) {
+    // [FR-19] The explicit secondary confirmation step: a first
+    // "Confirmar Capital Inicial" click reveals the inline panel below
+    // (showConfirmStep) instead of submitting — only that panel's own
+    // second, explicit action reaches this point with showConfirmStep
+    // already true. A submit reaching here with it still false (e.g. a
+    // stray Enter-key submit from within the product grid) is treated
+    // as the same first click, not a bypass.
+    if (!showConfirmStep) {
+      setShowConfirmStep(true);
+      return;
+    }
+
+    // [Void & Redo — Implementation Authorization §2 items 5-6; Rule 8
+    // Finding F2] This guard blocks an accidental SECOND ORIGINAL
+    // confirmation — it must not fire while producing a legitimate
+    // redo (redoingConfirmationId set). By this point hasInitialStockCount
+    // is already false for a genuine post-void state (Finding F1), but
+    // the explicit check here is kept for the same intention-revealing
+    // reason AppContext.tsx's own guard is.
+    if (hasInitialStockCount && !redoingConfirmationId) {
       setError('O Capital Inicial já foi definido anteriormente e não pode ser alterado.');
       return;
     }
@@ -500,13 +551,61 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
     setIsSaving(true);
     try {
-      await recordStockCount({ type: 'initial', date, items: itemsToSave, initialCapitalBasis });
+      await recordStockCount({
+        type: 'initial',
+        date,
+        items: itemsToSave,
+        initialCapitalBasis,
+        // [Void & Redo — Implementation Authorization §2 items 5-6]
+        // undefined for an original confirmation (the overwhelmingly
+        // common case, and every call site before this feature),
+        // present only mid-redo.
+        ...(redoingConfirmationId ? { redoesConfirmationId: redoingConfirmationId } : {}),
+      });
       setSavedMessage('Capital Inicial registado com sucesso!');
+      setRedoingConfirmationId(null);
       setTimeout(() => onComplete(), 1200);
     } catch (err: any) {
       setError(err.message || 'Erro ao registar o Capital Inicial.');
+      setShowConfirmStep(false);
     } finally {
       setIsSaving(false);
+    }
+  };
+
+  // [Void & Redo — Implementation Authorization §2 item 5; Rule 8
+  // Findings A1, D1] Triggers the Void step. Authorization is entirely
+  // firestore.rules' — a rejection here (window elapsed, Confirmation
+  // #4, non-Owner, or any other precondition failure) surfaces as a
+  // generic permission error, since the rules layer gives no more
+  // specific reason than a denial; the message below is written to
+  // cover the general case, not to claim a specific cause this
+  // function cannot actually distinguish.
+  const handleVoidAndRedo = async () => {
+    if (!showVoidConfirmStep) {
+      setShowVoidConfirmStep(true);
+      return;
+    }
+    setVoidError(null);
+    setIsVoiding(true);
+    try {
+      const voidedId = initialStockCount!.id;
+      await voidInitialStockConfirmation();
+      setRedoingConfirmationId(voidedId);
+      // [Void & Redo] Re-arms the draft-load effect (line ~254) so the
+      // reconstructed draft voidInitialStockConfirmation just wrote
+      // into context (initialStockDraft) is picked up into `rows`,
+      // exactly like loading any other draft — this component never
+      // reads initialStockDraft directly outside that one effect.
+      setDraftLoaded(false);
+      setShowVoidConfirmStep(false);
+      setShowConfirmStep(false);
+      setError(null);
+    } catch (err: any) {
+      setVoidError(err.message || 'Não foi possível anular esta confirmação — a janela de recuperação pode já ter expirado.');
+      setShowVoidConfirmStep(false);
+    } finally {
+      setIsVoiding(false);
     }
   };
 
@@ -523,6 +622,157 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             {formatCurrency(totalCapital, currencySymbol)}
           </span>
         </p>
+      </div>
+    );
+  }
+
+  // [Void & Redo — Implementation Authorization §2 items 8-9; FR-9,
+  // FR-10, FR-21] Once there's an active confirmation and we are not
+  // mid-redo-editing, this screen — not the blank form — is what the
+  // Owner sees on this tab from now on. Rendered regardless of
+  // subscriptionBlocksNewRecords: viewing the confirmed total and
+  // history never required a subscription, and the recovery action
+  // itself (below) is exactly what Option A exists to keep available
+  // even while blocked (Rule 8 Finding K1) — firestore.rules remains
+  // the actual enforcement point either way.
+  if (hasInitialStockCount && !redoingConfirmationId) {
+    const formatMsRemaining = (ms: number): string => {
+      const totalSeconds = Math.max(0, Math.floor(ms / 1000));
+      const minutes = Math.floor(totalSeconds / 60);
+      const seconds = totalSeconds % 60;
+      return `${minutes}:${seconds.toString().padStart(2, '0')}`;
+    };
+
+    return (
+      <div className="max-w-2xl mx-auto pb-12 space-y-4">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-5">
+          <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
+            <div className="w-10 h-10 rounded-xl bg-emerald-50 flex items-center justify-center text-emerald-600 shrink-0">
+              <CheckCircle2 className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div className="min-w-0 flex-1">
+              <h2 className="type-title">Capital Inicial Confirmado</h2>
+              <p className="text-[12px] text-gray-500 mt-0.5">
+                Este é o ponto de partida contra o qual o crescimento de capital do seu negócio é medido.
+              </p>
+            </div>
+          </div>
+
+          <div className="card-dark-gradient rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
+            <div className="flex items-center gap-2.5">
+              <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0" strokeWidth={2.25} />
+              <span className="font-semibold text-white/70 text-[13px]">Capital Inicial Total</span>
+            </div>
+            <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#D4AF37] tabular-nums leading-none">
+              {formatCurrency(initialCapitalValue, currencySymbol)}
+            </span>
+          </div>
+
+          {voidError && (
+            <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12.5px] font-medium">
+              {voidError}
+            </div>
+          )}
+
+          {/* [FR-21] Recovery-window visibility — the Owner must be
+              able to see, throughout the window, that recovery is
+              currently available. Nothing renders here at all once the
+              window elapses or Confirmation #4's ceiling is reached
+              (initialStockVoidEligibility.eligible is false either
+              way — the two cases are deliberately indistinguishable to
+              the Owner, matching FR-16's "unconditional, no soft
+              warning state" framing: there is no partial-eligibility
+              messaging to design here). */}
+          {initialStockVoidEligibility.eligible && (
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-semibold text-amber-800">
+                    Janela de recuperação ativa — {formatMsRemaining(initialStockVoidEligibility.msRemaining)} restantes
+                  </p>
+                  <p className="text-[11.5px] text-amber-700 mt-1 leading-relaxed">
+                    Confirmou por engano? Pode anular esta confirmação e refazê-la, mas apenas dentro desta janela de 30
+                    minutos a partir do momento em que confirmou. A confirmação original fica permanentemente registada
+                    no histórico, marcada como anulada — nunca é apagada.
+                  </p>
+                </div>
+              </div>
+
+              {!showVoidConfirmStep ? (
+                <button
+                  type="button"
+                  onClick={handleVoidAndRedo}
+                  disabled={isVoiding}
+                  className="w-full py-2.5 px-3 rounded-xl border border-amber-300 bg-white hover:bg-amber-100/50 text-amber-800 font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Anular e Refazer Capital Inicial
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[12px] font-semibold text-amber-800">
+                    Tem a certeza? Esta ação anula permanentemente a confirmação atual.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowVoidConfirmStep(false)}
+                      disabled={isVoiding}
+                      className="flex-1 py-2 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12px] transition-all duration-150"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleVoidAndRedo}
+                      disabled={isVoiding}
+                      className="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[12px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isVoiding ? 'A anular...' : 'Sim, anular e refazer'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* [FR-9, FR-10] History — every confirmation event this
+              business has ever had, up to 4, each unambiguously marked
+              voided or active. */}
+          {initialStockConfirmationChain.length > 1 && (
+            <div className="space-y-2">
+              <p className="type-label text-gray-400">Histórico de Confirmações</p>
+              <div className="space-y-1.5">
+                {initialStockConfirmationChain.map((count) => {
+                  const isVoided = voidRecords.some((v) => v.voidedConfirmationId === count.id);
+                  return (
+                    <div
+                      key={count.id}
+                      className="flex items-center justify-between gap-3 px-3.5 py-2.5 rounded-xl bg-[var(--muted)] border border-[#E5E7EB]"
+                    >
+                      <div className="min-w-0">
+                        <p className="text-[12.5px] font-semibold text-[#0B1F3A]">
+                          Confirmação #{count.chainPosition ?? 1}
+                          {count.date ? ` — ${count.date}` : ''}
+                        </p>
+                        <p className="text-[11px] text-gray-500 tabular-nums">
+                          {formatCurrency(resolveInitialCapitalValue(count), currencySymbol)}
+                        </p>
+                      </div>
+                      <span
+                        className={`shrink-0 text-[10.5px] font-bold px-2 py-0.5 rounded-full ${
+                          isVoided ? 'bg-gray-200 text-gray-500' : 'bg-emerald-100 text-emerald-700'
+                        }`}
+                      >
+                        {isVoided ? 'ANULADA' : 'ATIVA'}
+                      </span>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+        </div>
       </div>
     );
   }
@@ -623,7 +873,14 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     </>
   );
 
-  if (subscriptionBlocksNewRecords) {
+  // [Void & Redo — Implementation Authorization §2 item 7; Rule 8
+  // Finding K1/Option A] Skipped while mid-redo-editing — the whole
+  // point of the exemption is that a subscription-blocked business can
+  // still complete a legitimate recovery. This does not grant any
+  // OTHER new-record write while blocked; only the void/redo write
+  // paths are exempt at the rules layer, and this UI gate change
+  // affects visibility only.
+  if (subscriptionBlocksNewRecords && !redoingConfirmationId) {
     return <SubscriptionBlockedNotice />;
   }
 
@@ -924,25 +1181,72 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             </span>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-            {onSkip && (
+          {/* [FR-18, FR-19, FR-20 — Implementation Authorization §2
+              item 8] The Confirm action is deliberately separated from
+              ordinary editing controls above by the Total card, and
+              requires this explicit second step before it does
+              anything irreversible — a stray click on the primary
+              button reveals this panel, nothing more; only the panel's
+              own second, explicit action actually submits. */}
+          {!showConfirmStep ? (
+            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
+              {onSkip && !redoingConfirmationId && (
+                <button
+                  type="button"
+                  onClick={onSkip}
+                  className="sm:w-auto w-full py-3 px-4 rounded-xl border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 hover:border-gray-300 font-bold text-sm transition-all duration-150"
+                >
+                  Configurar mais tarde
+                </button>
+              )}
               <button
-                type="button"
-                onClick={onSkip}
-                className="sm:w-auto w-full py-3 px-4 rounded-xl border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 hover:border-gray-300 font-bold text-sm transition-all duration-150"
+                type="submit"
+                disabled={isSaving}
+                className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
               >
-                Configurar mais tarde
+                <span>{redoingConfirmationId ? 'Confirmar Nova Contagem' : 'Confirmar Capital Inicial'}</span>
+                <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
               </button>
-            )}
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-            >
-              <span>{isSaving ? 'A guardar...' : 'Confirmar Capital Inicial'}</span>
-              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
-            </button>
-          </div>
+            </div>
+          ) : (
+            <div className="border-2 border-[#D4AF37]/40 bg-[#D4AF37]/[0.06] rounded-2xl px-4 py-4 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <Info className="w-3.5 h-3.5 text-[#0B1F3A] shrink-0 mt-[3px]" strokeWidth={2.25} />
+                <p className="text-[12.5px] leading-relaxed text-[#0B1F3A]">
+                  {redoingConfirmationId ? (
+                    <>
+                      Esta nova contagem vai substituir a confirmação anulada como o seu Capital Inicial ativo. Uma vez
+                      confirmada, tem também a sua própria janela de recuperação de 30 minutos — sujeita ao limite
+                      máximo de recuperações para esta configuração de Capital Inicial.
+                    </>
+                  ) : (
+                    <>
+                      Esta ação estabelece o seu <strong className="font-semibold">Capital Inicial do Negócio</strong>.
+                      Tem 30 minutos após confirmar para anular e refazer, caso tenha cometido um erro — depois disso,
+                      não é livremente reversível.
+                    </>
+                  )}
+                </p>
+              </div>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setShowConfirmStep(false)}
+                  disabled={isSaving}
+                  className="flex-1 py-2.5 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12.5px] transition-all duration-150"
+                >
+                  Voltar
+                </button>
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 text-white font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  {isSaving ? 'A guardar...' : 'Sim, confirmar'}
+                </button>
+              </div>
+            </div>
+          )}
         </form>
       </div>
     </div>
