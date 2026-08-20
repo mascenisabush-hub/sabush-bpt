@@ -218,3 +218,71 @@ didn't previously have a named home in the existing pipeline.
 **Lifecycle:** Designed → **Approved** (governance decision only). Not
 Implemented, Executed, or Analyzed — no engineering work is authorized
 by this record.
+
+---
+
+## Addendum — Scope Boundary: Standards-Conformance Corrections
+
+**Type:** Non-normative clarifying addendum to this Governance Decision
+Record. Not a Business Decision Record, not a Policy, not a
+specification, not an implementation authorization. Does not reopen,
+reverse, or reinterpret Sections 1–4 above.
+**Approved by:** SABUSHIMIKE Masceni, Product Architect.
+**Date:** August 20, 2026.
+
+Business Decision Records exist, per Section 1 above, to answer
+"enduring questions about why a capability exists, what customer value
+it creates, what principles govern future decisions, and what business
+philosophy should remain stable over time." A change that answers none
+of those questions — because the business philosophy, principle, or
+Standard it follows was already decided and already approved — does not
+enter this hierarchy at the BDR/Policy layer at all.
+
+Concretely: a correction that brings existing implementation into
+compliance with an already-approved Standard (e.g. `DESIGN_SYSTEM.md`)
+or an already-approved Architecture Principle (e.g.
+`docs/architecture/02-core-product-principles.md` §2.11, Design System
+Discipline) introduces no new capability, business philosophy,
+operational policy, or business-domain decision. It does not require a
+Business Decision Record or a Policy document, regardless of how many
+modules or applications it touches.
+
+This is distinct from the existing cross-cutting BDR namespace
+(`BDR-0004`, `BDR-0008`, `BDR-0009`, `BDR-0012`) — those are BDRs whose
+*strategic subject matter* has no single module home, so they are filed
+unprefixed rather than skipped. Crossing module boundaries is never
+itself the BDR trigger, in either direction: it doesn't require a BDR
+(the cross-cutting BDR case) and it doesn't exempt one (this addendum's
+case) on its own. What determines the trigger, always, is whether a new
+strategic or business-philosophy question is actually being answered.
+
+Such a correction instead follows the applicable Standards/Architecture
+governance and this repository's engineering-governance path directly
+(Rule 8 Assessment → Implementation Authorization, per
+`docs/engineering/platform-engineering-governance-standard.md`), the
+same as it would for any other engineering change whose upstream
+business decision is already settled.
+
+**Precedent:** the UI Readability Amendment
+(`docs/engineering/ui-readability-amendment.md`) — a cross-cutting
+contrast/typography correction against `DESIGN_SYSTEM.md` and Principle
+2.11, spanning the tenant and superadmin apps, implemented and closed
+out (`docs/engineering/ui-readability-amendment-closeout.md`, commit
+`c71bfa0`) without a BDR, on exactly this reasoning.
+
+**Governance Notes**
+- This addendum does not reopen, reverse, or reinterpret Sections 1–4
+  above. It states a boundary already implied by Section 1's own
+  definition of a Business Decision Record.
+- This addendum does not authorize any future implementation. It only
+  clarifies which governance gate a future change of this shape enters
+  at.
+- This addendum does not modify `ui-readability-amendment.md`, its
+  Rule 8 Assessment, its Implementation Authorization, or its Close-Out
+  — those remain as recorded, and commit `c71bfa0` is unaffected.
+- This addendum does not modify
+  `docs/engineering/platform-engineering-governance-standard.md` or
+  `CLAUDE.md`.
+
+**Lifecycle:** Designed → **Approved** (non-normative addendum). Not a
+new governance gate; clarifies an existing one.
