@@ -1,14 +1,21 @@
 // Automatic Purchase-to-Selling Conversion — Increment B, Checkpoint B2.
 //
 // GOVERNANCE: implements exactly the Consolidated Specification's §13
-// ("Automatic Purchase-to-Selling Conversion") — Concept C's ARITHMETIC
-// only (docs/specs/product-memory-purchase-selling-valuation-specification.md
-// §13), per Rule 8 Assessment Finding 2 ("the multi-hop composition
+// ("Automatic Purchase-to-Selling Conversion") and §15 ("Quebra
+// Compatibility") Concept C arithmetic (docs/specs/product-memory-purchase-selling-valuation-specification.md
+// §13, §15), per Rule 8 Assessment Finding 2 ("the multi-hop composition
 // itself... is pure arithmetic over Product.unitRelationship.units[]'s
-// factorFromPrevious chain"). This file does NOT introduce
-// `StockBatch.derivedSellingValuation`, does NOT write anything, and is
-// NEVER read by `calculateBatch`/the Embedded Profit Engine/Business
-// Worth — those remain Checkpoint B3/B4's scope (Finding 1, revised).
+// factorFromPrevious chain") and Finding 3, revised ("Because
+// StockBatch.derivedSellingValuation.ratePerPurchaseUnit is a rate...
+// and not an absolute converted selling-unit quantity,
+// calculateDerivedTransactionValuation's remainingQuantity *
+// ratePerPurchaseUnit computation automatically and correctly reflects
+// any quebra"). This file is NEVER read by `calculateBatch`, the
+// Embedded Profit Engine, or Business Worth (Finding 1, revised) — the
+// dependency at the bottom of this file runs the other way:
+// calculateDerivedTransactionValuation (Checkpoint B4) CALLS the
+// existing, unmodified `calculateBatch` to reuse its authoritative
+// remainingQuantity, never the reverse.
 //
 // SCOPE OF THIS FILE, EXACTLY: pure functions only — no Firestore, no
 // UI, no batch-commit timing decision (Finding 2 leaves that to the
@@ -29,8 +36,9 @@
 // module treats that composition as the single source of truth for
 // every conversion below; it never re-derives it ad hoc per call site.
 
-import type { UnitRelationship, StockBatchDerivedSellingValuation } from '../types';
+import type { UnitRelationship, StockBatchDerivedSellingValuation, StockBatch, Quebra } from '../types';
 import { isValidUnitRelationship } from './unitRelationship';
+import { calculateBatch } from '../utils/calculations';
 
 /**
  * Cumulative "how many of units[i] equal ONE units[0]" for every index
@@ -257,4 +265,69 @@ export function buildDerivedSellingValuationSnapshot(
     unitRelationshipSnapshot: validRelationship.units.map((u) => ({ unit: u.unit, factorFromPrevious: u.factorFromPrevious })),
     derivedAt,
   };
+}
+
+// ------------------------------------------------------------------
+// Increment B, Checkpoint B4 — live remaining-quantity / quebra-aware
+// current derived valuation (§15, Rule 8 Finding 3, revised).
+// ------------------------------------------------------------------
+
+/** The current, LIVE derived selling valuation for a batch's remaining
+ * stock — recomputed fresh every time this is called (never itself
+ * frozen/persisted anywhere), unlike `StockBatch.derivedSellingValuation`
+ * (Checkpoint B3), which IS frozen. Deliberately mirrors
+ * `BatchCalculation`'s own shape (calculations.ts) so a caller already
+ * familiar with that type finds this one unsurprising. */
+export interface DerivedCurrentValuation {
+  remainingQuantity: number; // identical to BatchCalculation.remainingQuantity for this same batch/quebras — reused, not recomputed independently
+  currentDerivedSellingValue: number; // remainingQuantity * batch.derivedSellingValuation.ratePerPurchaseUnit
+}
+
+/**
+ * §15's business requirement, implemented exactly: "what must survive
+ * from the moment of the original transaction is something rate-like —
+ * the derived selling value per unit of the batch's own purchase unit
+ * — not a fixed total selling-unit quantity computed once and then
+ * left stale as quebras reduce what physically remains." This function
+ * is that multiplication, and nothing more: it does NOT compute its
+ * own remaining quantity independently — it calls the existing,
+ * completely unmodified `calculateBatch` (calculations.ts) and reads
+ * `remainingQuantity` off its result, so this figure is ALWAYS
+ * identical to whatever calculateBatch itself would report for the
+ * same batch/quebras (Rule 8 Finding 3: "reuses the existing,
+ * unmodified groupQuebrasByBatch logic — not duplicated"). There is no
+ * second, competing quebra calculation anywhere in this file.
+ *
+ * Returns `null` — never a fabricated valuation — when `batch` carries
+ * no `derivedSellingValuation` at all (product had no confirmed
+ * Product Memory at the moment this batch was originally recorded, or
+ * this batch predates Checkpoint B3 entirely). Existing behavior for
+ * such a batch (no Concept C figure shown anywhere) is completely
+ * preserved.
+ *
+ * `batch.derivedSellingValuation` itself — the frozen rate, selling
+ * unit, selling price, and relationship snapshot — is READ ONLY here,
+ * never written, mutated, or recomputed from whatever the product's
+ * CURRENT Product Memory happens to say. A later Product Memory change
+ * changes nothing this function returns for an already-recorded batch;
+ * only a NEW batch's own commit-time call to
+ * `buildDerivedSellingValuationSnapshot` (Checkpoint B3) would ever
+ * pick up the new Product Memory, and only for a NEW transaction.
+ *
+ * `remainingQuantity` is floored at 0 by `calculateBatch` itself (the
+ * existing "[Business Calculation Compliance Audit V-5]" guarantee) —
+ * this function inherits that floor for free, satisfying §15's
+ * "remaining quantity zero => derived value zero" requirement without
+ * any new floor logic of its own.
+ */
+export function calculateDerivedTransactionValuation(
+  batch: StockBatch,
+  batchQuebras: Quebra[]
+): DerivedCurrentValuation | null {
+  if (!batch.derivedSellingValuation) return null;
+
+  const { remainingQuantity } = calculateBatch(batch, batchQuebras);
+  const currentDerivedSellingValue = remainingQuantity * batch.derivedSellingValuation.ratePerPurchaseUnit;
+
+  return { remainingQuantity, currentDerivedSellingValue };
 }
