@@ -88,6 +88,60 @@ export function calculateInventoryTotals(batches: StockBatch[], quebras: Quebra[
 }
 
 // ------------------------------------------------------------------
+// [Void & Redo — Implementation Authorization §2 items 8-9; Rule 8
+// Finding I1; Specification FR-2, FR-8, FR-21] Client-side DISPLAY of
+// whether Void & Redo currently looks available for a given
+// confirmation, and how much of its 30-minute window remains.
+//
+// NEVER the authoritative gate — firestore.rules'
+// initialStockConfirmationVoidable() is authoritative, evaluated
+// against request.time (the server's trusted clock), not anything
+// computed here. A stale/manipulated client clock can, at worst,
+// cause this to report `eligible: true` a few moments after the
+// server would in fact refuse the write, or `eligible: false`
+// slightly early — never the reverse in a way that grants a write the
+// rules layer wouldn't independently allow. Exists purely so the UI
+// can display "time remaining" / "recovery available" without a
+// round-trip.
+//
+// A confirmation with no `confirmedAt` (every 'initial' count
+// confirmed before this feature existed) is never eligible — no
+// timestamp inferred or substituted, mirroring firestore.rules'
+// `confirmedAt != null` requirement exactly (Rule 8 Finding B1).
+//
+// Confirmation #4 (chainPosition 4) always reports `eligible: false`
+// regardless of remaining time — its window still has a real
+// msRemaining value (§21/FR-21's visibility requirement), but Void &
+// Redo can never succeed against it (Rule 8 Finding E1).
+//
+// Pure, deterministic (aside from reading the current time once), no
+// Firestore/AppContext dependency — safe to unit test directly.
+// ------------------------------------------------------------------
+export interface VoidEligibility {
+  eligible: boolean;
+  windowExpiresAt: Date | null;
+  msRemaining: number;
+}
+
+export function computeInitialStockVoidEligibility(
+  initialStockCount: StockCount | null | undefined,
+  now: Date = new Date()
+): VoidEligibility {
+  if (!initialStockCount || !initialStockCount.confirmedAt) {
+    return { eligible: false, windowExpiresAt: null, msRemaining: 0 };
+  }
+
+  const confirmedAtMs = initialStockCount.confirmedAt.toMillis();
+  const windowExpiresAtMs = confirmedAtMs + 30 * 60 * 1000;
+  const msRemaining = Math.max(0, windowExpiresAtMs - now.getTime());
+  const chainPosition = initialStockCount.chainPosition ?? 1;
+  const withinWindow = now.getTime() < windowExpiresAtMs;
+  const eligible = chainPosition !== 4 && withinWindow;
+
+  return { eligible, windowExpiresAt: new Date(windowExpiresAtMs), msRemaining };
+}
+
+// ------------------------------------------------------------------
 // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
 // §2 item 6] resolveInitialCapitalValue — the single, pure function
 // replacing the previous inline `initialStockCount?.totalValue || 0`

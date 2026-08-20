@@ -15,6 +15,8 @@ import {
   writeBatch as createFirestoreBatch,
   runTransaction,
   deleteField,
+  serverTimestamp,
+  type WithFieldValue,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
@@ -65,9 +67,10 @@ import {
   InitialCapitalBasis,
   SupplierWordingRelationship,
   UnitRelationship,
+  VoidRecord,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue } from '../utils/calculations';
+import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, type VoidEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -256,6 +259,23 @@ interface RecordStockCountParams {
   // parameter, is what makes the choice permanent (types.ts,
   // StockCount.initialCapitalBasis).
   initialCapitalBasis?: InitialCapitalBasis;
+  // [Void & Redo — Implementation Authorization §2 items 5-6; Rule 8
+  // Findings D1, F1] Present ONLY when this call is producing a REDO
+  // confirmation (chainPosition 2, 3, or 4) — the id of the
+  // confirmation event this redo replaces (i.e. the confirmation that
+  // was just voided). Never set for the original confirmation. When
+  // set: (a) the "already has an Initial Stock Count" guard below,
+  // which exists solely to block an accidental SECOND ORIGINAL
+  // confirmation, does not apply — firestore.rules independently and
+  // authoritatively enforces every Void & Redo precondition regardless
+  // of this client-side guard (Rule 8 Finding F2); (b) this function
+  // resolves the correct fixed chain-slot id/chainPosition from this
+  // value alone (never trusted from a separately-passed chainPosition
+  // parameter, to keep a single source of truth) and writes
+  // confirmedAt as a genuine serverTimestamp() sentinel, matching
+  // firestore.rules' own confirmedAt === request.time requirement for
+  // every redo branch.
+  redoesConfirmationId?: string;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -324,6 +344,17 @@ interface AppContextType {
   quebras: Quebra[];
   expenses: Expense[];
   stockCounts: StockCount[];
+  // [Void & Redo — Implementation Authorization §2 item 3]
+  voidRecords: VoidRecord[];
+  // [Void & Redo — Implementation Authorization §2 item 9; FR-9, FR-10]
+  // Every 'initial'-type confirmation event ever recorded, chain-order
+  // sorted, for history/audit display only.
+  initialStockConfirmationChain: StockCount[];
+  // [Void & Redo — Implementation Authorization §2 item 8; FR-21]
+  // Client-side display only — see computeInitialStockVoidEligibility's
+  // own doc comment (calculations.ts) for why this is never
+  // authoritative.
+  initialStockVoidEligibility: VoidEligibility;
   withdrawals: Withdrawal[];
   // Module #19 V1 Manual Payment Bridge — temporary confirmation
   // bridge, not the final payment architecture.
@@ -379,6 +410,8 @@ interface AppContextType {
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
   recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
+  // [Void & Redo — Implementation Authorization §2 item 5]
+  voidInitialStockConfirmation: () => Promise<InitialStockDraft>;
   // [Initial Stock Valuation History] Immutable, append-only audit trail
   // of price changes affecting units still remaining from the original
   // 'initial' StockCount. NEVER edits initialStockCount/initialCapitalValue
@@ -579,6 +612,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [quebras, setQuebras] = useState<Quebra[]>([]);
   const [expenses, setExpenses] = useState<Expense[]>([]);
   const [stockCounts, setStockCounts] = useState<StockCount[]>([]);
+  // [Void & Redo — Implementation Authorization §2 item 3; Rule 8
+  // Finding G1, Direction 2] The additive, create-only void-record
+  // artifact. Loaded exactly like stockCounts (same read tier,
+  // isMemberOf, per firestore.rules) — never itself mutated once a
+  // snapshot arrives, matching the collection's own create-only
+  // design.
+  const [voidRecords, setVoidRecords] = useState<VoidRecord[]>([]);
   const [initialStockPriceChangeEvents, setInitialStockPriceChangeEvents] = useState<InitialStockPriceChangeEvent[]>([]);
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
   // Null when no draft exists yet for this business (or once confirmed
@@ -794,8 +834,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // The one-and-only 'initial' StockCount establishes the permanent
   // Initial Business Capital baseline (see types.ts for the rationale).
-  const initialStockCount = stockCounts.find((s) => s.type === 'initial') || null;
+  // [Void & Redo — Implementation Authorization §2 item 3; Rule 8
+  // Finding F1] Extended, not replaced: a confirmation is excluded here
+  // if a VoidRecord exists for it — the single, centralized choke
+  // point every consumer below (Dashboard, both Reports,
+  // InitialStockPriceChangeModal, the Timeline entry) continues to
+  // read through, unchanged, with zero individual updates required to
+  // any of them (the same low-blast-radius argument Rule 8 Finding F1
+  // relies on).
+  const voidedConfirmationIds = new Set(voidRecords.map((v) => v.voidedConfirmationId));
+  const initialStockCount =
+    stockCounts.find((s) => s.type === 'initial' && !voidedConfirmationIds.has(s.id)) || null;
   const hasInitialStockCount = !!initialStockCount;
+  // [Void & Redo — Implementation Authorization §2 item 9; FR-9, FR-10]
+  // Every confirmation event ever recorded for this business's Initial
+  // Stock, in chain order (1 → up to 4) — the active one plus every
+  // voided one. For history/audit display only; never read by any
+  // calculation (FR-12, FR-13 — those read `initialStockCount` above,
+  // and only that).
+  const initialStockConfirmationChain = stockCounts
+    .filter((s) => s.type === 'initial')
+    .slice()
+    .sort((a, b) => (a.chainPosition ?? 1) - (b.chainPosition ?? 1));
   // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
   // §2 item 6] Replaces the previous inline
   // `initialStockCount?.totalValue || 0` expression with a call to the
@@ -807,6 +867,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // same `initialCapitalValue` constant, not the expression that
   // produces it.
   const initialCapitalValue = resolveInitialCapitalValue(initialStockCount);
+  // [Void & Redo — Implementation Authorization §2 item 8; Rule 8
+  // Finding I1] Display-only eligibility/window info for the currently
+  // active confirmation — see computeInitialStockVoidEligibility's own
+  // doc comment (calculations.ts) for why this is never authoritative.
+  // Recomputed on every render (cheap — a few arithmetic ops), so a
+  // consumer polling via setInterval/re-render gets a live countdown
+  // without this context needing its own timer.
+  const initialStockVoidEligibility = computeInitialStockVoidEligibility(initialStockCount);
 
   // ============================================================
   // BUSINESS WORTH — no fabricated cash ledger.
@@ -1148,6 +1216,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching stock counts:', err)
     );
 
+    // [Void & Redo — Implementation Authorization §2 item 3] VoidRecords
+    // collection — same read tier as stockCounts (isMemberOf). Small,
+    // bounded (at most 3 per business, ever — POL-0008 Decision 5), so
+    // loaded in full and matched client-side against stockCounts,
+    // exactly like initialStockPriceChangeEvents above.
+    const voidRecordsRef = collection(db, 'businesses', businessId, 'voidRecords');
+    const unsubVoidRecords = onSnapshot(
+      voidRecordsRef,
+      (snap) => {
+        const list: VoidRecord[] = [];
+        snap.forEach((doc) => list.push(doc.data() as VoidRecord));
+        setVoidRecords(list);
+      },
+      (err) => console.error('Error fetching void records:', err)
+    );
+
     // [Initial Stock Valuation History] Immutable, append-only price-change
     // audit trail — read tier matches stockCounts (any team member).
     const initialStockPriceChangeEventsRef = collection(db, 'businesses', businessId, 'initialStockPriceChangeEvents');
@@ -1290,6 +1374,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubQuebras();
       unsubExpenses();
       unsubStockCounts();
+      unsubVoidRecords();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
       unsubPeriodicDraft();
@@ -2548,12 +2633,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
-    if (type === 'initial' && hasInitialStockCount) {
+    // [Void & Redo — Implementation Authorization §2 items 5-6; Rule 8
+    // Finding F2] This guard exists to block an accidental SECOND
+    // ORIGINAL confirmation — it must not also block a legitimate redo
+    // (which, by the time this call happens, has already correctly
+    // made hasInitialStockCount false via the F1 read-path change,
+    // since the predecessor was just voided — but the `!redoesConfirmationId`
+    // check here is kept as an explicit, intention-revealing guard
+    // rather than relying solely on that timing). firestore.rules
+    // remains the authoritative enforcement for every Void & Redo
+    // precondition regardless of this client-side check.
+    if (type === 'initial' && !redoesConfirmationId && hasInitialStockCount) {
       throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
+    }
+    // [Void & Redo] A redo must name a real predecessor slot — resolved
+    // here, once, as the single source of truth for both the new
+    // document's id and its chainPosition (never separately passed and
+    // separately trusted). A predecessor outside {initial, initial-2,
+    // initial-3} (in particular 'initial-4', Confirmation #4 — which
+    // Rule 8 Finding E1/firestore.rules already refuse to ever let be
+    // voided in the first place, so a real VoidRecord for it could
+    // never exist) is rejected here immediately, client-side, as a
+    // defensive guard — firestore.rules' own redo-branch preconditions
+    // are the authoritative backstop regardless.
+    const redoChainSlotByPredecessor: Record<string, { chainPosition: 2 | 3 | 4; docId: string }> = {
+      initial: { chainPosition: 2, docId: 'initial-2' },
+      'initial-2': { chainPosition: 3, docId: 'initial-3' },
+      'initial-3': { chainPosition: 4, docId: 'initial-4' },
+    };
+    let initialConfirmationId = 'initial';
+    let initialChainPosition: 1 | 2 | 3 | 4 = 1;
+    if (type === 'initial' && redoesConfirmationId) {
+      const slot = redoChainSlotByPredecessor[redoesConfirmationId];
+      if (!slot) {
+        throw new Error('Não é possível refazer esta confirmação — o limite de recuperação já foi atingido.');
+      }
+      initialConfirmationId = slot.docId;
+      initialChainPosition = slot.chainPosition;
     }
     // [Stock Count Data-Loss Resilience — Implementation Task, Section 3]
     // Periodic finalization's idempotency mechanism is entirely
@@ -2690,7 +2810,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // this id either, matching the 'initial' id's own safety argument
     // above.
     const newCount: StockCount = {
-      id: type === 'initial' ? 'initial' : 'stockcount-periodic-' + submissionId,
+      id: type === 'initial' ? initialConfirmationId : 'stockcount-periodic-' + submissionId,
       type,
       date,
       items: countItems,
@@ -2740,9 +2860,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // own absent-basis default (calculations.ts) is what makes that
       // safe, not a fabricated default written here.
       ...(type === 'initial' && initialCapitalBasis ? { initialCapitalBasis } : {}),
+      // [Void & Redo — Implementation Authorization §2 items 1, 5-6]
+      // Plain values, safe to set directly on this precisely-typed
+      // record (unlike confirmedAt, a server-timestamp sentinel
+      // handled separately at the write-payload construction below,
+      // since StockCount.confirmedAt is typed as a resolved Timestamp,
+      // not a writable sentinel — see that comment for why).
+      ...(type === 'initial' ? { chainPosition: initialChainPosition } : {}),
+      ...(type === 'initial' && redoesConfirmationId ? { redoesConfirmationId } : {}),
     };
 
-    fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), newCount);
+    // [Void & Redo — Implementation Authorization §2 items 1, 5-6; Rule
+    // 8 Finding B1] confirmedAt is written as a genuine serverTimestamp()
+    // sentinel — never a client-computed value — for every
+    // chainPosition-bearing 'initial' confirmation (original and every
+    // redo alike). firestore.rules requires confirmedAt === request.time
+    // for those branches; a client-computed Date would fail that check
+    // outright, by design (this is what makes the 30-minute window's own
+    // timestamp untamperable). Built as a SEPARATE write-payload object
+    // (not by adding confirmedAt onto `newCount` itself) purely so
+    // `newCount` — used below for Timeline logging and
+    // resolveInitialCapitalValue — stays a precisely-typed, sentinel-free
+    // StockCount; only the single write() call needs to tolerate a
+    // FieldValue.
+    const stockCountWritePayload: WithFieldValue<StockCount> =
+      type === 'initial' ? { ...newCount, confirmedAt: serverTimestamp() } : newCount;
+    fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), stockCountWritePayload);
+    // [Void & Redo — Implementation Authorization §2 items 1, 5-6; Rule
+    // 8 Finding B1] confirmedAt is written ONLY here, as a genuine
+    // serverTimestamp() sentinel — never a client-computed value.
+    // firestore.rules requires confirmedAt === request.time for every
+    // chainPosition-bearing 'initial' create (both the new-shape
+    // original and every redo branch); a client-computed Date would
+    // fail that check outright, by design (this is what makes the
+    // 30-minute window's own timestamp untamperable — Finding B1).
     // [Amendment v1.0, Part 1] Confirmation is atomic with draft cleanup —
     // same Firestore batch as the stockCounts write above. If the batch
     // fails to commit for any reason, this delete never happens either,
@@ -2855,6 +3006,86 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // outcome the frozen spec's §8a requires.
     triggerTrialActivation(businessId);
     return newCount;
+  };
+
+  // [Void & Redo — Implementation Authorization §2 item 5; Rule 8
+  // Findings A1, D1, K1; Specification FR-3, FR-4] Voids the CURRENTLY
+  // ACTIVE Initial Stock confirmation and reconstructs the exact
+  // pre-confirmation draft state from its own items/initialCapitalBasis
+  // — never a blank form, never a partial reconstruction (FR-3).
+  //
+  // Authorization is entirely firestore.rules' — this function does
+  // NOT re-implement the Owner-only/30-minute-window/ceiling checks;
+  // it only issues the write and surfaces a clear message if the rules
+  // layer rejects it (window elapsed, Confirmation #4, non-Owner, or
+  // any other precondition failure — all indistinguishable from a
+  // generic permission error at this layer, since firestore.rules
+  // gives no more specific reason than a denial).
+  //
+  // [Rule 8 Finding A1; Authorization §2 item 5, §8 acceptance
+  // criterion 17] The reconstructed draft is deliberately TRANSIENT —
+  // set into local React state only (`initialStockDraft`), never
+  // written to the existing `stockCountDrafts/initial` Firestore
+  // document. This is a deliberate scope boundary, not an oversight:
+  // that collection's own create/update rule remains gated on
+  // subscriptionAllowsNewRecords (unchanged, unmodified by this
+  // feature — the Option A exemption (Rule 8 Finding K1) was
+  // authorized ONLY for the void-record artifact and the redo
+  // confirmation document, §2 item 7 of the signed Authorization,
+  // never for stockCountDrafts). Persisting the reconstructed draft
+  // there would silently widen the subscription exemption's surface
+  // beyond what was authorized. The practical consequence — a
+  // reconstructed draft is lost on page refresh before the Owner
+  // reconfirms — is a known, deliberately-accepted limitation of this
+  // step's scope, not resolved here; see this session's own
+  // verification notes for where this is tracked for the final
+  // verification pass.
+  const voidInitialStockConfirmation = async (): Promise<InitialStockDraft> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!initialStockCount) {
+      throw new Error('Não existe uma confirmação de Capital Inicial ativa para anular.');
+    }
+
+    const businessId = activeBusinessId;
+    const targetId = initialStockCount.id;
+
+    // [Rule 8 Finding D1] A single-document write is already atomic by
+    // itself; a batch of one is used here only for consistency with
+    // this file's established pattern for every other Firestore write
+    // (fsBatch.set + fsBatch.commit), not because atomicity across
+    // multiple documents is needed for this specific step.
+    const fsBatch = createFirestoreBatch(db);
+    const voidRecordPayload: WithFieldValue<VoidRecord> = {
+      id: targetId,
+      voidedConfirmationId: targetId,
+      voidedAt: serverTimestamp(),
+    };
+    fsBatch.set(doc(db, 'businesses', businessId, 'voidRecords', targetId), voidRecordPayload);
+    await fsBatch.commit();
+
+    // [FR-3; Rule 8 Finding A1] The confirmed StockCountItem shape is a
+    // strict superset of InitialStockDraftItem's business-meaningful
+    // fields, minus only the client-generated row id — a UI list-key
+    // convenience, never business data, regenerated fresh here without
+    // any loss of information.
+    const reconstructedDraft: InitialStockDraft = {
+      items: initialStockCount.items.map((item) => ({
+        id: 'draft-item-' + Date.now() + '-' + Math.random().toString(36).slice(2, 8),
+        productName: item.productName,
+        quantity: item.quantity,
+        ...(item.unit ? { unit: item.unit } : {}),
+        costPrice: item.costPrice,
+        ...(typeof item.sellingPrice === 'number' ? { sellingPrice: item.sellingPrice } : {}),
+      })),
+      date: initialStockCount.date,
+      updatedAt: new Date().toISOString(),
+      ...(initialStockCount.initialCapitalBasis ? { initialCapitalBasis: initialStockCount.initialCapitalBasis } : {}),
+    };
+
+    setInitialStockDraft(reconstructedDraft);
+    setInitialStockDraftLoaded(true);
+
+    return reconstructedDraft;
   };
 
   // [Initial Stock Valuation History] Records a price change affecting
@@ -3875,6 +4106,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quebras,
         expenses,
         stockCounts,
+        voidRecords,
+        initialStockConfirmationChain,
+        initialStockVoidEligibility,
         withdrawals,
         payments,
         submitPayment,
@@ -3898,6 +4132,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockCount,
         initialCapitalValue,
         recordStockCount,
+        voidInitialStockConfirmation,
         initialStockPriceChangeEvents,
         recordInitialStockPriceChangeEvent,
         initialStockCurrentValuation,
