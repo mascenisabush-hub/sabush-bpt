@@ -5,6 +5,19 @@
 **Structural precedent:** [`initial-stock-dual-valuation-basis-rule8-assessment.md`](./initial-stock-dual-valuation-basis-rule8-assessment.md) — same module, most recent Rule 8 assessment of the Initial Stock confirmation path.
 **This document does not:** modify `BDR-0015`, `POL-0008`, the accepted Specification, `firestore.rules`, `firestore.indexes.json`, or any application code. It does not create an Implementation Authorization. It assesses technical feasibility only.
 
+> **⚠️ Amendment Notice:** the governing recovery-window figure this
+> assessment's Finding B evaluates — **30 minutes** — has been amended to
+> **12 hours** by the
+> [Recovery Window Amendment](../specs/initial-stock-accidental-confirmation-recovery-window-amendment.md),
+> which includes its own Rule 8 impact analysis (§5 of that document)
+> concluding this assessment's **READY** verdict is reaffirmed, not
+> reopened, for the 12-hour value — Finding B's mechanism
+> (`serverTimestamp()` + `firestore.rules` time comparison) is
+> duration-agnostic; only the literal `duration.value(30, 'm')` constant it
+> enforces changes. No finding below is otherwise affected. The original
+> text is preserved unedited as the historical record of the original
+> assessment.
+
 ---
 
 ## 1. Fresh Repository Baseline

@@ -9,6 +9,16 @@ Decision Record
 **Does not amend:** `BDR-0015`, `BDR-0014`, either of `BDR-0014`'s companion amendments, `02-core-product-principles.md`, `10-stock-counts.md`, `10-initial-stock-valuation-history-amendment.md`, `firestore.rules`, or any application code.
 **Followed by:** A Business Domain Specification (functional requirements and acceptance criteria for the eventual `initial-stock` module changes), a Rule 8 Assessment, and a signed Implementation Authorization — each its own separate, explicitly gated step, none of which this document performs or authorizes.
 
+> **⚠️ Amendment Notice:** this document's recovery-window figure — **30
+> minutes** — has been amended to **12 hours** by the
+> [Recovery Window Amendment](./initial-stock-accidental-confirmation-recovery-window-amendment.md).
+> This affects Rule B, Rule F, Rule J, Rule L, and Decisions 2, 3, 4, and 5,
+> below. Measurement (from each confirmation event's own frozen timestamp),
+> no-restart, and no-extension are unchanged. Every other rule in this
+> Policy — including the 3-recovery-cycle/4-confirmation-event ceiling —
+> remains exactly as originally approved. The original text below is
+> preserved unedited as the historical record of the original decision.
+
 ---
 
 ## Numbering

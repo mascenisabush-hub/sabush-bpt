@@ -10,6 +10,16 @@ Business Decision Record
 **Does not amend:** `BDR-0014` (Initial Stock & Initial Capital Dual-Valuation-Basis), its two companion amendments (`10-initial-stock-dual-valuation-basis-amendment.md`, `02-capital-growth-dual-basis-amendment.md`), the accepted Specification, Rule 8 Assessment, or signed Implementation Authorization for that Dual-Valuation-Basis feature, `02-core-product-principles.md` itself, `10-initial-stock-valuation-history-amendment.md`, `10-stock-counts.md`, or any other existing artifact. §4, below, identifies exactly what this decision conflicts with and what remains open as a result.
 **Followed by:** Per the established sequence (`Business Philosophy → BDR → Policy → Module Specifications → Rule 8 → Implementation`, `19-governance-bdr-policy-framework.md` §3) — not a single named artifact and not drafted here. §5 identifies, without designing, the categories of follow-on work this decision unlocks.
 
+> **⚠️ Amendment Notice:** this document's recovery-window figure — **30
+> minutes** — has been amended to **12 hours** by the
+> [Recovery Window Amendment](./initial-stock-accidental-confirmation-recovery-window-amendment.md).
+> Measurement (from the confirmation event's own frozen timestamp),
+> no-restart, and no-extension rules are unchanged. Wherever this document
+> states "30 minutes" (including Decision B and Decision F in §9), the
+> current, governing figure is **12 hours**. Every other decision in this
+> BDR remains exactly as originally approved. The original text below is
+> preserved unedited as the historical record of the original decision.
+
 ---
 
 ## 1. The Business Reality

@@ -12,6 +12,16 @@ Implementation Plan
 
 **This document does not:** modify `BDR-0015`, `POL-0008`, the accepted Specification, the Rule 8 Assessment, `firestore.rules`, `firestore.indexes.json`, or any application code. It does not itself constitute Implementation Authorization — that is a separate, explicitly gated document (companion, below), which itself remains unsigned until Product Architect sign-off.
 
+> **⚠️ Amendment Notice:** the recovery-window figure this Plan's Void-step
+> and `firestore.rules` descriptions state — **30 minutes** — has been
+> amended to **12 hours** by the
+> [Recovery Window Amendment](../specs/initial-stock-accidental-confirmation-recovery-window-amendment.md).
+> Per that amendment's §6, the code described here (already implemented,
+> per the repository's commit history) still reflects the original
+> 30-minute value; updating it to 12 hours requires a separate, explicit
+> follow-up authorization, not yet granted. Every other element of this
+> Plan is unaffected. The original text below is preserved unedited.
+
 ---
 
 ## 1. Purpose

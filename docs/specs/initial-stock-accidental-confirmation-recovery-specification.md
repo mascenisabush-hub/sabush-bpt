@@ -9,6 +9,16 @@ Version 0.1 (Draft)
 **This document does not:** modify or reinterpret `BDR-0015`, `POL-0008`, `BDR-0014`, either of `BDR-0014`'s companion amendments, its accepted Specification, `02-core-product-principles.md` (Principle 2.10), `10-stock-counts.md`, `10-initial-stock-valuation-history-amendment.md`, `02-business-worth-engine.md`, or any other existing artifact. It is additive to, and consistent with, all of the above.
 **Location note:** Filed in `docs/specs/`, unprefixed — cross-cutting between Module #10 (Stock Counts) and Module #2 (Business Worth Engine), following the same pattern `initial-stock-dual-valuation-basis-specification.md` and `product-memory-purchase-selling-valuation-specification.md` already established for a cross-cutting Specification tied to its own BDR/Policy lineage.
 
+> **⚠️ Amendment Notice:** this document's recovery-window figure — **30
+> minutes** — has been amended to **12 hours** by the
+> [Recovery Window Amendment](./initial-stock-accidental-confirmation-recovery-window-amendment.md).
+> This affects the Recovery Window glossary entry, Business Rules 2/6/10,
+> Invariant I-3, FR-2/FR-8/FR-16, the Acceptance Criteria, and the §21
+> Confirmation #4 Clarification. Measurement, no-restart, and no-extension
+> are unchanged. Every other functional requirement and acceptance
+> criterion remains exactly as originally accepted. The original text below
+> is preserved unedited as the historical record of the original decision.
+
 ---
 
 ## 1. Status / Purpose

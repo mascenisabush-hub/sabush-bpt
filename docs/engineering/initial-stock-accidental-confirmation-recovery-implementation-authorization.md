@@ -12,6 +12,18 @@ Implementation Authorization
 
 **Repository state at this revision:** `main = origin/main = a65d98feafdf165a9132494fcfcedaefc5577785`, working tree clean, confirmed immediately before this document was drafted. **Nothing has been modified in `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, `tests/`, `BDR-0015`, `POL-0008`, the accepted Specification, or the Rule 8 Assessment to produce this document.**
 
+> **⚠️ Amendment Notice:** the recovery-window figure this Authorization's
+> acceptance criteria and required-tests list state — **30 minutes** — has
+> been amended to **12 hours** by the
+> [Recovery Window Amendment](../specs/initial-stock-accidental-confirmation-recovery-window-amendment.md).
+> **This original Authorization remains validly signed for the 30-minute
+> implementation that was actually built from it** (see the amendment's
+> §6): it is not revoked or invalidated by the amendment. Editing the
+> already-implemented `firestore.rules`/`calculations.ts` 30-minute
+> constants to 12 hours is a separate, not-yet-authorized follow-up step,
+> per the amendment's §6/§7. The original text below is preserved unedited
+> as the historical record of what was actually authorized and built.
+
 ---
 
 ## 1. Governance Completeness — What This Record Confirms
