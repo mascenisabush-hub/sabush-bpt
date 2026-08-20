@@ -185,6 +185,39 @@ export interface StockBatchRestockObservation {
   observedAt: string; // ISO string, same convention as StockBatch.createdAt
 }
 
+// [Increment B, Checkpoint B3 — Consolidated Specification §13-14
+// (product-memory-purchase-selling-valuation-specification.md), Rule 8
+// Assessment Finding 1, revised (product-memory-purchase-selling-
+// valuation-rule8-assessment.md)]. The frozen, transaction-scoped
+// "Concept C" system-derived selling valuation for ONE StockBatch.
+// Written ONLY at the moment that batch is committed (addMultipleStockBatches),
+// never retroactively, and ONLY when the product's Product Memory
+// (Product.unitRelationship, a confirmed sellingUnit within it, and
+// Product.sellingPrice) was valid AT THAT MOMENT -- its absence on a
+// StockBatch is the ordinary, fully anticipated "no confirmed Product
+// Memory yet" case (BDR-0012 §5.A Item 6), never an error, and never
+// backfilled onto an older batch. This object is FULLY SEPARATE FROM,
+// and never read by, StockBatch.sellingPrice/costPrice, calculateBatch,
+// the Embedded Profit Engine, Business Worth, or any Dashboard/Report
+// KPI (Rule 8 Finding 1, revised) -- it is never itself a claim that a
+// sale occurred, at that price or any price, per the Consolidated
+// Specification's own §24 non-goal. Once written, this ENTIRE object
+// is governed by the same immutability discipline costPrice already
+// has (BDR-0012 Decisions 15-16) -- never recalculated from whatever
+// Product Memory says at a later read/display time (§14). Because
+// ratePerPurchaseUnit is a RATE (MZN per one purchase unit), not an
+// absolute converted selling-unit quantity, it remains correct against
+// a live, quebra-reduced remaining quantity without ever needing to be
+// updated itself (§15) -- see calculateDerivedTransactionValuation
+// (Checkpoint B4) for the live-quantity multiplication this rate feeds.
+export interface StockBatchDerivedSellingValuation {
+  ratePerPurchaseUnit: number; // MZN implied selling value per ONE unit of this batch's OWN purchase unit (batch.unit) -- the frozen rate itself. Stored at full precision, never pre-rounded -- see purchaseToSellingConversion.ts's own header comment on why rounding belongs only at final-display time, not here.
+  sellingUnit: string; // Product Memory's selling unit AT THE TIME of derivation -- audit/display only, never re-read from current Product Memory after this write
+  sellingUnitPrice: number; // Product Memory's remembered selling price (Product.sellingPrice) AT THE TIME of derivation, in sellingUnit's own terms -- audit/display only, preserved verbatim, never itself recalculated
+  unitRelationshipSnapshot: Array<{ unit: string; factorFromPrevious: number }>; // frozen copy of the confirmed chain used for this derivation -- audit/display only, independent of Product.unitRelationship's current value
+  derivedAt: string; // ISO timestamp
+}
+
 export interface StockBatch {
   id: string;
   productId: string;
@@ -207,6 +240,11 @@ export interface StockBatch {
   // for a brand-new product's first-ever batch (there is no previous
   // cycle to compare against). See the amendment doc for full rules.
   restockObservation?: StockBatchRestockObservation;
+  // [Increment B, Checkpoint B3] See StockBatchDerivedSellingValuation
+  // above. Absent on every batch recorded before this checkpoint, and
+  // on any batch (before or after) whose product had no confirmed
+  // Product Memory at the moment it was recorded -- never backfilled.
+  derivedSellingValuation?: StockBatchDerivedSellingValuation;
 }
 
 // ============================================================

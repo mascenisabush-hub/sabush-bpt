@@ -27,6 +27,7 @@ import {
   type CheckedProductWordingSnapshot,
 } from '../lib/supplierWordingConfirmation';
 import { isValidUnitRelationship, confirmUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
+import { buildDerivedSellingValuationSnapshot } from '../lib/purchaseToSellingConversion';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -2130,12 +2131,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       // Add new batch
       const newBatchId = 'batch-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).substr(2, 4);
+      const batchUnit = item.unit ? item.unit.trim() : 'un';
+
+      // [Increment B, Checkpoint B3 — Consolidated Specification §13-14,
+      // Rule 8 Assessment Finding 1/2, revised] Concept C: computed
+      // ONCE, here, at the exact moment this batch is about to be
+      // written, via the pure, independently-tested
+      // buildDerivedSellingValuationSnapshot (purchaseToSellingConversion.ts)
+      // — this call site is deliberately thin glue, matching this
+      // repo's established pattern (supplierWordingConfirmation.ts,
+      // openBatchSupersession.ts). Reads whichever Product Memory is
+      // CURRENTLY confirmed for this product (the `product` lookup
+      // above, resolved fresh from `tempProducts` at the top of this
+      // function call — never a stale earlier read). `product` is
+      // `undefined` here for a brand-new product created earlier in
+      // THIS SAME loop iteration (the `!product` branch, above) — a
+      // brand-new product has no Product.sellingPrice yet, so
+      // derivation correctly does not fire for a product's own very
+      // first batch (BDR-0012 §5.A Item 6's ordinary warn-not-block
+      // case, never an error).
+      //
+      // PURCHASE FACTS ARE NEVER TOUCHED BY THIS: item.quantity/
+      // batchUnit/item.costPrice above (and newBatch.sellingPrice,
+      // below) are read completely unchanged, exactly as before this
+      // checkpoint — this call only ever ADDS the separate, optional
+      // derivedSellingValuation object; it never reads or writes
+      // item.sellingPrice (StockBatch.sellingPrice is a different
+      // concept entirely from Product Memory's remembered selling
+      // price, §4/§13 — conflating the two is exactly the error this
+      // Increment's governance chain exists to prevent).
+      const derivedSellingValuation = buildDerivedSellingValuationSnapshot(
+        product ? { unitRelationship: product.unitRelationship, sellingPrice: product.sellingPrice } : undefined,
+        batchUnit
+      );
+
       const newBatch: StockBatch = {
         id: newBatchId,
         productId: productId!,
         dateEntered: item.dateEntered,
         quantity: Number(item.quantity),
-        unit: item.unit ? item.unit.trim() : 'un',
+        unit: batchUnit,
         costPrice: Number(item.costPrice),
         sellingPrice: Number(item.sellingPrice),
         // [Restock Observation Amendment v1.0] Same undefined-field
@@ -2145,6 +2180,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         status: 'open',
         createdAt: new Date().toISOString(),
         purchaseBatchId: newPurchaseBatchId,
+        // [Increment B, Checkpoint B3] Same undefined-field discipline
+        // as every other optional StockBatch field above — absent,
+        // never a placeholder/null, whenever no derivation fired.
+        ...(derivedSellingValuation ? { derivedSellingValuation } : {}),
       };
 
       const newBatchRef = doc(db, 'businesses', businessId, 'batches', newBatchId);
@@ -2156,7 +2195,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lineItemSummaries.push({
         productName: trimmedName,
         quantity: Number(item.quantity),
-        unit: item.unit ? item.unit.trim() : 'un',
+        unit: batchUnit,
       });
     }
 

@@ -29,7 +29,7 @@
 // module treats that composition as the single source of truth for
 // every conversion below; it never re-derives it ad hoc per call site.
 
-import type { UnitRelationship } from '../types';
+import type { UnitRelationship, StockBatchDerivedSellingValuation } from '../types';
 import { isValidUnitRelationship } from './unitRelationship';
 
 /**
@@ -173,4 +173,88 @@ export function deriveTransactionValuation(input: {
   const embeddedProfit = impliedSellingValue - cost;
 
   return { ratePerPurchaseUnit, impliedSellingValue, cost, embeddedProfit };
+}
+
+// ------------------------------------------------------------------
+// Increment B, Checkpoint B3 — StockBatch.derivedSellingValuation
+// snapshot builder (§13 storage, §14 freeze-at-commit-time, Rule 8
+// Finding 1, revised).
+// ------------------------------------------------------------------
+
+/** The minimal shape this builder needs from a Product — deliberately
+ * NOT `Product` itself, so this function has no dependency on the full
+ * Product type and can be tested/called with a plain literal. */
+export interface ProductMemorySnapshot {
+  unitRelationship?: UnitRelationship;
+  sellingPrice?: number;
+}
+
+/**
+ * Builds the exact object to write, once, onto `StockBatch.derivedSellingValuation`
+ * (Finding 1, revised's frozen structure) for a batch being recorded
+ * RIGHT NOW, from whichever Product Memory is CURRENTLY confirmed for
+ * its product and this batch's own recorded purchase unit.
+ *
+ * FREEZING (§14) IS ACHIEVED ENTIRELY BY CALL DISCIPLINE, NOT BY
+ * ANYTHING THIS FUNCTION ITSELF DOES: this function is pure and
+ * stateless — it has no notion of "before" or "after," reads no
+ * Firestore document, and would happily recompute a different answer
+ * if called again later with different `productMemory` input. The
+ * freeze guarantee comes entirely from the CALLER (addMultipleStockBatches
+ * in AppContext.tsx) invoking this function exactly ONCE, at the
+ * moment a batch is committed, and then writing the returned object
+ * onto that StockBatch document permanently — never calling this
+ * function again for an already-recorded batch, and never re-deriving
+ * from current Product Memory at read/display time. This mirrors
+ * exactly how `costPrice`'s own immutability (BDR-0012 Decisions
+ * 15-16) already works in this codebase: nothing about the FIELD
+ * itself is special; the discipline lives entirely in when and how
+ * often it is written.
+ *
+ * Returns `undefined` — never a fabricated valuation, never a factor of
+ * 1 — whenever:
+ *   - `productMemory` is absent entirely (brand-new product, no
+ *     Product Memory confirmed yet at all).
+ *   - `productMemory.unitRelationship` fails `isValidUnitRelationship`
+ *     (no confirmed chain, or a confirmed chain with no selling unit
+ *     set — POL-0005's minimum-configuration threshold not yet met).
+ *   - `productMemory.sellingPrice` is missing or not a finite number
+ *     (Product Memory's remembered selling price not yet set).
+ *   - `purchaseUnit` is not a member of the confirmed chain.
+ * Every one of these is the ordinary, fully anticipated "no confirmed
+ * Product Memory (yet)" case (BDR-0012 §5.A Item 6) — never an error,
+ * and the caller's ordinary warn-not-block, manual-entry behavior for
+ * `costPrice`/`sellingPrice` is completely unaffected either way.
+ */
+export function buildDerivedSellingValuationSnapshot(
+  productMemory: ProductMemorySnapshot | undefined,
+  purchaseUnit: string,
+  derivedAt: string = new Date().toISOString()
+): StockBatchDerivedSellingValuation | undefined {
+  if (!productMemory) return undefined;
+
+  const relationship = productMemory.unitRelationship;
+  if (!isValidUnitRelationship(relationship)) return undefined;
+  const validRelationship = relationship as UnitRelationship;
+
+  const sellingUnit = validRelationship.sellingUnit;
+  if (!sellingUnit) return undefined;
+
+  const sellingUnitPrice = productMemory.sellingPrice;
+  if (typeof sellingUnitPrice !== 'number' || !Number.isFinite(sellingUnitPrice)) return undefined;
+
+  const ratePerPurchaseUnit = computeRatePerPurchaseUnit(validRelationship, purchaseUnit, sellingUnit, sellingUnitPrice);
+  if (ratePerPurchaseUnit === null) return undefined;
+
+  return {
+    ratePerPurchaseUnit,
+    sellingUnit,
+    sellingUnitPrice,
+    // Deep-copied plain objects, never a live reference into
+    // `validRelationship.units` — this snapshot must survive
+    // completely unaffected if the caller's own `productMemory` object
+    // (or the live Product document it came from) is later mutated.
+    unitRelationshipSnapshot: validRelationship.units.map((u) => ({ unit: u.unit, factorFromPrevious: u.factorFromPrevious })),
+    derivedAt,
+  };
 }
