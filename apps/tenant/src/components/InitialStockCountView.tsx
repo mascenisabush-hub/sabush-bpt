@@ -4,7 +4,7 @@ import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
-import { InitialStockDraftItem, UnitRelationship } from '../types';
+import { InitialStockDraftItem, UnitRelationship, InitialCapitalBasis } from '../types';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 
@@ -177,6 +177,17 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
   const [date, setDate] = useState(getTodayDateString());
   const [rows, setRows] = useState<CountRowItem[]>([createEmptyRow(), createEmptyRow()]);
+  // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+  // §2 items 2-4] The owner's chosen basis for THIS ENTIRE snapshot —
+  // one value, exactly like `date` above (never per-row, matching
+  // Invariant I-1). Defaults to 'cost' — both the existing, pre-this-
+  // feature behavior AND the correct default for a business that never
+  // touches the new control, per BDR-0014 §5.A item 1's prospective-
+  // only/backward-compatible resolution. Lives through the exact same
+  // reset/load/autosave lifecycle as `date`, below (business-switch
+  // reset effect, draft-load effect, autosave effect) — never a
+  // separate state machine.
+  const [initialCapitalBasis, setInitialCapitalBasis] = useState<InitialCapitalBasis>('cost');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -215,6 +226,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     setLoadedForBusinessId(activeBusinessId ?? null);
     setRows([createEmptyRow(), createEmptyRow()]);
     setDate(getTodayDateString());
+    setInitialCapitalBasis('cost');
     setError(null);
     setIsSaving(false);
     setSavedMessage(null);
@@ -260,6 +272,14 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         skipNextAutosave.current = true;
         setRows(initialStockDraft.items.map(draftItemToRow));
         setDate(initialStockDraft.date);
+        // [Initial Stock Dual-Valuation-Basis — Implementation
+        // Authorization, §2 item 3] Restored alongside rows/date —
+        // same "userHasStartedTyping" guard covers this too, since
+        // it's part of the same draft snapshot. Absent on a draft
+        // saved before this capability existed, or before the owner
+        // touched the new control at all — defaults to 'cost',
+        // matching this component's own initial state default.
+        setInitialCapitalBasis(initialStockDraft.initialCapitalBasis || 'cost');
       }
     }
     setDraftLoaded(true);
@@ -281,13 +301,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
     setDraftSaveState('saving');
     const handle = setTimeout(() => {
-      saveInitialStockDraft(rows.map(rowToDraftItem), date)
+      saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis)
         .then(() => setDraftSaveState('saved'))
         .catch(() => setDraftSaveState('idle'));
     }, 800);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [rows, date, draftLoaded, hasInitialStockCount]);
+  }, [rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount]);
 
   const updateRow = (id: string, fields: Partial<CountRowItem>) => {
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...fields } : row)));
@@ -480,7 +500,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
     setIsSaving(true);
     try {
-      await recordStockCount({ type: 'initial', date, items: itemsToSave });
+      await recordStockCount({ type: 'initial', date, items: itemsToSave, initialCapitalBasis });
       setSavedMessage('Capital Inicial registado com sucesso!');
       setTimeout(() => onComplete(), 1200);
     } catch (err: any) {
@@ -658,6 +678,51 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               onChange={(e) => setDate(e.target.value)}
               className={`${fieldClass} font-mono tabular-nums py-2`}
             />
+          </div>
+
+          {/* [Initial Stock Dual-Valuation-Basis — Implementation
+              Authorization, §2 items 2, 4] Presented exactly ONCE, for
+              the entire snapshot — never per product, never per
+              portion (Specification FR-2, Invariant I-1). This choice
+              becomes permanently locked the moment Initial Stock is
+              confirmed (FR-4) — after that, nothing in this app can
+              change it. Defaults to Custo (cost), matching this
+              component's own state default and the backward-
+              compatible resolution every business without an explicit
+              selection already gets. */}
+          <div>
+            <label className={fieldLabelClass}>Base de Valorização do Capital Inicial</label>
+            <p className="text-[11.5px] text-gray-500 mb-2 leading-relaxed">
+              Escolha uma vez, para toda a contagem. Depois de confirmar o Capital Inicial, esta escolha não pode ser alterada.
+            </p>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={() => setInitialCapitalBasis('cost')}
+                aria-pressed={initialCapitalBasis === 'cost'}
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition-all duration-150 ${
+                  initialCapitalBasis === 'cost'
+                    ? 'border-[#D4AF37] bg-[#D4AF37]/[0.06]'
+                    : 'border-[#E5E7EB] hover:border-[#D4AF37]/40'
+                }`}
+              >
+                <span className="block text-[13px] font-bold text-[#111827]">Custo</span>
+                <span className="block text-[11px] text-gray-500 mt-0.5">Valor investido (o que pagou)</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => setInitialCapitalBasis('selling')}
+                aria-pressed={initialCapitalBasis === 'selling'}
+                className={`flex-1 rounded-xl border px-3 py-2.5 text-left transition-all duration-150 ${
+                  initialCapitalBasis === 'selling'
+                    ? 'border-[#D4AF37] bg-[#D4AF37]/[0.06]'
+                    : 'border-[#E5E7EB] hover:border-[#D4AF37]/40'
+                }`}
+              >
+                <span className="block text-[13px] font-bold text-[#111827]">Venda</span>
+                <span className="block text-[11px] text-gray-500 mt-0.5">Valor de venda (o que espera vender)</span>
+              </button>
+            </div>
           </div>
 
           {/* Product grid — column header shown from sm+, rows collapse to

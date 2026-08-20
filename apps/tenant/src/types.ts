@@ -523,13 +523,15 @@ export interface StockCountItem {
   totalValue: number; // quantity * costPrice
 }
 
+export type InitialCapitalBasis = 'cost' | 'selling';
+
 export interface StockCount {
   id: string;
   type: StockCountType;
   label?: string; // owner-given label, mainly used for 'custom' counts
   date: string; // YYYY-MM-DD
   items: StockCountItem[];
-  totalValue: number; // sum of all items' totalValue = inventory value at this count
+  totalValue: number; // sum of all items' totalValue = inventory value at this count, COST basis (quantity * costPrice) — unchanged in meaning by the two fields below
   createdAt: string; // ISO string
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 5]
   // Present only on periodic counts recorded after this amendment.
@@ -539,6 +541,32 @@ export interface StockCount {
   // no baseline to compare against) and on every historical count
   // recorded before this field existed.
   expectedValueAtCount?: number;
+  // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+  // §2 items 1-2] The sum of quantity * sellingPrice across all
+  // portions — the SELLING-basis counterpart to totalValue's cost
+  // basis, computed and frozen at the same confirmation moment, never
+  // discarding or replacing totalValue. Present on every StockCount
+  // (both 'initial' and periodic types, per BDR-0014 Decision 7)
+  // confirmed after this feature ships; absent on every historical
+  // count recorded before it existed — never backfilled.
+  totalSellingValue?: number;
+  // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+  // §2 items 2-4] ONLY ever present when type === 'initial'. A frozen,
+  // per-count POINTER — never a monetary value of its own — recording
+  // which of totalValue (cost) or totalSellingValue (selling) resolves
+  // as initialCapitalValue for this business (see
+  // resolveInitialCapitalValue, calculations.ts). Chosen once, by the
+  // owner, before this count's own confirmation; immutable forever
+  // after (enforced by the existing, unconditional
+  // firestore.rules type=='initial' update/delete refusal — no rules
+  // change was needed for this). Absent on every 'initial' count
+  // confirmed before this capability existed — such a count's
+  // initialCapitalValue resolves to totalValue (cost), exactly as it
+  // already does today, permanently (BDR-0014 §5.A item 1,
+  // prospective-only). Never present on a periodic-type count —
+  // Periodic Contagem has no equivalent of "Initial Capital" and gains
+  // no basis-choice concept from this feature (BDR-0014 Decision 7).
+  initialCapitalBasis?: InitialCapitalBasis;
 }
 
 // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1] A
@@ -564,6 +592,21 @@ export interface InitialStockDraft {
   items: InitialStockDraftItem[];
   date: string; // YYYY-MM-DD — the count date the owner has staged so far
   updatedAt: string; // ISO string
+  // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+  // §2 item 3] Mirrors StockCount.initialCapitalBasis, but here as the
+  // owner's IN-PROGRESS, not-yet-confirmed selection — snapshot-level
+  // (like `date` above), never per-item, matching Invariant I-1's
+  // "one basis for the whole snapshot" rule even while still a draft.
+  // Survives autosave/resurrection exactly like every other field on
+  // this screen. Discarded (never migrated anywhere) the moment this
+  // draft document is deleted at confirmation — see recordStockCount,
+  // which reads the confirmed selection from its own explicit
+  // parameter, never from this draft. Absent on a draft saved before
+  // this capability existed, or before the owner has made a selection
+  // yet; InitialStockCountView.tsx treats an absent value as 'cost'
+  // for its own UI default, matching the confirmed-side backward-
+  // compatibility default (BDR-0014 §5.A item 1).
+  initialCapitalBasis?: InitialCapitalBasis;
 }
 
 // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]

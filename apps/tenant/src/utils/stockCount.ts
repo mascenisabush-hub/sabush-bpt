@@ -10,6 +10,23 @@
 // (never any draft/autosave state) and normalizes it. See
 // tests/initial-stock-confirmation.test.ts for the specific regression
 // coverage this exists to support.
+//
+// [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+// §2 item 1] `totalSellingValue` (quantity * sellingPrice, summed) is
+// computed here IN PARALLEL to the pre-existing `totalValue`
+// (quantity * costPrice, summed) — `totalValue`'s own computation is
+// completely unchanged, still cost-only, still exactly what two
+// existing tests already assert ('does not let selling price
+// influence totalValue', 'sellingPrice may also differ per portion
+// without affecting totalValue'). This function is SHARED by both
+// Initial Stock and Periodic Contagem's own finalization
+// (recordStockCount), so `totalSellingValue` becomes available to
+// both — consistent with BDR-0014 Decision 7's requirement that
+// Periodic Contagem also preserve both totals. Nothing in this file
+// wires `totalSellingValue` into any basis-selection UI or display for
+// Periodic Contagem — that remains explicitly out of this
+// authorization's scope (Rule 8 Assessment Finding 1's own scope
+// note).
 
 export interface StockCountInputItem {
   productName: string;
@@ -34,6 +51,10 @@ export interface NormalizedStockCountItem {
 export interface NormalizeStockCountItemsResult {
   items: NormalizedStockCountItem[];
   totalValue: number;
+  // [Initial Stock Dual-Valuation-Basis] Sum of quantity * sellingPrice
+  // across every non-blank row — the selling-basis counterpart to
+  // totalValue above. See this file's own header comment.
+  totalSellingValue: number;
 }
 
 /**
@@ -47,6 +68,7 @@ export interface NormalizeStockCountItemsResult {
 export function normalizeStockCountItems(items: StockCountInputItem[]): NormalizeStockCountItemsResult {
   const normalized: NormalizedStockCountItem[] = [];
   let totalValue = 0;
+  let totalSellingValue = 0;
 
   for (const raw of items) {
     const trimmedName = raw.productName.trim();
@@ -57,10 +79,14 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
     // sellingPrice is additional information only — it never
     // participates in totalValue, which stays quantity * costPrice
     // (the investment basis), matching Expected Current Stock Value's
-    // existing cost-based rule.
+    // existing cost-based rule. It DOES participate in the separate
+    // totalSellingValue accumulation below, unchanged in how it's read
+    // from the row (per-portion, independent, exactly like costPrice).
     const sellingPrice = Number(raw.sellingPrice) || 0;
     const itemTotal = Number((quantity * costPrice).toFixed(2));
+    const itemSellingTotal = Number((quantity * sellingPrice).toFixed(2));
     totalValue += itemTotal;
+    totalSellingValue += itemSellingTotal;
 
     normalized.push({
       productName: trimmedName,
@@ -72,7 +98,11 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
     });
   }
 
-  return { items: normalized, totalValue: Number(totalValue.toFixed(2)) };
+  return {
+    items: normalized,
+    totalValue: Number(totalValue.toFixed(2)),
+    totalSellingValue: Number(totalSellingValue.toFixed(2)),
+  };
 }
 
 // ------------------------------------------------------------------

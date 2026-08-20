@@ -62,11 +62,12 @@ import {
   Payment,
   PaymentMethod,
   InitialStockPriceChangeEvent,
+  InitialCapitalBasis,
   SupplierWordingRelationship,
   UnitRelationship,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation } from '../utils/calculations';
+import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -241,6 +242,20 @@ interface RecordStockCountParams {
   // for type === 'initial', which keeps its own pre-existing fixed-id
   // scheme untouched.
   submissionId?: string;
+  // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+  // §2 items 2, 5] The owner's confirmed choice of which retained
+  // valuation total ('cost' or 'selling') resolves as this business's
+  // initialCapitalValue, going forward. Only ever meaningful for, and
+  // only ever set by, the type === 'initial' caller
+  // (InitialStockCountView.tsx) — never set for a periodic count,
+  // mirroring exactly how expectedValueAtCount, above, is the reverse
+  // (periodic-only, never set for 'initial'). Written into the
+  // resulting StockCount document once, at confirmation, and never
+  // read or referenced again by this function after that single write
+  // — the frozen field on the persisted document, not this transient
+  // parameter, is what makes the choice permanent (types.ts,
+  // StockCount.initialCapitalBasis).
+  initialCapitalBasis?: InitialCapitalBasis;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -393,7 +408,7 @@ interface AppContextType {
   // know yet" from "confirmed: no draft exists." See the fix comment on
   // the underlying state in AppProvider for why this exists.
   initialStockDraftLoaded: boolean;
-  saveInitialStockDraft: (items: InitialStockDraftItem[], date: string) => Promise<void>;
+  saveInitialStockDraft: (items: InitialStockDraftItem[], date: string, initialCapitalBasis?: InitialCapitalBasis) => Promise<void>;
   clearInitialStockDraft: () => Promise<void>;
   // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
   // Persistent Periodic Contagem draft — null until an Owner starts one,
@@ -781,7 +796,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Initial Business Capital baseline (see types.ts for the rationale).
   const initialStockCount = stockCounts.find((s) => s.type === 'initial') || null;
   const hasInitialStockCount = !!initialStockCount;
-  const initialCapitalValue = initialStockCount?.totalValue || 0;
+  // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+  // §2 item 6] Replaces the previous inline
+  // `initialStockCount?.totalValue || 0` expression with a call to the
+  // single, pure, independently-tested resolution function — see its
+  // own doc comment (calculations.ts) for exactly what it resolves and
+  // why. Every consumer below (businessWorth's own capitalGrowth
+  // computation, Dashboard, both Reports, InitialStockPriceChangeModal)
+  // is unaffected by this change in shape — they all already read this
+  // same `initialCapitalValue` constant, not the expression that
+  // produces it.
+  const initialCapitalValue = resolveInitialCapitalValue(initialStockCount);
 
   // ============================================================
   // BUSINESS WORTH — no fabricated cash ledger.
@@ -2523,7 +2548,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -2551,7 +2576,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // React/context state; whatever the caller passed is exactly what
     // gets persisted, regardless of debounce timing on any autosave
     // side-channel. See tests/initial-stock-confirmation.test.ts.
-    const { items: normalizedItems } = normalizeStockCountItems(items);
+    // [Initial Stock Dual-Valuation-Basis] totalSellingValue is the new
+    // selling-basis counterpart to totalValue — see stockCount.ts's own
+    // header comment. Both are read here directly from the same, single
+    // normalizeStockCountItems() call; nothing recomputes either total
+    // independently elsewhere.
+    const { items: normalizedItems, totalSellingValue: normalizedTotalSellingValue } = normalizeStockCountItems(items);
 
     // [Product Memory / UOM — Increment A] normalizeStockCountItems()
     // above is a pure, independently-tested function whose own
@@ -2692,6 +2722,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(type !== 'initial' && typeof expectedValueAtCount === 'number'
         ? { expectedValueAtCount: Number(expectedValueAtCount.toFixed(2)) }
         : {}),
+      // [Initial Stock Dual-Valuation-Basis — Implementation
+      // Authorization, §2 items 1-2] Present on every count of either
+      // type, per BDR-0014 Decision 7 — computed once, here, from the
+      // same normalizeStockCountItems() call as totalValue itself,
+      // never a separate/redundant accumulation.
+      totalSellingValue: Number(normalizedTotalSellingValue.toFixed(2)),
+      // [Initial Stock Dual-Valuation-Basis — Implementation
+      // Authorization, §2 items 2, 5] ONLY ever written for
+      // type === 'initial' — never for a periodic count, matching
+      // types.ts's own StockCount.initialCapitalBasis contract exactly.
+      // Undefined-field-crash discipline (see the `label` comment,
+      // above) applies identically here: omitted entirely, never a
+      // literal `undefined`, whenever the caller didn't supply one
+      // (e.g. a hypothetical future caller that forgets to, or a test
+      // exercising the defensive path) — resolveInitialCapitalValue's
+      // own absent-basis default (calculations.ts) is what makes that
+      // safe, not a fabricated default written here.
+      ...(type === 'initial' && initialCapitalBasis ? { initialCapitalBasis } : {}),
     };
 
     fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), newCount);
@@ -2713,12 +2761,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await fsBatch.commit();
 
     if (type === 'initial') {
+      // [Initial Stock Dual-Valuation-Basis — Implementation
+      // Authorization, §2 item 7 / §5 "The Timeline Finding"] Uses the
+      // RESOLVED value (whichever basis newCount.initialCapitalBasis
+      // selected, or cost if absent) for the "Capital Inicial"
+      // financial-impact figure the owner actually sees — not
+      // newCount.totalValue directly, which would always show the cost
+      // total regardless of the selected basis. `details.totalValue`,
+      // below, deliberately continues to mirror the raw, always-cost
+      // StockCount.totalValue field verbatim (same name, same meaning,
+      // an honest audit trail of that specific field) — it is the
+      // financialImpact label the owner sees that needed the fix, per
+      // Rule 8 Finding 5.
+      const resolvedInitialCapital = resolveInitialCapitalValue(newCount);
       await logTimelineEvent({
         type: 'initial-stock-count',
         date,
         title: 'Contagem Inicial de Stock Concluída',
         description: `Capital inicial do negócio estabelecido com ${countItems.length} produto(s).`,
-        financialImpact: [{ label: 'Capital Inicial', amount: newCount.totalValue, tone: 'neutral' }],
+        financialImpact: [{ label: 'Capital Inicial', amount: resolvedInitialCapital, tone: 'neutral' }],
         details: {
           productCount: countItems.length,
           totalValue: newCount.totalValue,
@@ -2908,7 +2969,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // so a full overwrite is simpler and safer than incremental per-item
   // writes, and matches how the view already holds the whole row list
   // in local state before calling this).
-  const saveInitialStockDraft = async (items: InitialStockDraftItem[], date: string) => {
+  const saveInitialStockDraft = async (items: InitialStockDraftItem[], date: string, initialCapitalBasis?: InitialCapitalBasis) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (hasInitialStockCount) {
       throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
@@ -2917,6 +2978,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       items,
       date,
       updatedAt: new Date().toISOString(),
+      // [Initial Stock Dual-Valuation-Basis — Implementation
+      // Authorization, §2 item 3] Same undefined-field discipline as
+      // every other optional field in this file — omitted entirely,
+      // never a literal `undefined`, whenever the caller hasn't made a
+      // selection yet (e.g. a draft autosaved before the owner has
+      // touched the new basis control at all).
+      ...(initialCapitalBasis ? { initialCapitalBasis } : {}),
     };
     await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'), draft);
   };

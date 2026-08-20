@@ -87,6 +87,61 @@ export function calculateInventoryTotals(batches: StockBatch[], quebras: Quebra[
   return { totalInvestmentValue, totalMarketValue, totalEmbeddedProfit, activeBatchCount };
 }
 
+// ------------------------------------------------------------------
+// [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
+// §2 item 6] resolveInitialCapitalValue — the single, pure function
+// replacing the previous inline `initialStockCount?.totalValue || 0`
+// expression in AppContext.tsx. Every consumer of initialCapitalValue
+// (Dashboard, both Reports, InitialStockPriceChangeModal, and the
+// Initial Stock confirmation Timeline entry — see recordStockCount)
+// reads through this exact function, so this is the ONE place this
+// feature's business meaning lives.
+// ------------------------------------------------------------------
+
+/**
+ * Resolves what `initialCapitalValue` means for a given business's
+ * `initial` StockCount, per BDR-0014 §5.A's four resolved decisions:
+ *
+ * - No confirmed Initial Stock count at all → 0 (unchanged from today).
+ * - `initialCapitalBasis` absent (every 'initial' count confirmed
+ *   before this capability existed, and any future count where the
+ *   owner explicitly chose Cost) → `totalValue` (cost basis) —
+ *   BYTE-IDENTICAL to what `initialStockCount?.totalValue || 0`
+ *   already returned before this function existed. This is the
+ *   prospective-only, no-retroactive-change guarantee (BDR-0014 §5.A
+ *   item 1, Specification Invariant I-4) made concrete: an old
+ *   business's figure literally cannot change, because the code path
+ *   producing it is unchanged.
+ * - `initialCapitalBasis === 'cost'` (an explicit choice, same result
+ *   as the absent case) → `totalValue`.
+ * - `initialCapitalBasis === 'selling'` → `totalSellingValue`, with a
+ *   defensive fallback to `totalValue` if `totalSellingValue` is for
+ *   any reason not a finite number (should not occur under this
+ *   feature's own write path — Findings 1/2 always compute and freeze
+ *   both totals together at the same confirmation — but matches this
+ *   codebase's established `|| 0`/defensive-fallback discipline rather
+ *   than ever surfacing `NaN` or `undefined` to a consumer).
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency — safe to
+ * unit test directly, matching this repository's established
+ * "business-meaning calculations get their own dedicated function"
+ * convention (Rule 8 Assessment Finding 4).
+ */
+export function resolveInitialCapitalValue(initialStockCount: StockCount | null | undefined): number {
+  if (!initialStockCount) return 0;
+
+  const costTotal = initialStockCount.totalValue || 0;
+
+  if (initialStockCount.initialCapitalBasis === 'selling') {
+    const sellingTotal = initialStockCount.totalSellingValue;
+    return typeof sellingTotal === 'number' && Number.isFinite(sellingTotal) ? sellingTotal : costTotal;
+  }
+
+  // Absent, or explicitly 'cost' — both resolve identically to the
+  // cost total, exactly as this codebase has always behaved.
+  return costTotal;
+}
+
 /**
  * [Initial Stock Valuation History] Current, per-product-aware valuation
  * of the remaining ORIGINAL Initial Stock — distinct from the immutable
