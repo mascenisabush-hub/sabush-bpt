@@ -127,8 +127,22 @@ describe('stockCountPortionGrouping.ts — confirms the B5 helper was reused, no
     'utf-8'
   );
 
-  it('exports exactly one grouping function, computePortionLabels — no Periodic-Contagem-specific variant was added', () => {
+  it('still exports computePortionLabels, unchanged, alongside whatever else the shared file has since gained', () => {
+    // [Grouped Initial Stock UX] This shared file gained a second
+    // export, groupRowsByProductName, used ONLY by
+    // InitialStockCountView.tsx's later grouped redesign — confirmed
+    // by the assertion below that PeriodicStockCountView.tsx itself
+    // never references it (B6/Periodic Contagem was not touched by
+    // that later checkpoint). computePortionLabels itself — the
+    // function B6 actually uses — remains present and unmodified;
+    // this test no longer asserts it is the ONLY export, since that
+    // assertion was specific to a point in time before Initial Stock's
+    // own later redesign, not a requirement of B6 itself.
     const exportedFunctionNames = [...helperSource.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
-    assert.deepEqual(exportedFunctionNames, ['computePortionLabels']);
+    assert.ok(exportedFunctionNames.includes('computePortionLabels'));
+  });
+
+  it('PeriodicStockCountView.tsx never references groupRowsByProductName — confirms B6 is untouched by the later Grouped Initial Stock UX checkpoint', () => {
+    assert.doesNotMatch(source, /groupRowsByProductName/);
   });
 });

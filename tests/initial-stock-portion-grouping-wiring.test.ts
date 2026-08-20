@@ -1,4 +1,5 @@
-// Increment B, Checkpoint B5 — source-level regression guards for
+// Increment B, Checkpoint B5, extended by the Grouped Initial Stock UX
+// checkpoint — source-level regression guards for
 // InitialStockCountView.tsx (Consolidated Specification §16).
 //
 // SCOPE: this repository has no React/DOM test harness (see
@@ -6,10 +7,11 @@
 // — source-level wiring guards" precedent, which this suite mirrors
 // exactly). These tests inspect the component's SOURCE TEXT to prove
 // specific structural guarantees the pure-function tests
-// (stock-count-portion-grouping.test.ts) cannot: that the portion-
-// grouping helper is actually wired in, that no supplier-wording/
-// duplicate-candidate machinery exists on this surface, and that
-// nothing about the existing valuation/totals computation was touched.
+// (stock-count-portion-grouping.test.ts, stock-count-row-grouping.test.ts)
+// cannot: that the grouping helper is actually wired in, that no
+// supplier-wording/duplicate-candidate machinery exists on this
+// surface, and that nothing about the existing valuation/totals
+// computation was touched.
 //
 // HOW TO RUN:
 //   npx tsx --test tests/initial-stock-portion-grouping-wiring.test.ts
@@ -23,14 +25,35 @@ const source = readFileSync(
   'utf-8'
 );
 
-describe('InitialStockCountView.tsx — B5 portion-grouping wiring', () => {
-  it('imports and uses computePortionLabels from the pure grouping helper', () => {
-    assert.match(source, /import\s*\{\s*computePortionLabels\s*\}\s*from\s*'\.\.\/lib\/stockCountPortionGrouping'/);
-    assert.match(source, /computePortionLabels\(rows\)/);
+describe('InitialStockCountView.tsx — Grouped Initial Stock UX wiring', () => {
+  it('imports and uses groupRowsByProductName from the shared grouping helper', () => {
+    assert.match(source, /import\s*\{\s*groupRowsByProductName\s*\}\s*from\s*'\.\.\/lib\/stockCountPortionGrouping'/);
+    assert.match(source, /groupRowsByProductName\(rows\)/);
   });
 
-  it('renders a multi-portion label conditioned on isMultiPortion, not unconditionally', () => {
-    assert.match(source, /portionLabel\.isMultiPortion\s*&&/);
+  it('the product name field is rendered once per group (group.displayName), not once per row (row.productName)', () => {
+    assert.match(source, /value=\{group\.displayName\}/);
+    // The old B5-era per-row name binding must be gone — every name
+    // field in the grouped renderer reads from the group, never
+    // directly from a bare `row.productName` value binding.
+    assert.doesNotMatch(source, /value=\{row\.productName\}/);
+  });
+
+  it('renders a distinct nested portion list only for a group with more than one row (isSolo gate)', () => {
+    assert.match(source, /const isSolo = group\.rows\.length === 1;/);
+    assert.match(source, /\{!isSolo &&/);
+  });
+
+  it('provides an "add portion" action scoped to an existing, named group', () => {
+    assert.match(source, /handleAddPortion/);
+    assert.match(source, /\{group\.key &&/); // never offered for a still-blank/unnamed group
+  });
+
+  it('provides a "remove whole group" action distinct from the existing per-row handleRemoveRow', () => {
+    assert.match(source, /handleRemoveGroup/);
+    // Still calls handleRemoveRow for a single portion's own delete —
+    // that existing function is not replaced, only supplemented.
+    assert.match(source, /handleRemoveRow/);
   });
 });
 
@@ -55,6 +78,10 @@ describe('InitialStockCountView.tsx — requirement 5/8: no duplicate-product de
     // that would turn this into cross-row duplicate detection, exactly
     // what requirement 8 forbids introducing.
     assert.doesNotMatch(fnBody, /\brows\b/);
+  });
+
+  it('[Grouped Initial Stock UX] isGenuinelyNewProductName is now called once per GROUP (group.displayName), not once per row', () => {
+    assert.match(source, /isGenuinelyNewProductName\(group\.displayName\)/);
   });
 });
 

@@ -6,7 +6,7 @@ import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, Chev
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { InitialStockDraftItem, UnitRelationship } from '../types';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
-import { computePortionLabels } from '../lib/stockCountPortionGrouping';
+import { groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -300,6 +300,63 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     setRows((prev) => prev.filter((row) => row.id !== id));
   };
 
+  // [Grouped Initial Stock UX] Adds a new portion row PRE-FILLED with
+  // an existing product group's own name — the only behavioral
+  // difference from handleAddRow above, which always creates a wholly
+  // blank row. Everything else about the new row (quantity, unit,
+  // costPrice, sellingPrice, the two UI-only unit-relationship fields)
+  // starts blank, exactly like any other new row. Because grouping
+  // (groupRowsByProductName, below) is computed fresh from `rows` on
+  // every render, this new row is picked up into the SAME group
+  // automatically — there is no separate "group" state to update.
+  const handleAddPortion = (groupDisplayName: string) => {
+    setRows((prev) => [...prev, { ...createEmptyRow(), productName: groupDisplayName }]);
+  };
+
+  // [Grouped Initial Stock UX] Renames every row currently in the group
+  // keyed by `groupKey` (a trimmed, lowercased product name — see
+  // groupRowsByProductName) to `newName`, in one update. This is the
+  // one genuinely new multi-row operation this checkpoint introduces —
+  // every other handler here still touches exactly one row by its own
+  // id, matching this file's existing pattern. Still a plain
+  // client-side array transform over the SAME flat `rows` state; it
+  // writes nothing to Firestore directly (autosave picks up the result
+  // exactly as it already does for any other edit) and does not
+  // require `groupKey` to still match `newName` afterward — the group
+  // simply re-forms under the new name on the next render, or merges
+  // into an existing group if `newName` now matches one, which is
+  // correct, intended behavior (typing the same name onto a solo row
+  // makes it a portion of that existing product, exactly as it would
+  // if the owner had typed a matching name into any row today).
+  const handleRenameGroup = (groupKey: string, newName: string) => {
+    if (!groupKey) return; // a blank/solo group has no shared name to rename — its own input already handles this via updateRow
+    setRows((prev) =>
+      prev.map((row) => (row.productName.trim().toLowerCase() === groupKey ? { ...row, productName: newName } : row))
+    );
+  };
+
+  // [Grouped Initial Stock UX] Removes every row belonging to one
+  // group at once — the "remove entire product" action, distinct from
+  // handleRemoveRow's existing "remove one portion" behavior, which
+  // remains completely unchanged and is still what each individual
+  // portion's own delete button calls. Takes the group's own row ids
+  // directly (not a name match) specifically because a blank-name
+  // group's key ('') is shared by every not-yet-named row — matching
+  // by name alone would incorrectly remove every blank row in the
+  // form, not just this one group's single row. Mirrors
+  // handleRemoveRow's existing "never remove the very last row"
+  // guarantee: refuses (no-op) if removing this whole group would
+  // leave zero rows, rather than ever leaving the form with nothing to
+  // edit.
+  const handleRemoveGroup = (rowIds: string[]) => {
+    const idsToRemove = new Set(rowIds);
+    setRows((prev) => {
+      const remaining = prev.filter((row) => !idsToRemove.has(row.id));
+      if (remaining.length === 0) return prev;
+      return remaining;
+    });
+  };
+
   // [Product Memory / UOM — Increment A, Checkpoint 2] "Genuinely new"
   // means no existing Product matches this name (case-insensitive) —
   // the exact same lookup addStockBatch/recordStockCount themselves use
@@ -326,16 +383,16 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     return acc + q * c;
   }, 0);
 
-  // [Increment B, Checkpoint B5 — Consolidated Specification §16] Purely
-  // presentational: identifies which rows share a product name with
-  // another row in THIS draft, so they can be visually labeled as
-  // portions of one count for that product rather than reading as an
-  // accidental duplicate entry. Computed fresh every render from the
-  // current `rows` state — cheap (this list is never large) and always
-  // in sync with in-progress edits. Feeds NOTHING into totalCapital
-  // above, InitialStockDraftItem, or any Firestore write — see
-  // stockCountPortionGrouping.ts's own header comment.
-  const portionLabels = computePortionLabels(rows);
+  // [Grouped Initial Stock UX] Purely a render-layer reshaping of the
+  // SAME flat `rows` state into product groups — see
+  // groupRowsByProductName's own header comment. Computed fresh every
+  // render, exactly like B5's own portionLabels computation this
+  // replaces. Feeds NOTHING into totalCapital above,
+  // InitialStockDraftItem, or any Firestore write: handleSubmit, below,
+  // still iterates the flat `rows` array directly, never `rowGroups`,
+  // so the persisted shape is completely unaffected by how this screen
+  // currently chooses to visually group rows for editing.
+  const rowGroups = groupRowsByProductName(rows);
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -461,6 +518,91 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // last column is just wide enough for the hover-revealed delete icon.
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_112px_120px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
+  // [Grouped Initial Stock UX] Renders the shared quantity/unit/cost/
+  // selling/total/delete field set for exactly ONE row — factored out
+  // so both a solo (one-portion) product's inline row and a multi-
+  // portion product's nested portion rows render the identical field
+  // markup, wired to the identical updateRow(row.id, ...) calls this
+  // file already used for every row before this checkpoint. Purely a
+  // local render helper — no state of its own, no different behavior
+  // than the original inline JSX it replaces (byte-for-byte the same
+  // update calls, same formatCurrency computation, same delete-button
+  // treatment), just reusable across the two rendering contexts a
+  // grouped layout now has.
+  const renderPortionFields = (
+    row: CountRowItem,
+    opts: { onDelete?: () => void; deleteAriaLabel: string }
+  ) => (
+    <>
+      <div>
+        <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={row.quantity}
+          onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+          className={`${fieldClass} font-mono tabular-nums`}
+        />
+      </div>
+
+      <div>
+        <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
+        <input
+          type="text"
+          value={row.unit}
+          onChange={(e) => updateRow(row.id, { unit: e.target.value })}
+          className={`${fieldClass} font-mono text-center`}
+        />
+      </div>
+
+      <div>
+        <label className={`${fieldLabelClass} sm:hidden`}>Custo/Un ({currencySymbol})</label>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={row.costPrice}
+          onChange={(e) => updateRow(row.id, { costPrice: e.target.value })}
+          className={`${fieldClass} font-mono tabular-nums`}
+        />
+      </div>
+
+      <div>
+        <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={row.sellingPrice}
+          onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value })}
+          className={`${fieldClass} font-mono tabular-nums`}
+        />
+      </div>
+
+      <div className="flex items-end gap-1.5">
+        <div className="flex-1 min-w-0">
+          <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
+          <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
+            {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
+          </div>
+        </div>
+        {/* Delete — only fully visible on row hover/focus, keeping
+            the table calm until the user needs the action. */}
+        {opts.onDelete && (
+          <button
+            type="button"
+            onClick={opts.onDelete}
+            aria-label={opts.deleteAriaLabel}
+            className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+          >
+            <Trash2 className="w-3.5 h-3.5" />
+          </button>
+        )}
+      </div>
+    </>
+  );
+
   if (subscriptionBlocksNewRecords) {
     return <SubscriptionBlockedNotice />;
   }
@@ -519,7 +661,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           </div>
 
           {/* Product grid — column header shown from sm+, rows collapse to
-              stacked pairs on mobile with inline labels retained. */}
+              stacked pairs on mobile with inline labels retained.
+              [Grouped Initial Stock UX] Header remains identical to
+              before; the row content underneath is now grouped by
+              product instead of listing every product name repeatedly
+              — see rowGroups, above, and its own header comment for
+              why this is a pure render-layer change over the same flat
+              `rows` state. */}
           <div>
             <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 border-b border-[#E5E7EB]`}>
               <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Nome</span>
@@ -531,141 +679,161 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               <span />
             </div>
 
-            <div className="space-y-1">
-              {rows.map((row, idx) => {
-                const showUnitRelationshipSection = isGenuinelyNewProductName(row.productName);
-                // [Increment B, Checkpoint B5] Undefined only if `row.id`
-                // is somehow absent from `rows` at label-computation time
-                // — cannot happen in practice (portionLabels is derived
-                // from this exact same `rows` array on every render) but
-                // defensively defaulted rather than risking a crash.
-                const portionLabel = portionLabels.get(row.id) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+            <div className="space-y-2.5">
+              {rowGroups.map((group) => {
+                const firstRow = group.rows[0];
+                const isSolo = group.rows.length === 1;
+                // [Product Memory / UOM] Computed once per GROUP now,
+                // not once per portion — same unchanged function
+                // (isGenuinelyNewProductName), called with the group's
+                // shared display name instead of one row's own name.
+                // For a blank/not-yet-named group, group.displayName is
+                // '' and this correctly evaluates to false, exactly as
+                // isGenuinelyNewProductName('') already did before this
+                // checkpoint.
+                const showUnitRelationshipSection = isGenuinelyNewProductName(group.displayName);
+                const groupTotal = group.rows.reduce(
+                  (acc, r) => acc + (parseFloat(r.quantity) || 0) * (parseFloat(r.costPrice) || 0),
+                  0
+                );
+
                 return (
-                <React.Fragment key={row.id}>
-                <div
-                  className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
-                >
-                  <div className="col-span-2 sm:col-span-1">
-                    <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
-                    <input
-                      type="text"
-                      placeholder="Ex: Arroz"
-                      value={row.productName}
-                      onChange={(e) => updateRow(row.id, { productName: e.target.value })}
-                      className={fieldClass}
-                    />
-                    {/* [Increment B, Checkpoint B5 — Consolidated
-                        Specification §16] Shown ONLY when 2+ rows in
-                        this draft share this exact product name —
-                        makes clear these rows are being combined as
-                        portions of ONE product's count, each with its
-                        own unit/price basis, never as an accidental
-                        duplicate product entry. Purely informational;
-                        changes no value, triggers no validation, and
-                        has no effect on totalCapital or what gets
-                        persisted — see computePortionLabels's own
-                        header comment. */}
-                    {portionLabel.isMultiPortion && (
-                      <p className="mt-1 text-[10.5px] text-[#B8952F] font-medium leading-snug">
-                        Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
-                      </p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.quantity}
-                      onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
-                      className={`${fieldClass} font-mono tabular-nums`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
-                    <input
-                      type="text"
-                      value={row.unit}
-                      onChange={(e) => updateRow(row.id, { unit: e.target.value })}
-                      className={`${fieldClass} font-mono text-center`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`${fieldLabelClass} sm:hidden`}>Custo/Un ({currencySymbol})</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.costPrice}
-                      onChange={(e) => updateRow(row.id, { costPrice: e.target.value })}
-                      className={`${fieldClass} font-mono tabular-nums`}
-                    />
-                  </div>
-
-                  <div>
-                    <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
-                    <input
-                      type="number"
-                      min="0"
-                      step="0.01"
-                      value={row.sellingPrice}
-                      onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value })}
-                      className={`${fieldClass} font-mono tabular-nums`}
-                    />
-                  </div>
-
-                  <div className="flex items-end gap-1.5">
-                    <div className="flex-1 min-w-0">
-                      <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
-                      <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
-                        {formatCurrency((parseFloat(row.quantity) || 0) * (parseFloat(row.costPrice) || 0), currencySymbol)}
+                  <div
+                    key={firstRow.id}
+                    className="rounded-xl border border-transparent hover:border-[#E5E7EB] transition-colors duration-150 -mx-2.5 px-2.5 py-1.5"
+                  >
+                    {/* Group header — the product name field appears
+                        EXACTLY ONCE here, shared by every portion below
+                        it, whether there is one portion (rendered
+                        inline on this same row, exactly like the old
+                        flat layout) or several (rendered as a summary
+                        row with the group's combined total and a
+                        "remove whole product" action). */}
+                    <div className={`group ${rowGridClass}`}>
+                      <div className="col-span-2 sm:col-span-1">
+                        <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Arroz"
+                          value={group.displayName}
+                          onChange={(e) =>
+                            group.key
+                              ? handleRenameGroup(group.key, e.target.value)
+                              : updateRow(firstRow.id, { productName: e.target.value })
+                          }
+                          className={`${fieldClass} font-semibold`}
+                        />
                       </div>
+
+                      {isSolo ? (
+                        renderPortionFields(firstRow, {
+                          onDelete: rows.length > 1 ? () => handleRemoveRow(firstRow.id) : undefined,
+                          deleteAriaLabel: `Remover produto ${group.displayName || 'sem nome'}`,
+                        })
+                      ) : (
+                        <>
+                          <span className="hidden sm:block" />
+                          <span className="hidden sm:block" />
+                          <span className="hidden sm:block" />
+                          <div className="hidden sm:flex items-end">
+                            <span className="text-[10.5px] font-bold uppercase tracking-wide text-gray-400">
+                              {group.rows.length} porções
+                            </span>
+                          </div>
+                          <div className="flex items-end gap-1.5">
+                            <div className="flex-1 min-w-0">
+                              <label className={`${fieldLabelClass} sm:hidden`}>Valor Total</label>
+                              <div className="w-full bg-[#0B1F3A]/[0.06] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate font-semibold">
+                                {formatCurrency(groupTotal, currencySymbol)}
+                              </div>
+                            </div>
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveGroup(group.rows.map((r) => r.id))}
+                              aria-label={`Remover produto ${group.displayName}`}
+                              className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
+                        </>
+                      )}
                     </div>
-                    {/* Delete — only fully visible on row hover/focus, keeping
-                        the table calm until the user needs the action. */}
-                    {rows.length > 1 && (
+
+                    {/* Portions — only rendered as a distinct nested
+                        list once a product has 2+ portions; a solo
+                        product's single portion is already rendered
+                        inline on the header row above, so the common
+                        case (most businesses have far more single-
+                        portion products than multi-portion ones) looks
+                        exactly as compact as it did before this
+                        checkpoint. */}
+                    {!isSolo && (
+                      <div className="mt-1 pl-3 sm:pl-4 border-l-2 border-[#E5E7EB] space-y-1">
+                        {group.rows.map((row, portionIdx) => (
+                          <div key={row.id} className={`group ${rowGridClass}`}>
+                            <div className="col-span-2 sm:col-span-1 flex items-center">
+                              <span className="text-[11.5px] text-gray-400 font-semibold">
+                                Porção {portionIdx + 1}
+                              </span>
+                            </div>
+                            {renderPortionFields(row, {
+                              onDelete: () => handleRemoveRow(row.id),
+                              deleteAriaLabel: `Remover porção ${portionIdx + 1} de ${group.displayName}`,
+                            })}
+                          </div>
+                        ))}
+                      </div>
+                    )}
+
+                    {/* [Grouped Initial Stock UX] "+ Adicionar Porção"
+                        — only offered once the group actually has a
+                        name to add a portion under; adding a portion
+                        to a still-blank/not-yet-named row wouldn't
+                        have anything to group it with. */}
+                    {group.key && (
                       <button
                         type="button"
-                        onClick={() => handleRemoveRow(row.id)}
-                        aria-label={`Remover produto ${idx + 1}`}
-                        className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                        onClick={() => handleAddPortion(group.displayName)}
+                        className="mt-1 ml-3 sm:ml-4 flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Plus className="w-3 h-3" strokeWidth={2.5} />
+                        Adicionar porção
                       </button>
                     )}
-                  </div>
-                </div>
 
-                {/* [Product Memory / UOM — Increment A, Checkpoint 2]
-                    Shown ONLY for a row whose product name doesn't
-                    match anything already in the catalog — never shown,
-                    never asked again, for an already-known product
-                    (isGenuinelyNewProductName, above). Entirely
-                    optional: leaving it blank saves the product with no
-                    confirmed Product Memory, exactly as already happens
-                    today (BDR-0012 §5.A Item 6's warn-not-block state).
-                    This never edits row.unit/quantity/costPrice — the
-                    purchase-equivalent facts for Initial Stock — it only
-                    ever ADDS an optional, separate unitRelationship
-                    candidate alongside them. */}
-                {showUnitRelationshipSection && (
-                  <div className="col-span-2 sm:col-span-7 -mt-1 mb-1 pl-1">
-                    <UnitRelationshipRow
-                      purchaseUnit={row.unit || 'un'}
-                      sellingUnit={row.newProductSellingUnit}
-                      factor={row.newProductSellingUnitFactor}
-                      onChange={(sellingUnit, factor) =>
-                        updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
-                      }
-                    />
+                    {/* [Product Memory / UOM — Increment A, Checkpoint 2,
+                        now shown once PER GROUP instead of once per
+                        portion — Grouped Initial Stock UX] Shown ONLY
+                        for a product name that doesn't match anything
+                        already in the catalog — never shown, never
+                        asked again, for an already-known product
+                        (isGenuinelyNewProductName, above). Entirely
+                        optional: leaving it blank saves the product
+                        with no confirmed Product Memory, exactly as
+                        already happens today (BDR-0012 §5.A Item 6's
+                        warn-not-block state). This never edits any
+                        portion's own unit/quantity/costPrice — the
+                        purchase-equivalent facts for Initial Stock —
+                        it only ever ADDS an optional unitRelationship
+                        candidate, stored on the group's FIRST row only
+                        (handleSubmit, below, already only reads this
+                        from whichever row actually has it set — see
+                        its own comment). */}
+                    {showUnitRelationshipSection && (
+                      <div className="mt-1 pl-3 sm:pl-4">
+                        <UnitRelationshipRow
+                          purchaseUnit={firstRow.unit || 'un'}
+                          sellingUnit={firstRow.newProductSellingUnit}
+                          factor={firstRow.newProductSellingUnitFactor}
+                          onChange={(sellingUnit, factor) =>
+                            updateRow(firstRow.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                          }
+                        />
+                      </div>
+                    )}
                   </div>
-                )}
-                </React.Fragment>
-              );
+                );
               })}
             </div>
           </div>
