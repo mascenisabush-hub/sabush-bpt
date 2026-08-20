@@ -200,6 +200,37 @@ service cloud.firestore {
       );
     }
 
+    // [Void & Redo — Implementation Authorization §2 item 7; Rule 8
+    // Findings B1, E1] True only if stockCountId names a genuine,
+    // currently-existing 'initial' StockCount for this business, with
+    // a server-recorded confirmedAt (a target missing this field —
+    // every 'initial' count confirmed before this feature existed — is
+    // NEVER eligible; no timestamp is inferred, defaulted, or
+    // substituted for it, per this task's explicit instruction), a
+    // chainPosition other than 4 (the ceiling — Rule 8 Finding
+    // E1/Specification §21: Confirmation #4 can never be voided, under
+    // any circumstance, independent of whether its own window is still
+    // open), and whose own 30-minute window — measured from its own
+    // confirmedAt, compared against request.time (the server's trusted
+    // clock, never a client-supplied value) — has not yet elapsed.
+    // Used exclusively by the /voidRecords create rule below. The
+    // redo-confirmation branches of the /stockCounts create rule
+    // deliberately do NOT call this a second time — Rule 8 Finding D1
+    // treats "was this predecessor legitimately voided" (proven by a
+    // VoidRecord's mere existence, itself only creatable when this
+    // function returned true) as a separate concern from re-checking
+    // window/ceiling eligibility again at redo time.
+    function initialStockConfirmationVoidable(businessId, stockCountId) {
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.get('type', null) == 'initial' &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.get('confirmedAt', null) != null &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.get('chainPosition', 1) != 4 &&
+        // Safe direct (non-.get()) field access: the clause immediately
+        // above already proved 'confirmedAt' is present and non-null on
+        // this exact document, via short-circuit && evaluation order.
+        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.confirmedAt + duration.value(30, 'm');
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -435,16 +466,165 @@ service cloud.firestore {
       // record or remove them; any team member may read them.
       match /stockCounts/{stockCountId} {
         allow read: if isMemberOf(businessId);
-        // [Module #19 Phase 2] Establishes/adjusts the capital baseline
-        // that Business Worth is measured against — restricted once
-        // trial completes/expires (Business Rule 6 / Decision 2).
-        allow create: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId);
+
+        // [Void & Redo — Implementation Authorization §2 item 7; Rule 8
+        // Findings E1, F1, K1] The 'initial' StockCount is no longer
+        // read as a single, forever fixed-id ('initial') singleton — it
+        // may now be one of up to 4 confirmation events in a chain,
+        // held at 4 fixed slot ids: 'initial' (chainPosition 1, the
+        // ORIGINAL confirmation — the SAME id every confirmation has
+        // always used, preserving exact backward compatibility with
+        // every count confirmed before this feature and with the
+        // currently-deployed app, which does not yet send
+        // chainPosition/confirmedAt — that write path is UNCHANGED
+        // below), and 'initial-2'/'initial-3'/'initial-4'
+        // (chainPosition 2/3/4 — ONLY ever reachable via a legitimate
+        // Void & Redo redo, never directly).
+        //
+        // [Security review, this step] The PRE-EXISTING rule placed no
+        // id/content constraint on an 'initial'-type create at all —
+        // the old singleton guarantee came entirely from the fixed-id
+        // 'initial' create-if-absent trick, not from this rule. That
+        // was harmless for a single ever-immutable record, but would
+        // silently break Invariant I-1 (at most one active
+        // confirmation) once the read path recognizes multiple
+        // 'initial'-type documents per business (Finding F1) — a rogue
+        // extra 'initial'-type document at an arbitrary id, written by
+        // a direct API client bypassing the app UI, would otherwise be
+        // indistinguishable from a real confirmation event. Closed here
+        // by constraining every 'initial'-type create to exactly one of
+        // the 4 named slot/chainPosition pairs below. This is a
+        // technical implementation-task correction the new read-path
+        // design (Finding F1) makes newly load-bearing — it does not
+        // touch, weaken, or reinterpret any already-approved
+        // BDR-0015/POL-0008 decision.
+        allow create: if isOwnerOf(businessId) && (
+          // Non-'initial' counts (periodic/weekly/monthly/etc.) —
+          // entirely unaffected by this feature, unchanged rule.
+          (request.resource.data.get('type', null) != 'initial' &&
+            subscriptionAllowsNewRecords(businessId)) ||
+
+          // The ORIGINAL confirmation, legacy shape — no chainPosition
+          // field at all. Exactly what every 'initial' confirmation
+          // ever written looks like today, and what the
+          // currently-deployed, unmodified app still writes until a
+          // later implementation step updates it. Firestore's own
+          // create-if-absent semantics at the fixed id 'initial'
+          // guarantee this succeeds at most once per business, exactly
+          // as today.
+          (request.resource.data.get('type', null) == 'initial' &&
+            stockCountId == 'initial' &&
+            !('chainPosition' in request.resource.data) &&
+            subscriptionAllowsNewRecords(businessId)) ||
+
+          // The ORIGINAL confirmation, new full shape (chainPosition 1,
+          // server-verified confirmedAt) — forward-compatible with a
+          // future app update (a later, separate implementation step);
+          // requires no second rules deploy when that ships.
+          (request.resource.data.get('type', null) == 'initial' &&
+            stockCountId == 'initial' &&
+            request.resource.data.get('chainPosition', null) == 1 &&
+            request.resource.data.get('confirmedAt', null) == request.time &&
+            subscriptionAllowsNewRecords(businessId)) ||
+
+          // A REDO confirmation (chainPosition 2, 3, or 4). [Product
+          // Architect Decision — Option A; Rule 8 §14, Finding K1] The
+          // ONLY branch in this entire rule deliberately NOT gated on
+          // subscriptionAllowsNewRecords — a valid recovery must remain
+          // available even when normal new-record creation is blocked
+          // by subscription/trial state. Requires, for every branch: a
+          // server-verified confirmedAt (never client-supplied,
+          // Finding B1); the correct fixed slot id for the claimed
+          // chainPosition; redoesConfirmationId equal to EXACTLY the
+          // immediate predecessor's own slot id (a hardcoded literal
+          // per branch, never client-controlled — this is what
+          // prevents a fabricated or skipped-link lineage); and a
+          // VoidRecord already existing for that exact predecessor —
+          // the sole proof of an already window/ceiling-checked,
+          // legitimate void (Finding D1).
+          (request.resource.data.get('type', null) == 'initial' &&
+            request.resource.data.get('confirmedAt', null) == request.time &&
+            (
+              (request.resource.data.get('chainPosition', null) == 2 &&
+                stockCountId == 'initial-2' &&
+                request.resource.data.get('redoesConfirmationId', null) == 'initial' &&
+                // NOTE: path segment given via $("...") deliberately,
+                // not as a bare token — a hyphenated bare path segment
+                // (e.g. .../voidRecords/initial-2) risks being
+                // tokenized as a subtraction expression by the rules
+                // parser rather than a literal path component; $(...)
+                // with an explicit string forces it to be evaluated as
+                // a value, avoiding that ambiguity entirely.
+                exists(/databases/$(database)/documents/businesses/$(businessId)/voidRecords/$("initial"))) ||
+              (request.resource.data.get('chainPosition', null) == 3 &&
+                stockCountId == 'initial-3' &&
+                request.resource.data.get('redoesConfirmationId', null) == 'initial-2' &&
+                exists(/databases/$(database)/documents/businesses/$(businessId)/voidRecords/$("initial-2"))) ||
+              (request.resource.data.get('chainPosition', null) == 4 &&
+                stockCountId == 'initial-4' &&
+                request.resource.data.get('redoesConfirmationId', null) == 'initial-3' &&
+                exists(/databases/$(database)/documents/businesses/$(businessId)/voidRecords/$("initial-3")))
+            )
+          )
+        );
+
         // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 3]
         // The 'initial' count is Architecture 8.6's "no exceptions"
         // immutability tier — refused unconditionally, Owner included,
         // not merely a UI omission. Every other type keeps its prior
-        // Owner-editable/deletable behavior unchanged.
+        // Owner-editable/deletable behavior unchanged. UNMODIFIED by
+        // Void & Redo (Rule 8 Finding G1, Direction 2 — this line is
+        // byte-for-byte identical to before this feature) — and, since
+        // every confirmation event in a chain (original AND every
+        // redo) is itself type: 'initial', this one unchanged line
+        // automatically protects all of them, with no additional rule
+        // needed.
         allow update, delete: if isOwnerOf(businessId) && resource.data.get('type', null) != 'initial';
+      }
+
+      // [Void & Redo — Implementation Authorization §2 item 2; Rule 8
+      // Finding G1, Direction 2 (adopted)] The additive, create-only
+      // artifact recording that a confirmation event has been voided —
+      // WITHOUT ever mutating the original document above (POL-0008
+      // Rule D/Rule I; BDR-0015 §3 item 3). Document id is fixed to
+      // equal the id of the confirmation it voids ('initial',
+      // 'initial-2', or 'initial-3' — NEVER 'initial-4', enforced by
+      // initialStockConfirmationVoidable() below) — Firestore's own
+      // create-if-absent semantics are therefore what guarantee "at
+      // most one VoidRecord per confirmation, ever" (I-2) and "two
+      // simultaneous void attempts cannot both succeed" (FR-27), with
+      // no query or transaction needed — the identical mechanism the
+      // pre-existing 'initial' singleton (above) already relies on for
+      // the same class of guarantee.
+      match /voidRecords/{stockCountId} {
+        allow read: if isMemberOf(businessId);
+
+        // [Product Architect Decision — Option A; Rule 8 §14, Finding
+        // K1] Deliberately NOT gated on subscriptionAllowsNewRecords —
+        // a valid recovery must remain available even when normal
+        // new-record creation is blocked by subscription/trial state.
+        // Every precondition below is fully enforced regardless of
+        // subscription state; this exemption applies to this create
+        // rule alone, expressed via these Void & Redo-specific
+        // conditions directly, and to no other write path in this
+        // file (Option A item 3, verbatim: "NOT authorization to
+        // bypass subscription enforcement generally").
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('voidedConfirmationId', null) == stockCountId &&
+          // Tenant isolation is structural, not merely checked: the
+          // target lookup inside initialStockConfirmationVoidable() is
+          // scoped under businesses/$(businessId) — the SAME businessId
+          // this create rule itself is scoped under (bound from the
+          // URL path, never from request data) — so a confirmation
+          // belonging to a different business can never be reached
+          // from here, by construction, regardless of what id a client
+          // supplies.
+          initialStockConfirmationVoidable(businessId, stockCountId);
+
+        // [POL-0008 Rule I; I-8] Create-only, forever. No historical
+        // fact of a voided confirmation — including the fact that it
+        // is voided — is ever rewritten once set.
+        allow update, delete: if false;
       }
 
       // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]

@@ -54,6 +54,8 @@ import {
   collectionGroup,
   query,
   getDocs,
+  Timestamp,
+  serverTimestamp,
 } from 'firebase/firestore';
 
 const PROJECT_ID = 'sabush-bpt-rules-test';
@@ -622,9 +624,17 @@ describe('stockCounts', () => {
     await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { countedAt: new Date().toISOString() }));
     await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic')));
 
-    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial'), { id: 'sc-initial', type: 'initial', countedAt: new Date().toISOString() }));
-    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial'), { countedAt: new Date().toISOString() }));
-    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-initial')));
+    // [Void & Redo — Rule 8 security review] Doc id changed from the
+    // original 'sc-initial' to 'initial': a type: 'initial' create is
+    // now constrained to one of the fixed chain-slot ids (this test's
+    // own describe block, below, covers that constraint directly) —
+    // 'initial' with no chainPosition field is the legacy/original-
+    // confirmation shape, still unconditionally valid. This test's own
+    // intent (update/delete immutability) is unaffected by that id
+    // change.
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { countedAt: new Date().toISOString() }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial')));
   });
 
   // [Fix #3 — Initial Stock Count Singleton] The app-layer fix (a
@@ -642,6 +652,342 @@ describe('stockCounts', () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
+  });
+});
+
+// [Void & Redo — Initial Stock Accidental Confirmation Recovery.
+// Governed by BDR-0015 (Approved), POL-0008 (Approved), the accepted
+// Specification, and the Rule 8 Assessment (READY). This suite is the
+// dedicated rules-emulator coverage required by the signed
+// Implementation Authorization §6/§8 and requested explicitly in the
+// security-first review for this implementation step — it asserts
+// directly against firestore.rules' new /voidRecords rule and the
+// tightened /stockCounts create rule, not against application code.
+describe('Void & Redo — voidRecords create + chain-slot stockCounts create', () => {
+  // A confirmedAt 10 minutes old is safely inside the 30-minute window
+  // for every "should succeed" fixture below.
+  function freshConfirmedAt() {
+    return Timestamp.fromMillis(Date.now() - 10 * 60 * 1000);
+  }
+  // 31 minutes old — just past the 30-minute boundary.
+  function expiredConfirmedAt() {
+    return Timestamp.fromMillis(Date.now() - 31 * 60 * 1000);
+  }
+
+  async function seedConfirmation(
+    businessId: string,
+    stockCountId: string,
+    fields: Record<string, unknown>
+  ) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', businessId, 'stockCounts', stockCountId), {
+        id: stockCountId,
+        type: 'initial',
+        items: [],
+        totalValue: 0,
+        createdAt: new Date().toISOString(),
+        ...fields,
+      });
+    });
+  }
+
+  async function seedVoidRecord(businessId: string, stockCountId: string) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', businessId, 'voidRecords', stockCountId), {
+        id: stockCountId,
+        voidedConfirmationId: stockCountId,
+        voidedAt: Timestamp.now(),
+      });
+    });
+  }
+
+  it('Owner + valid window + eligible confirmation → void succeeds, then a matching redo succeeds', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial',
+        voidedConfirmationId: 'initial',
+        voidedAt: serverTimestamp(),
+      })
+    );
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2'), {
+        id: 'initial-2',
+        type: 'initial',
+        chainPosition: 2,
+        redoesConfirmationId: 'initial',
+        confirmedAt: serverTimestamp(),
+        items: [],
+        totalValue: 0,
+        createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('Manager and Staff cannot create a VoidRecord, even with a valid window', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    const managerDb = ctxFor(MANAGER_WITH_CLOSINGS_UID).firestore();
+    const staffDb = ctxFor(STAFF_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(managerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+    await assertFails(
+      setDoc(doc(staffDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('An expired window (> 30 minutes) denies the void', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: expiredConfirmedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('A confirmation with no confirmedAt (legacy, pre-feature) is never eligible — no timestamp is inferred', async () => {
+    // Deliberately no confirmedAt/chainPosition field at all — exactly
+    // the shape of every Initial Stock confirmation written before
+    // this feature existed.
+    await seedConfirmation(BIZ, 'initial', {});
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Confirmation #4 (chainPosition 4) can never be voided, even with a fully fresh window', async () => {
+    await seedConfirmation(BIZ, 'initial-4', {
+      chainPosition: 4,
+      redoesConfirmationId: 'initial-3',
+      confirmedAt: freshConfirmedAt(),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-4'), {
+        id: 'initial-4', voidedConfirmationId: 'initial-4', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('A user from another business cannot void this business\'s confirmation', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(otherDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+    // Also cannot even void their OWN business's confirmation by
+    // attempting to write it under the wrong business path with a
+    // mismatched target — structurally unreachable (no such doc there).
+    await assertFails(
+      setDoc(doc(otherDb, 'businesses', OTHER_BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('A VoidRecord whose voidedConfirmationId does not match its own document id is denied (lineage/id mismatch)', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial',
+        voidedConfirmationId: 'some-other-id', // mismatched — must equal the doc id itself
+        voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('A redo confirmation with a fabricated redoesConfirmationId (no matching VoidRecord) is denied', async () => {
+    // No VoidRecord seeded at all for 'initial' — a client attempting
+    // to skip the void step and jump straight to a "redo" must fail.
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2'), {
+        id: 'initial-2',
+        type: 'initial',
+        chainPosition: 2,
+        redoesConfirmationId: 'initial',
+        confirmedAt: serverTimestamp(),
+        items: [],
+        totalValue: 0,
+        createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('A redo confirmation whose redoesConfirmationId points to the WRONG predecessor slot is denied, even with a real VoidRecord elsewhere', async () => {
+    // A VoidRecord genuinely exists for 'initial-2', but this attempt
+    // claims chainPosition 3 while pointing redoesConfirmationId at
+    // 'initial' (skipping 'initial-2' entirely) — a fabricated/
+    // skipped-link lineage.
+    await seedVoidRecord(BIZ, 'initial-2');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-3'), {
+        id: 'initial-3',
+        type: 'initial',
+        chainPosition: 3,
+        redoesConfirmationId: 'initial', // should be 'initial-2'
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('subscription-blocked business: a valid Void & Redo (void + redo) still succeeds', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { status: 'expired' });
+    });
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2'), {
+        id: 'initial-2',
+        type: 'initial',
+        chainPosition: 2,
+        redoesConfirmationId: 'initial',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('subscription-blocked business: an ORDINARY new record (periodic count) is still denied — the exemption does not generalize', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { status: 'expired' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic-blocked'), {
+        id: 'sc-periodic-blocked', type: 'monthly', countedAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('subscription-blocked business: a fresh ORIGINAL confirmation is still denied (the exemption never applies to Confirmation #1)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { status: 'expired' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), {
+        id: 'initial', type: 'initial', items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('A redo confirmation (initial-2) is just as immutable as the original — update/delete denied unconditionally', async () => {
+    await seedConfirmation(BIZ, 'initial-2', { chainPosition: 2, redoesConfirmationId: 'initial', confirmedAt: freshConfirmedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2'), { countedAt: new Date().toISOString() }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2')));
+  });
+
+  it('A VoidRecord, once created, can never be updated or deleted', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    await seedVoidRecord(BIZ, 'initial');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), { voidedAt: serverTimestamp() }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial')));
+  });
+
+  it('Two simultaneous void attempts against the same confirmation: only the first succeeds', async () => {
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+    // A second attempt against the same target is now a create against
+    // an already-existing document — Firestore's own create-if-absent
+    // semantics deny it outright, independent of any application-layer
+    // check ever running (Rule 8 Finding D1/FR-27).
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('No path to a 5th confirmation: even with a VoidRecord for initial-3 seeded, chainPosition 5 / doc id initial-5 is never a valid create', async () => {
+    await seedVoidRecord(BIZ, 'initial-3');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-5'), {
+        id: 'initial-5',
+        type: 'initial',
+        chainPosition: 5,
+        redoesConfirmationId: 'initial-4',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('No path to a 5th confirmation via Confirmation #4: a VoidRecord can never even be created for it, so no redo can ever cite it', async () => {
+    await seedConfirmation(BIZ, 'initial-4', {
+      chainPosition: 4, redoesConfirmationId: 'initial-3', confirmedAt: freshConfirmedAt(),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    // The void step itself (the only way a VoidRecord for 'initial-4'
+    // could ever come to exist) is denied — already covered above, but
+    // asserted again here directly adjacent to the "5th confirmation"
+    // claim it exists specifically to prevent.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-4'), {
+        id: 'initial-4', voidedConfirmationId: 'initial-4', voidedAt: serverTimestamp(),
+      })
+    );
+    // And even if a client fabricated a VoidRecord write attempt AND
+    // simultaneously tried the corresponding redo in the same test run
+    // (no such VoidRecord exists, since the line above failed), the
+    // redo create rule's own precondition (an existing VoidRecord at
+    // voidRecords/initial-4) still independently denies it.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-5'), {
+        id: 'initial-5',
+        type: 'initial',
+        chainPosition: 5,
+        redoesConfirmationId: 'initial-4',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
   });
 });
 
