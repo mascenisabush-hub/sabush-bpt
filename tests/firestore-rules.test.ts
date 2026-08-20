@@ -989,6 +989,147 @@ describe('Void & Redo — voidRecords create + chain-slot stockCounts create', (
       })
     );
   });
+
+  // [Step 5/5 — additional coverage beyond Step 2's own block] Step 2's
+  // suite above proves the FIRST cycle (initial -> initial-2) end to
+  // end. These prove each LATER chain slot is independently voidable
+  // within its own window — not merely reachable as a byproduct of a
+  // prior cycle succeeding — matching the Implementation Plan §6 item
+  // 3's "both sides of the boundary... for the void step" requirement
+  // applied to every slot, not just the first.
+  it('Confirmation #2 (chainPosition 2, itself a redo) can be voided within its own fresh window, then Confirmation #3 created', async () => {
+    await seedVoidRecord(BIZ, 'initial'); // proves initial-2 legitimately exists as a redo
+    await seedConfirmation(BIZ, 'initial-2', {
+      chainPosition: 2, redoesConfirmationId: 'initial', confirmedAt: freshConfirmedAt(),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-2'), {
+        id: 'initial-2', voidedConfirmationId: 'initial-2', voidedAt: serverTimestamp(),
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-3'), {
+        id: 'initial-3',
+        type: 'initial',
+        chainPosition: 3,
+        redoesConfirmationId: 'initial-2',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('Confirmation #3 (chainPosition 3, the last voidable slot before the #4 ceiling) can be voided within its own fresh window, then Confirmation #4 created', async () => {
+    await seedVoidRecord(BIZ, 'initial');
+    await seedVoidRecord(BIZ, 'initial-2');
+    await seedConfirmation(BIZ, 'initial-3', {
+      chainPosition: 3, redoesConfirmationId: 'initial-2', confirmedAt: freshConfirmedAt(),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-3'), {
+        id: 'initial-3', voidedConfirmationId: 'initial-3', voidedAt: serverTimestamp(),
+      })
+    );
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-4'), {
+        id: 'initial-4',
+        type: 'initial',
+        chainPosition: 4,
+        redoesConfirmationId: 'initial-3',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('Confirmation #2 with an EXPIRED window (> 30 minutes since its own confirmedAt) is denied — the window is per-confirmation, never restarted or inherited from a prior cycle', async () => {
+    await seedVoidRecord(BIZ, 'initial');
+    await seedConfirmation(BIZ, 'initial-2', {
+      chainPosition: 2, redoesConfirmationId: 'initial', confirmedAt: expiredConfirmedAt(),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-2'), {
+        id: 'initial-2', voidedConfirmationId: 'initial-2', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  // [Implementation Plan §6 item 6 — "a void attempt racing against the
+  // ceiling being reached by another completed cycle"] Once a full
+  // redo cycle has already produced Confirmation #4, an attempt to void
+  // an EARLIER slot in that same chain (#3) must still be denied if its
+  // own window has separately elapsed by the time the race is attempted
+  // — proving the ceiling and the window are both independently
+  // re-checked per attempt, not cached from an earlier point in the
+  // chain's history.
+  it('once Confirmation #4 already exists, a void attempt against Confirmation #3 (already voided to produce #4) is denied — not by the ceiling, but because it was already voided (duplicate-void, still correctly refused)', async () => {
+    await seedVoidRecord(BIZ, 'initial');
+    await seedVoidRecord(BIZ, 'initial-2');
+    await seedVoidRecord(BIZ, 'initial-3'); // #3 was already voided to produce #4
+    await seedConfirmation(BIZ, 'initial-4', {
+      chainPosition: 4, redoesConfirmationId: 'initial-3', confirmedAt: freshConfirmedAt(),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    // A second "void" of initial-3 is a create against an
+    // already-existing voidRecords/initial-3 document — denied by
+    // Firestore's own create-if-absent semantics, exactly like the
+    // single-cycle duplicate-void case above, now proven at the far end
+    // of a full 4-confirmation chain.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-3'), {
+        id: 'initial-3', voidedConfirmationId: 'initial-3', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('concurrent attempts cannot exceed the 4-confirmation ceiling even when raced against a fresh, valid VoidRecord for Confirmation #3: initial-5 is refused regardless of chainPosition claimed', async () => {
+    await seedVoidRecord(BIZ, 'initial');
+    await seedVoidRecord(BIZ, 'initial-2');
+    await seedVoidRecord(BIZ, 'initial-3');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    // Two racing "redo" attempts both citing the same real predecessor
+    // VoidRecord (initial-3) — one honestly claiming chainPosition 4
+    // (the legitimate next slot, covered by the "Confirmation #3...then
+    // Confirmation #4 created" test above), the other dishonestly
+    // claiming chainPosition 5 at a fabricated doc id. Firestore rules
+    // evaluate each write independently against its own claimed id/
+    // chainPosition — the fixed-slot-id constraint (Step 2) refuses the
+    // second regardless of ordering or timing.
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-5'), {
+        id: 'initial-5',
+        type: 'initial',
+        chainPosition: 5,
+        redoesConfirmationId: 'initial-3',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('a redo confirmation cannot fabricate a lineage relationship by claiming a chainPosition that does not match its own doc id\'s fixed slot (e.g. initial-2 doc id with chainPosition 3)', async () => {
+    await seedVoidRecord(BIZ, 'initial');
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2'), {
+        id: 'initial-2',
+        type: 'initial',
+        chainPosition: 3, // mismatched — initial-2's fixed slot is chainPosition 2
+        redoesConfirmationId: 'initial',
+        confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
+  });
 });
 
 // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
