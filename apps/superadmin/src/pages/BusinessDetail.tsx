@@ -105,7 +105,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
         ← Voltar à pesquisa
       </button>
 
-      <p style={{ fontSize: 12, color: '#64748b', marginTop: -8 }}>{businessId}</p>
+      <p style={{ fontSize: 12, color: '#94a3b8', marginTop: -8 }}>{businessId}</p>
 
       {!data && (
         <div style={{ background: '#1e293b', borderRadius: 8, padding: 24, maxWidth: 480 }}>
@@ -162,7 +162,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
           </dl>
 
           <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 4 }}>Equipa ({data.staff.length})</h3>
-          {data.staff.length === 0 && <p style={{ fontSize: 13, color: '#64748b' }}>Sem funcionários.</p>}
+          {data.staff.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>Sem funcionários.</p>}
           {data.staff.length > 0 && (
             <ul style={{ fontSize: 13, paddingLeft: 18, margin: 0 }}>
               {data.staff.map((s, i) => (
@@ -174,7 +174,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
           )}
 
           <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 4 }}>Pagamentos recentes ({data.recentPayments.length})</h3>
-          {data.recentPayments.length === 0 && <p style={{ fontSize: 13, color: '#64748b' }}>Sem pagamentos.</p>}
+          {data.recentPayments.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>Sem pagamentos.</p>}
           {data.recentPayments.length > 0 && (
             <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
               <thead>

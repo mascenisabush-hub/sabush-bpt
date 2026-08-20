@@ -230,19 +230,19 @@ export const StocksView: React.FC = () => {
 
         <div className="flex items-center gap-4 text-right font-mono">
           <div>
-            <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
             <span className="text-xs type-number text-[#111827]">
               {formatCurrency(s.remainingInvestmentValue, currencySymbol)}
             </span>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
             <span className="text-xs type-number text-gray-700">
               {formatCurrency(s.remainingMarketValue, currencySymbol)}
             </span>
           </div>
           <div>
-            <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
             <span className={`text-xs type-number ${s.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(s.remainingEmbeddedProfit, currencySymbol)}
             </span>
@@ -272,17 +272,17 @@ export const StocksView: React.FC = () => {
 
         <div className="flex items-center gap-3 bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-2.5 px-4 text-xs shrink-0">
           <div>
-            <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wide">{t('stocksView.remainingInvestment')}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-bold tracking-wide">{t('stocksView.remainingInvestment')}</span>
             <span className="type-number text-[#111827]">{formatCurrency(summaryTotals.investment, currencySymbol)}</span>
           </div>
           <div className="h-6 w-px bg-[#E5E7EB]"></div>
           <div>
-            <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wide">{t('stocksView.marketValue')}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-bold tracking-wide">{t('stocksView.marketValue')}</span>
             <span className="type-number text-gray-700">{formatCurrency(summaryTotals.market, currencySymbol)}</span>
           </div>
           <div className="h-6 w-px bg-[#E5E7EB]"></div>
           <div>
-            <span className="text-[10px] text-gray-400 block uppercase font-bold tracking-wide">{t('stocksView.remainingEmbeddedProfit')}</span>
+            <span className="text-[10px] text-gray-500 block uppercase font-bold tracking-wide">{t('stocksView.remainingEmbeddedProfit')}</span>
             <span className={`type-number ${summaryTotals.profit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
               {formatCurrency(summaryTotals.profit, currencySymbol)}
             </span>
@@ -418,19 +418,19 @@ export const StocksView: React.FC = () => {
                   </div>
                   <div className="flex items-center gap-4 text-right font-mono">
                     <div>
-                      <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
+                      <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.invested')}</span>
                       <span className="text-xs type-number text-[#111827]">
                         {formatCurrency(group.remainingInvestmentValue, currencySymbol)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
+                      <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.market')}</span>
                       <span className="text-xs type-number text-gray-700">
                         {formatCurrency(group.remainingMarketValue, currencySymbol)}
                       </span>
                     </div>
                     <div>
-                      <span className="text-[10px] text-gray-400 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
+                      <span className="text-[10px] text-gray-500 block uppercase font-sans font-semibold">{t('stocksView.embeddedProfit')}</span>
                       <span className={`text-xs type-number ${group.remainingEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                         {formatCurrency(group.remainingEmbeddedProfit, currencySymbol)}
                       </span>
@@ -515,37 +515,37 @@ export const StocksView: React.FC = () => {
               {/* Investment Summary */}
               <div className="grid grid-cols-2 sm:grid-cols-3 gap-2.5">
                 <div className="bg-white border border-[#E5E7EB] rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-400 uppercase font-bold block tracking-wide">{t('stocksView.modal.totalInvestment')}</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block tracking-wide">{t('stocksView.modal.totalInvestment')}</span>
                   <span className="text-sm type-number text-[#111827]">
                     {formatCurrency(selectedSummary.totalInvestmentValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-white border border-[#E5E7EB] rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-400 uppercase font-bold block tracking-wide">{t('stocksView.modal.marketValue')}</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block tracking-wide">{t('stocksView.modal.marketValue')}</span>
                   <span className="text-sm type-number text-gray-700">
                     {formatCurrency(selectedSummary.totalMarketValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-white border border-[#E5E7EB] rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-gray-400 uppercase font-bold block tracking-wide">{t('stocksView.modal.embeddedProfit')}</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block tracking-wide">{t('stocksView.modal.embeddedProfit')}</span>
                   <span className={`text-sm type-number ${selectedSummary.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.totalEmbeddedProfit, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-[#0B1F3A]/60 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingInvestment')}</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingInvestment')}</span>
                   <span className="text-sm type-number text-[#0B1F3A]">
                     {formatCurrency(selectedSummary.remainingInvestmentValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-[#0B1F3A]/60 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingMarket')}</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingMarket')}</span>
                   <span className="text-sm type-number text-[#0B1F3A]">
                     {formatCurrency(selectedSummary.remainingMarketValue, currencySymbol)}
                   </span>
                 </div>
                 <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-xl p-3 text-center">
-                  <span className="text-[10px] text-[#0B1F3A]/60 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingProfit')}</span>
+                  <span className="text-[10px] text-gray-500 uppercase font-bold block tracking-wide">{t('stocksView.modal.remainingProfit')}</span>
                   <span className={`text-sm type-number ${selectedSummary.remainingEmbeddedProfit >= 0 ? 'text-emerald-700' : 'text-rose-600'}`}>
                     {formatCurrency(selectedSummary.remainingEmbeddedProfit, currencySymbol)}
                   </span>
@@ -569,7 +569,7 @@ export const StocksView: React.FC = () => {
                 <div className="border border-[#E5E7EB] rounded-2xl bg-[#FAFBFC] p-2 overflow-x-auto">
                   <table className="w-full text-left text-xs min-w-[560px]">
                     <thead>
-                      <tr className="border-b border-[#E5E7EB] text-[10px] font-bold uppercase tracking-wide text-gray-400">
+                      <tr className="border-b border-[#E5E7EB] text-[10px] font-bold uppercase tracking-wide text-gray-500">
                         <th className="py-2 px-2.5">{t('stocksView.modal.table.product')}</th>
                         <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.qtyRemaining')}</th>
                         <th className="py-2 px-2.5 text-right">{t('stocksView.modal.table.costSell')}</th>

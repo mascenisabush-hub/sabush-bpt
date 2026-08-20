@@ -735,12 +735,12 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               `rows` state. */}
           <div>
             <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 border-b border-[#E5E7EB]`}>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Nome</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Qtd</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Unid</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Custo/Un</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Venda/Un</span>
-              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Valor Total</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Custo/Un</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Venda/Un</span>
+              <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor Total</span>
               <span />
             </div>
 

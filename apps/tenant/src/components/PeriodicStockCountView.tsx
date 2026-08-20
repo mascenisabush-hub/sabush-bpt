@@ -683,7 +683,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </span>
         </p>
         {savedTally && (
-          <p className="text-xs text-gray-400">
+          <p className="text-xs text-gray-500">
             {savedTally.countedItems.length} produtos contados
             {savedTally.notCountedProductNames.length > 0
               ? ` · ${savedTally.notCountedProductNames.length} não contados`
@@ -1006,12 +1006,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             {visibleCatalogEntries.length > 0 && (
               <>
                 <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 mt-3 border-b border-[#E5E7EB]`}>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Nome</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Qtd</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Unid</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Compra/Un</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Venda/Un</span>
-                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-400">Valor</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Compra/Un</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Venda/Un</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor</span>
                   <span />
                 </div>
 
@@ -1121,7 +1121,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
             {removedCatalogEntries.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-gray-400 mr-1">Removidos desta contagem:</span>
+                <span className="text-[11px] text-gray-500 mr-1">Removidos desta contagem:</span>
                 {removedCatalogEntries.map(([productId, row]) => (
                   <button
                     key={productId}
@@ -1350,7 +1350,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         present on counts recorded after this amendment;
                         never recalculated from the live formula. */}
                     {typeof count.expectedValueAtCount === 'number' && (
-                      <span className="text-[10px] text-gray-400 tabular-nums block mt-0.5">
+                      <span className="text-[10px] text-gray-500 tabular-nums block mt-0.5">
                         vs. {formatCurrency(count.expectedValueAtCount, currencySymbol)} esperado
                       </span>
                     )}
