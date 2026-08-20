@@ -6,6 +6,7 @@ import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, Chev
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { InitialStockDraftItem, UnitRelationship } from '../types';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { computePortionLabels } from '../lib/stockCountPortionGrouping';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -325,6 +326,17 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     return acc + q * c;
   }, 0);
 
+  // [Increment B, Checkpoint B5 — Consolidated Specification §16] Purely
+  // presentational: identifies which rows share a product name with
+  // another row in THIS draft, so they can be visually labeled as
+  // portions of one count for that product rather than reading as an
+  // accidental duplicate entry. Computed fresh every render from the
+  // current `rows` state — cheap (this list is never large) and always
+  // in sync with in-progress edits. Feeds NOTHING into totalCapital
+  // above, InitialStockDraftItem, or any Firestore write — see
+  // stockCountPortionGrouping.ts's own header comment.
+  const portionLabels = computePortionLabels(rows);
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -522,6 +534,12 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             <div className="space-y-1">
               {rows.map((row, idx) => {
                 const showUnitRelationshipSection = isGenuinelyNewProductName(row.productName);
+                // [Increment B, Checkpoint B5] Undefined only if `row.id`
+                // is somehow absent from `rows` at label-computation time
+                // — cannot happen in practice (portionLabels is derived
+                // from this exact same `rows` array on every render) but
+                // defensively defaulted rather than risking a crash.
+                const portionLabel = portionLabels.get(row.id) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                 return (
                 <React.Fragment key={row.id}>
                 <div
@@ -536,6 +554,22 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                       onChange={(e) => updateRow(row.id, { productName: e.target.value })}
                       className={fieldClass}
                     />
+                    {/* [Increment B, Checkpoint B5 — Consolidated
+                        Specification §16] Shown ONLY when 2+ rows in
+                        this draft share this exact product name —
+                        makes clear these rows are being combined as
+                        portions of ONE product's count, each with its
+                        own unit/price basis, never as an accidental
+                        duplicate product entry. Purely informational;
+                        changes no value, triggers no validation, and
+                        has no effect on totalCapital or what gets
+                        persisted — see computePortionLabels's own
+                        header comment. */}
+                    {portionLabel.isMultiPortion && (
+                      <p className="mt-1 text-[10.5px] text-[#B8952F] font-medium leading-snug">
+                        Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
+                      </p>
+                    )}
                   </div>
 
                   <div>
