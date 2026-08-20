@@ -600,7 +600,8 @@ export interface StockCount {
   // most one confirmation at each position, and at most 4 positions
   // ever (POL-0008 Decision 5). chainPosition === 4 is the ceiling
   // marker: Void & Redo is unavailable against that confirmation, even
-  // though its own 30-minute window is still computed and displayed
+  // though its own 12-hour window [Recovery Window Amendment, amending
+  // the original 30-minute value] is still computed and displayed
   // exactly like every other confirmation's (Specification §21).
   chainPosition?: 1 | 2 | 3 | 4;
   // [Void & Redo — Implementation Authorization §2 item 1] Present only

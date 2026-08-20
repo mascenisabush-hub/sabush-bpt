@@ -21,7 +21,8 @@
 //      own established precedent for this exact technique.
 //
 // Firestore-rules-emulator-level coverage (Owner-only enforcement, the
-// 30-minute boundary, the chainPosition-4 ceiling, tenant isolation,
+// 12-hour boundary [Recovery Window Amendment, amending the original
+// 30-minute value], the chainPosition-4 ceiling, tenant isolation,
 // the subscription exemption's scope, concurrency) already exists in
 // tests/firestore-rules.test.ts's own "Void & Redo" describe block
 // (Step 2/5) — this suite adds the individual-chain-slot and
@@ -73,28 +74,36 @@ describe('computeInitialStockVoidEligibility — no confirmedAt (legacy record, 
   });
 });
 
-describe('computeInitialStockVoidEligibility — 30-minute window', () => {
-  it('is eligible well within the window (10 minutes elapsed, chainPosition 1)', () => {
+describe('computeInitialStockVoidEligibility — 12-hour window [Recovery Window Amendment, amending the original 30-minute value]', () => {
+  it('is eligible well within the window (2 hours elapsed, chainPosition 1)', () => {
     const now = new Date('2026-08-20T12:00:00Z');
-    const confirmedAt = Timestamp.fromMillis(now.getTime() - 10 * 60 * 1000);
+    const confirmedAt = Timestamp.fromMillis(now.getTime() - 2 * 60 * 60 * 1000);
     const result = computeInitialStockVoidEligibility(makeConfirmation({ chainPosition: 1, confirmedAt }), now);
     assert.equal(result.eligible, true);
-    // 20 of the 30 minutes remain.
-    assert.equal(result.msRemaining, 20 * 60 * 1000);
-    assert.equal(result.windowExpiresAt!.getTime(), confirmedAt.toMillis() + 30 * 60 * 1000);
+    // 10 of the 12 hours remain.
+    assert.equal(result.msRemaining, 10 * 60 * 60 * 1000);
+    assert.equal(result.windowExpiresAt!.getTime(), confirmedAt.toMillis() + 12 * 60 * 60 * 1000);
   });
 
-  it('is ineligible just past the 30-minute boundary (30 minutes + 1 second elapsed)', () => {
+  it('is eligible several hours later — the real "Owner discovers the mistake hours after confirming" path this amendment exists for (11 hours elapsed)', () => {
     const now = new Date('2026-08-20T12:00:00Z');
-    const confirmedAt = Timestamp.fromMillis(now.getTime() - (30 * 60 * 1000 + 1000));
+    const confirmedAt = Timestamp.fromMillis(now.getTime() - 11 * 60 * 60 * 1000);
+    const result = computeInitialStockVoidEligibility(makeConfirmation({ chainPosition: 1, confirmedAt }), now);
+    assert.equal(result.eligible, true);
+    assert.equal(result.msRemaining, 1 * 60 * 60 * 1000);
+  });
+
+  it('is ineligible just past the 12-hour boundary (12 hours + 1 second elapsed)', () => {
+    const now = new Date('2026-08-20T12:00:00Z');
+    const confirmedAt = Timestamp.fromMillis(now.getTime() - (12 * 60 * 60 * 1000 + 1000));
     const result = computeInitialStockVoidEligibility(makeConfirmation({ chainPosition: 1, confirmedAt }), now);
     assert.equal(result.eligible, false);
     assert.equal(result.msRemaining, 0);
   });
 
-  it('is eligible one second before the boundary (29:59 elapsed)', () => {
+  it('is eligible one second before the boundary (11:59:59 elapsed)', () => {
     const now = new Date('2026-08-20T12:00:00Z');
-    const confirmedAt = Timestamp.fromMillis(now.getTime() - (30 * 60 * 1000 - 1000));
+    const confirmedAt = Timestamp.fromMillis(now.getTime() - (12 * 60 * 60 * 1000 - 1000));
     const result = computeInitialStockVoidEligibility(makeConfirmation({ chainPosition: 1, confirmedAt }), now);
     assert.equal(result.eligible, true);
     assert.equal(result.msRemaining, 1000);
@@ -102,7 +111,7 @@ describe('computeInitialStockVoidEligibility — 30-minute window', () => {
 
   it('is ineligible exactly at the boundary (now === windowExpiresAt, the "<" comparison excludes it)', () => {
     const now = new Date('2026-08-20T12:00:00Z');
-    const confirmedAt = Timestamp.fromMillis(now.getTime() - 30 * 60 * 1000);
+    const confirmedAt = Timestamp.fromMillis(now.getTime() - 12 * 60 * 60 * 1000);
     const result = computeInitialStockVoidEligibility(makeConfirmation({ chainPosition: 1, confirmedAt }), now);
     assert.equal(result.eligible, false);
   });
@@ -126,15 +135,15 @@ describe('computeInitialStockVoidEligibility — chainPosition ceiling (Confirma
 
   it('Confirmation #4 still reports a REAL windowExpiresAt/msRemaining — the window is visible/measurable, only the void step itself is blocked (§21 clarification)', () => {
     const now = new Date('2026-08-20T12:00:00Z');
-    const confirmedAt = Timestamp.fromMillis(now.getTime() - 5 * 60 * 1000); // 5 minutes elapsed
+    const confirmedAt = Timestamp.fromMillis(now.getTime() - 2 * 60 * 60 * 1000); // 2 hours elapsed
     const result = computeInitialStockVoidEligibility(makeConfirmation({ chainPosition: 4, confirmedAt }), now);
     assert.equal(result.eligible, false);
     // NOT the "no confirmedAt" case's flattened 0/null — this is a real,
     // still-computed window, deliberately distinguished from ineligibility
     // due to a missing timestamp.
-    assert.equal(result.msRemaining, 25 * 60 * 1000);
+    assert.equal(result.msRemaining, 10 * 60 * 60 * 1000);
     assert.ok(result.windowExpiresAt !== null);
-    assert.equal(result.windowExpiresAt!.getTime(), confirmedAt.toMillis() + 30 * 60 * 1000);
+    assert.equal(result.windowExpiresAt!.getTime(), confirmedAt.toMillis() + 12 * 60 * 60 * 1000);
   });
 
   it('chainPosition 1, 2, and 3 are each independently eligible within their own fresh window — only 4 is special-cased', () => {
@@ -331,7 +340,7 @@ describe('InitialStockCountView.tsx — accidental-confirmation prevention (FR-1
   it('the secondary-confirmation panel shows consequence messaging, distinct for an original vs. a redo confirmation', () => {
     assert.match(viewSource, /redoingConfirmationId \? \(/);
     assert.match(viewSource, /Esta nova contagem vai substituir a confirmação anulada/);
-    assert.match(viewSource, /Tem 30 minutos após confirmar para anular e refazer/);
+    assert.match(viewSource, /Tem 12 horas após confirmar para anular e refazer/);
   });
 });
 
@@ -350,9 +359,10 @@ describe('InitialStockCountView.tsx — recovery-window visibility (FR-21)', () 
     assert.match(handleVoidMatch![0], /if \(!showVoidConfirmStep\) \{\s*\n\s*setShowVoidConfirmStep\(true\);\s*\n\s*return;/);
   });
 
-  it('handleVoidAndRedo does not itself re-check the 30-minute window or chainPosition client-side — authorization/window/ceiling enforcement remains entirely firestore.rules\', never reimplemented here', () => {
+  it('handleVoidAndRedo does not itself re-check the 12-hour window or chainPosition client-side — authorization/window/ceiling enforcement remains entirely firestore.rules\', never reimplemented here', () => {
     const handleVoidMatch = viewSource.match(/const handleVoidAndRedo = async \(\) => \{[\s\S]*?\n  \};/);
     assert.ok(handleVoidMatch);
+    assert.doesNotMatch(handleVoidMatch![0], /12 \* 60 \* 60 \* 1000/);
     assert.doesNotMatch(handleVoidMatch![0], /30 \* 60 \* 1000/);
     assert.doesNotMatch(handleVoidMatch![0], /chainPosition/);
   });

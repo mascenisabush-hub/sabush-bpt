@@ -692,8 +692,8 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                     Janela de recuperação ativa — {formatMsRemaining(initialStockVoidEligibility.msRemaining)} restantes
                   </p>
                   <p className="text-[11.5px] text-amber-700 mt-1 leading-relaxed">
-                    Confirmou por engano? Pode anular esta confirmação e refazê-la, mas apenas dentro desta janela de 30
-                    minutos a partir do momento em que confirmou. A confirmação original fica permanentemente registada
+                    Confirmou por engano? Pode anular esta confirmação e refazê-la, mas apenas dentro desta janela de 12
+                    horas a partir do momento em que confirmou. A confirmação original fica permanentemente registada
                     no histórico, marcada como anulada — nunca é apagada.
                   </p>
                 </div>
@@ -1216,13 +1216,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                   {redoingConfirmationId ? (
                     <>
                       Esta nova contagem vai substituir a confirmação anulada como o seu Capital Inicial ativo. Uma vez
-                      confirmada, tem também a sua própria janela de recuperação de 30 minutos — sujeita ao limite
+                      confirmada, tem também a sua própria janela de recuperação de 12 horas — sujeita ao limite
                       máximo de recuperações para esta configuração de Capital Inicial.
                     </>
                   ) : (
                     <>
                       Esta ação estabelece o seu <strong className="font-semibold">Capital Inicial do Negócio</strong>.
-                      Tem 30 minutos após confirmar para anular e refazer, caso tenha cometido um erro — depois disso,
+                      Tem 12 horas após confirmar para anular e refazer, caso tenha cometido um erro — depois disso,
                       não é livremente reversível.
                     </>
                   )}

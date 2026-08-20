@@ -91,7 +91,8 @@ export function calculateInventoryTotals(batches: StockBatch[], quebras: Quebra[
 // [Void & Redo — Implementation Authorization §2 items 8-9; Rule 8
 // Finding I1; Specification FR-2, FR-8, FR-21] Client-side DISPLAY of
 // whether Void & Redo currently looks available for a given
-// confirmation, and how much of its 30-minute window remains.
+// confirmation, and how much of its 12-hour window [Recovery Window
+// Amendment, amending the original 30-minute value] remains.
 //
 // NEVER the authoritative gate — firestore.rules'
 // initialStockConfirmationVoidable() is authoritative, evaluated
@@ -132,7 +133,7 @@ export function computeInitialStockVoidEligibility(
   }
 
   const confirmedAtMs = initialStockCount.confirmedAt.toMillis();
-  const windowExpiresAtMs = confirmedAtMs + 30 * 60 * 1000;
+  const windowExpiresAtMs = confirmedAtMs + 12 * 60 * 60 * 1000;
   const msRemaining = Math.max(0, windowExpiresAtMs - now.getTime());
   const chainPosition = initialStockCount.chainPosition ?? 1;
   const withinWindow = now.getTime() < windowExpiresAtMs;

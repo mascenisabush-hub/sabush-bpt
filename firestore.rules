@@ -210,7 +210,8 @@ service cloud.firestore {
     // chainPosition other than 4 (the ceiling — Rule 8 Finding
     // E1/Specification §21: Confirmation #4 can never be voided, under
     // any circumstance, independent of whether its own window is still
-    // open), and whose own 30-minute window — measured from its own
+    // open), and whose own 12-hour window [Recovery Window Amendment,
+    // amending the original 30-minute value] — measured from its own
     // confirmedAt, compared against request.time (the server's trusted
     // clock, never a client-supplied value) — has not yet elapsed.
     // Used exclusively by the /voidRecords create rule below. The
@@ -228,7 +229,7 @@ service cloud.firestore {
         // Safe direct (non-.get()) field access: the clause immediately
         // above already proved 'confirmedAt' is present and non-null on
         // this exact document, via short-circuit && evaluation order.
-        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.confirmedAt + duration.value(30, 'm');
+        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.confirmedAt + duration.value(12, 'h');
     }
 
     // ==========================================================

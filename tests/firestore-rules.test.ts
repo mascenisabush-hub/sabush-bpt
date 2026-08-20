@@ -664,14 +664,15 @@ describe('stockCounts', () => {
 // directly against firestore.rules' new /voidRecords rule and the
 // tightened /stockCounts create rule, not against application code.
 describe('Void & Redo — voidRecords create + chain-slot stockCounts create', () => {
-  // A confirmedAt 10 minutes old is safely inside the 30-minute window
+  // A confirmedAt 10 minutes old is safely inside the 12-hour window
+  // [Recovery Window Amendment, amending the original 30-minute value]
   // for every "should succeed" fixture below.
   function freshConfirmedAt() {
     return Timestamp.fromMillis(Date.now() - 10 * 60 * 1000);
   }
-  // 31 minutes old — just past the 30-minute boundary.
+  // 12 hours + 1 minute old — just past the 12-hour boundary.
   function expiredConfirmedAt() {
-    return Timestamp.fromMillis(Date.now() - 31 * 60 * 1000);
+    return Timestamp.fromMillis(Date.now() - (12 * 60 * 60 * 1000 + 60 * 1000));
   }
 
   async function seedConfirmation(
@@ -727,6 +728,38 @@ describe('Void & Redo — voidRecords create + chain-slot stockCounts create', (
     );
   });
 
+  // [Recovery Window Amendment] The real operational path this
+  // amendment exists to fix: an Owner who accidentally confirms
+  // Initial Stock, then discovers the mistake several hours later —
+  // not within the original 30-minute window, but still well inside
+  // the new 12-hour one.
+  it('Owner discovering the mistake 8 hours after confirming (well within the 12-hour window, well past the old 30-minute one) can still void and redo', async () => {
+    const eightHoursAgo = Timestamp.fromMillis(Date.now() - 8 * 60 * 60 * 1000);
+    await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: eightHoursAgo });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial',
+        voidedConfirmationId: 'initial',
+        voidedAt: serverTimestamp(),
+      })
+    );
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial-2'), {
+        id: 'initial-2',
+        type: 'initial',
+        chainPosition: 2,
+        redoesConfirmationId: 'initial',
+        confirmedAt: serverTimestamp(),
+        items: [],
+        totalValue: 0,
+        createdAt: new Date().toISOString(),
+      })
+    );
+  });
+
   it('Manager and Staff cannot create a VoidRecord, even with a valid window', async () => {
     await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: freshConfirmedAt() });
     const managerDb = ctxFor(MANAGER_WITH_CLOSINGS_UID).firestore();
@@ -744,7 +777,7 @@ describe('Void & Redo — voidRecords create + chain-slot stockCounts create', (
     );
   });
 
-  it('An expired window (> 30 minutes) denies the void', async () => {
+  it('An expired window (> 12 hours) denies the void', async () => {
     await seedConfirmation(BIZ, 'initial', { chainPosition: 1, confirmedAt: expiredConfirmedAt() });
     const ownerDb = ctxFor(OWNER_UID).firestore();
 
@@ -1046,7 +1079,7 @@ describe('Void & Redo — voidRecords create + chain-slot stockCounts create', (
     );
   });
 
-  it('Confirmation #2 with an EXPIRED window (> 30 minutes since its own confirmedAt) is denied — the window is per-confirmation, never restarted or inherited from a prior cycle', async () => {
+  it('Confirmation #2 with an EXPIRED window (> 12 hours since its own confirmedAt) is denied — the window is per-confirmation, never restarted or inherited from a prior cycle', async () => {
     await seedVoidRecord(BIZ, 'initial');
     await seedConfirmation(BIZ, 'initial-2', {
       chainPosition: 2, redoesConfirmationId: 'initial', confirmedAt: expiredConfirmedAt(),

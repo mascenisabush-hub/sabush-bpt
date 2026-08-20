@@ -2876,7 +2876,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // chainPosition-bearing 'initial' confirmation (original and every
     // redo alike). firestore.rules requires confirmedAt === request.time
     // for those branches; a client-computed Date would fail that check
-    // outright, by design (this is what makes the 30-minute window's own
+    // outright, by design (this is what makes the 12-hour window's own
     // timestamp untamperable). Built as a SEPARATE write-payload object
     // (not by adding confirmedAt onto `newCount` itself) purely so
     // `newCount` — used below for Timeline logging and
@@ -2893,7 +2893,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // chainPosition-bearing 'initial' create (both the new-shape
     // original and every redo branch); a client-computed Date would
     // fail that check outright, by design (this is what makes the
-    // 30-minute window's own timestamp untamperable — Finding B1).
+    // 12-hour window's own timestamp untamperable — Finding B1).
     // [Amendment v1.0, Part 1] Confirmation is atomic with draft cleanup —
     // same Firestore batch as the stockCounts write above. If the batch
     // fails to commit for any reason, this delete never happens either,
@@ -3015,7 +3015,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // — never a blank form, never a partial reconstruction (FR-3).
   //
   // Authorization is entirely firestore.rules' — this function does
-  // NOT re-implement the Owner-only/30-minute-window/ceiling checks;
+  // NOT re-implement the Owner-only/12-hour-window/ceiling checks;
   // it only issues the write and surfaces a clear message if the rules
   // layer rejects it (window elapsed, Confirmation #4, non-Owner, or
   // any other precondition failure — all indistinguishable from a
