@@ -10,6 +10,7 @@ import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } fr
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -1013,6 +1014,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         return;
       }
 
+      // [Increment B, Checkpoint B1 — Consolidated Specification §8]
+      // Defensive re-check, independent of the UI-level queue gating
+      // (getCurrentUnresolvedRowId/getRowsToDisplay, below in the
+      // render) that normally keeps the Submit button itself from
+      // rendering until every row is resolved. Mirrors this file's own
+      // established pattern (Product Memory/UOM's unitRelationship is
+      // re-validated here too, not merely trusted from what the UI
+      // showed) — a still-pending candidate list must never reach
+      // addMultipleStockBatches; that would silently create a new
+      // product for a wording the owner had not yet actually resolved,
+      // exactly the outcome §8/§11's one-at-a-time-then-atomic rule
+      // exists to prevent.
+      if (row.supplierWordingCandidates && row.supplierWordingCandidates.length > 0) {
+        alert(t('addStock.supplierWording.unresolvedCandidatesError', { n: i + 1 }));
+        return;
+      }
+
       // [Product Memory / UOM — Increment A, Checkpoint 2b] Built ONLY
       // when no existing product currently matches this row's name —
       // re-checked HERE at the point of use, not merely trusted from
@@ -1232,6 +1250,26 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     setWasRestoredFromDraft(false);
     setDraftSaveState('idle');
   };
+
+  // [Increment B, Checkpoint B1 — Consolidated Specification §8] The
+  // one-at-a-time unresolved-product queue. `currentUnresolvedRowId` is
+  // the single row (if any) the owner must resolve right now (§8 Step
+  // 3); `readyForFinalReview` gates §11's whole-receipt review screen
+  // (recognized + newly-resolved rows together, one atomic
+  // confirmation) — it stays false, and only the current unresolved
+  // row is rendered (rowsToDisplay, used below in place of `rows`),
+  // until the queue is empty. This introduces no new matching/
+  // candidate-detection logic — it only sequences the already-
+  // implemented per-row supplier-wording confirmation UI (Rule 8
+  // Finding 6). An ordinary single-row entry with nothing pending is
+  // unaffected: rowsToDisplay === rows and readyForFinalReview is true
+  // immediately, exactly as before this checkpoint.
+  const currentUnresolvedRowId = getCurrentUnresolvedRowId(rows);
+  const readyForFinalReview = isReceiptReadyForFinalReview(rows);
+  const rowsToDisplay = getRowsToDisplay(rows);
+  const currentUnresolvedRowNumber = currentUnresolvedRowId
+    ? rows.findIndex((r) => r.id === currentUnresolvedRowId) + 1
+    : null;
 
   // Calculate totals across all rows (new batches, so remainingQuantity == quantity — no quebras yet)
   const totals = rows.reduce(
@@ -1584,6 +1622,27 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               </p>
             </div>
 
+            {/* [Increment B, Checkpoint B1 — Consolidated Specification
+                §8] Unresolved-product progress banner. Shown only while
+                the queue is non-empty; below it, only ONE row (the
+                current unresolved one) is rendered — never the rest of
+                the receipt (§8 Step 3: "the owner sees exactly that one
+                line's resolution choice — not the rest of the
+                receipt"). Disappears the moment the queue empties and
+                the full receipt (§11) is shown for one whole-receipt
+                review + one atomic confirmation. */}
+            {!readyForFinalReview && rows.length > 1 && (
+              <div className="bg-[#FFF8E6] border border-[#D4AF37]/40 rounded-xl px-4 py-3 flex items-center gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />
+                <p className="text-[11.5px] leading-relaxed text-[#7A5C12] font-medium">
+                  {t('addStock.sequencing.resolveBeforeReview', {
+                    n: currentUnresolvedRowNumber ?? 0,
+                    total: rows.length,
+                  })}
+                </p>
+              </div>
+            )}
+
             {/* COMPACT TABLE */}
             <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
               {/* Table Header (Desktop) */}
@@ -1604,7 +1663,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
               {/* Table Body / Dense Rows - Flush with no horizontal dividers */}
               <div className="space-y-0">
-                {rows.map((row, index) => {
+                {rowsToDisplay.map((row) => {
+                  // [Increment B, Checkpoint B1] `index` below must
+                  // reflect the row's TRUE position in the full receipt
+                  // (`rows`), never its position within the filtered
+                  // `rowsToDisplay` — otherwise the "#N" batch label
+                  // would renumber as unresolved rows drop out of the
+                  // queue, which would misidentify which physical
+                  // receipt line the owner is looking at.
+                  const index = rows.findIndex((r) => r.id === row.id);
                   const numQty = parseFloat(row.quantity) || 0;
                   const numCost = parseFloat(row.costPrice) || 0;
                   const numSell = parseFloat(row.sellingPrice) || 0;
@@ -2179,80 +2246,99 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               </div>
             </div>
 
-            {/* Action to Add Another Product Row */}
-            <button
-              type="button"
-              onClick={handleAddRow}
-              className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
-            >
-              <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
-              <span>{t('addStock.addAnotherProduct')}</span>
-            </button>
+            {/* [Increment B, Checkpoint B1 — Consolidated Specification
+                §8/§11] Everything below this point — adding another
+                receipt line, the combined totals summary, the
+                auto-closing notice, and the final Submit action — is
+                part of the WHOLE-RECEIPT review (§11) and must not
+                appear until the unresolved queue is empty. This is the
+                render-level enforcement of "the full receipt review is
+                NOT shown as the final confirmation surface until all
+                unresolved products are resolved... once all are
+                resolved, the complete receipt is shown, the owner
+                confirms once, the entire receipt commits atomically."
+                An ordinary receipt with nothing ever unresolved
+                (readyForFinalReview true from the start) is completely
+                unaffected — this section renders exactly as it did
+                before this checkpoint. */}
+            {readyForFinalReview && (
+              <>
+                {/* Action to Add Another Product Row */}
+                <button
+                  type="button"
+                  onClick={handleAddRow}
+                  className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
+                >
+                  <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
+                  <span>{t('addStock.addAnotherProduct')}</span>
+                </button>
 
-            {/* Combined Total Summary Bar */}
-            {!isStaff && (
-              <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
-                <div className="flex items-center gap-2">
-                  <Sparkles className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />
-                  <span className="font-bold text-[#111827] text-[12.5px]">
-                    {rows.length === 1
-                      ? t('addStock.summary.titleOne', { count: rows.length })
-                      : t('addStock.summary.titleOther', { count: rows.length })}
+                {/* Combined Total Summary Bar */}
+                {!isStaff && (
+                  <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
+                    <div className="flex items-center gap-2">
+                      <Sparkles className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />
+                      <span className="font-bold text-[#111827] text-[12.5px]">
+                        {rows.length === 1
+                          ? t('addStock.summary.titleOne', { count: rows.length })
+                          : t('addStock.summary.titleOther', { count: rows.length })}
+                      </span>
+                    </div>
+
+                    <div className="flex items-center gap-4 sm:gap-6 text-[11px]">
+                      <div>
+                        <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.totalInvestment')}</span>
+                        <span className="font-bold text-[#111827] font-mono tabular-nums">
+                          {formatCurrency(totals.totalInvestmentValue, currencySymbol)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.marketValue')}</span>
+                        <span className="font-bold text-[#111827] font-mono tabular-nums">
+                          {formatCurrency(totals.totalMarketValue, currencySymbol)}
+                        </span>
+                      </div>
+
+                      <div>
+                        <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.embeddedProfit')}</span>
+                        <span
+                          className={`type-number tabular-nums ${
+                            totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
+                          }`}
+                        >
+                          {formatCurrency(totals.totalEmbeddedProfit, currencySymbol)}
+                        </span>
+                      </div>
+                    </div>
+                  </div>
+                )}
+
+                {/* Batch Auto-closing Notice */}
+                <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3 flex items-start gap-2.5">
+                  <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
+                  <p className="text-[11.5px] leading-relaxed text-gray-600">
+                    {t('addStock.autoCloseNotice')}
+                  </p>
+                </div>
+
+                {/* Submit Button */}
+                <button
+                  type="submit"
+                  disabled={isSaving}
+                  className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-60"
+                >
+                  <span>
+                    {isSaving
+                      ? '...'
+                      : rows.length > 1
+                      ? t('addStock.submitMultiple', { count: rows.length })
+                      : t('addStock.submitOne')}
                   </span>
-                </div>
-
-                <div className="flex items-center gap-4 sm:gap-6 text-[11px]">
-                  <div>
-                    <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.totalInvestment')}</span>
-                    <span className="font-bold text-[#111827] font-mono tabular-nums">
-                      {formatCurrency(totals.totalInvestmentValue, currencySymbol)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.marketValue')}</span>
-                    <span className="font-bold text-[#111827] font-mono tabular-nums">
-                      {formatCurrency(totals.totalMarketValue, currencySymbol)}
-                    </span>
-                  </div>
-
-                  <div>
-                    <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.embeddedProfit')}</span>
-                    <span
-                      className={`type-number tabular-nums ${
-                        totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
-                      }`}
-                    >
-                      {formatCurrency(totals.totalEmbeddedProfit, currencySymbol)}
-                    </span>
-                  </div>
-                </div>
-              </div>
+                  <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
+                </button>
+              </>
             )}
-
-            {/* Batch Auto-closing Notice */}
-            <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3 flex items-start gap-2.5">
-              <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-              <p className="text-[11.5px] leading-relaxed text-gray-600">
-                {t('addStock.autoCloseNotice')}
-              </p>
-            </div>
-
-            {/* Submit Button */}
-            <button
-              type="submit"
-              disabled={isSaving}
-              className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-60"
-            >
-              <span>
-                {isSaving
-                  ? '...'
-                  : rows.length > 1
-                  ? t('addStock.submitMultiple', { count: rows.length })
-                  : t('addStock.submitOne')}
-              </span>
-              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
-            </button>
           </form>
         )}
       </div>

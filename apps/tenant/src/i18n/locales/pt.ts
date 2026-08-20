@@ -341,6 +341,11 @@ export interface TranslationDict {
       distinguishingInfoLabel: string;
       distinguishingInfoPlaceholder: string;
       distinguishingInfoRequiredError: string;
+      unresolvedCandidatesError: string;
+    };
+    // [Increment B, Checkpoint B1 — Consolidated Specification §8]
+    sequencing: {
+      resolveBeforeReview: string;
     };
   };
   addQuebra: {
@@ -1276,6 +1281,10 @@ export const pt: TranslationDict = {
       distinguishingInfoLabel: 'O que torna este produto diferente?',
       distinguishingInfoPlaceholder: 'Ex.: embalagem de 500g em vez de 400g',
       distinguishingInfoRequiredError: 'Explique o que torna este produto diferente antes de continuar (linha {n}).',
+      unresolvedCandidatesError: 'Resolva a correspondência de produto sugerida antes de continuar (linha {n}).',
+    },
+    sequencing: {
+      resolveBeforeReview: 'Resolva a linha {n} de {total} antes de rever o recibo completo.',
     },
   },
   addQuebra: {

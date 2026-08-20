@@ -368,6 +368,10 @@ export const en: TranslationDict = {
       distinguishingInfoLabel: 'What makes this product different?',
       distinguishingInfoPlaceholder: 'E.g., 500g pack instead of 400g',
       distinguishingInfoRequiredError: 'Explain what makes this product different before continuing (row {n}).',
+      unresolvedCandidatesError: 'Resolve the suggested product match before continuing (row {n}).',
+    },
+    sequencing: {
+      resolveBeforeReview: 'Resolve row {n} of {total} before reviewing the full receipt.',
     },
   },
   addQuebra: {
