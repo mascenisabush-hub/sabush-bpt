@@ -110,6 +110,23 @@ export interface StockCountWorkingRow {
   // both land in Not Counted, never in Counted, never as an implied
   // zero.
   removed?: boolean;
+  // [Product Memory / UOM — Increment A, Checkpoint 2c] UI-only fields,
+  // meaningful only for a manually-added row (productId undefined) that
+  // does not match any existing catalog product — the Periodic Contagem
+  // analogue of InitialStockCountView.tsx's/AddStockView.tsx's own
+  // identically-scoped fields from Checkpoints 2a/2b. Deliberately NOT
+  // referenced by workingRowToDraftItem/draftItemToWorkingRow below —
+  // both build explicit, field-by-field object literals rather than
+  // spreading `row`, so these two fields are excluded from the
+  // persisted draft by construction, with no change needed to either
+  // function. tallyStockCountRows, further below, is unaffected for the
+  // identical reason (it also builds an explicit StockCountTallyItem
+  // literal, never spreading the source row). PeriodicStockCountView.tsx
+  // is solely responsible for reading these two fields and building/
+  // validating an actual UnitRelationship candidate from them at
+  // submission time — this type only carries the raw strings.
+  newProductSellingUnit?: string;
+  newProductSellingUnitFactor?: string;
 }
 
 export interface StockCountTallyItem {

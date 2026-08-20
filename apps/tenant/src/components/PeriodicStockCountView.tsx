@@ -2,9 +2,10 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
-import { StockCountType, PeriodicStockDraft } from '../types';
+import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
+import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -55,6 +56,78 @@ const TYPE_OPTIONS: { value: StockCountType; label: string }[] = [
   { value: 'custom', label: 'Personalizada' },
 ];
 
+// [Product Memory / UOM — Increment A, Checkpoint 2c] Identical
+// component/behavior to InitialStockCountView.tsx's/AddStockView.tsx's
+// own UnitRelationshipRow (Checkpoints 2a/2b) — deliberately duplicated
+// per file rather than extracted into a shared component in this
+// checkpoint, so no already-committed, already-tested surface's
+// behavior is put at risk by a shared-dependency refactor. A future
+// pure-refactor checkpoint may consolidate all three.
+const UnitRelationshipRow: React.FC<{
+  purchaseUnit: string;
+  sellingUnit: string;
+  factor: string;
+  onChange: (sellingUnit: string, factor: string) => void;
+}> = ({ purchaseUnit, sellingUnit, factor, onChange }) => {
+  const [expanded, setExpanded] = useState(!!(sellingUnit || factor));
+
+  if (!expanded) {
+    return (
+      <button
+        type="button"
+        onClick={() => setExpanded(true)}
+        className="col-span-2 sm:col-span-7 flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5 -mt-1"
+      >
+        <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
+        <span>Produto novo — configurar relação de unidades (opcional)</span>
+      </button>
+    );
+  }
+
+  return (
+    <div className="col-span-2 sm:col-span-7 -mt-1 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
+      <button
+        type="button"
+        onClick={() => setExpanded(false)}
+        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+      >
+        <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
+        <span>Relação de unidades para este produto novo (opcional)</span>
+      </button>
+      <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+        <span className="text-gray-500 pb-2">
+          1 <strong className="text-[#111827]">{purchaseUnit || 'un'}</strong> =
+        </span>
+        <div>
+          <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Quantidade</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={factor}
+            onChange={(e) => onChange(sellingUnit, e.target.value)}
+            placeholder="Ex: 24"
+            className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+        <div>
+          <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de venda</label>
+          <input
+            type="text"
+            value={sellingUnit}
+            onChange={(e) => onChange(e.target.value, factor)}
+            placeholder="Ex: Un"
+            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-400 leading-relaxed">
+        Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
+      </p>
+    </div>
+  );
+};
+
 export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ onComplete }) => {
   const {
     business,
@@ -83,6 +156,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     costPrice: '',
     sellingPrice: '',
   });
+
+  // [Product Memory / UOM — Increment A, Checkpoint 2c] Identical
+  // gating logic to InitialStockCountView.tsx's/AddStockView.tsx's own
+  // helpers (Checkpoints 2a/2b) — the same case-insensitive lookup
+  // AppContext.tsx's own product-creation paths use. Applied only to
+  // manualRows (below): a catalogRows entry always already has a
+  // productId (buildCatalogRow, immediately below) and therefore is
+  // never "genuinely new" by construction — Recognition/configuration
+  // is never offered for it, matching UOM Specification §3 step 5's
+  // "never re-run" rule.
+  const isGenuinelyNewProductName = (name: string): boolean => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return false;
+    return !products.some((p) => p.name.toLowerCase() === trimmed);
+  };
 
   // Builds one auto-populated working row from an existing catalog
   // Product — reference metadata pre-filled from its most recent
@@ -475,6 +563,38 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         await identityWriteRef.current;
       }
 
+      // [Product Memory / UOM — Increment A, Checkpoint 2c] Correlated
+      // back from allWorkingRows by trimmed, lowercased productName —
+      // the same pattern AppContext.tsx's own recordStockCount
+      // (Checkpoint 1) and InitialStockCountView.tsx (Checkpoint 2a)
+      // already use, since tallyStockCountRows' own StockCountTallyItem
+      // shape deliberately doesn't carry these two UI-only fields (see
+      // StockCountWorkingRow's own comment in utils/stockCount.ts).
+      // Only ever populated for a manually-added row with no existing
+      // product match — see isGenuinelyNewProductName's own gating of
+      // the UI section these values come from; re-validated here via
+      // isValidUnitRelationship regardless, never trusted merely
+      // because the UI fields were non-empty.
+      const unitRelationshipByProductName = new Map<string, UnitRelationship>();
+      for (const row of allWorkingRows) {
+        const key = row.productName.trim().toLowerCase();
+        if (!key || !row.newProductSellingUnit || !row.newProductSellingUnitFactor) continue;
+        const factor = parseFloat(row.newProductSellingUnitFactor);
+        const sellingUnit = row.newProductSellingUnit.trim();
+        if (!sellingUnit || !Number.isFinite(factor) || factor <= 0) continue;
+        const candidate: UnitRelationship = {
+          units: [
+            { unit: row.unit || 'un', factorFromPrevious: 0 },
+            { unit: sellingUnit, factorFromPrevious: factor },
+          ],
+          sellingUnit,
+          confirmedAt: new Date().toISOString(),
+        };
+        if (isValidUnitRelationship(candidate)) {
+          unitRelationshipByProductName.set(key, candidate);
+        }
+      }
+
       const saved = await recordStockCount({
         type,
         label: type === 'custom' ? label.trim() : undefined,
@@ -485,6 +605,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           unit: item.unit,
           costPrice: item.costPrice,
           sellingPrice: item.sellingPrice,
+          // [Product Memory / UOM — Increment A, Checkpoint 2c]
+          ...(unitRelationshipByProductName.has(item.productName.trim().toLowerCase())
+            ? { unitRelationship: unitRelationshipByProductName.get(item.productName.trim().toLowerCase())! }
+            : {}),
         })),
         expectedValueAtCount: expectedCurrentStockValue,
         submissionId: submissionIdRef.current || undefined,
@@ -972,8 +1096,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               <p className="text-[12.5px] font-bold text-[#111827] mb-2">Adicionados Manualmente</p>
               <div className="space-y-1">
                 {manualRows.map((row, idx) => (
+                  <React.Fragment key={idx}>
                   <div
-                    key={idx}
                     className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
                   >
                     <div className="col-span-2 sm:col-span-1">
@@ -1052,6 +1176,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       </button>
                     </div>
                   </div>
+
+                  {/* [Product Memory / UOM — Increment A, Checkpoint
+                      2c] Shown ONLY for a manually-added row whose
+                      product name doesn't match anything already in
+                      the catalog — never shown, never re-asked, for an
+                      already-known product. Entirely optional; leaving
+                      it blank changes nothing from today's behavior. */}
+                  {isGenuinelyNewProductName(row.productName) && (
+                    <UnitRelationshipRow
+                      purchaseUnit={row.unit || 'un'}
+                      sellingUnit={row.newProductSellingUnit || ''}
+                      factor={row.newProductSellingUnitFactor || ''}
+                      onChange={(sellingUnit, factor) =>
+                        updateManualRow(idx, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                      }
+                    />
+                  )}
+                  </React.Fragment>
                 ))}
               </div>
             </div>
