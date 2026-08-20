@@ -175,7 +175,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ data, currencySymbol }) 
               <span className="font-semibold text-gray-700 truncate">{d.label}</span>
             </span>
             <span className="type-number text-gray-800 shrink-0">
-              {formatCurrency(d.value, currencySymbol)} <span className="text-gray-400 font-normal">({((d.value / total) * 100).toFixed(0)}%)</span>
+              {formatCurrency(d.value, currencySymbol)} <span className="text-gray-500 font-normal">({((d.value / total) * 100).toFixed(0)}%)</span>
             </span>
           </div>
         ))}

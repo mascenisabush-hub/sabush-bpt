@@ -104,7 +104,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
           >
             <Icon className="w-[15px] h-[15px]" />
           </div>
-          <p className={`kpi-label leading-tight truncate ${isDark ? 'text-white/40' : ''}`}>
+          <p className={`kpi-label leading-tight truncate ${isDark ? 'text-white/65' : ''}`}>
             {label}
           </p>
         </div>
@@ -123,7 +123,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
         {value}
       </p>
 
-      <p className={`relative text-[11px] leading-snug mt-auto pt-1 font-medium ${isDark ? 'text-white/35' : 'text-gray-500'}`}>
+      <p className={`relative text-[11px] leading-snug mt-auto pt-1 font-medium ${isDark ? 'text-white/60' : 'text-gray-500'}`}>
         {description}
       </p>
     </button>
@@ -240,10 +240,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <KpiCard
           icon={Landmark}
           iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#D4AF37]/10'}
-          iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#D4AF37]'}
+          iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#8A6D1F]'}
           label={t('dashboard.kpi.initialCapital.label')}
           value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('dashboard.kpi.initialCapital.notSet')}
-          valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#D4AF37]'}
+          valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#8A6D1F]'}
           description={
             hasInitialStockCount
               ? t('dashboard.kpi.initialCapital.descSet')
@@ -668,7 +668,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       ) : (
         <div className="bg-white rounded-[10px] overflow-hidden elevation-1">
           {/* Table Header */}
-          <div className="grid grid-cols-12 gap-1 px-4 py-4 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-400">
+          <div className="grid grid-cols-12 gap-1 px-4 py-4 bg-gray-50 text-[10px] font-bold uppercase tracking-wider text-gray-500">
             <div className="col-span-4 sm:col-span-5">{t('dashboard.table.headerProduct')}</div>
             <div className="col-span-2 text-right">
               {t('dashboard.table.headerBuy')}
@@ -744,7 +744,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                         : t('dashboard.table.noBatch')}
                     </span>
                     {(product.category || product.supplier || product.sku) && (
-                      <span className="text-[9px] text-gray-400 block truncate">
+                      <span className="text-[10px] text-gray-500 block truncate">
                         {[product.category, product.supplier, product.sku && t('dashboard.table.skuLabel', { sku: product.sku })]
                           .filter(Boolean)
                           .join(' · ')}

@@ -137,7 +137,7 @@ export default function AuditTrail() {
               <tr key={e.id} style={{ borderBottom: '1px solid #1e293b' }}>
                 <td style={td}>{new Date(e.timestamp).toLocaleString('pt-PT')}</td>
                 <td style={td}>{actionLabel(e.actionType)}</td>
-                <td style={td}>{e.actorUid} <span style={{ color: '#64748b' }}>({e.actorRole})</span></td>
+                <td style={td}>{e.actorUid} <span style={{ color: '#94a3b8' }}>({e.actorRole})</span></td>
                 <td style={td}>{e.targetBusinessId ?? '—'}</td>
                 <td style={td}>{e.targetUid ?? '—'}</td>
                 <td style={td}>{e.justification ?? '—'}</td>
@@ -148,7 +148,7 @@ export default function AuditTrail() {
       )}
 
       {entries !== null && entries.length === 100 && (
-        <p style={{ fontSize: 12, color: '#64748b', marginTop: 8 }}>
+        <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
           A mostrar as 100 entradas mais recentes que correspondem aos filtros. Use os filtros para restringir os resultados.
         </p>
       )}

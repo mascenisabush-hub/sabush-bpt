@@ -114,14 +114,14 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                     {ownedBusinesses.length > 1 && (
                       <button
                         onClick={() => setShowOwnerPortfolio(true)}
-                        className="text-[10px] font-bold uppercase tracking-wider text-gray-400 hover:text-[#0B1F3A] transition-colors mb-0.5"
+                        className="text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-[#0B1F3A] transition-colors mb-0.5"
                       >
                         Portefólio
                       </button>
                     )}
                   </div>
                 ) : (
-                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#D4AF37] mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8A6D1F] mb-1">
                     {t('header.myBusiness')}
                   </p>
                 )}

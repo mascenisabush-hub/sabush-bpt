@@ -186,20 +186,20 @@ export default function BusinessDirectory({ onOpenBusiness }: Props) {
               {rows.map((r) => (
                 <tr key={r.businessId} onClick={() => onOpenBusiness(r.businessId)} style={{ cursor: 'pointer', borderBottom: '1px solid #1e293b' }}>
                   <td style={td}>
-                    {r.name || <span style={{ color: '#64748b' }}>(sem nome)</span>}
-                    <div style={{ color: '#64748b', fontSize: 12 }}>{r.businessId}</div>
+                    {r.name || <span style={{ color: '#94a3b8' }}>(sem nome)</span>}
+                    <div style={{ color: '#94a3b8', fontSize: 12 }}>{r.businessId}</div>
                   </td>
                   <td style={td}><ActivityBadge activity={r.operationalActivity} /></td>
                   <td style={td}>
-                    {r.daysSinceActivity === null ? <span style={{ color: '#64748b' }}>—</span> : `${r.daysSinceActivity} dia${r.daysSinceActivity === 1 ? '' : 's'} atrás`}
+                    {r.daysSinceActivity === null ? <span style={{ color: '#94a3b8' }}>—</span> : `${r.daysSinceActivity} dia${r.daysSinceActivity === 1 ? '' : 's'} atrás`}
                   </td>
-                  <td style={td}>{r.subscriptionState ? SUBSCRIPTION_LABELS[r.subscriptionState] ?? r.subscriptionState : <span style={{ color: '#64748b' }}>—</span>}</td>
+                  <td style={td}>{r.subscriptionState ? SUBSCRIPTION_LABELS[r.subscriptionState] ?? r.subscriptionState : <span style={{ color: '#94a3b8' }}>—</span>}</td>
                   <td style={td}>
                     {r.suspended
                       ? <span style={{ color: '#f87171', fontWeight: 600 }}>Suspenso</span>
-                      : <span style={{ color: '#64748b' }}>Ativo</span>}
+                      : <span style={{ color: '#94a3b8' }}>Ativo</span>}
                   </td>
-                  <td style={{ ...td, color: '#64748b', fontSize: 12 }}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('pt-PT') : '—'}</td>
+                  <td style={{ ...td, color: '#94a3b8', fontSize: 12 }}>{r.createdAt ? new Date(r.createdAt).toLocaleDateString('pt-PT') : '—'}</td>
                 </tr>
               ))}
             </tbody>

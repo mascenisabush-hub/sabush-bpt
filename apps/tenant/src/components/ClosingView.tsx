@@ -220,7 +220,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
         {/* Preview */}
         <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4 sm:p-5 space-y-3">
-          <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">Pré-visualização de {periodLabel}</p>
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">Pré-visualização de {periodLabel}</p>
 
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center">
             <div className="bg-white border border-[#E5E7EB] rounded-lg p-2.5">
@@ -364,19 +364,19 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
 
                     <div className="grid grid-cols-3 gap-1.5 text-center pt-1">
                       <div className="bg-white border border-[#E5E7EB] rounded-lg p-1.5">
-                        <p className="text-[9px] text-gray-500">Lucro Embutido</p>
+                        <p className="text-[10px] text-gray-500">Lucro Embutido</p>
                         <p className={`type-number text-[11px] tabular-nums ${c.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                           {formatCurrency(c.totalEmbeddedProfit, currencySymbol)}
                         </p>
                       </div>
                       <div className="bg-white border border-[#E5E7EB] rounded-lg p-1.5">
-                        <p className="text-[9px] text-gray-500">Levantado</p>
+                        <p className="text-[10px] text-gray-500">Levantado</p>
                         <p className="type-number text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.totalWithdrawals, currencySymbol)}
                         </p>
                       </div>
                       <div className="bg-[#D4AF37]/[0.06] border border-[#D4AF37]/25 rounded-lg p-1.5">
-                        <p className="text-[9px] text-gray-500">Valor Negócio</p>
+                        <p className="text-[10px] text-gray-500">Valor Negócio</p>
                         <p className="type-number text-[11px] text-[#0B1F3A] tabular-nums">
                           {formatCurrency(c.businessWorthAtClose, currencySymbol)}
                         </p>

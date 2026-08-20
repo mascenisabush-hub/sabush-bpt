@@ -119,7 +119,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
 
           {/* Batches List */}
           <div>
-            <h3 className="text-[11px] font-bold text-gray-400 uppercase tracking-wide mb-3 flex items-center gap-2">
+            <h3 className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-3 flex items-center gap-2">
               <Layers className="w-3.5 h-3.5 text-[#0B1F3A]/60" strokeWidth={2.25} />
               Lotes de Stock ({productBatches.length})
             </h3>
@@ -197,12 +197,12 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                         <div className="bg-[var(--muted)] p-2.5 rounded-lg border border-[#E5E7EB]">
                           <span className="text-gray-500 block text-[9.5px] font-semibold uppercase tracking-wide">Valor de Investimento</span>
                           <span className="font-bold text-[#111827] font-mono tabular-nums">{formatCurrency(calc.investmentValue, currencySymbol)}</span>
-                          <span className="text-[9px] text-gray-400 block font-mono">{formatCurrency(batch.costPrice, currencySymbol)}/{batch.unit || 'un'}</span>
+                          <span className="text-[10px] text-gray-500 block font-mono">{formatCurrency(batch.costPrice, currencySymbol)}/{batch.unit || 'un'}</span>
                         </div>
                         <div className="bg-[var(--muted)] p-2.5 rounded-lg border border-[#E5E7EB]">
                           <span className="text-gray-500 block text-[9.5px] font-semibold uppercase tracking-wide">Valor de Mercado</span>
                           <span className="font-bold text-[#111827] font-mono tabular-nums">{formatCurrency(calc.marketValue, currencySymbol)}</span>
-                          <span className="text-[9px] text-gray-400 block font-mono">{formatCurrency(batch.sellingPrice, currencySymbol)}/{batch.unit || 'un'}</span>
+                          <span className="text-[10px] text-gray-500 block font-mono">{formatCurrency(batch.sellingPrice, currencySymbol)}/{batch.unit || 'un'}</span>
                         </div>
                       </div>
 

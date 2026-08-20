@@ -97,14 +97,14 @@ export const ReportHome: React.FC<ReportHomeProps> = ({ onSelect }) => {
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white/10 text-[#D4AF37]">
                 <Gem className="w-[15px] h-[15px]" />
               </div>
-              <p className="kpi-label leading-tight truncate text-white/40">{t('reports.categories.businessWorth.title')}</p>
+              <p className="kpi-label leading-tight truncate text-white/65">{t('reports.categories.businessWorth.title')}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-white/30 shrink-0" />
           </div>
           <p className="relative leading-[1] truncate tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-[#D4AF37]">
             {formatCurrency(businessWorth, currencySymbol)}
           </p>
-          <p className="relative text-[11px] leading-snug mt-auto pt-1 font-medium text-white/35">
+          <p className="relative text-[11px] leading-snug mt-auto pt-1 font-medium text-white/60">
             {t('reports.categories.businessWorth.description')}
           </p>
         </button>

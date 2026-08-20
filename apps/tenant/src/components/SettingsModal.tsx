@@ -338,10 +338,10 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                   )}
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-x-4 gap-y-1 text-xs text-gray-600">
-                  <p><span className="text-gray-400">Nome:</span> <span className="font-semibold text-gray-800">{business?.name || 'N/D'}</span></p>
-                  <p><span className="text-gray-400">Contacto:</span> <span className="font-semibold text-gray-800">{business?.contact || 'N/D'}</span></p>
-                  <p><span className="text-gray-400">Localização:</span> <span className="font-semibold text-gray-800">{business?.location || 'N/D'}</span></p>
-                  <p><span className="text-gray-400">Email:</span> <span className="font-semibold text-gray-800">{business?.email || 'N/D'}</span></p>
+                  <p><span className="text-gray-500">Nome:</span> <span className="font-semibold text-gray-800">{business?.name || 'N/D'}</span></p>
+                  <p><span className="text-gray-500">Contacto:</span> <span className="font-semibold text-gray-800">{business?.contact || 'N/D'}</span></p>
+                  <p><span className="text-gray-500">Localização:</span> <span className="font-semibold text-gray-800">{business?.location || 'N/D'}</span></p>
+                  <p><span className="text-gray-500">Email:</span> <span className="font-semibold text-gray-800">{business?.email || 'N/D'}</span></p>
                 </div>
               </div>
 

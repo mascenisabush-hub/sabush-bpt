@@ -1646,7 +1646,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             {/* COMPACT TABLE */}
             <div className="bg-white border border-[#E5E7EB] rounded-xl overflow-hidden">
               {/* Table Header (Desktop) */}
-              <div className="hidden md:grid grid-cols-12 gap-1.5 items-center px-3 py-2.5 bg-[#FAFBFC] border-b border-[#E5E7EB] text-[10px] font-bold uppercase tracking-wide text-gray-400">
+              <div className="hidden md:grid grid-cols-12 gap-1.5 items-center px-3 py-2.5 bg-[#FAFBFC] border-b border-[#E5E7EB] text-[10px] font-bold uppercase tracking-wide text-gray-500">
                 <div className="col-span-1 text-center">{t('addStock.table.batch')}</div>
                 <div className="col-span-3">{t('addStock.table.product')}</div>
                 <div className="col-span-2">{t('addStock.table.dateEntered')}</div>
@@ -2287,21 +2287,21 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                     <div className="flex items-center gap-4 sm:gap-6 text-[11px]">
                       <div>
-                        <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.totalInvestment')}</span>
+                        <span className="text-gray-500 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.totalInvestment')}</span>
                         <span className="font-bold text-[#111827] font-mono tabular-nums">
                           {formatCurrency(totals.totalInvestmentValue, currencySymbol)}
                         </span>
                       </div>
 
                       <div>
-                        <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.marketValue')}</span>
+                        <span className="text-gray-500 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.marketValue')}</span>
                         <span className="font-bold text-[#111827] font-mono tabular-nums">
                           {formatCurrency(totals.totalMarketValue, currencySymbol)}
                         </span>
                       </div>
 
                       <div>
-                        <span className="text-gray-400 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.embeddedProfit')}</span>
+                        <span className="text-gray-500 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.embeddedProfit')}</span>
                         <span
                           className={`type-number tabular-nums ${
                             totals.totalEmbeddedProfit >= 0 ? 'text-emerald-600' : 'text-rose-600'
