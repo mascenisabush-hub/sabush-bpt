@@ -227,6 +227,29 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // action actually submits the form.
   const [showConfirmStep, setShowConfirmStep] = useState(false);
   const [showVoidConfirmStep, setShowVoidConfirmStep] = useState(false);
+  // [Accidental-confirm hardening] A deliberate extra gate in front of
+  // the primary Confirm button: the Owner must tick this box before it
+  // becomes clickable at all, on top of the existing FR-19 two-step
+  // panel below. Reset on every `rows` change (any edit — add, remove,
+  // or typing into a field) so a stray earlier tick can never cover a
+  // row the Owner hasn't actually looked at since editing it.
+  const [reviewedBeforeConfirm, setReviewedBeforeConfirm] = useState(false);
+  useEffect(() => {
+    setReviewedBeforeConfirm(false);
+  }, [rows]);
+  // [Accidental-confirm hardening] Locks background scroll while the
+  // confirm modal is open, so the page (and the fixed mobile bottom
+  // nav bar sitting on top of it) can't be scrolled or reached behind
+  // the dimmed backdrop — the modal is genuinely the only interactive
+  // surface on screen at that point, not just the topmost one.
+  useEffect(() => {
+    if (!showConfirmStep) return;
+    const previousOverflow = document.body.style.overflow;
+    document.body.style.overflow = 'hidden';
+    return () => {
+      document.body.style.overflow = previousOverflow;
+    };
+  }, [showConfirmStep]);
 
   // [Fix — business-switch draft staleness, Option B] Tracks which
   // business the component's current local state (rows/date/draftLoaded)
@@ -485,6 +508,25 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       const trimmedName = row.productName.trim();
       if (!trimmedName) continue;
 
+      // A row can have a product name and quantity typed in while its
+      // price fields are still blank — e.g. mid-edit, or left behind by
+      // an accidental confirm click. parseFloat('') is NaN, and NaN||0
+      // silently becomes 0, so without this explicit "was anything
+      // actually typed here" check a blank price field would be
+      // indistinguishable from a deliberate "0" and would be written
+      // into the permanent Capital Inicial record as if the product
+      // genuinely cost/sold for nothing. Checking the raw string (not
+      // the parsed number) is what lets a deliberate "0" through while
+      // still catching a field nobody touched.
+      if (row.costPrice.trim() === '') {
+        setError(`Introduza um preço de custo para "${trimmedName}" (ou 0, se for mesmo gratuito).`);
+        return;
+      }
+      if (row.sellingPrice.trim() === '') {
+        setError(`Introduza um preço de venda para "${trimmedName}" (ou 0, se não aplicável).`);
+        return;
+      }
+
       const numQty = parseFloat(row.quantity) || 0;
       const numCost = parseFloat(row.costPrice) || 0;
       const numSelling = parseFloat(row.sellingPrice) || 0;
@@ -704,40 +746,14 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                 </div>
               </div>
 
-              {!showVoidConfirmStep ? (
-                <button
-                  type="button"
-                  onClick={handleVoidAndRedo}
-                  disabled={isVoiding}
-                  className="w-full py-2.5 px-3 rounded-xl border border-amber-300 bg-white hover:bg-amber-100/50 text-amber-800 font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  Anular e Refazer Capital Inicial
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-[12px] font-semibold text-amber-800">
-                    Tem a certeza? Esta ação anula permanentemente a confirmação atual.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowVoidConfirmStep(false)}
-                      disabled={isVoiding}
-                      className="flex-1 py-2 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12px] transition-all duration-150"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleVoidAndRedo}
-                      disabled={isVoiding}
-                      className="flex-1 py-2 px-3 rounded-xl bg-amber-600 hover:bg-amber-700 text-white font-bold text-[12px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {isVoiding ? 'A anular...' : 'Sim, anular e refazer'}
-                    </button>
-                  </div>
-                </div>
-              )}
+              <button
+                type="button"
+                onClick={() => setShowVoidConfirmStep(true)}
+                disabled={isVoiding}
+                className="w-full py-2.5 px-3 rounded-xl border border-amber-300 bg-white hover:bg-amber-100/50 text-amber-800 font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Anular e Refazer Capital Inicial
+              </button>
             </div>
           )}
 
@@ -773,40 +789,72 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                 </div>
               </div>
 
-              {!showVoidConfirmStep ? (
-                <button
-                  type="button"
-                  onClick={handleVoidAndRedo}
-                  disabled={isVoiding}
-                  className="w-full py-2.5 px-3 rounded-xl border border-indigo-300 bg-white hover:bg-indigo-100/50 text-indigo-800 font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+              <button
+                type="button"
+                onClick={() => setShowVoidConfirmStep(true)}
+                disabled={isVoiding}
+                className="w-full py-2.5 px-3 rounded-xl border border-indigo-300 bg-white hover:bg-indigo-100/50 text-indigo-800 font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                Anular e Refazer Capital Inicial (autorizado pelo suporte)
+              </button>
+            </div>
+          )}
+
+          {/* [Accidental-confirm hardening] One shared modal for both
+              void triggers above — they're mutually exclusive
+              (initialStockVoidEligibility.eligible vs the SuperAdmin-
+              authorized fallback), so only one variant's copy/color
+              ever applies at a time, same as the two trigger panels
+              themselves. Detached from the scrollable page for the
+              same reason the Capital Inicial confirm modal is: this
+              is a permanent, hard-to-undo action, and it shouldn't be
+              reachable by a stray scroll/tap or a mis-tap near the
+              fixed mobile bottom nav. */}
+          {showVoidConfirmStep && (
+            <div
+              className="fixed inset-0 z-50 bg-[#0B1F3A]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+              onClick={() => !isVoiding && setShowVoidConfirmStep(false)}
+            >
+              <div
+                className={`w-full max-w-sm bg-white rounded-2xl shadow-2xl border-2 px-5 py-5 space-y-4 ${
+                  initialStockVoidEligibility.eligible ? 'border-amber-300' : 'border-indigo-300'
+                }`}
+                onClick={(e) => e.stopPropagation()}
+              >
+                <p
+                  className={`text-[13px] font-semibold ${
+                    initialStockVoidEligibility.eligible ? 'text-amber-800' : 'text-indigo-800'
+                  }`}
                 >
-                  Anular e Refazer Capital Inicial (autorizado pelo suporte)
-                </button>
-              ) : (
-                <div className="space-y-2">
-                  <p className="text-[12px] font-semibold text-indigo-800">
-                    Tem a certeza? Esta ação anula permanentemente a confirmação atual.
-                  </p>
-                  <div className="flex gap-2">
-                    <button
-                      type="button"
-                      onClick={() => setShowVoidConfirmStep(false)}
-                      disabled={isVoiding}
-                      className="flex-1 py-2 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12px] transition-all duration-150"
-                    >
-                      Cancelar
-                    </button>
-                    <button
-                      type="button"
-                      onClick={handleVoidAndRedo}
-                      disabled={isVoiding}
-                      className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[12px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
-                    >
-                      {isVoiding ? 'A anular...' : 'Sim, anular e refazer'}
-                    </button>
-                  </div>
+                  Tem a certeza? Esta ação anula permanentemente a confirmação atual.
+                </p>
+                <p className="text-[12px] leading-relaxed text-gray-500">
+                  A confirmação original fica registada no histórico, marcada como anulada — nunca é apagada. Depois
+                  de anular, terá de preencher e confirmar uma nova contagem para ter um Capital Inicial ativo.
+                </p>
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowVoidConfirmStep(false)}
+                    disabled={isVoiding}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12.5px] transition-all duration-150"
+                  >
+                    Cancelar
+                  </button>
+                  <button
+                    type="button"
+                    onClick={handleVoidAndRedo}
+                    disabled={isVoiding}
+                    className={`flex-1 py-2.5 px-3 rounded-xl text-white font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed ${
+                      initialStockVoidEligibility.eligible
+                        ? 'bg-amber-600 hover:bg-amber-700'
+                        : 'bg-indigo-600 hover:bg-indigo-700'
+                    }`}
+                  >
+                    {isVoiding ? 'A anular...' : 'Sim, anular e refazer'}
+                  </button>
                 </div>
-              )}
+              </div>
             </div>
           )}
 
@@ -1294,62 +1342,115 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               anything irreversible — a stray click on the primary
               button reveals this panel, nothing more; only the panel's
               own second, explicit action actually submits. */}
-          {!showConfirmStep ? (
-            <div className="flex flex-col sm:flex-row gap-2.5 pt-1">
-              {onSkip && !redoingConfirmationId && (
-                <button
-                  type="button"
-                  onClick={onSkip}
-                  className="sm:w-auto w-full py-3 px-4 rounded-xl border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 hover:border-gray-300 font-bold text-sm transition-all duration-150"
-                >
-                  Configurar mais tarde
-                </button>
-              )}
+          {/* [Accidental-confirm hardening] The button that's always
+              present in the normal editing flow is deliberately inert
+              on its own — a single click here never writes anything
+              (see handleSubmit's `if (!showConfirmStep)` guard) — so
+              it needs no extra gate itself. It's still pulled away
+              from "Adicionar outro produto" by a rule and extra
+              space so it isn't the very next thing a thumb lands on
+              while scrolling the product list. The action that's
+              actually irreversible lives in the modal below, fully
+              detached from this scrollable page (and from the fixed
+              mobile bottom nav bar) so a stray scroll/tap here can
+              never reach it. */}
+          <div className="pt-3 mt-1 border-t border-[#E5E7EB] flex flex-col sm:flex-row gap-2.5">
+            {onSkip && !redoingConfirmationId && (
               <button
-                type="submit"
-                disabled={isSaving}
-                className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+                type="button"
+                onClick={onSkip}
+                className="sm:w-auto w-full py-3 px-4 rounded-xl border border-[#E5E7EB] text-gray-600 hover:bg-gray-50 hover:border-gray-300 font-bold text-sm transition-all duration-150"
               >
-                <span>{redoingConfirmationId ? 'Confirmar Nova Contagem' : 'Confirmar Capital Inicial'}</span>
-                <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
+                Configurar mais tarde
               </button>
-            </div>
-          ) : (
-            <div className="border-2 border-[#D4AF37]/40 bg-[#D4AF37]/[0.06] rounded-2xl px-4 py-4 space-y-3">
-              <div className="flex items-start gap-2.5">
-                <Info className="w-3.5 h-3.5 text-[#0B1F3A] shrink-0 mt-[3px]" strokeWidth={2.25} />
-                <p className="text-[12.5px] leading-relaxed text-[#0B1F3A]">
-                  {redoingConfirmationId ? (
-                    <>
-                      Esta nova contagem vai substituir a confirmação anulada como o seu Capital Inicial ativo. Uma vez
-                      confirmada, tem também a sua própria janela de recuperação de 12 horas — sujeita ao limite
-                      máximo de recuperações para esta configuração de Capital Inicial.
-                    </>
-                  ) : (
-                    <>
-                      Esta ação estabelece o seu <strong className="font-semibold">Capital Inicial do Negócio</strong>.
-                      Tem 12 horas após confirmar para anular e refazer, caso tenha cometido um erro — depois disso,
-                      não é livremente reversível.
-                    </>
-                  )}
-                </p>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  type="button"
-                  onClick={() => setShowConfirmStep(false)}
-                  disabled={isSaving}
-                  className="flex-1 py-2.5 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12.5px] transition-all duration-150"
-                >
-                  Voltar
-                </button>
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 text-white font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
-                >
-                  {isSaving ? 'A guardar...' : 'Sim, confirmar'}
-                </button>
+            )}
+            <button
+              type="button"
+              onClick={() => setShowConfirmStep(true)}
+              disabled={isSaving}
+              className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <span>{redoingConfirmationId ? 'Confirmar Nova Contagem' : 'Confirmar Capital Inicial'}</span>
+              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
+            </button>
+          </div>
+
+          {/* [Accidental-confirm hardening] The actual submit control,
+              rendered as a true modal — fixed/centered over a dimmed,
+              non-interactive backdrop — rather than inline in the
+              scrollable form. This is what makes it structurally safe,
+              not just visually separated: it isn't part of the page's
+              scroll flow at all, so no scroll-release tap or misplaced
+              thumb can ever land on it, and the dimmed backdrop blocks
+              every element behind it, including the mobile bottom nav
+              bar. Reachable only by the genuinely deliberate first
+              click above. Body scroll is locked below while open so
+              the page behind it can't move under it either. */}
+          {showConfirmStep && (
+            <div
+              className="fixed inset-0 z-50 bg-[#0B1F3A]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
+              onClick={() => !isSaving && setShowConfirmStep(false)}
+            >
+              <div
+                className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border-2 border-[#D4AF37]/40 px-5 py-5 space-y-4"
+                onClick={(e) => e.stopPropagation()}
+              >
+                <div className="flex items-start gap-2.5">
+                  <Info className="w-4 h-4 text-[#0B1F3A] shrink-0 mt-[3px]" strokeWidth={2.25} />
+                  <p className="text-[13px] leading-relaxed text-[#0B1F3A]">
+                    {redoingConfirmationId ? (
+                      <>
+                        Esta nova contagem vai substituir a confirmação anulada como o seu Capital Inicial ativo. Uma
+                        vez confirmada, tem também a sua própria janela de recuperação de 12 horas — sujeita ao
+                        limite máximo de recuperações para esta configuração de Capital Inicial.
+                      </>
+                    ) : (
+                      <>
+                        Esta ação estabelece o seu <strong className="font-semibold">Capital Inicial do Negócio</strong>.
+                        Tem 12 horas após confirmar para anular e refazer, caso tenha cometido um erro — depois
+                        disso, não é livremente reversível.
+                      </>
+                    )}
+                  </p>
+                </div>
+
+                <div className="card-dark-gradient rounded-xl px-4 py-3 flex items-center justify-between gap-3">
+                  <span className="font-semibold text-white/70 text-[12.5px]">Capital Inicial Total</span>
+                  <span className="font-display font-semibold text-[18px] text-[#D4AF37] tabular-nums leading-none">
+                    {formatCurrency(totalCapital, currencySymbol)}
+                  </span>
+                </div>
+
+                <label className="flex items-start gap-2.5 px-3.5 py-3 rounded-xl border border-[#E5E7EB] bg-[var(--muted)] cursor-pointer select-none">
+                  <input
+                    type="checkbox"
+                    checked={reviewedBeforeConfirm}
+                    onChange={(e) => setReviewedBeforeConfirm(e.target.checked)}
+                    className="mt-0.5 w-4 h-4 shrink-0 accent-[#0B1F3A]"
+                  />
+                  <span className="text-[12.5px] leading-relaxed text-gray-700">
+                    Revi todos os produtos, quantidades e preços acima e confirmo que estão corretos.
+                  </span>
+                </label>
+
+                <div className="flex gap-2">
+                  <button
+                    type="button"
+                    onClick={() => setShowConfirmStep(false)}
+                    disabled={isSaving}
+                    className="flex-1 py-2.5 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12.5px] transition-all duration-150"
+                  >
+                    Voltar
+                  </button>
+                  <button
+                    type="submit"
+                    disabled={isSaving || !reviewedBeforeConfirm}
+                    title={!reviewedBeforeConfirm ? 'Marque a confirmação de revisão acima primeiro' : undefined}
+                    className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 text-white font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                  >
+                    {isSaving ? 'A guardar...' : 'Sim, confirmar'}
+                  </button>
+                </div>
               </div>
             </div>
           )}
