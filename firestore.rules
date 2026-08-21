@@ -232,6 +232,58 @@ service cloud.firestore {
         request.time < get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.confirmedAt + duration.value(12, 'h');
     }
 
+    // [SuperAdmin-Assisted Initial Stock Recovery — BDR-0016/POL-0009/
+    // Specification/Rule 8 Findings C, D, E, G/Implementation Plan §6,
+    // §7, §11/Implementation Authorization, signed 2026-08-21] The
+    // second, additive eligibility gate into the SAME /voidRecords
+    // create rule initialStockConfirmationVoidable() already governs —
+    // never a second void-record mechanism (POL-0009 Rule M; Rule 8
+    // Finding K). Deliberately does NOT re-check the ordinary 12-hour
+    // confirmedAt window at all (POL-0009 Rule R: "completely separate
+    // from the normal 12-hour confirmedAt recovery window") and, unlike
+    // initialStockConfirmationVoidable(), does NOT require confirmedAt
+    // to be present — this is precisely what makes a legacy
+    // confirmation (no confirmedAt field at all) reachable through this
+    // path (Rule 8 Finding D; Implementation Plan §7).
+    //
+    // Current-confirmation-only (POL-0009 Rule U; Rule 8 Finding E) is
+    // enforced two ways here, exactly as Implementation Plan §6
+    // specifies: (a) targetStockCountId on the Authorization document
+    // must equal stockCountId — re-verified at grant time server-side,
+    // never trusted from this check alone; (b) this function is reached
+    // only from the /voidRecords create rule below, whose own fixed-id-
+    // equals-stockCountId create-if-absent semantics already refuse a
+    // second void-record for an already-superseded confirmation,
+    // structurally — no separate "not yet voided" clause is needed here
+    // because the caller (the /voidRecords create rule) cannot reach
+    // this function at all for a stockCountId that already has a
+    // voidRecords document.
+    //
+    // The chainPosition != 4 clause is independently required here
+    // (Confirmation #4 remains absolutely non-voidable under every
+    // path — POL-0009 §"CEILING" instruction; Implementation
+    // Authorization Acceptance Criterion 12): a legacy confirmation has
+    // no chainPosition field at all and defaults to 1 (never 4, so
+    // never excluded by this clause — POL-0009 Rule W treats its first
+    // authorized recovery as Confirmation #1); an expired-window,
+    // non-legacy confirmation keeps its own real chainPosition (POL-0009
+    // Rule X) and remains excluded here exactly as
+    // initialStockConfirmationVoidable() already excludes it.
+    function initialStockRecoveryAuthorizationActive(businessId, stockCountId) {
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.get('type', null) == 'initial' &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/stockCounts/$(stockCountId)).data.get('chainPosition', 1) != 4 &&
+        exists(/databases/$(database)/documents/businesses/$(businessId)/initialStockRecoveryAuthorization/$("current")) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/initialStockRecoveryAuthorization/$("current")).data.get('status', null) == 'unconsumed' &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/initialStockRecoveryAuthorization/$("current")).data.get('targetStockCountId', null) == stockCountId &&
+        // Safe direct (non-.get()) field access: the clause immediately
+        // above already proved this document exists and is
+        // 'unconsumed', via short-circuit && evaluation order — the
+        // same discipline initialStockConfirmationVoidable() already
+        // uses for its own confirmedAt access, below.
+        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/initialStockRecoveryAuthorization/$("current")).data.expiresAt;
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -613,19 +665,83 @@ service cloud.firestore {
         allow create: if isOwnerOf(businessId) &&
           request.resource.data.get('voidedConfirmationId', null) == stockCountId &&
           // Tenant isolation is structural, not merely checked: the
-          // target lookup inside initialStockConfirmationVoidable() is
-          // scoped under businesses/$(businessId) — the SAME businessId
-          // this create rule itself is scoped under (bound from the
-          // URL path, never from request data) — so a confirmation
-          // belonging to a different business can never be reached
-          // from here, by construction, regardless of what id a client
-          // supplies.
-          initialStockConfirmationVoidable(businessId, stockCountId);
+          // target lookup inside initialStockConfirmationVoidable() (and,
+          // identically, inside initialStockRecoveryAuthorizationActive()
+          // below) is scoped under businesses/$(businessId) — the SAME
+          // businessId this create rule itself is scoped under (bound
+          // from the URL path, never from request data) — so a
+          // confirmation belonging to a different business can never be
+          // reached from here, by construction, regardless of what id a
+          // client supplies.
+          //
+          // [SuperAdmin-Assisted Initial Stock Recovery — POL-0009 Rule
+          // M; Rule 8 Finding C/K; Implementation Plan §10/§11] The
+          // ONLY change to this rule for this capability: one additive
+          // `||` branch. The pre-existing initialStockConfirmationVoidable(...)
+          // condition is completely unchanged — every confirmation
+          // eligible under the ordinary Owner-only 12-hour path remains
+          // exactly as eligible as before this capability existed.
+          (initialStockConfirmationVoidable(businessId, stockCountId) ||
+            initialStockRecoveryAuthorizationActive(businessId, stockCountId));
 
         // [POL-0008 Rule I; I-8] Create-only, forever. No historical
         // fact of a voided confirmation — including the fact that it
         // is voided — is ever rewritten once set.
         allow update, delete: if false;
+      }
+
+      // [SuperAdmin-Assisted Initial Stock Recovery — BDR-0016/POL-0009/
+      // Specification/Rule 8 Findings A, B, F/Implementation Plan §2,
+      // §5, §9, §10, §11/Implementation Authorization, signed
+      // 2026-08-21] The Authorization artifact itself. Fixed id
+      // ('current') per business — "at most one active Authorization
+      // per business" (POL-0009 Rule T) is a structural property of
+      // this collection's own create-if-absent-per-fixed-id semantics,
+      // not a query-then-write race, exactly as the pre-existing
+      // 'initial' stockCounts slot and the voidRecords fixed-id
+      // convention already establish elsewhere in this file.
+      match /initialStockRecoveryAuthorization/{docId} {
+        allow read: if isMemberOf(businessId);
+
+        // [Rule 8 Finding B; Implementation Plan §9] Grant is a
+        // privileged-server action (POST /api/superadmin/initial-stock-
+        // recovery/:businessId/authorize, gated by requirePlatformOperator
+        // + requireSuperAdmin, server/initialStockRecoveryAuthorization.ts),
+        // performed via the Admin SDK inside a Firestore transaction —
+        // NEVER a client-side Firestore write, by any role, including an
+        // authenticated platform_operators/{uid}. This mirrors
+        // platform_operators' and platform_audit_log's own existing
+        // "allow write: if false, Admin-SDK-only" pattern exactly (POL-0009
+        // Rule N: SuperAdmin's write surface is structurally incapable of
+        // reaching this document from a client, not merely discouraged by
+        // UI omission).
+        allow create: if false;
+
+        // [Consumption & Audit Amendment §8; Supplementary
+        // Implementation Authorization, signed 2026-08-21] SUPERSEDED —
+        // consumption is no longer a client-reachable write. It now
+        // happens exclusively via POST /api/initial-stock-recovery/consume
+        // (requireAuth + server-side Owner-of-business verification,
+        // server/initialStockRecoveryConsumption.ts), inside a Firestore
+        // Admin SDK transaction that bypasses this rules file entirely —
+        // identical in kind to how the grant itself already works. This
+        // is a strict NARROWING of client-reachable surface, not a
+        // widening: removing a client-reachable `allow update` path
+        // (even the narrow, field-locked one this comment used to
+        // describe) in favor of a fully server-mediated path means no
+        // client credential, Owner included, can directly manipulate
+        // this document at all. `allow update: if false` below is
+        // therefore now correct and complete — Owner-tier consumption
+        // is enforced by requireAuth + the server module's own
+        // resolveIsOwnerOfBusiness() check, not by a rules condition.
+        allow update: if false;
+
+        // [POL-0009 Rule Z; Rule 8 Finding H] No historical fact of a
+        // consumed Authorization is ever rewritten once set, and this
+        // artifact is never deleted (its history is the permanent
+        // record, matching the voidRecords/platform_audit_log
+        // discipline already established elsewhere in this file).
+        allow delete: if false;
       }
 
       // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]

@@ -3,6 +3,7 @@ import {
   fetchBusinessDetail,
   suspendBusiness,
   reactivateBusiness,
+  authorizeInitialStockRecovery,
   type BusinessDetailResponse,
   SuperAdminApiError,
 } from '../lib/superadminApi';
@@ -21,7 +22,7 @@ interface Props {
 // CONFIRMED) adds the suspend/reactivate actions below. This page
 // remains read-only otherwise — no other field is ever writable from
 // here, no subscription/payment control, no deletion.
-type PendingAction = null | 'suspend' | 'reactivate';
+type PendingAction = null | 'suspend' | 'reactivate' | 'authorize-recovery';
 
 export default function BusinessDetail({ businessId, onBack }: Props) {
   const [justification, setJustification] = useState('');
@@ -34,6 +35,21 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
+  // [SuperAdmin-Assisted Initial Stock Recovery] The confirmation slot
+  // to authorize — 'initial' covers the primary case (the original
+  // confirmation, legacy or expired-window). A future iteration could
+  // surface the full chain (initial/initial-2/initial-3) for the rarer
+  // case of authorizing a later redo; kept as a plain editable field
+  // for now rather than blocking this capability on that UI.
+  const [recoveryTargetStockCountId, setRecoveryTargetStockCountId] = useState('initial');
+  // [Product Architect direction — UX-quality pass, this session]
+  // Defaults to the locked, displayed-not-typed primary case. The
+  // actual current-confirmation-only check remains exclusively
+  // server-side (server/initialStockRecoveryAuthorization.ts's own
+  // grant-time validation) — this toggle only decides what this form
+  // SHOWS the operator; it grants no authority the server doesn't
+  // independently re-verify.
+  const [useAdvancedTarget, setUseAdvancedTarget] = useState(false);
 
   async function handleLoad() {
     if (!justification.trim()) {
@@ -93,6 +109,42 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
         setActionError('Este negócio já está ativo.');
       } else {
         setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao reativar o negócio.');
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  // [SuperAdmin-Assisted Initial Stock Recovery — BDR-0016/POL-0009/
+  // Rule 8 (READY)/Implementation Authorization, signed 2026-08-21]
+  // Grants a 48-hour Authorization; does NOT perform any recovery
+  // itself. Mirrors handleSuspend/handleReactivate's own shape exactly
+  // — same justification-required, same error/result pattern.
+  async function handleAuthorizeRecovery() {
+    if (!actionJustification.trim()) {
+      setActionError('É obrigatório indicar uma justificação.');
+      return;
+    }
+    if (!recoveryTargetStockCountId.trim()) {
+      setActionError('É obrigatório indicar a confirmação a autorizar.');
+      return;
+    }
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      const result = await authorizeInitialStockRecovery(businessId, recoveryTargetStockCountId.trim(), actionJustification.trim());
+      const hoursRemaining = Math.max(0, Math.round((result.expiresAtMs - Date.now()) / (60 * 60 * 1000)));
+      setActionResult(
+        `Autorização de recuperação concedida. O dono tem ${hoursRemaining}h para executar a recuperação — a autorização expira automaticamente depois disso.` +
+          (result.auditLogged === false ? ' Aviso: o registo de auditoria falhou ao gravar.' : '')
+      );
+      setPendingAction(null);
+      setActionJustification('');
+    } catch (err) {
+      if (err instanceof SuperAdminApiError && err.status === 409) {
+        setActionError(err.message || 'Já existe uma autorização ativa, ou esta confirmação não é elegível.');
+      } else {
+        setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao autorizar a recuperação.');
       }
     } finally {
       setActionBusy(false);
@@ -249,6 +301,84 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleReactivate} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A reativar…' : 'Sim, reativar'}</button>
                 <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} style={cancelBtn}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>Recuperação de Capital Inicial</h3>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: -4, marginBottom: 8 }}>
+            Concede ao dono uma janela de 48 horas para recuperar uma confirmação de Capital Inicial acidental ou legada, através do fluxo normal de Anular &amp; Refazer. O SuperAdmin apenas autoriza — quem executa a recuperação é sempre o dono do negócio.
+          </p>
+
+          {pendingAction === null && (
+            <button
+              onClick={() => { setPendingAction('authorize-recovery'); setActionError(null); setActionResult(null); }}
+              style={confirmBtn}
+            >
+              Autorizar recuperação de Capital Inicial
+            </button>
+          )}
+
+          {pendingAction === 'authorize-recovery' && (
+            <div style={dialogBox}>
+              <p style={{ marginTop: 0 }}>
+                Autorizar recuperação para <strong>{data.name ?? businessId}</strong>? Isto concede ao dono uma janela de <strong>48 horas</strong> para executar a recuperação — o SuperAdmin não realiza a recuperação em si. Só pode existir uma autorização ativa por negócio. É obrigatório indicar uma justificação.
+              </p>
+
+              {!useAdvancedTarget ? (
+                <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: 10, marginBottom: 8 }}>
+                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px 0' }}>A autorizar:</p>
+                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: '#e2e8f0' }}>
+                    Confirmação original de Capital Inicial <span style={{ fontFamily: 'monospace', color: '#a7f3d0' }}>(&quot;initial&quot;)</span>
+                  </p>
+                  <p style={{ fontSize: 11.5, color: '#64748b', margin: '4px 0 0 0' }}>
+                    Cobre o caso mais comum — confirmações legadas (anteriores a esta funcionalidade) ou confirmações
+                    cuja janela normal de 12 horas já expirou. O servidor confirma automaticamente que esta é a
+                    confirmação atual do negócio antes de conceder qualquer autorização.
+                  </p>
+                  <button
+                    type="button"
+                    onClick={() => setUseAdvancedTarget(true)}
+                    style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: 11.5, padding: 0, marginTop: 8, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Avançado: autorizar outra confirmação (raro)
+                  </button>
+                </div>
+              ) : (
+                <div style={{ marginBottom: 8 }}>
+                  <label style={{ fontSize: 12, color: '#fbbf24', display: 'block', marginBottom: 4 }}>
+                    ⚠ Avançado — identificador exato da confirmação (ex: &quot;initial-2&quot;). Só use isto se souber
+                    concretamente que não é a confirmação original — um valor incorreto será rejeitado pelo servidor,
+                    nunca aceite às cegas.
+                  </label>
+                  <input
+                    type="text"
+                    value={recoveryTargetStockCountId}
+                    onChange={(e) => setRecoveryTargetStockCountId(e.target.value)}
+                    placeholder="initial-2"
+                    style={{ width: '100%', borderRadius: 4, border: '1px solid #d97706', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 4 }}
+                  />
+                  <button
+                    type="button"
+                    onClick={() => { setUseAdvancedTarget(false); setRecoveryTargetStockCountId('initial'); }}
+                    style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: 11.5, padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                  >
+                    Voltar ao caso comum (&quot;initial&quot;)
+                  </button>
+                </div>
+              )}
+
+              <textarea
+                value={actionJustification}
+                onChange={(e) => setActionJustification(e.target.value)}
+                placeholder="Motivo da recuperação (ex: cliente confirmou Capital Inicial por engano)…"
+                rows={3}
+                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+              />
+              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleAuthorizeRecovery} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A autorizar…' : 'Sim, autorizar (48h)'}</button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setUseAdvancedTarget(false); setRecoveryTargetStockCountId('initial'); }} style={cancelBtn}>Cancelar</button>
               </div>
             </div>
           )}

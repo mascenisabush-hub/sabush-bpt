@@ -119,10 +119,38 @@ export interface PlatformOperator {
 export interface PlatformAuditLogEntry {
   id: string;
   actorUid: string;
-  actorRole: PlatformRole;
+  // [SuperAdmin-Assisted Initial Stock Recovery — Consumption & Audit
+  // Amendment §6; Supplementary Implementation Authorization, signed
+  // 2026-08-21] Widened, additively, to accept 'owner' — the ONE
+  // audited action in this repository where the actor is a tenant
+  // Owner rather than a platform operator (initial_stock_recovery.consumed).
+  // Every existing entry and every existing reader is unaffected: no
+  // existing write ever set 'owner' here, and no existing reader
+  // rejects it (actorRole is read/displayed, never used as an
+  // exhaustive-switch discriminant anywhere in this codebase).
+  actorRole: PlatformRole | 'owner';
   actionType: string;
   targetBusinessId?: string;
   targetUid?: string;
+  // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
+  // §16] Additive, optional field: the exact stockCounts/{id} an
+  // initial_stock_recovery.* audit entry targeted. Absent on every
+  // audit entry written before this capability existed, and on every
+  // entry unrelated to it — never repurposed from, or confused with,
+  // targetUid (a platform_operators/user id, a structurally different
+  // concept).
+  targetStockCountId?: string;
+  // [Consumption & Audit Amendment §6; Supplementary Implementation
+  // Authorization Acceptance Criterion 10] Additive, optional field:
+  // identifies WHICH grant of the fixed-id-per-business Authorization
+  // document (`initialStockRecoveryAuthorization/current`, overwritten
+  // on each new grant) a `.consumed` entry corresponds to — the
+  // consumed Authorization's own `authorizedAt` server timestamp,
+  // ISO-formatted, since the document id ('current') alone is not
+  // unique across separate grants for the same business. Present only
+  // on `initial_stock_recovery.consumed` entries; absent everywhere
+  // else.
+  authorizationId?: string;
   justification?: string;
   timestamp: string; // ISO — server-set, never client-supplied
 }
