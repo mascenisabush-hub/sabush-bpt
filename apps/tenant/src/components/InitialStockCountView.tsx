@@ -39,6 +39,15 @@ interface CountRowItem {
   // optional unit-relationship section is even shown.
   newProductSellingUnit: string;
   newProductSellingUnitFactor: string;
+  // [Sell-unit price conversion] Also UI-only, never persisted — the
+  // price the owner actually knows (per newProductSellingUnit, the
+  // smaller unit), used to auto-compute `sellingPrice` above (per this
+  // row's own `unit`, the buy unit) via newProductSellingUnitFactor.
+  // Kept separate from sellingPrice itself so sellingPrice stays the
+  // single value every other part of the app already reads — this is
+  // purely a convenience input that writes into it, not a parallel
+  // source of truth.
+  sellingPricePerSellingUnit: string;
 }
 
 const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
@@ -70,6 +79,7 @@ const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
   // (see rowToDraftItem above), so there is nothing to restore.
   newProductSellingUnit: '',
   newProductSellingUnitFactor: '',
+  sellingPricePerSellingUnit: '',
 });
 
 // [Product Memory / UOM — Increment A, Checkpoint 2] A small, self-
@@ -89,9 +99,22 @@ const UnitRelationshipRow: React.FC<{
   purchaseUnit: string;
   sellingUnit: string;
   factor: string;
+  sellingPricePerSellingUnit: string;
   onChange: (sellingUnit: string, factor: string) => void;
-}> = ({ purchaseUnit, sellingUnit, factor, onChange }) => {
-  const [expanded, setExpanded] = useState(!!(sellingUnit || factor));
+  onSellingPriceChange: (value: string) => void;
+  computedSellingPrice: number | null;
+  currencySymbol: string;
+}> = ({
+  purchaseUnit,
+  sellingUnit,
+  factor,
+  sellingPricePerSellingUnit,
+  onChange,
+  onSellingPriceChange,
+  computedSellingPrice,
+  currencySymbol,
+}) => {
+  const [expanded, setExpanded] = useState(!!(sellingUnit || factor || sellingPricePerSellingUnit));
 
   if (!expanded) {
     return (
@@ -101,20 +124,20 @@ const UnitRelationshipRow: React.FC<{
         className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
       >
         <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
-        <span>Produto novo — configurar relação de unidades (opcional)</span>
+        <span>Compra em {purchaseUnit || 'un'}, vende numa unidade menor? Calcular preço de venda</span>
       </button>
     );
   }
 
   return (
-    <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
+    <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2.5">
       <button
         type="button"
         onClick={() => setExpanded(false)}
         className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
       >
         <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
-        <span>Relação de unidades para este produto novo (opcional)</span>
+        <span>Conversão de unidades (opcional)</span>
       </button>
       <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
         <span className="text-gray-500 pb-2">
@@ -128,7 +151,7 @@ const UnitRelationshipRow: React.FC<{
             step="0.01"
             value={factor}
             onChange={(e) => onChange(sellingUnit, e.target.value)}
-            placeholder="Ex: 24"
+            placeholder="Ex: 20"
             className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           />
         </div>
@@ -143,6 +166,37 @@ const UnitRelationshipRow: React.FC<{
           />
         </div>
       </div>
+
+      {/* [Sell-unit price conversion] Lets the owner type the price
+          they actually know — per the small selling unit, e.g. "130
+          MT por Un" — instead of doing the multiplication themselves
+          to figure out the equivalent price per purchase unit. Only
+          appears once a selling unit and quantity are both entered,
+          since the conversion is meaningless without both. */}
+      {sellingUnit.trim() && parseFloat(factor) > 0 && (
+        <div className="flex flex-wrap items-end gap-2.5 text-[12.5px] pt-1 border-t border-[#E5E7EB]">
+          <div>
+            <label className="block type-label mb-1">Preço de venda por {sellingUnit.trim()}</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={sellingPricePerSellingUnit}
+              onChange={(e) => onSellingPriceChange(e.target.value)}
+              placeholder="Ex: 6.50"
+              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+          {computedSellingPrice !== null && (
+            <span className="text-gray-500 pb-2">
+              → <strong className="text-[#0B1F3A]">{formatCurrency(computedSellingPrice, currencySymbol)}</strong> por{' '}
+              {purchaseUnit || 'un'}{' '}
+              <span className="text-gray-400">(preenchido automaticamente em "Preço de venda" acima)</span>
+            </span>
+          )}
+        </div>
+      )}
+
       <p className="text-[11px] text-gray-400 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
       </p>
@@ -186,6 +240,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     sellingPrice: '',
     newProductSellingUnit: '',
     newProductSellingUnitFactor: '',
+    sellingPricePerSellingUnit: '',
   });
 
   const [date, setDate] = useState(getTodayDateString());
@@ -377,6 +432,25 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount]);
 
+  // [Draft-loss fix, part 2 / instant-save] Shared, reusable flush of
+  // the current `rows` straight to Firestore, bypassing the 800ms
+  // debounce above entirely. Refs (not state) so callers always see
+  // the latest values regardless of when they fire, without
+  // re-subscribing anything on every keystroke.
+  const latestFlushArgs = useRef({ rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount });
+  latestFlushArgs.current = { rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount };
+  const flushDraftNow = () => {
+    const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
+      latestFlushArgs.current;
+    if (!loaded || confirmed) return;
+    const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
+    if (!hasAnyContent) return;
+    setDraftSaveState('saving');
+    saveInitialStockDraft(r.map(rowToDraftItem), d, basis)
+      .then(() => setDraftSaveState('saved'))
+      .catch(() => setDraftSaveState('idle'));
+  };
+
   // [Draft-loss fix, part 2] The 800ms debounce above is exactly what
   // let a refresh or tab close interrupt a pending save and discard
   // whatever hadn't reached Firestore yet — this happened for real:
@@ -386,42 +460,25 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // case of the page being reloaded, closed, or navigated away from at
   // any moment while mid-edit, not just at the Confirm click.
   //
-  // Refs (not state) so this always sees the latest values regardless
-  // of when the browser fires the event, without re-subscribing the
-  // listeners on every keystroke. Fired on 'visibilitychange' (tab
-  // hidden — covers switching tabs, minimizing, and is the most
-  // reliable signal on mobile) and 'pagehide' (covers an actual
-  // reload/close/navigation) rather than 'beforeunload', which mobile
-  // Safari and some browsers don't reliably fire at all. This is a
-  // best-effort fire-and-forget write — the browser gives no guarantee
-  // it completes once the page is actually gone — but it closes the
-  // large, common window (typing, then immediately refreshing) that
-  // caused the loss here; it does not claim to make loss impossible in
-  // every conceivable case (e.g. the device losing power mid-write).
-  const latestFlushArgs = useRef({ rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount });
-  latestFlushArgs.current = { rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount };
+  // Fired on 'visibilitychange' (tab hidden — covers switching tabs,
+  // minimizing, and is the most reliable signal on mobile) and
+  // 'pagehide' (covers an actual reload/close/navigation) rather than
+  // 'beforeunload', which mobile Safari and some browsers don't
+  // reliably fire at all. This is a best-effort fire-and-forget write
+  // — the browser gives no guarantee it completes once the page is
+  // actually gone — but it closes the large, common window (typing,
+  // then immediately refreshing) that caused the loss here; it does
+  // not claim to make loss impossible in every conceivable case (e.g.
+  // the device losing power mid-write).
   useEffect(() => {
-    const flushOnHide = () => {
-      const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
-        latestFlushArgs.current;
-      if (!loaded || confirmed) return;
-      const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
-      if (!hasAnyContent) return;
-      saveInitialStockDraft(r.map(rowToDraftItem), d, basis).catch(() => {
-        // Best-effort — nothing meaningful to do with a failure this
-        // late; the debounced autosave above will retry on the next
-        // edit if the page stays open, and handleOpenConfirmStep
-        // covers the Confirm-click path independently.
-      });
-    };
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'hidden') flushOnHide();
+      if (document.visibilityState === 'hidden') flushDraftNow();
     };
     document.addEventListener('visibilitychange', handleVisibilityChange);
-    window.addEventListener('pagehide', flushOnHide);
+    window.addEventListener('pagehide', flushDraftNow);
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
-      window.removeEventListener('pagehide', flushOnHide);
+      window.removeEventListener('pagehide', flushDraftNow);
     };
   }, []);
 
@@ -1251,19 +1308,33 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
               <span />
             </div>
 
-            <div className="space-y-2.5">
+            <div
+              className="space-y-2.5"
+              // [Instant-save] Fires the moment focus leaves any field
+              // in the product list — React's onBlur bubbles (via
+              // native focusout, React 17+), so one listener here
+              // covers every input/select in every row without wiring
+              // each one individually. Triggers the same non-debounced
+              // flushDraftNow used by the tab-hide/reload safety net
+              // above, so a finished field is saved in well under a
+              // second rather than waiting out the full 800ms
+              // inactivity debounce.
+              onBlur={flushDraftNow}
+            >
               {rowGroups.map((group) => {
                 const firstRow = group.rows[0];
                 const isSolo = group.rows.length === 1;
-                // [Product Memory / UOM] Computed once per GROUP now,
-                // not once per portion — same unchanged function
-                // (isGenuinelyNewProductName), called with the group's
-                // shared display name instead of one row's own name.
-                // For a blank/not-yet-named group, group.displayName is
-                // '' and this correctly evaluates to false, exactly as
-                // isGenuinelyNewProductName('') already did before this
-                // checkpoint.
-                const showUnitRelationshipSection = isGenuinelyNewProductName(group.displayName);
+                // [Sell-unit price conversion] Available for any named
+                // product, known or new — the conversion this section
+                // now also drives (an auto-computed sellingPrice, see
+                // handleUnitRelationshipChange below) is useful
+                // regardless of whether the product already exists in
+                // the catalog. isGenuinelyNewProductName remains
+                // unchanged and is still what gates whether a
+                // unitRelationship candidate gets persisted to Product
+                // Memory at submit time (handleSubmit, below) — that
+                // persistence rule is untouched by this.
+                const showUnitRelationshipSection = group.displayName.trim() !== '';
                 const groupTotal = group.rows.reduce(
                   (acc, r) => acc + (parseFloat(r.quantity) || 0) * (parseFloat(r.costPrice) || 0),
                   0
@@ -1391,16 +1462,70 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                         candidate, stored on the group's FIRST row only
                         (handleSubmit, below, already only reads this
                         from whichever row actually has it set — see
-                        its own comment). */}
+                        its own comment).
+
+                        [Sell-unit price conversion] The one thing this
+                        section DOES now write into an existing
+                        purchase-fact field is firstRow.sellingPrice —
+                        computed as sellingPricePerSellingUnit × factor
+                        the moment both are present, via
+                        handleSellingPriceConversionChange below. This
+                        is deliberately the only field it touches:
+                        sellingPrice already means "price per this
+                        row's own unit" everywhere else in the app
+                        (normalizeStockCountItems, totalSellingValue,
+                        Reports) — writing the converted value there,
+                        instead of introducing a second sellingPrice
+                        concept, means nothing downstream needs to
+                        change to understand it. The main "Preço de
+                        venda" field stays a normal, directly-editable
+                        input throughout — this only ever pre-fills it,
+                        never locks it, so typing over the computed
+                        value works exactly as it always did. */}
                     {showUnitRelationshipSection && (
                       <div className="mt-1 pl-3 sm:pl-4">
                         <UnitRelationshipRow
                           purchaseUnit={firstRow.unit || 'un'}
                           sellingUnit={firstRow.newProductSellingUnit}
                           factor={firstRow.newProductSellingUnitFactor}
-                          onChange={(sellingUnit, factor) =>
-                            updateRow(firstRow.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
-                          }
+                          sellingPricePerSellingUnit={firstRow.sellingPricePerSellingUnit}
+                          currencySymbol={currencySymbol}
+                          computedSellingPrice={(() => {
+                            const factor = parseFloat(firstRow.newProductSellingUnitFactor);
+                            const perUnitPrice = parseFloat(firstRow.sellingPricePerSellingUnit);
+                            if (!Number.isFinite(factor) || factor <= 0 || !Number.isFinite(perUnitPrice) || perUnitPrice < 0) {
+                              return null;
+                            }
+                            return Number((perUnitPrice * factor).toFixed(2));
+                          })()}
+                          onChange={(sellingUnit, factor) => {
+                            const parsedFactor = parseFloat(factor);
+                            const perUnitPrice = parseFloat(firstRow.sellingPricePerSellingUnit);
+                            const fields: Partial<CountRowItem> = { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor };
+                            // Keeps sellingPrice in sync if the owner
+                            // adjusts the factor/unit after already
+                            // having typed a per-selling-unit price —
+                            // otherwise changing "20" to "24" here
+                            // would silently leave the old, now-wrong
+                            // computed price sitting in sellingPrice.
+                            if (Number.isFinite(parsedFactor) && parsedFactor > 0 && Number.isFinite(perUnitPrice) && perUnitPrice >= 0) {
+                              fields.sellingPrice = (perUnitPrice * parsedFactor).toFixed(2);
+                            }
+                            updateRow(firstRow.id, fields);
+                          }}
+                          onSellingPriceChange={(value) => {
+                            const factor = parseFloat(firstRow.newProductSellingUnitFactor);
+                            const perUnitPrice = parseFloat(value);
+                            const fields: Partial<CountRowItem> = { sellingPricePerSellingUnit: value };
+                            // Auto-fills the main sellingPrice field the
+                            // instant both inputs are valid — the owner
+                            // can still freely overwrite it afterward,
+                            // exactly as any other pre-filled field.
+                            if (Number.isFinite(factor) && factor > 0 && Number.isFinite(perUnitPrice) && perUnitPrice >= 0) {
+                              fields.sellingPrice = (perUnitPrice * factor).toFixed(2);
+                            }
+                            updateRow(firstRow.id, fields);
+                          }}
                         />
                       </div>
                     )}

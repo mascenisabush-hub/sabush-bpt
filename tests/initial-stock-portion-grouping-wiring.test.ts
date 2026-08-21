@@ -80,8 +80,18 @@ describe('InitialStockCountView.tsx — requirement 5/8: no duplicate-product de
     assert.doesNotMatch(fnBody, /\brows\b/);
   });
 
-  it('[Grouped Initial Stock UX] isGenuinelyNewProductName is now called once per GROUP (group.displayName), not once per row', () => {
-    assert.match(source, /isGenuinelyNewProductName\(group\.displayName\)/);
+  it('[Grouped Initial Stock UX] the unit-relationship section\'s visibility is computed once per GROUP (group.displayName), not once per row', () => {
+    // [Sell-unit price conversion] Superseded from
+    // isGenuinelyNewProductName(group.displayName) to a plain
+    // non-blank check — the section is now useful for any named
+    // product (known or new), not just genuinely-new ones, since it
+    // also drives an auto-computed sellingPrice. The specific
+    // predicate changed; the property this test actually cares about
+    // — computed once per GROUP's displayName, not once per row —
+    // did not. isGenuinelyNewProductName itself is unchanged and
+    // still gates Product Memory persistence in handleSubmit,
+    // entirely separately from this section's visibility.
+    assert.match(source, /const showUnitRelationshipSection = group\.displayName\.trim\(\) !== '';/);
   });
 });
 
