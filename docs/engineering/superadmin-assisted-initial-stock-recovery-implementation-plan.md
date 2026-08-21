@@ -4,6 +4,21 @@
 **Governing chain:** [`BDR-0016`](../specs/BDR-0016-superadmin-assisted-initial-stock-recovery.md) (✅ Approved) → [`POL-0009`](../specs/POL-0009-superadmin-assisted-initial-stock-recovery-policy.md) (✅ Approved) → [Specification](../specs/superadmin-assisted-initial-stock-recovery-specification.md) (decisions resolved) → [Rule 8 Assessment](./superadmin-assisted-initial-stock-recovery-rule8-assessment.md) (✅ **READY**, Findings A–L). This Plan introduces no new business decision beyond what those four documents already settled — every item below cites the specific Decision/Rule/FR/Finding it implements.
 **Method:** Every design choice below either (a) directly implements a named Decision/Rule/FR/Finding, or (b) is an implementation-detail choice within Rule 8's own resolved direction (e.g., exact field names) — never a new business judgment. §23 re-verifies this traceability explicitly.
 
+> **⚠️ Amendment Notice:** §9 and §16, below, describing Owner
+> consumption as a client-side `firestore.rules` write, have been
+> superseded by the
+> [Consumption-Audit Amendment](./superadmin-assisted-initial-stock-recovery-consumption-audit-amendment.md) —
+> consumption now happens via a small, authenticated, server-mediated
+> path (Owner remains the sole actor) so that the consumption event can
+> be audited, which a pure client-side write structurally cannot be.
+> Every other section of this Plan — the grant route (§9's SuperAdmin
+> portion), the data model (§2), scoping (§3), expiry (§4),
+> single-active enforcement (§5), legacy/expired-window handling (§6–8),
+> immutability (§13), ceiling protection (§14), subscription exemption
+> (§15), and everything else — is unaffected and remains exactly as
+> originally planned. The original text below is preserved unedited as
+> the historical record of the original plan.
+
 ---
 
 ## 1. Purpose

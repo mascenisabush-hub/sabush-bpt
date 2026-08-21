@@ -68,9 +68,10 @@ import {
   SupplierWordingRelationship,
   UnitRelationship,
   VoidRecord,
+  InitialStockRecoveryAuthorization,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, type VoidEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -355,6 +356,13 @@ interface AppContextType {
   // own doc comment (calculations.ts) for why this is never
   // authoritative.
   initialStockVoidEligibility: VoidEligibility;
+  // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
+  // §2/§17] The business's single Authorization document, or null if
+  // none has ever been granted / it has been fully superseded.
+  initialStockRecoveryAuthorization: InitialStockRecoveryAuthorization | null;
+  // Client-side display only, same discipline as initialStockVoidEligibility
+  // immediately above, for the separate 48-hour Authorization window.
+  initialStockAuthorizedRecoveryEligibility: AuthorizedRecoveryEligibility;
   withdrawals: Withdrawal[];
   // Module #19 V1 Manual Payment Bridge — temporary confirmation
   // bridge, not the final payment architecture.
@@ -619,6 +627,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // snapshot arrives, matching the collection's own create-only
   // design.
   const [voidRecords, setVoidRecords] = useState<VoidRecord[]>([]);
+  // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
+  // §17] Null when no Authorization has ever been granted for this
+  // business, or once it has been fully superseded (a fresh grant
+  // overwrites the same fixed 'current' document). Read-only from the
+  // client's perspective except for the one narrow 'consumed'
+  // transition voidInitialStockConfirmation() performs below — never
+  // itself created or granted client-side (POL-0009 Rule N).
+  const [initialStockRecoveryAuthorization, setInitialStockRecoveryAuthorization] = useState<InitialStockRecoveryAuthorization | null>(null);
   const [initialStockPriceChangeEvents, setInitialStockPriceChangeEvents] = useState<InitialStockPriceChangeEvent[]>([]);
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
   // Null when no draft exists yet for this business (or once confirmed
@@ -875,6 +891,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // consumer polling via setInterval/re-render gets a live countdown
   // without this context needing its own timer.
   const initialStockVoidEligibility = computeInitialStockVoidEligibility(initialStockCount);
+  // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
+  // §17] Display-only, never authoritative — same discipline as
+  // initialStockVoidEligibility immediately above, applied to the
+  // separate 48-hour Authorization window (POL-0009 Rule R: completely
+  // separate from the 12-hour window computed above). `null` for
+  // targetStockCountId when there is no current confirmation to check
+  // against — computeInitialStockAuthorizedRecoveryEligibility already
+  // treats that as ineligible.
+  const initialStockAuthorizedRecoveryEligibility = computeInitialStockAuthorizedRecoveryEligibility(
+    initialStockRecoveryAuthorization,
+    initialStockCount?.id ?? null
+  );
 
   // ============================================================
   // BUSINESS WORTH — no fabricated cash ledger.
@@ -1232,6 +1260,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching void records:', err)
     );
 
+    // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
+    // §2/§17] Single fixed-id document, not a collection — mirrors the
+    // subscription doc listener's own shape (1a, above) rather than
+    // voidRecords' collection-query shape, since this artifact is a
+    // per-business singleton, not a bounded list.
+    const initialStockRecoveryAuthorizationRef = doc(db, 'businesses', businessId, 'initialStockRecoveryAuthorization', 'current');
+    const unsubInitialStockRecoveryAuthorization = onSnapshot(
+      initialStockRecoveryAuthorizationRef,
+      (snap) => {
+        setInitialStockRecoveryAuthorization(snap.exists() ? (snap.data() as InitialStockRecoveryAuthorization) : null);
+      },
+      (err) => console.error('Error fetching initial stock recovery authorization:', err)
+    );
+
     // [Initial Stock Valuation History] Immutable, append-only price-change
     // audit trail — read tier matches stockCounts (any team member).
     const initialStockPriceChangeEventsRef = collection(db, 'businesses', businessId, 'initialStockPriceChangeEvents');
@@ -1375,6 +1417,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubExpenses();
       unsubStockCounts();
       unsubVoidRecords();
+      unsubInitialStockRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
       unsubPeriodicDraft();
@@ -3049,19 +3092,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const businessId = activeBusinessId;
     const targetId = initialStockCount.id;
 
-    // [Rule 8 Finding D1] A single-document write is already atomic by
-    // itself; a batch of one is used here only for consistency with
-    // this file's established pattern for every other Firestore write
-    // (fsBatch.set + fsBatch.commit), not because atomicity across
-    // multiple documents is needed for this specific step.
-    const fsBatch = createFirestoreBatch(db);
-    const voidRecordPayload: WithFieldValue<VoidRecord> = {
-      id: targetId,
-      voidedConfirmationId: targetId,
-      voidedAt: serverTimestamp(),
-    };
-    fsBatch.set(doc(db, 'businesses', businessId, 'voidRecords', targetId), voidRecordPayload);
-    await fsBatch.commit();
+    // [SuperAdmin-Assisted Initial Stock Recovery — Consumption & Audit
+    // Amendment; Supplementary Implementation Authorization, signed
+    // 2026-08-21] Two distinct write paths, chosen the same way as
+    // before this amendment (ONLY use the authorized path when the
+    // ordinary 12-hour window does NOT already cover it — never spends
+    // a still-valid Authorization unnecessarily):
+    //
+    // - ORDINARY path (unchanged from before this amendment): a direct
+    //   client batch write, gated by firestore.rules'
+    //   initialStockConfirmationVoidable().
+    // - AUTHORIZED path (Amendment §2/§3): the client no longer writes
+    //   voidRecords/the Authorization document directly at all — it
+    //   calls POST /api/initial-stock-recovery/consume, which performs
+    //   both writes together in one server-side Firestore transaction
+    //   and is what makes the resulting `.consumed` audit entry
+    //   possible in the first place (a pure client write structurally
+    //   cannot write platform_audit_log). The Owner remains the sole
+    //   actor — this call is authenticated as the Owner, never a
+    //   platform-operator credential, and the server performs no
+    //   judgment of its own beyond re-verifying what was already true.
+    const usingAuthorizedRecovery =
+      !initialStockVoidEligibility.eligible && initialStockAuthorizedRecoveryEligibility.eligible;
+
+    if (usingAuthorizedRecovery) {
+      if (!currentUser) {
+        throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+      }
+      const idToken = await currentUser.getIdToken();
+      let response: Response;
+      try {
+        response = await fetch('/api/initial-stock-recovery/consume', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            Authorization: `Bearer ${idToken}`,
+          },
+          body: JSON.stringify({ businessId, targetStockCountId: targetId }),
+        });
+      } catch {
+        throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+      }
+      if (!response.ok) {
+        let message = 'Não foi possível concluir a recuperação autorizada. Tente novamente.';
+        try {
+          const body = await response.json();
+          if (body?.message) message = body.message;
+        } catch {
+          // response wasn't JSON — keep the generic message
+        }
+        throw new Error(message);
+      }
+    } else {
+      // [Rule 8 Finding D1] A single-document write is already atomic
+      // by itself; a batch of one is used here only for consistency
+      // with this file's established pattern for every other Firestore
+      // write (fsBatch.set + fsBatch.commit), not because atomicity
+      // across multiple documents is needed for this specific step.
+      const fsBatch = createFirestoreBatch(db);
+      const voidRecordPayload: WithFieldValue<VoidRecord> = {
+        id: targetId,
+        voidedConfirmationId: targetId,
+        voidedAt: serverTimestamp(),
+      };
+      fsBatch.set(doc(db, 'businesses', businessId, 'voidRecords', targetId), voidRecordPayload);
+      await fsBatch.commit();
+    }
 
     // [FR-3; Rule 8 Finding A1] The confirmed StockCountItem shape is a
     // strict superset of InitialStockDraftItem's business-meaningful
@@ -4109,6 +4205,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         voidRecords,
         initialStockConfirmationChain,
         initialStockVoidEligibility,
+        initialStockRecoveryAuthorization,
+        initialStockAuthorizedRecoveryEligibility,
         withdrawals,
         payments,
         submitPayment,

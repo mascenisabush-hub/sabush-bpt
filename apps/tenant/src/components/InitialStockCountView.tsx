@@ -161,6 +161,11 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     // [Void & Redo — Implementation Authorization §2 items 5, 8-9]
     voidInitialStockConfirmation,
     initialStockVoidEligibility,
+    // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
+    // §17; Consumption & Audit Amendment §"Owner UI"] Display-only,
+    // never authoritative, exactly like initialStockVoidEligibility
+    // above (calculations.ts's own doc comment).
+    initialStockAuthorizedRecoveryEligibility,
     initialStockConfirmationChain,
     voidRecords,
     subscriptionBlocksNewRecords,
@@ -734,6 +739,107 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                 </div>
               )}
             </div>
+          )}
+
+          {/* [SuperAdmin-Assisted Initial Stock Recovery — Implementation
+              Plan §17; Supplementary Implementation Authorization,
+              signed 2026-08-21] Distinct panel for the SuperAdmin-
+              authorized 48-hour window — rendered ONLY when the
+              ordinary 12-hour window is NOT already eligible (the two
+              panels are deliberately mutually exclusive; the ordinary
+              panel above already covers the case where both happen to
+              be true, since it needs no SuperAdmin involvement).
+              Visually distinct (indigo, not amber) so the Owner never
+              confuses "your own recovery window" with "a support-
+              granted one," per explicit UI requirement. Reuses the
+              EXACT same handleVoidAndRedo/showVoidConfirmStep/isVoiding
+              flow as the ordinary panel above — this is not a second
+              recovery workflow, only a second eligibility source
+              feeding the same button. */}
+          {!initialStockVoidEligibility.eligible && initialStockAuthorizedRecoveryEligibility.eligible && (
+            <div className="bg-indigo-50 border border-indigo-200 rounded-xl px-4 py-3.5 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <ShieldCheck className="w-3.5 h-3.5 text-indigo-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+                <div className="min-w-0 flex-1">
+                  <p className="text-[12.5px] font-semibold text-indigo-800">
+                    Recuperação autorizada pelo suporte — {formatMsRemaining(initialStockAuthorizedRecoveryEligibility.msRemaining)} restantes
+                  </p>
+                  <p className="text-[11.5px] text-indigo-700 mt-1 leading-relaxed">
+                    A sua janela normal de 12 horas já não está disponível para esta confirmação, mas o suporte
+                    autorizou uma recuperação excecional, válida por 48 horas a partir da autorização. A confirmação
+                    original fica permanentemente registada no histórico, marcada como anulada — nunca é apagada. É o
+                    dono do negócio, e apenas o dono, que executa esta recuperação.
+                  </p>
+                </div>
+              </div>
+
+              {!showVoidConfirmStep ? (
+                <button
+                  type="button"
+                  onClick={handleVoidAndRedo}
+                  disabled={isVoiding}
+                  className="w-full py-2.5 px-3 rounded-xl border border-indigo-300 bg-white hover:bg-indigo-100/50 text-indigo-800 font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                >
+                  Anular e Refazer Capital Inicial (autorizado pelo suporte)
+                </button>
+              ) : (
+                <div className="space-y-2">
+                  <p className="text-[12px] font-semibold text-indigo-800">
+                    Tem a certeza? Esta ação anula permanentemente a confirmação atual.
+                  </p>
+                  <div className="flex gap-2">
+                    <button
+                      type="button"
+                      onClick={() => setShowVoidConfirmStep(false)}
+                      disabled={isVoiding}
+                      className="flex-1 py-2 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12px] transition-all duration-150"
+                    >
+                      Cancelar
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleVoidAndRedo}
+                      disabled={isVoiding}
+                      className="flex-1 py-2 px-3 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white font-bold text-[12px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
+                    >
+                      {isVoiding ? 'A anular...' : 'Sim, anular e refazer'}
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
+          )}
+
+          {/* [Product Architect direction — UX-quality pass, this
+              session] Three genuinely distinct states, never
+              conflated: Confirmation #4 (absolute, no path, ever —
+              never suggests support can help); otherwise-blocked but
+              still recoverable via SuperAdmin assistance (reassuring,
+              accurate — never implies SuperAdmin edits Initial Stock
+              directly, always says the Owner performs it); this panel
+              only ever appears when BOTH eligibility windows are
+              closed, exactly as before. */}
+          {!initialStockVoidEligibility.eligible && !initialStockAuthorizedRecoveryEligibility.eligible && (
+            (initialStockCount?.chainPosition ?? 1) === 4 ? (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-start gap-2.5">
+                <Info className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-[3px]" strokeWidth={2.25} />
+                <p className="text-[11.5px] text-gray-500 leading-relaxed">
+                  Esta confirmação atingiu o limite máximo de recuperações (Confirmação #4) e já não pode ser anulada
+                  ou recuperada — nem mesmo com autorização do suporte. Este limite existe para proteger a integridade
+                  do histórico do seu Capital Inicial e não pode ser contornado.
+                </p>
+              </div>
+            ) : (
+              <div className="bg-gray-50 border border-gray-200 rounded-xl px-4 py-3 flex items-start gap-2.5">
+                <Info className="w-3.5 h-3.5 text-gray-400 shrink-0 mt-[3px]" strokeWidth={2.25} />
+                <p className="text-[11.5px] text-gray-500 leading-relaxed">
+                  Confirmou o Capital Inicial por engano e a sua janela normal de 12 horas já não está disponível?
+                  Contacte o suporte — em casos legítimos, é possível autorizar uma recuperação excecional, válida por
+                  48 horas. O suporte apenas autoriza; é sempre o dono do negócio quem executa a recuperação, aqui
+                  nesta mesma página.
+                </p>
+              </div>
+            )
           )}
 
           {/* [FR-9, FR-10] History — every confirmation event this

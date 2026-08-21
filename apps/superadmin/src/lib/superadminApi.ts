@@ -296,6 +296,33 @@ export async function reactivateBusiness(businessId: string, justification: stri
   })) as ReactivateBusinessResult;
 }
 
+// [SuperAdmin-Assisted Initial Stock Recovery — BDR-0016/POL-0009/
+// Specification/Rule 8 (READY)/Implementation Authorization, signed
+// 2026-08-21] SuperAdmin grants a scoped, 48-hour Authorization
+// unlocking Void & Redo eligibility for one exact, otherwise-
+// ineligible Initial Stock confirmation. SuperAdmin never performs the
+// recovery itself — this call only grants; only the business's own
+// Owner can subsequently consume it (server/initialStockRecoveryConsumption.ts,
+// a tenant-facing route this SuperAdmin app never calls).
+export interface AuthorizeInitialStockRecoveryResult {
+  outcome: 'granted';
+  businessId: string;
+  targetStockCountId: string;
+  expiresAtMs: number;
+  auditLogged?: false;
+}
+
+export async function authorizeInitialStockRecovery(
+  businessId: string,
+  targetStockCountId: string,
+  justification: string
+): Promise<AuthorizeInitialStockRecoveryResult> {
+  return (await authedFetch(`/initial-stock-recovery/${encodeURIComponent(businessId)}/authorize`, {
+    method: 'POST',
+    body: JSON.stringify({ targetStockCountId, justification }),
+  })) as AuthorizeInitialStockRecoveryResult;
+}
+
 // SuperAdmin V1 Operational Control Plane — Phase D (ADR-0006). Audit
 // Center Filtering. targetUid added to the response shape (Decision C
 // — operator-related events target a uid, not a business). Filters

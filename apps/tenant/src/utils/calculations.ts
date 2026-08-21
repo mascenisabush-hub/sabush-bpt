@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -140,6 +140,53 @@ export function computeInitialStockVoidEligibility(
   const eligible = chainPosition !== 4 && withinWindow;
 
   return { eligible, windowExpiresAt: new Date(windowExpiresAtMs), msRemaining };
+}
+
+// ------------------------------------------------------------------
+// [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan §17;
+// POL-0009 Rule K precedent] computeInitialStockAuthorizedRecoveryEligibility
+//
+// Mirrors computeInitialStockVoidEligibility's own shape and its own
+// "never the authoritative gate" discipline exactly: firestore.rules'
+// initialStockRecoveryAuthorizationActive() is authoritative, evaluated
+// server-side against request.time — this function exists only so the
+// Owner UI can display "an authorized recovery is available, N hours
+// remaining" without a round trip, and can never grant a write the
+// rules layer wouldn't independently allow.
+//
+// Distinct from, and never confused with, the ordinary 12-hour window
+// this file's own computeInitialStockVoidEligibility already computes
+// (POL-0009 Rule R: "completely separate from the normal 12-hour
+// confirmedAt recovery window"). A confirmation may simultaneously have
+// eligible: false from computeInitialStockVoidEligibility (its own
+// window expired, or it is legacy and never had one) and eligible: true
+// here — that is precisely the case this capability exists to serve.
+// ------------------------------------------------------------------
+export interface AuthorizedRecoveryEligibility {
+  eligible: boolean;
+  expiresAt: Date | null;
+  msRemaining: number;
+}
+
+export function computeInitialStockAuthorizedRecoveryEligibility(
+  authorization: InitialStockRecoveryAuthorization | null | undefined,
+  targetStockCountId: string | null | undefined,
+  now: Date = new Date()
+): AuthorizedRecoveryEligibility {
+  if (
+    !authorization ||
+    !targetStockCountId ||
+    authorization.status !== 'unconsumed' ||
+    authorization.targetStockCountId !== targetStockCountId
+  ) {
+    return { eligible: false, expiresAt: null, msRemaining: 0 };
+  }
+
+  const expiresAtMs = authorization.expiresAt.toMillis();
+  const msRemaining = Math.max(0, expiresAtMs - now.getTime());
+  const eligible = now.getTime() < expiresAtMs;
+
+  return { eligible, expiresAt: new Date(expiresAtMs), msRemaining };
 }
 
 // ------------------------------------------------------------------

@@ -655,6 +655,71 @@ export interface VoidRecord {
 // Single document per business (fixed id 'initial'); confirming it
 // deletes this document in the same Firestore batch that creates the
 // permanent 'initial' StockCount.
+// [SuperAdmin-Assisted Initial Stock Recovery — BDR-0016/POL-0009/
+// Specification/Rule 8/Implementation Plan/Implementation Authorization,
+// signed 2026-08-21] The Authorization artifact POL-0009's Terminology
+// section defines: a SuperAdmin-granted, Owner-consumed, one-time,
+// time-bounded permission that makes one named, otherwise-ineligible
+// Initial Stock confirmation eligible to enter the existing Void & Redo
+// flow. NOT itself a Void, a Redo, or a confirmation event of any kind
+// (POL-0009 Terminology). Lives at a single, fixed document id
+// ('current') per business — Implementation Plan §2/§5: "at most one
+// active Authorization per business" (POL-0009 Rule T) is therefore a
+// structural property of the collection, not a query-then-write race.
+export type InitialStockRecoveryAuthorizationStatus = 'unconsumed' | 'consumed';
+
+export interface InitialStockRecoveryAuthorization {
+  // Always the literal string 'current' — the fixed-id-per-business
+  // convention (Implementation Plan §2/§5). Included as a field, not
+  // only as the document id, so a client reading this document can
+  // self-verify it fetched the right shape without a second lookup.
+  id: 'current';
+  // The exact stockCounts/{id} this Authorization names (POL-0009 Rule
+  // O — "one exact confirmation per Authorization"). Always the
+  // business's current, not-yet-superseded confirmation at the moment
+  // of grant (POL-0009 Rule U / BDR-0016 §9 Decision 3) — re-verified,
+  // not merely recorded, at both grant time (server) and consumption
+  // time (firestore.rules).
+  targetStockCountId: string;
+  // Server-recorded grant moment (POL-0009 Terminology: `authorizedAt`)
+  // — set only by the privileged server via the Admin SDK's server
+  // timestamp, never client-supplied. Structurally distinct from, and
+  // never derived from or copied to, StockCount.confirmedAt (POL-0009
+  // Rule S; Implementation Authorization Acceptance Criterion 7/8).
+  authorizedAt: Timestamp;
+  // authorizedAt + 48 hours, computed once at grant time (BDR-0016 §9
+  // Decision 1; POL-0009 Rule R — final, Product-Architect-approved
+  // figure, not a proposal). Stored, not recomputed at read time, so
+  // firestore.rules' consumption-time check is a single request.time
+  // comparison (Implementation Plan §4).
+  expiresAt: Timestamp;
+  // One-way: 'unconsumed' -> 'consumed', per the one narrow, field-
+  // locked Owner-tier update firestore.rules permits (POL-0009 Rule Q;
+  // Implementation Plan §10's atomic-consumption requirement). There is
+  // deliberately no 'expired' status value written by any code path —
+  // expiry is enforced entirely via the expiresAt comparison at
+  // consumption time (Implementation Plan §16), never by a status
+  // flip, so "unconsumed but past expiresAt" and "unconsumed and still
+  // valid" are distinguished by time, not by an extra write nobody is
+  // required to perform.
+  status: InitialStockRecoveryAuthorizationStatus;
+  // The platform_operators/{uid} who granted this Authorization
+  // (POL-0009 Rule N — SuperAdmin grants; SuperAdmin never performs any
+  // Void & Redo step itself).
+  grantedByUid: string;
+  // Required, non-empty (POL-0009 Rule V). Carried into the
+  // platform_audit_log entry at grant time; never itself required to
+  // uniquely identify the grant (the fixed document id/path already
+  // does that).
+  justification: string;
+  // Set only at the moment of Owner consumption (the same client
+  // batch that creates the voidRecords document) — structurally
+  // distinct from authorizedAt and from StockCount.confirmedAt
+  // (POL-0009 Rule S's distinctness requirement, extended to this
+  // third timestamp).
+  consumedAt?: Timestamp;
+}
+
 export interface InitialStockDraftItem {
   id: string; // stable client-generated row id, so edits round-trip cleanly
   productName: string;

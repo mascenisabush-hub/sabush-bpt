@@ -21,6 +21,7 @@ import { fileURLToPath } from 'url';
 import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
 import { getFirestore } from 'firebase-admin/firestore';
+import { Timestamp } from 'firebase-admin/firestore';
 import { backgroundWorker } from './backgroundWorker';
 import { resolveServiceMode, isTenantMode, createTenantOnlyMiddleware } from './serviceMode';
 import { createNotificationPlatform } from './notificationPlatform';
@@ -37,6 +38,8 @@ import { suspendBusiness, reactivateBusiness, type BusinessSuspensionDb } from '
 import { touchBusinessActivity, type ActivityTouchDb } from './activityTouch';
 import { queryBusinessDirectory, type BusinessDirectoryDb } from './businessDirectory';
 import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
+import { grantInitialStockRecoveryAuthorization, type InitialStockRecoveryAuthorizationDb } from './initialStockRecoveryAuthorization';
+import { consumeInitialStockRecoveryAuthorization, type InitialStockRecoveryConsumptionDb } from './initialStockRecoveryConsumption';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -1107,6 +1110,132 @@ expressApp.post('/api/staff/set-tier', tenantOnly, requireAuth, async (req: Auth
 });
 
 // ------------------------------------------------------------------
+// POST /api/initial-stock-recovery/consume
+//
+// SuperAdmin-Assisted Initial Stock Recovery — Owner consumption
+// (Consumption & Audit Amendment; Supplementary Implementation
+// Authorization, signed 2026-08-21). TENANT-facing (requireAuth only —
+// never requirePlatformOperator/requireSuperAdmin; a platform-operator
+// credential cannot reach this route by construction, matching
+// Acceptance Criterion 3). The Owner remains the sole actor: this
+// route is an authenticated proxy for the Owner's own decision, never
+// a second authorization decision (Amendment §7) — SuperAdmin already
+// decided whether this recovery may happen; this route only lets the
+// Owner actually execute it and be reliably audited doing so.
+//
+// Body: { businessId: string, targetStockCountId: string }. No
+// justification/reason field is accepted here — per explicit Product
+// Architect instruction, the audit context is exclusively the
+// Authorization's own existing justification (SuperAdmin's grant-time
+// reason), reused verbatim, never a new Owner-entered value
+// (Acceptance Criterion 11).
+// ------------------------------------------------------------------
+expressApp.post('/api/initial-stock-recovery/consume', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+  const targetStockCountId = String(req.body?.targetStockCountId || '').trim();
+
+  if (!businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+    return;
+  }
+
+  let result;
+  try {
+    result = await consumeInitialStockRecoveryAuthorization(
+      initialStockRecoveryConsumptionDb,
+      initialStockRecoveryAuthorizationClock,
+      { requesterUid, businessId, targetStockCountId }
+    );
+  } catch (err) {
+    console.error('[initial-stock-recovery/consume] failed', {
+      requesterUid,
+      businessId,
+      targetStockCountId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao processar a recuperação.' });
+    return;
+  }
+
+  if (result.outcome === 'missing-target') {
+    res.status(400).json({ error: 'invalid-argument', message: result.message });
+    return;
+  }
+  if (result.outcome === 'requester-not-found' || result.outcome === 'not-owner') {
+    res.status(403).json({ error: 'permission-denied', message: result.message });
+    return;
+  }
+  if (result.outcome === 'target-not-found') {
+    res.status(404).json({ error: 'not-found', message: result.message });
+    return;
+  }
+  if (
+    result.outcome === 'target-not-initial-type' ||
+    result.outcome === 'target-not-current' ||
+    result.outcome === 'target-at-ceiling' ||
+    result.outcome === 'no-active-authorization' ||
+    result.outcome === 'authorization-mismatch' ||
+    result.outcome === 'authorization-expired'
+  ) {
+    res.status(409).json({ error: result.outcome, message: result.message });
+    return;
+  }
+
+  // [Amendment §5] Idempotency: an already-consumed Authorization is
+  // not an error on retry — it means a PRIOR call already completed
+  // the transaction (possibly with a failed audit write). Re-attempt
+  // the audit write here too, exactly as a fresh 'consumed' outcome
+  // would, so a retry can still close an audit gap without risking a
+  // second void-record or a second, distinct '.consumed' entry
+  // misrepresenting a new action (Acceptance Criteria 12, 15).
+  if (result.outcome === 'already-consumed') {
+    res.json({ outcome: 'consumed', businessId: result.businessId, targetStockCountId: result.targetStockCountId, alreadyConsumed: true });
+    return;
+  }
+
+  // result.outcome === 'consumed' from here — the transaction (void-
+  // record + Authorization-consumed) has already committed. The audit
+  // write happens AFTER, as its own step, NEVER claimed to be part of
+  // that transaction (Amendment §4 — this repository's own
+  // architecture does not support nested Admin SDK transactions).
+  let auditLogged = true;
+  try {
+    await writeAuditLogEntry(db, {
+      actorUid: requesterUid,
+      actorRole: 'owner',
+      actionType: 'initial_stock_recovery.consumed',
+      targetBusinessId: result.businessId,
+      targetStockCountId: result.targetStockCountId,
+      authorizationId: new Date(result.authorizationAuthorizedAt.toMillis()).toISOString(),
+      justification: result.authorizationJustification,
+    });
+  } catch (err) {
+    // [Amendment §5] A successful recovery is NEVER rolled back or
+    // downgraded to a failure because the audit write failed — the
+    // void-record/Authorization-consumed state is the real, durable
+    // outcome. The failure is surfaced explicitly (auditLogged: false
+    // in the response, below) and logged server-side for follow-up —
+    // never silently swallowed. A retry of this same request is always
+    // safe (idempotency, above) and will attempt this audit write again.
+    console.error('[initial-stock-recovery/consume] audit log write failed after successful recovery', {
+      requesterUid,
+      businessId,
+      targetStockCountId,
+      error: err instanceof Error ? err.message : String(err),
+    });
+    auditLogged = false;
+  }
+
+  res.json({
+    outcome: 'consumed',
+    businessId: result.businessId,
+    targetStockCountId: result.targetStockCountId,
+    ...(auditLogged ? {} : { auditLogged: false }),
+  });
+});
+
+// ------------------------------------------------------------------
 // POST /api/provisioning/business
 //
 // Business Provisioning Orchestrator (ADR-0001, docs/adr/ADR-0001-
@@ -1685,6 +1814,18 @@ const businessDirectoryDb = db as unknown as BusinessDirectoryDb;
 const businessSuspensionDb = db as unknown as BusinessSuspensionDb;
 const activityTouchDb = db as unknown as ActivityTouchDb;
 const auditLogDb = db as unknown as AuditLogDb;
+const initialStockRecoveryAuthorizationDb = db as unknown as InitialStockRecoveryAuthorizationDb;
+const initialStockRecoveryConsumptionDb = db as unknown as InitialStockRecoveryConsumptionDb;
+// [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan §4;
+// server/initialStockRecoveryAuthorization.ts's own TimestampFactory]
+// The real Admin SDK Timestamp, satisfying the module's narrow
+// TimestampFactory interface without that module importing
+// firebase-admin/firestore itself (keeping it independently
+// importable by tests, per this file's own established pattern).
+const initialStockRecoveryAuthorizationClock = {
+  now: () => Timestamp.now(),
+  fromMillis: (ms: number) => Timestamp.fromMillis(ms),
+};
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -2344,6 +2485,113 @@ expressApp.post(
     }
 
     res.json({ outcome: 'reactivated', businessId: result.businessId, ...(auditLogged ? {} : { auditLogged: false }) });
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/initial-stock-recovery/:businessId/authorize
+//
+// SuperAdmin-Assisted Initial Stock Recovery — the ONE privileged-
+// server write this capability introduces (Rule 8 Finding B;
+// Implementation Plan §9; Implementation Authorization, signed
+// 2026-08-21). Grants a scoped, one-time, 48-hour Authorization that
+// makes ONE named, otherwise-ineligible confirmation (legacy, or with
+// an expired ordinary 12-hour window) eligible to enter the existing,
+// unmodified Void & Redo flow — never a second recovery mechanism
+// (POL-0009 Rule M), never a write to stockCounts itself (Implementation
+// Authorization Acceptance Criterion 10), and never anything the
+// broader BDR-0011 SuperAdmin subscription/platform-access question
+// touches (BDR-0016 §4 — explicit non-merge).
+//
+// Body: { targetStockCountId: string, justification: string }.
+// Every grant-time precondition (current-confirmation-only, ceiling,
+// single-active-Authorization) is enforced inside
+// grantInitialStockRecoveryAuthorization()'s own transaction — this
+// route is a thin wrapper, exactly like every other SuperAdmin route
+// in this file.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/initial-stock-recovery/:businessId/authorize',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const { businessId } = req.params;
+    const targetStockCountId = String(req.body?.targetStockCountId || '');
+    const justification = String(req.body?.justification || '');
+
+    let result;
+    try {
+      result = await grantInitialStockRecoveryAuthorization(
+        initialStockRecoveryAuthorizationDb,
+        initialStockRecoveryAuthorizationClock,
+        { businessId, targetStockCountId, justification, grantedByUid: operator.uid }
+      );
+    } catch (err) {
+      console.error('[superadmin/initial-stock-recovery/authorize] failed', {
+        operatorUid: operator.uid,
+        businessId,
+        targetStockCountId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao autorizar a recuperação.' });
+      return;
+    }
+
+    if (result.outcome === 'missing-justification' || result.outcome === 'missing-target') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+    if (result.outcome === 'target-not-found') {
+      res.status(404).json({ error: 'not-found', message: result.message });
+      return;
+    }
+    if (
+      result.outcome === 'target-not-initial-type' ||
+      result.outcome === 'target-not-current' ||
+      result.outcome === 'target-at-ceiling'
+    ) {
+      res.status(409).json({ error: result.outcome, message: result.message });
+      return;
+    }
+    if (result.outcome === 'authorization-already-active') {
+      res.status(409).json({ error: 'authorization-already-active', message: result.message });
+      return;
+    }
+
+    // result.outcome === 'granted' from here — audit log is written
+    // AFTER the grant succeeds, same two-step, idempotent-by-retry
+    // pattern every other audited SuperAdmin action in this file
+    // already uses (platformAuditLog.ts's own header explains why this
+    // is never folded into the same transaction).
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'initial_stock_recovery.authorized',
+        targetBusinessId: result.businessId,
+        targetStockCountId: result.targetStockCountId,
+        justification,
+      });
+    } catch (err) {
+      console.error('[superadmin/initial-stock-recovery/authorize] audit log write failed after successful grant', {
+        operatorUid: operator.uid,
+        businessId,
+        targetStockCountId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      auditLogged = false;
+    }
+
+    res.json({
+      outcome: 'granted',
+      businessId: result.businessId,
+      targetStockCountId: result.targetStockCountId,
+      expiresAtMs: result.expiresAt.toMillis(),
+      ...(auditLogged ? {} : { auditLogged: false }),
+    });
   }
 );
 

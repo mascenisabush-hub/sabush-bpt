@@ -88,10 +88,12 @@ export async function writeAuditLogEntry(
     .set({
       id,
       actorUid: entry.actorUid,
-      actorRole: entry.actorRole satisfies PlatformRole,
+      actorRole: entry.actorRole,
       actionType: entry.actionType,
       ...(entry.targetBusinessId !== undefined ? { targetBusinessId: entry.targetBusinessId } : {}),
       ...(entry.targetUid !== undefined ? { targetUid: entry.targetUid } : {}),
+      ...(entry.targetStockCountId !== undefined ? { targetStockCountId: entry.targetStockCountId } : {}),
+      ...(entry.authorizationId !== undefined ? { authorizationId: entry.authorizationId } : {}),
       ...(entry.justification !== undefined ? { justification: entry.justification } : {}),
       timestamp,
     });
