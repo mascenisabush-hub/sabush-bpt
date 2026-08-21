@@ -490,6 +490,19 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       return;
     }
 
+    // [Accidental-confirm hardening] Checked here, inside the actual
+    // submit handler, rather than only via the button's `disabled`
+    // attribute — a disabled button doesn't fire a click event at all,
+    // so gating solely on `disabled` means an unticked checkbox makes
+    // the button silently do nothing with no error, no feedback, and
+    // no obvious explanation. Checking it here means "Sim, confirmar"
+    // always responds to a click: either it proceeds, or it explains
+    // exactly what's missing.
+    if (!reviewedBeforeConfirm) {
+      setError('Marque a confirmação de revisão antes de continuar.');
+      return;
+    }
+
     // [Void & Redo — Implementation Authorization §2 items 5-6; Rule 8
     // Finding F2] This guard blocks an accidental SECOND ORIGINAL
     // confirmation — it must not fire while producing a legitimate
@@ -1366,7 +1379,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             )}
             <button
               type="button"
-              onClick={() => setShowConfirmStep(true)}
+              onClick={() => {
+                setError(null);
+                setShowConfirmStep(true);
+              }}
               disabled={isSaving}
               className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
@@ -1389,7 +1405,12 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           {showConfirmStep && (
             <div
               className="fixed inset-0 z-50 bg-[#0B1F3A]/70 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5"
-              onClick={() => !isSaving && setShowConfirmStep(false)}
+              onClick={() => {
+                if (!isSaving) {
+                  setError(null);
+                  setShowConfirmStep(false);
+                }
+              }}
             >
               <div
                 className="w-full max-w-sm bg-white rounded-2xl shadow-2xl border-2 border-[#D4AF37]/40 px-5 py-5 space-y-4"
@@ -1425,7 +1446,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                   <input
                     type="checkbox"
                     checked={reviewedBeforeConfirm}
-                    onChange={(e) => setReviewedBeforeConfirm(e.target.checked)}
+                    onChange={(e) => {
+                      setReviewedBeforeConfirm(e.target.checked);
+                      if (e.target.checked) setError(null);
+                    }}
                     className="mt-0.5 w-4 h-4 shrink-0 accent-[#0B1F3A]"
                   />
                   <span className="text-[12.5px] leading-relaxed text-gray-700">
@@ -1433,10 +1457,17 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                   </span>
                 </label>
 
+                {error && (
+                  <p className="text-[12.5px] font-semibold text-red-600 -mt-1">{error}</p>
+                )}
+
                 <div className="flex gap-2">
                   <button
                     type="button"
-                    onClick={() => setShowConfirmStep(false)}
+                    onClick={() => {
+                      setError(null);
+                      setShowConfirmStep(false);
+                    }}
                     disabled={isSaving}
                     className="flex-1 py-2.5 px-3 rounded-xl border border-[#E5E7EB] bg-white text-gray-600 hover:bg-gray-50 font-bold text-[12.5px] transition-all duration-150"
                   >
@@ -1444,8 +1475,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                   </button>
                   <button
                     type="submit"
-                    disabled={isSaving || !reviewedBeforeConfirm}
-                    title={!reviewedBeforeConfirm ? 'Marque a confirmação de revisão acima primeiro' : undefined}
+                    disabled={isSaving}
                     className="flex-1 py-2.5 px-3 rounded-xl bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 text-white font-bold text-[12.5px] transition-all duration-150 disabled:opacity-60 disabled:cursor-not-allowed"
                   >
                     {isSaving ? 'A guardar...' : 'Sim, confirmar'}
