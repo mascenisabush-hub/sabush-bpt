@@ -880,7 +880,10 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       )}
 
       {showInitialStockValuationModal && (
-        <InitialStockPriceChangeModal onClose={() => setShowInitialStockValuationModal(false)} />
+        <InitialStockPriceChangeModal
+          onClose={() => setShowInitialStockValuationModal(false)}
+          onOpenInitialStockScreen={onNavigateToInitialStockCount}
+        />
       )}
     </div>
   );

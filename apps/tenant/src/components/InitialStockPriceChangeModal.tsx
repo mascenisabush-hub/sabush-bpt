@@ -2,10 +2,17 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/formatters';
 import { calculateInitialStockValuationChange } from '../utils/calculations';
-import { X, History, ShieldCheck, Info, TrendingUp, Save } from 'lucide-react';
+import { X, History, ShieldCheck, Info, TrendingUp, Save, ArrowRight } from 'lucide-react';
 
 interface InitialStockPriceChangeModalProps {
   onClose: () => void;
+  // [Navigation/UX fix — Owner discoverability of the Initial Stock
+  // screen after confirmation] The only route to InitialStockCountView
+  // (where the ordinary Void & Redo panel and the SuperAdmin-authorized
+  // recovery panel both live) once Initial Stock is confirmed. Reuses
+  // App.tsx's existing, unconditional handleNavigateToInitialStockCount
+  // — no new navigation plumbing, no change to that screen itself.
+  onOpenInitialStockScreen: () => void;
 }
 
 // ============================================================
@@ -23,7 +30,7 @@ interface InitialStockPriceChangeModalProps {
 //     "Editar Capital Inicial" — because that's exactly what it is:
 //     a new, separate historical record, not an edit.
 // ============================================================
-export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModalProps> = ({ onClose }) => {
+export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModalProps> = ({ onClose, onOpenInitialStockScreen }) => {
   const {
     currencySymbol,
     initialCapitalValue,
@@ -112,6 +119,23 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
             <p className="text-xs text-gray-500">
               Registe uma alteração de preço para as unidades que ainda restam — o Capital Inicial original nunca é alterado.
             </p>
+            {/* [Navigation/UX fix — smallest change] The only affordance
+                that opens InitialStockCountView (the ordinary 12h
+                recovery panel and, when applicable, the SuperAdmin-
+                authorized recovery panel) once Initial Stock is
+                confirmed — the Dashboard card itself always opens THIS
+                modal in that state, by design, unchanged. */}
+            <button
+              type="button"
+              onClick={() => {
+                onClose();
+                onOpenInitialStockScreen();
+              }}
+              className="mt-1.5 inline-flex items-center gap-1 text-[11.5px] font-semibold text-[#0B1F3A] hover:text-[#D4AF37] transition-colors"
+            >
+              Rever ecrã de Capital Inicial
+              <ArrowRight className="w-3 h-3" strokeWidth={2.5} />
+            </button>
           </div>
           <button
             type="button"
