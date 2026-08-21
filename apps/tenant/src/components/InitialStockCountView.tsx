@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
+import { UNIT_GUESS_DICTIONARY } from '../data/unitGuessDictionary';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { InitialStockDraftItem, UnitRelationship, InitialCapitalBasis } from '../types';
@@ -48,6 +49,13 @@ interface CountRowItem {
   // purely a convenience input that writes into it, not a parallel
   // source of truth.
   sellingPricePerSellingUnit: string;
+  // [Unit-of-measure auto-detect] UI-only, never persisted — tracks
+  // whether the owner has directly edited this row's own `unit` field
+  // at least once. Auto-detection (detectSuggestedUnit, below) never
+  // overwrites `unit` once this is true, so a deliberate choice is
+  // never silently clobbered by a later suggestion (e.g. renaming the
+  // product again after already correcting the unit).
+  unitManuallySet: boolean;
 }
 
 const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
@@ -80,6 +88,12 @@ const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
   newProductSellingUnit: '',
   newProductSellingUnitFactor: '',
   sellingPricePerSellingUnit: '',
+  // A restored draft row's `unit` already reflects either a manual
+  // choice or an auto-suggestion applied earlier — either way, it's
+  // an already-considered value, so this is `true` here to stop
+  // auto-detection from re-evaluating and silently changing it on
+  // reload.
+  unitManuallySet: true,
 });
 
 // [Product Memory / UOM — Increment A, Checkpoint 2] A small, self-
@@ -241,6 +255,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     newProductSellingUnit: '',
     newProductSellingUnitFactor: '',
     sellingPricePerSellingUnit: '',
+    unitManuallySet: false,
   });
 
   const [date, setDate] = useState(getTodayDateString());
@@ -568,6 +583,36 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     const trimmed = name.trim().toLowerCase();
     if (!trimmed) return false;
     return !products.some((p) => p.name.toLowerCase() === trimmed);
+  };
+
+  // [Unit-of-measure auto-detect] Suggests a purchase unit for a
+  // freshly-typed product name, in priority order:
+  //   1. An exact (case-insensitive) match in the owner's own catalog
+  //      with a confirmed unitRelationship — grounded in their own
+  //      previously-verified data, so always trustworthy when it
+  //      fires.
+  //   2. A keyword match against UNIT_GUESS_DICTIONARY — a best-effort
+  //      guess for a name the system has never seen before. Openly a
+  //      guess: only ever pre-fills the (freely editable) `unit`
+  //      field, never validated against or blocking anything.
+  // Returns null (no suggestion) rather than a fallback default —
+  // callers already have their own default (suggestedUnits[0]) for
+  // the "nothing detected" case, so this only ever returns a value
+  // it's actually confident enough to suggest.
+  const detectSuggestedUnit = (name: string): string | null => {
+    const trimmed = name.trim().toLowerCase();
+    if (!trimmed) return null;
+
+    const catalogMatch = products.find((p) => p.name.toLowerCase() === trimmed);
+    const catalogUnit = catalogMatch?.unitRelationship?.units?.[0]?.unit?.trim();
+    if (catalogUnit) return catalogUnit;
+
+    for (const entry of UNIT_GUESS_DICTIONARY) {
+      if (entry.keywords.some((keyword) => trimmed.includes(keyword))) {
+        return entry.unit;
+      }
+    }
+    return null;
   };
 
   const totalCapital = rows.reduce((acc, row) => {
@@ -1128,7 +1173,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         <input
           type="text"
           value={row.unit}
-          onChange={(e) => updateRow(row.id, { unit: e.target.value })}
+          onChange={(e) => updateRow(row.id, { unit: e.target.value, unitManuallySet: true })}
           className={`${fieldClass} font-mono text-center`}
         />
       </div>
@@ -1364,6 +1409,22 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                               ? handleRenameGroup(group.key, e.target.value)
                               : updateRow(firstRow.id, { productName: e.target.value })
                           }
+                          onBlur={() => {
+                            // [Unit-of-measure auto-detect] Runs once
+                            // the owner finishes typing the name (not
+                            // per keystroke — a suggestion flickering
+                            // mid-word would be more distracting than
+                            // helpful), and only touches the group's
+                            // FIRST row — a multi-portion product may
+                            // deliberately have different units per
+                            // portion (the "Adicionar porção" split),
+                            // which this must never override.
+                            if (firstRow.unitManuallySet) return;
+                            const suggestion = detectSuggestedUnit(group.displayName);
+                            if (suggestion && suggestion !== firstRow.unit) {
+                              updateRow(firstRow.id, { unit: suggestion });
+                            }
+                          }}
                           className={`${fieldClass} font-semibold`}
                         />
                       </div>
