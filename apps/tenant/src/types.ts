@@ -730,6 +730,18 @@ export interface InitialStockDraftItem {
   // backward-compatibility reason as StockCountItem.sellingPrice above —
   // drafts saved before this field existed have no sellingPrice.
   sellingPrice?: number;
+  // [Multi-level unit chain — Cross-Portion Auto-Computation feature]
+  // A genuinely-new product's in-progress unit chain (the levels AFTER
+  // this item's own `unit`), the selling-unit choice among that chain,
+  // and the one canonical selling rate for the whole product — all
+  // optional, all absent on any draft saved before this feature
+  // existed or on an item that never configured one. Deliberately
+  // persisted (unlike this feature's InitialStockCountView.tsx
+  // predecessor, which kept the equivalent config UI-only) so a
+  // mid-configuration chain survives a refresh.
+  unitChain?: Array<{ unit: string; factorFromPrevious: number }>;
+  chainSellingUnit?: string;
+  sellingPricePerSellingUnit?: number;
 }
 
 export interface InitialStockDraft {

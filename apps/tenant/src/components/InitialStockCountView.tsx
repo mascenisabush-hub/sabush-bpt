@@ -8,6 +8,7 @@ import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { InitialStockDraftItem, UnitRelationship, InitialCapitalBasis } from '../types';
 import { resolveInitialCapitalValue } from '../utils/calculations';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 
 interface InitialStockCountViewProps {
@@ -22,32 +23,37 @@ interface CountRowItem {
   unit: string;
   costPrice: string;
   sellingPrice: string;
-  // [Product Memory / UOM — Increment A, Checkpoint 2] UI-only fields,
-  // never persisted to InitialStockDraftItem/the autosaved draft (see
-  // rowToDraftItem/draftItemToRow, below — neither reads or writes
-  // these two fields). Deliberately scoped to a single, optional
-  // second unit (a two-level relationship: this row's own `unit` as
-  // the top-level/purchase unit, plus one further "selling" unit and
-  // how many of it make one `unit`) — not an arbitrary N-level chain
-  // builder. This is a genuine, real, working subset of the accepted
-  // UOM Specification's data model (Product.unitRelationship already
-  // supports N levels — see types.ts), not a different concept; a
-  // longer chain remains something the owner can add later via a
-  // product-catalog "confirm/edit unit relationship" action (Decision
-  // 14), still to be built. Both fields are blank/unused whenever this
-  // row's productName already matches an existing product — see
-  // isGenuinelyNewProductName below, which gates whether this row's
-  // optional unit-relationship section is even shown.
-  newProductSellingUnit: string;
-  newProductSellingUnitFactor: string;
-  // [Sell-unit price conversion] Also UI-only, never persisted — the
-  // price the owner actually knows (per newProductSellingUnit, the
-  // smaller unit), used to auto-compute `sellingPrice` above (per this
-  // row's own `unit`, the buy unit) via newProductSellingUnitFactor.
-  // Kept separate from sellingPrice itself so sellingPrice stays the
-  // single value every other part of the app already reads — this is
-  // purely a convenience input that writes into it, not a parallel
-  // source of truth.
+  // [Multi-level unit chain — replaces the single-hop Increment A/2
+  // pair] The chain of units AFTER this row's own `unit` (the
+  // purchase/reference unit, implicit as index 0 — never duplicated
+  // here) — e.g. for "1 cx = 4 emb = 24 un", unit='cx' and
+  // unitChain=[{unit:'emb',factorFromPrevious:4},{unit:'un',factorFromPrevious:6}].
+  // factorFromPrevious is always relative to the PRECEDING entry, per
+  // UnitRelationship's own established convention
+  // (purchaseToSellingConversion.ts) — never to `unit` directly for
+  // hops beyond the first. Only ever populated/editable for a
+  // genuinely new product (see resolveGroupUnitRelationship, below) —
+  // a known product's already-confirmed chain is read from the
+  // catalog instead and this stays empty for it. Persisted to the
+  // draft (rowToDraftItem/draftItemToRow) at the owner's explicit
+  // request, so a chain configured mid-entry survives a refresh —
+  // unlike the two fields this replaces, which were deliberately
+  // UI-only.
+  unitChain: Array<{ unit: string; factorFromPrevious: number }>;
+  // Which unit in [unit, ...unitChain] is the selling unit — must be a
+  // member per POL-0005, enforced by isValidUnitRelationship at the
+  // point this actually gets used/persisted. Defaults to the last
+  // chain entry's unit when a new hop is added, but stays explicitly
+  // overridable — a chain doesn't have to sell at its smallest unit.
+  chainSellingUnit: string;
+  // The ONE canonical selling rate for the whole product/group — "per
+  // chainSellingUnit" — entered exactly once, here on the group's
+  // first row, and NEVER auto-overwritten by anything (this is what
+  // makes it safe to treat as the ground truth every other portion's
+  // own sellingPrice gets derived from). For a known product, prefilled
+  // from Product.sellingPrice as a starting suggestion — still freely
+  // editable, since today's actual stock may be priced differently
+  // than the catalog default.
   sellingPricePerSellingUnit: string;
   // [Unit-of-measure auto-detect] UI-only, never persisted — tracks
   // whether the owner has directly edited this row's own `unit` field
@@ -56,6 +62,16 @@ interface CountRowItem {
   // never silently clobbered by a later suggestion (e.g. renaming the
   // product again after already correcting the unit).
   unitManuallySet: boolean;
+  // [Cross-portion auto-computation] Tracks whether the OWNER has
+  // directly edited this row's own costPrice/sellingPrice at least
+  // once — auto-computation (applyChainComputations, below) never
+  // overwrites a field once its own flag is true, mirroring
+  // unitManuallySet's exact discipline, just per price field instead
+  // of per unit. The row acting as the cost REFERENCE for its group is
+  // never auto-written to at all (it IS the source), regardless of
+  // this flag.
+  costManuallySet: boolean;
+  sellingManuallySet: boolean;
 }
 
 const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
@@ -65,11 +81,19 @@ const rowToDraftItem = (row: CountRowItem): InitialStockDraftItem => ({
   unit: row.unit,
   costPrice: parseFloat(row.costPrice) || 0,
   sellingPrice: parseFloat(row.sellingPrice) || 0,
-  // [Product Memory / UOM — Increment A, Checkpoint 2] Deliberately NOT
-  // included — newProductSellingUnit/newProductSellingUnitFactor are
-  // UI-only, never part of the persisted draft (see CountRowItem's own
-  // comment above). InitialStockDraftItem's shape is completely
-  // unchanged by this checkpoint.
+  // [Multi-level unit chain — included in the draft at the owner's
+  // explicit request] Unlike the single-hop fields this replaces
+  // (deliberately UI-only), a mid-configuration chain now survives a
+  // refresh — building a 3+ level chain is real work, and losing it to
+  // an interrupted session would be exactly the kind of avoidable
+  // frustration this feature exists to prevent. Only ever non-empty
+  // for a genuinely new product (see resolveGroupUnitRelationship) —
+  // a known product's chain lives on its Product document, never here.
+  ...(row.unitChain.length > 0 ? { unitChain: row.unitChain } : {}),
+  ...(row.chainSellingUnit.trim() ? { chainSellingUnit: row.chainSellingUnit.trim() } : {}),
+  ...(row.sellingPricePerSellingUnit.trim()
+    ? { sellingPricePerSellingUnit: parseFloat(row.sellingPricePerSellingUnit) || 0 }
+    : {}),
 });
 
 const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
@@ -82,53 +106,69 @@ const draftItemToRow = (item: InitialStockDraftItem): CountRowItem => ({
   // draft saved before this field existed simply has no selling price
   // to restore, so the field starts blank, same as any other unset row.
   sellingPrice: item.sellingPrice ? String(item.sellingPrice) : '',
-  // [Product Memory / UOM — Increment A, Checkpoint 2] Always starts
-  // blank on load — this optional sub-config was never persisted
-  // (see rowToDraftItem above), so there is nothing to restore.
-  newProductSellingUnit: '',
-  newProductSellingUnitFactor: '',
-  sellingPricePerSellingUnit: '',
+  // Restores a mid-configuration chain exactly as it was left — absent
+  // entirely on any draft saved before this feature existed, or on a
+  // row that never had one, in which case this is the same empty-array
+  // starting state createEmptyRow itself uses.
+  unitChain: item.unitChain ?? [],
+  chainSellingUnit: item.chainSellingUnit ?? '',
+  sellingPricePerSellingUnit:
+    typeof item.sellingPricePerSellingUnit === 'number' ? String(item.sellingPricePerSellingUnit) : '',
   // A restored draft row's `unit` already reflects either a manual
   // choice or an auto-suggestion applied earlier — either way, it's
   // an already-considered value, so this is `true` here to stop
   // auto-detection from re-evaluating and silently changing it on
   // reload.
   unitManuallySet: true,
+  // Mirrors unitManuallySet's own reasoning exactly: a restored price
+  // already reflects whatever state it was left in (typed or
+  // previously auto-computed) — treating it as "manually set" on
+  // reload stops auto-computation from immediately overwriting a value
+  // the owner may have deliberately corrected right before refreshing.
+  costManuallySet: true,
+  sellingManuallySet: true,
 });
 
-// [Product Memory / UOM — Increment A, Checkpoint 2] A small, self-
-// contained, collapsible optional-input row — deliberately its own
-// component (not inlined) so its collapsed/expanded state is
-// independent per product row, and so this checkpoint's scope (a
-// single optional second unit, per CountRowItem's own comment above)
-// stays visibly contained to one place. Starts collapsed, matching this
-// screen's existing "calm until needed" pattern (the delete button's
-// hover-reveal treatment, immediately above in the JSX this renders
-// alongside). Purely a controlled, presentational component — it holds
-// no state of its own beyond the collapse toggle, and never calls
-// recordStockCount or any context function directly; the parent
-// (InitialStockCountView) owns and validates the actual values via
-// onChange, exactly like every other row field.
-const UnitRelationshipRow: React.FC<{
+
+// [Multi-level unit chain] Self-contained, collapsible component
+// covering TWO distinct cases, chosen by the caller via
+// `knownRelationship`:
+//   - A KNOWN product (knownRelationship non-null): read-only summary
+//     of its already-confirmed chain — reconfiguring an EXISTING
+//     product's relationship is a separate, explicit owner action
+//     elsewhere in the app (Decision 14), never silently offered here.
+//     Only the group-level selling rate stays editable in this case.
+//   - A genuinely NEW product (knownRelationship null): the full
+//     editable chain builder — add/remove as many levels as needed
+//     (1 cx = 4 emb = 24 un, or more), not capped at one hop.
+// Purely a controlled, presentational component in both cases — it
+// holds no state of its own beyond the collapse toggle, and never
+// calls recordStockCount or any context function directly; the parent
+// (InitialStockCountView) owns and validates every value via onChange,
+// exactly like every other row field.
+const UnitChainSection: React.FC<{
   purchaseUnit: string;
-  sellingUnit: string;
-  factor: string;
-  sellingPricePerSellingUnit: string;
-  onChange: (sellingUnit: string, factor: string) => void;
-  onSellingPriceChange: (value: string) => void;
-  computedSellingPrice: number | null;
+  knownRelationship: UnitRelationship | null;
+  chain: Array<{ unit: string; factorFromPrevious: number }>;
+  chainSellingUnit: string;
+  sellingRate: string;
   currencySymbol: string;
+  onChainChange: (chain: Array<{ unit: string; factorFromPrevious: number }>) => void;
+  onSellingUnitChange: (unit: string) => void;
+  onSellingRateChange: (value: string) => void;
 }> = ({
   purchaseUnit,
-  sellingUnit,
-  factor,
-  sellingPricePerSellingUnit,
-  onChange,
-  onSellingPriceChange,
-  computedSellingPrice,
+  knownRelationship,
+  chain,
+  chainSellingUnit,
+  sellingRate,
   currencySymbol,
+  onChainChange,
+  onSellingUnitChange,
+  onSellingRateChange,
 }) => {
-  const [expanded, setExpanded] = useState(!!(sellingUnit || factor || sellingPricePerSellingUnit));
+  const [expanded, setExpanded] = useState(!!(knownRelationship || chain.length > 0 || sellingRate));
+  const effectiveSellingUnit = knownRelationship?.sellingUnit ?? chainSellingUnit;
 
   if (!expanded) {
     return (
@@ -138,7 +178,11 @@ const UnitRelationshipRow: React.FC<{
         className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
       >
         <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
-        <span>Compra em {purchaseUnit || 'un'}, vende numa unidade menor? Calcular preço de venda</span>
+        <span>
+          {knownRelationship
+            ? 'Relação de unidades já configurada — ver / definir preço de venda'
+            : `Compra em ${purchaseUnit || 'un'}, vende numa unidade menor? Calcular totais`}
+        </span>
       </button>
     );
   }
@@ -151,69 +195,158 @@ const UnitRelationshipRow: React.FC<{
         className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
       >
         <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
-        <span>Conversão de unidades (opcional)</span>
+        <span>Conversão de unidades</span>
       </button>
-      <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
-        <span className="text-gray-500 pb-2">
-          1 <strong className="text-[#111827]">{purchaseUnit || 'un'}</strong> =
-        </span>
-        <div>
-          <label className="block type-label mb-1">Quantidade</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={factor}
-            onChange={(e) => onChange(sellingUnit, e.target.value)}
-            placeholder="Ex: 20"
-            className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          />
-        </div>
-        <div>
-          <label className="block type-label mb-1">Unidade de venda</label>
-          <input
-            type="text"
-            value={sellingUnit}
-            onChange={(e) => onChange(e.target.value, factor)}
-            placeholder="Ex: Un"
-            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          />
-        </div>
-      </div>
 
-      {/* [Sell-unit price conversion] Lets the owner type the price
-          they actually know — per the small selling unit, e.g. "130
-          MT por Un" — instead of doing the multiplication themselves
-          to figure out the equivalent price per purchase unit. Only
-          appears once a selling unit and quantity are both entered,
-          since the conversion is meaningless without both. */}
-      {sellingUnit.trim() && parseFloat(factor) > 0 && (
-        <div className="flex flex-wrap items-end gap-2.5 text-[12.5px] pt-1 border-t border-[#E5E7EB]">
-          <div>
-            <label className="block type-label mb-1">Preço de venda por {sellingUnit.trim()}</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={sellingPricePerSellingUnit}
-              onChange={(e) => onSellingPriceChange(e.target.value)}
-              placeholder="Ex: 6.50"
-              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            />
-          </div>
-          {computedSellingPrice !== null && (
-            <span className="text-gray-500 pb-2">
-              → <strong className="text-[#0B1F3A]">{formatCurrency(computedSellingPrice, currencySymbol)}</strong> por{' '}
-              {purchaseUnit || 'un'}{' '}
-              <span className="text-gray-400">(preenchido automaticamente em "Preço de venda" acima)</span>
-            </span>
+      {knownRelationship ? (
+        <div className="text-[12.5px] text-gray-600">
+          <span className="font-mono">
+            1 {purchaseUnit || knownRelationship.units[0].unit}
+            {knownRelationship.units.slice(1).map((u, i) => {
+              const factor = getConversionFactor(knownRelationship, knownRelationship.units[0].unit, u.unit);
+              return (
+                <span key={i}>
+                  {' '}
+                  = <strong className="text-[#111827]">{factor ?? '?'}</strong> {u.unit}
+                </span>
+              );
+            })}
+          </span>
+          <span className="block text-[11px] text-gray-400 mt-1">
+            Já configurado para este produto — para alterar, edite a ficha do produto.
+          </span>
+        </div>
+      ) : (
+        <div className="space-y-2">
+          {/* [Multi-level unit chain] Each hop: "1 [previous unit] =
+              [N] [this unit]". previousUnit for hop 0 is the row's own
+              purchase unit; for every later hop it's the PRECEDING
+              hop's own unit — matching UnitRelationship.units[].factorFromPrevious's
+              established "relative to the immediately preceding chain
+              element" convention (purchaseToSellingConversion.ts). */}
+          {chain.map((hop, index) => {
+            const previousUnit = index === 0 ? purchaseUnit || 'un' : chain[index - 1].unit || '?';
+            return (
+              <div key={index} className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+                <span className="text-gray-500 pb-2">
+                  1 <strong className="text-[#111827]">{previousUnit}</strong> =
+                </span>
+                <div>
+                  <label className="block type-label mb-1">Quantidade</label>
+                  <input
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    value={hop.factorFromPrevious || ''}
+                    onChange={(e) => {
+                      const next = [...chain];
+                      next[index] = { ...hop, factorFromPrevious: parseFloat(e.target.value) || 0 };
+                      onChainChange(next);
+                    }}
+                    placeholder="Ex: 4"
+                    className="w-20 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                  />
+                </div>
+                <div>
+                  <label className="block type-label mb-1">Unidade</label>
+                  <input
+                    type="text"
+                    value={hop.unit}
+                    onChange={(e) => {
+                      const next = [...chain];
+                      const wasSellingUnit = chainSellingUnit === hop.unit;
+                      next[index] = { ...hop, unit: e.target.value };
+                      onChainChange(next);
+                      // Keeps the selling-unit choice pointing at the
+                      // same hop if it was renamed, and defaults a
+                      // freshly-typed final hop to be the selling unit
+                      // (the common case — the smallest unit is
+                      // usually what's sold) without overriding an
+                      // explicit earlier choice.
+                      if (wasSellingUnit || (!chainSellingUnit && index === chain.length - 1)) {
+                        onSellingUnitChange(e.target.value);
+                      }
+                    }}
+                    placeholder="Ex: Emb"
+                    className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                  />
+                </div>
+                <button
+                  type="button"
+                  onClick={() => {
+                    const removedUnit = hop.unit;
+                    onChainChange(chain.filter((_, i) => i !== index));
+                    if (chainSellingUnit === removedUnit) onSellingUnitChange('');
+                  }}
+                  aria-label={`Remover nível ${previousUnit} = ${hop.unit || '...'}`}
+                  className="p-1.5 mb-[3px] rounded-lg text-gray-300 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                >
+                  <Trash2 className="w-3.5 h-3.5" />
+                </button>
+              </div>
+            );
+          })}
+          <button
+            type="button"
+            onClick={() => onChainChange([...chain, { unit: '', factorFromPrevious: 0 }])}
+            className="flex items-center gap-1.5 text-[11.5px] font-bold text-[#0B1F3A]/70 hover:text-[#0B1F3A] transition-colors duration-150"
+          >
+            <Plus className="w-3 h-3" strokeWidth={2.5} />
+            <span>Adicionar nível</span>
+          </button>
+
+          {chain.length > 1 && (
+            <div>
+              <label className="block type-label mb-1">Unidade de venda</label>
+              <select
+                value={chainSellingUnit}
+                onChange={(e) => onSellingUnitChange(e.target.value)}
+                className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              >
+                <option value="">Escolher...</option>
+                {[purchaseUnit, ...chain.map((h) => h.unit)]
+                  .filter((u) => u.trim())
+                  .map((u) => (
+                    <option key={u} value={u}>
+                      {u}
+                    </option>
+                  ))}
+              </select>
+            </div>
           )}
         </div>
       )}
 
-      <p className="text-[11px] text-gray-400 leading-relaxed">
-        Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
-      </p>
+      {/* [Cross-portion auto-computation] The ONE canonical selling
+          rate for the whole product — entered once, here, and never
+          auto-overwritten by anything (see the component-level
+          comment above and applyChainComputations, below). Every
+          portion's own "Venda/Un" field is what actually shows a
+          computed result; this input is purely the source. */}
+      {effectiveSellingUnit && (
+        <div className="pt-1 border-t border-[#E5E7EB]">
+          <label className="block type-label mb-1">Preço de venda por {effectiveSellingUnit}</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={sellingRate}
+            onChange={(e) => onSellingRateChange(e.target.value)}
+            placeholder="Ex: 100"
+            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+          <p className="text-[11px] text-gray-400 leading-relaxed mt-1.5">
+            Este valor nunca é alterado automaticamente — os totais de cada porção e do produto são calculados a
+            partir dele, não o contrário.
+          </p>
+        </div>
+      )}
+
+      {!knownRelationship && (
+        <p className="text-[11px] text-gray-400 leading-relaxed">
+          Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
+        </p>
+      )}
     </div>
   );
 };
@@ -252,10 +385,12 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     unit: suggestedUnits[0] || 'un',
     costPrice: '',
     sellingPrice: '',
-    newProductSellingUnit: '',
-    newProductSellingUnitFactor: '',
+    unitChain: [],
+    chainSellingUnit: '',
     sellingPricePerSellingUnit: '',
     unitManuallySet: false,
+    costManuallySet: false,
+    sellingManuallySet: false,
   });
 
   const [date, setDate] = useState(getTodayDateString());
@@ -615,11 +750,83 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     return null;
   };
 
+  // [Cross-portion auto-computation] The single source of truth for
+  // "what unit chain applies to this group of portions" — used by both
+  // the UnitChainSection display (Stage 1/2) and applyChainComputations
+  // (below). Prefers a KNOWN product's already-confirmed Product Memory
+  // relationship over anything locally configured — a genuinely new
+  // product's own in-progress chain (firstRow.unitChain) is only ever a
+  // fallback for when no catalog entry exists yet. The confirmedAt
+  // stamped here is a placeholder used ONLY for this function's own
+  // isValidUnitRelationship check and any live math derived from it —
+  // it is NEVER persisted; the real timestamp is stamped fresh, once,
+  // at actual confirm time in handleSubmit (below), from the same
+  // underlying unitChain/chainSellingUnit fields.
+  const resolveGroupUnitRelationship = (group: { displayName: string; rows: CountRowItem[] }): UnitRelationship | null => {
+    const trimmedName = group.displayName.trim().toLowerCase();
+    if (trimmedName) {
+      const catalogMatch = products.find((p) => p.name.toLowerCase() === trimmedName);
+      if (catalogMatch && isValidUnitRelationship(catalogMatch.unitRelationship)) {
+        return catalogMatch.unitRelationship!;
+      }
+    }
+    const firstRow = group.rows[0];
+    if (!firstRow || firstRow.unitChain.length === 0) return null;
+    const candidate: UnitRelationship = {
+      units: [{ unit: firstRow.unit || 'un', factorFromPrevious: 0 }, ...firstRow.unitChain],
+      ...(firstRow.chainSellingUnit.trim() ? { sellingUnit: firstRow.chainSellingUnit.trim() } : {}),
+      confirmedAt: '1970-01-01T00:00:00.000Z',
+    };
+    return isValidUnitRelationship(candidate) ? candidate : null;
+  };
+
+  // Tolerance matches the 2-decimal-place rounding every price in this
+  // screen already uses (toFixed(2)) — prevents a computed value that's
+  // equal to within floating-point noise from being treated as a
+  // "change," which would otherwise re-trigger applyChainComputations'
+  // own effect on every render in an infinite loop.
+  const pricesEffectivelyEqual = (a: string, b: string): boolean => Math.abs((parseFloat(a) || 0) - (parseFloat(b) || 0)) < 0.005;
+
   const totalCapital = rows.reduce((acc, row) => {
     const q = parseFloat(row.quantity) || 0;
     const c = parseFloat(row.costPrice) || 0;
     return acc + q * c;
   }, 0);
+
+  // [Initial Stock Valuation Basis — Live Total fix] Same shape as
+  // totalCapital above, using sellingPrice instead of costPrice.
+  // sellingPrice already holds the fully-converted value (per this
+  // row's own purchase unit, via the "Conversão de unidades" helper
+  // and its onSellingPriceChange handler) whenever a sell-unit
+  // conversion was used — so qty × sellingPrice here is already the
+  // correct selling valuation with NO further conversion needed at
+  // this point; that work already happened at input time. Deliberately
+  // a SEPARATE variable from totalCapital, not a change to it: an
+  // existing regression test locks totalCapital in as a pure
+  // qty×costPrice sum, and this must not disturb that — it never feeds
+  // anything cost-basis-related, only the basis-aware display value
+  // below.
+  const totalSellingCapital = rows.reduce((acc, row) => {
+    const q = parseFloat(row.quantity) || 0;
+    const s = parseFloat(row.sellingPrice) || 0;
+    return acc + q * s;
+  }, 0);
+
+  // [Initial Stock Valuation Basis — Live Total fix] The ONE total
+  // actually shown anywhere in this pre-confirm screen (the "Capital
+  // Inicial Total" card, the confirm modal, and the post-save success
+  // message all read this, never totalCapital directly) — previously
+  // all three read totalCapital itself, which is always cost-basis
+  // regardless of the owner's initialCapitalBasis selection. This is
+  // what actually makes "Escolha uma vez, para toda a contagem"
+  // (the Custo/Venda toggle just above the product grid) reflect in
+  // what the owner sees while entering and confirming data, matching
+  // what recordStockCount already persists via normalizeStockCountItems
+  // (totalValue vs totalSellingValue) and what resolveInitialCapitalValue
+  // already resolves post-confirmation — this brings the LIVE number in
+  // line with the ALREADY-CORRECT persisted one, not the other way
+  // around.
+  const displayedCapitalTotal = initialCapitalBasis === 'selling' ? totalSellingCapital : totalCapital;
 
   // [Grouped Initial Stock UX] Purely a render-layer reshaping of the
   // SAME flat `rows` state into product groups — see
@@ -631,6 +838,80 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // so the persisted shape is completely unaffected by how this screen
   // currently chooses to visually group rows for editing.
   const rowGroups = groupRowsByProductName(rows);
+
+  // [Cross-portion auto-computation] Runs after every render where
+  // `rows` actually changed, recomputing any portion's cost/selling
+  // price that (a) belongs to a group with a resolvable unit
+  // relationship (known-product catalog match OR a fully-configured
+  // new-product chain), and (b) hasn't been manually touched by the
+  // owner (costManuallySet/sellingManuallySet). Writes only go out for
+  // fields that actually differ from their current value
+  // (pricesEffectivelyEqual gates every updateRow call below) — once
+  // computed values match current values, the effect produces no
+  // writes, `rows` doesn't change, and the effect does not re-fire,
+  // so this cannot loop.
+  //
+  // Cost's reference is a SPECIFIC ROW — whichever portion in the
+  // group is in the chain's own top-level/purchase unit (units[0]) —
+  // so that row is never itself auto-written to; it IS the source
+  // applyChainComputations reads from for every other portion. If no
+  // portion currently uses that unit, cost simply cannot auto-compute
+  // for this group (no reference to derive from) — every portion's
+  // cost stays manual, matching this codebase's consistent
+  // warn-not-block rule rather than fabricating a number.
+  //
+  // Selling's reference is the GROUP-LEVEL rate
+  // (firstRow.sellingPricePerSellingUnit) instead — entered once,
+  // independent of which physical portions exist — so unlike cost,
+  // selling can auto-compute for every portion (including one in the
+  // reference unit itself; getConversionFactor(rel, x, x) already
+  // correctly returns exactly 1, reproducing the typed rate with no
+  // special-casing needed).
+  useEffect(() => {
+    for (const group of rowGroups) {
+      const relationship = resolveGroupUnitRelationship(group);
+      if (!relationship) continue;
+
+      const referenceUnit = relationship.units[0].unit;
+      const sellingUnit = relationship.sellingUnit;
+
+      const referenceCostRow = group.rows.find((r) => r.unit === referenceUnit);
+      const referenceCostRate = referenceCostRow ? parseFloat(referenceCostRow.costPrice) : NaN;
+      const hasValidCostReference = !!referenceCostRow && Number.isFinite(referenceCostRate) && referenceCostRate >= 0;
+
+      const groupSellingRate = parseFloat(group.rows[0].sellingPricePerSellingUnit);
+      const hasValidSellingReference = !!sellingUnit && Number.isFinite(groupSellingRate) && groupSellingRate >= 0;
+
+      for (const row of group.rows) {
+        const updates: Partial<CountRowItem> = {};
+
+        if (hasValidCostReference && row.id !== referenceCostRow!.id && !row.costManuallySet) {
+          const factor = getConversionFactor(relationship, row.unit, referenceUnit);
+          if (factor !== null) {
+            const computed = (factor * referenceCostRate).toFixed(2);
+            if (!pricesEffectivelyEqual(row.costPrice, computed)) {
+              updates.costPrice = computed;
+            }
+          }
+        }
+
+        if (hasValidSellingReference && !row.sellingManuallySet) {
+          const factor = getConversionFactor(relationship, row.unit, sellingUnit!);
+          if (factor !== null) {
+            const computed = (factor * groupSellingRate).toFixed(2);
+            if (!pricesEffectivelyEqual(row.sellingPrice, computed)) {
+              updates.sellingPrice = computed;
+            }
+          }
+        }
+
+        if (Object.keys(updates).length > 0) {
+          updateRow(row.id, updates);
+        }
+      }
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [rows]);
 
   // [Draft-loss fix] Fired by the "Confirmar Capital Inicial" /
   // "Confirmar Nova Contagem" click, before the confirm modal opens.
@@ -742,40 +1023,35 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         return;
       }
 
-      // [Product Memory / UOM — Increment A, Checkpoint 2] Built ONLY
-      // when this row's product is genuinely new AND the owner actually
-      // filled in the optional second-unit fields — an empty/untouched
-      // section contributes nothing (no unitRelationship key at all),
-      // which is exactly the same "no confirmed configuration, warn
-      // later, never block" state a product created without this
-      // section already has today (BDR-0012 §5.A Item 6). PURCHASE
-      // FACTS ARE NEVER TOUCHED BY THIS: row.unit, row.quantity, and
-      // row.costPrice above are read completely unchanged, before and
-      // after this block — this only ever ADDS an optional
-      // unitRelationship candidate for a brand-new product to the item
-      // being sent to recordStockCount; it never rewrites anything
-      // already collected above.
+      // [Multi-level unit chain] Built ONLY when this row's product is
+      // genuinely new AND the owner actually configured a chain — an
+      // empty/untouched chain contributes nothing (no unitRelationship
+      // key at all), the same "no confirmed configuration, warn later,
+      // never block" state a product created without one already has
+      // today (BDR-0012 §5.A Item 6). PURCHASE FACTS ARE NEVER TOUCHED
+      // BY THIS: row.unit, row.quantity, and row.costPrice above are
+      // read completely unchanged, before and after this block — this
+      // only ever ADDS an optional unitRelationship candidate for a
+      // brand-new product to the item being sent to recordStockCount;
+      // it never rewrites anything already collected above. Reads
+      // row.unitChain directly rather than resolveGroupUnitRelationship
+      // (below) — that helper also has to handle the KNOWN-product
+      // catalog-read case, which is irrelevant here (isGenuinelyNewProductName
+      // already guarantees no catalog entry exists to read from).
       let unitRelationship: UnitRelationship | undefined;
-      if (isGenuinelyNewProductName(trimmedName)) {
-        const sellingUnit = row.newProductSellingUnit.trim();
-        const factor = parseFloat(row.newProductSellingUnitFactor);
-        if (sellingUnit && Number.isFinite(factor) && factor > 0) {
-          const candidate: UnitRelationship = {
-            units: [
-              { unit: row.unit || 'un', factorFromPrevious: 0 },
-              { unit: sellingUnit, factorFromPrevious: factor },
-            ],
-            sellingUnit,
-            confirmedAt: new Date().toISOString(),
-          };
-          // Re-validated here, at the actual point of use — never
-          // trusted merely because the UI fields were non-empty
-          // (POL-0005's threshold is the single source of truth,
-          // enforced identically to every other write path from
-          // Checkpoint 1).
-          if (isValidUnitRelationship(candidate)) {
-            unitRelationship = candidate;
-          }
+      if (isGenuinelyNewProductName(trimmedName) && row.unitChain.length > 0) {
+        const candidate: UnitRelationship = {
+          units: [{ unit: row.unit || 'un', factorFromPrevious: 0 }, ...row.unitChain],
+          ...(row.chainSellingUnit.trim() ? { sellingUnit: row.chainSellingUnit.trim() } : {}),
+          confirmedAt: new Date().toISOString(),
+        };
+        // Re-validated here, at the actual point of use — never
+        // trusted merely because the UI fields were non-empty
+        // (POL-0005's threshold is the single source of truth,
+        // enforced identically to every other write path from
+        // Checkpoint 1).
+        if (isValidUnitRelationship(candidate)) {
+          unitRelationship = candidate;
         }
       }
 
@@ -862,9 +1138,9 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         </div>
         <h2 className="type-title">{savedMessage}</h2>
         <p className="text-sm text-gray-500">
-          Capital Inicial:{' '}
+          Capital Inicial ({initialCapitalBasis === 'selling' ? 'Venda' : 'Custo'}):{' '}
           <span className="font-display font-semibold text-[#0B1F3A] tabular-nums">
-            {formatCurrency(totalCapital, currencySymbol)}
+            {formatCurrency(displayedCapitalTotal, currencySymbol)}
           </span>
         </p>
       </div>
@@ -1185,7 +1461,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           min="0"
           step="0.01"
           value={row.costPrice}
-          onChange={(e) => updateRow(row.id, { costPrice: e.target.value })}
+          onChange={(e) => updateRow(row.id, { costPrice: e.target.value, costManuallySet: true })}
           className={`${fieldClass} font-mono tabular-nums`}
         />
       </div>
@@ -1197,7 +1473,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           min="0"
           step="0.01"
           value={row.sellingPrice}
-          onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value })}
+          onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value, sellingManuallySet: true })}
           className={`${fieldClass} font-mono tabular-nums`}
         />
       </div>
@@ -1419,10 +1695,27 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                             // deliberately have different units per
                             // portion (the "Adicionar porção" split),
                             // which this must never override.
-                            if (firstRow.unitManuallySet) return;
-                            const suggestion = detectSuggestedUnit(group.displayName);
-                            if (suggestion && suggestion !== firstRow.unit) {
-                              updateRow(firstRow.id, { unit: suggestion });
+                            if (!firstRow.unitManuallySet) {
+                              const suggestion = detectSuggestedUnit(group.displayName);
+                              if (suggestion && suggestion !== firstRow.unit) {
+                                updateRow(firstRow.id, { unit: suggestion });
+                              }
+                            }
+                            // [Cross-portion auto-computation] A known
+                            // product's remembered selling price is
+                            // only ever a starting SUGGESTION for the
+                            // group-level rate, prefilled once and only
+                            // while the field is still genuinely blank
+                            // — never re-applied once the owner has
+                            // typed anything here, since today's actual
+                            // stock may be priced differently than the
+                            // catalog default.
+                            if (!firstRow.sellingPricePerSellingUnit.trim()) {
+                              const trimmedName = group.displayName.trim().toLowerCase();
+                              const catalogMatch = trimmedName ? products.find((p) => p.name.toLowerCase() === trimmedName) : undefined;
+                              if (catalogMatch && typeof catalogMatch.sellingPrice === 'number' && catalogMatch.sellingPrice >= 0) {
+                                updateRow(firstRow.id, { sellingPricePerSellingUnit: String(catalogMatch.sellingPrice) });
+                              }
                             }
                           }}
                           className={`${fieldClass} font-semibold`}
@@ -1506,87 +1799,51 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                       </button>
                     )}
 
-                    {/* [Product Memory / UOM — Increment A, Checkpoint 2,
-                        now shown once PER GROUP instead of once per
-                        portion — Grouped Initial Stock UX] Shown ONLY
-                        for a product name that doesn't match anything
-                        already in the catalog — never shown, never
-                        asked again, for an already-known product
-                        (isGenuinelyNewProductName, above). Entirely
-                        optional: leaving it blank saves the product
-                        with no confirmed Product Memory, exactly as
-                        already happens today (BDR-0012 §5.A Item 6's
-                        warn-not-block state). This never edits any
-                        portion's own unit/quantity/costPrice — the
+                    {/* [Multi-level unit chain — Cross-Portion Auto-
+                        Computation feature] Shown for any named
+                        product, known or new — the section itself
+                        adapts (read-only summary vs. editable chain
+                        builder) based on whether resolveGroupUnitRelationship
+                        finds a confirmed catalog entry. Entirely
+                        optional for a new product: leaving it blank
+                        saves the product with no confirmed Product
+                        Memory, exactly as already happens today
+                        (BDR-0012 §5.A Item 6's warn-not-block state).
+                        This never edits any portion's own
+                        unit/quantity/costPrice directly — the
                         purchase-equivalent facts for Initial Stock —
                         it only ever ADDS an optional unitRelationship
-                        candidate, stored on the group's FIRST row only
-                        (handleSubmit, below, already only reads this
-                        from whichever row actually has it set — see
-                        its own comment).
+                        candidate (new product) or reads an existing
+                        one (known product), stored/read via the
+                        group's FIRST row (handleSubmit, below, and
+                        resolveGroupUnitRelationship, above, both
+                        already only look at that one row).
 
-                        [Sell-unit price conversion] The one thing this
-                        section DOES now write into an existing
-                        purchase-fact field is firstRow.sellingPrice —
-                        computed as sellingPricePerSellingUnit × factor
-                        the moment both are present, via
-                        handleSellingPriceConversionChange below. This
-                        is deliberately the only field it touches:
-                        sellingPrice already means "price per this
-                        row's own unit" everywhere else in the app
-                        (normalizeStockCountItems, totalSellingValue,
-                        Reports) — writing the converted value there,
-                        instead of introducing a second sellingPrice
-                        concept, means nothing downstream needs to
-                        change to understand it. The main "Preço de
-                        venda" field stays a normal, directly-editable
-                        input throughout — this only ever pre-fills it,
-                        never locks it, so typing over the computed
-                        value works exactly as it always did. */}
+                        [Cross-portion auto-computation] The actual
+                        writes into other portions' own costPrice/
+                        sellingPrice happen in the applyChainComputations
+                        effect, above rowGroups' own definition — this
+                        section only ever collects the chain and the
+                        one canonical selling rate that effect reads
+                        from; it never computes anything itself. */}
                     {showUnitRelationshipSection && (
                       <div className="mt-1 pl-3 sm:pl-4">
-                        <UnitRelationshipRow
+                        <UnitChainSection
                           purchaseUnit={firstRow.unit || 'un'}
-                          sellingUnit={firstRow.newProductSellingUnit}
-                          factor={firstRow.newProductSellingUnitFactor}
-                          sellingPricePerSellingUnit={firstRow.sellingPricePerSellingUnit}
-                          currencySymbol={currencySymbol}
-                          computedSellingPrice={(() => {
-                            const factor = parseFloat(firstRow.newProductSellingUnitFactor);
-                            const perUnitPrice = parseFloat(firstRow.sellingPricePerSellingUnit);
-                            if (!Number.isFinite(factor) || factor <= 0 || !Number.isFinite(perUnitPrice) || perUnitPrice < 0) {
-                              return null;
-                            }
-                            return Number((perUnitPrice * factor).toFixed(2));
+                          knownRelationship={(() => {
+                            const trimmedName = group.displayName.trim().toLowerCase();
+                            const catalogMatch = trimmedName ? products.find((p) => p.name.toLowerCase() === trimmedName) : undefined;
+                            return catalogMatch && isValidUnitRelationship(catalogMatch.unitRelationship)
+                              ? catalogMatch.unitRelationship!
+                              : null;
                           })()}
-                          onChange={(sellingUnit, factor) => {
-                            const parsedFactor = parseFloat(factor);
-                            const perUnitPrice = parseFloat(firstRow.sellingPricePerSellingUnit);
-                            const fields: Partial<CountRowItem> = { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor };
-                            // Keeps sellingPrice in sync if the owner
-                            // adjusts the factor/unit after already
-                            // having typed a per-selling-unit price —
-                            // otherwise changing "20" to "24" here
-                            // would silently leave the old, now-wrong
-                            // computed price sitting in sellingPrice.
-                            if (Number.isFinite(parsedFactor) && parsedFactor > 0 && Number.isFinite(perUnitPrice) && perUnitPrice >= 0) {
-                              fields.sellingPrice = (perUnitPrice * parsedFactor).toFixed(2);
-                            }
-                            updateRow(firstRow.id, fields);
-                          }}
-                          onSellingPriceChange={(value) => {
-                            const factor = parseFloat(firstRow.newProductSellingUnitFactor);
-                            const perUnitPrice = parseFloat(value);
-                            const fields: Partial<CountRowItem> = { sellingPricePerSellingUnit: value };
-                            // Auto-fills the main sellingPrice field the
-                            // instant both inputs are valid — the owner
-                            // can still freely overwrite it afterward,
-                            // exactly as any other pre-filled field.
-                            if (Number.isFinite(factor) && factor > 0 && Number.isFinite(perUnitPrice) && perUnitPrice >= 0) {
-                              fields.sellingPrice = (perUnitPrice * factor).toFixed(2);
-                            }
-                            updateRow(firstRow.id, fields);
-                          }}
+                          chain={firstRow.unitChain}
+                          chainSellingUnit={firstRow.chainSellingUnit}
+                          sellingRate={firstRow.sellingPricePerSellingUnit}
+                          currencySymbol={currencySymbol}
+                          onChainChange={(chain) => updateRow(firstRow.id, { unitChain: chain })}
+                          onSellingUnitChange={(unit) => updateRow(firstRow.id, { chainSellingUnit: unit })}
+                          onSellingRateChange={(value) => updateRow(firstRow.id, { sellingPricePerSellingUnit: value })}
                         />
                       </div>
                     )}
@@ -1610,10 +1867,15 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           <div className="card-dark-gradient rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
             <div className="flex items-center gap-2.5">
               <ShieldCheck className="w-4 h-4 text-[#D4AF37] shrink-0" strokeWidth={2.25} />
-              <span className="font-semibold text-white/70 text-[13px]">Capital Inicial Total</span>
+              <span className="font-semibold text-white/70 text-[13px]">
+                Capital Inicial Total{' '}
+                <span className="font-normal text-white/40">
+                  ({initialCapitalBasis === 'selling' ? 'Venda' : 'Custo'})
+                </span>
+              </span>
             </div>
             <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#D4AF37] tabular-nums leading-none">
-              {formatCurrency(totalCapital, currencySymbol)}
+              {formatCurrency(displayedCapitalTotal, currencySymbol)}
             </span>
           </div>
 
@@ -1708,9 +1970,14 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                 </div>
 
                 <div className="card-dark-gradient rounded-xl px-4 py-3 flex items-center justify-between gap-3">
-                  <span className="font-semibold text-white/70 text-[12.5px]">Capital Inicial Total</span>
+                  <span className="font-semibold text-white/70 text-[12.5px]">
+                    Capital Inicial Total{' '}
+                    <span className="font-normal text-white/40">
+                      ({initialCapitalBasis === 'selling' ? 'Venda' : 'Custo'})
+                    </span>
+                  </span>
                   <span className="font-display font-semibold text-[18px] text-[#D4AF37] tabular-nums leading-none">
-                    {formatCurrency(totalCapital, currencySymbol)}
+                    {formatCurrency(displayedCapitalTotal, currencySymbol)}
                   </span>
                 </div>
 

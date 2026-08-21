@@ -64,6 +64,37 @@ describe('normalizeStockCountItems — totalSellingValue (requirement 1: both to
     const result = normalizeStockCountItems([{ productName: 'Arroz', quantity: 3, unit: 'un', costPrice: 10, sellingPrice: 10.333 }]);
     assert.equal(result.totalSellingValue, 31);
   });
+
+  // [Initial Stock Valuation Basis — Bernine-style purchase-unit ≠
+  // selling-unit correction] The unit conversion itself (perUnitPrice
+  // × factor) happens at UI input time, in InitialStockCountView.tsx's
+  // onSellingPriceChange handler — see
+  // initial-stock-live-total-valuation-basis.test.ts for that. By the
+  // time an item reaches normalizeStockCountItems, sellingPrice is
+  // already the fully-converted per-purchase-unit value; these prove
+  // this function correctly turns that ALREADY-converted value into
+  // the right total, with quantity/unit/costPrice completely
+  // unaffected by whatever unit the selling price conversion involved.
+  it('Bernine example: 1 cx purchased at 2050 MZN/cx, sold at 100 MZN/un with 1cx=24un — cost total 2050, selling total 2400 (the pre-converted 2400/cx value)', () => {
+    const result = normalizeStockCountItems([
+      { productName: 'Bernine', quantity: 1, unit: 'cx', costPrice: 2050, sellingPrice: 2400 },
+    ]);
+    assert.equal(result.totalValue, 2050); // 1 * 2050 — untouched by the conversion entirely
+    assert.equal(result.totalSellingValue, 2400); // 1 * 2400 (2400 = 100 * 24, already converted)
+    // The persisted item itself still shows the ORIGINAL purchase unit
+    // and quantity — never rewritten into "24 un".
+    assert.equal(result.items[0].quantity, 1);
+    assert.equal(result.items[0].unit, 'cx');
+    assert.equal(result.items[0].costPrice, 2050);
+  });
+
+  it('a larger purchase quantity of the same Bernine-style product scales both totals correctly (2 cx, not 1)', () => {
+    const result = normalizeStockCountItems([
+      { productName: 'Bernine', quantity: 2, unit: 'cx', costPrice: 2050, sellingPrice: 2400 },
+    ]);
+    assert.equal(result.totalValue, 4100); // 2 * 2050
+    assert.equal(result.totalSellingValue, 4800); // 2 * 2400 = 2 * 24 * 100
+  });
 });
 
 describe('resolveInitialCapitalValue — the single resolution point (requirements 5-8)', () => {
