@@ -331,10 +331,20 @@ describe('InitialStockCountView.tsx — accidental-confirmation prevention (FR-1
     // comment above handleSubmit — that comment quotes the same button
     // label ("Confirmar Capital Inicial") in prose, much earlier in the
     // file, and would give a false pass/fail here if matched instead.
-    const confirmButtonJsxIndex = viewSource.indexOf("<span>{redoingConfirmationId ? 'Confirmar Nova Contagem' : 'Confirmar Capital Inicial'}</span>");
+    // Matched as a whitespace-tolerant pattern (not an exact string)
+    // because the [Draft-loss fix] flush-before-confirm change wraps
+    // this same redoingConfirmationId ternary across multiple lines
+    // alongside an isFlushingDraft branch — the underlying label logic
+    // this test cares about is unchanged, only its formatting is.
+    const confirmButtonJsxMatch = viewSource.match(
+      /redoingConfirmationId\s*\?\s*'Confirmar Nova Contagem'\s*:\s*'Confirmar Capital Inicial'/
+    );
     assert.ok(secondTotalCardIndex !== -1, 'Expected to find the form\'s Total card.');
-    assert.ok(confirmButtonJsxIndex !== -1, 'Expected to find the actual Confirm button JSX.');
-    assert.ok(secondTotalCardIndex < confirmButtonJsxIndex, 'Expected the Total card to precede the Confirm action in source/render order.');
+    assert.ok(confirmButtonJsxMatch, 'Expected to find the actual Confirm button JSX.');
+    assert.ok(
+      secondTotalCardIndex < confirmButtonJsxMatch!.index!,
+      'Expected the Total card to precede the Confirm action in source/render order.'
+    );
   });
 
   it('the secondary-confirmation panel shows consequence messaging, distinct for an original vs. a redo confirmation', () => {

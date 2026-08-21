@@ -209,6 +209,14 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // empty rows before the listener's first snapshot arrives.
   const [draftLoaded, setDraftLoaded] = useState(false);
   const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  // [Draft-loss fix] The autosave effect below is debounced by 800ms so
+  // a fast typist doesn't trigger a write per keystroke — but that same
+  // debounce is exactly what lets a page reload right after a burst of
+  // typing discard whatever hadn't reached the server yet. This flag
+  // gates the explicit, non-debounced flush fired the moment the
+  // Confirm button is clicked (see handleOpenConfirmStep) so the modal
+  // never opens against data that only exists locally.
+  const [isFlushingDraft, setIsFlushingDraft] = useState(false);
   const skipNextAutosave = useRef(false);
 
   // [Void & Redo — Implementation Authorization §2 item 9; FR-5] Set
@@ -473,6 +481,33 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // so the persisted shape is completely unaffected by how this screen
   // currently chooses to visually group rows for editing.
   const rowGroups = groupRowsByProductName(rows);
+
+  // [Draft-loss fix] Fired by the "Confirmar Capital Inicial" /
+  // "Confirmar Nova Contagem" click, before the confirm modal opens.
+  // Forces an immediate, non-debounced write of the current `rows` to
+  // the persistent draft — the exact same write the debounced autosave
+  // effect above would eventually make, just not left to a timer that
+  // a page reload could interrupt. If it fails (e.g. no connection),
+  // the modal does not open, and the reason is shown inline instead of
+  // silently risking data that was never actually persisted.
+  const handleOpenConfirmStep = async () => {
+    setError(null);
+    const hasAnyContent = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice);
+    if (hasAnyContent && !hasInitialStockCount) {
+      setIsFlushingDraft(true);
+      setDraftSaveState('saving');
+      try {
+        await saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis);
+        setDraftSaveState('saved');
+      } catch {
+        setIsFlushingDraft(false);
+        setError('Não foi possível guardar o rascunho antes de confirmar. Verifique a sua ligação e tente novamente.');
+        return;
+      }
+      setIsFlushingDraft(false);
+    }
+    setShowConfirmStep(true);
+  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -1379,14 +1414,17 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             )}
             <button
               type="button"
-              onClick={() => {
-                setError(null);
-                setShowConfirmStep(true);
-              }}
-              disabled={isSaving}
+              onClick={handleOpenConfirmStep}
+              disabled={isSaving || isFlushingDraft}
               className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
-              <span>{redoingConfirmationId ? 'Confirmar Nova Contagem' : 'Confirmar Capital Inicial'}</span>
+              <span>
+                {isFlushingDraft
+                  ? 'A guardar rascunho...'
+                  : redoingConfirmationId
+                    ? 'Confirmar Nova Contagem'
+                    : 'Confirmar Capital Inicial'}
+              </span>
               <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
             </button>
           </div>
