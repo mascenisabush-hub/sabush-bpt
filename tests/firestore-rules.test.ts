@@ -1165,6 +1165,263 @@ describe('Void & Redo — voidRecords create + chain-slot stockCounts create', (
   });
 });
 
+// [SuperAdmin-Assisted Initial Stock Recovery — BDR-0016/POL-0009/
+// Specification/Rule 8 (READY)/Implementation Authorization, signed
+// 2026-08-21; Consumption & Audit Amendment/Rule 8 Re-Assessment
+// (READY)/Supplementary Implementation Authorization, signed
+// 2026-08-21] The rules-layer coverage the original submission of
+// this suite did not yet include — added per this session's own
+// verification report identifying the gap. Every scenario here is
+// checked directly against firestore.rules via the real emulator, not
+// inferred from server/*.ts (which bypasses these rules entirely via
+// the Admin SDK) or from source-regression tests alone.
+describe('SuperAdmin-Assisted Initial Stock Recovery — initialStockRecoveryAuthorization collection + voidRecords authorized branch', () => {
+  const AUTH_DURATION_MS = 48 * 60 * 60 * 1000;
+
+  function freshAuthorizedAt() {
+    return Timestamp.fromMillis(Date.now() - 60 * 60 * 1000); // 1 hour ago — well within 48h
+  }
+  function expiredAuthorizedAt() {
+    return Timestamp.fromMillis(Date.now() - (AUTH_DURATION_MS + 60 * 1000)); // 48h + 1min ago
+  }
+
+  async function seedConfirmation(businessId: string, stockCountId: string, fields: Record<string, unknown> = {}) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', businessId, 'stockCounts', stockCountId), {
+        id: stockCountId,
+        type: 'initial',
+        items: [],
+        totalValue: 0,
+        createdAt: new Date().toISOString(),
+        ...fields,
+      });
+    });
+  }
+
+  async function seedAuthorization(
+    businessId: string,
+    fields: { targetStockCountId: string; authorizedAt: Timestamp; status?: 'unconsumed' | 'consumed' }
+  ) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', businessId, 'initialStockRecoveryAuthorization', 'current'), {
+        targetStockCountId: fields.targetStockCountId,
+        authorizedAt: fields.authorizedAt,
+        expiresAt: Timestamp.fromMillis(fields.authorizedAt.toMillis() + AUTH_DURATION_MS),
+        status: fields.status ?? 'unconsumed',
+        grantedByUid: 'superadmin-op-1',
+        justification: 'Cliente contactou o suporte — confirmação acidental.',
+      });
+    });
+  }
+
+  it('Owner CAN void a LEGACY confirmation (no confirmedAt at all) when a valid, matching Authorization exists', async () => {
+    await seedConfirmation(BIZ, 'initial'); // no confirmedAt, no chainPosition — legacy shape
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Owner CAN void an EXPIRED-WINDOW, non-legacy confirmation (chainPosition 2, confirmedAt long past 12h) when authorized', async () => {
+    const wellPast12h = Timestamp.fromMillis(Date.now() - 20 * 60 * 60 * 1000);
+    await seedConfirmation(BIZ, 'initial-2', { chainPosition: 2, confirmedAt: wellPast12h });
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial-2', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-2'), {
+        id: 'initial-2', voidedConfirmationId: 'initial-2', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Owner CANNOT void with an EXPIRED (>48h) Authorization', async () => {
+    await seedConfirmation(BIZ, 'initial');
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: expiredAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Owner CANNOT void with an already-CONSUMED Authorization', async () => {
+    await seedConfirmation(BIZ, 'initial');
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt(), status: 'consumed' });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Owner CANNOT void a confirmation the Authorization does NOT name (mismatch)', async () => {
+    await seedConfirmation(BIZ, 'initial-2', { chainPosition: 2 });
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() }); // names a different slot
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-2'), {
+        id: 'initial-2', voidedConfirmationId: 'initial-2', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Confirmation #4 CANNOT be voided even with a valid, matching Authorization — the ceiling is absolute', async () => {
+    await seedConfirmation(BIZ, 'initial-4', { chainPosition: 4 });
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial-4', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial-4'), {
+        id: 'initial-4', voidedConfirmationId: 'initial-4', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Manager and Staff cannot void via the authorized path either — Owner-only, exactly as the ordinary path', async () => {
+    await seedConfirmation(BIZ, 'initial');
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const managerDb = ctxFor(MANAGER_WITH_CLOSINGS_UID).firestore();
+    const staffDb = ctxFor(STAFF_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(managerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+    await assertFails(
+      setDoc(doc(staffDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Tenant isolation: an Authorization on OTHER_BIZ grants nothing on BIZ, even for the same slot id', async () => {
+    await seedConfirmation(BIZ, 'initial'); // legacy, BIZ — would otherwise be voidable if authorization leaked across tenants
+    await seedAuthorization(OTHER_BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore(); // owns BIZ, not OTHER_BIZ
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('Owner of a DIFFERENT business cannot consume BIZ\'s Authorization', async () => {
+    await seedConfirmation(BIZ, 'initial');
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const otherOwnerDb = ctxFor(OTHER_OWNER_UID).firestore(); // owns OTHER_BIZ
+
+    await assertFails(
+      setDoc(doc(otherOwnerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  // [Consumption & Audit Amendment §8] Consumption is now fully
+  // server-mediated (Admin SDK, bypasses these rules entirely) — no
+  // client, Owner included, may write this collection at all anymore.
+  it('No client — not even the Owner — can CREATE an Authorization document (grant is Admin-SDK/server-only)', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current'), {
+        targetStockCountId: 'initial',
+        authorizedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + AUTH_DURATION_MS),
+        status: 'unconsumed',
+        grantedByUid: 'someone',
+        justification: 'attempted client-side grant',
+      })
+    );
+  });
+
+  it('No client — not even a seeded platform_operators uid — can CREATE an Authorization document from the client SDK', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_operators', 'operator1'), { platformRole: 'superadmin' });
+    });
+    const operatorDb = ctxFor('operator1').firestore();
+
+    await assertFails(
+      setDoc(doc(operatorDb, 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current'), {
+        targetStockCountId: 'initial',
+        authorizedAt: serverTimestamp(),
+        expiresAt: Timestamp.fromMillis(Date.now() + AUTH_DURATION_MS),
+        status: 'unconsumed',
+        grantedByUid: 'operator1',
+        justification: 'attempted client-side grant by a real platform operator uid',
+      })
+    );
+  });
+
+  it('No client — Owner included — can UPDATE an existing Authorization document (consumption is server-mediated only)', async () => {
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(
+      updateDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current'), {
+        status: 'consumed',
+        consumedAt: serverTimestamp(),
+      })
+    );
+  });
+
+  it('No client can DELETE an Authorization document, ever', async () => {
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current')));
+  });
+
+  it('Any business member (Owner, Manager, or Staff) can READ the Authorization document — visibility is not Owner-restricted', async () => {
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+
+    await assertSucceeds(getDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current')));
+    await assertSucceeds(getDoc(doc(ctxFor(MANAGER_WITH_CLOSINGS_UID).firestore(), 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current')));
+    await assertSucceeds(getDoc(doc(ctxFor(STAFF_UID).firestore(), 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current')));
+  });
+
+  it('A member of a DIFFERENT business cannot read this business\'s Authorization document', async () => {
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    await assertFails(getDoc(doc(ctxFor(OTHER_OWNER_UID).firestore(), 'businesses', BIZ, 'initialStockRecoveryAuthorization', 'current')));
+  });
+
+  it('The original stockCounts immutability rule is unaffected by any of the above — still refused unconditionally for type "initial"', async () => {
+    await seedConfirmation(BIZ, 'initial');
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { totalValue: 99999 }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial')));
+  });
+
+  it('The subscription exemption is preserved: the authorized voidRecords create succeeds even while the business subscription is expired', async () => {
+    await seedConfirmation(BIZ, 'initial');
+    await seedAuthorization(BIZ, { targetStockCountId: 'initial', authorizedAt: freshAuthorizedAt() });
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { status: 'expired' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    await assertSucceeds(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'voidRecords', 'initial'), {
+        id: 'initial', voidedConfirmationId: 'initial', voidedAt: serverTimestamp(),
+      })
+    );
+  });
+});
+
 // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
 describe('stockCountDrafts', () => {
   it('Owner can read/create/update/delete their own draft; Staff and other businesses cannot', async () => {
