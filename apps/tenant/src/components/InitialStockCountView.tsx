@@ -377,6 +377,54 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount]);
 
+  // [Draft-loss fix, part 2] The 800ms debounce above is exactly what
+  // let a refresh or tab close interrupt a pending save and discard
+  // whatever hadn't reached Firestore yet — this happened for real:
+  // typed edits were lost when the page was reloaded before the
+  // debounce timer fired. handleOpenConfirmStep already closes this
+  // gap for the "click Confirm" path; this closes it for the general
+  // case of the page being reloaded, closed, or navigated away from at
+  // any moment while mid-edit, not just at the Confirm click.
+  //
+  // Refs (not state) so this always sees the latest values regardless
+  // of when the browser fires the event, without re-subscribing the
+  // listeners on every keystroke. Fired on 'visibilitychange' (tab
+  // hidden — covers switching tabs, minimizing, and is the most
+  // reliable signal on mobile) and 'pagehide' (covers an actual
+  // reload/close/navigation) rather than 'beforeunload', which mobile
+  // Safari and some browsers don't reliably fire at all. This is a
+  // best-effort fire-and-forget write — the browser gives no guarantee
+  // it completes once the page is actually gone — but it closes the
+  // large, common window (typing, then immediately refreshing) that
+  // caused the loss here; it does not claim to make loss impossible in
+  // every conceivable case (e.g. the device losing power mid-write).
+  const latestFlushArgs = useRef({ rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount });
+  latestFlushArgs.current = { rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount };
+  useEffect(() => {
+    const flushOnHide = () => {
+      const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
+        latestFlushArgs.current;
+      if (!loaded || confirmed) return;
+      const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
+      if (!hasAnyContent) return;
+      saveInitialStockDraft(r.map(rowToDraftItem), d, basis).catch(() => {
+        // Best-effort — nothing meaningful to do with a failure this
+        // late; the debounced autosave above will retry on the next
+        // edit if the page stays open, and handleOpenConfirmStep
+        // covers the Confirm-click path independently.
+      });
+    };
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushOnHide();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', flushOnHide);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', flushOnHide);
+    };
+  }, []);
+
   const updateRow = (id: string, fields: Partial<CountRowItem>) => {
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...fields } : row)));
   };
