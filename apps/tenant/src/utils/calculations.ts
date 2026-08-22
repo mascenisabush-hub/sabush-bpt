@@ -245,49 +245,126 @@ export function resolveInitialCapitalValue(initialStockCount: StockCount | null 
 }
 
 /**
- * [Business Worth Evolution — Implementation Authorization, Increment 1;
- * Specification §7, FR-1, FR-3, FR-4; source BDR Decisions 1, 3] The
- * single, unambiguous "Current Business Worth" read: the latest
- * confirmed BusinessWorthSnapshot's own frozen `measuredBusinessWorth`,
- * or the literal string 'UNKNOWN' when no snapshot exists yet for this
- * business — never a third outcome (FR-3, I-1).
+ * [Business Worth Evolution — Implementation Authorization, Increment 1
+ * (corrected per Specification §41, Accepted 22 August 2026; Implementation
+ * Plan §6/§7, Accepted 22 August 2026); Specification §7, FR-1, FR-3, FR-4,
+ * §41.3; source BDR Decisions 1, 3, 21, 23]
  *
- * NEVER independently computed — this performs no live recalculation
- * from batches/expenses/withdrawals; that live figure is Estimated
- * Business Worth (Specification §9), a structurally distinct
- * calculation, not yet implemented (Increment 2). This function's
- * UNKNOWN return is what implements FR-1 in practice: no code path may
- * present a figure as a known, measured Current Business Worth while
- * this function returns 'UNKNOWN'.
+ * THE SHARED CURRENT/ESTIMATED BUSINESS WORTH CALCULATION FUNCTION.
  *
- * Only 'active' snapshots are ever considered "current" — a snapshot
- * whose status has moved to 'corrected' or 'superseded-by-recovery' (the
- * Increment 8 correction/recovery mechanism, not yet implemented) has,
- * by definition, been superseded by a newer one; this guard has no
- * observable effect until Increment 8 exists (every snapshot Increment 1
- * creates is 'active'), but is written now because 'active' is already
- * part of the Specification's own status enum (§8) — not a new rule.
+ * [Correction, this pass] The previous version of this function returned
+ * only the latest snapshot's own frozen `measuredBusinessWorth` — accurate
+ * against the Specification's *original* text ("never itself independently
+ * computed... never a live recomputation"), but that text is now corrected
+ * by the accepted §41 amendment: Current Business Worth is the latest
+ * confirmed `BusinessWorthSnapshot` PLUS every governed Business-Worth-
+ * affecting change recorded since that snapshot's own `confirmedAt` — a
+ * live, on-demand calculation, not a frozen read. This is the SAME
+ * calculation the Implementation Plan's §9/Case-A formula already defines
+ * for Estimated Business Worth — per §41.4's own note, "Current" and
+ * "Estimated" are two names for the same formula, read at different
+ * moments ("as of right now" vs. "as of a chosen date, or before any
+ * measurement exists"). This function is that one shared calculation.
  *
- * Pure, deterministic, no Firestore/AppContext dependency — safe to unit
- * test directly, matching this repository's established
- * "business-meaning calculations get their own dedicated function"
- * convention (Rule 8 Assessment Finding 4).
+ * [Increment 1 scope — existing sources only, per explicit Product
+ * Architect direction] This function reads only from collections that
+ * already exist in this codebase today — `batches`, `quebras`, `expenses`,
+ * `withdrawals` — exactly the four sources the source BDR/Specification
+ * confirm already exist (embedded profit, Expenses, Quebras,
+ * Levantamentos). It deliberately does NOT read Receivables, Payables, or
+ * a Cash Ledger — those genuinely have no existing source anywhere in this
+ * codebase (confirmed, independently, three separate times across this
+ * capability's own governance history: the Rule 8 Assessment's Current
+ * State Assessment, the Specification's own §1 item 8 investigation, and
+ * the Implementation Plan's own §3.2/§3.4 correction pass) and remain
+ * correctly deferred to Increment 3 — this function's own signature has no
+ * parameter for them at all in Increment 1, so there is no zero to
+ * silently fabricate.
+ *
+ * [Implementation-time resolution — how "embedded profit generated since
+ * that snapshot" is computed, not otherwise specified by the Plan] Embedded
+ * profit is a point-in-time property of currently open batches, not a
+ * dated event log — there is no "embedded profit occurred on this date"
+ * record to filter by. The well-defined, computable equivalent is a DELTA:
+ * (current total embedded profit, from the existing
+ * calculateInventoryTotals over all currently open batches/quebras) MINUS
+ * (the snapshot's own frozen `embeddedProfitTotal`, captured at the moment
+ * of that measurement). This correctly captures new purchases (raising
+ * embedded profit), consumption/closure of batches (lowering it), and
+ * quebra losses (already reflected in `calculateInventoryTotals`'s own
+ * `remainingQuantity`) — without inventing any new ledger.
+ *
+ * [Expenses/Levantamentos since] Filtered by each record's own `date`
+ * field against the window [snapshot.confirmedAt, asOfDate] — the exact
+ * same `isDateInRange` mechanism this codebase already uses elsewhere
+ * (e.g. `recordStockCount`'s own `expensesSinceLastSnapshot` computation
+ * at confirmation time). Breakages (Quebras) since the snapshot are
+ * informational only here, matching `BusinessWorthSnapshot`'s own existing
+ * discipline (§3.1) — never a second subtraction on top of the embedded-
+ * profit delta above, since a Quebra's effect on embedded profit is
+ * already captured by that delta.
+ *
+ * Returns 'UNKNOWN' when no 'active' `BusinessWorthSnapshot` exists yet
+ * for the business (State 1/1a) — never a third outcome (FR-3, I-1).
+ *
+ * Pure, deterministic given its inputs — no Firestore/AppContext
+ * dependency of its own, safe to unit test directly. `asOfDate` defaults
+ * to "today" (an ISO date string) when omitted, but accepting it
+ * explicitly keeps the function fully deterministic for tests.
  */
-export function getCurrentBusinessWorth(
-  snapshots: BusinessWorthSnapshot[] | null | undefined
-): number | 'UNKNOWN' {
+export function getCurrentBusinessWorth(params: {
+  snapshots: BusinessWorthSnapshot[] | null | undefined;
+  batches: StockBatch[];
+  quebras: Quebra[];
+  expenses: Expense[];
+  withdrawals: Withdrawal[];
+  asOfDate?: string;
+}): number | 'UNKNOWN' {
+  const { snapshots, batches, quebras, expenses, withdrawals } = params;
+  const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
+
   if (!snapshots || snapshots.length === 0) return 'UNKNOWN';
 
   const active = snapshots.filter((s) => s.status === 'active');
   if (active.length === 0) return 'UNKNOWN';
 
-  const latest = [...active].sort((a, b) => {
-    const aTime = toMillis(a.confirmedAt);
-    const bTime = toMillis(b.confirmedAt);
-    return bTime - aTime;
-  })[0];
+  const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
 
-  return latest.measuredBusinessWorth;
+  const snapshotDate = new Date(toMillis(latest.confirmedAt)).toISOString().slice(0, 10);
+
+  // Embedded profit delta since the snapshot (see doc comment above).
+  const currentEmbeddedProfitTotal = calculateInventoryTotals(
+    batches.filter((b) => b.status === 'open'),
+    quebras
+  ).totalEmbeddedProfit;
+  const embeddedProfitSinceSnapshot = Number(
+    (currentEmbeddedProfitTotal - latest.embeddedProfitTotal).toFixed(2)
+  );
+
+  const expensesSinceSnapshot = Number(
+    expenses
+      .filter((e) => isDateInRange(e.date, snapshotDate, asOfDate))
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      .toFixed(2)
+  );
+  const levantamentosSinceSnapshot = Number(
+    withdrawals
+      .filter((w) => isDateInRange(w.date, snapshotDate, asOfDate))
+      .reduce((sum, w) => sum + Number(w.amount || 0), 0)
+      .toFixed(2)
+  );
+
+  // Receivables/Payables/Cash position changes: deliberately no term here
+  // in Increment 1 — see doc comment above. Not a fabricated zero; the
+  // function simply has no such input to read yet.
+  return Number(
+    (
+      latest.measuredBusinessWorth +
+      embeddedProfitSinceSnapshot -
+      expensesSinceSnapshot -
+      levantamentosSinceSnapshot
+    ).toFixed(2)
+  );
 }
 
 // Firestore Timestamp objects expose toMillis()/seconds; a plain object

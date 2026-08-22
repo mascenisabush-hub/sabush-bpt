@@ -938,17 +938,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   );
 
   // [Business Worth Evolution — Implementation Authorization, Increment
-  // 1; Specification §7, FR-1, FR-3, FR-4] The single, unambiguous
-  // "Current Business Worth" read — the latest confirmed
-  // BusinessWorthSnapshot's frozen measuredBusinessWorth, or the literal
-  // 'UNKNOWN' sentinel when this business has no snapshot yet. NEVER
-  // independently computed here — see getCurrentBusinessWorth's own doc
-  // comment (calculations.ts). Not yet consumed by the Dashboard or
-  // Owner Portfolio in Increment 1 (both are explicitly Increment 2
-  // scope, per the Implementation Plan's §24 sequence) — exposed on
-  // this context now so Increment 2 can wire the UI without needing any
-  // new data-loading work.
-  const currentBusinessWorth = getCurrentBusinessWorth(businessWorthSnapshots);
+  // 1, corrected per Specification §41 (Accepted 22 August 2026) and the
+  // Implementation Plan's own §6/§7 correction (Accepted 22 August 2026)]
+  // Current Business Worth is now a LIVE, on-demand calculation — the
+  // latest confirmed BusinessWorthSnapshot plus governed activity since
+  // (embedded profit delta, Expenses, Levantamentos — existing sources
+  // only; Receivables/Payables/Cash correctly deferred to Increment 3) —
+  // not a bare frozen-snapshot lookup. See getCurrentBusinessWorth's own
+  // doc comment (calculations.ts) for the full mechanism. Not yet
+  // consumed by the Dashboard or Owner Portfolio's own component code in
+  // Increment 1 (both are explicitly Increment 2 scope, per the
+  // Implementation Plan's §24 sequence) — exposed on this context now so
+  // Increment 2 can wire the UI without needing any new data-loading work.
+  const currentBusinessWorth = getCurrentBusinessWorth({
+    snapshots: businessWorthSnapshots,
+    batches,
+    quebras,
+    expenses,
+    withdrawals,
+  });
 
   // ============================================================
   // BUSINESS WORTH — no fabricated cash ledger.
@@ -3137,13 +3145,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .toFixed(2)
       );
 
-      // [Specification §7; Implementation Plan §6] Increment 1's own
-      // Current Business Worth read path only — no dependency on
-      // Increment 2/3. 'UNKNOWN' (this business's very first snapshot)
-      // becomes null, matching the field's own null-only-for-first-
-      // snapshot contract (Specification §8) — a truthful null, not a
-      // placeholder (there genuinely is no prior snapshot).
-      const priorCurrent = getCurrentBusinessWorth(businessWorthSnapshots);
+      // [Specification §7, §41; Implementation Plan §6 (corrected)]
+      // previousCurrentBusinessWorth now correctly captures the LIVE
+      // Current Business Worth immediately before this new confirmation
+      // — the prior snapshot (if any) plus governed activity accumulated
+      // since it, evaluated as of this Contagem's own `date` — not merely
+      // the prior snapshot's frozen value, matching §41's corrected
+      // meaning of "Current Business Worth." 'UNKNOWN' (this business's
+      // very first snapshot) becomes null, matching the field's own
+      // null-only-for-first-snapshot contract (Specification §8) — a
+      // truthful null, not a placeholder (there genuinely is no prior
+      // snapshot). `businessWorthSnapshots` here still holds only the
+      // PRIOR snapshots — the new one has not yet been added to context
+      // state, since it is written directly to Firestore below, not
+      // pushed into this array first.
+      const priorCurrent = getCurrentBusinessWorth({
+        snapshots: businessWorthSnapshots,
+        batches,
+        quebras,
+        expenses,
+        withdrawals,
+        asOfDate: date,
+      });
       const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
 
       // [Corrected — Product Architect clarification, this session]
