@@ -121,6 +121,8 @@ export const en: TranslationDict = {
       businessWorth: {
         label: 'Business Worth',
         desc: "The business's current estimated value, based on verified stock and recorded adjustments.",
+        estimatedLabel: 'Estimated',
+        unknown: 'No value yet',
       },
       expenses: {
         label: 'General Expenses',
@@ -173,11 +175,22 @@ export const en: TranslationDict = {
       expenses: 'General Expenses:',
       withdrawals: 'Owner Withdrawals:',
       totalLabel: 'Total Business Worth:',
+      totalLabelEstimated: 'Estimated Business Worth:',
+      estimatedNotice: 'This is an Estimated figure — there is no confirmed Count yet to measure Current Business Worth.',
+      viewHistory: 'View Business Worth history',
       latestCount: 'Most Recent Physical Count:',
       initialCapital: 'Initial Capital (starting point):',
       growth: 'Capital Growth:',
       basedOnCount: 'Current stock based on the count from {{date}}',
       defineInitialCapital: ' · Set your Initial Capital to measure growth.',
+    },
+    historyModal: {
+      title: 'Business Worth History',
+      subtitle: 'Every confirmed Count creates a permanent, non-editable record.',
+      empty: 'No records yet — confirm your first Count to start the history.',
+      current: 'Current',
+      measuredOn: 'Measured on {{date}}',
+      close: 'Close',
     },
     table: {
       emptyTitle: 'No products found',

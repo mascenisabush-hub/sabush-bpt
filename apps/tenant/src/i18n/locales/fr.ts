@@ -121,6 +121,8 @@ export const fr: TranslationDict = {
       businessWorth: {
         label: "Valeur de l'Entreprise",
         desc: "La valeur estimée actuelle de l'entreprise, basée sur le stock vérifié et les ajustements enregistrés.",
+        estimatedLabel: 'Estimée',
+        unknown: 'Pas encore de valeur',
       },
       expenses: {
         label: 'Dépenses Générales',
@@ -173,11 +175,22 @@ export const fr: TranslationDict = {
       expenses: 'Dépenses Générales :',
       withdrawals: 'Retraits du Propriétaire :',
       totalLabel: "Valeur Totale de l'Entreprise :",
+      totalLabelEstimated: "Valeur Estimée de l'Entreprise :",
+      estimatedNotice: "Ceci est une valeur Estimée — aucun Comptage confirmé n'existe encore pour mesurer la Valeur Actuelle de l'Entreprise.",
+      viewHistory: "Voir l'historique de la Valeur de l'Entreprise",
       latestCount: 'Comptage Physique le Plus Récent :',
       initialCapital: 'Capital Initial (point de départ) :',
       growth: 'Croissance du Capital :',
       basedOnCount: 'Stock actuel basé sur le comptage du {{date}}',
       defineInitialCapital: ' · Définissez votre Capital Initial pour mesurer la croissance.',
+    },
+    historyModal: {
+      title: "Historique de la Valeur de l'Entreprise",
+      subtitle: 'Chaque Comptage confirmé crée un enregistrement permanent et non modifiable.',
+      empty: "Aucun enregistrement pour l'instant — confirmez votre premier Comptage pour démarrer l'historique.",
+      current: 'Actuel',
+      measuredOn: 'Mesuré le {{date}}',
+      close: 'Fermer',
     },
     table: {
       emptyTitle: 'Aucun produit trouvé',

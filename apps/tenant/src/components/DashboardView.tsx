@@ -143,11 +143,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     totalInvestmentValueAllTime, totalMarketValueAllTime, totalEmbeddedProfitAllTime,
     activeBatchCount, totalExpensesAllTime, totalWithdrawalsAllTime,
     businessWorth, capitalGrowth, capitalGrowthPct,
+    currentBusinessWorth, estimatedBusinessWorth, businessWorthSnapshots,
   } = useApp();
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
   const [showBreakdownModal, setShowBreakdownModal] = useState(false);
   const [showWorthModal, setShowWorthModal] = useState(false);
+  const [showWorthHistoryModal, setShowWorthHistoryModal] = useState(false);
   const [showInitialStockValuationModal, setShowInitialStockValuationModal] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'profit' | 'cost'>('name');
@@ -155,6 +157,22 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [categoryFilter, setCategoryFilter] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('');
   const [editingProduct, setEditingProduct] = useState<Product | null>(null);
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 2;
+  // Specification §32, FR-4, FR-59] The existing Business Worth card (and
+  // its click-through modal, below) is rewired to read the authoritative
+  // shared calculation instead of the legacy `businessWorth` figure:
+  // Current Business Worth once this business has an active
+  // BusinessWorthSnapshot (State 3), or Estimated Business Worth before
+  // that (State 1a) — never presented as though it were the measured
+  // Current figure. `businessWorth`/`capitalGrowth`/`capitalGrowthPct`
+  // themselves are UNCHANGED above — Reports/Closings (out of this
+  // increment's scope) still read them exactly as before; only what this
+  // one card displays is rewired here.
+  const hasActiveBusinessWorthSnapshot = businessWorthSnapshots.some((s) => s.status === 'active');
+  const displayedBusinessWorth = hasActiveBusinessWorthSnapshot ? currentBusinessWorth : estimatedBusinessWorth;
+  const displayedBusinessWorthIsEstimated = !hasActiveBusinessWorthSnapshot && displayedBusinessWorth !== 'UNKNOWN';
+  const displayedBusinessWorthValue = displayedBusinessWorth === 'UNKNOWN' ? null : displayedBusinessWorth;
 
   // Business-wide Embedded Profit split by batch status. None of this is
   // realized income — it's potential profit still sitting in unsold stock.
@@ -290,13 +308,21 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           iconBgClass="bg-[#D4AF37]/10"
           iconTextClass="text-[#D4AF37]"
           label={t('dashboard.kpi.businessWorth.label')}
-          value={formatCurrency(businessWorth, currencySymbol)}
+          value={
+            displayedBusinessWorthValue === null
+              ? t('dashboard.kpi.businessWorth.unknown')
+              : formatCurrency(displayedBusinessWorthValue, currencySymbol)
+          }
           valueClass="text-[#D4AF37]"
           description={t('dashboard.kpi.businessWorth.desc')}
           onClick={() => setShowWorthModal(true)}
           variant="dark"
           badge={
-            hasInitialStockCount && capitalGrowth !== 0 ? (
+            displayedBusinessWorthIsEstimated ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#D4AF37] bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-full px-2 py-0.5">
+                {t('dashboard.kpi.businessWorth.estimatedLabel')}
+              </span>
+            ) : hasInitialStockCount && capitalGrowth !== 0 ? (
               <span
                 className={`inline-flex items-center gap-1 text-[10px] type-number ${
                   capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
@@ -554,6 +580,12 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {t('dashboard.worthModal.explanation')}
             </p>
 
+            {displayedBusinessWorthIsEstimated && (
+              <p className="text-[11px] text-[#8A6D1F] bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-[10px] px-3 py-2 -mt-1">
+                {t('dashboard.worthModal.estimatedNotice')}
+              </p>
+            )}
+
             <div className="space-y-1 text-xs">
               <div className="flex items-center justify-between px-4 py-2.5">
                 <span className="flex items-center gap-2 text-gray-500">
@@ -586,9 +618,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </div>
 
               <div className="mt-1 flex items-center justify-between px-4 py-3.5 rounded-[10px] bg-[#D4AF37]/10 border border-[#D4AF37]/30">
-                <span className="text-gray-800 font-bold">{t('dashboard.worthModal.totalLabel')}</span>
+                <span className="text-gray-800 font-bold">
+                  {t(displayedBusinessWorthIsEstimated ? 'dashboard.worthModal.totalLabelEstimated' : 'dashboard.worthModal.totalLabel')}
+                </span>
                 <span className="text-base font-extrabold font-mono text-[#8A6D1F]">
-                  {formatCurrency(businessWorth, currencySymbol)}
+                  {displayedBusinessWorthValue === null
+                    ? t('dashboard.kpi.businessWorth.unknown')
+                    : formatCurrency(displayedBusinessWorthValue, currencySymbol)}
                 </span>
               </div>
 
@@ -634,11 +670,102 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               )}
             </div>
 
+            {/* [Business Worth Evolution — Implementation Authorization,
+                Increment 2; Specification §32 FR-47] Click-through into the
+                Business Worth history view — every confirmed
+                BusinessWorthSnapshot, ordered, drillable. */}
+            <button
+              onClick={() => {
+                setShowWorthModal(false);
+                setShowWorthHistoryModal(true);
+              }}
+              className="w-full py-2 rounded-[10px] bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 text-[#8A6D1F] font-bold text-xs transition"
+            >
+              {t('dashboard.worthModal.viewHistory')}
+            </button>
+
             <button
               onClick={() => setShowWorthModal(false)}
               className="w-full py-2 rounded-[10px] bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
             >
               {t('common.close')}
+            </button>
+          </div>
+        </div>
+      )}
+
+      {/* [Business Worth Evolution — Implementation Authorization,
+          Increment 2; Specification §8, §32 FR-47] Business Worth History
+          — every confirmed BusinessWorthSnapshot for this business,
+          ordered newest-first, including the current record. No
+          redesign — reuses the exact same modal shell/styling as the
+          Business Worth Modal above. */}
+      {showWorthHistoryModal && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl max-w-md w-full p-6 elevation-3 space-y-4 animate-fadeIn max-h-[85vh] flex flex-col">
+            <div className="flex items-center justify-between border-b border-gray-200 pb-4">
+              <div className="flex items-center space-x-2">
+                <Gem className="w-5 h-5 text-[#D4AF37]" />
+                <h3 className="text-base font-bold text-title">{t('dashboard.historyModal.title')}</h3>
+              </div>
+              <button
+                onClick={() => setShowWorthHistoryModal(false)}
+                className="p-2 text-gray-500 hover:text-gray-800 rounded-[10px] hover:bg-gray-50 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+
+            <p className="text-[11px] text-gray-500 -mt-1">
+              {t('dashboard.historyModal.subtitle')}
+            </p>
+
+            {businessWorthSnapshots.length === 0 ? (
+              <p className="text-xs text-gray-400 text-center py-6">
+                {t('dashboard.historyModal.empty')}
+              </p>
+            ) : (
+              <div className="space-y-1 text-xs overflow-y-auto">
+                {[...businessWorthSnapshots]
+                  .sort((a, b) => {
+                    const aMs = (a.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+                    const bMs = (b.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+                    return bMs - aMs;
+                  })
+                  .map((snapshot, index) => {
+                    const confirmedMs = (snapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+                    const confirmedDate = confirmedMs ? new Date(confirmedMs) : null;
+                    return (
+                      <div
+                        key={snapshot.id}
+                        className="flex items-center justify-between px-4 py-3 rounded-[10px] border border-gray-100 hover:bg-gray-50 transition"
+                      >
+                        <span className="flex flex-col">
+                          <span className="text-gray-700 font-semibold flex items-center gap-1.5">
+                            {index === 0 && snapshot.status === 'active' && (
+                              <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                                {t('dashboard.historyModal.current')}
+                              </span>
+                            )}
+                            {confirmedDate
+                              ? t('dashboard.historyModal.measuredOn', { date: confirmedDate.toLocaleDateString() })
+                              : snapshot.id}
+                          </span>
+                        </span>
+                        <span className="type-number text-[#8A6D1F] font-bold">
+                          {formatCurrency(snapshot.measuredBusinessWorth, currencySymbol)}
+                        </span>
+                      </div>
+                    );
+                  })}
+              </div>
+            )}
+
+            <button
+              onClick={() => setShowWorthHistoryModal(false)}
+              className="w-full py-2 rounded-[10px] bg-gray-50 hover:bg-gray-100 text-gray-800 font-bold text-xs transition"
+            >
+              {t('dashboard.historyModal.close')}
             </button>
           </div>
         </div>

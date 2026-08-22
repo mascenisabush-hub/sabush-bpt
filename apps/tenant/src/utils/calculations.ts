@@ -362,6 +362,30 @@ export function getCurrentBusinessWorth(params: {
   if (active.length === 0) return 'UNKNOWN';
 
   const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
+
+  return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, asOfMillis });
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 2;
+ * Specification §9 Case A, §41.4] Extracted, unchanged in behavior, from
+ * `getCurrentBusinessWorth`'s own previous inline body — the exact same
+ * "Case A" arithmetic, now shared so `getEstimatedBusinessWorth` (below)
+ * can call the identical calculation for a business that already has an
+ * active `BusinessWorthSnapshot`, per §41.4's own note: "Current" and
+ * "Estimated" are two names for the same formula, never two competing
+ * ones. `getCurrentBusinessWorth`'s own external behavior (including its
+ * 'UNKNOWN' handling) is completely unchanged by this extraction.
+ */
+function computeCaseALiveBusinessWorth(params: {
+  latest: BusinessWorthSnapshot;
+  batches: StockBatch[];
+  quebras: Quebra[];
+  expenses: Expense[];
+  withdrawals: Withdrawal[];
+  asOfMillis: number;
+}): number {
+  const { latest, batches, quebras, expenses, withdrawals, asOfMillis } = params;
   const snapshotMillis = toMillis(latest.confirmedAt);
 
   // Embedded profit delta since the snapshot (see doc comment above) —
@@ -407,6 +431,146 @@ export function getCurrentBusinessWorth(params: {
       embeddedProfitSinceSnapshot -
       expensesSinceSnapshot -
       levantamentosSinceSnapshot
+    ).toFixed(2)
+  );
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 2;
+ * Specification §9, §6 State 1a, §41.4; Implementation Plan §7; source
+ * BDR Decisions 7, 25]
+ *
+ * THE SAME SHARED CALCULATION, READ UNDER ITS "ESTIMATED" NAME.
+ *
+ * Per the accepted §41 amendment, "Current Business Worth" and
+ * "Estimated Business Worth Case A" are the exact same formula — this
+ * function's own Case A branch below calls the identical
+ * `computeCaseALiveBusinessWorth` helper `getCurrentBusinessWorth` uses,
+ * never a second, independently-maintained calculation. What this
+ * function ADDS, that `getCurrentBusinessWorth` deliberately does not
+ * have (FR-1: Current Business Worth must never be presented before a
+ * business's first confirmed new-model Contagem), is Case B: a business
+ * with no `BusinessWorthSnapshot` yet, but a preserved historical
+ * Capital Inicial (State 1a) — Estimated Business Worth exists for such
+ * a business today, per FR-50, without requiring a new Contagem first.
+ *
+ * Case B formula (Specification §9): `Historical Capital Inicial +
+ * embedded profits since the applicable baseline − Expenses −
+ * Breakages − Levantamentos`. Reads only `resolveInitialCapitalValue`
+ * (existing, unchanged) plus the same already-shipped
+ * `calculateInventoryTotals` this codebase's Case A branch already
+ * uses — no new collection, no fabricated Cash/Receivables/Payables
+ * term (those remain Increment 3 only, and Case B's own formula shape
+ * in the Specification has no such term to begin with).
+ *
+ * [Basis-aware baseline, implementation-level resolution of "embedded
+ * profits since the applicable baseline" — not a new business rule, an
+ * implementation mapping of the Specification's own formula onto this
+ * codebase's existing dual-valuation-basis fields] `initialCapitalValue`
+ * (via `resolveInitialCapitalValue`, unchanged) resolves to EITHER the
+ * initial StockCount's cost total OR its selling total, depending on
+ * the Owner's own `initialCapitalBasis` choice (Initial Stock
+ * Dual-Valuation-Basis feature, pre-existing, unmodified). Which one was
+ * chosen determines whether the initial goods' own built-in margin
+ * (selling total − cost total, frozen at the same confirmation moment)
+ * is already folded into Capital Inicial or not:
+ *   - basis === 'cost': Capital Inicial carries NO margin yet — the
+ *     initial goods' own current embedded profit is genuinely new
+ *     information to add, exactly like every other batch's.
+ *   - basis === 'selling': Capital Inicial already IS the initial
+ *     goods' own market value (cost + margin) — adding that same
+ *     margin again via the embedded-profit term would double-count it,
+ *     the exact "never add a stock purchase's full cost twice" family
+ *     of error FR-9 forbids for Case A, applied here to Case B's own
+ *     baseline instead of a snapshot.
+ * Both bases converge on the identical total (the initial goods' full
+ * market value) when nothing else has happened yet — verified as an
+ * invariant, not asserted by convention alone.
+ *
+ * Quebras: no separate term, for the identical reason
+ * `computeCaseALiveBusinessWorth` already documents — a physical loss
+ * is already absent from what remains to be valued.
+ *
+ * Expenses/Levantamentos: subtracted ALL-TIME (never date-filtered),
+ * unlike Case A's own "since the snapshot" window — Case B's baseline
+ * (Capital Inicial) has never had any Expense/Levantamento deducted
+ * from it before, so nothing is "already accounted for" the way a
+ * snapshot's own frozen `measuredBusinessWorth` already accounts for
+ * every Expense/Levantamento that existed at confirmation time.
+ *
+ * Returns 'UNKNOWN' — never a fabricated Estimated figure — for a
+ * genuinely new business with no preserved historical Capital Inicial
+ * and no `BusinessWorthSnapshot` either (Specification §6 State 1,
+ * I-1). Exactly one of {'UNKNOWN', Case B value, Case A value} is ever
+ * returned — never a third, blended outcome.
+ */
+export function getEstimatedBusinessWorth(params: {
+  snapshots: BusinessWorthSnapshot[] | null | undefined;
+  initialStockCount: StockCount | null | undefined;
+  batches: StockBatch[];
+  quebras: Quebra[];
+  expenses: Expense[];
+  withdrawals: Withdrawal[];
+  asOfDate?: string;
+}): number | 'UNKNOWN' {
+  const { snapshots, initialStockCount, batches, quebras, expenses, withdrawals } = params;
+  const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const asOfMillis = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
+
+  const active = (snapshots ?? []).filter((s) => s.status === 'active');
+  if (active.length > 0) {
+    // Case A — a BusinessWorthSnapshot already exists. Same calculation
+    // as getCurrentBusinessWorth, per §41.4 — this function's own
+    // "Estimated" name applies only in the sense that a caller reading
+    // this function's output as of a date other than "right now" (Fecho,
+    // a later increment) would call it Estimated; the arithmetic itself
+    // never differs from Current.
+    const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
+    return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, asOfMillis });
+  }
+
+  // Case B — State 1a: existing business, preserved historical Capital
+  // Inicial, no BusinessWorthSnapshot yet.
+  if (!initialStockCount) {
+    // No baseline at all — a genuinely new business, State 1, UNKNOWN
+    // (Specification §6, I-1). Never a fabricated Estimated figure.
+    return 'UNKNOWN';
+  }
+
+  const initialCapitalValue = resolveInitialCapitalValue(initialStockCount);
+  const basis: 'cost' | 'selling' = initialStockCount.initialCapitalBasis === 'selling' ? 'selling' : 'cost';
+  const initialCostTotal = initialStockCount.totalValue || 0;
+  const initialSellingTotalRaw = initialStockCount.totalSellingValue;
+  const initialSellingTotal =
+    typeof initialSellingTotalRaw === 'number' && Number.isFinite(initialSellingTotalRaw)
+      ? initialSellingTotalRaw
+      : initialCostTotal;
+  // See this function's own doc comment above for why this term is 0 for
+  // a 'cost'-basis Capital Inicial and the initial goods' own frozen
+  // margin for a 'selling'-basis one.
+  const initialMarginAlreadyIncludedInBaseline = basis === 'selling' ? initialSellingTotal - initialCostTotal : 0;
+
+  const currentEmbeddedProfitTotal = calculateInventoryTotals(
+    batches.filter((b) => b.status === 'open'),
+    quebras
+  ).totalEmbeddedProfit;
+  const embeddedProfitSinceBaseline = Number(
+    (currentEmbeddedProfitTotal - initialMarginAlreadyIncludedInBaseline).toFixed(2)
+  );
+
+  const totalExpensesAllTime = Number(
+    expenses.reduce((sum, e) => sum + Number(e.amount || 0), 0).toFixed(2)
+  );
+  const totalWithdrawalsAllTime = Number(
+    withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0).toFixed(2)
+  );
+
+  return Number(
+    (
+      initialCapitalValue +
+      embeddedProfitSinceBaseline -
+      totalExpensesAllTime -
+      totalWithdrawalsAllTime
     ).toFixed(2)
   );
 }

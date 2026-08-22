@@ -74,7 +74,7 @@ import {
   BusinessWorthSnapshotEmbeddedProfitLine,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, computeMeasuredBusinessWorth, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -372,6 +372,12 @@ interface AppContextType {
   // comment (calculations.ts) for exactly what this is and is not. Not
   // yet consumed by the Dashboard or Owner Portfolio (both Increment 2).
   currentBusinessWorth: number | 'UNKNOWN';
+  // [Business Worth Evolution — Implementation Authorization, Increment 2;
+  // Specification §9 Case B/§6 State 1a] See estimatedBusinessWorth's own
+  // computation site (above currentBusinessWorth's sibling definition) for
+  // the full doc comment — one shared calculation, two context fields
+  // exposing its two named readings.
+  estimatedBusinessWorth: number | 'UNKNOWN';
   // [Void & Redo — Implementation Authorization §2 item 9; FR-9, FR-10]
   // Every 'initial'-type confirmation event ever recorded, chain-order
   // sorted, for history/audit display only.
@@ -952,6 +958,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Increment 2 can wire the UI without needing any new data-loading work.
   const currentBusinessWorth = getCurrentBusinessWorth({
     snapshots: businessWorthSnapshots,
+    batches,
+    quebras,
+    expenses,
+    withdrawals,
+  });
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 2;
+  // Specification §9 Case B, §6 State 1a; Implementation Plan §7] The
+  // SAME shared calculation as currentBusinessWorth above, read under its
+  // "Estimated" name — for a business with no BusinessWorthSnapshot yet
+  // (State 1a), this resolves to the Case B figure (Historical Capital
+  // Inicial + embedded profit since baseline − Expenses − Levantamentos)
+  // instead of UNKNOWN; for a business that already has an active
+  // snapshot, it resolves to the identical value currentBusinessWorth
+  // does (§41.4 — one calculation, two names). Consumed by the Dashboard
+  // (Increment 2, DashboardView.tsx) and Owner Portfolio (refreshShopWorth,
+  // below) so the same authoritative figure is never independently
+  // recomputed a second time by either.
+  const estimatedBusinessWorth = getEstimatedBusinessWorth({
+    snapshots: businessWorthSnapshots,
+    initialStockCount,
     batches,
     quebras,
     expenses,
@@ -1708,13 +1735,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // amendment — Accepted 2026-08-17; Stage 8 Authorization signed
   // 2026-08-17, corrected 2026-08-17 per a dedicated feasibility check]
   //
+  // [Business Worth Evolution — Implementation Authorization, Increment 2;
+  // Specification §7 FR-60, Rule 8 Finding 15-A; Implementation Plan §7
+  // "Owner Portfolio rewire"] Rewired, this pass, to stop computing its
+  // own independent `totalMarketValue − shopTotalExpenses −
+  // shopTotalWithdrawals` figure — a second, competing Business Worth
+  // formula (confirmed by direct inspection to already have existed
+  // separately from the live Engine formula, Finding 15-A) — and instead
+  // call the SAME authoritative shared calculation the Dashboard uses
+  // (getEstimatedBusinessWorth, calculations.ts — Current where a
+  // BusinessWorthSnapshot exists for the target shop, Estimated Case B
+  // where none exists yet, exactly matching the Dashboard's own State 1a
+  // treatment, per §7's own explicit instruction). "Business Worth
+  // Evolution is authoritative. Owner Portfolio consumes that value
+  // rather than maintaining a competing Business Worth mechanism."
+  //
   // Refreshes exactly ONE owned shop's currentWorth cache, on an
   // explicit Admin action only — never automatic, never scheduled,
   // never a side effect of any other write. May target ANY owned
   // shop, active or not — confirmed safe by the governance chain's own
   // feasibility check: batches/quebras/expenses' read rules use
-  // isMemberOf(businessId), withdrawals' uses isOwnerOf(businessId) —
-  // both evaluated per-businessId, never against which business is
+  // isMemberOf(businessId), withdrawals'/stockCounts'/
+  // businessWorthSnapshots' use isOwnerOf(businessId)/isMemberOf(businessId)
+  // — all evaluated per-businessId, never against which business is
   // "active" in this session, so an Admin already has read access to
   // every owned shop's operational data today.
   //
@@ -1722,24 +1765,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // listener — the fetched data is used once, to compute a single
   // value, then discarded. This is NOT a new live subscription for a
   // non-active shop; nothing about this function changes what data is
-  // continuously synced for the app.
-  //
-  // Reuses calculateInventoryTotals and the exact same businessWorth
-  // formula AppContext.tsx already computes for the active shop above
-  // (totalMarketValue - totalExpensesAllTime - totalWithdrawalsAllTime)
-  // — the same calculation path, not a new or alternate one. Producing
-  // a different number here than what the Dashboard would show for
-  // this same shop, at this same moment, would be a bug, not a design
-  // choice.
+  // continuously synced for the app. Still scoped to exactly the six
+  // collections a single target business owns (batches, quebras,
+  // expenses, withdrawals, stockCounts, businessWorthSnapshots) plus
+  // voidRecords (needed only to resolve that shop's own
+  // initialStockCount exactly as the active-shop context already does,
+  // §14 marker aside — never a cross-business query, never a background
+  // sweep, never a write-triggered recomputation).
   //
   // Never throws to its caller in a way that corrupts anything — a
-  // failed refresh (network, read, or write failure) simply means the
-  // Firestore document is never touched, so any previously-cached
-  // currentWorth/calculatedAt is left exactly as it was. The caller
-  // (the Owner Portfolio UI) is responsible for surfacing success/
-  // failure to the Admin; this function reports that outcome via its
-  // return value rather than by throwing, so a failure here can never
-  // propagate into breaking anything else in the app.
+  // failed refresh (network, read, or write failure, or a genuinely
+  // UNKNOWN Business Worth for that shop — no baseline at all yet) simply
+  // means the Firestore document is never touched, so any previously-
+  // cached currentWorth/calculatedAt is left exactly as it was. The
+  // caller (the Owner Portfolio UI) is responsible for surfacing
+  // success/failure to the Admin; this function reports that outcome via
+  // its return value rather than by throwing, so a failure here can
+  // never propagate into breaking anything else in the app.
   const refreshShopWorth = async (businessId: string): Promise<{ success: boolean; error?: string }> => {
     if (!currentUser || !isOwner) {
       return { success: false, error: 'Apenas o dono do negócio pode atualizar este valor.' };
@@ -1749,11 +1791,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap] = await Promise.all([
+      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap, stockCountsSnap, voidRecordsSnap, businessWorthSnapshotsSnap] = await Promise.all([
         getDocs(collection(db, 'businesses', businessId, 'batches')),
         getDocs(collection(db, 'businesses', businessId, 'quebras')),
         getDocs(collection(db, 'businesses', businessId, 'expenses')),
         getDocs(collection(db, 'businesses', businessId, 'withdrawals')),
+        getDocs(collection(db, 'businesses', businessId, 'stockCounts')),
+        getDocs(collection(db, 'businesses', businessId, 'voidRecords')),
+        getDocs(collection(db, 'businesses', businessId, 'businessWorthSnapshots')),
       ]);
 
       const shopBatches: StockBatch[] = [];
@@ -1764,11 +1809,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       expensesSnap.forEach((d) => shopExpenses.push(d.data() as Expense));
       const shopWithdrawals: Withdrawal[] = [];
       withdrawalsSnap.forEach((d) => shopWithdrawals.push(d.data() as Withdrawal));
+      const shopStockCounts: StockCount[] = [];
+      stockCountsSnap.forEach((d) => shopStockCounts.push(d.data() as StockCount));
+      const shopVoidRecords: VoidRecord[] = [];
+      voidRecordsSnap.forEach((d) => shopVoidRecords.push(d.data() as VoidRecord));
+      const shopBusinessWorthSnapshots: BusinessWorthSnapshot[] = [];
+      businessWorthSnapshotsSnap.forEach((d) => shopBusinessWorthSnapshots.push(d.data() as BusinessWorthSnapshot));
 
-      const { totalMarketValue } = calculateInventoryTotals(shopBatches, shopQuebras);
-      const shopTotalExpenses = shopExpenses.reduce((sum, e) => sum + Number(e.amount || 0), 0);
-      const shopTotalWithdrawals = shopWithdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0);
-      const value = totalMarketValue - shopTotalExpenses - shopTotalWithdrawals;
+      // Same "exclude a voided confirmation" choke point the active-shop
+      // context already applies (see `initialStockCount`'s own definition,
+      // above) — applied here to this OTHER shop's own data, never mixed
+      // with the active shop's.
+      const shopVoidedConfirmationIds = new Set(shopVoidRecords.map((v) => v.voidedConfirmationId));
+      const shopInitialStockCount =
+        shopStockCounts.find((s) => s.type === 'initial' && !shopVoidedConfirmationIds.has(s.id)) || null;
+
+      const shopEstimatedOrCurrentWorth = getEstimatedBusinessWorth({
+        snapshots: shopBusinessWorthSnapshots,
+        initialStockCount: shopInitialStockCount,
+        batches: shopBatches,
+        quebras: shopQuebras,
+        expenses: shopExpenses,
+        withdrawals: shopWithdrawals,
+      });
+
+      if (shopEstimatedOrCurrentWorth === 'UNKNOWN') {
+        // No baseline at all yet for this shop (no Capital Inicial, no
+        // BusinessWorthSnapshot) — never write a fabricated currentWorth
+        // value; report this as a (non-corrupting) failure instead,
+        // matching this function's own established "no fabricated
+        // substitute" discipline.
+        return { success: false, error: 'Esta loja ainda não tem Capital Inicial definido.' };
+      }
+
+      const value = shopEstimatedOrCurrentWorth;
 
       await updateDoc(doc(db, 'businesses', businessId), {
         currentWorth: {
@@ -3169,15 +3243,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
       const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 2; Specification §8] Estimated Business Worth now
+      // exists (getEstimatedBusinessWorth, calculations.ts) — this
+      // snapshot's own reconciliation figures can be genuinely computed
+      // for the first time. Read as of this Contagem's own `date`, using
+      // ONLY the PRIOR snapshots/initial stock count still in context
+      // state at this point (the new snapshot being written below has not
+      // been added to `businessWorthSnapshots` yet), so this is honestly
+      // "what Estimated Business Worth was immediately before this
+      // confirmation" — never the post-confirmation figure. Omitted
+      // entirely (never a fabricated 0/null) when genuinely 'UNKNOWN' —
+      // a genuinely new business's very first confirmation (simultaneously
+      // its first Initial Stock AND its first snapshot) had no baseline at
+      // all to estimate from beforehand.
+      const priorEstimated = getEstimatedBusinessWorth({
+        snapshots: businessWorthSnapshots,
+        initialStockCount,
+        batches,
+        quebras,
+        expenses,
+        withdrawals,
+        asOfDate: date,
+      });
+      const estimatedBusinessWorthImmediatelyBefore = priorEstimated === 'UNKNOWN' ? undefined : priorEstimated;
+      const difference =
+        estimatedBusinessWorthImmediatelyBefore === undefined
+          ? undefined
+          : Number((measuredBusinessWorth - estimatedBusinessWorthImmediatelyBefore).toFixed(2));
+
       // [Corrected — Product Architect clarification, this session]
-      // cashPosition/receivablesPosition/payablesPosition/
-      // estimatedBusinessWorthImmediatelyBefore/difference are now
-      // OMITTED ENTIRELY (never set to a literal 0 or null) — the exact
-      // same "omit entirely, never a fabricated value" discipline this
-      // codebase already uses for every other optional field (see
-      // newCount's own construction, above, for the established
-      // precedent). See types.ts's own BusinessWorthSnapshot comment
-      // for the full rationale.
+      // cashPosition/receivablesPosition/payablesPosition are OMITTED
+      // ENTIRELY (never set to a literal 0) — the exact same "omit
+      // entirely, never a fabricated value" discipline this codebase
+      // already uses for every other optional field (see newCount's own
+      // construction, above, for the established precedent). See
+      // types.ts's own BusinessWorthSnapshot comment for the full
+      // rationale.
       const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
         id: businessWorthSnapshotId,
         businessId,
@@ -3191,13 +3293,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         breakagesSinceLastSnapshot,
         levantamentosSinceLastSnapshot,
         previousCurrentBusinessWorth,
+        // [Increment 2] Now genuinely computable — see doc comment above.
+        // Still omitted (not fabricated) on the one path where it is
+        // genuinely 'UNKNOWN' (no baseline existed before this
+        // confirmation at all).
+        ...(estimatedBusinessWorthImmediatelyBefore !== undefined ? { estimatedBusinessWorthImmediatelyBefore } : {}),
+        ...(difference !== undefined ? { difference } : {}),
         // [Increment 3 dependency, explicitly flagged] cashPosition,
         // receivablesPosition, payablesPosition intentionally absent —
         // no existing source; never fabricated as 0.
-        // [Increment 2 dependency, explicitly flagged] estimated
-        // BusinessWorthImmediatelyBefore, difference intentionally
-        // absent — Estimated Business Worth does not exist yet; never
-        // fabricated as null.
         correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         status: 'active',
       };
@@ -4494,6 +4598,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         voidRecords,
         businessWorthSnapshots,
         currentBusinessWorth,
+        estimatedBusinessWorth,
         initialStockConfirmationChain,
         initialStockVoidEligibility,
         initialStockRecoveryAuthorization,

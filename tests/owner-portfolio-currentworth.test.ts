@@ -52,7 +52,7 @@ describe('refreshShopWorth (apps/tenant/src/context/AppContext.tsx) — the expl
     assert.match(fnBody, /if \(!ownedBusinessIds\.includes\(businessId\)\)/);
   });
 
-  it('uses one-time getDocs reads, never a new onSnapshot listener, for the four contributing collections', () => {
+  it('uses one-time getDocs reads, never a new onSnapshot listener, for every contributing collection', () => {
     assert.match(fnBody, /getDocs\(collection\(db, 'businesses', businessId, 'batches'\)\)/);
     assert.match(fnBody, /getDocs\(collection\(db, 'businesses', businessId, 'quebras'\)\)/);
     assert.match(fnBody, /getDocs\(collection\(db, 'businesses', businessId, 'expenses'\)\)/);
@@ -60,17 +60,37 @@ describe('refreshShopWorth (apps/tenant/src/context/AppContext.tsx) — the expl
     assert.doesNotMatch(fnBody, /onSnapshot/, 'refreshShopWorth must never establish a new live listener — one-time reads only.');
   });
 
+  it('[Business Worth Evolution, Increment 2] also reads stockCounts, voidRecords, and businessWorthSnapshots — required to resolve the target shop\'s own initialStockCount/snapshot state for the shared calculation', () => {
+    assert.match(fnBody, /getDocs\(collection\(db, 'businesses', businessId, 'stockCounts'\)\)/);
+    assert.match(fnBody, /getDocs\(collection\(db, 'businesses', businessId, 'voidRecords'\)\)/);
+    assert.match(fnBody, /getDocs\(collection\(db, 'businesses', businessId, 'businessWorthSnapshots'\)\)/);
+  });
+
   it('every read/write targets the single, explicit target businessId — never a different or additional businessId in this function', () => {
     const businessIdRefs = fnBody.match(/'businesses', businessId[,)]/g) ?? [];
-    assert.equal(businessIdRefs.length, 5, 'Expected exactly 5 references to the single target businessId (4 collection reads + 1 document write), all using the same variable, none hardcoded or reading a second business.');
+    assert.equal(businessIdRefs.length, 8, 'Expected exactly 8 references to the single target businessId (7 collection reads + 1 document write), all using the same variable, none hardcoded or reading a second business.');
   });
 
-  it('reuses calculateInventoryTotals — the existing Business Worth Engine path, not a new or duplicate formula', () => {
-    assert.match(fnBody, /calculateInventoryTotals\(shopBatches, shopQuebras\)/);
+  it('[Business Worth Evolution, Increment 2] reuses the shared authoritative calculation (getEstimatedBusinessWorth) — never an independent, competing formula (Rule 8 Finding 15-A, FR-60)', () => {
+    assert.match(fnBody, /getEstimatedBusinessWorth\(\{/);
+    assert.doesNotMatch(
+      fnBody,
+      /totalMarketValue\s*-\s*shopTotalExpenses\s*-\s*shopTotalWithdrawals/,
+      'The old, independent formula must be gone — this was exactly the competing calculation Finding 15-A identified.'
+    );
   });
 
-  it('computes worth using the exact same formula as the live active-shop calculation (totalMarketValue minus expenses minus withdrawals)', () => {
-    assert.match(fnBody, /totalMarketValue\s*-\s*shopTotalExpenses\s*-\s*shopTotalWithdrawals/);
+  it('[Business Worth Evolution, Increment 2] resolves the target shop\'s own initialStockCount using the identical voided-confirmation exclusion the active-shop context already applies', () => {
+    assert.match(fnBody, /shopVoidedConfirmationIds/);
+    assert.match(fnBody, /s\.type === 'initial' && !shopVoidedConfirmationIds\.has\(s\.id\)/);
+  });
+
+  it('[Business Worth Evolution, Increment 2] never writes a fabricated currentWorth when the shared calculation is genuinely UNKNOWN', () => {
+    assert.match(fnBody, /if \(shopEstimatedOrCurrentWorth === 'UNKNOWN'\)/);
+    const unknownBranchStart = fnBody.indexOf("if (shopEstimatedOrCurrentWorth === 'UNKNOWN')");
+    const unknownBranch = fnBody.slice(unknownBranchStart, unknownBranchStart + 400);
+    assert.match(unknownBranch, /return \{ success: false/);
+    assert.doesNotMatch(unknownBranch, /updateDoc/);
   });
 
   it('calculatedAt uses a client-supplied new Date().toISOString(), per the Implementation Plan §5.6 Amendment resolution — not serverTimestamp()', () => {
@@ -179,11 +199,14 @@ describe('Header.tsx — entry point gating', () => {
 });
 
 describe('Scope discipline — no unauthorized changes', () => {
-  it('AppContext.tsx: no new firestore.rules-adjacent collection or query beyond the four already-existing collections', () => {
+  it('[Business Worth Evolution, Increment 2] AppContext.tsx: refreshShopWorth reads exactly the seven collections this rewire requires — batches, expenses, quebras, withdrawals, stockCounts, voidRecords, businessWorthSnapshots — never a cross-business query, never a new unrelated collection', () => {
     const fnBody = extractFunctionBody(appContextSrc, 'const refreshShopWorth = async (');
     const collectionRefs = fnBody.match(/collection\(db, 'businesses', businessId, '(\w+)'\)/g) ?? [];
     const uniqueCollections = new Set(collectionRefs.map((c) => c.match(/'(\w+)'\)$/)?.[1]));
-    assert.deepEqual([...uniqueCollections].sort(), ['batches', 'expenses', 'quebras', 'withdrawals']);
+    assert.deepEqual(
+      [...uniqueCollections].sort(),
+      ['batches', 'businessWorthSnapshots', 'expenses', 'quebras', 'stockCounts', 'voidRecords', 'withdrawals']
+    );
   });
 
   it('does not modify the existing businessWorth calculation used by the active-shop Dashboard path', () => {

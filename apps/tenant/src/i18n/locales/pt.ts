@@ -103,7 +103,19 @@ export interface TranslationDict {
       stockCost: { label: string; desc: string };
       marketValue: { label: string; desc: string };
       embeddedProfit: { label: string; desc: string };
-      businessWorth: { label: string; desc: string };
+      businessWorth: {
+        label: string;
+        desc: string;
+        // [Business Worth Evolution — Implementation Authorization,
+        // Increment 2; Specification §32, FR-59] Shown next to the value
+        // whenever the card is displaying Estimated Business Worth (State
+        // 1a — no BusinessWorthSnapshot yet) instead of Current, so the
+        // two are never visually indistinguishable.
+        estimatedLabel: string;
+        // Genuinely UNKNOWN (Specification §6 State 1) — a brand-new
+        // business with no historical Capital Inicial and no snapshot yet.
+        unknown: string;
+      };
       expenses: { label: string; desc: string };
       withdrawals: { label: string; desc: string };
       quebraLoss: { label: string; desc: string };
@@ -146,6 +158,28 @@ export interface TranslationDict {
       growth: string;
       basedOnCount: string;
       defineInitialCapital: string;
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 2; Specification §32, FR-59] Shown in place of
+      // totalLabel when the modal is displaying Estimated Business Worth
+      // (State 1a) instead of Current.
+      totalLabelEstimated: string;
+      // Short banner shown only in the Estimated state, explaining why the
+      // figure is an estimate rather than a measured Current value.
+      estimatedNotice: string;
+      // Click-through into the Business Worth history view (FR-47).
+      viewHistory: string;
+    };
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 2; Specification §8, §32, FR-47] The Business Worth history view —
+    // every confirmed BusinessWorthSnapshot for this business, ordered,
+    // each independently drillable, including the current record.
+    historyModal: {
+      title: string;
+      subtitle: string;
+      empty: string;
+      current: string;
+      measuredOn: string;
+      close: string;
     };
     table: {
       emptyTitle: string;
@@ -1034,6 +1068,8 @@ export const pt: TranslationDict = {
       businessWorth: {
         label: 'Valor do Negócio',
         desc: 'O valor estimado atual do negócio, com base no stock verificado e nos ajustes registados.',
+        estimatedLabel: 'Estimado',
+        unknown: 'Ainda sem valor',
       },
       expenses: {
         label: 'Despesas Gerais',
@@ -1086,11 +1122,22 @@ export const pt: TranslationDict = {
       expenses: 'Despesas Gerais:',
       withdrawals: 'Levantamentos do Dono:',
       totalLabel: 'Valor Total do Negócio:',
+      totalLabelEstimated: 'Valor Estimado do Negócio:',
+      estimatedNotice: 'Este é um valor Estimado — ainda não há uma Contagem confirmada para medir o Valor Atual do Negócio.',
+      viewHistory: 'Ver histórico do Valor do Negócio',
       latestCount: 'Contagem Física Mais Recente:',
       initialCapital: 'Capital Inicial (ponto de partida):',
       growth: 'Crescimento do Capital:',
       basedOnCount: 'Stock atual baseado na contagem de {{date}}',
       defineInitialCapital: ' · Defina o Capital Inicial para medir o crescimento.',
+    },
+    historyModal: {
+      title: 'Histórico do Valor do Negócio',
+      subtitle: 'Cada Contagem confirmada cria um registo permanente e não editável.',
+      empty: 'Ainda não há registos — confirme a primeira Contagem para começar o histórico.',
+      current: 'Atual',
+      measuredOn: 'Medido em {{date}}',
+      close: 'Fechar',
     },
     table: {
       emptyTitle: 'Nenhum produto encontrado',
