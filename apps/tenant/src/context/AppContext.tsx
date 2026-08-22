@@ -69,9 +69,12 @@ import {
   UnitRelationship,
   VoidRecord,
   InitialStockRecoveryAuthorization,
+  BusinessWorthSnapshot,
+  BusinessWorthSnapshotProductValuationLine,
+  BusinessWorthSnapshotEmbeddedProfitLine,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -277,6 +280,18 @@ interface RecordStockCountParams {
   // firestore.rules' own confirmedAt === request.time requirement for
   // every redo branch.
   redoesConfirmationId?: string;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 1; Specification §14, FR-18, FR-19; Implementation Plan §4] Supplied
+  // by the caller (a UI decision point, or a business-level "is this
+  // business now on the new model" read — an implementation, not
+  // business, detail) — recordStockCount itself does not decide this.
+  // When true, the resulting StockCount is marked
+  // producesBusinessWorthSnapshot: true and a corresponding
+  // BusinessWorthSnapshot is created atomically in the same batch (§5,
+  // below). Never set for a call reconstructing/redoing a historical
+  // confirmation via Void & Redo (that mechanism is entirely separate —
+  // Implementation Plan §13's exclusivity design).
+  producesBusinessWorthSnapshot?: boolean;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -347,6 +362,16 @@ interface AppContextType {
   stockCounts: StockCount[];
   // [Void & Redo — Implementation Authorization §2 item 3]
   voidRecords: VoidRecord[];
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 1; Specification §8, FR-5-FR-7] Every BusinessWorthSnapshot ever
+  // created for this business, ordered newest-first.
+  businessWorthSnapshots: BusinessWorthSnapshot[];
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 1; Specification §7, FR-1, FR-3, FR-4] The single, unambiguous
+  // Current Business Worth read — see getCurrentBusinessWorth's own doc
+  // comment (calculations.ts) for exactly what this is and is not. Not
+  // yet consumed by the Dashboard or Owner Portfolio (both Increment 2).
+  currentBusinessWorth: number | 'UNKNOWN';
   // [Void & Redo — Implementation Authorization §2 item 9; FR-9, FR-10]
   // Every 'initial'-type confirmation event ever recorded, chain-order
   // sorted, for history/audit display only.
@@ -627,6 +652,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // snapshot arrives, matching the collection's own create-only
   // design.
   const [voidRecords, setVoidRecords] = useState<VoidRecord[]>([]);
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 1; Specification §8, FR-5-FR-7] Every BusinessWorthSnapshot ever
+  // created for this business — loaded exactly like stockCounts (same
+  // read tier, isMemberOf, per firestore.rules). Immutable once written
+  // (outside the not-yet-implemented Increment 8 correction/recovery
+  // window), so a snapshot arriving here never needs reconciling against
+  // a locally-optimistic copy.
+  const [businessWorthSnapshots, setBusinessWorthSnapshots] = useState<BusinessWorthSnapshot[]>([]);
   // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
   // §17] Null when no Authorization has ever been granted for this
   // business, or once it has been fully superseded (a fresh grant
@@ -903,6 +936,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     initialStockRecoveryAuthorization,
     initialStockCount?.id ?? null
   );
+
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 1; Specification §7, FR-1, FR-3, FR-4] The single, unambiguous
+  // "Current Business Worth" read — the latest confirmed
+  // BusinessWorthSnapshot's frozen measuredBusinessWorth, or the literal
+  // 'UNKNOWN' sentinel when this business has no snapshot yet. NEVER
+  // independently computed here — see getCurrentBusinessWorth's own doc
+  // comment (calculations.ts). Not yet consumed by the Dashboard or
+  // Owner Portfolio in Increment 1 (both are explicitly Increment 2
+  // scope, per the Implementation Plan's §24 sequence) — exposed on
+  // this context now so Increment 2 can wire the UI without needing any
+  // new data-loading work.
+  const currentBusinessWorth = getCurrentBusinessWorth(businessWorthSnapshots);
 
   // ============================================================
   // BUSINESS WORTH — no fabricated cash ledger.
@@ -1260,6 +1306,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching void records:', err)
     );
 
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 1; Specification §8, FR-7] Loaded exactly like
+    // stockCounts/voidRecords above (same read tier, isMemberOf).
+    // Ordering here is cosmetic only (getCurrentBusinessWorth, above,
+    // does its own confirmedAt-based sort and never trusts array order)
+    // — sorted for any future direct-list display (§7 FR-7's history
+    // view, Increment 2+) to already read newest-first.
+    const businessWorthSnapshotsRef = collection(db, 'businesses', businessId, 'businessWorthSnapshots');
+    const unsubBusinessWorthSnapshots = onSnapshot(
+      businessWorthSnapshotsRef,
+      (snap) => {
+        const list: BusinessWorthSnapshot[] = [];
+        snap.forEach((doc) => list.push(doc.data() as BusinessWorthSnapshot));
+        list.sort((a, b) => {
+          const aMs = (a.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          const bMs = (b.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+          return bMs - aMs;
+        });
+        setBusinessWorthSnapshots(list);
+      },
+      (err) => console.error('Error fetching business worth snapshots:', err)
+    );
+
     // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
     // §2/§17] Single fixed-id document, not a collection — mirrors the
     // subscription doc listener's own shape (1a, above) rather than
@@ -1417,6 +1486,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubExpenses();
       unsubStockCounts();
       unsubVoidRecords();
+      unsubBusinessWorthSnapshots();
       unsubInitialStockRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
@@ -2676,7 +2746,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -2911,6 +2981,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // not a writable sentinel — see that comment for why).
       ...(type === 'initial' ? { chainPosition: initialChainPosition } : {}),
       ...(type === 'initial' && redoesConfirmationId ? { redoesConfirmationId } : {}),
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 1; Specification §14, FR-18, FR-19] Same
+      // "omit entirely, never a literal `undefined`/`false`" discipline
+      // as every other optional field on this object — absent is the
+      // correct, permanent state for a historical/non-participating
+      // count, not `false` written explicitly (both read identically as
+      // falsy today, but omission keeps a future migration/audit query
+      // for "which counts have this field at all" meaningful).
+      ...(producesBusinessWorthSnapshot ? { producesBusinessWorthSnapshot: true } : {}),
     };
 
     // [Void & Redo — Implementation Authorization §2 items 1, 5-6; Rule
@@ -2929,6 +3008,175 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const stockCountWritePayload: WithFieldValue<StockCount> =
       type === 'initial' ? { ...newCount, confirmedAt: serverTimestamp() } : newCount;
     fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), stockCountWritePayload);
+
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 1; Specification §5 (Plan), §8, FR-5, FR-36, FR-37]
+    // Writes exactly one BusinessWorthSnapshot in the SAME batch as the
+    // StockCount write above — never a separately-retriable write, so a
+    // partial outcome (StockCount confirmed, no snapshot, or vice versa)
+    // is structurally impossible, exactly as this batch already
+    // guarantees for stockCounts + the draft-delete below.
+    if (producesBusinessWorthSnapshot) {
+      // [FR-37 idempotency] Deterministic, submission-identity-derived
+      // id — one-to-one with sourceStockCountId (newCount.id), the exact
+      // same fixed-id-per-source-event discipline this codebase already
+      // trusts for stockCounts/voidRecords (Rule 8 Finding 10-A). This
+      // structurally guarantees I-2 ("no two BusinessWorthSnapshot
+      // documents share a sourceStockCountId") via Firestore's own
+      // create-if-absent semantics — no query or transaction needed.
+      const businessWorthSnapshotId = 'bws-' + newCount.id;
+
+      // [Specification §16, FR-23; existing calculateInventoryTotals/
+      // calculateBatch, calculations.ts] Embedded profit is drill-down/
+      // explanatory only (FR-24) — computed fresh, at confirmation time,
+      // from the SAME single source of truth Dashboard/Reports/Closings
+      // already use. NOT the Contagem's own items — the Contagem
+      // measures physical stock; embedded profit is a property of the
+      // currently-open PURCHASE BATCHES, a structurally distinct figure
+      // (this is exactly what makes a reconciliation difference between
+      // them possible and meaningful — Specification §22).
+      const quebrasByBatch = groupQuebrasByBatch(quebras);
+      const openBatches = batches.filter((b) => b.status === 'open');
+      const embeddedProfitDetail: BusinessWorthSnapshotEmbeddedProfitLine[] = openBatches.map((b) => {
+        const calc = calculateBatch(b, quebrasByBatch.get(b.id) ?? []);
+        // StockBatch itself carries no productName — resolved here via
+        // the same tempProducts lookup already used above for
+        // countItems, matching how every other batch-drill-down display
+        // in this codebase (Dashboard, Reports) already resolves it.
+        const productName = tempProducts.find((p) => p.id === b.productId)?.name ?? b.productId;
+        return {
+          batchId: b.id,
+          productId: b.productId,
+          productName,
+          investmentValue: Number(calc.investmentValue.toFixed(2)),
+          marketValue: Number(calc.marketValue.toFixed(2)),
+          embeddedProfit: Number(calc.embeddedProfit.toFixed(2)),
+        };
+      });
+      const embeddedProfitTotal = Number(
+        embeddedProfitDetail.reduce((sum, l) => sum + l.embeddedProfit, 0).toFixed(2)
+      );
+
+      // [Implementation note — Increment 1 interim resolution, flagged
+      // explicitly, not silently invented; see types.ts's own
+      // BusinessWorthSnapshot comment and this Authorization's final
+      // report] productValuationTotal is this Contagem's own
+      // selling-basis (market) valuation — matching the existing
+      // Business Worth Engine's market-value convention, not a new
+      // basis. cashPosition/receivablesPosition/payablesPosition are
+      // always 0 in Increment 1 (Cash Ledger/Receivables/Payables do
+      // not exist until Increment 3 — there are zero such records
+      // anywhere in the system yet). Resolves Rule 8 open question #4's
+      // additive structure directly from the Specification's own FR-24
+      // text (embeddedProfitTotal is never a second addend).
+      const productValuationTotal = Number(normalizedTotalSellingValue.toFixed(2));
+      const cashPosition = 0;
+      const receivablesPosition = 0;
+      const payablesPosition = 0;
+      const measuredBusinessWorth = Number(
+        (productValuationTotal + cashPosition + receivablesPosition - payablesPosition).toFixed(2)
+      );
+
+      const productValuationDetail: BusinessWorthSnapshotProductValuationLine[] = countItems.map((item) => ({
+        productId: item.productId,
+        productName: item.productName,
+        quantity: item.quantity,
+        ...(item.unit ? { unit: item.unit } : {}),
+        costPrice: item.costPrice,
+        sellingPrice: item.sellingPrice,
+        totalValue: item.totalValue,
+      }));
+
+      // [Drill-down/explanatory only — FR-24; existing Expense/Quebra/
+      // Withdrawal collections, unmodified, FR-28-FR-30] Since the
+      // previous snapshot's confirmedAt if one exists, else since the
+      // business's own creation date — never fabricated, never a
+      // cutover timestamp (Decision 1). Uses each record's own `date`
+      // field, matching how this codebase already filters by date
+      // elsewhere (isDateInRange, calculations.ts).
+      const previousSnapshots = businessWorthSnapshots.filter((s) => s.status === 'active');
+      const previousSnapshot = previousSnapshots.length
+        ? [...previousSnapshots].sort((a, b) => {
+            const aMs = (a.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+            const bMs = (b.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+            return bMs - aMs;
+          })[0]
+        : null;
+      const windowStartDate = previousSnapshot
+        ? new Date(
+            (previousSnapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0
+          ).toISOString().slice(0, 10)
+        : (business?.createdAt ?? '1970-01-01').slice(0, 10);
+      const expensesSinceLastSnapshot = Number(
+        expenses
+          .filter((e) => isDateInRange(e.date, windowStartDate, date))
+          .reduce((sum, e) => sum + Number(e.amount || 0), 0)
+          .toFixed(2)
+      );
+      const breakagesSinceLastSnapshot = Number(
+        quebras
+          .filter((q) => isDateInRange(q.date, windowStartDate, date))
+          .reduce((sum, q) => sum + Number(q.quantityLost || 0) * (batches.find((b) => b.id === q.batchId)?.costPrice ?? 0), 0)
+          .toFixed(2)
+      );
+      const levantamentosSinceLastSnapshot = Number(
+        withdrawals
+          .filter((w) => isDateInRange(w.date, windowStartDate, date))
+          .reduce((sum, w) => sum + Number(w.amount || 0), 0)
+          .toFixed(2)
+      );
+
+      // [Specification §7; Implementation Plan §6] Increment 1's own
+      // Current Business Worth read path only — no dependency on
+      // Increment 2/3. 'UNKNOWN' (this business's very first snapshot)
+      // becomes null, matching the field's own null-only-for-first-
+      // snapshot contract (Specification §8).
+      const priorCurrent = getCurrentBusinessWorth(businessWorthSnapshots);
+      const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
+
+      const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
+        id: businessWorthSnapshotId,
+        businessId,
+        sourceStockCountId: newCount.id,
+        measuredBusinessWorth,
+        productValuationTotal,
+        productValuationDetail,
+        embeddedProfitTotal,
+        embeddedProfitDetail,
+        cashPosition,
+        receivablesPosition,
+        payablesPosition,
+        expensesSinceLastSnapshot,
+        breakagesSinceLastSnapshot,
+        levantamentosSinceLastSnapshot,
+        previousCurrentBusinessWorth,
+        // [Increment 2 dependency, explicitly flagged — see types.ts's
+        // own BusinessWorthSnapshot comment] Estimated Business Worth
+        // does not exist yet; both fields are permanently null for a
+        // snapshot created before Increment 2 ships (immutability, I-3).
+        estimatedBusinessWorthImmediatelyBefore: null,
+        difference: null,
+        // [Display-only, non-authoritative — see types.ts's own comment]
+        correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+        status: 'active',
+      };
+      // [Void & Redo — Implementation Authorization §2 items 1, 5-6;
+      // Rule 8 Finding B1 — same discipline, applied here] confirmedAt
+      // is written ONLY at the write-payload boundary, as a genuine
+      // serverTimestamp() sentinel — never a client-computed value.
+      // `businessWorthSnapshot` itself stays a precisely-typed,
+      // sentinel-free object (via the Omit above); only this single
+      // write() call needs to tolerate a FieldValue — mirroring
+      // stockCountWritePayload's own exact pattern immediately above.
+      const businessWorthSnapshotWritePayload: WithFieldValue<BusinessWorthSnapshot> = {
+        ...businessWorthSnapshot,
+        confirmedAt: serverTimestamp(),
+      };
+      fsBatch.set(
+        doc(db, 'businesses', businessId, 'businessWorthSnapshots', businessWorthSnapshotId),
+        businessWorthSnapshotWritePayload
+      );
+    }
     // [Void & Redo — Implementation Authorization §2 items 1, 5-6; Rule
     // 8 Finding B1] confirmedAt is written ONLY here, as a genuine
     // serverTimestamp() sentinel — never a client-computed value.
@@ -4203,6 +4451,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         expenses,
         stockCounts,
         voidRecords,
+        businessWorthSnapshots,
+        currentBusinessWorth,
         initialStockConfirmationChain,
         initialStockVoidEligibility,
         initialStockRecoveryAuthorization,

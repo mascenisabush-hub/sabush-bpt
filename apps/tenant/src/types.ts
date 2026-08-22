@@ -613,6 +613,158 @@ export interface StockCount {
   // (initialCapitalValue resolution reads only the active confirmation,
   // Rule 8 Finding F1, independent of this field).
   redoesConfirmationId?: string;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 1; Specification §14, FR-18, FR-19; Rule 8 Finding, Gap Analysis]
+  // The AUTHORITATIVE, and only, marker distinguishing a "new-model"
+  // Contagem (one that produces a BusinessWorthSnapshot) from a
+  // historical, pre-capability record. Set true ONLY at the moment a
+  // Contagem is confirmed under this model going forward — never
+  // inferred from date, never backfilled onto any existing record.
+  // Absent (or false) is the permanent, accurate state of every
+  // pre-capability StockCount — mirrors the identical "no timestamp is
+  // inferred, defaulted, or substituted" discipline confirmedAt already
+  // establishes above. No code path may determine eligibility any other
+  // way (e.g. comparing `date` against a cutover moment) — Specification
+  // Decision 1 explicitly rejected a cutover-timestamp design.
+  producesBusinessWorthSnapshot?: boolean;
+}
+
+// [Business Worth Evolution — Implementation Authorization, Increment 1;
+// Specification §8; source BDR Decision 10] The authoritative FROZEN
+// Business Worth measurement result produced by a single confirmed
+// new-model Contagem. Deliberately a SEPARATE record type from
+// StockCount, never merged with it and never a substitute for it:
+// StockCount remains the physical measurement event; this is the
+// financial result that measurement produced, frozen at that moment.
+//
+// Created exactly once per confirmed new-model Contagem, in the SAME
+// atomic Firestore batch as the StockCount write (see recordStockCount,
+// AppContext.tsx) — never independently, never retroactively.
+//
+// [Implementation note — Increment 1 interim values, explicitly
+// identified, not silently invented; see Implementation Authorization
+// final report] cashPosition/receivablesPosition/payablesPosition are
+// always 0 in Increment 1 — the Cash Ledger/Receivables/Payables
+// collections this Specification also names (§10-§12) do not exist
+// until Increment 3, so there are literally zero such records anywhere
+// in the system yet; 0 is an accurate reflection of that, not a
+// fabricated business fact. estimatedBusinessWorthImmediatelyBefore and
+// difference are always null in Increment 1 — computing a real value
+// would require the Estimated Business Worth engine (§9), which is
+// Increment 2's own scope; per this Authorization's explicit
+// instruction, Increment 1 must not "pretend Estimated Business Worth
+// already exists." Both fields are already typed nullable for exactly
+// this reason. Because BusinessWorthSnapshot's frozen fields are never
+// rewritten once written (I-3, FR-6), this null state is PERMANENT for
+// snapshots created before Increment 2 ships — flagged explicitly for
+// Product Architect awareness, not a defect silently introduced here.
+export interface BusinessWorthSnapshot {
+  id: string;
+  businessId: string;
+  // The Contagem (StockCount) that produced this snapshot.
+  sourceStockCountId: string;
+  // Server-recorded (Timestamp, via serverTimestamp()) — never a
+  // client-computed value, matching the identical discipline
+  // StockCount.confirmedAt already establishes above (Void & Redo
+  // Implementation Authorization §2 item 1). This snapshot's own
+  // immutable anchor — independent of, and not copied from, the source
+  // StockCount's own (possibly absent, for a periodic count) confirmedAt.
+  confirmedAt: Timestamp;
+  // Frozen at confirmation time. Increment 1: equals productValuationTotal
+  // exactly (cashPosition/receivablesPosition/payablesPosition are 0 — see
+  // interim-values note above). Resolves Rule 8 open question #4 (§36
+  // item 4) for its ADDITIVE STRUCTURE only, directly from the
+  // Specification's own FR-24 text ("embeddedProfitTotal... never a
+  // second addend to measuredBusinessWorth") — not an invented rule.
+  measuredBusinessWorth: number;
+  // The physical Contagem's own selling-basis (market) valuation total —
+  // StockCount.totalSellingValue at the moment of confirmation. Matches
+  // the existing Business Worth Engine's market-value convention
+  // (calculations.ts calculateInventoryTotals' totalMarketValue), not a
+  // new valuation basis.
+  productValuationTotal: number;
+  // Per-product drill-down. A frozen, self-contained line (not merely a
+  // productId reference) — chosen here, for historical accuracy, over a
+  // bare reference that could break if a Product is later renamed or
+  // deleted. The exact reference-vs-frozen-value balance is Rule 8 open
+  // question #2 (§36 item 2); this is Increment 1's implementation-time
+  // resolution of it, not a business decision.
+  productValuationDetail: BusinessWorthSnapshotProductValuationLine[];
+  // Drill-down/explanatory only (FR-24) — never a second addend to
+  // measuredBusinessWorth. Computed fresh, at confirmation time, from
+  // the existing calculateInventoryTotals(batches, quebras) — the same
+  // single source of truth Dashboard/Reports/Closings already use.
+  embeddedProfitTotal: number;
+  embeddedProfitDetail: BusinessWorthSnapshotEmbeddedProfitLine[];
+  // [Increment 3 dependency — see interim-values note above] Always 0 in
+  // Increment 1.
+  cashPosition: number;
+  receivablesPosition: number;
+  payablesPosition: number;
+  // Drill-down/explanatory only — sums of the EXISTING Expense/Quebra/
+  // Withdrawal collections (unmodified by this capability, FR-28-FR-30)
+  // recorded between the previous snapshot (if any) and this Contagem's
+  // own date. Never a second subtraction from measuredBusinessWorth —
+  // their effect is already reflected in the physical count/cash
+  // position actually observed at this Contagem.
+  expensesSinceLastSnapshot: number;
+  breakagesSinceLastSnapshot: number;
+  levantamentosSinceLastSnapshot: number;
+  // The prior Current Business Worth (the immediately-preceding
+  // snapshot's own measuredBusinessWorth) — null ONLY for a business's
+  // very first snapshot ever. Uses Increment 1's own §6 read path only —
+  // no dependency on Increment 2/3.
+  previousCurrentBusinessWorth: number | null;
+  // [Increment 2 dependency — see interim-values note above] Always null
+  // in Increment 1.
+  estimatedBusinessWorthImmediatelyBefore: number | null;
+  // measuredBusinessWorth − estimatedBusinessWorthImmediatelyBefore.
+  // Always null in Increment 1 (estimatedBusinessWorthImmediatelyBefore
+  // is null) — see interim-values note above.
+  difference: number | null;
+  // [Display-only, non-authoritative — same discipline as
+  // computeInitialStockVoidEligibility's own "client display only, never
+  // authoritative" precedent, calculations.ts. The AUTHORITATIVE 3-hour
+  // correction-window enforcement, once Increment 8 implements it, will
+  // be evaluated at the Security Rules layer directly against this
+  // document's own real, server-set confirmedAt field (request.time <
+  // confirmedAt + duration.value(3,'h')) — mirroring
+  // initialStockConfirmationVoidable()'s exact existing pattern for the
+  // analogous 12-hour window, which similarly stores no separate
+  // expiresAt field of its own. This field is a client-computed
+  // convenience only, subject to ordinary clock-skew, never trusted by
+  // any rule.] Approximately confirmedAt + 3 hours.
+  correctionWindowExpiresAt: string;
+  // Increment 1 creates only 'active' snapshots — 'corrected' and
+  // 'superseded-by-recovery' are Increment 8's own mechanism, not
+  // implemented here (no general-purpose update/delete path exists for
+  // this collection in Increment 1 — see firestore.rules).
+  status: 'active' | 'corrected' | 'superseded-by-recovery';
+  // Set only by a future Increment 8 correction/recovery — never set by
+  // Increment 1.
+  supersedesSnapshotId?: string;
+}
+
+// Frozen, self-contained per-product line for BusinessWorthSnapshot.productValuationDetail
+// — see that field's own comment for why this is a frozen copy, not a bare reference.
+export interface BusinessWorthSnapshotProductValuationLine {
+  productId: string;
+  productName: string;
+  quantity: number;
+  unit?: string;
+  costPrice: number;
+  sellingPrice: number;
+  totalValue: number;
+}
+
+// Frozen, self-contained per-batch line for BusinessWorthSnapshot.embeddedProfitDetail.
+export interface BusinessWorthSnapshotEmbeddedProfitLine {
+  batchId: string;
+  productId: string;
+  productName: string;
+  investmentValue: number;
+  marketValue: number;
+  embeddedProfit: number;
 }
 
 // [Void & Redo — Implementation Authorization §2 item 2; Rule 8 Finding

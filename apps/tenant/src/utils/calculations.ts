@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -242,6 +242,67 @@ export function resolveInitialCapitalValue(initialStockCount: StockCount | null 
   // Absent, or explicitly 'cost' — both resolve identically to the
   // cost total, exactly as this codebase has always behaved.
   return costTotal;
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 1;
+ * Specification §7, FR-1, FR-3, FR-4; source BDR Decisions 1, 3] The
+ * single, unambiguous "Current Business Worth" read: the latest
+ * confirmed BusinessWorthSnapshot's own frozen `measuredBusinessWorth`,
+ * or the literal string 'UNKNOWN' when no snapshot exists yet for this
+ * business — never a third outcome (FR-3, I-1).
+ *
+ * NEVER independently computed — this performs no live recalculation
+ * from batches/expenses/withdrawals; that live figure is Estimated
+ * Business Worth (Specification §9), a structurally distinct
+ * calculation, not yet implemented (Increment 2). This function's
+ * UNKNOWN return is what implements FR-1 in practice: no code path may
+ * present a figure as a known, measured Current Business Worth while
+ * this function returns 'UNKNOWN'.
+ *
+ * Only 'active' snapshots are ever considered "current" — a snapshot
+ * whose status has moved to 'corrected' or 'superseded-by-recovery' (the
+ * Increment 8 correction/recovery mechanism, not yet implemented) has,
+ * by definition, been superseded by a newer one; this guard has no
+ * observable effect until Increment 8 exists (every snapshot Increment 1
+ * creates is 'active'), but is written now because 'active' is already
+ * part of the Specification's own status enum (§8) — not a new rule.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency — safe to unit
+ * test directly, matching this repository's established
+ * "business-meaning calculations get their own dedicated function"
+ * convention (Rule 8 Assessment Finding 4).
+ */
+export function getCurrentBusinessWorth(
+  snapshots: BusinessWorthSnapshot[] | null | undefined
+): number | 'UNKNOWN' {
+  if (!snapshots || snapshots.length === 0) return 'UNKNOWN';
+
+  const active = snapshots.filter((s) => s.status === 'active');
+  if (active.length === 0) return 'UNKNOWN';
+
+  const latest = [...active].sort((a, b) => {
+    const aTime = toMillis(a.confirmedAt);
+    const bTime = toMillis(b.confirmedAt);
+    return bTime - aTime;
+  })[0];
+
+  return latest.measuredBusinessWorth;
+}
+
+// Firestore Timestamp objects expose toMillis()/seconds; a plain object
+// (e.g. from a test fixture not using the real SDK type) may instead
+// carry a raw `seconds` field. Falls back to 0 (oldest possible) only
+// for a genuinely malformed entry — never throws, never silently drops
+// a real snapshot from consideration.
+function toMillis(value: unknown): number {
+  if (value && typeof (value as { toMillis?: () => number }).toMillis === 'function') {
+    return (value as { toMillis: () => number }).toMillis();
+  }
+  if (value && typeof (value as { seconds?: number }).seconds === 'number') {
+    return (value as { seconds: number }).seconds * 1000;
+  }
+  return 0;
 }
 
 /**

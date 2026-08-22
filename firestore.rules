@@ -635,6 +635,67 @@ service cloud.firestore {
         allow update, delete: if isOwnerOf(businessId) && resource.data.get('type', null) != 'initial';
       }
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 1; Specification §8, FR-5-FR-7, I-2, I-3; Implementation
+      // Plan §3.1, §14, §18] The frozen Business Worth measurement result
+      // produced by a confirmed new-model Contagem. Tenant-scoped
+      // identically to every other business-owned collection
+      // (isMemberOf/isOwnerOf) — same read/create tier as stockCounts
+      // immediately above, since a BusinessWorthSnapshot is always
+      // created alongside a stockCounts write, in the SAME Firestore
+      // batch (recordStockCount, AppContext.tsx), by the Owner only.
+      //
+      // [Increment 1 scope] Pure immutability — allow update, delete: if
+      // false, unconditionally, with NO exception. This capability's own
+      // Owner 3-hour correction window and SuperAdmin-authorized 72-hour
+      // recovery (Specification §25-§26) are explicitly NOT implemented
+      // in this Increment (per the Implementation Authorization's own
+      // Increment 1 scope, item 7: "Do not create a general-purpose
+      // update/delete mechanism for snapshots... The later recovery
+      // mechanism is NOT being implemented in Increment 1"). A future
+      // Increment 8 will add ONE additive, narrowly-scoped `||` branch
+      // to the update rule for the status-only correction/recovery
+      // transition (mirroring exactly how the SuperAdmin-Assisted
+      // Initial Stock Recovery capability added its own single additive
+      // branch to the pre-existing voidRecords rule below, without
+      // touching anything else in that rule) — never a general-purpose
+      // update path, and never by editing this comment's own "if false"
+      // line in place without that being its own reviewed, cited change.
+      //
+      // [FR-37 idempotency; Rule 8 Finding 10-A] Document id is a
+      // deterministic function of sourceStockCountId ('bws-' + the
+      // source StockCount's own id) — Firestore's own create-if-absent
+      // semantics are what guarantee I-2 ("no two BusinessWorthSnapshot
+      // documents share a sourceStockCountId"), the identical mechanism
+      // the pre-existing 'initial' stockCounts singleton and voidRecords
+      // fixed-id convention already rely on elsewhere in this file. A
+      // genuine retried confirmation attempt is correctly REJECTED here
+      // as an update-to-an-existing-document (matching this file's own
+      // existing 'initial' stockCounts precedent for the identical class
+      // of retry, immediately above) rather than silently accepted as an
+      // overwrite — silently overwriting would let a retry's fresh
+      // serverTimestamp() rewrite this snapshot's own supposedly-frozen
+      // confirmedAt, which this rule must never allow.
+      match /businessWorthSnapshots/{snapshotId} {
+        allow read: if isMemberOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('businessId', null) == businessId &&
+          request.resource.data.get('id', null) == snapshotId &&
+          // [Rule 8 Finding B1 — same discipline as StockCount.confirmedAt]
+          // Server-verified, never client-supplied — this is what makes
+          // the future 3-hour correction window (Increment 8) untamperable
+          // by a client-computed confirmedAt, exactly as
+          // initialStockConfirmationVoidable()'s 12-hour window already
+          // relies on for stockCounts.
+          request.resource.data.get('confirmedAt', null) == request.time &&
+          // Increment 1 never creates any status other than 'active' — no
+          // correction/recovery mechanism exists yet to produce another.
+          request.resource.data.get('status', null) == 'active' &&
+          request.resource.data.get('sourceStockCountId', null) is string &&
+          request.resource.data.get('measuredBusinessWorth', null) is number;
+        allow update, delete: if false;
+      }
+
       // [Void & Redo — Implementation Authorization §2 item 2; Rule 8
       // Finding G1, Direction 2 (adopted)] The additive, create-only
       // artifact recording that a confirmation event has been voided —
