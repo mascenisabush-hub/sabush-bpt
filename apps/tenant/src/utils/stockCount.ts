@@ -37,6 +37,13 @@ export interface StockCountInputItem {
   // compiling and behaving the same way — missing/invalid input
   // coerces to 0, matching costPrice's own `Number(x) || 0` rule.
   sellingPrice?: number | string;
+  // [Business Worth Evolution — Implementation Authorization, Increment 4;
+  // Specification §15, FR-20] Optional display-only pass-through — see
+  // StockCountItem.valuationMode's own comment (types.ts). This function
+  // never reads this field for any arithmetic; it exists solely so a
+  // caller's Mode A/B choice survives into the persisted StockCountItem
+  // shape unchanged.
+  valuationMode?: 'A' | 'B';
 }
 
 export interface NormalizedStockCountItem {
@@ -46,6 +53,7 @@ export interface NormalizedStockCountItem {
   costPrice: number;
   sellingPrice: number;
   totalValue: number;
+  valuationMode?: 'A' | 'B';
 }
 
 export interface NormalizeStockCountItemsResult {
@@ -95,6 +103,11 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
       costPrice,
       sellingPrice,
       totalValue: itemTotal,
+      // Display-only pass-through (see StockCountInputItem.valuationMode
+      // above) — omitted entirely, never written as literal `undefined`,
+      // matching this codebase's existing Firestore-safe-optional-field
+      // discipline (workingRowToDraftItem, this same file, below).
+      ...(raw.valuationMode ? { valuationMode: raw.valuationMode } : {}),
     });
   }
 

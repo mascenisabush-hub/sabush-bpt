@@ -77,6 +77,7 @@ import {
   ReceivablePayment,
   Payable,
   PayablePayment,
+  ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
 import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
@@ -233,6 +234,15 @@ interface RecordStockCountItemInput {
   // applies identically for a genuinely new product introduced during
   // Periodic Contagem.
   unitRelationship?: UnitRelationship;
+  // [Business Worth Evolution — Implementation Authorization, Increment 4;
+  // Specification §15, FR-20] Optional, display-only pass-through — see
+  // StockCountItem.valuationMode's own comment (types.ts). Flows,
+  // unmodified, through normalizeStockCountItems (utils/stockCount.ts,
+  // itself already extended with the identical optional pass-through)
+  // into countItems below and from there into
+  // BusinessWorthSnapshotProductValuationLine.valuationMode. Never read
+  // by any arithmetic in this function.
+  valuationMode?: ContagemValuationMode;
 }
 
 interface RecordStockCountParams {
@@ -3397,6 +3407,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         costPrice: norm.costPrice,
         sellingPrice: norm.sellingPrice,
         totalValue: norm.totalValue,
+        // [Business Worth Evolution — Increment 4, Specification §15,
+        // FR-20] Pass-through only — see this field's own comment on
+        // StockCountItem (types.ts).
+        ...(norm.valuationMode ? { valuationMode: norm.valuationMode } : {}),
       });
     }
 
@@ -3637,6 +3651,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         costPrice: item.costPrice,
         sellingPrice: item.sellingPrice,
         totalValue: item.totalValue,
+        // [Business Worth Evolution — Increment 4, Specification §15,
+        // FR-20] Frozen, display-only pass-through of the source item's
+        // own valuationMode — see BusinessWorthSnapshotProductValuationLine's
+        // own comment (types.ts). Never read by measuredBusinessWorth or
+        // any other calculation above/below this line.
+        ...(item.valuationMode ? { valuationMode: item.valuationMode } : {}),
       }));
 
       // [Drill-down/explanatory, narrower window than the all-time terms

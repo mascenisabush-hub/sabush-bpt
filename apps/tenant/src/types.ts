@@ -533,7 +533,30 @@ export interface StockCountItem {
   // BATCH CALCULATIONS note below and the amendment doc's Part 5).
   sellingPrice?: number; // selling price per unit at the time of the count
   totalValue: number; // quantity * costPrice
+  // [Business Worth Evolution — Implementation Authorization, Increment 4;
+  // Specification §15, FR-20] Display-only transparency marker: which
+  // Contagem valuation mode produced this portion's own `sellingPrice`
+  // above — 'A' if it was derived from a single Owner-entered reference
+  // price via unit conversion (contagemMultiUnitValuation.ts), 'B' if the
+  // Owner entered this exact portion's price directly (this codebase's
+  // existing, unconditional, already-shipped default behavior — see that
+  // file's own header comment). Optional, and absent on every record
+  // created before this Increment shipped, mirroring sellingPrice's own
+  // established optionality above — never backfilled. NEVER read by any
+  // valuation calculation (sellingPrice/totalValue/totalSellingValue are
+  // computed identically regardless of this field's value or absence) —
+  // purely so the Owner, and any drill-down view, can see HOW a price was
+  // arrived at (governing prompt's "do not hide unit conversions that
+  // materially affect valuation" requirement), never a second source of
+  // truth for the valuation itself.
+  valuationMode?: ContagemValuationMode;
 }
+
+// [Business Worth Evolution — Implementation Authorization, Increment 4;
+// Specification §15] The two Contagem valuation modes — see
+// contagemMultiUnitValuation.ts's own header comment for the full design-
+// pass resolution of Rule 8 open question #1 (Specification §36 item 1).
+export type ContagemValuationMode = 'A' | 'B';
 
 export type InitialCapitalBasis = 'cost' | 'selling';
 
@@ -805,6 +828,16 @@ export interface BusinessWorthSnapshotProductValuationLine {
   costPrice: number;
   sellingPrice: number;
   totalValue: number;
+  // [Business Worth Evolution — Implementation Authorization, Increment 4;
+  // Specification §15, FR-20] Frozen copy of the source StockCountItem's
+  // own valuationMode (types.ts, StockCountItem) — same "display-only,
+  // never read by any calculation, absent on every pre-Increment-4
+  // snapshot, never backfilled" discipline as that field. Lets a historical
+  // drill-down honestly show whether a given line's price was Owner-
+  // entered directly (Mode B) or derived by unit conversion from a single
+  // reference price (Mode A), exactly as it was at confirmation time —
+  // never recomputed later.
+  valuationMode?: ContagemValuationMode;
 }
 
 // Frozen, self-contained per-batch line for BusinessWorthSnapshot.embeddedProfitDetail.

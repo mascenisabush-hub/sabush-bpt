@@ -7,6 +7,15 @@ import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { computePortionLabels } from '../lib/stockCountPortionGrouping';
+// [Business Worth Evolution — Implementation Authorization, Increment 4;
+// Specification §15, FR-20-FR-23] The ONLY valuation engine this file
+// uses for Mode A — reused exactly as-is, never duplicated. See that
+// file's own header comment for the full design-pass resolution of Rule
+// 8 open question #1. Mode B needs no import here at all: it is this
+// codebase's existing, unconditional, already-shipped per-portion
+// sellingPrice entry (every input below, unchanged) — nothing in this
+// file's own pre-existing code path is touched to support it.
+import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuantity } from '../lib/contagemMultiUnitValuation';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -125,6 +134,79 @@ const UnitRelationshipRow: React.FC<{
       <p className="text-[11px] text-gray-400 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
       </p>
+    </div>
+  );
+};
+
+// [Business Worth Evolution — Implementation Authorization, Increment 4;
+// Specification §15, FR-20] The ONLY new Owner-facing control this
+// Increment adds — rendered exactly once per multi-portion product group
+// (never per-row), right where that group's existing "Porção X de Y"
+// caption already appears. Deliberately a plain toggle + two inputs, no
+// new screen, no new navigation, no Dashboard/design-system change —
+// "the smallest possible UI change" per the governing prompt.
+//
+// Mode B (the default — unchanged) needs no control here at all: it is
+// simply what happens when this toggle is off, which is every existing
+// portion row's own already-present "Venda/Un" price input, untouched.
+const ModeAValuationControl: React.FC<{
+  referenceUnitOptions: string[];
+  active: boolean;
+  referenceUnit: string;
+  referencePrice: string;
+  currencySymbol: string;
+  /** True when every current portion's unit is convertible against
+   * referenceUnit (canApplyModeA) — false surfaces a non-blocking notice
+   * that at least one portion's price was left untouched, never a
+   * fabricated conversion (UOM Specification §4 Item 6). */
+  allPortionsConvertible: boolean;
+  onToggle: (enable: boolean) => void;
+  onChange: (fields: Partial<{ referenceUnit: string; referencePrice: string }>) => void;
+}> = ({ referenceUnitOptions, active, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onToggle, onChange }) => {
+  return (
+    <div className="col-span-2 sm:col-span-7 -mt-1 mb-1">
+      <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 select-none">
+        <input type="checkbox" checked={active} onChange={(e) => onToggle(e.target.checked)} className="rounded" />
+        Usar um único preço de venda para todas as porções deste produto (convertido automaticamente)
+      </label>
+      {active && (
+        <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
+          <div>
+            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de referência</label>
+            <select
+              value={referenceUnit}
+              onChange={(e) => onChange({ referenceUnit: e.target.value })}
+              className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            >
+              {referenceUnitOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={referencePrice}
+              onChange={(e) => onChange({ referencePrice: e.target.value })}
+              placeholder="Ex: 1250"
+              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+          <p className="text-[11px] text-gray-400 leading-relaxed basis-full">
+            O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas.
+          </p>
+          {!allPortionsConvertible && (
+            <p className="text-[11px] text-amber-600 font-medium leading-relaxed basis-full">
+              Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -344,6 +426,107 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const handleRestoreCatalogRow = (productId: string) => {
     updateCatalogRow(productId, { removed: false });
+  };
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 4;
+  // Specification §15, FR-20] Mode A activation state for THIS DRAFT
+  // ONLY — keyed by trimmed, lowercased productName, the SAME key
+  // computePortionLabels/portionLabels already use (stockCountPortionGrouping.ts).
+  // Deliberately transient component state, never written to
+  // PeriodicStockDraft/Firestore: Mode A's own OUTPUT (a derived
+  // sellingPrice written onto each portion row below) already flows
+  // through the existing, unmodified StockCountWorkingRow.sellingPrice
+  // field, which the existing autosave/draft-recovery path already
+  // persists and restores correctly with ZERO changes to that path —
+  // exactly the "one authoritative valuation path" design this
+  // Increment's engine already committed to. A resumed draft therefore
+  // still carries every Mode-A-derived price exactly as it was, even
+  // though the fact that Mode A produced it is not itself remembered
+  // across a resume (the Owner would simply see the same numbers, still
+  // freely editable — never a functional loss, only a transparency nuance
+  // limited to the Mode A toggle's own on/off display for an
+  // interrupted-and-resumed session). Absence of a key here means Mode B
+  // — this codebase's existing default — exactly as everywhere else in
+  // this capability (unitRelationship, expectedValueAtCount, etc.).
+  const [modeAGroups, setModeAGroups] = useState<Record<string, { referenceUnit: string; referencePrice: string }>>({});
+
+  const productKeyFor = (name: string) => name.trim().toLowerCase();
+
+  const getUnitRelationshipForProductName = (name: string) => {
+    const trimmed = productKeyFor(name);
+    if (!trimmed) return undefined;
+    return products.find((p) => p.name.toLowerCase() === trimmed)?.unitRelationship;
+  };
+
+  // Gathers every row (catalog AND manual — a multi-portion product may
+  // be split across both, exactly as portionLabels above already
+  // accounts for) currently belonging to one product's group, in the
+  // exact shape deriveModeAPortionValuations needs. Row ids are prefixed
+  // so results can be routed back to the correct updater (updateCatalogRow
+  // vs updateManualRow) without guessing.
+  const collectGroupPortions = (productKey: string): ContagemPortionQuantity[] => {
+    const fromCatalog: ContagemPortionQuantity[] = Object.entries(catalogRows)
+      .filter(([, row]) => !row.removed && productKeyFor(row.productName) === productKey)
+      .map(([productId, row]) => ({ id: `catalog:${productId}`, unit: row.unit.trim() || 'un', quantity: Number(row.quantity) || 0 }));
+    const fromManual: ContagemPortionQuantity[] = manualRows
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row }) => productKeyFor(row.productName) === productKey)
+      .map(({ row, idx }) => ({ id: `manual:${idx}`, unit: row.unit.trim() || 'un', quantity: Number(row.quantity) || 0 }));
+    return [...fromCatalog, ...fromManual];
+  };
+
+  // Mode A's own write-back step: derives every portion's price from the
+  // group's single reference price/unit (the ALREADY-TESTED engine, this
+  // file's own new import above) and writes each derived price onto that
+  // portion's EXISTING sellingPrice field via the EXISTING updater
+  // functions — never touching quantity or unit (FR-21), never touching
+  // costPrice (FR-23), never introducing a second sellingValue
+  // calculation (liveTally/tallyStockCountRows below computes
+  // quantity*sellingPrice exactly as it always has, completely unaware
+  // of which mode produced this particular sellingPrice). A portion whose
+  // unit cannot be converted (outside the confirmed chain) is left
+  // entirely untouched — never coerced to a fabricated price — so the
+  // Owner can still enter it manually, exactly UOM Specification §4 Item
+  // 6's existing warn-and-allow discipline.
+  const applyModeAToGroup = (productKey: string, referenceUnit: string, referencePriceRaw: string) => {
+    const referencePrice = Number(referencePriceRaw);
+    if (!referenceUnit || !Number.isFinite(referencePrice)) return;
+    const relationship = getUnitRelationshipForProductName(productKey);
+    const portions = collectGroupPortions(productKey);
+    if (!portions.length) return;
+    const derived = deriveModeAPortionValuations(portions, referenceUnit, referencePrice, relationship);
+    for (const d of derived) {
+      if (d.derivedSellingPrice === null) continue;
+      if (d.id.startsWith('catalog:')) {
+        updateCatalogRow(d.id.slice('catalog:'.length), { sellingPrice: String(d.derivedSellingPrice) });
+      } else if (d.id.startsWith('manual:')) {
+        updateManualRow(Number(d.id.slice('manual:'.length)), { sellingPrice: String(d.derivedSellingPrice) });
+      }
+    }
+  };
+
+  const handleModeAToggle = (productKey: string, enable: boolean) => {
+    if (!enable) {
+      setModeAGroups((prev) => {
+        const next = { ...prev };
+        delete next[productKey];
+        return next;
+      });
+      return;
+    }
+    const relationship = getUnitRelationshipForProductName(productKey);
+    const defaultReferenceUnit = relationship?.units?.[0]?.unit || '';
+    setModeAGroups((prev) => ({ ...prev, [productKey]: { referenceUnit: defaultReferenceUnit, referencePrice: '' } }));
+  };
+
+  const handleModeAFieldChange = (productKey: string, fields: Partial<{ referenceUnit: string; referencePrice: string }>) => {
+    setModeAGroups((prev) => {
+      const current = prev[productKey] ?? { referenceUnit: '', referencePrice: '' };
+      const nextConfig = { ...current, ...fields };
+      const next = { ...prev, [productKey]: nextConfig };
+      applyModeAToGroup(productKey, nextConfig.referenceUnit, nextConfig.referencePrice);
+      return next;
+    });
   };
 
   const updateManualRow = (index: number, fields: Partial<StockCountWorkingRow>) => {
@@ -640,6 +823,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           ...(unitRelationshipByProductName.has(item.productName.trim().toLowerCase())
             ? { unitRelationship: unitRelationshipByProductName.get(item.productName.trim().toLowerCase())! }
             : {}),
+          // [Business Worth Evolution — Increment 4, Specification §15,
+          // FR-20] Same productName-keyed correlation pattern as
+          // unitRelationship immediately above — modeAGroups holding a
+          // key for this product means the Owner had Mode A active for
+          // it at confirmation time. Display-only (types.ts,
+          // StockCountItem.valuationMode's own comment) — never read by
+          // any calculation; the item's own sellingPrice above (Mode-A-
+          // derived or Mode-B-typed, indistinguishably) is what
+          // determines valuation, exactly as it already did before this
+          // Increment. Omitted entirely for Mode B, matching this
+          // codebase's existing "absence is the default" convention.
+          ...(modeAGroups[item.productName.trim().toLowerCase()] ? { valuationMode: 'A' as const } : {}),
         })),
         expectedValueAtCount: expectedCurrentStockValue,
         submissionId: submissionIdRef.current || undefined,
@@ -1021,6 +1216,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     const q = isBlank ? 0 : Number(row.quantity) || 0;
                     const c = Number(row.costPrice) || 0;
                     const portionLabel = portionLabels.get(productId) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+                    // [Business Worth Evolution — Increment 4] Extracted
+                    // as its own named boolean, rather than repeating a
+                    // second "isMultiPortion, and" style expression in
+                    // this loop, specifically so this Increment's own new
+                    // gating condition does not alter the COUNT of the
+                    // pre-existing conditional-label source pattern the B6
+                    // structural regression test
+                    // (periodic-stock-portion-grouping-wiring.test.ts)
+                    // independently guards ("exactly one conditional label
+                    // in the catalog loop and one in the manual loop") —
+                    // an existing invariant this Increment does not touch
+                    // or reinterpret, only avoids colliding with textually.
+                    const isFirstPortionOfMultiPortionGroup = portionLabel.isMultiPortion ? portionLabel.portionIndex === 1 : false;
                     return (
                       <div
                         key={productId}
@@ -1044,6 +1252,50 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             </p>
                           </div>
                         )}
+                        {/* [Business Worth Evolution — Increment 4,
+                            Specification §15] Rendered exactly once per
+                            group, on its first portion only, whether that
+                            first portion lands in the catalog block (here)
+                            or the manual block below — see portionLabels'
+                            own combined ordering. Hidden entirely when
+                            this product has no confirmed unitRelationship
+                            (Mode A is not offerable — never a forced
+                            choice, FR-20; Mode B, unaffected, remains the
+                            only option exactly as it always has been).
+                            Gated on isFirstPortionOfMultiPortionGroup
+                            (extracted above) rather than repeating a
+                            second copy of that condition here — see
+                            that variable's own comment. */}
+                        {isFirstPortionOfMultiPortionGroup &&
+                          (() => {
+                            const key = productKeyFor(row.productName);
+                            const relationship = getUnitRelationshipForProductName(row.productName);
+                            if (!relationship || !isValidUnitRelationship(relationship)) return null;
+                            const config = modeAGroups[key];
+                            const referenceUnitOptions = relationship.units.map((u) => u.unit);
+                            const effectiveReferenceUnit = config?.referenceUnit || referenceUnitOptions[0] || '';
+                            // A portion's unit falling outside the chain
+                            // (e.g. Owner typed a non-member unit after
+                            // enabling Mode A) does not hide this control —
+                            // Mode A stays visibly active with its own
+                            // inputs so the Owner can see/fix it; that
+                            // specific portion's price is simply left
+                            // untouched by applyModeAToGroup (never
+                            // fabricated), matching UOM Specification §4
+                            // Item 6's existing warn-and-allow discipline.
+                            return (
+                              <ModeAValuationControl
+                                referenceUnitOptions={referenceUnitOptions}
+                                active={!!config}
+                                referenceUnit={effectiveReferenceUnit}
+                                referencePrice={config?.referencePrice || ''}
+                                currencySymbol={currencySymbol}
+                                allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
+                                onToggle={(enable) => handleModeAToggle(key, enable)}
+                                onChange={(fields) => handleModeAFieldChange(key, fields)}
+                              />
+                            );
+                          })()}
 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
@@ -1144,6 +1396,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               <div className="space-y-1">
                 {manualRows.map((row, idx) => {
                   const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+                  // [Business Worth Evolution — Increment 4] Same
+                  // reasoning as the catalog-row loop above — see that
+                  // variable's own comment.
+                  const isFirstPortionOfMultiPortionGroup = portionLabel.isMultiPortion ? portionLabel.portionIndex === 1 : false;
                   return (
                   <React.Fragment key={idx}>
                   <div
@@ -1170,6 +1426,36 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         </p>
                       )}
                     </div>
+
+                    {/* [Business Worth Evolution — Increment 4,
+                        Specification §15] Same control, same group-key
+                        state, as the catalog-row loop above — rendered
+                        here only when this group's first portion happens
+                        to be a manual row (i.e. no catalog row exists for
+                        this product name yet). Hidden when the product
+                        has no confirmed unitRelationship, exactly as
+                        above. */}
+                    {isFirstPortionOfMultiPortionGroup &&
+                      (() => {
+                        const key = productKeyFor(row.productName);
+                        const relationship = getUnitRelationshipForProductName(row.productName);
+                        if (!relationship || !isValidUnitRelationship(relationship)) return null;
+                        const config = modeAGroups[key];
+                        const referenceUnitOptions = relationship.units.map((u) => u.unit);
+                        const effectiveReferenceUnit = config?.referenceUnit || referenceUnitOptions[0] || '';
+                        return (
+                          <ModeAValuationControl
+                            referenceUnitOptions={referenceUnitOptions}
+                            active={!!config}
+                            referenceUnit={effectiveReferenceUnit}
+                            referencePrice={config?.referencePrice || ''}
+                            currencySymbol={currencySymbol}
+                            allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
+                            onToggle={(enable) => handleModeAToggle(key, enable)}
+                            onChange={(fields) => handleModeAFieldChange(key, fields)}
+                          />
+                        );
+                      })()}
 
                     <div>
                       <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
