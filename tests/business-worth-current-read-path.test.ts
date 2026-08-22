@@ -259,6 +259,288 @@ describe('getCurrentBusinessWorth — BDR Decision 15/16 worked example (cash-fi
   });
 });
 
+describe('getCurrentBusinessWorth — Increment 1 Audit §2: same-day Contagem/activity boundary', () => {
+  it('includes activity recorded on the SAME calendar date as confirmation, when it occurs after confirmation', () => {
+    // 01 May: Contagem confirms at some moment; later the same day, +Stock
+    // occurs, generating embedded profit. That activity must be included
+    // — it must never be excluded merely because it shares the Contagem's
+    // own calendar date.
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T09:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      batches: [makeBatch({ id: 'same-day-purchase', quantity: 10, costPrice: 50, sellingPrice: 80 })], // +300
+      asOfDate: '2026-05-01',
+    });
+    assert.equal(result, 500300);
+  });
+
+  it('continues to include that same-day activity when queried on a later date (02 May)', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T09:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      batches: [makeBatch({ id: 'same-day-purchase', quantity: 10, costPrice: 50, sellingPrice: 80 })],
+      asOfDate: '2026-05-02',
+    });
+    assert.equal(result, 500300);
+  });
+
+  it('[REGRESSION — Increment 1 financial-integrity audit, corrected] an Expense created BEFORE the snapshot confirmation, even on the same calendar date, is NOT double-subtracted', () => {
+    // Reproduction of the audit's own finding: an Expense dated 2026-05-01
+    // was already created (createdAt 09:00) BEFORE the Contagem was
+    // confirmed (confirmedAt 15:00) the same day. computeMeasuredBusinessWorth's
+    // own totalExpensesAllTime input (AppContext.tsx) sums ALL
+    // currently-existing Expense records with no date filter — so this
+    // Expense is ALREADY subtracted into the snapshot's own frozen
+    // measuredBusinessWorth. The CORRECTED function now compares this
+    // Expense's own `createdAt` (09:00) against the snapshot's
+    // `confirmedAt` (15:00) — since createdAt <= confirmedAt, it is
+    // correctly excluded from the post-snapshot delta, avoiding the
+    // double subtraction the previous, date-based implementation produced
+    // (485,000 — see git history for the prior, defective test).
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000, // frozen; already reflects the 09:00 Rent expense via totalExpensesAllTime
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T15:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'], // confirmed at 15:00
+    });
+    const result = call({
+      snapshots: [snap],
+      expenses: [
+        { id: 'e1', date: '2026-05-01', description: 'Rent (recorded 09:00, before confirmation)', amount: 15000, createdAt: '2026-05-01T09:00:00.000Z' },
+      ],
+      asOfDate: '2026-05-01',
+    });
+    assert.equal(result, 500000, 'The pre-confirmation same-day Expense must not be counted a second time.');
+  });
+
+  it('a Levantamento (Withdrawal) created BEFORE the snapshot confirmation, same calendar date, is NOT double-subtracted', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T15:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      withdrawals: [
+        { id: 'w1', date: '2026-05-01', amount: 20000, createdAt: '2026-05-01T10:00:00.000Z' },
+      ],
+      asOfDate: '2026-05-01',
+    });
+    assert.equal(result, 500000);
+  });
+
+  it('an Expense created AFTER the snapshot confirmation, same calendar date, IS included', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T15:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      expenses: [
+        { id: 'e2', date: '2026-05-01', description: 'Post-confirmation expense', amount: 4000, createdAt: '2026-05-01T16:00:00.000Z' },
+      ],
+      asOfDate: '2026-05-01',
+    });
+    assert.equal(result, 496000);
+  });
+
+  it('a Levantamento created AFTER the snapshot confirmation, same calendar date, IS included', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T15:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      withdrawals: [
+        { id: 'w2', date: '2026-05-01', amount: 3000, createdAt: '2026-05-01T16:00:00.000Z' },
+      ],
+      asOfDate: '2026-05-01',
+    });
+    assert.equal(result, 497000);
+  });
+
+  it('a BACKDATED Expense (business date before the snapshot) is still included, because it was CREATED after confirmation', () => {
+    // The exact scenario the correction targets: Contagem confirmed 01 May
+    // 15:00; an Expense is entered on 03 May (createdAt), correcting a
+    // forgotten expense whose own business date is 30 April — BEFORE the
+    // snapshot. It must still be included, because it did not exist yet
+    // at confirmation time and therefore was never subtracted into the
+    // snapshot's own frozen measuredBusinessWorth.
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T15:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      expenses: [
+        { id: 'e3', date: '2026-04-30', description: 'Forgotten expense, entered late', amount: 2000, createdAt: '2026-05-03T10:00:00.000Z' },
+      ],
+      asOfDate: '2026-05-05',
+    });
+    assert.equal(result, 498000, 'A backdated expense created after confirmation must still be included.');
+  });
+
+  it('that same backdated Expense is EXCLUDED if asOfDate is before it was actually created', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T15:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      expenses: [
+        { id: 'e3', date: '2026-04-30', description: 'Forgotten expense, entered late', amount: 2000, createdAt: '2026-05-03T10:00:00.000Z' },
+      ],
+      asOfDate: '2026-05-02', // before the expense was actually created (05-03)
+    });
+    assert.equal(result, 500000);
+  });
+});
+
+describe('getCurrentBusinessWorth — Increment 1 Audit §9: Quebras are informational only, never a second subtraction', () => {
+  it('a Quebra after the snapshot reduces embedded profit via remainingQuantity, but is never separately subtracted again', () => {
+    // A batch with 100 units, cost 10, selling 20 -> embedded profit at
+    // full quantity = 100*(20-10) = 1000. A Quebra of 20 units reduces
+    // remainingQuantity to 80 -> embedded profit = 80*(20-10) = 800. The
+    // function has no separate "breakage" subtraction term — Quebra's
+    // effect is folded entirely into the embedded-profit delta.
+    const snap = makeSnapshot({ measuredBusinessWorth: 500000, embeddedProfitTotal: 1000 });
+    const quebra: Quebra = { id: 'q1', batchId: 'b1', productId: 'p1', date: '2026-08-02', quantityLost: 20, reason: 'Damaged', createdAt: '2026-08-02T00:00:00.000Z' };
+    const result = call({
+      snapshots: [snap],
+      batches: [makeBatch({ id: 'b1', quantity: 100, costPrice: 10, sellingPrice: 20 })],
+      quebras: [quebra],
+      asOfDate: '2026-08-05',
+    });
+    // Embedded profit now = 800 (after quebra), snapshot's own = 1000 ->
+    // delta = -200 -> 500000 - 200 = 499800. Never 500000 - 200 - (any
+    // separate quebra-value subtraction) — there is no such term.
+    assert.equal(result, 499800);
+  });
+});
+
+describe('getCurrentBusinessWorth — Increment 1 Audit §11: multiple snapshots / baseline reset', () => {
+  it('activity between snapshot A and snapshot B is excluded once B exists — B becomes the sole active baseline', () => {
+    const snapA = makeSnapshot({
+      id: 'bws-A',
+      measuredBusinessWorth: 500000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-01T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    // Activity that occurred strictly between A and B.
+    const activityBetween = {
+      expenses: [{ id: 'e1', date: '2026-05-10', description: 'Between A and B', amount: 3000, createdAt: '2026-05-10T00:00:00.000Z' }],
+    };
+
+    // Before B exists: this activity correctly reduces the live figure below A.
+    const beforeB = call({ snapshots: [snapA], expenses: activityBetween.expenses, asOfDate: '2026-05-15' });
+    assert.equal(beforeB, 497000);
+
+    // Now Contagem B is confirmed on 2026-05-20 at 520,000 (a fresh
+    // measurement, not a pure roll-forward of A + activity).
+    const snapB = makeSnapshot({
+      id: 'bws-B',
+      measuredBusinessWorth: 520000,
+      embeddedProfitTotal: 0,
+      confirmedAt: fakeTimestamp('2026-05-20T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+
+    // With both A and B present, and no activity after B, Current must be
+    // exactly B's own value — the 05-10 expense (between A and B) must
+    // NOT continue to reduce the figure once B is the active baseline.
+    const afterB = call({ snapshots: [snapA, snapB], expenses: activityBetween.expenses, asOfDate: '2026-05-25' });
+    assert.equal(afterB, 520000);
+  });
+
+  it('activity genuinely after B is still correctly included', () => {
+    const snapA = makeSnapshot({
+      id: 'bws-A',
+      measuredBusinessWorth: 500000,
+      confirmedAt: fakeTimestamp('2026-05-01T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const snapB = makeSnapshot({
+      id: 'bws-B',
+      measuredBusinessWorth: 520000,
+      confirmedAt: fakeTimestamp('2026-05-20T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snapA, snapB],
+      expenses: [{ id: 'e2', date: '2026-05-22', description: 'After B', amount: 1000, createdAt: '2026-05-22T00:00:00.000Z' }],
+      asOfDate: '2026-05-25',
+    });
+    assert.equal(result, 519000);
+  });
+});
+
+describe('getCurrentBusinessWorth — Increment 1 Audit §12: asOfDate precision', () => {
+  it('excludes activity dated AFTER the requested asOfDate', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      confirmedAt: fakeTimestamp('2026-05-01T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      expenses: [{ id: 'e1', date: '2026-05-10', description: 'Later', amount: 4000, createdAt: '2026-05-10T00:00:00.000Z' }],
+      asOfDate: '2026-05-05', // before the 05-10 expense
+    });
+    assert.equal(result, 500000);
+  });
+
+  it('includes that same activity once asOfDate moves past it', () => {
+    const snap = makeSnapshot({
+      measuredBusinessWorth: 500000,
+      confirmedAt: fakeTimestamp('2026-05-01T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'],
+    });
+    const result = call({
+      snapshots: [snap],
+      expenses: [{ id: 'e1', date: '2026-05-10', description: 'Later', amount: 4000, createdAt: '2026-05-10T00:00:00.000Z' }],
+      asOfDate: '2026-05-15', // after the 05-10 expense
+    });
+    assert.equal(result, 496000);
+  });
+});
+
+describe('getCurrentBusinessWorth — Increment 1 Audit §10/§15/§19: immutability and idempotency', () => {
+  it('never mutates the snapshot object it reads (historical immutability, at the pure-function level)', () => {
+    const snap = makeSnapshot({ measuredBusinessWorth: 500000, embeddedProfitTotal: 0 });
+    const frozenCopy = JSON.parse(JSON.stringify({ ...snap, confirmedAt: '2026-08-01T00:00:00.000Z' }));
+    call({
+      snapshots: [snap],
+      batches: [makeBatch({ quantity: 10, costPrice: 50, sellingPrice: 80 })],
+      expenses: [{ id: 'e1', date: '2026-08-02', description: 'X', amount: 1000, createdAt: '2026-08-02T00:00:00.000Z' }],
+      asOfDate: '2026-08-05',
+    });
+    const afterCopy = JSON.parse(JSON.stringify({ ...snap, confirmedAt: '2026-08-01T00:00:00.000Z' }));
+    assert.deepEqual(afterCopy, frozenCopy, 'The snapshot object must be byte-for-byte unchanged after the call.');
+    assert.equal(snap.measuredBusinessWorth, 500000, 'measuredBusinessWorth itself must never change.');
+  });
+
+  it('repeated calls with identical inputs return identical results (pure, idempotent read)', () => {
+    const snap = makeSnapshot({ measuredBusinessWorth: 500000, embeddedProfitTotal: 0 });
+    const params = {
+      snapshots: [snap],
+      batches: [makeBatch({ quantity: 10, costPrice: 50, sellingPrice: 80 })],
+      expenses: [{ id: 'e1', date: '2026-08-02', description: 'X', amount: 1000, createdAt: '2026-08-02T00:00:00.000Z' }],
+      asOfDate: '2026-08-05',
+    };
+    const first = call(params);
+    const second = call(params);
+    const third = call(params);
+    assert.equal(first, second);
+    assert.equal(second, third);
+  });
+});
+
 describe('getCurrentBusinessWorth — Increment 3 deferral (no fabricated Receivables/Payables/Cash term)', () => {
   it('has no parameter for cash/receivables/payables at all — TypeScript itself enforces this is not a silent zero', () => {
     // This test exists to pin the function's own signature: it accepts

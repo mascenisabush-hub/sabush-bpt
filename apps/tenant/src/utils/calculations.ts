@@ -281,28 +281,60 @@ export function resolveInitialCapitalValue(initialStockCount: StockCount | null 
  * parameter for them at all in Increment 1, so there is no zero to
  * silently fabricate.
  *
- * [Implementation-time resolution — how "embedded profit generated since
- * that snapshot" is computed, not otherwise specified by the Plan] Embedded
- * profit is a point-in-time property of currently open batches, not a
- * dated event log — there is no "embedded profit occurred on this date"
- * record to filter by. The well-defined, computable equivalent is a DELTA:
- * (current total embedded profit, from the existing
- * calculateInventoryTotals over all currently open batches/quebras) MINUS
- * (the snapshot's own frozen `embeddedProfitTotal`, captured at the moment
- * of that measurement). This correctly captures new purchases (raising
- * embedded profit), consumption/closure of batches (lowering it), and
- * quebra losses (already reflected in `calculateInventoryTotals`'s own
- * `remainingQuantity`) — without inventing any new ledger.
+ * [Correction, this pass — snapshot-boundary temporal semantics, per the
+ * Increment 1 financial-integrity audit's own finding] The PREVIOUS
+ * version of this function used each record's `date` field (an
+ * Owner-entered calendar day, e.g. "2026-05-01", with no time-of-day) to
+ * decide whether it occurred "since" the snapshot, compared against the
+ * snapshot's OWN calendar day. This double-counted any Expense/Withdrawal
+ * dated on the exact same calendar day as the Contagem's own confirmation,
+ * if that record already existed (was already created) BEFORE the
+ * confirmation moment — because `AppContext.tsx`'s own
+ * `totalExpensesAllTime`/`totalWithdrawalsAllTime` (the inputs
+ * `computeMeasuredBusinessWorth` uses to freeze the snapshot) sum EVERY
+ * currently-existing record with no date filter at all, so such a record
+ * is already baked into the snapshot's own frozen `measuredBusinessWorth`
+ * — counting it again here double-subtracted it.
  *
- * [Expenses/Levantamentos since] Filtered by each record's own `date`
- * field against the window [snapshot.confirmedAt, asOfDate] — the exact
- * same `isDateInRange` mechanism this codebase already uses elsewhere
- * (e.g. `recordStockCount`'s own `expensesSinceLastSnapshot` computation
- * at confirmation time). Breakages (Quebras) since the snapshot are
- * informational only here, matching `BusinessWorthSnapshot`'s own existing
- * discipline (§3.1) — never a second subtraction on top of the embedded-
- * profit delta above, since a Quebra's effect on embedded profit is
- * already captured by that delta.
+ * THREE DISTINCT CONCEPTS, NEVER CONFLATED:
+ * - BUSINESS DATE (`record.date`) — the transaction's Owner-declared
+ *   date, for reporting/business-date purposes. Unchanged, still used
+ *   elsewhere in this codebase exactly as before. NOT used for this
+ *   function's own snapshot-boundary decision.
+ * - CREATION TIMESTAMP (`record.createdAt`, an existing ISO-timestamp
+ *   field already present on `Expense`/`Withdrawal`/`Quebra`) — when the
+ *   record actually entered the system. THIS is what this function now
+ *   compares against the snapshot boundary.
+ * - SNAPSHOT CONFIRMATION TIMESTAMP (`snapshot.confirmedAt`) — when the
+ *   Business Worth measurement became frozen; the boundary itself.
+ *
+ * CORRECTED RULE: `record.createdAt <= snapshot.confirmedAt` → the record
+ * already existed at measurement time → excluded from the post-snapshot
+ * delta (it is already reflected in the snapshot's own frozen value).
+ * `record.createdAt > snapshot.confirmedAt` → the record was created
+ * after measurement → included, per its own approved Business Worth
+ * effect. **Equality is treated as "already existed"** (`<=`, not `<`) —
+ * a deterministic default requiring no new business rule: the snapshot's
+ * own frozen totals are computed by summing whatever exists in Firestore
+ * at the instant of confirmation, so a record whose `createdAt` exactly
+ * equals that instant was, by construction, already part of that sum.
+ *
+ * This correction also fixes a related, previously-unnoticed gap: a
+ * BACKDATED record (Owner-entered `date` before the snapshot, but actually
+ * `createdAt` AFTER it — e.g. correcting a forgotten historical expense)
+ * is now correctly included in the post-snapshot delta, since its
+ * `createdAt` is what is compared, not its `date`. Under the previous
+ * `date`-based filter, such a record would have been silently and
+ * permanently excluded from ever affecting Business Worth.
+ *
+ * [`asOfDate` — the requested calculation endpoint, a separate concept
+ * from the snapshot boundary above, per explicit instruction not to
+ * replace one with the other] `asOfDate` remains an Owner/caller-facing
+ * calendar-day string. For consistency with the corrected, timestamp-based
+ * snapshot boundary, it is compared as "the end of that calendar day"
+ * (`asOfDate` + `T23:59:59.999Z`, UTC) — a record created after that
+ * instant is excluded from this particular read, even though it may
+ * still be a genuinely valid post-snapshot record for a *later* read.
  *
  * Returns 'UNKNOWN' when no 'active' `BusinessWorthSnapshot` exists yet
  * for the business (State 1/1a) — never a third outcome (FR-3, I-1).
@@ -322,6 +354,7 @@ export function getCurrentBusinessWorth(params: {
 }): number | 'UNKNOWN' {
   const { snapshots, batches, quebras, expenses, withdrawals } = params;
   const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
+  const asOfMillis = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
 
   if (!snapshots || snapshots.length === 0) return 'UNKNOWN';
 
@@ -329,10 +362,11 @@ export function getCurrentBusinessWorth(params: {
   if (active.length === 0) return 'UNKNOWN';
 
   const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
+  const snapshotMillis = toMillis(latest.confirmedAt);
 
-  const snapshotDate = new Date(toMillis(latest.confirmedAt)).toISOString().slice(0, 10);
-
-  // Embedded profit delta since the snapshot (see doc comment above).
+  // Embedded profit delta since the snapshot (see doc comment above) —
+  // unchanged by this correction: a live-vs-frozen comparison, not a
+  // date-filtered range, so it carries no date-granularity risk.
   const currentEmbeddedProfitTotal = calculateInventoryTotals(
     batches.filter((b) => b.status === 'open'),
     quebras
@@ -341,15 +375,25 @@ export function getCurrentBusinessWorth(params: {
     (currentEmbeddedProfitTotal - latest.embeddedProfitTotal).toFixed(2)
   );
 
+  // [Corrected] createdAt (a precise timestamp) vs confirmedAt (a precise
+  // timestamp) — never date (a calendar day) vs confirmedAt. A record's
+  // own `createdAt` must be strictly AFTER the snapshot's confirmedAt to
+  // be considered post-snapshot activity, and no later than the end of
+  // the requested asOfDate.
+  const isPostSnapshotActivity = (createdAt: string): boolean => {
+    const createdMillis = new Date(createdAt).getTime();
+    return createdMillis > snapshotMillis && createdMillis <= asOfMillis;
+  };
+
   const expensesSinceSnapshot = Number(
     expenses
-      .filter((e) => isDateInRange(e.date, snapshotDate, asOfDate))
+      .filter((e) => isPostSnapshotActivity(e.createdAt))
       .reduce((sum, e) => sum + Number(e.amount || 0), 0)
       .toFixed(2)
   );
   const levantamentosSinceSnapshot = Number(
     withdrawals
-      .filter((w) => isDateInRange(w.date, snapshotDate, asOfDate))
+      .filter((w) => isPostSnapshotActivity(w.createdAt))
       .reduce((sum, w) => sum + Number(w.amount || 0), 0)
       .toFixed(2)
   );
