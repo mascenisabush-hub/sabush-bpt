@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -350,9 +350,26 @@ export function getCurrentBusinessWorth(params: {
   quebras: Quebra[];
   expenses: Expense[];
   withdrawals: Withdrawal[];
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §7/§9, FR-14, FR-15; Implementation Plan §7's own
+  // "±Receivables/Payables/Cash position changes" clarification] Optional
+  // and additive — genuinely new sources with no existing representation
+  // before this increment, following the exact same "omit, don't
+  // fabricate a zero-that-means-something-real" discipline this function
+  // already used for them in Increment 1/2 (see this function's own
+  // pre-Increment-3 doc comment, preserved below). Defaulting to `[]`
+  // when omitted is safe and NOT the same "fabricated zero" concern that
+  // discipline warns against, because an empty array is the true,
+  // accurate state of "no Payables/CashLedgerEntries exist for this
+  // business yet" — unlike a numeric 0 standing in for "this term simply
+  // isn't computed," which is what that discipline actually forbids.
+  payables?: Payable[];
+  cashLedgerEntries?: CashLedgerEntry[];
   asOfDate?: string;
 }): number | 'UNKNOWN' {
   const { snapshots, batches, quebras, expenses, withdrawals } = params;
+  const payables = params.payables ?? [];
+  const cashLedgerEntries = params.cashLedgerEntries ?? [];
   const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
   const asOfMillis = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
 
@@ -363,7 +380,7 @@ export function getCurrentBusinessWorth(params: {
 
   const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
 
-  return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, asOfMillis });
+  return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, asOfMillis });
 }
 
 /**
@@ -376,6 +393,54 @@ export function getCurrentBusinessWorth(params: {
  * "Estimated" are two names for the same formula, never two competing
  * ones. `getCurrentBusinessWorth`'s own external behavior (including its
  * 'UNKNOWN' handling) is completely unchanged by this extraction.
+ *
+ * [Extended, Increment 3 — Specification §7/§9's "±Receivables/Payables/
+ * Cash position changes" term, Implementation Plan §7's own mechanical
+ * clarification of it] Per Plan §7, this term is NEVER "the ledger-
+ * derived cash balance minus the snapshot's own cash figure" — that
+ * would re-subtract Expenses/Levantamentos a second time, since those
+ * already have their own linked CashLedgerEntry categories AND their own
+ * separate `expensesSinceSnapshot`/`levantamentosSinceSnapshot` terms
+ * above. Per Plan §7's own three-part breakdown, this term is instead
+ * built from exactly:
+ *
+ * (1) Receivables: NO separate "outstanding balance" term at all. An
+ *     unpaid Receivable contributes nothing (FIN-3) and never did, so
+ *     there is nothing to track here — a receivable's entire effect on
+ *     Business Worth flows through (3) below, its own linked
+ *     `customer-payment` CashLedgerEntry, the moment a payment is
+ *     actually received. (Plan §7's own "cash increases by the paid
+ *     amount, the receivable decreases by the same amount, net zero"
+ *     language describes exactly why NOT adding a second, symmetric
+ *     receivable-balance term here is correct — adding one would cancel
+ *     out the genuine, positive `customer-payment` effect (3) already
+ *     provides, wrongly returning FIN-3's "unpaid = zero" rule to every
+ *     receivable, paid or not.)
+ * (2) Payables: an outstanding Payable DOES reduce Business Worth the
+ *     moment it's recorded (FIN-4) — unlike a Receivable, a Payable has
+ *     no linked CashLedgerEntry at the moment it's created (no cash
+ *     moves yet), so its own effect can ONLY be captured by tracking its
+ *     outstanding-balance CHANGE since the snapshot: an increase (a new
+ *     supplier-credit purchase) reduces this term; a later decrease (a
+ *     PayablePayment settling it) increases this term back — exactly
+ *     offsetting that same payment's own `supplier-payment` outflow in
+ *     (3), so the payment itself nets to zero change overall (FIN-5,
+ *     "settles, never doubly reduces").
+ * (3) Any other governed CashLedgerEntry this Plan's categories actually
+ *     produce, restricted to `customer-payment` (inflow, adds) and
+ *     `supplier-payment` (outflow, subtracts) — `expense`/`levantamento`
+ *     categories are deliberately EXCLUDED here, since those two are
+ *     already fully captured by this function's own pre-existing
+ *     `expensesSinceSnapshot`/`levantamentosSinceSnapshot` terms above;
+ *     including them again here would double-subtract them (the
+ *     Test Requirements' own Examples D/E, and the explicit
+ *     "no duplicate stock-purchase cash subtraction" requirement).
+ *
+ * A cash-financed `+Stock` purchase touches NONE of (1)/(2)/(3) — it
+ * produces no CashLedgerEntry and no Payable/Receivable — so this whole
+ * term is entirely unaffected by it, exactly as the worked example
+ * (500,000 + 5,000 embedded profit = 505,000, never 480,000/530,000)
+ * requires.
  */
 function computeCaseALiveBusinessWorth(params: {
   latest: BusinessWorthSnapshot;
@@ -383,9 +448,11 @@ function computeCaseALiveBusinessWorth(params: {
   quebras: Quebra[];
   expenses: Expense[];
   withdrawals: Withdrawal[];
+  payables: Payable[];
+  cashLedgerEntries: CashLedgerEntry[];
   asOfMillis: number;
 }): number {
-  const { latest, batches, quebras, expenses, withdrawals, asOfMillis } = params;
+  const { latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, asOfMillis } = params;
   const snapshotMillis = toMillis(latest.confirmedAt);
 
   // Embedded profit delta since the snapshot (see doc comment above) —
@@ -422,15 +489,31 @@ function computeCaseALiveBusinessWorth(params: {
       .toFixed(2)
   );
 
-  // Receivables/Payables/Cash position changes: deliberately no term here
-  // in Increment 1 — see doc comment above. Not a fabricated zero; the
-  // function simply has no such input to read yet.
+  // [Increment 3] (2) Payables outstanding-balance CHANGE since the
+  // snapshot — see this function's own doc comment above.
+  const currentPayablesOutstanding = payables.reduce((sum, p) => sum + Number(p.amountRemaining || 0), 0);
+  const payablesOutstandingAtSnapshot = latest.payablesPosition ?? 0;
+  const payablesPositionChange = Number((payablesOutstandingAtSnapshot - currentPayablesOutstanding).toFixed(2));
+
+  // [Increment 3] (3) customer-payment/supplier-payment CashLedgerEntry
+  // net, since the snapshot — see this function's own doc comment above
+  // for why `expense`/`levantamento` categories are excluded here.
+  const cashLedgerNetSinceSnapshot = Number(
+    cashLedgerEntries
+      .filter((e) => isPostSnapshotActivity(e.createdAt) && (e.category === 'customer-payment' || e.category === 'supplier-payment'))
+      .reduce((sum, e) => sum + (e.direction === 'inflow' ? Number(e.amount || 0) : -Number(e.amount || 0)), 0)
+      .toFixed(2)
+  );
+
+  const financialPositionChangeSinceSnapshot = Number((payablesPositionChange + cashLedgerNetSinceSnapshot).toFixed(2));
+
   return Number(
     (
       latest.measuredBusinessWorth +
       embeddedProfitSinceSnapshot -
       expensesSinceSnapshot -
-      levantamentosSinceSnapshot
+      levantamentosSinceSnapshot +
+      financialPositionChangeSinceSnapshot
     ).toFixed(2)
   );
 }
@@ -511,9 +594,16 @@ export function getEstimatedBusinessWorth(params: {
   quebras: Quebra[];
   expenses: Expense[];
   withdrawals: Withdrawal[];
+  // [Business Worth Evolution — Implementation Authorization, Increment 3]
+  // See getCurrentBusinessWorth's own identical parameters for the full
+  // rationale — optional/additive, defaulting to `[]`.
+  payables?: Payable[];
+  cashLedgerEntries?: CashLedgerEntry[];
   asOfDate?: string;
 }): number | 'UNKNOWN' {
   const { snapshots, initialStockCount, batches, quebras, expenses, withdrawals } = params;
+  const payables = params.payables ?? [];
+  const cashLedgerEntries = params.cashLedgerEntries ?? [];
   const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
   const asOfMillis = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
 
@@ -526,7 +616,7 @@ export function getEstimatedBusinessWorth(params: {
     // a later increment) would call it Estimated; the arithmetic itself
     // never differs from Current.
     const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
-    return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, asOfMillis });
+    return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, asOfMillis });
   }
 
   // Case B — State 1a: existing business, preserved historical Capital
@@ -565,12 +655,29 @@ export function getEstimatedBusinessWorth(params: {
     withdrawals.reduce((sum, w) => sum + Number(w.amount || 0), 0).toFixed(2)
   );
 
+  // [Increment 3] Case B has no snapshot baseline to measure a delta
+  // against at all — its baseline (Capital Inicial) predates the Cash
+  // Ledger/Payables collections entirely, exactly mirroring the
+  // Expenses/Levantamentos treatment immediately above: subtracted/added
+  // ALL-TIME, never "since" a boundary that doesn't exist for this case.
+  const totalPayablesOutstanding = Number(
+    payables.reduce((sum, p) => sum + Number(p.amountRemaining || 0), 0).toFixed(2)
+  );
+  const cashLedgerNetAllTime = Number(
+    cashLedgerEntries
+      .filter((e) => e.category === 'customer-payment' || e.category === 'supplier-payment')
+      .reduce((sum, e) => sum + (e.direction === 'inflow' ? Number(e.amount || 0) : -Number(e.amount || 0)), 0)
+      .toFixed(2)
+  );
+  const financialPositionEffect = Number((cashLedgerNetAllTime - totalPayablesOutstanding).toFixed(2));
+
   return Number(
     (
       initialCapitalValue +
       embeddedProfitSinceBaseline -
       totalExpensesAllTime -
-      totalWithdrawalsAllTime
+      totalWithdrawalsAllTime +
+      financialPositionEffect
     ).toFixed(2)
   );
 }
@@ -625,6 +732,37 @@ function toMillis(value: unknown): number {
  * Pure, deterministic, no Firestore/AppContext dependency — safe to
  * unit test directly.
  */
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 3]
+ * Pure sum of every currently-outstanding (unpaid or partially-paid)
+ * Payable's `amountRemaining` for a business — the exact figure this
+ * capability's snapshot-creation path freezes as `BusinessWorthSnapshot.
+ * payablesPosition` (a real, meaningful subtraction at snapshot-creation
+ * time — a fresh physical count already includes credit-financed stock
+ * at full value, so the outstanding debt against it must be subtracted
+ * to reflect true net worth, Specification §12 FIN-4) and the exact
+ * figure the live calculation above compares against to detect a
+ * Payable's own outstanding-balance CHANGE since that snapshot.
+ */
+export function sumOutstandingPayables(payables: Payable[]): number {
+  return Number(payables.reduce((sum, p) => sum + Number(p.amountRemaining || 0), 0).toFixed(2));
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 3]
+ * Pure sum of every currently-outstanding (unpaid or partially-paid)
+ * Receivable's `amountRemaining` for a business — INFORMATIONAL/drill-
+ * down only (frozen onto `BusinessWorthSnapshot.receivablesPosition` for
+ * audit/history display), NEVER fed into `computeMeasuredBusinessWorth`'s
+ * own arithmetic — an unpaid Receivable contributes nothing to Business
+ * Worth (Specification §11 FIN-3), so passing this sum into that
+ * function's additive `receivablesPosition` parameter would wrongly add
+ * it. See `computeMeasuredBusinessWorth`'s own doc comment.
+ */
+export function sumOutstandingReceivables(receivables: Receivable[]): number {
+  return Number(receivables.reduce((sum, r) => sum + Number(r.amountRemaining || 0), 0).toFixed(2));
+}
+
 export function computeMeasuredBusinessWorth(params: {
   productValuationTotal: number;
   totalExpensesAllTime: number;

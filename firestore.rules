@@ -696,6 +696,112 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §10, §33, I-4] Owner-only tier (same
+      // access class as withdrawals — Staff never handles cash/debt
+      // records). Append-only: no update or delete path exists for any
+      // role, at any time. Category is restricted to the exact five
+      // accepted governed-event values (§10) — never an arbitrary string
+      // — matching the closed-enum discipline this file already applies
+      // elsewhere (e.g. BusinessWorthSnapshot.status, above).
+      match /cashLedgerEntries/{entryId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('businessId', null) == businessId &&
+          request.resource.data.get('id', null) == entryId &&
+          request.resource.data.get('direction', null) in ['inflow', 'outflow'] &&
+          request.resource.data.get('amount', null) is number &&
+          request.resource.data.get('amount', 0) > 0 &&
+          request.resource.data.get('category', null) in
+            ['customer-payment', 'supplier-payment', 'expense', 'levantamento', 'other-governed-movement'] &&
+          request.resource.data.get('createdBy', null) == request.auth.uid;
+        allow update, delete: if false;
+      }
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §11, §33] Owner-only tier. `create`
+      // requires the fresh-record invariants (zero paid, remaining ==
+      // total, status 'unpaid') so a client cannot create an
+      // already-partially-settled Receivable out of thin air. `update`
+      // is restricted to exactly the three fields a payment is allowed
+      // to change (amountPaid/amountRemaining/status) — totalAmount,
+      // createdAt, description, debtorName remain immutable after
+      // creation, the same "lock the historical fact, allow only the
+      // governed state transition" discipline `closings`' own per-field
+      // lock already establishes elsewhere in this file.
+      match /receivables/{receivableId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('businessId', null) == businessId &&
+          request.resource.data.get('id', null) == receivableId &&
+          request.resource.data.get('totalAmount', null) is number &&
+          request.resource.data.get('totalAmount', 0) > 0 &&
+          request.resource.data.get('amountPaid', null) == 0 &&
+          request.resource.data.get('amountRemaining', null) == request.resource.data.get('totalAmount', null) &&
+          request.resource.data.get('status', null) == 'unpaid';
+        allow update: if isOwnerOf(businessId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amountPaid', 'amountRemaining', 'status']) &&
+          request.resource.data.get('status', null) in ['unpaid', 'partially-paid', 'paid'];
+        allow delete: if false;
+      }
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §11, FR-13, I-4] Append-only — a
+      // payment, once recorded, is never edited or removed (mirrors
+      // CashLedgerEntry's own I-4 discipline). Document id is the
+      // caller's own submissionId (FR-49/idempotency) — Firestore's
+      // create-if-absent semantics are what make a retried write with
+      // the same id a safe no-op rather than a silent duplicate, the
+      // identical mechanism this file already relies on for
+      // businessWorthSnapshots' own 'bws-' + sourceStockCountId id.
+      match /receivablePayments/{paymentId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('id', null) == paymentId &&
+          request.resource.data.get('receivableId', null) is string &&
+          request.resource.data.get('amountPaid', null) is number &&
+          request.resource.data.get('amountPaid', 0) > 0 &&
+          request.resource.data.get('cashLedgerEntryId', null) is string;
+        allow update, delete: if false;
+      }
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §12, §33] Mirrors receivables' own
+      // rule exactly, for the liability side. `sourcePurchaseBatchId` is
+      // required (§12) — a Payable never exists independent of the
+      // PurchaseBatch/StockBatch it originated from.
+      match /payables/{payableId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('businessId', null) == businessId &&
+          request.resource.data.get('id', null) == payableId &&
+          request.resource.data.get('sourcePurchaseBatchId', null) is string &&
+          request.resource.data.get('totalAmount', null) is number &&
+          request.resource.data.get('totalAmount', 0) > 0 &&
+          request.resource.data.get('amountPaid', null) == 0 &&
+          request.resource.data.get('amountRemaining', null) == request.resource.data.get('totalAmount', null) &&
+          request.resource.data.get('status', null) == 'unpaid';
+        allow update: if isOwnerOf(businessId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['amountPaid', 'amountRemaining', 'status']) &&
+          request.resource.data.get('status', null) in ['unpaid', 'partially-paid', 'paid'];
+        allow delete: if false;
+      }
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §12, FR-15, I-4] Mirrors
+      // receivablePayments' own append-only/idempotent-id rule exactly,
+      // for the liability side.
+      match /payablePayments/{paymentId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('id', null) == paymentId &&
+          request.resource.data.get('payableId', null) is string &&
+          request.resource.data.get('amountPaid', null) is number &&
+          request.resource.data.get('amountPaid', 0) > 0 &&
+          request.resource.data.get('cashLedgerEntryId', null) is string;
+        allow update, delete: if false;
+      }
+
       // [Void & Redo — Implementation Authorization §2 item 2; Rule 8
       // Finding G1, Direction 2 (adopted)] The additive, create-only
       // artifact recording that a confirmation event has been voided —

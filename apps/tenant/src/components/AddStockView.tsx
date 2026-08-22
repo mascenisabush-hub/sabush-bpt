@@ -365,6 +365,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const [supplierName, setSupplierName] = useState('');
   const [supplierPhone, setSupplierPhone] = useState('');
   const [supplierNotes, setSupplierNotes] = useState('');
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 3; Specification §12 Case 2, FR-14] Owner's own explicit declaration
+  // that this purchase was acquired on supplier credit rather than paid
+  // immediately — the only signal that determines whether a Payable is
+  // created alongside this purchase. Defaults to false (Case 1, paid
+  // immediately) — this feature never assumes credit.
+  const [supplierCredit, setSupplierCredit] = useState(false);
   const [isSupplierDropdownOpen, setIsSupplierDropdownOpen] = useState(false);
   const [batchNotes, setBatchNotes] = useState('');
 
@@ -1149,7 +1156,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         { name: supplierName, phone: supplierPhone, notes: supplierNotes },
         batchNotes,
         supplierId,
-        currentPurchaseEventId
+        currentPurchaseEventId,
+        supplierCredit
       );
 
       const messageText =
@@ -1163,6 +1171,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       setSupplierName('');
       setSupplierPhone('');
       setSupplierNotes('');
+      setSupplierCredit(false);
       setBatchNotes('');
       setWasRestoredFromDraft(false);
 
@@ -1617,6 +1626,21 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
               </div>
+              {/* [Business Worth Evolution — Implementation Authorization,
+                  Increment 3; Specification §12 Case 2, FR-14] The only
+                  UI control this increment adds to +Stock — an explicit
+                  Owner declaration that this purchase was on supplier
+                  credit. Unchecked (the default) is Case 1 (paid
+                  immediately) — completely unmodified +Stock behavior. */}
+              <label className="flex items-center gap-2 text-[12px] text-[#111827] cursor-pointer">
+                <input
+                  type="checkbox"
+                  checked={supplierCredit}
+                  onChange={e => setSupplierCredit(e.target.checked)}
+                  className="w-4 h-4 rounded border-[#E5E7EB] text-[#0B1F3A] focus:ring-[#D4AF37]/30"
+                />
+                {t('addStock.supplier.creditCheckboxLabel')}
+              </label>
               <p className="text-[10.5px] text-gray-400">
                 {t('addStock.supplier.unspecifiedHint')}
               </p>

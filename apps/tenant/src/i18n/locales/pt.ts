@@ -219,12 +219,53 @@ export interface TranslationDict {
       addExpense: { label: string; shortLabel: string };
       addWithdrawal: { label: string; shortLabel: string };
       closing: { label: string; shortLabel: string };
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §11, §12]
+      debts: { label: string; shortLabel: string };
       reports: { label: string; shortLabel: string };
       timeline: { label: string; shortLabel: string };
     };
     /** Browser-tab title for the initial stock count onboarding flow — not
      * one of the 11 NAV_TABS bar entries, so it lives outside `tabs`. */
     initialStockTitle: string;
+  };
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §11, §12] Minimal screen for the Owner to record
+  // debts owed to the business (Receivables) and view/settle supplier
+  // debts (Payables, created automatically by a supplier-credit +Stock
+  // purchase).
+  debts: {
+    title: string;
+    subtitle: string;
+    receivablesSection: {
+      title: string;
+      addButton: string;
+      empty: string;
+      totalLabel: string;
+      remainingLabel: string;
+      recordPayment: string;
+      statusUnpaid: string;
+      statusPartial: string;
+      statusPaid: string;
+    };
+    payablesSection: {
+      title: string;
+      empty: string;
+      totalLabel: string;
+      remainingLabel: string;
+      recordPayment: string;
+      hint: string;
+    };
+    form: {
+      amountLabel: string;
+      debtorNameLabel: string;
+      descriptionLabel: string;
+      submit: string;
+      cancel: string;
+      paymentAmountLabel: string;
+      paymentDateLabel: string;
+      submitPayment: string;
+    };
   };
   header: {
     myBusiness: string;
@@ -276,6 +317,7 @@ export interface TranslationDict {
       notesLabel: string;
       notesPlaceholder: string;
       unspecifiedHint: string;
+      creditCheckboxLabel: string;
       searchPlaceholder: string;
       existingTag: string;
       createNewShort: string;
@@ -1177,10 +1219,44 @@ export const pt: TranslationDict = {
       addExpense: { label: 'Adicionar Despesa', shortLabel: '+ Despesa' },
       addWithdrawal: { label: 'Registar Levantamento', shortLabel: '+ Levant.' },
       closing: { label: 'Fecho Mensal/Anual', shortLabel: 'Fecho' },
+      debts: { label: 'Dívidas', shortLabel: 'Dívidas' },
       reports: { label: 'Relatórios', shortLabel: 'Relatórios' },
       timeline: { label: 'Linha do Tempo', shortLabel: 'Histórico' },
     },
     initialStockTitle: 'Contagem de Stock Inicial',
+  },
+  debts: {
+    title: 'Dívidas',
+    subtitle: 'Dinheiro que a sua empresa deve receber ou pagar.',
+    receivablesSection: {
+      title: 'A Receber (Clientes)',
+      addButton: '+ Nova Dívida',
+      empty: 'Nenhuma dívida registada.',
+      totalLabel: 'Total',
+      remainingLabel: 'Em Aberto',
+      recordPayment: 'Registar Pagamento',
+      statusUnpaid: 'Por Pagar',
+      statusPartial: 'Parcialmente Paga',
+      statusPaid: 'Paga',
+    },
+    payablesSection: {
+      title: 'A Pagar (Fornecedores)',
+      empty: 'Nenhuma dívida a fornecedores.',
+      totalLabel: 'Total',
+      remainingLabel: 'Em Aberto',
+      recordPayment: 'Registar Pagamento',
+      hint: 'Criadas automaticamente ao comprar stock a crédito do fornecedor.',
+    },
+    form: {
+      amountLabel: 'Valor',
+      debtorNameLabel: 'Quem deve (opcional)',
+      descriptionLabel: 'Descrição (opcional)',
+      submit: 'Guardar',
+      cancel: 'Cancelar',
+      paymentAmountLabel: 'Valor Pago',
+      paymentDateLabel: 'Data do Pagamento',
+      submitPayment: 'Confirmar Pagamento',
+    },
   },
   header: {
     myBusiness: 'Meu Negócio',
@@ -1232,6 +1308,7 @@ export const pt: TranslationDict = {
       notesLabel: 'Notas do Lote (opcional)',
       notesPlaceholder: 'Ex.: Compra à vista, entrega parcial...',
       unspecifiedHint: 'Se não indicar um fornecedor, este lote será guardado como "Fornecedor Não Especificado".',
+      creditCheckboxLabel: 'Esta compra foi feita a crédito do fornecedor (ainda não paga)',
       searchPlaceholder: 'Pesquisar/criar fornecedor...',
       existingTag: 'Existente',
       createNewShort: '+ Criar "{{name}}"',

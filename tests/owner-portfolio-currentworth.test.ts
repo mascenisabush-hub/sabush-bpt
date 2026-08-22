@@ -68,7 +68,7 @@ describe('refreshShopWorth (apps/tenant/src/context/AppContext.tsx) — the expl
 
   it('every read/write targets the single, explicit target businessId — never a different or additional businessId in this function', () => {
     const businessIdRefs = fnBody.match(/'businesses', businessId[,)]/g) ?? [];
-    assert.equal(businessIdRefs.length, 8, 'Expected exactly 8 references to the single target businessId (7 collection reads + 1 document write), all using the same variable, none hardcoded or reading a second business.');
+    assert.equal(businessIdRefs.length, 10, 'Expected exactly 10 references to the single target businessId (9 collection reads + 1 document write), all using the same variable, none hardcoded or reading a second business.');
   });
 
   it('[Business Worth Evolution, Increment 2] reuses the shared authoritative calculation (getEstimatedBusinessWorth) — never an independent, competing formula (Rule 8 Finding 15-A, FR-60)', () => {
@@ -199,13 +199,13 @@ describe('Header.tsx — entry point gating', () => {
 });
 
 describe('Scope discipline — no unauthorized changes', () => {
-  it('[Business Worth Evolution, Increment 2] AppContext.tsx: refreshShopWorth reads exactly the seven collections this rewire requires — batches, expenses, quebras, withdrawals, stockCounts, voidRecords, businessWorthSnapshots — never a cross-business query, never a new unrelated collection', () => {
+  it('[Business Worth Evolution, Increment 3] AppContext.tsx: refreshShopWorth reads exactly the nine collections this rewire requires — batches, expenses, quebras, withdrawals, stockCounts, voidRecords, businessWorthSnapshots, payables, cashLedgerEntries — never a cross-business query, never a new unrelated collection', () => {
     const fnBody = extractFunctionBody(appContextSrc, 'const refreshShopWorth = async (');
     const collectionRefs = fnBody.match(/collection\(db, 'businesses', businessId, '(\w+)'\)/g) ?? [];
     const uniqueCollections = new Set(collectionRefs.map((c) => c.match(/'(\w+)'\)$/)?.[1]));
     assert.deepEqual(
       [...uniqueCollections].sort(),
-      ['batches', 'businessWorthSnapshots', 'expenses', 'quebras', 'stockCounts', 'voidRecords', 'withdrawals']
+      ['batches', 'businessWorthSnapshots', 'cashLedgerEntries', 'expenses', 'payables', 'quebras', 'stockCounts', 'voidRecords', 'withdrawals']
     );
   });
 

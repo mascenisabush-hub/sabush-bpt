@@ -817,6 +817,99 @@ export interface BusinessWorthSnapshotEmbeddedProfitLine {
   embeddedProfit: number;
 }
 
+// ============================================================
+// BUSINESS WORTH EVOLUTION — INCREMENT 3
+// Cash Ledger, Receivables, Payables (Specification §10-12).
+// ============================================================
+
+// [Business Worth Evolution — Implementation Authorization, Increment 3;
+// Specification §10] An append-only ledger of GOVERNED cash-affecting
+// events only — never a generic record of every arbitrary cash movement.
+// A cash-financed +Stock purchase NEVER produces one of these (that
+// purchase is, and remains, exclusively recorded via +Stock/PurchaseBatch
+// — see AppContext.tsx's own addMultipleStockBatches, unmodified by this
+// increment). No update/delete path exists for any role, at any time
+// (I-4) — mirrors the existing InitialStockPriceChangeEvent/Timeline-event
+// append-only precedent.
+export interface CashLedgerEntry {
+  id: string;
+  businessId: string;
+  direction: 'inflow' | 'outflow';
+  amount: number;
+  category: 'customer-payment' | 'supplier-payment' | 'expense' | 'levantamento' | 'other-governed-movement';
+  sourceReference: {
+    type: 'receivable' | 'payable' | 'expense' | 'withdrawal' | 'contagem-reconciliation' | 'other';
+    id?: string;
+  };
+  occurredAt: string; // ISO string — the Owner-declared date of the event, e.g. a payment date
+  createdAt: string; // ISO string — server-recorded write time, distinct from occurredAt
+  createdBy: string; // uid, for auditability
+}
+
+// [Business Worth Evolution — Implementation Authorization, Increment 3;
+// Specification §11] A manually-recorded debt — money owed TO the
+// business. An unpaid Receivable contributes NOTHING to Business Worth
+// (FIN-3) — only an actually-received payment does, via its own linked
+// CashLedgerEntry (customer-payment).
+export interface Receivable {
+  id: string;
+  businessId: string;
+  totalAmount: number;
+  // [Rule 8 open question §36 item 3, resolved here as a schema-shape
+  // choice, not a business rule] Maintained as a denormalized running
+  // total, updated transactionally alongside each payment write —
+  // mirrors this codebase's own existing "amountPaid on the parent
+  // document" precedent (Payable, below) rather than requiring a
+  // subcollection read on every display. I-5 (amountPaid always equals
+  // the sum of its own payments) is enforced at the write path
+  // (recordReceivablePayment), not merely assumed.
+  amountPaid: number;
+  amountRemaining: number;
+  status: 'unpaid' | 'partially-paid' | 'paid';
+  createdAt: string; // ISO string
+  description?: string;
+  // Free-text, owner-entered — who owes this money. Not a reference to
+  // any existing customer/user entity (this system has no customer
+  // accounts) — a genuinely new, narrow field for exactly this purpose.
+  debtorName?: string;
+}
+
+export interface ReceivablePayment {
+  id: string;
+  receivableId: string;
+  amountPaid: number;
+  paidAt: string; // ISO string
+  createdAt: string; // ISO string — server-recorded write time
+  cashLedgerEntryId: string; // the CashLedgerEntry this payment produced
+}
+
+// [Business Worth Evolution — Implementation Authorization, Increment 3;
+// Specification §12] Money the business OWES to a supplier — created
+// only for Case 2 (supplier credit) at the same time +Stock records the
+// acquisition (FR-14). Never created merely because a supplier was paid
+// immediately (Case 1) — that payment, if made from recorded business
+// cash, is its own CashLedgerEntry only, never a Payable.
+export interface Payable {
+  id: string;
+  businessId: string;
+  sourcePurchaseBatchId: string;
+  supplierId?: string; // links to the existing reusable SupplierRecord, where one was used
+  totalAmount: number;
+  amountPaid: number; // denormalized running total — same discipline as Receivable.amountPaid, above
+  amountRemaining: number;
+  status: 'unpaid' | 'partially-paid' | 'paid';
+  createdAt: string; // ISO string
+}
+
+export interface PayablePayment {
+  id: string;
+  payableId: string;
+  amountPaid: number;
+  paidAt: string; // ISO string
+  createdAt: string; // ISO string — server-recorded write time
+  cashLedgerEntryId: string;
+}
+
 // [Void & Redo — Implementation Authorization §2 item 2; Rule 8 Finding
 // G1, Direction 2 (adopted)] The additive, create-only artifact
 // recording that a given `initial` StockCount confirmation has been

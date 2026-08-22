@@ -72,9 +72,14 @@ import {
   BusinessWorthSnapshot,
   BusinessWorthSnapshotProductValuationLine,
   BusinessWorthSnapshotEmbeddedProfitLine,
+  CashLedgerEntry,
+  Receivable,
+  ReceivablePayment,
+  Payable,
+  PayablePayment,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -378,6 +383,28 @@ interface AppContextType {
   // the full doc comment — one shared calculation, two context fields
   // exposing its two named readings.
   estimatedBusinessWorth: number | 'UNKNOWN';
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §10-12, §33] Owner-only tier — see the onSnapshot
+  // listener setup's own doc comment for why.
+  cashLedgerEntries: CashLedgerEntry[];
+  receivables: Receivable[];
+  receivablePayments: ReceivablePayment[];
+  payables: Payable[];
+  payablePayments: PayablePayment[];
+  // Creates a manually-recorded debt owed TO the business (Specification
+  // §11). Contributes nothing to Business Worth until actually paid
+  // (FIN-3) — see recordReceivablePayment for the payment side.
+  addReceivable: (params: { totalAmount: number; description?: string; debtorName?: string }) => Promise<{ receivableId: string }>;
+  // Records a payment against an existing Receivable — atomic with its
+  // own linked CashLedgerEntry (FR-13), rejects an amount exceeding what
+  // remains outstanding (never an overpayment), and is itself idempotent
+  // against a client-supplied submissionId (a retried call with the same
+  // id never double-applies).
+  recordReceivablePayment: (params: { receivableId: string; amountPaid: number; paidAt: string; submissionId: string }) => Promise<{ success: boolean; error?: string }>;
+  // Records a payment against an existing supplier Payable — same
+  // atomicity/idempotency/overpayment-rejection discipline as
+  // recordReceivablePayment, mirrored for the liability side (I-6, FR-15).
+  recordPayablePayment: (params: { payableId: string; amountPaid: number; paidAt: string; submissionId: string }) => Promise<{ success: boolean; error?: string }>;
   // [Void & Redo — Implementation Authorization §2 item 9; FR-9, FR-10]
   // Every 'initial'-type confirmation event ever recorded, chain-order
   // sorted, for history/audit display only.
@@ -429,7 +456,17 @@ interface AppContextType {
     supplier?: Supplier,
     notes?: string,
     supplierId?: string,
-    purchaseEventId?: string
+    purchaseEventId?: string,
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 3; Specification §12 Case 2, FR-14] When true, this purchase was
+    // acquired on supplier credit rather than paid immediately — a
+    // `Payable` is created, in the same atomic write as everything else
+    // here, for this purchase's own total investment value. `+Stock`
+    // itself is completely unmodified otherwise: this flag adds one
+    // additional document to the same batch, never a second
+    // stock-acquisition record (Specification §12's own "no duplicate
+    // stock-purchase record" rule).
+    supplierCredit?: boolean
   ) => Promise<{ purchaseBatchId: string | null }>;
   // [Multi-Supplier Purchase Event Amendment v1.0] Retroactively tags
   // an already-finalized PurchaseBatch with a Purchase Event
@@ -666,6 +703,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // window), so a snapshot arriving here never needs reconciling against
   // a locally-optimistic copy.
   const [businessWorthSnapshots, setBusinessWorthSnapshots] = useState<BusinessWorthSnapshot[]>([]);
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §10-12, §33] Owner-only tier (isOwnerOf), same access
+  // class as withdrawals — Staff never handles these, matching the
+  // Specification's own explicit authorization boundary for these three
+  // record types.
+  const [cashLedgerEntries, setCashLedgerEntries] = useState<CashLedgerEntry[]>([]);
+  const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [receivablePayments, setReceivablePayments] = useState<ReceivablePayment[]>([]);
+  const [payables, setPayables] = useState<Payable[]>([]);
+  const [payablePayments, setPayablePayments] = useState<PayablePayment[]>([]);
   // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
   // §17] Null when no Authorization has ever been granted for this
   // business, or once it has been fully superseded (a fresh grant
@@ -956,12 +1003,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Increment 1 (both are explicitly Increment 2 scope, per the
   // Implementation Plan's §24 sequence) — exposed on this context now so
   // Increment 2 can wire the UI without needing any new data-loading work.
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §7/§9] `payables`/`cashLedgerEntries` now supply the
+  // "±Receivables/Payables/Cash position changes" term this function's
+  // own doc comment (calculations.ts) describes in full — the term is no
+  // longer omitted (Increment 1/2), it is genuinely computed.
   const currentBusinessWorth = getCurrentBusinessWorth({
     snapshots: businessWorthSnapshots,
     batches,
     quebras,
     expenses,
     withdrawals,
+    payables,
+    cashLedgerEntries,
   });
 
   // [Business Worth Evolution — Implementation Authorization, Increment 2;
@@ -969,13 +1023,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // SAME shared calculation as currentBusinessWorth above, read under its
   // "Estimated" name — for a business with no BusinessWorthSnapshot yet
   // (State 1a), this resolves to the Case B figure (Historical Capital
-  // Inicial + embedded profit since baseline − Expenses − Levantamentos)
-  // instead of UNKNOWN; for a business that already has an active
-  // snapshot, it resolves to the identical value currentBusinessWorth
-  // does (§41.4 — one calculation, two names). Consumed by the Dashboard
-  // (Increment 2, DashboardView.tsx) and Owner Portfolio (refreshShopWorth,
-  // below) so the same authoritative figure is never independently
-  // recomputed a second time by either.
+  // Inicial + embedded profit since baseline − Expenses − Levantamentos
+  // ± the same Increment-3 financial-position term above) instead of
+  // UNKNOWN; for a business that already has an active snapshot, it
+  // resolves to the identical value currentBusinessWorth does (§41.4 —
+  // one calculation, two names). Consumed by the Dashboard (Increment 2,
+  // DashboardView.tsx) and Owner Portfolio (refreshShopWorth, below) so
+  // the same authoritative figure is never independently recomputed a
+  // second time by either.
   const estimatedBusinessWorth = getEstimatedBusinessWorth({
     snapshots: businessWorthSnapshots,
     initialStockCount,
@@ -983,6 +1038,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     quebras,
     expenses,
     withdrawals,
+    payables,
+    cashLedgerEntries,
   });
 
   // ============================================================
@@ -1364,6 +1421,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching business worth snapshots:', err)
     );
 
+    // [Business Worth Evolution — Implementation Authorization, Increment 3;
+    // Specification §10-12] Five new, tenant-scoped, Owner-only
+    // collections — loaded exactly like withdrawals (same read tier,
+    // isOwnerOf), unconditionally (small, bounded per-business lists,
+    // same class as businessWorthSnapshots above — no pagination
+    // introduced, matching this Plan's own "no unrelated engineering
+    // improvement" discipline).
+    const cashLedgerEntriesRef = collection(db, 'businesses', businessId, 'cashLedgerEntries');
+    const unsubCashLedgerEntries = onSnapshot(
+      cashLedgerEntriesRef,
+      (snap) => {
+        const list: CashLedgerEntry[] = [];
+        snap.forEach((doc) => list.push(doc.data() as CashLedgerEntry));
+        setCashLedgerEntries(list);
+      },
+      (err) => console.error('Error fetching cash ledger entries:', err)
+    );
+
+    const receivablesRef = collection(db, 'businesses', businessId, 'receivables');
+    const unsubReceivables = onSnapshot(
+      receivablesRef,
+      (snap) => {
+        const list: Receivable[] = [];
+        snap.forEach((doc) => list.push(doc.data() as Receivable));
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setReceivables(list);
+      },
+      (err) => console.error('Error fetching receivables:', err)
+    );
+
+    const receivablePaymentsRef = collection(db, 'businesses', businessId, 'receivablePayments');
+    const unsubReceivablePayments = onSnapshot(
+      receivablePaymentsRef,
+      (snap) => {
+        const list: ReceivablePayment[] = [];
+        snap.forEach((doc) => list.push(doc.data() as ReceivablePayment));
+        setReceivablePayments(list);
+      },
+      (err) => console.error('Error fetching receivable payments:', err)
+    );
+
+    const payablesRef = collection(db, 'businesses', businessId, 'payables');
+    const unsubPayables = onSnapshot(
+      payablesRef,
+      (snap) => {
+        const list: Payable[] = [];
+        snap.forEach((doc) => list.push(doc.data() as Payable));
+        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setPayables(list);
+      },
+      (err) => console.error('Error fetching payables:', err)
+    );
+
+    const payablePaymentsRef = collection(db, 'businesses', businessId, 'payablePayments');
+    const unsubPayablePayments = onSnapshot(
+      payablePaymentsRef,
+      (snap) => {
+        const list: PayablePayment[] = [];
+        snap.forEach((doc) => list.push(doc.data() as PayablePayment));
+        setPayablePayments(list);
+      },
+      (err) => console.error('Error fetching payable payments:', err)
+    );
+
     // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
     // §2/§17] Single fixed-id document, not a collection — mirrors the
     // subscription doc listener's own shape (1a, above) rather than
@@ -1522,6 +1643,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubStockCounts();
       unsubVoidRecords();
       unsubBusinessWorthSnapshots();
+      unsubCashLedgerEntries();
+      unsubReceivables();
+      unsubReceivablePayments();
+      unsubPayables();
+      unsubPayablePayments();
       unsubInitialStockRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
@@ -1791,7 +1917,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap, stockCountsSnap, voidRecordsSnap, businessWorthSnapshotsSnap] = await Promise.all([
+      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap, stockCountsSnap, voidRecordsSnap, businessWorthSnapshotsSnap, payablesSnap, cashLedgerEntriesSnap] = await Promise.all([
         getDocs(collection(db, 'businesses', businessId, 'batches')),
         getDocs(collection(db, 'businesses', businessId, 'quebras')),
         getDocs(collection(db, 'businesses', businessId, 'expenses')),
@@ -1799,6 +1925,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getDocs(collection(db, 'businesses', businessId, 'stockCounts')),
         getDocs(collection(db, 'businesses', businessId, 'voidRecords')),
         getDocs(collection(db, 'businesses', businessId, 'businessWorthSnapshots')),
+        getDocs(collection(db, 'businesses', businessId, 'payables')),
+        getDocs(collection(db, 'businesses', businessId, 'cashLedgerEntries')),
       ]);
 
       const shopBatches: StockBatch[] = [];
@@ -1815,6 +1943,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       voidRecordsSnap.forEach((d) => shopVoidRecords.push(d.data() as VoidRecord));
       const shopBusinessWorthSnapshots: BusinessWorthSnapshot[] = [];
       businessWorthSnapshotsSnap.forEach((d) => shopBusinessWorthSnapshots.push(d.data() as BusinessWorthSnapshot));
+      const shopPayables: Payable[] = [];
+      payablesSnap.forEach((d) => shopPayables.push(d.data() as Payable));
+      const shopCashLedgerEntries: CashLedgerEntry[] = [];
+      cashLedgerEntriesSnap.forEach((d) => shopCashLedgerEntries.push(d.data() as CashLedgerEntry));
 
       // Same "exclude a voided confirmation" choke point the active-shop
       // context already applies (see `initialStockCount`'s own definition,
@@ -1831,6 +1963,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quebras: shopQuebras,
         expenses: shopExpenses,
         withdrawals: shopWithdrawals,
+        payables: shopPayables,
+        cashLedgerEntries: shopCashLedgerEntries,
       });
 
       if (shopEstimatedOrCurrentWorth === 'UNKNOWN') {
@@ -2232,7 +2366,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     supplier?: Supplier,
     notes?: string,
     supplierId?: string,
-    purchaseEventId?: string
+    purchaseEventId?: string,
+    supplierCredit?: boolean
   ) => {
     if (!activeBusinessId || !items.length) return { purchaseBatchId: null };
     const businessId = activeBusinessId;
@@ -2504,6 +2639,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     }
 
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 3; Specification §12 Case 2, FR-14] Supplier-credit purchase — a
+    // Payable is created, in the SAME atomic batch as the stock write
+    // above, for this purchase's own total investment (cost) value. The
+    // stock acquisition itself is entirely unmodified above (+Stock
+    // remains the sole acquisition record) — this adds one additional
+    // document only, never a duplicate purchase record. No Business
+    // Worth change occurs here beyond what the resulting batches'
+    // embedded profit already produces (FR-14) — the live calculation's
+    // own payables-position term (calculations.ts) is what reflects this
+    // Payable's outstanding balance, not this write itself.
+    if (supplierCredit && totalInvestmentValue > 0) {
+      const newPayableId = 'payable-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+      const roundedTotal = Number(totalInvestmentValue.toFixed(2));
+      const newPayable: Payable = {
+        id: newPayableId,
+        businessId,
+        sourcePurchaseBatchId: newPurchaseBatchId,
+        ...(resolvedSupplierId ? { supplierId: resolvedSupplierId } : {}),
+        totalAmount: roundedTotal,
+        amountPaid: 0,
+        amountRemaining: roundedTotal,
+        status: 'unpaid',
+        createdAt: new Date().toISOString(),
+      };
+      fsBatch.set(doc(db, 'businesses', businessId, 'payables', newPayableId), newPayable);
+    }
+
     // [Durable Purchase Capture Amendment v1.0] Clear the finalizing
     // user's Purchase Draft in the SAME atomic batch as everything
     // above — Firestore batch writes are all-or-nothing, so if this
@@ -2697,6 +2860,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    const businessId = activeBusinessId;
     const newExpense: Expense = {
       id: 'exp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       date,
@@ -2706,7 +2870,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', activeBusinessId, 'expenses', newExpense.id), newExpense);
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 3; Specification §10 FR-10] Every Expense also gets its own
+    // governed CashLedgerEntry (category 'expense') — for auditability/
+    // completeness of the ledger only. This entry is deliberately
+    // EXCLUDED from the live calculation's own position-change term
+    // (calculations.ts) — Expense's real Business Worth effect continues
+    // to flow exclusively through the existing, unmodified
+    // expensesSinceSnapshot/totalExpensesAllTime terms, exactly as
+    // before this increment (Test Requirement "Expense is not subtracted
+    // twice through Cash Ledger"). The Expense record/category system
+    // itself is completely unmodified — this is an additive, atomic
+    // sibling write, never a change to Expense's own shape or behavior.
+    const cashLedgerEntryId = 'cle-expense-' + newExpense.id;
+    const cashLedgerEntry: CashLedgerEntry = {
+      id: cashLedgerEntryId,
+      businessId,
+      direction: 'outflow',
+      amount: newExpense.amount,
+      category: 'expense',
+      sourceReference: { type: 'expense', id: newExpense.id },
+      occurredAt: date,
+      createdAt: newExpense.createdAt,
+      createdBy: currentUser?.uid || '',
+    };
+
+    const fsBatch = createFirestoreBatch(db);
+    fsBatch.set(doc(db, 'businesses', businessId, 'expenses', newExpense.id), newExpense);
+    fsBatch.set(doc(db, 'businesses', businessId, 'cashLedgerEntries', cashLedgerEntryId), cashLedgerEntry);
+    await fsBatch.commit();
 
     await logTimelineEvent({
       type: 'expense-recorded',
@@ -2739,6 +2931,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
     }
 
+    const businessId = activeBusinessId;
     const newWithdrawal: Withdrawal = {
       id: 'wd-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       date,
@@ -2748,7 +2941,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', activeBusinessId, 'withdrawals', newWithdrawal.id), newWithdrawal);
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 3; Specification §10 FR-10] Same discipline as addExpense's own
+    // CashLedgerEntry, immediately above — a Levantamento's own governed
+    // ledger entry (category 'levantamento'), for auditability only,
+    // EXCLUDED from the live calculation's own position-change term.
+    // Withdrawal's own record/behavior is completely unmodified.
+    const cashLedgerEntryId = 'cle-levantamento-' + newWithdrawal.id;
+    const cashLedgerEntry: CashLedgerEntry = {
+      id: cashLedgerEntryId,
+      businessId,
+      direction: 'outflow',
+      amount: newWithdrawal.amount,
+      category: 'levantamento',
+      sourceReference: { type: 'withdrawal', id: newWithdrawal.id },
+      occurredAt: date,
+      createdAt: newWithdrawal.createdAt,
+      createdBy: currentUser?.uid || '',
+    };
+
+    const fsBatch = createFirestoreBatch(db);
+    fsBatch.set(doc(db, 'businesses', businessId, 'withdrawals', newWithdrawal.id), newWithdrawal);
+    fsBatch.set(doc(db, 'businesses', businessId, 'cashLedgerEntries', cashLedgerEntryId), cashLedgerEntry);
+    await fsBatch.commit();
 
     await logTimelineEvent({
       type: 'withdrawal-recorded',
@@ -2766,6 +2981,228 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return newWithdrawal;
+  };
+
+  // ============================================================
+  // BUSINESS WORTH EVOLUTION — INCREMENT 3
+  // Receivables (Specification §11) + Payables (§12) payment recording.
+  // ============================================================
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §11, FR-12] Creating a Receivable itself has NO
+  // Business Worth effect (FIN-3) — a single, un-batched write is
+  // sufficient (nothing else needs to change atomically alongside it).
+  const addReceivable = async ({ totalAmount, description, debtorName }: { totalAmount: number; description?: string; debtorName?: string }) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode registar dívidas.');
+    if (!(Number(totalAmount) > 0)) throw new Error('O valor da dívida deve ser maior que zero.');
+
+    const businessId = activeBusinessId;
+    const receivableId = 'receivable-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const rounded = Number(Number(totalAmount).toFixed(2));
+
+    const newReceivable: Receivable = {
+      id: receivableId,
+      businessId,
+      totalAmount: rounded,
+      amountPaid: 0,
+      amountRemaining: rounded,
+      status: 'unpaid',
+      createdAt: new Date().toISOString(),
+      ...(description?.trim() ? { description: description.trim() } : {}),
+      ...(debtorName?.trim() ? { debtorName: debtorName.trim() } : {}),
+    };
+
+    await setDoc(doc(db, 'businesses', businessId, 'receivables', receivableId), newReceivable);
+    return { receivableId };
+  };
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §11, FR-12, FR-13, I-5] Records a payment against an
+  // existing Receivable. Atomic (one Firestore transaction): the payment
+  // record, its linked CashLedgerEntry (FR-13 — no payment may exist
+  // without one), and the Receivable's own denormalized amountPaid/
+  // amountRemaining/status all update together or not at all.
+  //
+  // Idempotent by construction: the payment document's id IS the
+  // caller-supplied submissionId, so a retried call with the same id
+  // reads back its own already-written payment inside the transaction
+  // and returns success without applying anything a second time — the
+  // identical "deterministic id, read-then-no-op-if-already-written"
+  // discipline this codebase already uses for BusinessWorthSnapshot's
+  // own 'bws-' + sourceStockCountId id.
+  //
+  // Overpayment is rejected: an amountPaid that would take
+  // amountRemaining below zero throws before any write is attempted.
+  const recordReceivablePayment = async ({
+    receivableId,
+    amountPaid,
+    paidAt,
+    submissionId,
+  }: {
+    receivableId: string;
+    amountPaid: number;
+    paidAt: string;
+    submissionId: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    if (!activeBusinessId) return { success: false, error: 'Sem negócio associado.' };
+    if (!isOwner) return { success: false, error: 'Apenas o dono pode registar pagamentos.' };
+    if (!(Number(amountPaid) > 0)) return { success: false, error: 'O valor pago deve ser maior que zero.' };
+
+    const businessId = activeBusinessId;
+    const roundedAmount = Number(Number(amountPaid).toFixed(2));
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const receivableRef = doc(db, 'businesses', businessId, 'receivables', receivableId);
+        const paymentRef = doc(db, 'businesses', businessId, 'receivablePayments', submissionId);
+
+        // Reads must happen before any write inside a Firestore
+        // transaction — both reads are issued before either ref below is
+        // touched.
+        const [receivableSnap, existingPaymentSnap] = await Promise.all([tx.get(receivableRef), tx.get(paymentRef)]);
+
+        if (existingPaymentSnap.exists()) {
+          // Idempotent retry — already applied by an earlier attempt with
+          // this exact submissionId. Nothing more to do.
+          return;
+        }
+        if (!receivableSnap.exists()) {
+          throw new Error('Dívida não encontrada.');
+        }
+
+        const receivable = receivableSnap.data() as Receivable;
+        const newAmountRemaining = Number((receivable.amountRemaining - roundedAmount).toFixed(2));
+        if (newAmountRemaining < -0.005) {
+          throw new Error('O valor pago excede o saldo em aberto desta dívida.');
+        }
+        const clampedRemaining = Math.max(0, newAmountRemaining);
+        const newAmountPaid = Number((receivable.amountPaid + roundedAmount).toFixed(2));
+        const newStatus: Receivable['status'] = clampedRemaining <= 0.005 ? 'paid' : 'partially-paid';
+
+        const cashLedgerEntryId = 'cle-receivable-' + submissionId;
+        const cashLedgerEntry: CashLedgerEntry = {
+          id: cashLedgerEntryId,
+          businessId,
+          direction: 'inflow',
+          amount: roundedAmount,
+          category: 'customer-payment',
+          sourceReference: { type: 'receivable', id: receivableId },
+          occurredAt: paidAt,
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser?.uid || '',
+        };
+        const payment: ReceivablePayment = {
+          id: submissionId,
+          receivableId,
+          amountPaid: roundedAmount,
+          paidAt,
+          createdAt: new Date().toISOString(),
+          cashLedgerEntryId,
+        };
+
+        tx.set(paymentRef, payment);
+        tx.set(doc(db, 'businesses', businessId, 'cashLedgerEntries', cashLedgerEntryId), cashLedgerEntry);
+        tx.update(receivableRef, {
+          amountPaid: newAmountPaid,
+          amountRemaining: clampedRemaining,
+          status: newStatus,
+        });
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error recording receivable payment:', businessId, receivableId, err);
+      return { success: false, error: err.message || 'Erro ao registar o pagamento.' };
+    }
+  };
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 3;
+  // Specification §12, FR-15, I-6] Records a payment against an existing
+  // supplier Payable — mirrors recordReceivablePayment exactly (atomicity,
+  // idempotency, overpayment rejection), for the liability side. The
+  // linked CashLedgerEntry is category 'supplier-payment' (an outflow),
+  // never a second, independent Business Worth reduction beyond the
+  // reduction the Payable's own outstanding balance already represents
+  // (FR-15 — the live calculation's own payables-position term,
+  // calculations.ts, is what makes this settle rather than doubly reduce).
+  const recordPayablePayment = async ({
+    payableId,
+    amountPaid,
+    paidAt,
+    submissionId,
+  }: {
+    payableId: string;
+    amountPaid: number;
+    paidAt: string;
+    submissionId: string;
+  }): Promise<{ success: boolean; error?: string }> => {
+    if (!activeBusinessId) return { success: false, error: 'Sem negócio associado.' };
+    if (!isOwner) return { success: false, error: 'Apenas o dono pode registar pagamentos.' };
+    if (!(Number(amountPaid) > 0)) return { success: false, error: 'O valor pago deve ser maior que zero.' };
+
+    const businessId = activeBusinessId;
+    const roundedAmount = Number(Number(amountPaid).toFixed(2));
+
+    try {
+      await runTransaction(db, async (tx) => {
+        const payableRef = doc(db, 'businesses', businessId, 'payables', payableId);
+        const paymentRef = doc(db, 'businesses', businessId, 'payablePayments', submissionId);
+
+        const [payableSnap, existingPaymentSnap] = await Promise.all([tx.get(payableRef), tx.get(paymentRef)]);
+
+        if (existingPaymentSnap.exists()) {
+          // Idempotent retry — already applied.
+          return;
+        }
+        if (!payableSnap.exists()) {
+          throw new Error('Dívida ao fornecedor não encontrada.');
+        }
+
+        const payable = payableSnap.data() as Payable;
+        const newAmountRemaining = Number((payable.amountRemaining - roundedAmount).toFixed(2));
+        if (newAmountRemaining < -0.005) {
+          throw new Error('O valor pago excede o saldo em aberto desta dívida ao fornecedor.');
+        }
+        const clampedRemaining = Math.max(0, newAmountRemaining);
+        const newAmountPaid = Number((payable.amountPaid + roundedAmount).toFixed(2));
+        const newStatus: Payable['status'] = clampedRemaining <= 0.005 ? 'paid' : 'partially-paid';
+
+        const cashLedgerEntryId = 'cle-payable-' + submissionId;
+        const cashLedgerEntry: CashLedgerEntry = {
+          id: cashLedgerEntryId,
+          businessId,
+          direction: 'outflow',
+          amount: roundedAmount,
+          category: 'supplier-payment',
+          sourceReference: { type: 'payable', id: payableId },
+          occurredAt: paidAt,
+          createdAt: new Date().toISOString(),
+          createdBy: currentUser?.uid || '',
+        };
+        const payment: PayablePayment = {
+          id: submissionId,
+          payableId,
+          amountPaid: roundedAmount,
+          paidAt,
+          createdAt: new Date().toISOString(),
+          cashLedgerEntryId,
+        };
+
+        tx.set(paymentRef, payment);
+        tx.set(doc(db, 'businesses', businessId, 'cashLedgerEntries', cashLedgerEntryId), cashLedgerEntry);
+        tx.update(payableRef, {
+          amountPaid: newAmountPaid,
+          amountRemaining: clampedRemaining,
+          status: newStatus,
+        });
+      });
+
+      return { success: true };
+    } catch (err: any) {
+      console.error('Error recording payable payment:', businessId, payableId, err);
+      return { success: false, error: err.message || 'Erro ao registar o pagamento.' };
+    }
   };
 
   // Module #19 V1 Manual Payment Bridge — temporary confirmation bridge,
@@ -3163,10 +3600,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // there to count), exactly as the existing batch-ledger
       // calculation already relies on for the identical reason.
       const productValuationTotal = Number(normalizedTotalSellingValue.toFixed(2));
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 3; Specification §12 FIN-4] A fresh physical count
+      // (productValuationTotal above) already includes credit-financed
+      // stock at its FULL market value — regardless of whether it's
+      // been paid for yet. currentPayablesOutstanding is subtracted here
+      // so a business that owes a supplier for stock sitting in this
+      // count isn't measured as though that stock were fully, freely
+      // owned. This is NOT a double-count against the live "since
+      // snapshot" calculation's own payables-position term
+      // (calculations.ts) — that term only tracks the outstanding
+      // balance CHANGING after this snapshot, using this exact figure as
+      // its own new starting baseline (payablesPosition, below).
+      //
+      // [Specification §11 FIN-3] receivablesPosition is deliberately
+      // NEVER passed to computeMeasuredBusinessWorth's own additive
+      // parameter — an outstanding (unpaid) Receivable must contribute
+      // ZERO to Business Worth, so passing a real, nonzero sum into an
+      // ADDITIVE parameter would violate FIN-3. The sum is still frozen
+      // onto the snapshot itself, below, as an informational drill-down
+      // figure only (§8) — never fed into this arithmetic.
+      const currentPayablesOutstanding = sumOutstandingPayables(payables);
+      const currentReceivablesOutstanding = sumOutstandingReceivables(receivables);
       const measuredBusinessWorth = computeMeasuredBusinessWorth({
         productValuationTotal,
         totalExpensesAllTime,
         totalWithdrawalsAllTime,
+        payablesPosition: currentPayablesOutstanding,
       });
 
       const productValuationDetail: BusinessWorthSnapshotProductValuationLine[] = countItems.map((item) => ({
@@ -3239,6 +3699,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quebras,
         expenses,
         withdrawals,
+        payables,
+        cashLedgerEntries,
         asOfDate: date,
       });
       const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
@@ -3264,6 +3726,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         quebras,
         expenses,
         withdrawals,
+        payables,
+        cashLedgerEntries,
         asOfDate: date,
       });
       const estimatedBusinessWorthImmediatelyBefore = priorEstimated === 'UNKNOWN' ? undefined : priorEstimated;
@@ -3273,13 +3737,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           : Number((measuredBusinessWorth - estimatedBusinessWorthImmediatelyBefore).toFixed(2));
 
       // [Corrected — Product Architect clarification, this session]
-      // cashPosition/receivablesPosition/payablesPosition are OMITTED
-      // ENTIRELY (never set to a literal 0) — the exact same "omit
-      // entirely, never a fabricated value" discipline this codebase
-      // already uses for every other optional field (see newCount's own
-      // construction, above, for the established precedent). See
-      // types.ts's own BusinessWorthSnapshot comment for the full
-      // rationale.
+      // cashPosition is OMITTED ENTIRELY (never set to a literal 0) —
+      // owner-confirmed physical cash capture at Contagem remains
+      // deferred to Increment 7's own Reconciliation scope (FR-11) —
+      // continuing the exact same "omit entirely, never a fabricated
+      // value" discipline this codebase already uses for every other
+      // optional field. payablesPosition/receivablesPosition are now
+      // genuinely computed (Increment 3) — see their own computation
+      // above for exactly what each represents and why.
       const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
         id: businessWorthSnapshotId,
         businessId,
@@ -3289,6 +3754,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         productValuationDetail,
         embeddedProfitTotal,
         embeddedProfitDetail,
+        payablesPosition: currentPayablesOutstanding,
+        receivablesPosition: currentReceivablesOutstanding,
         expensesSinceLastSnapshot,
         breakagesSinceLastSnapshot,
         levantamentosSinceLastSnapshot,
@@ -3299,9 +3766,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // confirmation at all).
         ...(estimatedBusinessWorthImmediatelyBefore !== undefined ? { estimatedBusinessWorthImmediatelyBefore } : {}),
         ...(difference !== undefined ? { difference } : {}),
-        // [Increment 3 dependency, explicitly flagged] cashPosition,
-        // receivablesPosition, payablesPosition intentionally absent —
-        // no existing source; never fabricated as 0.
         correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         status: 'active',
       };
@@ -4599,6 +5063,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         businessWorthSnapshots,
         currentBusinessWorth,
         estimatedBusinessWorth,
+        cashLedgerEntries,
+        receivables,
+        receivablePayments,
+        payables,
+        payablePayments,
+        addReceivable,
+        recordReceivablePayment,
+        recordPayablePayment,
         initialStockConfirmationChain,
         initialStockVoidEligibility,
         initialStockRecoveryAuthorization,
