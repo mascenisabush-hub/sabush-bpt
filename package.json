@@ -26,6 +26,7 @@
     "test:audit-log-firestore-query": "tsx --test tests/superadmin-audit-log-firestore-query.test.ts",
     "test:calculations": "tsx --test tests/calculations.test.ts",
     "test:business-worth-current-read-path": "tsx --test tests/business-worth-current-read-path.test.ts",
+    "test:business-worth-measured-value": "tsx --test tests/business-worth-measured-value.test.ts",
     "test:business-worth-snapshot-foundation": "tsx --test tests/business-worth-snapshot-foundation.test.ts",
     "test:owner-portfolio-currentworth": "tsx --test tests/owner-portfolio-currentworth.test.ts",
     "test:subscription-contact-modal-autoclose": "tsx --test tests/subscription-contact-modal-autoclose.test.ts",

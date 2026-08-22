@@ -115,6 +115,13 @@ function stockCountBody(id: string) {
 }
 
 function snapshotBody(id: string, sourceStockCountId: string, overrides: Record<string, unknown> = {}) {
+  // [Corrected] cashPosition/receivablesPosition/payablesPosition/
+  // estimatedBusinessWorthImmediatelyBefore/difference are OMITTED by
+  // default here, matching the corrected BusinessWorthSnapshot
+  // interface exactly (all five are optional; Increment 1 never
+  // fabricates a 0 or a permanent null for them — see types.ts's own
+  // comment). A test that needs one present can still supply it via
+  // `overrides`.
   return {
     id,
     businessId: BIZ,
@@ -125,15 +132,10 @@ function snapshotBody(id: string, sourceStockCountId: string, overrides: Record<
     productValuationDetail: [],
     embeddedProfitTotal: 0,
     embeddedProfitDetail: [],
-    cashPosition: 0,
-    receivablesPosition: 0,
-    payablesPosition: 0,
     expensesSinceLastSnapshot: 0,
     breakagesSinceLastSnapshot: 0,
     levantamentosSinceLastSnapshot: 0,
     previousCurrentBusinessWorth: null,
-    estimatedBusinessWorthImmediatelyBefore: null,
-    difference: null,
     correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
     status: 'active',
     ...overrides,

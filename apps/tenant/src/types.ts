@@ -641,23 +641,31 @@ export interface StockCount {
 // atomic Firestore batch as the StockCount write (see recordStockCount,
 // AppContext.tsx) — never independently, never retroactively.
 //
-// [Implementation note — Increment 1 interim values, explicitly
-// identified, not silently invented; see Implementation Authorization
-// final report] cashPosition/receivablesPosition/payablesPosition are
-// always 0 in Increment 1 — the Cash Ledger/Receivables/Payables
-// collections this Specification also names (§10-§12) do not exist
-// until Increment 3, so there are literally zero such records anywhere
-// in the system yet; 0 is an accurate reflection of that, not a
-// fabricated business fact. estimatedBusinessWorthImmediatelyBefore and
-// difference are always null in Increment 1 — computing a real value
-// would require the Estimated Business Worth engine (§9), which is
-// Increment 2's own scope; per this Authorization's explicit
-// instruction, Increment 1 must not "pretend Estimated Business Worth
-// already exists." Both fields are already typed nullable for exactly
-// this reason. Because BusinessWorthSnapshot's frozen fields are never
-// rewritten once written (I-3, FR-6), this null state is PERMANENT for
-// snapshots created before Increment 2 ships — flagged explicitly for
-// Product Architect awareness, not a defect silently introduced here.
+// [Correction — Product Architect clarification, this session] The
+// previous version of this comment stated cashPosition/
+// receivablesPosition/payablesPosition are "always 0" and
+// estimatedBusinessWorthImmediatelyBefore/difference are "always null"
+// in Increment 1. Both were WRONG: a hard-coded 0 for a real financial
+// position is a false zero, not an honest absence, and a permanent
+// null written into an immutable historical record is a misleading
+// value the system can never truthfully correct later. Corrected
+// design: these five fields are OPTIONAL and are OMITTED ENTIRELY from
+// a snapshot written before their own governing increment ships — the
+// exact same "absent means this feature didn't exist yet when this
+// record was written" idiom this codebase already uses everywhere else
+// (expectedValueAtCount?, initialCapitalBasis?, chainPosition?, etc.),
+// applied here for the first time to this new record type. Absent is
+// never later silently backfilled (immutability, I-3, FR-6) — a field
+// that was genuinely unavailable when a snapshot was created remains
+// absent on that snapshot forever; only a NEW, later snapshot (from a
+// later Contagem, once the governing increment has shipped) will carry
+// it.
+//
+// measuredBusinessWorth itself is corrected to actually incorporate
+// EXISTING, already-tracked financial activity — see that field's own
+// comment below for the exact formula and why the previous
+// productValuationTotal-alone version was an undercount, not a
+// reasonable interim value.
 export interface BusinessWorthSnapshot {
   id: string;
   businessId: string;
@@ -670,12 +678,31 @@ export interface BusinessWorthSnapshot {
   // immutable anchor — independent of, and not copied from, the source
   // StockCount's own (possibly absent, for a periodic count) confirmedAt.
   confirmedAt: Timestamp;
-  // Frozen at confirmation time. Increment 1: equals productValuationTotal
-  // exactly (cashPosition/receivablesPosition/payablesPosition are 0 — see
-  // interim-values note above). Resolves Rule 8 open question #4 (§36
-  // item 4) for its ADDITIVE STRUCTURE only, directly from the
-  // Specification's own FR-24 text ("embeddedProfitTotal... never a
-  // second addend to measuredBusinessWorth") — not an invented rule.
+  // [Corrected] Frozen at confirmation time as:
+  //   productValuationTotal
+  //   + cashPosition + receivablesPosition − payablesPosition (when present)
+  //   − totalExpensesAllTime − totalWithdrawalsAllTime (the EXISTING,
+  //     already-tracked, all-time cumulative totals this codebase
+  //     already computes today — AppContext.tsx's own existing
+  //     businessWorth formula, line ~943, unchanged and reused here,
+  //     not recomputed independently)
+  // This mirrors the EXISTING, unmodified Business Worth Engine formula
+  // (totalMarketValueAllTime − totalExpensesAllTime − totalWithdrawalsAllTime)
+  // exactly, with productValuationTotal (the Contagem's own MEASURED
+  // physical count) standing in for totalMarketValueAllTime (the
+  // batch-ledger's own ESTIMATE) — the entire point of a Contagem being
+  // a more accurate, measured figure than the estimate it replaces.
+  // cashPosition/receivablesPosition/payablesPosition are included only
+  // when present (Increment 3+) — their absence in Increment 1 means
+  // this formula correctly omits a term with no existing source, rather
+  // than silently treating it as an included zero. Quebras need no
+  // separate term here: a physical count already reflects any breakage
+  // (broken stock simply isn't there to count), exactly as the existing
+  // batch-ledger calculation already relies on for the same reason.
+  // Resolves Rule 8 open question #4 (§36 item 4) for its ADDITIVE
+  // STRUCTURE only, directly from the Specification's own FR-24 text
+  // ("embeddedProfitTotal... never a second addend to
+  // measuredBusinessWorth") — not an invented rule.
   measuredBusinessWorth: number;
   // The physical Contagem's own selling-basis (market) valuation total —
   // StockCount.totalSellingValue at the moment of confirmation. Matches
@@ -696,32 +723,55 @@ export interface BusinessWorthSnapshot {
   // single source of truth Dashboard/Reports/Closings already use.
   embeddedProfitTotal: number;
   embeddedProfitDetail: BusinessWorthSnapshotEmbeddedProfitLine[];
-  // [Increment 3 dependency — see interim-values note above] Always 0 in
-  // Increment 1.
-  cashPosition: number;
-  receivablesPosition: number;
-  payablesPosition: number;
-  // Drill-down/explanatory only — sums of the EXISTING Expense/Quebra/
-  // Withdrawal collections (unmodified by this capability, FR-28-FR-30)
-  // recorded between the previous snapshot (if any) and this Contagem's
-  // own date. Never a second subtraction from measuredBusinessWorth —
-  // their effect is already reflected in the physical count/cash
-  // position actually observed at this Contagem.
+  // [Corrected] Genuinely unavailable until Increment 3 (Cash Ledger/
+  // Receivables/Payables) — confirmed, twice now, by direct repository
+  // inspection to have no existing source anywhere in this codebase.
+  // OPTIONAL and OMITTED on every Increment-1-created snapshot — never
+  // written as a fabricated 0. A future Increment 3 snapshot will carry
+  // real values here; an Increment-1-era snapshot simply lacks the
+  // field, forever (immutability) — exactly like StockCount's own
+  // expectedValueAtCount/initialCapitalBasis fields are absent on
+  // records that predate THEIR features.
+  cashPosition?: number;
+  receivablesPosition?: number;
+  payablesPosition?: number;
+  // Drill-down/explanatory — narrower-window (since the previous
+  // snapshot, not all-time) sums of the EXISTING Expense/Quebra/
+  // Withdrawal collections (unmodified by this capability,
+  // FR-28-FR-30). [Corrected] Not all three are "already reflected in
+  // the physical count" the way the previous version of this comment
+  // claimed: breakagesSinceLastSnapshot genuinely is (broken stock
+  // isn't there to count) — but expensesSinceLastSnapshot and
+  // levantamentosSinceLastSnapshot are NOT reflected in a physical
+  // stock count at all (they affect money, not counted quantity).
+  // Their actual effect on measuredBusinessWorth is via the ALL-TIME
+  // totalExpensesAllTime/totalWithdrawalsAllTime terms already
+  // subtracted above — these three fields are a narrower, purely
+  // informational window (since-last-snapshot, not all-time) for
+  // reconciliation display only, never a SECOND subtraction on top of
+  // the all-time terms already baked into measuredBusinessWorth.
   expensesSinceLastSnapshot: number;
   breakagesSinceLastSnapshot: number;
   levantamentosSinceLastSnapshot: number;
   // The prior Current Business Worth (the immediately-preceding
   // snapshot's own measuredBusinessWorth) — null ONLY for a business's
-  // very first snapshot ever. Uses Increment 1's own §6 read path only —
-  // no dependency on Increment 2/3.
+  // very first snapshot ever, which is a truthful null (there genuinely
+  // is no prior snapshot), not a placeholder. Uses Increment 1's own §6
+  // read path only — no dependency on Increment 2/3.
   previousCurrentBusinessWorth: number | null;
-  // [Increment 2 dependency — see interim-values note above] Always null
-  // in Increment 1.
-  estimatedBusinessWorthImmediatelyBefore: number | null;
-  // measuredBusinessWorth − estimatedBusinessWorthImmediatelyBefore.
-  // Always null in Increment 1 (estimatedBusinessWorthImmediatelyBefore
-  // is null) — see interim-values note above.
-  difference: number | null;
+  // [Corrected] Genuinely unavailable until Increment 2's Estimated
+  // Business Worth engine exists — computing a real value now would
+  // require pretending that engine already exists, which it does not.
+  // OPTIONAL and OMITTED on every Increment-1-created snapshot — never
+  // written as a permanent, misleading null. A future Increment 2
+  // snapshot will carry a real value here; an Increment-1-era snapshot
+  // simply lacks the field, forever (immutability, I-3, FR-6).
+  estimatedBusinessWorthImmediatelyBefore?: number;
+  // measuredBusinessWorth − estimatedBusinessWorthImmediatelyBefore —
+  // genuinely uncomputable while that term is unavailable (see above).
+  // OPTIONAL and OMITTED for the identical reason, on the identical
+  // schedule.
+  difference?: number;
   // [Display-only, non-authoritative — same discipline as
   // computeInitialStockVoidEligibility's own "client display only, never
   // authoritative" precedent, calculations.ts. The AUTHORITATIVE 3-hour

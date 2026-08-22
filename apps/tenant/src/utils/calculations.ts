@@ -306,6 +306,69 @@ function toMillis(value: unknown): number {
 }
 
 /**
+ * [Business Worth Evolution — Implementation Authorization, Increment 1
+ * (corrected); Specification §8, FR-24; Product Architect clarification
+ * "Decision A" — existing financial activity already exists and must
+ * not be treated as zero] Computes a BusinessWorthSnapshot's own frozen
+ * `measuredBusinessWorth` at the moment of a new-model Contagem
+ * confirmation.
+ *
+ * Deliberately mirrors the EXISTING, unmodified Business Worth Engine
+ * formula (`businessWorth = totalMarketValueAllTime -
+ * totalExpensesAllTime - totalWithdrawalsAllTime`, AppContext.tsx line
+ * ~943) exactly, with `productValuationTotal` (the Contagem's own
+ * MEASURED physical count) standing in for `totalMarketValueAllTime`
+ * (the batch-ledger's own ESTIMATE) — the entire point of a Contagem
+ * being a more accurate, measured figure than the estimate it
+ * replaces. `totalExpensesAllTime`/`totalWithdrawalsAllTime` are the
+ * SAME all-time cumulative totals this codebase already computes today
+ * — passed in here, never independently recomputed, so there is only
+ * ever one source of truth for those two figures.
+ *
+ * `cashPosition`/`receivablesPosition`/`payablesPosition` are accepted
+ * as optional, additive terms for forward compatibility with Increment
+ * 3 (Cash Ledger/Receivables/Payables) — omitted (not defaulted to 0)
+ * when genuinely unavailable, so a caller that has no such data simply
+ * does not pass them, rather than this function silently treating an
+ * omission as a real zero balance.
+ *
+ * Quebras need no separate term here: a physical count already
+ * reflects any breakage (broken stock isn't there to count), exactly
+ * as the existing batch-ledger calculation (calculateBatch's own
+ * `remainingQuantity`) already relies on for the identical reason.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency — safe to
+ * unit test directly.
+ */
+export function computeMeasuredBusinessWorth(params: {
+  productValuationTotal: number;
+  totalExpensesAllTime: number;
+  totalWithdrawalsAllTime: number;
+  cashPosition?: number;
+  receivablesPosition?: number;
+  payablesPosition?: number;
+}): number {
+  const {
+    productValuationTotal,
+    totalExpensesAllTime,
+    totalWithdrawalsAllTime,
+    cashPosition = 0,
+    receivablesPosition = 0,
+    payablesPosition = 0,
+  } = params;
+  return Number(
+    (
+      productValuationTotal +
+      cashPosition +
+      receivablesPosition -
+      payablesPosition -
+      totalExpensesAllTime -
+      totalWithdrawalsAllTime
+    ).toFixed(2)
+  );
+}
+
+/**
  * [Initial Stock Valuation History] Current, per-product-aware valuation
  * of the remaining ORIGINAL Initial Stock — distinct from the immutable
  * `initialCapitalValue` (== the confirmed 'initial' StockCount's own

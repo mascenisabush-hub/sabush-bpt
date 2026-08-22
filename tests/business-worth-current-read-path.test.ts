@@ -33,6 +33,11 @@ function fakeTimestamp(isoDate: string) {
 }
 
 function makeSnapshot(overrides: Partial<BusinessWorthSnapshot> = {}): BusinessWorthSnapshot {
+  // [Corrected] cashPosition/receivablesPosition/payablesPosition/
+  // estimatedBusinessWorthImmediatelyBefore/difference are OMITTED here
+  // by default, matching the corrected BusinessWorthSnapshot interface
+  // exactly (all five are optional, never a fabricated 0/null) — a test
+  // that needs one present can still supply it via `overrides`.
   return {
     id: 'bws-1',
     businessId: 'biz1',
@@ -43,15 +48,10 @@ function makeSnapshot(overrides: Partial<BusinessWorthSnapshot> = {}): BusinessW
     productValuationDetail: [],
     embeddedProfitTotal: 0,
     embeddedProfitDetail: [],
-    cashPosition: 0,
-    receivablesPosition: 0,
-    payablesPosition: 0,
     expensesSinceLastSnapshot: 0,
     breakagesSinceLastSnapshot: 0,
     levantamentosSinceLastSnapshot: 0,
     previousCurrentBusinessWorth: null,
-    estimatedBusinessWorthImmediatelyBefore: null,
-    difference: null,
     correctionWindowExpiresAt: '2026-08-01T03:00:00.000Z',
     status: 'active',
     ...overrides,

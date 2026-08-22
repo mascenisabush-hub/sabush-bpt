@@ -74,7 +74,7 @@ import {
   BusinessWorthSnapshotEmbeddedProfitLine,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, computeMeasuredBusinessWorth, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -3057,25 +3057,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         embeddedProfitDetail.reduce((sum, l) => sum + l.embeddedProfit, 0).toFixed(2)
       );
 
-      // [Implementation note — Increment 1 interim resolution, flagged
-      // explicitly, not silently invented; see types.ts's own
-      // BusinessWorthSnapshot comment and this Authorization's final
-      // report] productValuationTotal is this Contagem's own
-      // selling-basis (market) valuation — matching the existing
-      // Business Worth Engine's market-value convention, not a new
-      // basis. cashPosition/receivablesPosition/payablesPosition are
-      // always 0 in Increment 1 (Cash Ledger/Receivables/Payables do
-      // not exist until Increment 3 — there are zero such records
-      // anywhere in the system yet). Resolves Rule 8 open question #4's
-      // additive structure directly from the Specification's own FR-24
-      // text (embeddedProfitTotal is never a second addend).
+      // [Corrected — Product Architect clarification, this session] The
+      // previous version of this code set measuredBusinessWorth to
+      // productValuationTotal ALONE, silently ignoring the business's
+      // own EXISTING, already-tracked expenses and withdrawals — an
+      // undercount of the true measured figure, not a reasonable
+      // interim value. Corrected: reuses totalExpensesAllTime/
+      // totalWithdrawalsAllTime, the SAME all-time cumulative constants
+      // this component already computes today (above, unchanged — the
+      // existing Business Worth Engine's own inputs) — never a second,
+      // duplicate reduction. cashPosition/receivablesPosition/
+      // payablesPosition are OMITTED here (not included as 0) because
+      // Cash Ledger/Receivables/Payables genuinely do not exist until
+      // Increment 3 — confirmed, twice now, by direct repository
+      // inspection to have no existing source anywhere in this
+      // codebase. This mirrors the EXISTING, unmodified formula
+      // (totalMarketValueAllTime − totalExpensesAllTime −
+      // totalWithdrawalsAllTime, AppContext.tsx line ~943) exactly,
+      // with productValuationTotal (the Contagem's own MEASURED
+      // physical count) standing in for totalMarketValueAllTime (the
+      // batch-ledger's own ESTIMATE). Quebras need no separate term: a
+      // physical count already reflects breakage (broken stock isn't
+      // there to count), exactly as the existing batch-ledger
+      // calculation already relies on for the identical reason.
       const productValuationTotal = Number(normalizedTotalSellingValue.toFixed(2));
-      const cashPosition = 0;
-      const receivablesPosition = 0;
-      const payablesPosition = 0;
-      const measuredBusinessWorth = Number(
-        (productValuationTotal + cashPosition + receivablesPosition - payablesPosition).toFixed(2)
-      );
+      const measuredBusinessWorth = computeMeasuredBusinessWorth({
+        productValuationTotal,
+        totalExpensesAllTime,
+        totalWithdrawalsAllTime,
+      });
 
       const productValuationDetail: BusinessWorthSnapshotProductValuationLine[] = countItems.map((item) => ({
         productId: item.productId,
@@ -3087,7 +3097,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         totalValue: item.totalValue,
       }));
 
-      // [Drill-down/explanatory only — FR-24; existing Expense/Quebra/
+      // [Drill-down/explanatory, narrower window than the all-time terms
+      // already subtracted above — FR-24; existing Expense/Quebra/
       // Withdrawal collections, unmodified, FR-28-FR-30] Since the
       // previous snapshot's confirmedAt if one exists, else since the
       // business's own creation date — never fabricated, never a
@@ -3130,10 +3141,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // Current Business Worth read path only — no dependency on
       // Increment 2/3. 'UNKNOWN' (this business's very first snapshot)
       // becomes null, matching the field's own null-only-for-first-
-      // snapshot contract (Specification §8).
+      // snapshot contract (Specification §8) — a truthful null, not a
+      // placeholder (there genuinely is no prior snapshot).
       const priorCurrent = getCurrentBusinessWorth(businessWorthSnapshots);
       const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
 
+      // [Corrected — Product Architect clarification, this session]
+      // cashPosition/receivablesPosition/payablesPosition/
+      // estimatedBusinessWorthImmediatelyBefore/difference are now
+      // OMITTED ENTIRELY (never set to a literal 0 or null) — the exact
+      // same "omit entirely, never a fabricated value" discipline this
+      // codebase already uses for every other optional field (see
+      // newCount's own construction, above, for the established
+      // precedent). See types.ts's own BusinessWorthSnapshot comment
+      // for the full rationale.
       const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
         id: businessWorthSnapshotId,
         businessId,
@@ -3143,20 +3164,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         productValuationDetail,
         embeddedProfitTotal,
         embeddedProfitDetail,
-        cashPosition,
-        receivablesPosition,
-        payablesPosition,
         expensesSinceLastSnapshot,
         breakagesSinceLastSnapshot,
         levantamentosSinceLastSnapshot,
         previousCurrentBusinessWorth,
-        // [Increment 2 dependency, explicitly flagged — see types.ts's
-        // own BusinessWorthSnapshot comment] Estimated Business Worth
-        // does not exist yet; both fields are permanently null for a
-        // snapshot created before Increment 2 ships (immutability, I-3).
-        estimatedBusinessWorthImmediatelyBefore: null,
-        difference: null,
-        // [Display-only, non-authoritative — see types.ts's own comment]
+        // [Increment 3 dependency, explicitly flagged] cashPosition,
+        // receivablesPosition, payablesPosition intentionally absent —
+        // no existing source; never fabricated as 0.
+        // [Increment 2 dependency, explicitly flagged] estimated
+        // BusinessWorthImmediatelyBefore, difference intentionally
+        // absent — Estimated Business Worth does not exist yet; never
+        // fabricated as null.
         correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         status: 'active',
       };
