@@ -249,3 +249,50 @@ Every one of the Specification's own 31 Acceptance Criteria (§29) governs wheth
 The whole-capability authorization stated throughout this document (§2, §13, §14) was never withdrawn — the complete Business Worth Evolution capability remains authorized, and execution remains strictly one increment at a time. §7's corrected Increment 1 boundary is now, as of this acceptance, fully authorized alongside the rest of this document.
 
 **This document's original signature (§14), together with §15's now-accepted update to §7, together authorize implementation strictly per §2's scope, §3's exclusions, and §7's (corrected) incremental discipline.** No code has been written and no schema or `firestore.rules` change has been made as of this acceptance. **The next operational action, once separately instructed, is: BEGIN IMPLEMENTATION INCREMENT 1 ONLY, per §7's corrected scope** — Increment 2 and every later increment remain unauthorized to begin until Increment 1 is implemented and verified per §7's own steps. This acceptance itself does not begin coding; it clears the governance gate that a future, separate instruction to start Increment 1 will act on.
+
+---
+
+## 16. Post-Implementation Correction — Finding 3, Option A — ACCEPTED
+
+**Scope note, to avoid a numbering collision:** this "Finding 3" is unrelated to the Rule 8 Assessment's own Finding 3-A (autosave/draft-recovery/idempotent-finalization, §"Recovery Safety" §3 of that document) — it is a distinct, later finding, discovered by direct code review of the already-shipped Increment 1–4 implementation (`4186357`, `c337ba8`, `49fb8ab`, all already authorized and merged under this same Authorization). It is recorded here, as a new section, rather than under the Rule 8 Assessment's existing Finding 3 heading, precisely so it is not confused with that unrelated finding.
+
+**Finding.** `BusinessWorthSnapshotProductValuationLine.totalValue` (the per-product drill-down line frozen onto every `BusinessWorthSnapshot.productValuationDetail`) was constructed as a direct pass-through of the source Stock Count item's own cost-basis `totalValue` (`quantity × costPrice` — the investment basis `normalizeStockCountItems` computes for Expected Current Stock Value). The snapshot's own headline `productValuationTotal`, however, is — and always was, since Increment 1 — the selling-basis figure (`normalizeStockCountItems`'s `totalSellingValue`, `quantity × sellingPrice`, summed). Whenever a product's `costPrice` and `sellingPrice` differ, the drill-down's own line totals could never sum to the snapshot's own headline total — the detail did not mathematically reconcile with the figure it exists to explain.
+
+**Product Architect Decision: Option A — SELLING-BASIS (accepted).**
+
+> For every `BusinessWorthSnapshotProductValuationLine`:
+>
+>     totalValue = quantity × sellingPrice
+>
+> This is the same selling-basis valuation used by the authoritative `productValuationTotal`.
+
+**Rationale (recorded verbatim from the accepted decision):** the snapshot drill-down must reconcile mathematically with `productValuationTotal`, which is already the authoritative selling-basis valuation. This prevents an Owner from seeing detail lines whose totals do not reconcile with the Business Worth headline.
+
+**What this decision explicitly does NOT change** (restated per the decision's own terms — none of the following was touched, redesigned, or reopened by this correction):
+- the Business Worth economic formula;
+- `productValuationTotal`;
+- `measuredBusinessWorth`;
+- Current Business Worth;
+- Estimated Business Worth;
+- `costPrice` itself — **remains preserved as its own field on the line, unchanged, not deleted or redefined**; only `totalValue`'s own meaning changed;
+- physical `quantity`;
+- `unit`;
+- `valuationMode`;
+- historical snapshot immutability (no historical snapshot is backfilled or rewritten — this correction governs how a line is *computed going forward*, exactly like every other Increment 1–4 field-level fix in this capability's own history);
+- any Cash Ledger / Receivables / Payables behavior;
+- any Increment 5+ scope.
+
+**Classification: a clarification/acceptance of Finding 3, not a new business rule.** `productValuationTotal`'s selling-basis meaning was already decided (Increment 1, Specification §8/FR-18–19) and already implemented, unchanged by this correction. This decision settles only which of two *already-approved, already-computed* bases (`normalizeStockCountItems` has always computed both, in parallel, since the Initial Stock Dual-Valuation-Basis capability) a single *other* field — `totalValue` on the drill-down line — should mirror, so that field agrees with a total the Specification already authoritatively defines. No new financial concept, ceiling, formula, or figure is introduced; Section 9 ("No Redesign") above is not implicated.
+
+**Already-implemented correction this decision formally records:** `apps/tenant/src/utils/calculations.ts`'s new pure `buildProductValuationDetail()` function (alongside the existing `computeMeasuredBusinessWorth`), used by `AppContext.tsx`'s `recordStockCount` to construct `productValuationDetail`; `BusinessWorthSnapshotProductValuationLine.totalValue` is now `quantity × sellingPrice`, `Number(...).toFixed(2)`-rounded per line, exactly matching this section's decision. Regression coverage: `tests/business-worth-snapshot-product-valuation-line.test.ts` — proves `totalValue === quantity × sellingPrice` per line, proves the summed line totals reconcile exactly to `productValuationTotal` (computed via the real `normalizeStockCountItems`, not reimplemented), and proves `totalValue` follows `sellingPrice` rather than `costPrice` when they diverge. Commit `0a78cdf`.
+
+**Formal acceptance:**
+
+> I have reviewed Finding 3 (`BusinessWorthSnapshotProductValuationLine.totalValue` not reconciling with `productValuationTotal` whenever `costPrice` and `sellingPrice` diverge) and select **Option A — SELLING-BASIS**: `totalValue = quantity × sellingPrice`, matching `productValuationTotal`'s own already-authoritative basis. This is a clarification of an already-approved figure's construction, not a new business decision — it introduces no new financial concept, changes no economic formula, and does not reopen `productValuationTotal`, `measuredBusinessWorth`, Current/Estimated Business Worth, `costPrice`, or any Increment 5+ scope. **ACCEPTED.**
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **ACCEPTED.**
+
+The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected — this section records a field-level construction correction within already-authorized, already-implemented Increments 1–4; it does not reopen, extend, or advance the incremental sequence. Increment 5 remains unauthorized to begin until separately instructed.
