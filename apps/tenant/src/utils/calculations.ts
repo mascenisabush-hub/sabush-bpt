@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -761,6 +761,59 @@ export function sumOutstandingPayables(payables: Payable[]): number {
  */
 export function sumOutstandingReceivables(receivables: Receivable[]): number {
   return Number(receivables.reduce((sum, r) => sum + Number(r.amountRemaining || 0), 0).toFixed(2));
+}
+
+/**
+ * [Business Worth Evolution — Finding 3 correction, Product Architect
+ * Decision: Option A (accepted).] Builds a `BusinessWorthSnapshot`'s
+ * frozen `productValuationDetail` lines from the confirming Contagem's
+ * own items.
+ *
+ * `totalValue` on each line MUST be the same selling-basis figure the
+ * snapshot's own `productValuationTotal` is built from (quantity *
+ * sellingPrice — see `normalizeStockCountItems`'s own
+ * `totalSellingValue`, `stockCount.ts`), not the item's cost-basis
+ * `totalValue` (quantity * costPrice, the investment basis used
+ * elsewhere for Expected Current Stock Value). Before this correction,
+ * this line's `totalValue` was a pass-through of the item's cost-basis
+ * total, which could never sum to `productValuationTotal` whenever
+ * `costPrice` differed from `sellingPrice` — the drill-down did not
+ * mathematically reconcile with its own parent total. `costPrice` is
+ * still carried on the line unchanged, for consumers that need it
+ * independently — only the meaning of `totalValue` changes.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency — safe to
+ * unit test directly.
+ */
+export function buildProductValuationDetail(
+  items: Array<{
+    productId: string;
+    productName: string;
+    quantity: number;
+    unit?: string;
+    costPrice: number;
+    // Optional to match StockCountItem's own field (a Stock Count
+    // confirmed before the Dual-Valuation-Basis feature may genuinely
+    // lack it) — coerced to 0 with the same `Number(x) || 0` rule
+    // normalizeStockCountItems already applies, never left as
+    // undefined/NaN.
+    sellingPrice?: number;
+    valuationMode?: 'A' | 'B';
+  }>
+): BusinessWorthSnapshotProductValuationLine[] {
+  return items.map((item) => {
+    const sellingPrice = Number(item.sellingPrice) || 0;
+    return {
+      productId: item.productId,
+      productName: item.productName,
+      quantity: item.quantity,
+      ...(item.unit ? { unit: item.unit } : {}),
+      costPrice: item.costPrice,
+      sellingPrice,
+      totalValue: Number((item.quantity * sellingPrice).toFixed(2)),
+      ...(item.valuationMode ? { valuationMode: item.valuationMode } : {}),
+    };
+  });
 }
 
 export function computeMeasuredBusinessWorth(params: {

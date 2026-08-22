@@ -80,7 +80,7 @@ import {
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -3643,21 +3643,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         payablesPosition: currentPayablesOutstanding,
       });
 
-      const productValuationDetail: BusinessWorthSnapshotProductValuationLine[] = countItems.map((item) => ({
-        productId: item.productId,
-        productName: item.productName,
-        quantity: item.quantity,
-        ...(item.unit ? { unit: item.unit } : {}),
-        costPrice: item.costPrice,
-        sellingPrice: item.sellingPrice,
-        totalValue: item.totalValue,
-        // [Business Worth Evolution — Increment 4, Specification §15,
-        // FR-20] Frozen, display-only pass-through of the source item's
-        // own valuationMode — see BusinessWorthSnapshotProductValuationLine's
-        // own comment (types.ts). Never read by measuredBusinessWorth or
-        // any other calculation above/below this line.
-        ...(item.valuationMode ? { valuationMode: item.valuationMode } : {}),
-      }));
+      // [Finding 3 correction — Product Architect Decision: Option A,
+      // accepted] totalValue on each line is now the same selling-basis
+      // figure productValuationTotal is built from (quantity *
+      // sellingPrice), via the pure, independently-tested
+      // buildProductValuationDetail() (calculations.ts) — see that
+      // function's own header comment for why. valuationMode remains a
+      // frozen, display-only pass-through of the source item's own
+      // field — see BusinessWorthSnapshotProductValuationLine's own
+      // comment (types.ts). Never read by measuredBusinessWorth or any
+      // other calculation above/below this line.
+      const productValuationDetail: BusinessWorthSnapshotProductValuationLine[] =
+        buildProductValuationDetail(countItems);
 
       // [Drill-down/explanatory, narrower window than the all-time terms
       // already subtracted above — FR-24; existing Expense/Quebra/
