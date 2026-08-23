@@ -1024,6 +1024,30 @@ export interface TranslationDict {
         recommendedAction: string;
       };
     };
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 7; Specification §22, FR-57]
+    businessWorth: {
+      valueDiscrepancy: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+      cashDiscrepancy: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+      payableOutstanding: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+      receivableOutstanding: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+    };
   };
 }
 
@@ -2042,6 +2066,28 @@ export const pt: TranslationDict = {
         whatHappened: 'Um dos seus lotes de stock perdeu mais unidades do que tinha originalmente.',
         whyItMatters: 'As perdas neste lote já excedem a quantidade comprada — isto altera o valor real do lote.',
         recommendedAction: 'Reveja os registos de quebra deste lote para confirmar que estão corretos.',
+      },
+    },
+    businessWorth: {
+      valueDiscrepancy: {
+        whatHappened: 'A última Contagem mostrou uma diferença no valor do negócio.',
+        whyItMatters: 'Certifique-se de que os movimentos de stock estão a ser registados corretamente.',
+        recommendedAction: 'Reveja os registos de stock desde a última Contagem.',
+      },
+      cashDiscrepancy: {
+        whatHappened: 'A última Contagem mostrou uma discrepância na posição de caixa.',
+        whyItMatters: 'Lembre-se de verificar os seus registos antes da próxima Contagem.',
+        recommendedAction: 'Reveja os movimentos de caixa desde a última Contagem.',
+      },
+      payableOutstanding: {
+        whatHappened: 'Tem pagamentos a fornecedores por regularizar.',
+        whyItMatters: 'Um pagamento não registado pode explicar diferenças no valor do negócio.',
+        recommendedAction: 'Lembre-se de atualizar o estado de pagamento a fornecedores.',
+      },
+      receivableOutstanding: {
+        whatHappened: 'Ainda há valores a receber por regularizar.',
+        whyItMatters: 'Um valor por cobrar ainda não conta para o valor do negócio.',
+        recommendedAction: 'Considere fazer o acompanhamento com os clientes.',
       },
     },
   },

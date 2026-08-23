@@ -845,6 +845,189 @@ export function computeMeasuredBusinessWorth(params: {
 }
 
 /**
+ * [Business Worth Evolution — Implementation Authorization, Increment 7;
+ * Specification §10, FR-10, FR-11] The ledger-derived cash balance — the
+ * sum of every `CashLedgerEntry`'s own signed effect (inflow adds,
+ * outflow subtracts), never a separately stored/independently mutable
+ * field, per §10's own "current cash balance is derived" rule. Every
+ * category counts here (unlike the Case-B `financialPositionEffect`
+ * term in `getEstimatedBusinessWorth`, which deliberately narrows to
+ * customer-payment/supplier-payment only for THAT function's own
+ * different purpose) — this function answers a different question:
+ * "what does the complete ledger say cash actually is right now,"
+ * not "what changed the financial position since a snapshot."
+ *
+ * `asOfMillis`, when supplied, restricts the sum to entries whose own
+ * `occurredAt` is at or before that instant — the Owner-declared date of
+ * the cash-affecting event, matching every other date-filtered read in
+ * this file (e.g. `isDateInRange`'s own use of Expense/Quebra/Withdrawal
+ * `date`, not `createdAt`). Omitted, the sum is simply all-time.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency.
+ */
+export function getLedgerDerivedCashBalance(
+  cashLedgerEntries: CashLedgerEntry[],
+  asOfMillis?: number
+): number {
+  const relevant =
+    asOfMillis === undefined
+      ? cashLedgerEntries
+      : cashLedgerEntries.filter((e) => new Date(e.occurredAt).getTime() <= asOfMillis);
+  return Number(
+    relevant
+      .reduce((sum, e) => sum + (e.direction === 'inflow' ? Number(e.amount || 0) : -Number(e.amount || 0)), 0)
+      .toFixed(2)
+  );
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 7;
+ * Specification §22, FR-11, FR-31, FR-32] The cash reconciliation
+ * signal: the Owner-confirmed actual cash position minus the
+ * ledger-derived balance — e.g. the Specification's own worked example
+ * (system cash 120,000, physical cash 115,000) is
+ * `115,000 - 120,000 = -5,000`, matching the identical sign convention
+ * `BusinessWorthSnapshot.difference` already uses (measured minus
+ * estimated — the actually-observed figure minus the system's own
+ * expectation). A SIGNAL only — this function performs, and must never
+ * be extended to perform, any classification of the result (FR-32);
+ * that determination, if ever recorded, is exclusively an Owner-entered
+ * fact.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency.
+ */
+export function computeCashReconciliationDifference(
+  ownerConfirmedCashPosition: number,
+  ledgerDerivedCashBalance: number
+): number {
+  return Number((ownerConfirmedCashPosition - ledgerDerivedCashBalance).toFixed(2));
+}
+
+// [Business Worth Evolution — Implementation Authorization, Increment 7;
+// Specification §22, FR-56] The fixed vocabulary of possible-cause keys
+// this function may return — each one maps 1:1 to an i18n key under
+// `notificationTemplates.businessWorth.possibleCauses.*` (or an
+// equivalent UI-facing dictionary) at display time. Deliberately a
+// closed, named set (not free text) so a caller can never accidentally
+// synthesize an unsupported "finding" — every key here corresponds to
+// exactly one evidence check below, and nothing is ever added to this
+// list without a matching evidence check.
+export type PossibleReconciliationCauseKey =
+  | 'unrecordedExpense'
+  | 'stockNotProperlyRecorded'
+  | 'incorrectStockCount'
+  | 'unrecordedBreakage'
+  | 'unrecordedLevantamento'
+  | 'supplierPaymentNotUpdated'
+  | 'receivablesRequireFollowUp';
+
+export interface PossibleReconciliationCause {
+  key: PossibleReconciliationCauseKey;
+  // The specific evidence this cause is grounded in — e.g. an amount or
+  // a count — so a caller can render "3 unpaid Payables totaling
+  // 12,000" rather than a bare, unsupported label. Never itself a
+  // classification of the discrepancy's actual cause (FR-56's own
+  // "never asserted as fact unless the records already establish it"
+  // rule) — this is what the records show, not what happened.
+  evidenceAmount?: number;
+  evidenceCount?: number;
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment 7;
+ * Specification §22, FR-56] Generates a non-exhaustive, evidence-bound
+ * list of POSSIBLE causes to investigate for a reconciliation
+ * discrepancy — never a determined cause, never invented from nothing.
+ * Every entry returned corresponds to a real, nonzero fact already
+ * present in the business's own records, passed in here — this function
+ * reads no store, performs no I/O, and infers nothing beyond "is this
+ * evidence nonzero." An empty discrepancy in every one of these
+ * dimensions correctly yields an empty list — this function never pads
+ * its result to seem more informative than the records actually
+ * support.
+ *
+ * Order is stable and mirrors the Specification's own enumeration order
+ * (§22) — not a ranking of likelihood, which this function has no basis
+ * to assert.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency — safe to
+ * unit test directly.
+ */
+export function getPossibleReconciliationCauses(params: {
+  expensesSinceLastSnapshot?: number;
+  breakagesSinceLastSnapshot?: number;
+  levantamentosSinceLastSnapshot?: number;
+  outstandingPayables?: Payable[];
+  outstandingReceivables?: Receivable[];
+}): PossibleReconciliationCause[] {
+  const causes: PossibleReconciliationCause[] = [];
+
+  // [§22 item "unrecorded expenses" / "stock not properly recorded"]
+  // A nonzero expenses-since-last-snapshot figure is evidence that
+  // money left the business through a channel that, if under-recorded,
+  // could explain a cash shortfall — never asserted as the cause, only
+  // surfaced as evidence that exists.
+  if (typeof params.expensesSinceLastSnapshot === 'number' && params.expensesSinceLastSnapshot > 0) {
+    causes.push({ key: 'unrecordedExpense', evidenceAmount: params.expensesSinceLastSnapshot });
+  }
+
+  // [§22 item "unrecorded breakage"] A nonzero breakage figure since the
+  // last snapshot is real, already-recorded evidence of stock loss —
+  // named separately from the general "stock not properly recorded"
+  // possibility below, since this one is drawn from an actual Quebra
+  // record, not merely inferred from the discrepancy's own existence.
+  if (typeof params.breakagesSinceLastSnapshot === 'number' && params.breakagesSinceLastSnapshot > 0) {
+    causes.push({ key: 'unrecordedBreakage', evidenceAmount: params.breakagesSinceLastSnapshot });
+  }
+
+  // [§22 item "an unrecorded Levantamento"]
+  if (typeof params.levantamentosSinceLastSnapshot === 'number' && params.levantamentosSinceLastSnapshot > 0) {
+    causes.push({ key: 'unrecordedLevantamento', evidenceAmount: params.levantamentosSinceLastSnapshot });
+  }
+
+  // [§22 item "supplier/payment records not updated"] Every currently-
+  // outstanding Payable is a fact the business's own records already
+  // establish (FR-56's own "fact, not guess" bar) — an unpaid or
+  // partially-paid supplier obligation is real evidence worth
+  // surfacing, never a guess about why cash is short.
+  const outstandingPayables = (params.outstandingPayables ?? []).filter((p) => p.status !== 'paid');
+  if (outstandingPayables.length > 0) {
+    causes.push({
+      key: 'supplierPaymentNotUpdated',
+      evidenceAmount: sumOutstandingPayables(outstandingPayables),
+      evidenceCount: outstandingPayables.length,
+    });
+  }
+
+  // [§22 item "receivables requiring follow-up"]
+  const outstandingReceivables = (params.outstandingReceivables ?? []).filter((r) => r.status !== 'paid');
+  if (outstandingReceivables.length > 0) {
+    causes.push({
+      key: 'receivablesRequireFollowUp',
+      evidenceAmount: sumOutstandingReceivables(outstandingReceivables),
+      evidenceCount: outstandingReceivables.length,
+    });
+  }
+
+  // [§22 item "an incorrect stock count" / "stock not properly
+  // recorded"] These two possibilities are always genuinely available
+  // to investigate whenever ANY discrepancy exists at all (a physical
+  // count is itself always fallible, independent of whether any other
+  // specific evidence above is present) — included whenever this
+  // function is called with at least one other nonzero signal present,
+  // so the list is never misleadingly narrow when a real discrepancy
+  // triggered it, but also never appended when every other input above
+  // is zero/empty (i.e. this function was called with nothing to go
+  // on at all).
+  if (causes.length > 0) {
+    causes.push({ key: 'incorrectStockCount' });
+    causes.push({ key: 'stockNotProperlyRecorded' });
+  }
+
+  return causes;
+}
+
+/**
  * [Initial Stock Valuation History] Current, per-product-aware valuation
  * of the remaining ORIGINAL Initial Stock — distinct from the immutable
  * `initialCapitalValue` (== the confirmed 'initial' StockCount's own

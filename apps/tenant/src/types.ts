@@ -755,7 +755,38 @@ export interface BusinessWorthSnapshot {
   // field, forever (immutability) — exactly like StockCount's own
   // expectedValueAtCount/initialCapitalBasis fields are absent on
   // records that predate THEIR features.
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 7; Specification §10 Decision 3, §22, FR-11, FR-55] The
+  // Owner-CONFIRMED actual cash position as of this Contagem's own
+  // date — never a mechanical read of the ledger-derived balance
+  // (cashLedgerBalanceAtConfirmation, below, is that separate,
+  // independently-frozen figure). This is the figure
+  // computeMeasuredBusinessWorth's own cashPosition parameter now
+  // receives (previously never passed — see that call site's own
+  // comment, AppContext.tsx). Still OPTIONAL and OMITTED (never a
+  // fabricated 0) on every pre-Increment-7 snapshot, for the identical
+  // reason receivablesPosition/payablesPosition were omitted before
+  // Increment 3 shipped.
   cashPosition?: number;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 7; Specification §10, FR-11] The ledger-derived cash balance (sum
+  // of CashLedgerEntry inflow minus outflow, all-time) at the moment
+  // of this confirmation — frozen here purely so a later drill-down can
+  // show "system cash" and "physical cash" side by side (§22's own
+  // possible-cause-guidance requirement), exactly as the Specification's
+  // worked example does. Never itself fed into measuredBusinessWorth —
+  // only cashPosition (the Owner-confirmed figure) is. Omitted on every
+  // pre-Increment-7 snapshot, same discipline as every other optional
+  // field on this record.
+  cashLedgerBalanceAtConfirmation?: number;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 7; Specification §22, FR-11, FR-31, FR-32] cashPosition minus
+  // cashLedgerBalanceAtConfirmation — a signed numeric reconciliation
+  // signal ONLY, exactly mirroring `difference`'s own "never a default
+  // classification beyond reconciliation signal" discipline (FR-32
+  // applies identically here: never automatically labeled theft, loss,
+  // error, or Quebra). Omitted on every pre-Increment-7 snapshot.
+  cashReconciliationDifference?: number;
   receivablesPosition?: number;
   payablesPosition?: number;
   // Drill-down/explanatory — narrower-window (since the previous
@@ -1453,18 +1484,22 @@ export interface TimelineFinancialImpact {
 // neither. Enforced by the writer (server-side), not by this type.
 export type NotificationScope = 'business' | 'user';
 
-// The five V1 categories (20.3, Decision Gate 4, as amended by
-// [Amendment v1.2] — the Module #20 Category Amendment). Originally
-// four; `staff` added by v1.2 to give staff-action confirmation events
-// (suspend/reactivate/delete/set-tier/reset-pin — Business Rule 4,
-// 20.5 Path 2) a category to belong to. Still fixed, not extensible
-// without a further spec amendment.
+// The six V1 categories (20.3, Decision Gate 4, as amended by
+// [Amendment v1.2] — the Module #20 Category Amendment — and by
+// Business Worth Evolution Increment 7, Specification §22, FR-57).
+// Originally four; `staff` added by v1.2 to give staff-action
+// confirmation events (suspend/reactivate/delete/set-tier/reset-pin —
+// Business Rule 4, 20.5 Path 2) a category to belong to; `business_worth`
+// added by Increment 7, following the identical additive-enum-entry
+// precedent, for reconciliation/preventive-reminder notifications
+// (§22). Still fixed, not extensible without a further spec amendment.
 export type NotificationCategory =
   | 'closing'
   | 'inventory_risk'
   | 'subscription'
   | 'platform_announcement'
-  | 'staff';
+  | 'staff'
+  | 'business_worth';
 
 // V1 implements exactly one delivery channel (20.4, Decision Gate 3).
 // The field exists now so Email/WhatsApp are additive later, not a

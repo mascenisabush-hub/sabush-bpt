@@ -1015,5 +1015,27 @@ export const fr: TranslationDict = {
         recommendedAction: 'Vérifiez les entrées de perte de ce lot pour confirmer qu\'elles sont exactes.',
       },
     },
+    businessWorth: {
+      valueDiscrepancy: {
+        whatHappened: 'La dernière Contagem a montré une différence dans la valeur du négoce.',
+        whyItMatters: 'Assurez-vous que les mouvements de stock sont correctement enregistrés.',
+        recommendedAction: 'Vérifiez les registres de stock depuis la dernière Contagem.',
+      },
+      cashDiscrepancy: {
+        whatHappened: 'La dernière Contagem a montré un écart dans la position de caisse.',
+        whyItMatters: 'Pensez à vérifier vos registres avant la prochaine Contagem.',
+        recommendedAction: 'Vérifiez les mouvements de caisse depuis la dernière Contagem.',
+      },
+      payableOutstanding: {
+        whatHappened: 'Vous avez des paiements à des fournisseurs en attente.',
+        whyItMatters: 'Un paiement non enregistré peut expliquer des différences dans la valeur du négoce.',
+        recommendedAction: "Pensez à mettre à jour l'état de paiement des fournisseurs.",
+      },
+      receivableOutstanding: {
+        whatHappened: 'Certaines créances restent en attente.',
+        whyItMatters: "Une créance impayée ne compte pas encore dans la valeur du négoce.",
+        recommendedAction: 'Envisagez de faire un suivi avec les clients.',
+      },
+    },
   },
 };

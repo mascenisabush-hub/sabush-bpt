@@ -96,7 +96,12 @@ export interface FirestoreLike {
 // ADR-0004 Decision 5, not extended to the type definitions.
 // ------------------------------------------------------------------
 export type NotificationScope = 'business' | 'user';
-export type NotificationCategory = 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement' | 'staff';
+// [Business Worth Evolution — Implementation Authorization, Increment 7;
+// Specification §22, FR-57; Implementation Plan §8] 'business_worth'
+// added following the exact precedent the 'staff' category amendment
+// already used (v1.2) — an additive enum entry, no change to
+// validateNotificationPayload's own logic below.
+export type NotificationCategory = 'closing' | 'inventory_risk' | 'subscription' | 'platform_announcement' | 'staff' | 'business_worth';
 export type NotificationChannel = 'in_app';
 export type NotificationPriority = 'immediate' | 'timeline' | 'daily_summary';
 // [Priority Reconciliation Amendment, v1.3] — business significance of
@@ -130,6 +135,7 @@ const NOTIFICATION_CATEGORIES: NotificationCategory[] = [
   'subscription',
   'platform_announcement',
   'staff',
+  'business_worth',
 ];
 const NOTIFICATION_PRIORITIES: NotificationPriority[] = ['immediate', 'timeline', 'daily_summary'];
 const NOTIFICATION_IMPORTANCES: NotificationImportance[] = ['immediate', 'high', 'normal', 'low'];

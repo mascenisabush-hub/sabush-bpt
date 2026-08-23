@@ -81,7 +81,7 @@ import {
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -308,6 +308,18 @@ interface RecordStockCountParams {
   // confirmation via Void & Redo (that mechanism is entirely separate —
   // Implementation Plan §13's exclusivity design).
   producesBusinessWorthSnapshot?: boolean;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 7; Specification §10 Decision 3, §22, FR-11, FR-55] The Owner-
+  // confirmed actual cash position as of this Contagem's own date —
+  // required product behavior whenever producesBusinessWorthSnapshot is
+  // true (FR-55), per the identical "physical measurement" discipline
+  // Contagem already applies to stock. Ignored (never read) when
+  // producesBusinessWorthSnapshot is not true — mirrors
+  // expectedValueAtCount's own "only meaningful for its own governing
+  // flag" shape, above. The caller (a UI decision point) is responsible
+  // for actually collecting this from the Owner; this function does not
+  // decide whether to prompt for it.
+  ownerConfirmedCashPosition?: number;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -3400,7 +3412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -3761,11 +3773,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // figure only (§8) — never fed into this arithmetic.
       const currentPayablesOutstanding = sumOutstandingPayables(payables);
       const currentReceivablesOutstanding = sumOutstandingReceivables(receivables);
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 7; Specification §10 Decision 3, §22, FR-11, FR-55]
+      // cashPosition is now genuinely available — the Owner-confirmed
+      // actual cash position at this Contagem, when the caller supplied
+      // one (RecordStockCountParams.ownerConfirmedCashPosition, above).
+      // Passed into computeMeasuredBusinessWorth's own existing
+      // (previously always-omitted) cashPosition parameter — the first
+      // time this term is ever actually included, not a change to the
+      // function's own formula. Genuinely omitted (never a fabricated
+      // 0) when the caller supplies nothing, exactly as
+      // payablesPosition/receivablesPosition were omitted before
+      // Increment 3.
+      const hasCashPosition = typeof ownerConfirmedCashPosition === 'number' && Number.isFinite(ownerConfirmedCashPosition);
       const measuredBusinessWorth = computeMeasuredBusinessWorth({
         productValuationTotal,
         totalExpensesAllTime,
         totalWithdrawalsAllTime,
         payablesPosition: currentPayablesOutstanding,
+        ...(hasCashPosition ? { cashPosition: ownerConfirmedCashPosition } : {}),
       });
 
       // [Finding 3 correction — Product Architect Decision: Option A,
@@ -3878,15 +3904,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ? undefined
           : Number((measuredBusinessWorth - estimatedBusinessWorthImmediatelyBefore).toFixed(2));
 
-      // [Corrected — Product Architect clarification, this session]
-      // cashPosition is OMITTED ENTIRELY (never set to a literal 0) —
-      // owner-confirmed physical cash capture at Contagem remains
-      // deferred to Increment 7's own Reconciliation scope (FR-11) —
-      // continuing the exact same "omit entirely, never a fabricated
-      // value" discipline this codebase already uses for every other
-      // optional field. payablesPosition/receivablesPosition are now
-      // genuinely computed (Increment 3) — see their own computation
-      // above for exactly what each represents and why.
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 7; Specification §10 Decision 3, §22, FR-11, FR-55]
+      // cashPosition/cashLedgerBalanceAtConfirmation/
+      // cashReconciliationDifference are now genuinely computable when
+      // the caller supplied an Owner-confirmed cash figure — omitted
+      // entirely (never a fabricated 0/undefined-as-zero) on the path
+      // where the caller genuinely supplied nothing, continuing the
+      // exact same "omit entirely" discipline this codebase already
+      // uses for every other optional field on this record.
+      // payablesPosition/receivablesPosition are computed above
+      // (Increment 3) — see their own computation for what each
+      // represents.
+      const ledgerDerivedCashBalance = hasCashPosition
+        ? getLedgerDerivedCashBalance(cashLedgerEntries, new Date(`${date}T23:59:59.999Z`).getTime())
+        : undefined;
+      const cashReconciliationDifference =
+        hasCashPosition && ledgerDerivedCashBalance !== undefined
+          ? computeCashReconciliationDifference(ownerConfirmedCashPosition as number, ledgerDerivedCashBalance)
+          : undefined;
       const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
         id: businessWorthSnapshotId,
         businessId,
@@ -3908,6 +3944,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // confirmation at all).
         ...(estimatedBusinessWorthImmediatelyBefore !== undefined ? { estimatedBusinessWorthImmediatelyBefore } : {}),
         ...(difference !== undefined ? { difference } : {}),
+        // [Increment 7] See doc comment above.
+        ...(hasCashPosition ? { cashPosition: ownerConfirmedCashPosition as number } : {}),
+        ...(ledgerDerivedCashBalance !== undefined ? { cashLedgerBalanceAtConfirmation: ledgerDerivedCashBalance } : {}),
+        ...(cashReconciliationDifference !== undefined ? { cashReconciliationDifference } : {}),
         correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         status: 'active',
       };

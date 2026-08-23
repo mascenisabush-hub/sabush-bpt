@@ -1015,5 +1015,27 @@ export const en: TranslationDict = {
         recommendedAction: "Review this batch's loss entries to confirm they're accurate.",
       },
     },
+    businessWorth: {
+      valueDiscrepancy: {
+        whatHappened: 'The last Contagem showed a difference in business worth.',
+        whyItMatters: 'Make sure stock movements are being recorded correctly.',
+        recommendedAction: 'Review stock records since the last Contagem.',
+      },
+      cashDiscrepancy: {
+        whatHappened: 'The last Contagem showed a cash position discrepancy.',
+        whyItMatters: 'Remember to verify your records before the next Contagem.',
+        recommendedAction: 'Review cash movements since the last Contagem.',
+      },
+      payableOutstanding: {
+        whatHappened: 'You have outstanding supplier payments.',
+        whyItMatters: 'An unrecorded payment could explain differences in business worth.',
+        recommendedAction: 'Remember to update their payment status.',
+      },
+      receivableOutstanding: {
+        whatHappened: 'Some receivables remain outstanding.',
+        whyItMatters: "An unpaid receivable doesn't yet count toward business worth.",
+        recommendedAction: 'Consider following up with customers.',
+      },
+    },
   },
 };

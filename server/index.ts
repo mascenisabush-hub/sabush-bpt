@@ -28,6 +28,7 @@ import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
+import { registerBusinessWorthNotificationPolicyAndTemplates, createBusinessWorthNotificationProducer } from './businessWorthNotificationProducer';
 import { createSubscriptionEngine } from './subscriptionEngine';
 import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
 import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperatorRequest } from './superadminAuth';
@@ -138,6 +139,12 @@ const closingNotificationProducer = createClosingNotificationProducer(db, notifi
 // same shared Notification Platform instance every producer uses.
 registerBreakageNotificationPolicyAndTemplates(notificationPlatform);
 const breakageNotificationProducer = createBreakageNotificationProducer(db, notificationPlatform);
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 7; Specification §22, FR-57] Registered following the identical
+// pattern as every other Phase 3 producer above — see
+// businessWorthNotificationProducer.ts's own header for full scope.
+registerBusinessWorthNotificationPolicyAndTemplates(notificationPlatform);
+const businessWorthNotificationProducer = createBusinessWorthNotificationProducer(db, notificationPlatform);
 
 const expressApp = express();
 
@@ -1758,6 +1765,20 @@ if (tenantMode) {
     jobType: 'breakage-notification-sweep',
     scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
     execute: breakageNotificationProducer.runBreakageNotificationSweep,
+  });
+
+  // Business Worth Evolution — Implementation Authorization, Increment
+  // 7 (server/businessWorthNotificationProducer.ts). A fifth,
+  // independent registered job — reuses the same schedule interval as
+  // the others (an ordinary reconciliation/outstanding-obligation
+  // reminder needs no finer-grained polling than the existing hourly
+  // cadence). Isolated from every other registered job by the
+  // Background Worker (ADR-0003) — a failure here never blocks Trial,
+  // Closing, or Breakage's own tick, and vice versa.
+  backgroundWorker.registerJob({
+    jobType: 'business-worth-notification-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: businessWorthNotificationProducer.runBusinessWorthNotificationSweep,
   });
 
   // Module #19 V1 Subscription Lifecycle Engine
