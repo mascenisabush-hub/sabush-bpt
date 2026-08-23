@@ -532,3 +532,217 @@ The whole-capability authorization stated throughout this document (§2, §13, �
 **Status:** ✅ **AUTHORIZED.**
 
 The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction, §17's Increment 5 authorization, §18's Increment 6 authorization, §19's Increment 7 authorization, and §20's Increment 8 authorization are unaffected and remain intact. This section authorizes only Increment 9's own beginning, per §7's one-increment-at-a-time discipline — and, being the final increment in the approved sequence, closes that discipline out rather than opening a further unauthorized increment. This section authorizes implementation to begin; it does not itself implement any code.
+
+---
+
+# Implementation Authorization Amendment — Revision 3 (Increment 10 + Post-Implementation Corrections)
+
+**Status: ✅ SIGNED AND AUTHORIZED (23 August 2026).** Signed by explicit Product Architect signature (§10, below). This amendment is, as of this signature, authoritative Implementation Authorization content, appended per this document's own established pattern (§15 §41-reconciliation, §16 Post-Implementation Correction, §17–§21 per-increment authorizations). **This signature is the governance authorization gate. It does not by itself instruct implementation to begin.** Implementation may begin only upon a further, separate, explicit instruction identifying the specific Increment 10 item or Post-Implementation Correction to execute, per §23's own one-item-at-a-time execution rule.
+
+**Target of this amendment:** `docs/engineering/business-worth-evolution-implementation-authorization.md`, as new dated sections to be appended there once signed — following that document's own established pattern (§15 §41-reconciliation, §16 Post-Implementation Correction, §17–§21 per-increment authorizations). This amendment is now recorded in this file itself. No code, test, `firestore.rules`, `firestore.indexes.json`, or other implementation artifact is touched by this document, and none is authorized to be touched by this document alone — a signature on this draft is the governance gate; it is not itself the instruction to begin coding, exactly as the existing §14/§15 signatures already establish for Increments 1–9 ("signature is the governance gate that permits that next, separate execution step; it does not itself perform it").
+
+**Governing basis, in order:** BDR (`5870bdd`, Decision 1 corrected, Decision 36 added) → Specification (`5870bdd`, §42/§43 and inline corrections) → Rule 8 Assessment Addendum — Revision 3 (✅ **ACCEPTED**, gate `READY AFTER DECISIONS`, all three acknowledgment points accepted, SABUSHIMIKE Masceni, 23 August 2026) → Implementation Plan Amendment — Revision 3 (✅ **ACCEPTED AND SIGNED**, SABUSHIMIKE Masceni, 23 August 2026, including the Owner-Declared UI decision recorded there) → **this Authorization Amendment (✅ SIGNED, §10)**.
+
+**One umbrella Authorization, extended, not replaced (per BDR Decision 35 / existing Authorization header's own "one umbrella Authorization, not nine" statement):** this amendment does not create a second, separate Implementation Authorization. It extends the single existing signed Authorization with new sections for Increment 10 and the two Post-Implementation Corrections, exactly as §15–§21 already extended it for the §41 reconciliation and Increments 5–9. §2 (Scope), §3 (Exclusions), §5 (Approved Financial Behavior), §6 (Restated Decisions), §8–§11 (Governance Boundary, No Redesign, Security, Historical Data) from the existing Authorization remain unchanged in substance and are not restated in full here — only extended where Revision 3 requires (§22, below).
+
+---
+
+## 22. What This Amendment Adds to §23's Scope
+
+The existing Authorization's §2 ("What This Authorization Covers — Complete Umbrella Scope") is extended to include, for the first time:
+
+- Owner-Declared Business Worth as a second snapshot-establishment method (BDR Decision 36; Specification §42.1, FR-61).
+- Opening-balance / other-obligation `Payable` origins (Specification §42 Decision 12, FR-62).
+- The `OwnerInvestment` collection and its live-formula/drill-down integration (Specification §43, FR-63–66).
+- Recurring 30-day receivable reminders, including the new `Receivable.lastReminderSentAt` field (Specification §22/FR-57 as amended).
+- Deterministic Contagem cost-basis conversion for multi-portion entries (Specification §15/FR-67).
+- Fecho batch-level profit attribution (Specification §18/FR-68).
+- Dashboard/report three-surface terminology correction (Specification §32).
+- **Two Post-Implementation Corrections** to already-shipped Increment 6 and Increment 4 behavior (§24, §25 below) — these are corrections within the existing umbrella, not new capability, but are named here explicitly since the original §2 (in the base Implementation Authorization) did not anticipate a correction to already-shipped code at drafting time.
+
+**§3's exclusions (existing Authorization) are unchanged and are not loosened by this amendment** — this remains a Business Worth measurement capability only; nothing above introduces POS, checkout, invoicing, payroll, full accounting, or ERP functionality, and Owner Portfolio remains completely outside this amendment's scope, exactly as the Specification's own preservation list (Part C, original Revision 3 draft) requires.
+
+---
+
+## 23. Product Architect Authorization — Increment 10
+
+**Scope (implements Implementation Plan Amendment — Revision 3, Parts A):**
+
+1. Owner-Declared Business Worth: `businessWorthSnapshots.allow create` second branch (Plan Amendment §A.1); dedicated "Declare Business Worth" entry point/screen, structurally separate from the Contagem data-entry flow — **per the Product Architect's own explicit decision, recorded in full at §6 below, this is not a mode/toggle inside Contagem.**
+2. Opening-balance / other-obligation `Payable`s: extended `payables.allow create` rule, `origin`/`description` fields (Plan Amendment §A.2).
+3. `OwnerInvestment`: new collection, rules, atomic pairing with `CashLedgerEntry` (`category: 'other-governed-movement'`), live-formula extension (`+ ownerInvestmentsSinceSnapshot`), `ownerInvestmentSinceLastSnapshot` drill-down field, Timeline audit event (Plan Amendment §A.3).
+4. Recurring receivable reminders: `Receivable.lastReminderSentAt` field, write-path isolation from `recordReceivablePayment`, and the sweep-logic change to `businessWorthNotificationProducer.ts`'s `RECEIVABLE_OUTSTANDING_EVENT_TYPE` handling (Plan Amendment, "Recurring 30-Day Receivable Reminders").
+5. Contagem cost-basis conversion: the `getConversionFactor`-driven automatic cost derivation in `stockCount.ts`'s per-portion cost-entry path, for the narrow case FR-67 names (Plan Amendment, "Contagem Cost-Basis Conversion"). **The removal of the existing silent-zero fallback for this same narrow case is authorized only together with, and subject to, §25 below (Post-Implementation Correction — Cost-Price Zero-Fallback), not independently.**
+6. Fecho batch-level profit attribution: `batchContributions` on `ProductReportDetail`, sourced from `generateReportSummary`'s existing per-batch loop (Plan Amendment, "Fecho Batch-Level Profit Attribution").
+7. Dashboard/report three-surface terminology: the Dashboard Business Worth summary modal, `CapitalGrowthReport.tsx`, `BusinessWorthReport.tsx` (Plan Amendment, "Three-Surface Terminology Correction"). **Sequenced together with §24 below (Fecho baseline removal), per the Plan Amendment's own Finding FB-4 dependency note — neither should ship to a given business without the other.**
+
+**Execution rule — one item at a time, mirroring §7's existing eight-step discipline exactly, applied here to Increment 10's seven items above, in the Plan Amendment's own proposed order (Plan Amendment, "Proposed Sequencing," items 1–7):**
+
+1. Read the item's scope (above, and the cited Plan Amendment section) before writing anything.
+2. Verify its prerequisites — for item 3 (Owner Investment) and item 7 (terminology, paired with §3), confirm item 1 (`establishmentMethod`) and §3 (Fecho baseline removal) respectively are actually complete and verified, not merely started.
+3. Implement only that item's own scope — no item may silently implement a later item's functionality.
+4. Run the tests/verification the Plan Amendment names for that item, including any newly-required regression updates (§25 below, for item 5's paired correction).
+5. Inspect the diff — confirm no file outside the item's own stated scope was touched.
+6. Verify governance compliance against the specific FR(s)/Decision(s)/Finding(s) the item claims to implement.
+7. Record the result.
+8. Only then proceed to the next item.
+
+**This Authorization Amendment does not permit implementing all seven Increment 10 items in one pass**, and does not permit bypassing any of the eight steps above for any item — identical discipline to §7's existing rule for Increments 1–9.
+
+---
+
+## 24. Post-Implementation Correction — Fecho Baseline (Capital Inicial Fallback Removal)
+
+**Scope note, mirroring §16's own "avoid a numbering collision" discipline:** this correction is distinct from, and not to be confused with, the existing §16 "Finding 3, Option A" correction (an unrelated `BusinessWorthSnapshotProductValuationLine.totalValue` fix from Increments 1–4's own post-implementation review).
+
+**Finding (per Rule 8 Assessment Addendum — Revision 3, Findings FB-1–FB-4, already accepted).** `resolveActiveBusinessWorthBaselineDate` (`apps/tenant/src/utils/calculations.ts`, line 1478), shipped as part of Increment 6 (`b2578d0`), currently falls back to `initialStockCount.createdAt` (Capital Inicial's date) as Fecho's baseline whenever no `BusinessWorthSnapshot` exists — a real, deliberately-tested behavior (`tests/fecho-baseline-anchored-closing.test.ts`, at least three cases exercising this exact path). Per Revision 3 (Specification §18/FR-25 as corrected; the signed decision log's own Decision 4), this fallback is superseded: Fecho's baseline must resolve exclusively from the latest active `BusinessWorthSnapshot`'s `confirmedAt` — of either `establishmentMethod` — never from Capital Inicial's date, under any circumstance.
+
+**Product Architect Decision (recorded here for formal acceptance, not re-decided — this restates Decision 4 from the signed decision log, already approved 23 August 2026):**
+
+> Remove the Capital Inicial fallback from `resolveActiveBusinessWorthBaselineDate`. When no `BusinessWorthSnapshot` exists, Fecho has no baseline and custom-period Fecho is unavailable, regardless of whether the business has a preserved historical Capital Inicial. The Owner sees the approved message: *"Estabeleça primeiro o Valor do Negócio através de uma Contagem ou de um Valor de Negócio Declarado para utilizar o Fecho."*
+
+**Rationale:** Fecho's baseline must mean exactly one thing — a genuine Business Worth establishment event — never a proxy derived from unrelated historical capital-record data. The fallback's continued presence would have let a State-1a business run custom Fecho against a baseline that Revision 3's own terminology table (§42.1) explicitly says does **not** establish Business Worth — an internal contradiction this correction closes.
+
+**What this correction explicitly does NOT change:**
+- `resolveActiveBusinessWorthBaselineDate`'s treatment of an existing `BusinessWorthSnapshot` (of either establishment method) — unchanged, still the sole basis for the baseline once one exists.
+- The `'custom'` `ClosingPeriodType` value, the double-close guard, or any other Fecho mechanism from Increment 6 — unchanged.
+- Any Business Worth formula, ceiling, or figure — unaffected; this is a baseline-*resolution* change, not a valuation change.
+- Historical Capital Inicial data itself — never deleted, migrated, or rewritten (HIST-1), exactly as every other item in this capability preserves it.
+
+**Required regression update (implements the Product Architect's own instruction that existing regression tests be updated in the same implementation change):** `tests/fecho-baseline-anchored-closing.test.ts`'s fallback-path test cases (identified in the Rule 8 Addendum, Finding FB-1) must be updated, in the same change, to assert the new "no baseline" result — not left failing, and not silently deleted without replacement coverage for the "no snapshot exists" case.
+
+**Sequencing requirement, carried from the Plan Amendment (Finding FB-4):** this correction must land together with, or with an explicit rollout note relative to, Increment 10 item 7 (Dashboard/report three-surface terminology) — the Owner-facing message above must be live for any business affected by this change no later than the change itself.
+
+**Formal acceptance:**
+
+> I have reviewed this Post-Implementation Correction (removal of the Capital Inicial fallback from `resolveActiveBusinessWorthBaselineDate`, Increment 6) and confirm it correctly implements the already-approved Decision 4. I confirm it introduces no new business decision, changes no Business Worth formula or figure, preserves all historical Capital Inicial data unmodified, and requires the named regression-test update in the same change. This correction is **ACCEPTED**, pending implementation per §23's execution rule.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+---
+
+## 25. Post-Implementation Correction — Contagem Cost-Price Zero-Fallback Removal
+
+**Scope note:** distinct from, and not to be confused with, §16's existing Finding 3/Option A or this document's own §24, above.
+
+**Finding (per Rule 8 Assessment Addendum — Revision 3, Findings CB-1, CB-2, ZF-1, ZF-2, already accepted).** `apps/tenant/src/utils/stockCount.ts`'s per-portion cost-entry path, shipped as part of Increment 4 (`49fb8ab`), currently computes `const costPrice = Number(raw.costPrice) || 0;` — an unfilled or non-numeric `costPrice` silently becomes `0`, unconditionally, for every Contagem portion. Specification §15/FR-67 requires that, for the specific case of a multi-portion entry where a portion's unit differs from the product's purchase unit and a valid, confirmed `unitRelationship` exists, cost is instead derived automatically and deterministically via `getConversionFactor` — never silently defaulted to zero in that case.
+
+**Product Architect Decision:**
+
+> For the case FR-67 names — a Contagem portion whose unit differs from the product's most recent purchase unit, where a valid, confirmed `unitRelationship` covers that unit — the existing silent-zero cost-price fallback is removed and replaced with automatic, deterministic conversion via the existing `getConversionFactor` engine. Outside that specific case, today's manual cost-entry behavior, including its existing zero-coercion for a genuinely blank manual entry, is unchanged — this is FR-67's own named exception, mirroring `getConversionFactor`'s own null-handling contract exactly.
+
+**Rationale:** a silently-zeroed cost price on a convertible portion would understate `embeddedProfitTotal` and, downstream, `measuredBusinessWorth` — a genuine data-integrity defect this correction closes for the case where a correct figure is actually derivable. Where no confirmed relationship exists, manual entry (and its existing behavior) remains appropriate, since no deterministic figure can be derived — Revision 3 does not require inventing one.
+
+**What this correction explicitly does NOT change:**
+- Cost-price handling for single-unit Contagem entries, or for a portion with no confirmed `unitRelationship` — unchanged.
+- Selling-price entry or `deriveModeAPortionValuations` (Mode A) — confirmed zero coupling; this correction touches only `costPrice`, never `sellingPrice`.
+- `getConversionFactor` itself, or `Product.unitRelationship` — reused unmodified, no new engine.
+- Any already-frozen `BusinessWorthSnapshot`'s `embeddedProfitDetail` — this correction governs how a value is computed going forward, exactly like every other Increment 1–4 field-level fix in this capability's own history (§16's own precedent), never a rewrite of historical snapshot data (I-3, unaffected).
+
+**Required regression review (per the Product Architect's own instruction):** `tests/contagem-multi-unit-valuation.test.ts` and `tests/periodic-stock-mode-a-integration.test.ts` must be checked for any fixture relying on, or merely tolerating, the silent-zero default within FR-67's own narrow scope, and updated in the same change if any such case exists.
+
+**Formal acceptance:**
+
+> I have reviewed this Post-Implementation Correction (removal of the silent cost-price zero-fallback, within FR-67's own named scope, Increment 4) and confirm it correctly implements FR-67 without altering cost-price handling outside that scope, without touching selling-price logic, and without rewriting any historical snapshot data. This correction is **ACCEPTED**, pending implementation per §23's execution rule and the required regression review above.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+---
+
+## 26. Owner-Declared Business Worth UI Decision — Recorded
+
+**Recorded here verbatim, per the Product Architect's own instruction, as the one implementation-detail decision this amendment settles that the Plan Amendment itself had left open (Plan Amendment, Rule 8 Finding OD-5):**
+
+> **Owner-Declared Business Worth UI.** Use a dedicated "Declare Business Worth" entry point/screen, separate from the Contagem data-entry flow. Do not implement Owner-Declared Business Worth as a mode/toggle inside Contagem. **Reason:** Contagem is a physical stock-count establishment event, while Owner-Declared Business Worth is an explicit declaration by an Owner who already knows the business's worth. They are two different establishment methods and must remain clearly distinguishable in the UX.
+
+This binds Increment 10 item 1 (§23, above) and closes the one UI-boundary question the Rule 8 Addendum and Plan Amendment both left open. No other implementation-detail decision is settled by this amendment beyond this one and the two Post-Implementation Corrections above — every other exact field/route/collection name in the Plan Amendment remains, as before, an ordinary implementation choice subject to normal code review, not a Product Architect decision.
+
+---
+
+## 27. The Resulting Lifecycle, as Approved
+
+Recorded here verbatim from the Product Architect's acceptance, for direct traceability alongside Specification §6/§42:
+
+**Existing business:** operational use → either Contagem **or** Declare Business Worth → Business Worth established → Current Business Worth.
+
+**New business:** business creation → repeatable `+Stock` / Initial Investment activity → whenever Owner is ready, either Contagem **or** Declare Business Worth → Business Worth established → Current Business Worth.
+
+**Capital Inicial remains neither a gate nor a Business Worth establishment mechanism** — confirmed consistent with §42.1's terminology table and §6 State 2 as corrected; no further textual change is required to the Specification for this lifecycle statement, since §6/§42 already state it in these terms.
+
+---
+
+## 28. Acceptance Criteria — Increment 10 and Post-Implementation Corrections
+
+Mirrors the existing Authorization's §12 format, extended for Revision 3's new FRs.
+
+**Increment 10:**
+- AC-R3-1: A `BusinessWorthSnapshot` can be created via Owner-Declared establishment only through the dedicated entry point (§26, above); it is `isOwnerOf`-gated, carries `establishmentMethod: 'owner-declared'`, has no `sourceStockCountId`, and omits every field FR-69 names, enforced server-side.
+- AC-R3-2: A `Payable` of `origin: 'opening-balance'` or `'other-obligation'` can be created via a standalone path requiring no `PurchaseBatch`, with `sourcePurchaseBatchId` structurally absent and `description` required non-empty; purchase-origin creation is byte-for-byte unchanged.
+- AC-R3-3: Recording an `OwnerInvestment` produces exactly one linked `CashLedgerEntry` in the same atomic write; the live Business Worth calculation reflects it exactly once; it appears as `ownerInvestmentSinceLastSnapshot` on the next snapshot regardless of establishment method; it is logged to the Timeline, never `platform_audit_log`.
+- AC-R3-4: An outstanding `Receivable` receives a reminder no more than once per 30-day period, measured from `lastReminderSentAt`; a partial payment does not reset this; `status: 'paid'` stops reminders permanently; `recordReceivablePayment` never writes `lastReminderSentAt`.
+- AC-R3-5: For a Contagem portion meeting FR-67's named condition, cost price is derived automatically via `getConversionFactor`, never left at a silent zero; outside that condition, behavior is unchanged.
+- AC-R3-6: `ProductReportDetail.batchContributions` reflects the same per-batch figures `generateReportSummary`'s existing loop already computes, with no change to existing aggregate fields.
+- AC-R3-7: The Dashboard modal, `CapitalGrowthReport.tsx`, and `BusinessWorthReport.tsx` each display "Business Worth" (Estimated, where applicable) pre-establishment and "Current Business Worth" post-establishment (either method), with historical Capital Inicial data relocated to display only, never deleted.
+
+**Post-Implementation Corrections:**
+- AC-R3-8: `resolveActiveBusinessWorthBaselineDate` returns "no baseline" (never a Capital-Inicial-derived date) when no `BusinessWorthSnapshot` exists; `tests/fecho-baseline-anchored-closing.test.ts` reflects this; the approved Owner-facing message is live no later than this change.
+- AC-R3-9: The cost-price silent-zero fallback is removed only for FR-67's named case; `tests/contagem-multi-unit-valuation.test.ts` and `tests/periodic-stock-mode-a-integration.test.ts` reflect this; manual-entry behavior outside that case is unchanged.
+
+---
+
+## 29. Traceability Re-Verification — Revision 3
+
+| Item | BDR Decision | Specification §/FR | Rule 8 Finding | Plan Amendment § | AC |
+|---|---|---|---|---|---|
+| Owner-Declared establishment | 36 | §42.1, §8, FR-61 | OD-1–OD-5 | A.1 | AC-R3-1 |
+| Opening/other-obligation Payables | 12 (Spec) | §42 Dec. 12, §12, FR-62 | OP-1–OP-4 | A.2 | AC-R3-2 |
+| Owner Investment | — (new territory) | §43, FR-63–66 | OI-1–OI-6 | A.3 | AC-R3-3 |
+| Recurring receivable reminders | — (fills open question) | §22, FR-57 | RC-1–RC-5 | (dedicated section) | AC-R3-4 |
+| Cost-basis conversion (new-territory portion) | — (new territory) | §15, FR-67 | CB-3 | (dedicated section) | AC-R3-5 |
+| Fecho batch-level profit | — (scoped enhancement) | §18, FR-68 | BP-1, BP-2 | (dedicated section) | AC-R3-6 |
+| Three-surface terminology | 3 (Current Business Worth transfer) | §32 | TS-1 | (dedicated section) | AC-R3-7 |
+| **Fecho baseline fallback removal** | 4 (signed decision log) | §18/FR-25 (corrected) | FB-1–FB-4 | §3 (this document) | AC-R3-8 |
+| **Cost-price zero-fallback removal** | — (Rule 8-surfaced correction) | §15/FR-67 | CB-1, CB-2, ZF-1, ZF-2 | §4 (this document) | AC-R3-9 |
+| Owner-Declared UI (dedicated screen) | — (implementation decision) | — | OD-5 | §5 (this document) | AC-R3-1 |
+
+No row above introduces a decision beyond what Revision 3, the Rule 8 Addendum, the Plan Amendment, or this document's own §5 already settled.
+
+---
+
+## 30. Explicit Gate Statement
+
+**This document, once signed, authorizes:** drafting the concrete code/rules/test changes for Increment 10's seven items and the two Post-Implementation Corrections, strictly per §23's execution rule, one item at a time, with the sequencing and pairing dependencies named in §2–§4 above.
+
+**This document, even once signed, does NOT itself:**
+- Write, modify, or commit any `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or `tests/` file.
+- Constitute the instruction to begin coding — a further, separate, explicit instruction ("BEGIN IMPLEMENTATION INCREMENT 10 ITEM 1," or equivalent, per §23's own sequencing) is required before any code is written, mirroring exactly how §15's own acceptance did not itself begin Increment 1.
+- Authorize skipping the regression-update requirements named in §3/§4 for either Post-Implementation Correction.
+- Reopen, reweaken, or reinterpret any decision from BDR Decisions 1–36, Specification §§1–43, or any prior Increment 1–9 Authorization section.
+
+---
+
+## 31. Product Architect Signature — Recorded
+
+> I APPROVE AND SIGN the Implementation Authorization Amendment — Revision 3. I confirm that I have reviewed and accepted the full scope, execution discipline, acceptance criteria, traceability, the Increment 10 authorization, the Fecho baseline Post-Implementation Correction, the Contagem cost-price zero-fallback Post-Implementation Correction, and the dedicated Owner-Declared Business Worth UI decision. This signature is the governance authorization gate. It does not by itself instruct implementation to begin. Implementation may begin only upon my separate explicit instruction identifying the Increment 10 item or Post-Implementation Correction to execute.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **SIGNED.**
+
+---
+
+## 32. Governance Notes
+
+- This is an Implementation Authorization Amendment draft only. No `apps/`, `server/`, `firestore.rules`, `tests/`, or `firestore.indexes.json` file is touched by this document.
+- This amendment does not modify the source BDR, the Specification, the Rule 8 Assessment/Addendum, or the Implementation Plan/Plan Amendment.
+- **Companion item, still tracked separately, still not resolved by this document:** Specification FR-1's literal wording correction (recognizing both establishment methods), per the Implementation Plan Amendment's own Governance Notes. Not a Plan or Authorization item; flagged again here only so it is not lost.
+- Nothing was committed or pushed to produce this document.
+
+## 33. Next Governance Step
+
+This amendment is now signed (§31, above). The next, separate operational action — **not performed here** — is an explicit instruction to begin a specific Increment 10 item or Post-Implementation Correction, per §23's own one-item-at-a-time execution rule. No code, test, rules, or index file is created, modified, or authorized by this document itself, even now that it is signed.
+
+**Lifecycle:** Signed Revision 3 decisions → Governance recording (`5870bdd`) → Rule 8 Assessment Addendum (accepted) → Implementation Plan Amendment (accepted, signed) → **Implementation Authorization Amendment (signed, this document)**. Governance chain complete through Authorization. Not yet implemented — implementation begins only per a further, separate, explicit per-item instruction.

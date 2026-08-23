@@ -346,3 +346,275 @@ Each increment is still bound by the Specification's own §29 Acceptance Criteri
 The next step — **not performed here** — is a signed Implementation Authorization, per `19-governance-bdr-policy-framework.md` §3. No push or merge of this document is performed unless explicitly instructed.
 
 **Lifecycle:** Drafted → Product Architect Reviewed → Accepted → Rule 8 Assessed → READY FOR IMPLEMENTATION → **Implementation Plan (this step)**. Not yet an Implementation Authorization. Not Implemented.
+
+---
+
+# Implementation Plan Amendment — Revision 3 (Business Worth First Establishment Lifecycle)
+
+**Status: ✅ ACCEPTED AND SIGNED (23 August 2026).** Reviewed and accepted by explicit Product Architect signature, including the settled Owner-Declared Business Worth UI decision (dedicated entry point/screen, never a mode/toggle inside Contagem). This amendment is, as of this acceptance, authoritative Implementation Plan content, appended per this document's own established append/reconciliation-pass discipline (its existing 22 August 2026 corrections, its §41 reconciliation pass).
+
+**Target of this amendment:** `docs/engineering/business-worth-evolution-implementation-plan.md`, as a new dated amendment section to be appended there once accepted — following that document's own established append/reconciliation-pass discipline (its existing 22 August 2026 corrections and its §41 reconciliation pass, §26). This amendment is now recorded in this file itself. No code, test, `firestore.rules`, `firestore.indexes.json`, or Implementation Authorization file is touched by this document. This document itself is not an Implementation Authorization and grants no permission to write code.
+
+**Governing basis:** the Revision 3 governance amendment (Specification §42/§43 and inline corrections; BDR §4 Decision 1 corrected, Decision 36 added), live on `origin/main` at `5870bdd`; and the **Rule 8 Assessment Addendum — Revision 3** (draft, gate status `READY AFTER DECISIONS`, all three required acknowledgment points now accepted by explicit Product Architect decision, SABUSHIMIKE Masceni, 23 August 2026). This amendment converts that addendum's findings into a concrete implementation map, exactly as the parent Plan's own §1 Purpose describes its relationship to the Rule 8 Assessment. **No item below introduces a business decision beyond what Revision 3 and the Rule 8 Addendum already settled** — every design choice either directly implements a named FR/Finding, or is an implementation-detail choice (exact field/route/collection names) explicitly reserved for this stage.
+
+**Companion item, not part of this Plan amendment:** the Product Architect's acknowledgment #3 (Rule 8 Addendum) — that FR-1's literal wording should be corrected to recognize both establishment methods — is a Specification-text correction, not an Implementation Plan item. It is **not resolved here** and is not silently folded into any section below; it is listed as its own line in this amendment's Governance Notes (§7) as a companion action tracked separately, per the Product Architect's own instruction not to silently resolve it elsewhere.
+
+**Scope note, restated from the Rule 8 Addendum's own §0, and per explicit instruction to keep it separate throughout:** this amendment is organized in two parts with different governance weight:
+- **Part A — Increment 10 (new capability).** Genuinely new code paths; nothing in Increments 1–9 does this today.
+- **Part B — Post-Implementation Corrections.** Changes to the *observable behavior* of already-shipped, already-tested code (Increments 4, 6, 7), classified per the Implementation Authorization's own §16 precedent ("Post-Implementation Correction — Finding 3, Option A") — engineering-planned here, but their own Product-Architect-level acceptance record belongs in the Implementation Authorization (a future, separate document), exactly as §16 itself was recorded there, not in the Plan.
+
+---
+
+## PART A — Increment 10: New Collections and Data Model (implements Specification §8 as extended, §12 as extended, §43)
+
+Mirrors the parent Plan's own §3 structure and citation discipline.
+
+### A.1 `BusinessWorthSnapshot` — Owner-Declared Establishment Branch (implements §42.1, §8 `establishmentMethod`, FR-61; Rule 8 Finding OD-1–OD-5)
+
+**No new collection** — extends the existing `businessWorthSnapshots` collection's write path with a second creation branch, alongside the existing Contagem-confirmation branch.
+
+**Schema addition** (already recorded in the Specification, §8): `establishmentMethod: 'contagem' | 'owner-declared'`, immutable, set once at creation.
+
+**`firestore.rules` change** (`businessWorthSnapshots.allow create`, currently line 727): add a second disjunct alongside the existing Contagem-confirmation branch, structurally parallel to it —
+
+```
+allow create: if isOwnerOf(businessId) &&
+  request.resource.data.get('businessId', null) == businessId &&
+  request.resource.data.get('id', null) == snapshotId &&
+  request.resource.data.get('confirmedAt', null) == request.time &&
+  request.resource.data.get('measuredBusinessWorth', null) is number &&
+  request.resource.data.get('measuredBusinessWorth', 0) > 0 &&
+  (
+    // Existing Contagem branch — UNCHANGED (Rule 8 Finding OD-1: the
+    // existing branch's own text/conditions are not modified by this
+    // amendment; only a new disjunct is added alongside it).
+    (
+      request.resource.data.get('establishmentMethod', null) == 'contagem' &&
+      request.resource.data.get('sourceStockCountId', null) is string &&
+      ( ...exactly the existing status/supersedesSnapshotId conditions, unchanged... )
+    )
+    ||
+    // NEW — Owner-Declared branch (Rule 8 Finding OD-1). sourceStockCountId
+    // must be genuinely ABSENT, never null/empty-string, so a client
+    // cannot fabricate a fake StockCount id to blur the two methods.
+    // Every FR-69 omitted field (§A.1 note below) must also be absent,
+    // enforced server-side, not merely UI-convention.
+    (
+      request.resource.data.get('establishmentMethod', null) == 'owner-declared' &&
+      !('sourceStockCountId' in request.resource.data) &&
+      !('productValuationTotal' in request.resource.data) &&
+      !('productValuationDetail' in request.resource.data) &&
+      !('embeddedProfitTotal' in request.resource.data) &&
+      !('embeddedProfitDetail' in request.resource.data) &&
+      !('cashPosition' in request.resource.data) &&
+      !('receivablesPosition' in request.resource.data) &&
+      !('payablesPosition' in request.resource.data) &&
+      !('expensesSinceLastSnapshot' in request.resource.data) &&
+      !('breakagesSinceLastSnapshot' in request.resource.data) &&
+      !('levantamentosSinceLastSnapshot' in request.resource.data) &&
+      !('ownerInvestmentSinceLastSnapshot' in request.resource.data) &&
+      request.resource.data.get('supersedesSnapshotId', null) == null &&
+      request.resource.data.get('status', null) == 'active'
+    )
+  );
+```
+
+Exact field list and rule text above are this Plan's own illustrative implementation detail (per Specification §3/§37's own out-of-scope convention) — the *requirement* (Owner-only, tenant-scoped, mutually exclusive from Contagem provenance, FR-69's omission list server-enforced) is fixed by Revision 3 and the Rule 8 Addendum; the exact Rules syntax is an implementation choice, subject to normal code review.
+
+**Write path (UI/route boundary — Rule 8 Finding OD-5, explicitly flagged as undecided by the Addendum):** **Implementation decision required, not resolved by this Plan amendment.** Two options: (a) a dedicated "Declare Business Worth" entry point, structurally separate from the Contagem entry flow; (b) a mode toggle on the existing Contagem entry screen. **Settled by explicit Product Architect decision, recorded in the Implementation Authorization Amendment:** option (a), a dedicated entry point/screen, is the approved direction — never a mode/toggle inside Contagem. See the Implementation Authorization Amendment's own recorded decision for the full rationale.
+
+**Atomicity/idempotency (implements Rule 8 Finding OD-3):** single-document create, trivially atomic by Firestore's own per-document write guarantee — no batch-write design needed, unlike the paired Contagem write. The document's own `id` must derive from a client-generated `submissionId`, exactly as `recordStockCount` already does for `StockCount` (`AppContext.tsx` ~line 2856's own `id:` expression) — direct reuse of an existing, proven idempotency pattern, not a new one.
+
+**Correction/recovery (Rule 8 Finding OD-4 — confirmed no code change required):** `businessWorthSnapshotCorrectable()` and `businessWorthRecoveryAuthorizationActive()` (both already shipped, Increment 8) operate generically on `snapshotId`/`confirmedAt` with no branch on establishment method — an Owner-Declared snapshot is correctable/recoverable on identical terms with **zero modification to either function.**
+
+**Drill-down (implements §42.3, FR-69):** the Business Worth history view's read/render path gains a branch: when `establishmentMethod === 'owner-declared'`, display `measuredBusinessWorth`, `confirmedAt`, `establishmentMethod` badge, and an explicit "no physical/financial breakdown exists for this establishment" notice — never a blank/zero field presented as though it were data. This is a UI-layer conditional, not a new calculation.
+
+### A.2 `Payable` — Opening Balance / Other Obligation Origins (implements §42 Decision 12, §12 as extended, FR-62; Rule 8 Finding OP-1–OP-4)
+
+**No new collection** — extends the existing `payables` collection's schema (`origin`, `description` fields, already recorded in the Specification §12) and write rule.
+
+**`firestore.rules` change** (`payables.allow create`, currently line 920): restructure into an origin-branching rule —
+
+```
+allow create: if isOwnerOf(businessId) &&
+  request.resource.data.get('businessId', null) == businessId &&
+  request.resource.data.get('id', null) == payableId &&
+  request.resource.data.get('totalAmount', null) is number &&
+  request.resource.data.get('totalAmount', 0) > 0 &&
+  request.resource.data.get('amountPaid', null) == 0 &&
+  request.resource.data.get('amountRemaining', null) == request.resource.data.get('totalAmount', null) &&
+  request.resource.data.get('status', null) == 'unpaid' &&
+  (
+    // Existing purchase-origin branch — UNCHANGED, byte-for-byte, per
+    // the Specification's own "purchase-origin Payables unchanged"
+    // preservation item and Rule 8 Finding OP-1.
+    (
+      request.resource.data.get('origin', null) == 'purchase' &&
+      request.resource.data.get('sourcePurchaseBatchId', null) is string
+    )
+    ||
+    // NEW — opening-balance / other-obligation. sourcePurchaseBatchId
+    // must be genuinely ABSENT (Rule 8 Finding OP-1: this is the
+    // control preventing a non-purchase liability from also carrying
+    // purchase provenance). description required non-empty.
+    (
+      request.resource.data.get('origin', null) in ['opening-balance', 'other-obligation'] &&
+      !('sourcePurchaseBatchId' in request.resource.data) &&
+      request.resource.data.get('description', null) is string &&
+      request.resource.data.get('description', '').size() > 0
+    )
+  );
+```
+
+**`PayablePayment` and `payables.allow update` (implements Rule 8 Finding OP-2 — confirmed zero change required):** both are already origin-agnostic (neither references `sourcePurchaseBatchId` or `origin` today) — no schema or rule change needed for existing settlement mechanics to cover the two new origins, satisfying FR-62's "must otherwise participate in the exact same payment, settlement... mechanics... without alteration."
+
+**Notification interaction (Rule 8 Finding OP-3 — confirmed zero change required):** the existing `PAYABLE_OUTSTANDING_EVENT_TYPE` sweep filters only on outstanding status, with no origin-based condition — a new-origin `Payable` is picked up automatically.
+
+**Legacy-record read-path treatment (Rule 8 Finding OP-4 — implementation decision, not resolved here):** any UI distinguishing the three origins must treat a pre-amendment `Payable` with no `origin` field as equivalent to `'purchase'` (the only origin that existed before). This Plan amendment names this as the required default; it does not design the exact UI conditional.
+
+### A.3 `OwnerInvestment` — New Collection (implements §43, FR-63–66; Rule 8 Finding OI-1–OI-6)
+
+**New collection:** `businesses/{businessId}/ownerInvestments/{investmentId}`, schema exactly as Specification §43 defines (`id`, `businessId`, `amount`, `date`, `description?`, `createdAt`, `createdBy`).
+
+**`firestore.rules` addition**, structurally identical in shape to the existing `startupInvestmentEntries` rule (line 963 — same tenant path, same `isOwnerOf` gate, same closed-field-presence discipline, append-only):
+
+```
+match /ownerInvestments/{investmentId} {
+  allow read: if isOwnerOf(businessId);
+  allow create: if isOwnerOf(businessId) &&
+    request.resource.data.get('businessId', null) == businessId &&
+    request.resource.data.get('id', null) == investmentId &&
+    request.resource.data.get('amount', null) is number &&
+    request.resource.data.get('amount', 0) > 0 &&
+    request.resource.data.get('createdBy', null) == request.auth.uid;
+  allow update, delete: if false;
+}
+```
+
+**Atomic pairing with `CashLedgerEntry` (implements FR-63; Rule 8 Finding OI-2 — confirmed zero schema/rules change to `cashLedgerEntries` itself):** `category: 'other-governed-movement'` already exists in the live enum (`types.ts` line 994, `firestore.rules` line 862) and is confirmed genuinely unused by any current production code path today — direct reuse. The write path pairs one `OwnerInvestment` document with exactly one `CashLedgerEntry` document (`direction: 'inflow'`, `category: 'other-governed-movement'`) in a single Firestore batch write, following the identical pattern `recordReceivablePayment`/`recordPayablePayment` already use for their own payment-plus-ledger-entry pairs.
+
+**Idempotency (implements FR-63; Rule 8 Finding OI-3):** the `OwnerInvestment` document's `id` derives from a client-supplied `submissionId`, mirroring §5's existing discipline. Exact id-derivation scheme (e.g. `` `${submissionId}` `` vs. a composite) is an implementation detail for the engineer picking this up, not decided here.
+
+**Live formula extension (implements FR-64; Rule 8 Finding OI-4):** `computeCaseALiveBusinessWorth` (Increment 3, `calculations.ts`) gains one new additive parameter: `+ ownerInvestmentsSinceSnapshot`, computed as the sum of `OwnerInvestment.amount` where `date > <active baseline's own confirmedAt>`. This is structurally the same kind of additive-term extension Increment 3 already performed once for the Receivables/Payables/Cash position-change term (Plan §24 item 3) — not a new class of change to this function. **No double-counting:** this term is read directly from `OwnerInvestment` records; the function must **not** separately sum `cashLedgerEntries` by `category: 'other-governed-movement'` into the same total — the linked `CashLedgerEntry`'s own effect and this term must never both move the live figure independently.
+
+**Snapshot drill-down field (implements FR-65):** `BusinessWorthSnapshot` gains `ownerInvestmentSinceLastSnapshot`, following the existing "reference, don't duplicate" discipline §8 already establishes for its sibling since-last-snapshot fields. **Confirmed compatible with §42.3's Owner-Declared omission rule (Rule 8 Finding OI-6):** this field is a *since-baseline* field, never an *at-establishment* field, so it is never one of the fields FR-69 requires omitted on an Owner-Declared snapshot's own establishment-moment detail — present identically regardless of which method established the baseline.
+
+**Timeline audit event (implements Rule 8 Finding OI-5):** a new `TimelineEvent` variant, following the existing, already-proven "log after successful batch commit" pattern (`AppContext.tsx`'s existing Timeline-write discipline) — logged to the per-business Timeline, never `platform_audit_log` (reserved for platform/SuperAdmin events; Owner Investment is an Owner-initiated, business-scoped event).
+
+**Never widens Startup Investment (implements FR-66):** no change of any kind to `startupInvestmentEntries`'s schema, category enum, or FR-17's scope restriction — confirmed by construction, since `OwnerInvestment` is a wholly separate collection and code path.
+
+---
+
+## PART A — Recurring 30-Day Receivable Reminders (implements §22/FR-57 as amended; Rule 8 Finding RC-1–RC-5)
+
+**Product Architect decision now incorporated (acceptance point 1, above): `lastReminderSentAt`-style field on `Receivable`, written only by the reminder-firing action.**
+
+**Schema addition:** `Receivable` gains `lastReminderSentAt?: Timestamp` (or ISO string, matching this collection's existing `createdAt: string` convention) — an additive optional field, tolerated the same way `StockCount.producesBusinessWorthSnapshot` was added without migration (Rule 8 Assessment's own precedent, Finding 14-A).
+
+**Write-path isolation (implements the "partial payment does not reset cadence" requirement structurally, not by convention — Rule 8 Finding RC-2):** `lastReminderSentAt` is written **exclusively** by the reminder-firing server action, and the recordReceivablePayment write path must not touch this field under any circumstance. This isolation is itself the mechanism that makes cadence-preservation-under-partial-payment a structural guarantee rather than an assumption — this Plan amendment states it as an explicit constraint the code review for this Increment must verify, not merely as a design intention.
+
+**Sweep logic change (implements FR-57; Rule 8 Finding RC-5 — the one genuinely new-shape piece of this item):** `businessWorthNotificationProducer.ts`'s existing `RECEIVABLE_OUTSTANDING_EVENT_TYPE` sweep currently fires once per document, ever (its own header's documented one-shot dedupe model, `dedupeKey` with no time component). This must change from "skip if already notified" to "re-evaluate every outstanding Receivable on each pass, gate firing on `now − lastReminderSentAt ≥ 30 days`" (or `lastReminderSentAt` absent, for the first-ever reminder). **This is the one item in this amendment requiring a genuine change to the sweep's own control flow**, not a pure additive extension — flagged for extra code-review attention, though still a bounded, well-precedented kind of scheduling logic (Class A in the Rule 8 sense: an implementation-detail answer to an already-decided business requirement, not a new business judgment).
+
+**Stops on paid (implements the "paid status stops reminders permanently" requirement; Rule 8 Finding RC-3 — confirmed zero additional logic required):** the existing sweep's own outstanding-status filter (`unpaid`/`partially-paid` only) already excludes any `Receivable` that has reached `status: 'paid'` — this requirement is satisfied as a direct consequence of the existing filter, with no new code.
+
+**FIN-3 unaffected (Rule 8 Finding RC-4 — confirmed structurally unreachable):** no code in this item writes to `amountRemaining`, the live Business Worth formula, or any Business-Worth-bearing field — this is a pure downstream notification concern.
+
+---
+
+## PART A — Contagem Cost-Basis Conversion (implements §15/FR-67; Rule 8 Finding CB-1–CB-3)
+
+**Engine reuse (confirmed, zero new engine — Rule 8 Finding CB-3):** `getConversionFactor` (`apps/tenant/src/lib/purchaseToSellingConversion.ts`) already has the exact null-handling contract FR-67 requires (returns `null`, never a fabricated `1`, when the relationship is invalid or a unit is outside the confirmed chain) — direct reuse, no new conversion engine, no new field on `UnitRelationship`.
+
+**The actual code change — per-portion cost-entry path (`apps/tenant/src/utils/stockCount.ts`):** when a Contagem portion's unit differs from the product's most recent purchase unit and a valid `unitRelationship` covers that unit, the cost price for that portion is computed via `getConversionFactor`, automatically and unconditionally — never an Owner-facing toggle. **This replaces the currently-shipped `const costPrice = Number(raw.costPrice) || 0;` line for exactly this case** (§B.2, below, carries the Post-Implementation-Correction-level regression-review requirement for this change, since it modifies already-shipped Increment 4 code). Outside this specific case (single-unit Contagem, or no confirmed `unitRelationship`), today's behavior is unchanged — manual entry remains, with the existing zero-coercion for a genuinely blank entry (FR-67's own "narrow exception" clause), since a manual-entry case is exactly the case `getConversionFactor` itself already treats as unconvertible.
+
+**Zero coupling with selling-price logic (confirmed — Rule 8 Finding CB-3):** `deriveModeAPortionValuations` (Increment 4's own Mode A engine) only ever reads/writes `sellingPrice`, never `costPrice` — this cost-basis change introduces no interaction with that function, preserving Specification §15's "zero interaction between the two calculations" requirement by construction, not by added guard logic.
+
+**Required regression gate before merge (implements the Product Architect's acceptance point 2's "existing regression tests must be updated in the same implementation change," applied here per Rule 8 Finding CB-2/ZF-1):** `tests/contagem-multi-unit-valuation.test.ts` and `tests/periodic-stock-mode-a-integration.test.ts` must be reviewed for any fixture relying on (or merely tolerating) the silent-zero cost-price default, and updated in the same change that lands this feature — not treated as a pre-existing, unrelated suite.
+
+---
+
+## PART A — Fecho Batch-Level Profit Attribution (implements §18/FR-68; Rule 8 Finding BP-1, BP-2)
+
+**The actual code change:** `generateReportSummary` (`apps/tenant/src/utils/calculations.ts`, line 1295) already calls `calculateBatch(batch, batchQuebras)` per batch inside its own loop (line 1333) before aggregating into product-level totals. `ProductReportDetail`'s return type gains a new `batchContributions: { batchId, costPrice, embeddedProfit, status }[]` field, populated from that same, already-running per-batch call — a parallel accumulation alongside the existing aggregation, not a second computation of profit. **Zero change to `generateReportSummary`'s existing aggregate return fields** (`productEmbeddedProfit`/`finalizedEmbeddedProfit`/`estimatedEmbeddedProfit` unchanged in meaning or value).
+
+**No interaction with Business Worth Engine or snapshot immutability (Rule 8 Finding BP-2 — confirmed):** `generateReportSummary` shares no mutable state with `computeCaseALiveBusinessWorth` or any `BusinessWorthSnapshot` write path.
+
+---
+
+## PART A — Three-Surface Terminology Correction (implements §32; Rule 8 Finding TS-1)
+
+**No schema, rule, or write-path change** — a display-layer relabeling across three named files (the Dashboard's Business Worth summary modal; `CapitalGrowthReport.tsx`'s `initialCapitalValue`-labeled timeline start-point; `BusinessWorthReport.tsx`'s `kpiInitialCapital`/`kpiInitialCapitalFull` KPI card). Each: before establishment (State 1/1a), label "Business Worth" (Estimated where applicable); after establishment (State 3, either method), label "Current Business Worth," reading the already-live §7 calculation. Historical Capital Inicial data is relocated in display only, to an "Initial Investment / capital history" section — never deleted, migrated, or rewritten (HIST-1). This item has no atomicity, security, or data-integrity dimension per the Rule 8 Addendum's own TS-1 finding, and can proceed directly from the Specification text.
+
+**Sequencing dependency (Rule 8 Finding FB-4, carried forward here):** this item should land together with, or with an explicit note relative to, Part B.1 (Fecho baseline removal) below — a business losing its Fecho baseline while its Dashboard still shows an unlabeled Capital-Inicial-derived figure would present an inconsistent mid-rollout state to the Owner.
+
+---
+
+## PART B — Post-Implementation Corrections (implements the Product Architect's acceptance point 2)
+
+**Governance note, restated:** per the Implementation Authorization's own §16 precedent, each item below will require its own dated Product-Architect-signed acceptance section in a future Implementation Authorization amendment (structurally mirroring §16's "Finding → Product Architect Decision → Rationale → What This Explicitly Does NOT Change → Formal acceptance" shape) — **not created by this Plan amendment.** This Plan amendment's own job, for Part B, is limited to defining the concrete technical change and its regression-handling requirement, so that future Authorization section has a settled technical basis to accept.
+
+### B.1 Fecho Baseline — Capital Inicial Fallback Removal (implements §18/FR-25 as corrected; Rule 8 Finding FB-1–FB-4)
+
+**The actual code change:** `resolveActiveBusinessWorthBaselineDate` (`apps/tenant/src/utils/calculations.ts`, line 1478) removes its `initialStockCount.createdAt` fallback branch entirely. When no `BusinessWorthSnapshot` exists (of either `establishmentMethod`), the function returns its own explicit "no baseline" result — never a Capital-Inicial-derived date, regardless of whether the business has one.
+
+**Required regression update (Rule 8 Finding FB-1 — identified, not hypothetical):** `tests/fecho-baseline-anchored-closing.test.ts` contains at least three test cases exercising the fallback path directly (`resolveActiveBusinessWorthBaselineDate({ snapshots: [], initialStockCount: initial })`-shaped calls). These cases must be updated **in the same change** to assert the new "no baseline" result instead of the old fallback date — this is an expected, correct consequence of the correction, not an incidental test break to be patched around.
+
+**UI messaging, sequenced with the code change (implements Decision 4's own required copy; Rule 8 Finding FB-2):** the Portuguese message — *"Estabeleça primeiro o Valor do Negócio através de uma Contagem ou de um Valor de Negócio Declarado para utilizar o Fecho."* — must land atomically with, or before, this code change goes live for any given business, not as a follow-up — since any currently-onboarded State-1a business loses custom-period Fecho the moment this change ships (an explicitly accepted, not hypothetical, behavior change per the signed decision log's own Decision 4).
+
+**No security/atomicity/rules dimension (Rule 8 Finding FB-3):** pure calculation-logic change, no `firestore.rules` change, no new write path, no new collection.
+
+### B.2 Cost-Price Silent-Zero-Fallback Removal (implements §15/FR-67; Rule 8 Finding ZF-1, ZF-2 — cross-referenced from Part A's cost-basis-conversion item, recorded again here per explicit instruction to classify it separately)
+
+**The actual code change:** already specified under Part A's Contagem Cost-Basis Conversion section above — `stockCount.ts`'s `Number(raw.costPrice) || 0` fallback is removed **only for the specific case FR-67 names** (multi-portion entry, unit differs from purchase unit, valid confirmed `unitRelationship` exists). Outside that case, today's behavior is unchanged (Rule 8 Finding ZF-2) — this is a narrower behavior change than B.1's.
+
+**Required regression review (Rule 8 Finding ZF-1):** `tests/contagem-multi-unit-valuation.test.ts` and `tests/periodic-stock-mode-a-integration.test.ts` fixtures must be checked for any case relying on the silent-zero default within FR-67's own narrow scope, and updated in the same change if found.
+
+---
+
+## Proposed Sequencing (Increment 10, per source BDR §10/Decision 35's "feature-by-feature within one umbrella Authorization" discipline)
+
+Mirrors the parent Plan's own §24 format. This is a sequencing proposal only — it does not itself authorize any increment; a future Implementation Authorization amendment does that.
+
+1. **Foundation — Owner-Declared establishment method.** §A.1's rules branch, drill-down UI conditional, and the (not-yet-decided) entry-point UI. This is foundational because Owner Investment's drill-down interaction (§A.3, Finding OI-6) and the three-surface terminology item both assume `establishmentMethod` already exists and is populated correctly.
+2. **Opening/other-obligation Payables.** §A.2 — independent of item 1, can proceed in parallel.
+3. **Owner Investment.** §A.3 — depends on item 1 only for its drill-down-field interaction (Finding OI-6); the collection, rules, atomic write, and live-formula extension are otherwise independent.
+4. **Recurring receivable reminders.** The schema field is independent and can land any time; the sweep-logic change (the genuinely new-shape piece, Finding RC-5) should land as its own reviewed unit given its higher control-flow risk.
+5. **Contagem cost-basis conversion, together with its Post-Implementation-Correction regression update (B.2).** Sequenced together deliberately, per the instruction that the existing regression suites be updated in the same change.
+6. **Fecho baseline removal (B.1), together with the three-surface terminology correction (Part A).** Sequenced together per Finding FB-4's own dependency note, to avoid a mid-rollout inconsistent-display state.
+7. **Fecho batch-level profit attribution.** Independent, low-risk, can land at any point after item 6 or in parallel with it.
+
+**Why this sequencing is not itself a new business decision:** every dependency named above is a technical build-order consequence of what Revision 3 and the Rule 8 Addendum already decided (e.g., Owner Investment's drill-down field only makes sense once `establishmentMethod` exists) — no item's *content* changes based on this ordering, only *when* it is built, exactly the same kind of engineering-sequencing judgment the parent Plan's own §24 already makes for Increments 1–9.
+
+---
+
+## Traceability
+
+| Item | Class | Spec §/FR | Rule 8 Finding(s) | Reverses shipped behavior? |
+|---|---|---|---|---|
+| Owner-Declared snapshot creation | A — new | §42.1, §8, FR-61 | OD-1–OD-5 | No |
+| Opening/other-obligation Payables | A — new | §42 Dec. 12, §12, FR-62 | OP-1–OP-4 | No |
+| Owner Investment | A — new | §43, FR-63–66 | OI-1–OI-6 | No |
+| Recurring receivable reminders | A — new | §22, FR-57 | RC-1–RC-5 | No (extends a one-shot mechanism, does not remove prior guarantee) |
+| Contagem cost-basis conversion (engine + write) | A — new, with a B-class sub-item | §15, FR-67 | CB-1–CB-3 | Partially — see B.2 |
+| Fecho batch-level profit attribution | A — new | §18, FR-68 | BP-1, BP-2 | No |
+| Three-surface terminology | A — new (display-only) | §32 | TS-1 | No |
+| Fecho baseline fallback removal | **B — Post-Implementation Correction** | §18/FR-25 (corrected) | FB-1–FB-4 | **Yes — removes shipped Increment 6 fallback behavior** |
+| Cost-price silent-zero-fallback removal | **B — Post-Implementation Correction** | §15/FR-67 | ZF-1, ZF-2 | **Yes — removes a shipped default, narrowly scoped** |
+
+---
+
+## Governance Notes
+
+- This is an Implementation Plan amendment draft only. No `apps/`, `server/`, `firestore.rules`, `tests/`, or `firestore.indexes.json` file is touched by this document.
+- This amendment does not modify the source BDR, the Specification, or the Rule 8 Assessment/Addendum.
+- No Implementation Authorization is created or amended by this document. Per the Product Architect's own explicit instruction, this acceptance authorizes drafting/amending the Implementation Plan only.
+- **Companion item, tracked separately, not resolved here:** Specification FR-1's literal wording ("no confirmed Contagem under this model") should be corrected to also recognize Owner-Declared establishment, consistent with the already-corrected §6 State 2 text. This is a Specification-text correction, not a Plan item, and is recorded here only so it is not silently dropped between governance artifacts.
+- Both Part B items require their own dated Product-Architect-signed acceptance in a future Implementation Authorization amendment, mirroring the existing §16 precedent — not created here.
+- All Revision 3 Product Architect decisions are preserved exactly as recorded; no settled business decision is reopened by this amendment.
+- Nothing was committed or pushed to produce this document.
+
+## Next Governance Step (Revision 3 Amendment)
+
+This amendment's own next governance step, per this repository's established sequence, was a signed Implementation Authorization Amendment — now itself drafted, signed, and recorded (see `business-worth-evolution-implementation-authorization.md`'s own recorded Revision 3 sections), including its own "Product Architect Authorization — Increment 10" section and the two Part B "Post-Implementation Correction" sections. No code, test, rules, or index file is created, modified, or authorized by this Plan amendment itself — that remains gated by the separate, explicit per-item implementation instruction the signed Authorization Amendment itself requires.
+
+**Lifecycle (Revision 3):** Signed Revision 3 decisions → Governance recording (Specification/BDR/Rule 8 Assessment, `5870bdd`) → Rule 8 Assessment Addendum (accepted) → Implementation Plan Amendment (accepted, signed, this document) → Implementation Authorization Amendment (accepted, signed). Not yet implemented — implementation begins only per the signed Authorization's own one-item-at-a-time execution rule and a further explicit per-item instruction.
