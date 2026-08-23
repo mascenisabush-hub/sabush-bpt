@@ -30,6 +30,10 @@ export const ACTIVITY_ICON: Record<TimelineActivityType, React.ComponentType<{ c
   'business-profile-updated': Building2,
   'monthly-closing': Lock,
   'yearly-closing': Lock,
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6] Fecho's own timeline event — same "frozen period" concept
+  // as monthly/yearly closing, so it reuses the same Lock icon.
+  'fecho-closing': Lock,
   'report-exported': FileDown,
   'staff-removed': UserMinus,
   'staff-suspended': UserX,
@@ -48,6 +52,8 @@ export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
   'business-profile-updated': 'bg-purple-50 text-purple-600 border-purple-200',
   'monthly-closing': 'bg-teal-50 text-teal-600 border-teal-200',
   'yearly-closing': 'bg-teal-50 text-teal-600 border-teal-200',
+  // [Increment 6] Same teal "frozen period" family as monthly/yearly.
+  'fecho-closing': 'bg-teal-50 text-teal-600 border-teal-200',
   'report-exported': 'bg-gray-100 text-gray-600 border-gray-200',
   'staff-removed': 'bg-slate-100 text-slate-600 border-slate-300',
   'staff-suspended': 'bg-orange-50 text-orange-600 border-orange-200',
@@ -66,6 +72,9 @@ export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
   'business-profile-updated': 'Perfil do Negócio',
   'monthly-closing': 'Fecho Mensal',
   'yearly-closing': 'Fecho Anual',
+  // [Increment 6] Fecho's own label, distinct from the calendar-aligned
+  // "Fecho Mensal"/"Fecho Anual" above.
+  'fecho-closing': 'Fecho',
   'report-exported': 'Relatório',
   'staff-removed': 'Funcionário Removido',
   'staff-suspended': 'Funcionário Suspenso',
@@ -83,6 +92,7 @@ export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
   'product-created',
   'monthly-closing',
   'yearly-closing',
+  'fecho-closing',
   'business-profile-updated',
   'report-exported',
   'staff-removed',

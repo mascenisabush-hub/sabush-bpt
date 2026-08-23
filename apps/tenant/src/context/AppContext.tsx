@@ -4735,15 +4735,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const lockedExpenses = expenses.filter((e) => e.closingId === id);
     const lockedWithdrawals = withdrawals.filter((w) => w.closingId === id);
 
+    // [Increment 6] No ClosedPeriod doc was ever written for a 'custom'
+    // (Fecho) Closing — see recordClosing/closedPeriodKey's own comments —
+    // so there is nothing to delete here for one. Narrowed to a local
+    // const first: TS property-access narrowing on `target.periodType`
+    // does not persist inside the arrow-function closure below.
+    const targetPeriodType = target.periodType;
     const ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void> = [
       (b) => b.update(doc(db, 'businesses', activeBusinessId!, 'closings', id), closingUpdate),
-      // [Increment 6] No ClosedPeriod doc was ever written for a 'custom'
-      // (Fecho) Closing — see recordClosing/closedPeriodKey's own comments
-      // — so there is nothing to delete here for one.
-      ...(target.periodType === 'custom'
+      ...(targetPeriodType === 'custom'
         ? []
         : [(b: ReturnType<typeof createFirestoreBatch>) =>
-            b.delete(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', closedPeriodKey(target.periodType, target.startDate)))]),
+            b.delete(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', closedPeriodKey(targetPeriodType, target.startDate)))]),
       ...lockedExpenses.map((e) => (b: ReturnType<typeof createFirestoreBatch>) =>
         b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: deleteField(), lockedAt: deleteField() })
       ),
