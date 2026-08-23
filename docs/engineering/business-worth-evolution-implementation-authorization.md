@@ -428,3 +428,48 @@ The whole-capability authorization stated throughout this document (§2, §13, �
 **Status:** ✅ **AUTHORIZED.**
 
 The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction, §17's Increment 5 authorization, and §18's Increment 6 authorization are unaffected and remain intact. This section authorizes only Increment 7's own beginning, per §7's one-increment-at-a-time discipline. Increment 8 — Correction / Recovery — remains unauthorized. Increment 9 — Auditability — remains unauthorized. Increments 8–9 remain unauthorized to begin until each is separately instructed in turn. This section authorizes implementation to begin; it does not itself implement any code.
+
+---
+
+## 20. Product Architect Authorization — Increment 8
+
+**Increment 8: CORRECTION / RECOVERY**
+
+**Status:** ✅ **AUTHORIZED TO BEGIN.**
+
+**Prerequisite confirmation:**
+- [x] Increment 1 is complete (`4186357`, plus the corrective commits `779c542`, `4b77b54`, `4a99430`).
+- [x] Increment 2 is complete (`ba2c130`).
+- [x] Increment 3 is complete (`c337ba8`).
+- [x] Increment 4 is complete (`49fb8ab`).
+- [x] Increment 5 is complete and authorized (§17, above).
+- [x] Increment 6 is complete and authorized (§18, above; `b2578d0`, `a060c96`).
+- [x] Increment 7 is complete and authorized (§19, above; implementation commit `ba61fe4`).
+- [x] Increment 8 is now authorized to begin.
+
+**This authorization means, and means only:**
+- Implementation remains strictly **one increment at a time** (§7) — Increment 9 remains unauthorized to begin.
+- This authorization does **not** authorize implementation of the whole Business Worth Evolution capability at once.
+- This authorization does **not** change any business decision.
+- This authorization does **not** introduce any new business rule, financial formula, ceiling, correction mechanism, recovery mechanism, or auditability mechanism.
+- Implementation must follow the already-approved Specification, Rule 8 Assessment, Implementation Plan, and this Authorization — none of which are reopened, reinterpreted, or amended by this section.
+
+**Increment 8 scope, explicitly preserved as already approved (not restated in substance, not redesigned):**
+- Owner 3-Hour Correction Window — Specification §25, FR-38, FR-39, I-7; Plan §12; Authorization §7 item 8. A governed correction path against a `BusinessWorthSnapshot` (and its underlying `StockCount`) available to the Owner only while `now < correctionWindowExpiresAt` — a correction produces a **new** `BusinessWorthSnapshot` via `supersedesSnapshotId`, never an edit-in-place to the original's frozen fields. Structurally the same *kind* of mechanism as `BDR-0015`'s Void & Redo, but its own distinct figure and its own distinct mechanism — it does not amend Void & Redo's own 12-hour Initial-Stock-specific window.
+- SuperAdmin-Authorized Recovery, 72-Hour Ceiling — Specification §26, FR-40 through FR-43, FR-58; Plan §13; Authorization §7 item 8. A new, separate, parallel collection (e.g. `businesses/{businessId}/businessWorthRecoveryAuthorizations/{id}`), deliberately the identical shipped pattern `POL-0009`'s existing Initial-Stock Authorization design already establishes, reused with a new collection name — never merged with, never interacting with, that existing collection (FR-43). SuperAdmin authorizes → Owner performs the recovery/edit → Owner confirms; SuperAdmin's write surface never includes a write to any `BusinessWorthSnapshot`/`StockCount` field, only to the Authorization artifact itself (FR-42).
+- Recovery exclusivity (FR-58, Specification Decision 2, §26) — eligibility for any `StockCount` is determined exclusively by its own `producesBusinessWorthSnapshot` marker: `true` routes exclusively to this increment's §25–§26 mechanism; absent/`false` routes exclusively to the existing, entirely-unchanged `POL-0008`/`POL-0009` Void & Redo mechanism. No `StockCount` is ever eligible for both at once.
+- **No correction/recovery-cycle ceiling** — per the Product Architect decision already recorded in the Rule 8 Assessment (Finding 4-B, RESOLVED) and Specification §26/§30b: *"NO additional numerical ceiling. The 3-hour Owner window and 72-hour SuperAdmin authorization are the governing limits."* This authorization introduces no new figure here either — the two already-approved windows remain the sole governing limits. The unbounded-chain risk this decision knowingly accepts (not silently dropped) is unchanged by this section; ordinary rate-limiting/auditability discipline applies at implementation time, not as a business rule.
+- `POL-0008`/`POL-0009`'s own existing figures (12-hour window, 3-cycle/4-confirmation ceiling, 48-hour SuperAdmin authorization duration) are entirely unamended by this increment (Specification §26, REC-3).
+
+**No requirement above is added to, removed from, or reinterpreted by this authorization.**
+
+**Formal acceptance:**
+
+> I authorize Increment 8 — Correction / Recovery — to begin, per the already-approved scope in Specification §25–§26 (FR-38 through FR-43, FR-58), Plan §12–§13 and §24 item 8, Authorization §7 item 8, and the Rule 8 Assessment's own resolved findings (4-A, 4-B, 10-B). Increments 1–7 are confirmed complete/authorized, including Increment 7's implementation commit `ba61fe4`. Implementation remains strictly one increment at a time; Increment 9 remains unauthorized. This authorization introduces no new business rule, financial formula, ceiling, correction mechanism, recovery mechanism, or auditability mechanism, and does not reopen §16's Finding 3 / Option A or §17's/§18's/§19's Increment 5/6/7 authorizations, all of which remain intact. **AUTHORIZED.**
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **AUTHORIZED.**
+
+The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction, §17's Increment 5 authorization, §18's Increment 6 authorization, and §19's Increment 7 authorization are unaffected and remain intact. This section authorizes only Increment 8's own beginning, per §7's one-increment-at-a-time discipline. Increment 9 — Auditability — remains unauthorized to begin until separately instructed. This section authorizes implementation to begin; it does not itself implement any code.
