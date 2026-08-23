@@ -384,3 +384,47 @@ The whole-capability authorization stated throughout this document (§2, §13, �
 **Status:** ✅ **AUTHORIZED.**
 
 The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction and §17's Increment 5 authorization are unaffected and remain intact. This section authorizes only Increment 6's own beginning, per §7's one-increment-at-a-time discipline. Increment 7 — Reconciliation / Notifications — remains unauthorized. Increment 8 — Correction / Recovery — remains unauthorized. Increment 9 — Auditability — remains unauthorized. Increments 7–9 remain unauthorized to begin until each is separately instructed in turn. This section authorizes implementation to begin; it does not itself implement any code.
+
+---
+
+## 19. Product Architect Authorization — Increment 7
+
+**Increment 7: RECONCILIATION / NOTIFICATIONS**
+
+**Status:** ✅ **AUTHORIZED TO BEGIN.**
+
+**Prerequisite confirmation:**
+- [x] Increment 1 is complete (`4186357`, plus the corrective commits `779c542`, `4b77b54`, `4a99430`).
+- [x] Increment 2 is complete (`ba2c130`).
+- [x] Increment 3 is complete (`c337ba8`).
+- [x] Increment 4 is complete (`49fb8ab`).
+- [x] Increment 5 is complete and authorized (§17, above).
+- [x] Increment 6 is complete and authorized (§18, above; `b2578d0`, `a060c96`).
+- [x] Increment 7 is now authorized to begin.
+
+**This authorization means, and means only:**
+- Implementation remains strictly **one increment at a time** (§7) — Increment 8 and every later increment remain unauthorized to begin.
+- This authorization does **not** authorize implementation of the whole Business Worth Evolution capability at once.
+- This authorization does **not** change any business decision.
+- This authorization does **not** introduce any new business rule, financial formula, ceiling, correction mechanism, recovery mechanism, or auditability mechanism.
+- Implementation must follow the already-approved Specification, Rule 8 Assessment, Implementation Plan, and this Authorization — none of which are reopened, reinterpreted, or amended by this section.
+
+**Increment 7 scope, explicitly preserved as already approved (not restated in substance, not redesigned):**
+- Contagem Reconciliation Signal — Specification §22, FR-31, FR-32; Plan §8; Authorization §7 item 7.
+- The cash-position comparison (Specification §3.2/§22) and `BusinessWorthSnapshot.difference` (measured − estimated-immediately-before, Plan §5) are recorded and displayed as a signed numeric difference with no default classification beyond "reconciliation signal" — never automatically labeled theft, loss, error, or Quebra (FR-32).
+- Possible-cause guidance (FR-56) — a non-exhaustive, evidence-supported list of possible causes to investigate, drawn only from what the business's own existing records can actually evidence; never presented as a determined fact unless those records already establish it as fact (Specification §22's "Possible-cause guidance" decision, 22 August 2026).
+- Preventive notifications (FR-57) — extending the existing, real, shipped Notifications platform (`server/notificationPlatform.ts`, `NotificationContext.tsx`, `deliveryChannel.ts`, and the three existing producers — `trialNotificationProducer.ts`, `closingNotificationProducer.ts`, `breakageNotificationProducer.ts`) with one new producer following the identical "derive facts, call `writeNotification`" shape, and one new additive `NotificationCategory` entry, following the exact precedent the `'staff'` category amendment already used — never a new, parallel notification system (Rule 8 Current State Assessment, §1 item 13; Rule 8 open question #9, resolved low-risk/precedented).
+- The authoritative Business Worth path (Contagem/Snapshot → Current/Estimated Business Worth → approved financial activity → Fecho/other approved events) is not altered, superseded, or duplicated by this increment — reconciliation identifies and reports differences; it does not become a second source of truth and does not mutate `BusinessWorthSnapshot.measuredBusinessWorth`, Current Business Worth, Estimated Business Worth, historical StockCounts, historical financial records, or Fecho records, unless the Specification explicitly authorizes a particular mutation (none does, for this increment).
+
+**No requirement above is added to, removed from, or reinterpreted by this authorization.**
+
+**Formal acceptance:**
+
+> I authorize Increment 7 — Reconciliation / Notifications — to begin, per the already-approved scope in Specification §22 (FR-31, FR-32, FR-56, FR-57), Plan §8 and §24 item 7, Authorization §7 item 7, and the Rule 8 Current State Assessment's confirmation that the existing Notifications platform is the correct extension point. Increments 1–6 are confirmed complete/authorized. Implementation remains strictly one increment at a time; Increment 8 and all later increments remain unauthorized. This authorization introduces no new business rule, financial formula, ceiling, correction mechanism, recovery mechanism, or auditability mechanism, and does not reopen §16's Finding 3 / Option A or §17's/§18's Increment 5/6 authorizations, all of which remain intact. **AUTHORIZED.**
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **AUTHORIZED.**
+
+The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction, §17's Increment 5 authorization, and §18's Increment 6 authorization are unaffected and remain intact. This section authorizes only Increment 7's own beginning, per §7's one-increment-at-a-time discipline. Increment 8 — Correction / Recovery — remains unauthorized. Increment 9 — Auditability — remains unauthorized. Increments 8–9 remain unauthorized to begin until each is separately instructed in turn. This section authorizes implementation to begin; it does not itself implement any code.
