@@ -667,6 +667,67 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return products.find((p) => p.name.toLowerCase() === trimmed)?.unitRelationship;
   };
 
+  // [Business Worth Evolution — Decision 37, B.4: Cost-Field Suppression
+  // on Non-Purchase-Unit Portions] Per Implementation Authorization §36
+  // item 4 and Plan Amendment §B.4 verbatim: "once a product-level cost
+  // basis + unit relationship exist (B.1/B.2), hide/disable the
+  // per-portion costPrice input for any portion whose unit differs from
+  // the product's purchase unit... No new calculation lives here — this
+  // item is UI-only; the actual Total Cost Value figure is produced by
+  // the already-planned FR-67 code change in stockCount.ts" (not this
+  // item's scope, and not yet implemented in this codebase). This
+  // function therefore only ever answers "should this portion's cost
+  // field be suppressed?" — it never computes, fabricates, or returns a
+  // cost value.
+  //
+  // Two cost-basis sources, mirroring B.1/B.2's own existing split:
+  //  - an EXISTING catalogued product: cost basis + relationship already
+  //    live on the Product record itself (getUnitRelationshipForProductName,
+  //    unchanged).
+  //  - a GENUINELY NEW product still being entered in this Contagem:
+  //    cost basis + relationship live in B.1/B.2's own newProductInfo
+  //    panel state. The "complete step" filter below mirrors, but does
+  //    not modify or duplicate the authority of, the identical filter the
+  //    submit-time unitRelationshipByProductName correlation loop already
+  //    uses (see its own comment, further below) — this is a read-only,
+  //    presentation-time check, never a second candidate-construction path.
+  const getCostBasisForSuppression = (productName: string): { purchaseUnit: string } | null => {
+    const key = productKeyFor(productName);
+    if (!key) return null;
+
+    const existingRelationship = getUnitRelationshipForProductName(productName);
+    if (existingRelationship && isValidUnitRelationship(existingRelationship)) {
+      const purchaseUnit = existingRelationship.units[0]?.unit?.trim();
+      if (purchaseUnit) return { purchaseUnit };
+    }
+
+    const info = newProductInfo[key];
+    if (info) {
+      const purchaseUnit = info.purchaseUnit.trim();
+      const hasCostBasis = purchaseUnit !== '' && info.purchaseCost.trim() !== '' && Number.isFinite(parseFloat(info.purchaseCost));
+      const hasCompleteStep = info.relationshipSteps.some(
+        (s) => s.unit.trim() !== '' && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
+      );
+      if (hasCostBasis && hasCompleteStep) return { purchaseUnit };
+    }
+
+    return null;
+  };
+
+  // A portion's cost field is suppressed only once a cost basis +
+  // relationship exist (above) AND this specific portion's own unit is
+  // not the purchase unit itself — the purchase-unit portion's cost
+  // remains the one place the original cost basis is actually visible
+  // and editable, exactly as Decision 37's own example (Coca-Cola/CX)
+  // describes.
+  const isCostFieldSuppressed = (productName: string, portionUnit: string): boolean => {
+    const basis = getCostBasisForSuppression(productName);
+    if (!basis) return false;
+    const trimmedPortionUnit = portionUnit.trim();
+    if (!trimmedPortionUnit) return false;
+    return trimmedPortionUnit.toLowerCase() !== basis.purchaseUnit.toLowerCase();
+  };
+
   // Gathers every row (catalog AND manual — a multi-portion product may
   // be split across both, exactly as portionLabels above already
   // accounts for) currently belonging to one product's group, in the
@@ -1724,14 +1785,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
-                          <input
-                            type="number"
-                            min="0"
-                            step="0.01"
-                            value={row.costPrice}
-                            onChange={(e) => updateCatalogRow(productId, { costPrice: e.target.value })}
-                            className={`${fieldClass} font-mono tabular-nums`}
-                          />
+                          {/* [Decision 37, B.4] Suppressed once a cost
+                              basis + relationship exist AND this
+                              portion's unit differs from the purchase
+                              unit — see isCostFieldSuppressed's own
+                              comment. UI-only: row.costPrice itself is
+                              left completely untouched, never cleared or
+                              derived here. */}
+                          {isCostFieldSuppressed(row.productName, row.unit) ? (
+                            <div
+                              className={`${fieldClass} font-mono text-[11px] text-gray-400 flex items-center bg-gray-50 cursor-not-allowed`}
+                              title="Custo definido pela compra original do produto"
+                            >
+                              Definido na compra
+                            </div>
+                          ) : (
+                            <input
+                              type="number"
+                              min="0"
+                              step="0.01"
+                              value={row.costPrice}
+                              onChange={(e) => updateCatalogRow(productId, { costPrice: e.target.value })}
+                              className={`${fieldClass} font-mono tabular-nums`}
+                            />
+                          )}
                         </div>
 
                         <div>
@@ -1940,14 +2017,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                               <div>
                                 <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
-                                <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
-                                  value={row.costPrice}
-                                  onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
-                                  className={`${fieldClass} font-mono tabular-nums`}
-                                />
+                                {/* [Decision 37, B.4] Same suppression
+                                    check as the catalog-row cost field,
+                                    above — see isCostFieldSuppressed's
+                                    own comment. UI-only: row.costPrice
+                                    itself is left completely untouched. */}
+                                {isCostFieldSuppressed(row.productName, row.unit) ? (
+                                  <div
+                                    className={`${fieldClass} font-mono text-[11px] text-gray-400 flex items-center bg-gray-50 cursor-not-allowed`}
+                                    title="Custo definido pela compra original do produto"
+                                  >
+                                    Definido na compra
+                                  </div>
+                                ) : (
+                                  <input
+                                    type="number"
+                                    min="0"
+                                    step="0.01"
+                                    value={row.costPrice}
+                                    onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
+                                    className={`${fieldClass} font-mono tabular-nums`}
+                                  />
+                                )}
                               </div>
 
                               <div>
