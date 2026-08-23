@@ -29,6 +29,7 @@ import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationPro
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
 import { registerBusinessWorthNotificationPolicyAndTemplates, createBusinessWorthNotificationProducer } from './businessWorthNotificationProducer';
+import { createBusinessWorthRecoveryExpiryAuditSweep, type BusinessWorthRecoveryExpiryAuditDb } from './businessWorthRecoveryExpiryAudit';
 import { createSubscriptionEngine } from './subscriptionEngine';
 import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
 import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperatorRequest } from './superadminAuth';
@@ -146,6 +147,20 @@ const breakageNotificationProducer = createBreakageNotificationProducer(db, noti
 // businessWorthNotificationProducer.ts's own header for full scope.
 registerBusinessWorthNotificationPolicyAndTemplates(notificationPlatform);
 const businessWorthNotificationProducer = createBusinessWorthNotificationProducer(db, notificationPlatform);
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 9; Specification §34, FR-48] Its own db wrapper — never shares a
+// type with the Increment 8 grant module (server/index.ts's own
+// businessWorthRecoveryAuthorizationDb, declared further down, near
+// the SuperAdmin routes) even though both target the same collection,
+// matching this file's own established one-wrapper-per-module
+// convention. Declared here (not near the SuperAdmin section) because
+// the job-registration block below needs it in scope before that
+// later declaration would otherwise appear.
+const businessWorthRecoveryExpiryAuditDb = db as unknown as BusinessWorthRecoveryExpiryAuditDb;
+const businessWorthRecoveryExpiryAuditSweep = createBusinessWorthRecoveryExpiryAuditSweep(
+  businessWorthRecoveryExpiryAuditDb,
+  reportCriticalFailure
+);
 
 const expressApp = express();
 
@@ -1780,6 +1795,23 @@ if (tenantMode) {
     jobType: 'business-worth-notification-sweep',
     scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
     execute: businessWorthNotificationProducer.runBusinessWorthNotificationSweep,
+  });
+
+  // Business Worth Evolution — Implementation Authorization, Increment
+  // 9 (Auditability); Specification §34, FR-48; Rule 8 Finding 11-A;
+  // Plan §15's own explicit `business_worth_recovery.expired`
+  // actionType proposal. A sixth, independent registered job — reuses
+  // the same schedule interval as the others (an unconsumed
+  // Authorization's own 72-hour ceiling needs no finer-grained polling
+  // than the existing hourly cadence). Isolated from every other
+  // registered job by the Background Worker (ADR-0003) — a failure
+  // here never blocks any other sweep, and vice versa. Its own
+  // db wrapper/module pair, defined above, never shares a type with
+  // grantBusinessWorthRecoveryAuthorization's own (Increment 8).
+  backgroundWorker.registerJob({
+    jobType: 'business-worth-recovery-expiry-audit-sweep',
+    scheduleMs: TRIAL_LIFECYCLE_SWEEP_INTERVAL_MS,
+    execute: businessWorthRecoveryExpiryAuditSweep.runBusinessWorthRecoveryExpiryAuditSweep,
   });
 
   // Module #19 V1 Subscription Lifecycle Engine

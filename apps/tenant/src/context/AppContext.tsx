@@ -3382,6 +3382,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
       });
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 9; Specification §34, FR-48] Audits the actual
+      // governed payment event (this transaction), never a mere UI
+      // click — logged AFTER the transaction above has already
+      // succeeded (a throw inside it is caught below, never reaching
+      // this line). Deterministic id derived from the same
+      // submissionId the payment/idempotency architecture already
+      // uses — a retry lands on the same Timeline document id, which
+      // `timelineEvents`' own pre-existing `allow update: if false`
+      // rule rejects outright, absorbed by logTimelineEvent's own
+      // pre-existing try/catch — the same "exactly one document,
+      // rules-enforced" mechanism this file's periodic
+      // 'stock-verification' entry already establishes, extended here
+      // rather than reinvented. This call is unconditional (fired on
+      // both a genuine first apply and an idempotent retry no-op) by
+      // design — the id-collision rule, not a branch in this function,
+      // is what prevents a misleading duplicate audit entry.
+      await logTimelineEvent({
+        id: 'tl-receivable-payment-' + submissionId,
+        type: 'receivable-payment-recorded',
+        date: paidAt,
+        title: 'Pagamento de Dívida Recebido',
+        description: `Pagamento de ${roundedAmount} registado contra uma dívida a receber.`,
+        financialImpact: [{ label: 'Pagamento Recebido', amount: roundedAmount, tone: 'positive' }],
+        details: { receivableId },
+      });
+
       return { success: true };
     } catch (err: any) {
       console.error('Error recording receivable payment:', businessId, receivableId, err);
@@ -3468,6 +3495,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           amountRemaining: clampedRemaining,
           status: newStatus,
         });
+      });
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 9; Specification §34, FR-48] Mirrors
+      // recordReceivablePayment's own audit call exactly — see that
+      // function's own comment for the full idempotency/retry-safety
+      // rationale (deterministic id, rules-enforced single-document
+      // convergence, unconditional call).
+      await logTimelineEvent({
+        id: 'tl-payable-payment-' + submissionId,
+        type: 'payable-payment-recorded',
+        date: paidAt,
+        title: 'Pagamento a Fornecedor Registado',
+        description: `Pagamento de ${roundedAmount} registado contra uma dívida a fornecedor.`,
+        financialImpact: [{ label: 'Pagamento a Fornecedor', amount: -roundedAmount, tone: 'negative' }],
+        details: { payableId },
       });
 
       return { success: true };
@@ -3824,6 +3867,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), stockCountWritePayload);
 
     // [Business Worth Evolution — Implementation Authorization,
+    // Increment 9; Specification §34, FR-48] Hoisted above the
+    // producesBusinessWorthSnapshot block below so the values needed
+    // for this event's own Timeline audit entry survive past that
+    // block's closing brace to the post-commit logging call further
+    // down — the audit entry is logged only AFTER the batch commit
+    // below actually succeeds (matching every other logTimelineEvent
+    // call site in this file, and the explicit "never audit an
+    // operation that ultimately failed" discipline this increment's
+    // own task requires), never before.
+    let businessWorthSnapshotForTimeline:
+      | { id: string; measuredBusinessWorth: number; difference?: number; cashReconciliationDifference?: number }
+      | undefined;
+
+    // [Business Worth Evolution — Implementation Authorization,
     // Increment 1; Specification §5 (Plan), §8, FR-5, FR-36, FR-37]
     // Writes exactly one BusinessWorthSnapshot in the SAME batch as the
     // StockCount write above — never a separately-retriable write, so a
@@ -4121,6 +4178,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       );
 
       // [Business Worth Evolution — Implementation Authorization,
+      // Increment 9; Specification §34, FR-48] Captured here, inside
+      // this block, into the hoisted variable declared above this
+      // block — read only after the batch commit below succeeds,
+      // further down. `difference`/`cashReconciliationDifference`
+      // (Specification §22's own reconciliation-signal fields) are
+      // carried through so the eventual Timeline entry can surface a
+      // reconciliation
+      // discrepancy at the SAME moment as the confirmation itself —
+      // never a second, separately-invented reconciliation event or
+      // calculation (this increment's own explicit instruction).
+      businessWorthSnapshotForTimeline = {
+        id: businessWorthSnapshotId,
+        measuredBusinessWorth,
+        ...(difference !== undefined ? { difference } : {}),
+        ...(cashReconciliationDifference !== undefined ? { cashReconciliationDifference } : {}),
+      };
+
+      // [Business Worth Evolution — Implementation Authorization,
       // Increment 8; Specification §25 FR-39, §26 FR-40-FR-43, FR-58;
       // Plan §12-§13] The correction/recovery's OTHER two writes,
       // batched atomically alongside the new snapshot above — never
@@ -4260,6 +4335,105 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           totalValue: newCount.totalValue,
         },
       });
+    }
+
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 9; Specification §34, FR-48; Rule 8 Finding 11-A / §36
+    // item 7's own resolution] Tenant-scoped audit entry for this
+    // Contagem's own Business Worth event — logged only after
+    // fsBatch.commit() has already succeeded (this function would have
+    // thrown above otherwise, and this line would never be reached),
+    // matching every other logTimelineEvent call site in this file.
+    // Deterministic id derived from the same businessWorthSnapshotId
+    // the underlying write already used (itself one-to-one with
+    // sourceStockCountId, FR-37) — a retry of the same logical
+    // confirmation lands on the same Timeline document id, which
+    // `timelineEvents`' own pre-existing `allow update: if false` rule
+    // rejects outright (never a silent overwrite), and
+    // logTimelineEvent's own pre-existing try/catch absorbs that
+    // rejection — the exact same "exactly one document, enforced by the
+    // rules layer, not by idempotent overwrite" mechanism this file's
+    // own periodic 'stock-verification' entry above already
+    // establishes. This is never skipped merely because the eventual
+    // write is a no-op — the point is that a retry can never produce a
+    // MISLEADING duplicate audit entry, not that this call is
+    // conditional.
+    //
+    // Distinguishes exactly the three lifecycle events FR-48/this
+    // increment's own task require be distinguishable, never collapsed
+    // into one generic type: an ordinary Contagem confirmation, an
+    // Owner correction (§25), and a SuperAdmin-authorized recovery
+    // consumption (§26) — the correctionKind parameter (never
+    // free-typed by this function itself; see RecordStockCountParams'
+    // own comment) is what the caller already established, re-read
+    // here only to select the correct event type, never re-decided.
+    //
+    // Reconciliation-signal auditing (Specification §22, FR-48's own
+    // "reconciliation-signal event" item): carried as this SAME entry's
+    // own financialImpact/details when a discrepancy exists on this
+    // snapshot, rather than a second, separately-invented event or
+    // calculation — the discrepancy becomes knowable at exactly this
+    // moment (confirmation time), and this Specification's own §22
+    // already frames the reconciliation signal as part of what a
+    // Contagem confirmation produces, not a later, independent event.
+    if (businessWorthSnapshotForTimeline) {
+      const bwsTimeline = businessWorthSnapshotForTimeline;
+      const reconciliationImpact: TimelineFinancialImpact[] = [];
+      if (typeof bwsTimeline.difference === 'number' && bwsTimeline.difference !== 0) {
+        reconciliationImpact.push({
+          label: 'Diferença de Reconciliação (Valor do Negócio)',
+          amount: bwsTimeline.difference,
+          tone: bwsTimeline.difference < 0 ? 'negative' : 'positive',
+        });
+      }
+      if (typeof bwsTimeline.cashReconciliationDifference === 'number' && bwsTimeline.cashReconciliationDifference !== 0) {
+        reconciliationImpact.push({
+          label: 'Diferença de Reconciliação (Caixa)',
+          amount: bwsTimeline.cashReconciliationDifference,
+          tone: bwsTimeline.cashReconciliationDifference < 0 ? 'negative' : 'positive',
+        });
+      }
+
+      if (correctionOfSnapshotId && correctionKind === 'superadmin-authorized-recovery') {
+        await logTimelineEvent({
+          id: 'tl-' + bwsTimeline.id,
+          type: 'business-worth-recovery-consumed',
+          date,
+          title: 'Recuperação de Valor do Negócio Executada',
+          description: `Recuperação autorizada pelo SuperAdmin executada — substitui o registo de valor do negócio anterior (${correctionOfSnapshotId}).`,
+          financialImpact: [
+            { label: 'Valor do Negócio (Recuperado)', amount: bwsTimeline.measuredBusinessWorth, tone: 'neutral' },
+            ...reconciliationImpact,
+          ],
+          details: { supersedesSnapshotId: correctionOfSnapshotId, businessWorthSnapshotId: bwsTimeline.id },
+        });
+      } else if (correctionOfSnapshotId && correctionKind === 'owner-correction') {
+        await logTimelineEvent({
+          id: 'tl-' + bwsTimeline.id,
+          type: 'business-worth-correction',
+          date,
+          title: 'Contagem Corrigida',
+          description: `Correção do dono, dentro da janela de 3 horas — substitui o registo de valor do negócio anterior (${correctionOfSnapshotId}).`,
+          financialImpact: [
+            { label: 'Valor do Negócio (Corrigido)', amount: bwsTimeline.measuredBusinessWorth, tone: 'neutral' },
+            ...reconciliationImpact,
+          ],
+          details: { supersedesSnapshotId: correctionOfSnapshotId, businessWorthSnapshotId: bwsTimeline.id },
+        });
+      } else {
+        await logTimelineEvent({
+          id: 'tl-' + bwsTimeline.id,
+          type: 'business-worth-snapshot-confirmed',
+          date,
+          title: 'Valor do Negócio Registado',
+          description: `Contagem confirmada — novo registo de valor do negócio criado.`,
+          financialImpact: [
+            { label: 'Valor do Negócio', amount: bwsTimeline.measuredBusinessWorth, tone: 'neutral' },
+            ...reconciliationImpact,
+          ],
+          details: { businessWorthSnapshotId: bwsTimeline.id },
+        });
+      }
     }
 
     // [Implementation Task, Section 3] Deliberately NOT gated on "was

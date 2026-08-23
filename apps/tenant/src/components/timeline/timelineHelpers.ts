@@ -12,6 +12,10 @@ import {
   UserX,
   UserCheck,
   LockOpen,
+  Gem,
+  Undo2,
+  ShieldCheck,
+  Coins,
 } from 'lucide-react';
 import { TimelineActivityType, TimelineEvent } from '../../types';
 import { isDateInRange } from '../../utils/calculations';
@@ -39,6 +43,13 @@ export const ACTIVITY_ICON: Record<TimelineActivityType, React.ComponentType<{ c
   'staff-suspended': UserX,
   'staff-reactivated': UserCheck,
   'period-reopened': LockOpen,
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 9; Specification §34, FR-48]
+  'business-worth-snapshot-confirmed': Gem,
+  'business-worth-correction': Undo2,
+  'business-worth-recovery-consumed': ShieldCheck,
+  'receivable-payment-recorded': Coins,
+  'payable-payment-recorded': Receipt,
 };
 
 export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
@@ -59,6 +70,16 @@ export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
   'staff-suspended': 'bg-orange-50 text-orange-600 border-orange-200',
   'staff-reactivated': 'bg-green-50 text-green-600 border-green-200',
   'period-reopened': 'bg-yellow-50 text-yellow-700 border-yellow-300',
+  // [Increment 9] Same gold/navy family the Business Worth card
+  // already uses elsewhere (Dashboard) — 'confirmed' the neutral gold,
+  // 'correction'/'recovery' amber (matching PeriodicStockCountView's
+  // own correction/recovery banner), payments matching their existing
+  // Expense/Withdrawal color family.
+  'business-worth-snapshot-confirmed': 'bg-[#D4AF37]/10 text-[#8A6D1F] border-[#D4AF37]/30',
+  'business-worth-correction': 'bg-amber-50 text-amber-700 border-amber-200',
+  'business-worth-recovery-consumed': 'bg-amber-50 text-amber-700 border-amber-200',
+  'receivable-payment-recorded': 'bg-emerald-50 text-emerald-600 border-emerald-200',
+  'payable-payment-recorded': 'bg-rose-50 text-rose-600 border-rose-200',
 };
 
 export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
@@ -80,6 +101,12 @@ export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
   'staff-suspended': 'Funcionário Suspenso',
   'staff-reactivated': 'Funcionário Reativado',
   'period-reopened': 'Período Reaberto',
+  // [Increment 9]
+  'business-worth-snapshot-confirmed': 'Valor do Negócio',
+  'business-worth-correction': 'Correção de Contagem',
+  'business-worth-recovery-consumed': 'Recuperação de Valor do Negócio',
+  'receivable-payment-recorded': 'Pagamento Recebido',
+  'payable-payment-recorded': 'Pagamento a Fornecedor',
 };
 
 export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
@@ -99,6 +126,12 @@ export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
   'staff-suspended',
   'staff-reactivated',
   'period-reopened',
+  // [Increment 9]
+  'business-worth-snapshot-confirmed',
+  'business-worth-correction',
+  'business-worth-recovery-consumed',
+  'receivable-payment-recorded',
+  'payable-payment-recorded',
 ];
 
 export function getEventTime(createdAt: string): string {

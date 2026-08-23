@@ -128,7 +128,17 @@ export interface PlatformAuditLogEntry {
   // existing write ever set 'owner' here, and no existing reader
   // rejects it (actorRole is read/displayed, never used as an
   // exhaustive-switch discriminant anywhere in this codebase).
-  actorRole: PlatformRole | 'owner';
+  //
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 9; Specification §34, FR-48; Rule 8 Finding 11-A] Widened again,
+  // identically additively, to accept 'system' — the ONE audited
+  // action in this repository where there is genuinely no human or
+  // tenant actor at all: the automated unconsumed-expiry sweep
+  // (server/businessWorthRecoveryExpiryAudit.ts,
+  // business_worth_recovery.expired). Mirrors the exact same widening
+  // rationale the 'owner' addition already established — no existing
+  // entry or reader is affected.
+  actorRole: PlatformRole | 'owner' | 'system';
   actionType: string;
   targetBusinessId?: string;
   targetUid?: string;

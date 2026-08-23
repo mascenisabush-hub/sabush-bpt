@@ -956,6 +956,20 @@ export interface BusinessWorthRecoveryAuthorization {
   // mirroring InitialStockRecoveryAuthorization's own identical
   // distinctness requirement.
   consumedAt?: Timestamp;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 9; Specification §34, FR-48; Rule 8 Finding 11-A, Plan §15's own
+  // explicit `business_worth_recovery.expired` actionType proposal]
+  // Set only by the server-side expiry-audit sweep
+  // (server/businessWorthRecoveryExpiryAudit.ts), the moment it has
+  // written the corresponding `platform_audit_log` entry for THIS
+  // authorization's own unconsumed expiry — never set client-side,
+  // never set at grant or consumption time. Purely an idempotency
+  // marker so the sweep never writes a second, duplicate expiry audit
+  // entry for the same authorization on a later tick. A fresh grant
+  // overwrites this whole fixed-slot document (including this field),
+  // so it is never carried forward onto a later, unrelated
+  // Authorization for the same business.
+  expiryAuditedAt?: Timestamp;
 }
 
 // ============================================================
@@ -1534,7 +1548,25 @@ export type TimelineActivityType =
   | 'staff-removed'
   | 'staff-suspended'
   | 'staff-reactivated'
-  | 'period-reopened';
+  | 'period-reopened'
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 9; Specification §34, FR-48; Rule 8 Finding 11-A / §36 item 7's own
+  // resolution] Tenant-scoped audit events for Owner-initiated Business
+  // Worth actions — per `09-superadmin-architecture.md` §9.6's own
+  // scope statement ("the permanent, append-only record of every
+  // PLATFORM-OPERATOR action — distinct from the per-business Timeline
+  // (8.10), which records TENANT actions"), these are Timeline events,
+  // never `platform_audit_log` entries (that collection is `allow
+  // write: if false`, Admin-SDK-only, and architecturally scoped to
+  // platform-operator actions, not Owner ones). This is the resolution
+  // of Rule 8's own open question #7 — reached by inspecting the
+  // existing, authoritative architecture document Specification §34
+  // itself cites as its basis, not invented here.
+  | 'business-worth-snapshot-confirmed'
+  | 'business-worth-correction'
+  | 'business-worth-recovery-consumed'
+  | 'receivable-payment-recorded'
+  | 'payable-payment-recorded';
 
 export interface TimelineFinancialImpact {
   label: string; // e.g. "Investimento", "Despesa", "Retirada", "Perda"
