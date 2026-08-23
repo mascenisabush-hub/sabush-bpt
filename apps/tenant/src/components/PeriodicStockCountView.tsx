@@ -16,6 +16,14 @@ import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountP
 // sellingPrice entry (every input below, unchanged) — nothing in this
 // file's own pre-existing code path is touched to support it.
 import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuantity } from '../lib/contagemMultiUnitValuation';
+// [Business Worth Evolution — Increment 10 Item 5 / Post-Implementation
+// Correction §25, Specification §15/FR-67; Product Architect
+// resolution, 24 August 2026] The SAME shared cost-basis resolver
+// AppContext.tsx's recordStockCount uses for persistence — this is
+// what guarantees the live preview total below and the persisted
+// Contagem can never disagree. See that module's own header comment
+// for the full authoritative-cost-basis and fallback rules.
+import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -958,7 +966,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     [catalogRows, manualRows]
   );
 
-  const liveTally = useMemo(() => tallyStockCountRows(allWorkingRows), [allWorkingRows]);
+  // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
+  // Resolved from the full catalog (`products`) exactly like
+  // AppContext.tsx's own identical call — a genuinely new product
+  // being entered in this same Contagem (not yet in `products` at
+  // all) is correctly absent, falling through to §25's unchanged
+  // fallback exactly as it will at persistence time.
+  const costBasisByProductName = useMemo(() => buildProductCostBasisMap(products), [products]);
+
+  const liveTally = useMemo(
+    () => tallyStockCountRows(allWorkingRows, costBasisByProductName),
+    [allWorkingRows, costBasisByProductName]
+  );
 
   // [Increment B, Checkpoint B6 — Consolidated Specification §17] Purely
   // presentational, identical reasoning and helper as Checkpoint B5's
@@ -1045,7 +1064,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
 
-    const tally = tallyStockCountRows(allWorkingRows);
+    const tally = tallyStockCountRows(allWorkingRows, costBasisByProductName);
     if (tally.countedItems.length === 0) {
       setError('Introduza a quantidade física de pelo menos um produto antes de confirmar.');
       return;

@@ -100,7 +100,16 @@ describe('PeriodicStockCountView.tsx — requirement: draft/finalization pipelin
   });
 
   it('liveTally still uses the existing, unmodified tallyStockCountRows as its single source of truth', () => {
-    assert.match(source, /tallyStockCountRows\(allWorkingRows\)/);
+    // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
+    // tallyStockCountRows now also accepts the optional
+    // costBasisByProductName parameter (utils/stockCount.ts) — the
+    // SAME shared resolver AppContext.tsx's own persistence path uses
+    // (buildProductCostBasisMap), so the Owner-facing preview and the
+    // persisted Contagem can never disagree. This regex is updated to
+    // match that authorized second argument; the invariant this test
+    // protects — that `allWorkingRows` (unfiltered, ungrouped) remains
+    // the sole FIRST argument / source of truth — is unchanged.
+    assert.match(source, /tallyStockCountRows\(allWorkingRows, costBasisByProductName\)/);
   });
 
   it('does not introduce any new "expected"/second valuation field anywhere in the view', () => {

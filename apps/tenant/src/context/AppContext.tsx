@@ -20,6 +20,7 @@ import {
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
+import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
 import {
@@ -3816,6 +3817,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fsBatch = createFirestoreBatch(db);
     const tempProducts = [...products];
 
+    // [Business Worth Evolution — Increment 10 Item 5 / Post-
+    // Implementation Correction §25, Specification §15/FR-67; Product
+    // Architect resolution, 24 August 2026] Resolved BEFORE
+    // normalizeStockCountItems() runs, from `tempProducts` (the
+    // pre-write catalog state this function already has — the same
+    // list the per-item loop below uses for its own `product`/
+    // `productId` lookup, so this reflects exactly the same "existing
+    // vs. new" distinction that loop makes) via the SAME shared
+    // resolver PeriodicStockCountView.tsx's own preview uses
+    // (buildProductCostBasisMap, lib/fr67CostBasisConversion.ts) — one
+    // resolution path, not two, so the Owner-facing preview and this
+    // persisted write can never disagree. A genuinely NEW product
+    // introduced in this same Contagem has no Product.costPrice yet
+    // (it does not exist as a Product record until the per-item loop
+    // below creates it), so it is correctly absent from this map by
+    // construction — falling through to §25's unchanged fallback
+    // automatically.
+    const costBasisByProductName = buildProductCostBasisMap(tempProducts);
+
     // [Fix — data-flow contract] Normalization happens via the pure,
     // independently-tested normalizeStockCountItems() — operating only
     // on the `items` argument this function received explicitly from
@@ -3828,7 +3848,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // header comment. Both are read here directly from the same, single
     // normalizeStockCountItems() call; nothing recomputes either total
     // independently elsewhere.
-    const { items: normalizedItems, totalSellingValue: normalizedTotalSellingValue } = normalizeStockCountItems(items);
+    // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
+    // costBasisByProductName (immediately above) is now threaded
+    // through as normalizeStockCountItems' own optional second
+    // parameter — this is the ONLY change to this call.
+    const { items: normalizedItems, totalSellingValue: normalizedTotalSellingValue } = normalizeStockCountItems(
+      items,
+      costBasisByProductName
+    );
 
     // [Product Memory / UOM — Increment A] normalizeStockCountItems()
     // above is a pure, independently-tested function whose own

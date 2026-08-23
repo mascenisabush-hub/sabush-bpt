@@ -11,6 +11,23 @@
 // tests/initial-stock-confirmation.test.ts for the specific regression
 // coverage this exists to support.
 //
+// [Business Worth Evolution — Increment 10 Item 5 / Post-Implementation
+// Correction §25, "Contagem Cost-Basis Conversion" / "Cost-Price
+// Zero-Fallback Removal", Specification §15/FR-67] Both
+// normalizeStockCountItems and tallyStockCountRows (further below)
+// accept an OPTIONAL costBasisByProductName lookup and, when a given
+// row/item's product has an entry, derive that portion's cost
+// contribution via the single shared deriveCostContribution helper
+// (lib/fr67CostBasisConversion.ts) instead of the old, unconditional
+// `quantity * costPrice`. Absent a lookup, or absent a matching entry,
+// both functions behave exactly as before this correction — this is
+// what keeps every pre-existing call site (and every regression test
+// that does not pass this new, optional parameter) byte-for-byte
+// unchanged. See that module's own header comment for the full
+// authoritative-cost-basis and fallback rules this delegates to.
+import type { ProductCostBasis } from '../lib/fr67CostBasisConversion';
+import { deriveCostContribution } from '../lib/fr67CostBasisConversion';
+
 // [Initial Stock Dual-Valuation-Basis — Implementation Authorization,
 // §2 item 1] `totalSellingValue` (quantity * sellingPrice, summed) is
 // computed here IN PARALLEL to the pre-existing `totalValue`
@@ -73,7 +90,15 @@ export interface NormalizeStockCountItemsResult {
  * are coerced to numbers (invalid input becomes 0, matching
  * recordStockCount's existing `Number(x) || 0` behavior).
  */
-export function normalizeStockCountItems(items: StockCountInputItem[]): NormalizeStockCountItemsResult {
+export function normalizeStockCountItems(
+  items: StockCountInputItem[],
+  // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67] See
+  // this file's own header comment above. Keyed by trimmed, lowercased
+  // productName — the same key convention this file's
+  // unitRelationshipByProductName correlation (AppContext.tsx) already
+  // uses. Optional so every existing call site is unaffected.
+  costBasisByProductName?: Map<string, ProductCostBasis>
+): NormalizeStockCountItemsResult {
   const normalized: NormalizedStockCountItem[] = [];
   let totalValue = 0;
   let totalSellingValue = 0;
@@ -83,15 +108,27 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
     if (!trimmedName) continue;
 
     const quantity = Number(raw.quantity) || 0;
+    const unit = raw.unit ? raw.unit.trim() : 'un';
     const costPrice = Number(raw.costPrice) || 0;
     // sellingPrice is additional information only — it never
-    // participates in totalValue, which stays quantity * costPrice
-    // (the investment basis), matching Expected Current Stock Value's
+    // participates in totalValue, which stays cost-basis-derived (the
+    // investment basis), matching Expected Current Stock Value's
     // existing cost-based rule. It DOES participate in the separate
     // totalSellingValue accumulation below, unchanged in how it's read
     // from the row (per-portion, independent, exactly like costPrice).
     const sellingPrice = Number(raw.sellingPrice) || 0;
-    const itemTotal = Number((quantity * costPrice).toFixed(2));
+    // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
+    // `costContribution` replaces the old unconditional
+    // `quantity * costPrice` for this item's OWN totalValue only —
+    // `costPrice` itself, stored on the normalized item below, is
+    // NEVER overwritten with a derived value (Data Storage Rule: no
+    // synthetic per-portion costPrice). Absent a matching cost basis
+    // (or absent the parameter entirely), deriveCostContribution's own
+    // fallback reproduces `quantity * costPrice` exactly — byte-for-
+    // byte identical to this function's pre-correction behavior.
+    const basis = costBasisByProductName?.get(trimmedName.toLowerCase());
+    const { value: costContribution } = deriveCostContribution(quantity, unit, costPrice, basis);
+    const itemTotal = Number(costContribution.toFixed(2));
     const itemSellingTotal = Number((quantity * sellingPrice).toFixed(2));
     totalValue += itemTotal;
     totalSellingValue += itemSellingTotal;
@@ -99,7 +136,7 @@ export function normalizeStockCountItems(items: StockCountInputItem[]): Normaliz
     normalized.push({
       productName: trimmedName,
       quantity,
-      unit: raw.unit ? raw.unit.trim() : 'un',
+      unit,
       costPrice,
       sellingPrice,
       totalValue: itemTotal,
@@ -215,7 +252,23 @@ export interface StockCountTallyResult {
  * entirely, matching this file's existing normalizeStockCountItems
  * behavior for blank product names.
  */
-export function tallyStockCountRows(rows: StockCountWorkingRow[]): StockCountTallyResult {
+export function tallyStockCountRows(
+  rows: StockCountWorkingRow[],
+  // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67] Same
+  // parameter, same semantics, same shared deriveCostContribution
+  // helper as normalizeStockCountItems above — this is what guarantees
+  // the Owner-facing preview (this function) and the persisted
+  // Contagem (normalizeStockCountItems) can never disagree. Passed in
+  // by the caller (PeriodicStockCountView.tsx) rather than carried on
+  // StockCountWorkingRow itself: a row's own shape is round-tripped
+  // through workingRowToDraftItem/draftItemToWorkingRow and persisted
+  // as an autosaved draft (further below), so adding a cost-basis
+  // field there would introduce a new persisted-draft schema field —
+  // exactly what this correction's own governing instruction forbids
+  // absent strict necessity. Threading it as a separate, un-persisted
+  // parameter avoids that entirely.
+  costBasisByProductName?: Map<string, ProductCostBasis>
+): StockCountTallyResult {
   const countedItems: StockCountTallyItem[] = [];
   const notCountedProductNames: string[] = [];
   let totalPhysicalUnits = 0;
@@ -236,15 +289,23 @@ export function tallyStockCountRows(rows: StockCountWorkingRow[]): StockCountTal
     }
 
     const quantity = parsedQuantity;
+    const unit = row.unit.trim() || 'un';
     const costPrice = Number(row.costPrice) || 0;
     const sellingPrice = Number(row.sellingPrice) || 0;
-    const purchaseValue = Number((quantity * costPrice).toFixed(2));
+    // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67] See
+    // normalizeStockCountItems' identical comment above — same helper,
+    // same fallback guarantee, same "costPrice itself is never
+    // overwritten" rule for the persisted StockCountTallyItem.costPrice
+    // field below.
+    const basis = costBasisByProductName?.get(trimmedName.toLowerCase());
+    const { value: costContribution } = deriveCostContribution(quantity, unit, costPrice, basis);
+    const purchaseValue = Number(costContribution.toFixed(2));
     const sellingValue = Number((quantity * sellingPrice).toFixed(2));
 
     countedItems.push({
       productName: trimmedName,
       quantity,
-      unit: row.unit.trim() || 'un',
+      unit,
       costPrice,
       sellingPrice,
       purchaseValue,

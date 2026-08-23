@@ -159,7 +159,13 @@ describe('PeriodicStockCountView.tsx — source-level wiring guards', () => {
   });
 
   it('uses tallyStockCountRows as the single source of truth for Counted/Not Counted', () => {
-    assert.match(source, /tallyStockCountRows\(allWorkingRows\)/);
+    // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67] See
+    // the identical comment in periodic-stock-portion-grouping-wiring
+    // .test.ts — tallyStockCountRows now also accepts the optional,
+    // authorized costBasisByProductName parameter; `allWorkingRows`
+    // remains the sole first argument / source of truth this test
+    // protects.
+    assert.match(source, /tallyStockCountRows\(allWorkingRows, costBasisByProductName\)/);
   });
 
   it('shows a mandatory confirmation step before saving (Amendment Part 9)', () => {
