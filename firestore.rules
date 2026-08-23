@@ -284,6 +284,54 @@ service cloud.firestore {
         request.time < get(/databases/$(database)/documents/businesses/$(businessId)/initialStockRecoveryAuthorization/$("current")).data.expiresAt;
     }
 
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 8; Specification §25, FR-38, I-7; Plan §12] The
+    // ordinary Owner-only correction-window gate, mirroring
+    // initialStockConfirmationVoidable()'s own shape exactly, but keyed
+    // off businessWorthSnapshots/{snapshotId}'s own server-recorded
+    // correctionWindowExpiresAt-equivalent — the snapshot's own
+    // `confirmedAt` (server timestamp, already write-time-verified
+    // above) plus the fixed 3-hour duration this Specification's own
+    // §25 defines, computed HERE against request.time rather than
+    // trusted from the document's own client-computed
+    // `correctionWindowExpiresAt` string field (that field is
+    // display-only — see its own comment above — never the
+    // authoritative gate). Only a snapshot whose status is still
+    // 'active' is ever correctable — an already-'corrected' or
+    // already-'superseded-by-recovery' snapshot has nothing further to
+    // correct through this path (§27's own terminal-state invariant).
+    function businessWorthSnapshotCorrectable(businessId, snapshotId) {
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/businessWorthSnapshots/$(snapshotId)) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthSnapshots/$(snapshotId)).data.get('status', null) == 'active' &&
+        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthSnapshots/$(snapshotId)).data.confirmedAt + duration.value(3, 'h');
+    }
+
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 8; Specification §26, FR-40-FR-43, FR-58; Plan §13] The
+    // SuperAdmin-authorized-recovery gate, mirroring
+    // initialStockRecoveryAuthorizationActive()'s own shape exactly,
+    // reading the NEW, separate, parallel businessWorthRecoveryAuthorizations
+    // collection — never the existing initialStockRecoveryAuthorization
+    // collection (FR-43: no shared read, no shared write, no shared
+    // eligibility check). Deliberately does NOT re-check the ordinary
+    // 3-hour correctionWindowExpiresAt-equivalent window at all (§26's
+    // own "after the Owner's window closes" framing — this mechanism is
+    // reached precisely once that window is no longer relied upon).
+    // Only a snapshot whose status is still 'active' is ever eligible,
+    // for the identical reason businessWorthSnapshotCorrectable()
+    // excludes a non-'active' snapshot above.
+    function businessWorthRecoveryAuthorizationActive(businessId, snapshotId) {
+      return exists(/databases/$(database)/documents/businesses/$(businessId)/businessWorthSnapshots/$(snapshotId)) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthSnapshots/$(snapshotId)).data.get('status', null) == 'active' &&
+        exists(/databases/$(database)/documents/businesses/$(businessId)/businessWorthRecoveryAuthorizations/$("current")) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthRecoveryAuthorizations/$("current")).data.get('status', null) == 'unconsumed' &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthRecoveryAuthorizations/$("current")).data.get('targetSnapshotId', null) == snapshotId &&
+        // Safe direct (non-.get()) field access: the clause immediately
+        // above already proved this document exists and is
+        // 'unconsumed', via short-circuit && evaluation order.
+        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthRecoveryAuthorizations/$("current")).data.expiresAt;
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -683,17 +731,116 @@ service cloud.firestore {
           request.resource.data.get('id', null) == snapshotId &&
           // [Rule 8 Finding B1 — same discipline as StockCount.confirmedAt]
           // Server-verified, never client-supplied — this is what makes
-          // the future 3-hour correction window (Increment 8) untamperable
-          // by a client-computed confirmedAt, exactly as
+          // the 3-hour correction window (Increment 8,
+          // businessWorthSnapshotCorrectable() above) untamperable by a
+          // client-computed confirmedAt, exactly as
           // initialStockConfirmationVoidable()'s 12-hour window already
           // relies on for stockCounts.
           request.resource.data.get('confirmedAt', null) == request.time &&
-          // Increment 1 never creates any status other than 'active' — no
-          // correction/recovery mechanism exists yet to produce another.
-          request.resource.data.get('status', null) == 'active' &&
           request.resource.data.get('sourceStockCountId', null) is string &&
-          request.resource.data.get('measuredBusinessWorth', null) is number;
-        allow update, delete: if false;
+          request.resource.data.get('measuredBusinessWorth', null) is number &&
+          (
+            // Ordinary Contagem confirmation (Increments 1-7) — no
+            // supersedesSnapshotId, status always 'active'. UNCHANGED
+            // from before this increment.
+            (request.resource.data.get('supersedesSnapshotId', null) == null &&
+              request.resource.data.get('status', null) == 'active') ||
+            // [Business Worth Evolution — Implementation Authorization,
+            // Increment 8; Specification §25 FR-39, §26 FR-40] A
+            // correction/recovery-produced snapshot — always 'active'
+            // itself (it is the new, current figure), always naming a
+            // real predecessor via supersedesSnapshotId, and only ever
+            // reachable when that predecessor is genuinely eligible
+            // through EXACTLY ONE of the two Increment 8 mechanisms
+            // (never both — each is independently, authoritatively
+            // re-verified here, never trusted from client intent alone).
+            (request.resource.data.get('supersedesSnapshotId', null) is string &&
+              request.resource.data.get('status', null) == 'active' &&
+              (businessWorthSnapshotCorrectable(businessId, request.resource.data.supersedesSnapshotId) ||
+                businessWorthRecoveryAuthorizationActive(businessId, request.resource.data.supersedesSnapshotId)))
+          );
+
+        // [Business Worth Evolution — Implementation Authorization,
+        // Increment 8; Specification §25 FR-39, §26, §27, FR-58] The
+        // ONE narrow, field-locked exception to this collection's
+        // otherwise-total immutability (§27's own "narrow, bounded
+        // exception — never a precedent for 'immutable, except
+        // when...'" framing, mirroring BDR-0015's identical discipline
+        // for Void & Redo). Permits ONLY the `status` field to change,
+        // ONLY from 'active', ONLY to 'corrected' (via the ordinary
+        // 3-hour Owner window) or 'superseded-by-recovery' (via an
+        // active SuperAdmin-granted recovery Authorization) — never to
+        // any other value, never from any other starting status, never
+        // touching any other field (every frozen figure —
+        // measuredBusinessWorth, productValuationDetail,
+        // cashPosition, etc. — remains exactly as originally written).
+        allow update: if isOwnerOf(businessId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status']) &&
+          resource.data.get('status', null) == 'active' &&
+          (
+            (request.resource.data.get('status', null) == 'corrected' &&
+              businessWorthSnapshotCorrectable(businessId, snapshotId)) ||
+            (request.resource.data.get('status', null) == 'superseded-by-recovery' &&
+              businessWorthRecoveryAuthorizationActive(businessId, snapshotId))
+          );
+        allow delete: if false;
+      }
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 8; Specification §26, FR-40-FR-43; Plan §13] The
+      // Authorization artifact itself — deliberately the identical
+      // shipped pattern initialStockRecoveryAuthorization already
+      // establishes, reused with a new collection name, as a fully
+      // separate, parallel collection (FR-43: never sharing a read, a
+      // write, or an eligibility check with that existing collection).
+      // Fixed id ('current') per business — "at most one active
+      // Authorization per business" (FR-41) is a structural property of
+      // this collection's own create-if-absent-per-fixed-id semantics.
+      match /businessWorthRecoveryAuthorizations/{docId} {
+        allow read: if isMemberOf(businessId);
+
+        // [Plan §13 "Grant route"] Grant is a privileged-server action
+        // (POST /api/superadmin/business-worth-recovery/:businessId/authorize,
+        // gated by requirePlatformOperator + requireSuperAdmin,
+        // server/businessWorthRecoveryAuthorization.ts), performed via
+        // the Admin SDK inside a Firestore transaction — NEVER a
+        // client-side Firestore write, by any role, including an
+        // authenticated platform_operators/{uid}. Mirrors
+        // initialStockRecoveryAuthorization's own "allow create: if
+        // false, Admin-SDK-only" pattern exactly (FR-42: SuperAdmin's
+        // write surface never includes a write to any
+        // BusinessWorthSnapshot/StockCount field, only to this
+        // Authorization artifact itself, and even that write is
+        // server-mediated, not client-reachable).
+        allow create: if false;
+
+        // [Plan §13 "Consumption: Owner-only, via a new eligibility
+        // branch on whatever write path performs the correction (§12)"]
+        // Unlike the LATER-hardened initialStockRecoveryAuthorization
+        // (whose own consumption moved fully server-side by its own
+        // Consumption & Audit Amendment), this Specification's own Plan
+        // §13 text places consumption on the client-side correction
+        // write path itself — so this is the ONE narrow, field-locked
+        // Owner-tier update this collection permits: only `status`/
+        // `consumedAt` may change, only from 'unconsumed' to
+        // 'consumed', and only when businessWorthRecoveryAuthorizationActive()
+        // independently re-confirms this exact Authorization is still
+        // valid for the snapshot named in `targetSnapshotId` — never
+        // trusted from the client's own claim that a recovery occurred.
+        // This lets the ENTIRE recovery (new snapshot create + original
+        // status transition + Authorization consumption) commit as one
+        // atomic client batch, exactly like the existing atomic
+        // snapshot-producing confirmation (Plan §5) this increment
+        // extends, rather than requiring a mid-flow server round-trip.
+        allow update: if isOwnerOf(businessId) &&
+          request.resource.data.diff(resource.data).affectedKeys().hasOnly(['status', 'consumedAt']) &&
+          resource.data.get('status', null) == 'unconsumed' &&
+          request.resource.data.get('status', null) == 'consumed' &&
+          businessWorthRecoveryAuthorizationActive(businessId, resource.data.get('targetSnapshotId', null));
+
+        // No historical fact of a granted/consumed recovery Authorization
+        // is ever deleted.
+        allow delete: if false;
       }
 
       // [Business Worth Evolution — Implementation Authorization,

@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine, StartupInvestmentEntry } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine, StartupInvestmentEntry, BusinessWorthRecoveryAuthorization } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -178,6 +178,80 @@ export function computeInitialStockAuthorizedRecoveryEligibility(
     !targetStockCountId ||
     authorization.status !== 'unconsumed' ||
     authorization.targetStockCountId !== targetStockCountId
+  ) {
+    return { eligible: false, expiresAt: null, msRemaining: 0 };
+  }
+
+  const expiresAtMs = authorization.expiresAt.toMillis();
+  const msRemaining = Math.max(0, expiresAtMs - now.getTime());
+  const eligible = now.getTime() < expiresAtMs;
+
+  return { eligible, expiresAt: new Date(expiresAtMs), msRemaining };
+}
+
+// ------------------------------------------------------------------
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 8; Specification §25, FR-38, I-7; Plan §12] computeBusinessWorthCorrectionEligibility
+//
+// Mirrors computeInitialStockVoidEligibility's own shape and its own
+// "never the authoritative gate" discipline exactly — firestore.rules'
+// businessWorthSnapshotCorrectable() is authoritative, evaluated
+// server-side against request.time; this function exists only so the
+// Owner UI can display "correction available, N remaining" without a
+// round trip, and can never grant a write the rules layer wouldn't
+// independently allow.
+//
+// A snapshot whose status is not 'active' (already corrected, already
+// superseded by recovery) is never eligible, mirroring §27's own
+// "no re-correction of an already-terminal snapshot" invariant — the
+// original's status is a one-way transition (types.ts, own comment).
+// ------------------------------------------------------------------
+export function computeBusinessWorthCorrectionEligibility(
+  snapshot: BusinessWorthSnapshot | null | undefined,
+  now: Date = new Date()
+): VoidEligibility {
+  if (!snapshot || snapshot.status !== 'active') {
+    return { eligible: false, windowExpiresAt: null, msRemaining: 0 };
+  }
+
+  const windowExpiresAtMs = new Date(snapshot.correctionWindowExpiresAt).getTime();
+  const msRemaining = Math.max(0, windowExpiresAtMs - now.getTime());
+  const eligible = now.getTime() < windowExpiresAtMs;
+
+  return { eligible, windowExpiresAt: new Date(windowExpiresAtMs), msRemaining };
+}
+
+// ------------------------------------------------------------------
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 8; Specification §26, FR-40-FR-43, FR-58; Plan §13]
+// computeBusinessWorthAuthorizedRecoveryEligibility
+//
+// Mirrors computeInitialStockAuthorizedRecoveryEligibility's own shape
+// exactly, for the NEW, separate, parallel BusinessWorthRecoveryAuthorization
+// collection (FR-43 — never reads or is read by the existing
+// Initial-Stock Authorization collection). Distinct from, and never
+// confused with, this file's own computeBusinessWorthCorrectionEligibility
+// above — a snapshot may simultaneously have eligible: false from that
+// function (its own 3-hour window expired) and eligible: true here,
+// exactly the case this mechanism exists to serve (§26's own "after
+// the Owner's window closes" framing).
+//
+// A snapshot whose status is not 'active' is never eligible here
+// either, for the identical reason computeBusinessWorthCorrectionEligibility
+// excludes it — an already-corrected or already-recovered snapshot has
+// no further recovery to grant against it under this mechanism.
+// ------------------------------------------------------------------
+export function computeBusinessWorthAuthorizedRecoveryEligibility(
+  authorization: BusinessWorthRecoveryAuthorization | null | undefined,
+  snapshot: BusinessWorthSnapshot | null | undefined,
+  now: Date = new Date()
+): AuthorizedRecoveryEligibility {
+  if (
+    !authorization ||
+    !snapshot ||
+    snapshot.status !== 'active' ||
+    authorization.status !== 'unconsumed' ||
+    authorization.targetSnapshotId !== snapshot.id
   ) {
     return { eligible: false, expiresAt: null, msRemaining: 0 };
   }

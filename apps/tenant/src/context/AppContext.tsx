@@ -320,6 +320,36 @@ interface RecordStockCountParams {
   // for actually collecting this from the Owner; this function does not
   // decide whether to prompt for it.
   ownerConfirmedCashPosition?: number;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25, §26, FR-38, FR-39, FR-58] Present ONLY when
+  // this call is a correction (Owner, within the 3-hour window) or an
+  // authorized recovery (Owner, consuming a valid SuperAdmin-granted
+  // Authorization) of an existing, currently-active `BusinessWorthSnapshot`
+  // — the id of the snapshot being corrected/recovered. Never set for
+  // an ordinary Contagem confirmation. When set, the resulting new
+  // snapshot's own `supersedesSnapshotId` is written as this value, and
+  // the ORIGINAL snapshot's `status` transitions from 'active' to
+  // exactly one of 'corrected' or 'superseded-by-recovery' (never both,
+  // never any other value) — which one is determined by `correctionKind`
+  // below, itself only ever meaningful together with this field.
+  correctionOfSnapshotId?: string;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8] Required whenever correctionOfSnapshotId is set; ignored
+  // otherwise. 'owner-correction' targets the ordinary Owner-only
+  // 3-hour window (firestore.rules `businessWorthSnapshotCorrectable`)
+  // and writes the original's status as 'corrected'. 'superadmin-
+  // authorized-recovery' targets a currently-active, unconsumed
+  // Authorization naming this exact snapshot (firestore.rules
+  // `businessWorthRecoveryAuthorizationActive`) and writes the
+  // original's status as 'superseded-by-recovery', consuming that
+  // Authorization in the SAME atomic batch. The caller (a UI decision
+  // point, using computeBusinessWorthCorrectionEligibility /
+  // computeBusinessWorthAuthorizedRecoveryEligibility to decide which
+  // path is actually available) picks this — recordStockCount itself
+  // does not decide it, and firestore.rules independently and
+  // authoritatively re-verifies whichever path is claimed regardless of
+  // what the caller asserts here.
+  correctionKind?: 'owner-correction' | 'superadmin-authorized-recovery';
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -3412,7 +3442,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -3950,6 +3980,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...(cashReconciliationDifference !== undefined ? { cashReconciliationDifference } : {}),
         correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
         status: 'active',
+        // [Business Worth Evolution — Implementation Authorization,
+        // Increment 8; Specification §25 FR-39, §26 FR-40] Set ONLY
+        // when this call is a correction/recovery of an existing
+        // snapshot (RecordStockCountParams.correctionOfSnapshotId,
+        // above) — the id of the original this new snapshot supersedes.
+        // Absent for every ordinary Contagem confirmation, exactly as
+        // before this increment.
+        ...(correctionOfSnapshotId ? { supersedesSnapshotId: correctionOfSnapshotId } : {}),
       };
       // [Void & Redo — Implementation Authorization §2 items 1, 5-6;
       // Rule 8 Finding B1 — same discipline, applied here] confirmedAt
@@ -3967,6 +4005,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         doc(db, 'businesses', businessId, 'businessWorthSnapshots', businessWorthSnapshotId),
         businessWorthSnapshotWritePayload
       );
+
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 8; Specification §25 FR-39, §26 FR-40-FR-43, FR-58;
+      // Plan §12-§13] The correction/recovery's OTHER two writes,
+      // batched atomically alongside the new snapshot above — never
+      // separately retriable, so a partial outcome (new snapshot
+      // written, original left 'active'; or Authorization left
+      // 'unconsumed' after a real recovery) is structurally impossible,
+      // exactly as this batch already guarantees for stockCounts +
+      // businessWorthSnapshots together (§5).
+      if (correctionOfSnapshotId) {
+        // The original's status transitions exactly once, to exactly
+        // one terminal value — firestore.rules independently and
+        // authoritatively re-verifies this transition is legitimate
+        // (businessWorthSnapshotCorrectable / businessWorthRecoveryAuthorizationActive)
+        // regardless of what correctionKind the caller asserts here.
+        fsBatch.update(
+          doc(db, 'businesses', businessId, 'businessWorthSnapshots', correctionOfSnapshotId),
+          { status: correctionKind === 'superadmin-authorized-recovery' ? 'superseded-by-recovery' : 'corrected' }
+        );
+        if (correctionKind === 'superadmin-authorized-recovery') {
+          // [Plan §13 "Consumption: Owner-only, via a new eligibility
+          // branch on whatever write path performs the correction"] The
+          // Authorization is consumed in the SAME batch as the recovery
+          // it authorizes — never a separate, unguarded write, and
+          // never left 'unconsumed' after a real recovery has already
+          // happened (which would wrongly leave it reusable).
+          fsBatch.update(
+            doc(db, 'businesses', businessId, 'businessWorthRecoveryAuthorizations', 'current'),
+            { status: 'consumed', consumedAt: serverTimestamp() }
+          );
+        }
+      }
     }
     // [Void & Redo — Implementation Authorization §2 items 1, 5-6; Rule
     // 8 Finding B1] confirmedAt is written ONLY here, as a genuine

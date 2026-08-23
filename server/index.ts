@@ -40,6 +40,7 @@ import { touchBusinessActivity, type ActivityTouchDb } from './activityTouch';
 import { queryBusinessDirectory, type BusinessDirectoryDb } from './businessDirectory';
 import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
 import { grantInitialStockRecoveryAuthorization, type InitialStockRecoveryAuthorizationDb } from './initialStockRecoveryAuthorization';
+import { grantBusinessWorthRecoveryAuthorization, type BusinessWorthRecoveryAuthorizationDb } from './businessWorthRecoveryAuthorization';
 import { consumeInitialStockRecoveryAuthorization, type InitialStockRecoveryConsumptionDb } from './initialStockRecoveryConsumption';
 import { reportCriticalFailure } from './alerting';
 import {
@@ -1837,6 +1838,11 @@ const activityTouchDb = db as unknown as ActivityTouchDb;
 const auditLogDb = db as unknown as AuditLogDb;
 const initialStockRecoveryAuthorizationDb = db as unknown as InitialStockRecoveryAuthorizationDb;
 const initialStockRecoveryConsumptionDb = db as unknown as InitialStockRecoveryConsumptionDb;
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 8; Specification §26, FR-43] A FULLY SEPARATE db wrapper/module pair
+// from the Initial-Stock one immediately above — never sharing a type,
+// a read, or a write with it.
+const businessWorthRecoveryAuthorizationDb = db as unknown as BusinessWorthRecoveryAuthorizationDb;
 // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan §4;
 // server/initialStockRecoveryAuthorization.ts's own TimestampFactory]
 // The real Admin SDK Timestamp, satisfying the module's narrow
@@ -2609,6 +2615,110 @@ expressApp.post(
     res.json({
       outcome: 'granted',
       businessId: result.businessId,
+      targetStockCountId: result.targetStockCountId,
+      expiresAtMs: result.expiresAt.toMillis(),
+      ...(auditLogged ? {} : { auditLogged: false }),
+    });
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/business-worth-recovery/:businessId/authorize
+//
+// Business Worth Evolution — Implementation Authorization, Increment 8
+// (Correction / Recovery); Specification §26, FR-40-FR-43, FR-58;
+// Implementation Plan §13; Rule 8 Findings 4-A, 4-B, 10-B; Authorization
+// §20 (signed 23 August 2026). Grants a scoped, one-time, 72-hour
+// Authorization that makes ONE named, currently-'active'
+// BusinessWorthSnapshot eligible for Owner-executed recovery through
+// the existing correction write path (firestore.rules
+// businessWorthRecoveryAuthorizationActive()) — a FULLY SEPARATE,
+// PARALLEL mechanism from the Initial-Stock route immediately above
+// (FR-43: no shared collection, no shared eligibility check). Never a
+// write to businessWorthSnapshots or stockCounts itself (FR-42) —
+// SuperAdmin's write surface here is exactly the same shape as the
+// Initial-Stock precedent's own single-collection write surface.
+//
+// Body: { targetSnapshotId: string, justification: string }. Every
+// grant-time precondition is enforced inside
+// grantBusinessWorthRecoveryAuthorization()'s own transaction — this
+// route is a thin wrapper, exactly like every other SuperAdmin route
+// in this file.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/business-worth-recovery/:businessId/authorize',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operator = req.platformOperator!;
+    const { businessId } = req.params;
+    const targetSnapshotId = String(req.body?.targetSnapshotId || '');
+    const justification = String(req.body?.justification || '');
+
+    let result;
+    try {
+      result = await grantBusinessWorthRecoveryAuthorization(
+        businessWorthRecoveryAuthorizationDb,
+        initialStockRecoveryAuthorizationClock,
+        { businessId, targetSnapshotId, justification, grantedByUid: operator.uid }
+      );
+    } catch (err) {
+      console.error('[superadmin/business-worth-recovery/authorize] failed', {
+        operatorUid: operator.uid,
+        businessId,
+        targetSnapshotId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao autorizar a recuperação.' });
+      return;
+    }
+
+    if (result.outcome === 'missing-justification' || result.outcome === 'missing-target') {
+      res.status(400).json({ error: 'invalid-argument', message: result.message });
+      return;
+    }
+    if (result.outcome === 'target-not-found') {
+      res.status(404).json({ error: 'not-found', message: result.message });
+      return;
+    }
+    if (result.outcome === 'target-not-active') {
+      res.status(409).json({ error: result.outcome, message: result.message });
+      return;
+    }
+    if (result.outcome === 'authorization-already-active') {
+      res.status(409).json({ error: 'authorization-already-active', message: result.message });
+      return;
+    }
+
+    // result.outcome === 'granted' from here — audit log is written
+    // AFTER the grant succeeds, same two-step, idempotent-by-retry
+    // pattern every other audited SuperAdmin action in this file
+    // already uses.
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'business_worth_recovery.authorized',
+        targetBusinessId: result.businessId,
+        targetStockCountId: result.targetStockCountId,
+        justification,
+      });
+    } catch (err) {
+      console.error('[superadmin/business-worth-recovery/authorize] audit log write failed after successful grant', {
+        operatorUid: operator.uid,
+        businessId,
+        targetSnapshotId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      auditLogged = false;
+    }
+
+    res.json({
+      outcome: 'granted',
+      businessId: result.businessId,
+      targetSnapshotId: result.targetSnapshotId,
       targetStockCountId: result.targetStockCountId,
       expiresAtMs: result.expiresAt.toMillis(),
       ...(auditLogged ? {} : { auditLogged: false }),

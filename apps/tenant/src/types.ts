@@ -839,13 +839,29 @@ export interface BusinessWorthSnapshot {
   // convenience only, subject to ordinary clock-skew, never trusted by
   // any rule.] Approximately confirmedAt + 3 hours.
   correctionWindowExpiresAt: string;
-  // Increment 1 creates only 'active' snapshots — 'corrected' and
-  // 'superseded-by-recovery' are Increment 8's own mechanism, not
-  // implemented here (no general-purpose update/delete path exists for
-  // this collection in Increment 1 — see firestore.rules).
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25, §26, §27, FR-39, FR-58] One-way transitions
+  // only, and only via the narrow, field-locked update firestore.rules
+  // permits: 'active' -> 'corrected' (an Owner correction performed
+  // within the 3-hour window, §25) or 'active' -> 'superseded-by-
+  // recovery' (a SuperAdmin-authorized recovery consumed within the
+  // 72-hour ceiling, §26). Every other field on a snapshot in either
+  // terminal status remains exactly as originally frozen — a
+  // correction/recovery never edits any field but this one on the
+  // original document; the corrected/recovered figures live on a NEW
+  // snapshot instead (supersedesSnapshotId, below).
   status: 'active' | 'corrected' | 'superseded-by-recovery';
-  // Set only by a future Increment 8 correction/recovery — never set by
-  // Increment 1.
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25 FR-39, §26 FR-40] Set only on a snapshot
+  // CREATED BY a correction or an authorized recovery — the id of the
+  // original snapshot it supersedes. Never set on an ordinary Contagem
+  // confirmation's own snapshot (Increments 1-7). Purely a lineage
+  // pointer for audit/history display — never read by any Current/
+  // Estimated Business Worth calculation beyond the ordinary "latest
+  // active snapshot" selection those functions already perform (a
+  // superseded snapshot's own status !== 'active' is what excludes it
+  // from that selection — supersedesSnapshotId itself is not consulted
+  // by any calculation).
   supersedesSnapshotId?: string;
 }
 
@@ -879,6 +895,67 @@ export interface BusinessWorthSnapshotEmbeddedProfitLine {
   investmentValue: number;
   marketValue: number;
   embeddedProfit: number;
+}
+
+// ============================================================
+// BUSINESS WORTH EVOLUTION — INCREMENT 8
+// Owner Correction Window / SuperAdmin-Authorized Recovery
+// (Specification §25-26; Plan §12-13; Authorization §20).
+// ============================================================
+
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 8; Specification §26, FR-40-FR-43] Deliberately the identical
+// shipped shape InitialStockRecoveryAuthorization already establishes
+// (request -> grant -> consume-or-expire, fixed slot, SuperAdmin-
+// grants/Owner-consumes-only) — reused as a NEW, SEPARATE, PARALLEL
+// type/collection, never merged with or read by the existing
+// Initial-Stock-specific type above (FR-43). One-way status:
+// 'unconsumed' -> 'consumed', via the one narrow, field-locked
+// Owner-tier update firestore.rules permits (mirroring Plan §13's own
+// "Consumption: Owner-only, via a new eligibility branch on whatever
+// write path performs the correction" instruction) — there is
+// deliberately no 'expired' status ever written by any code path;
+// expiry is enforced entirely via the expiresAt comparison at
+// consumption time, never by a status flip.
+export type BusinessWorthRecoveryAuthorizationStatus = 'unconsumed' | 'consumed';
+
+export interface BusinessWorthRecoveryAuthorization {
+  // Always the literal string 'current' — the fixed-id-per-business
+  // convention (Plan §13), identical in kind to
+  // InitialStockRecoveryAuthorization.id.
+  id: 'current';
+  // The exact businessWorthSnapshots/{id} this Authorization names
+  // (Specification §26 "one exact confirmation per Authorization,"
+  // mirroring POL-0009 Rule O) — the business's current (status ===
+  // 'active') snapshot at the moment of grant, re-verified, not
+  // merely recorded, at both grant time (server) and consumption time
+  // (firestore.rules).
+  targetSnapshotId: string;
+  // Carried alongside targetSnapshotId purely for display/traceability
+  // (Plan §13's own field list) — never itself re-verified at
+  // consumption time; targetSnapshotId is the sole authoritative
+  // target.
+  targetStockCountId: string;
+  // Server-recorded grant moment — set only by the privileged server
+  // via the Admin SDK's server timestamp, never client-supplied.
+  authorizedAt: Timestamp;
+  // authorizedAt + 72 hours, computed once at grant time (Specification
+  // Decision 32/§26 — this capability's own figure, distinct from
+  // POL-0009's 48-hour duration). Stored, not recomputed at read time.
+  expiresAt: Timestamp;
+  status: BusinessWorthRecoveryAuthorizationStatus;
+  // The platform_operators/{uid} who granted this Authorization.
+  grantedByUid: string;
+  // Required, non-empty — carried into the platform_audit_log entry at
+  // grant time.
+  justification: string;
+  // Set only at the moment of Owner consumption (the same client batch
+  // that creates the new, corrected/recovered BusinessWorthSnapshot and
+  // transitions the original's own status) — structurally distinct
+  // from authorizedAt and from BusinessWorthSnapshot.confirmedAt,
+  // mirroring InitialStockRecoveryAuthorization's own identical
+  // distinctness requirement.
+  consumedAt?: Timestamp;
 }
 
 // ============================================================
