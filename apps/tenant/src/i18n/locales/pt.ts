@@ -180,6 +180,12 @@ export interface TranslationDict {
       current: string;
       measuredOn: string;
       close: string;
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 8; Specification §25, §26]
+      corrected: string;
+      recovered: string;
+      correctAction: string;
+      recoverAction: string;
     };
     table: {
       emptyTitle: string;
@@ -1244,6 +1250,10 @@ export const pt: TranslationDict = {
       current: 'Atual',
       measuredOn: 'Medido em {{date}}',
       close: 'Fechar',
+      corrected: 'Corrigido',
+      recovered: 'Recuperado',
+      correctAction: 'Corrigir esta Contagem ({{hours}}h restantes)',
+      recoverAction: 'Recuperar (autorizado, {{hours}}h restantes)',
     },
     table: {
       emptyTitle: 'Nenhum produto encontrado',

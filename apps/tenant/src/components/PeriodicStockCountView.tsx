@@ -228,6 +228,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     periodicStockDraftLoaded,
     savePeriodicStockDraft,
     clearPeriodicStockDraft,
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 8; Specification §25, §26, FR-38, FR-39, FR-58] Correction/
+    // recovery mode — set only via DashboardView's own eligibility-
+    // gated entry point (AppContext's startBusinessWorthCorrection),
+    // never entered here directly. This screen's own confirmation
+    // write path is otherwise entirely unmodified — the same tally/
+    // review/confirm flow every ordinary Contagem already uses.
+    pendingBusinessWorthCorrection,
+    clearBusinessWorthCorrection,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -838,11 +847,38 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         })),
         expectedValueAtCount: expectedCurrentStockValue,
         submissionId: submissionIdRef.current || undefined,
+        // [Business Worth Evolution — Implementation Authorization,
+        // Increment 8; Specification §25, §26, FR-38, FR-39, FR-58]
+        // When this confirmation is a correction/recovery
+        // (pendingBusinessWorthCorrection, set only via DashboardView's
+        // own eligibility-gated entry point), producesBusinessWorthSnapshot
+        // is set true so recordStockCount's own correction/recovery
+        // write path actually runs — the target snapshot id and kind
+        // are never free-typed here, only ever the value
+        // startBusinessWorthCorrection already recorded.
+        // firestore.rules independently and authoritatively re-verifies
+        // eligibility regardless of what is asserted here.
+        ...(pendingBusinessWorthCorrection
+          ? {
+              producesBusinessWorthSnapshot: true,
+              correctionOfSnapshotId: pendingBusinessWorthCorrection.snapshotId,
+              correctionKind: pendingBusinessWorthCorrection.kind,
+            }
+          : {}),
       });
       setSavedTotal(saved.totalValue);
       setSavedTally(pendingTally);
-      setSavedMessage(`Contagem ${TYPE_LABELS[type]} registada com sucesso!`);
+      setSavedMessage(
+        pendingBusinessWorthCorrection
+          ? 'Correção registada com sucesso!'
+          : `Contagem ${TYPE_LABELS[type]} registada com sucesso!`
+      );
       setPendingTally(null);
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 8] Correction mode is scoped to exactly one
+      // confirmation — cleared here so a later, entirely unrelated
+      // Contagem never silently inherits it.
+      if (pendingBusinessWorthCorrection) clearBusinessWorthCorrection();
       // [Implementation Task, Section 4b] Finalized — this identity has
       // done its job. A future periodic count (after onComplete moves
       // the operator away from this screen) needs a fresh one; leaving
@@ -895,6 +931,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   if (pendingTally) {
     return (
       <div className="max-w-2xl mx-auto py-10 space-y-5">
+        {pendingBusinessWorthCorrection && (
+          <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
+            <p className="text-[12.5px] font-bold text-amber-800">
+              {pendingBusinessWorthCorrection.kind === 'superadmin-authorized-recovery'
+                ? '⚠ A confirmar uma RECUPERAÇÃO de Valor do Negócio (autorizada pelo SuperAdmin) — não uma Contagem normal.'
+                : '⚠ A confirmar uma CORREÇÃO da última Contagem — não uma Contagem normal.'}
+            </p>
+          </div>
+        )}
         <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-6">
           <div className="flex items-center gap-3">
             <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
@@ -1058,6 +1103,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-4">
+      {/* [Business Worth Evolution — Implementation Authorization,
+          Increment 8; Specification §25, §26] Clearly distinguishes a
+          correction/recovery from an ordinary Contagem, per the task's
+          own explicit requirement — never merely a UI omission the
+          Owner could miss. */}
+      {pendingBusinessWorthCorrection && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-start gap-3">
+          <Undo2 className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
+          <div>
+            <p className="text-[13px] font-bold text-amber-800">
+              {pendingBusinessWorthCorrection.kind === 'superadmin-authorized-recovery'
+                ? 'Está a recuperar um registo de Valor do Negócio (autorizado pelo SuperAdmin)'
+                : 'Está a corrigir a última Contagem'}
+            </p>
+            <p className="text-[12px] text-amber-700 mt-0.5">
+              Esta contagem substitui o registo de Valor do Negócio atual — o registo anterior fica preservado no
+              histórico, nunca é editado ou apagado.
+            </p>
+            <button
+              type="button"
+              onClick={() => clearBusinessWorthCorrection()}
+              className="text-[11.5px] text-amber-800 underline mt-2"
+            >
+              Cancelar e voltar a uma Contagem normal
+            </button>
+          </div>
+        </div>
+      )}
       <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-6">
         {/* Header */}
         <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">

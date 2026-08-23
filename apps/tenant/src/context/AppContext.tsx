@@ -69,6 +69,7 @@ import {
   UnitRelationship,
   VoidRecord,
   InitialStockRecoveryAuthorization,
+  BusinessWorthRecoveryAuthorization,
   BusinessWorthSnapshot,
   BusinessWorthSnapshotProductValuationLine,
   BusinessWorthSnapshotEmbeddedProfitLine,
@@ -81,7 +82,7 @@ import {
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, computeBusinessWorthCorrectionEligibility, computeBusinessWorthAuthorizedRecoveryEligibility, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -504,6 +505,34 @@ interface AppContextType {
   // Client-side display only, same discipline as initialStockVoidEligibility
   // immediately above, for the separate 48-hour Authorization window.
   initialStockAuthorizedRecoveryEligibility: AuthorizedRecoveryEligibility;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §26, FR-43] The business's single Business-Worth-
+  // specific recovery Authorization document, or null — a FULLY
+  // SEPARATE field from initialStockRecoveryAuthorization above, never
+  // merged with or derived from it.
+  businessWorthRecoveryAuthorization: BusinessWorthRecoveryAuthorization | null;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25] Display-only eligibility for the Owner's own
+  // 3-hour correction window against the business's current (latest
+  // active) BusinessWorthSnapshot.
+  businessWorthCorrectionEligibility: VoidEligibility;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §26] Display-only eligibility for the separate,
+  // SuperAdmin-authorized 72-hour recovery ceiling.
+  businessWorthAuthorizedRecoveryEligibility: AuthorizedRecoveryEligibility;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8] The business's own current (latest active) BusinessWorthSnapshot
+  // — null when none exists. Exposed so the UI never needs to
+  // re-derive this selection itself (a second, potentially-diverging
+  // implementation of "which snapshot is current" is exactly what this
+  // avoids).
+  latestActiveBusinessWorthSnapshot: BusinessWorthSnapshot | null;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8] The cross-view correction/recovery-mode signal, above, plus its
+  // start/clear controls.
+  pendingBusinessWorthCorrection: { snapshotId: string; kind: 'owner-correction' | 'superadmin-authorized-recovery' } | null;
+  startBusinessWorthCorrection: (snapshotId: string, kind: 'owner-correction' | 'superadmin-authorized-recovery') => void;
+  clearBusinessWorthCorrection: () => void;
   withdrawals: Withdrawal[];
   // Module #19 V1 Manual Payment Bridge — temporary confirmation
   // bridge, not the final payment architecture.
@@ -808,6 +837,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // transition voidInitialStockConfirmation() performs below — never
   // itself created or granted client-side (POL-0009 Rule N).
   const [initialStockRecoveryAuthorization, setInitialStockRecoveryAuthorization] = useState<InitialStockRecoveryAuthorization | null>(null);
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §26] Same discipline as
+  // initialStockRecoveryAuthorization immediately above, for the new,
+  // fully separate collection — never itself created client-side (only
+  // the one narrow 'consumed' transition, performed inside
+  // recordStockCount's own atomic batch, Specification §26 FR-42).
+  const [businessWorthRecoveryAuthorization, setBusinessWorthRecoveryAuthorization] = useState<BusinessWorthRecoveryAuthorization | null>(null);
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25, §26] Cross-view "correction mode" signal —
+  // this app switches between full-screen tabs (App.tsx's own
+  // activeTab state), not nested routes, so a component initiating a
+  // correction/recovery (DashboardView's history modal) and the
+  // component that actually performs it (PeriodicStockCountView, on a
+  // different tab) share this one piece of context state rather than
+  // App.tsx growing a new prop-drilled channel — the same pattern this
+  // codebase already uses for cross-view drafts. Always bound to the
+  // business's own real, current snapshot id (never a free-typed
+  // value) — see startBusinessWorthCorrection's own comment below.
+  const [pendingBusinessWorthCorrection, setPendingBusinessWorthCorrection] = useState<{
+    snapshotId: string;
+    kind: 'owner-correction' | 'superadmin-authorized-recovery';
+  } | null>(null);
   const [initialStockPriceChangeEvents, setInitialStockPriceChangeEvents] = useState<InitialStockPriceChangeEvent[]>([]);
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 1]
   // Null when no draft exists yet for this business (or once confirmed
@@ -1075,6 +1126,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const initialStockAuthorizedRecoveryEligibility = computeInitialStockAuthorizedRecoveryEligibility(
     initialStockRecoveryAuthorization,
     initialStockCount?.id ?? null
+  );
+
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25, §26] The business's own current (latest
+  // active) BusinessWorthSnapshot — the only one a correction or
+  // recovery can ever target (§26's own "one exact confirmation per
+  // Authorization, the current one"). `null` when the business has no
+  // active snapshot at all (State 1/1a, or every snapshot already
+  // terminal) — both eligibility functions below already treat that as
+  // ineligible.
+  const latestActiveBusinessWorthSnapshot =
+    businessWorthSnapshots
+      .filter((s) => s.status === 'active')
+      .sort((a, b) => {
+        const aMs = (a.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+        const bMs = (b.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+        return bMs - aMs;
+      })[0] ?? null;
+  // Display-only, never authoritative — same discipline as
+  // initialStockVoidEligibility/initialStockAuthorizedRecoveryEligibility
+  // above, applied to this Specification's own 3-hour Owner window.
+  const businessWorthCorrectionEligibility = computeBusinessWorthCorrectionEligibility(latestActiveBusinessWorthSnapshot);
+  // Display-only, never authoritative — the separate 72-hour ceiling
+  // (Specification §26), completely independent of the 3-hour window
+  // immediately above (mirroring POL-0009 Rule R's own "completely
+  // separate" precedent).
+  const businessWorthAuthorizedRecoveryEligibility = computeBusinessWorthAuthorizedRecoveryEligibility(
+    businessWorthRecoveryAuthorization,
+    latestActiveBusinessWorthSnapshot
   );
 
   // [Business Worth Evolution — Implementation Authorization, Increment
@@ -1632,6 +1712,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching initial stock recovery authorization:', err)
     );
 
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 8; Specification §26, FR-43] A FULLY SEPARATE listener from the
+    // Initial-Stock one immediately above — same fixed-id-singleton
+    // shape, never merged with it (mirrors the two collections'
+    // own firestore.rules separation).
+    const businessWorthRecoveryAuthorizationRef = doc(db, 'businesses', businessId, 'businessWorthRecoveryAuthorizations', 'current');
+    const unsubBusinessWorthRecoveryAuthorization = onSnapshot(
+      businessWorthRecoveryAuthorizationRef,
+      (snap) => {
+        setBusinessWorthRecoveryAuthorization(snap.exists() ? (snap.data() as BusinessWorthRecoveryAuthorization) : null);
+      },
+      (err) => console.error('Error fetching business worth recovery authorization:', err)
+    );
+
     // [Initial Stock Valuation History] Immutable, append-only price-change
     // audit trail — read tier matches stockCounts (any team member).
     const initialStockPriceChangeEventsRef = collection(db, 'businesses', businessId, 'initialStockPriceChangeEvents');
@@ -1783,6 +1877,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubPayablePayments();
       unsubStartupInvestmentEntries();
       unsubInitialStockRecoveryAuthorization();
+      unsubBusinessWorthRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
       unsubPeriodicDraft();
@@ -3442,6 +3537,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // business. Once set, it becomes the permanent Initial Business Capital
   // baseline that everything else (capital growth, business worth) is
   // measured against, so it is intentionally never editable or repeatable.
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §25, §26, FR-38, FR-40] Starts a correction/
+  // recovery — always bound to the caller's own already-known,
+  // already-eligible snapshot id (DashboardView passes
+  // latestActiveBusinessWorthSnapshot.id, this context's own selection,
+  // never a free-typed value) — this function itself does not decide
+  // eligibility (computeBusinessWorthCorrectionEligibility/
+  // computeBusinessWorthAuthorizedRecoveryEligibility, calculations.ts,
+  // already exposed via this context, are what the caller checks
+  // before ever calling this), and firestore.rules independently and
+  // authoritatively re-verifies eligibility again at write time
+  // regardless of what is set here.
+  const startBusinessWorthCorrection = (snapshotId: string, kind: 'owner-correction' | 'superadmin-authorized-recovery') => {
+    setPendingBusinessWorthCorrection({ snapshotId, kind });
+  };
+  const clearBusinessWorthCorrection = () => {
+    setPendingBusinessWorthCorrection(null);
+  };
+
   const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
@@ -5409,6 +5523,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockConfirmationChain,
         initialStockVoidEligibility,
         initialStockRecoveryAuthorization,
+        businessWorthRecoveryAuthorization,
+        businessWorthCorrectionEligibility,
+        businessWorthAuthorizedRecoveryEligibility,
+        latestActiveBusinessWorthSnapshot,
+        pendingBusinessWorthCorrection,
+        startBusinessWorthCorrection,
+        clearBusinessWorthCorrection,
         initialStockAuthorizedRecoveryEligibility,
         withdrawals,
         payments,

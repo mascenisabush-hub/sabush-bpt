@@ -191,6 +191,10 @@ export const fr: TranslationDict = {
       current: 'Actuel',
       measuredOn: 'Mesuré le {{date}}',
       close: 'Fermer',
+      corrected: 'Corrigé',
+      recovered: 'Récupéré',
+      correctAction: 'Corriger ce Comptage ({{hours}}h restantes)',
+      recoverAction: 'Récupérer (autorisé, {{hours}}h restantes)',
     },
     table: {
       emptyTitle: 'Aucun produit trouvé',

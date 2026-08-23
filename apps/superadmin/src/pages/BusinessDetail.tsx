@@ -4,6 +4,7 @@ import {
   suspendBusiness,
   reactivateBusiness,
   authorizeInitialStockRecovery,
+  authorizeBusinessWorthRecovery,
   type BusinessDetailResponse,
   SuperAdminApiError,
 } from '../lib/superadminApi';
@@ -22,7 +23,7 @@ interface Props {
 // CONFIRMED) adds the suspend/reactivate actions below. This page
 // remains read-only otherwise — no other field is ever writable from
 // here, no subscription/payment control, no deletion.
-type PendingAction = null | 'suspend' | 'reactivate' | 'authorize-recovery';
+type PendingAction = null | 'suspend' | 'reactivate' | 'authorize-recovery' | 'authorize-business-worth-recovery';
 
 export default function BusinessDetail({ businessId, onBack }: Props) {
   const [justification, setJustification] = useState('');
@@ -50,6 +51,17 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
   // SHOWS the operator; it grants no authority the server doesn't
   // independently re-verify.
   const [useAdvancedTarget, setUseAdvancedTarget] = useState(false);
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §26, FR-40] A FULLY SEPARATE target field from
+  // recoveryTargetStockCountId above — no common-case default exists
+  // here (unlike Initial Stock's own single, fixed 'initial' slot, a
+  // BusinessWorthSnapshot id is always business/Contagem-specific), so
+  // this is always operator-entered, obtained from the business's own
+  // Dashboard (Business Worth history) during the support interaction
+  // — never fabricated or guessed here. The server independently
+  // re-verifies eligibility (grantBusinessWorthRecoveryAuthorization())
+  // regardless of what is typed.
+  const [businessWorthTargetSnapshotId, setBusinessWorthTargetSnapshotId] = useState('');
 
   async function handleLoad() {
     if (!justification.trim()) {
@@ -143,6 +155,44 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
     } catch (err) {
       if (err instanceof SuperAdminApiError && err.status === 409) {
         setActionError(err.message || 'Já existe uma autorização ativa, ou esta confirmação não é elegível.');
+      } else {
+        setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao autorizar a recuperação.');
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8; Specification §26, FR-40-FR-43; Plan §13] Grants a 72-hour
+  // Authorization; does NOT perform any recovery itself — mirrors
+  // handleAuthorizeRecovery's own shape exactly, for a FULLY SEPARATE
+  // mechanism (a different target type, a different collection, a
+  // different route — never sharing state with Initial-Stock recovery).
+  async function handleAuthorizeBusinessWorthRecovery() {
+    if (!actionJustification.trim()) {
+      setActionError('É obrigatório indicar uma justificação.');
+      return;
+    }
+    if (!businessWorthTargetSnapshotId.trim()) {
+      setActionError('É obrigatório indicar o registo de valor do negócio a autorizar.');
+      return;
+    }
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      const result = await authorizeBusinessWorthRecovery(businessId, businessWorthTargetSnapshotId.trim(), actionJustification.trim());
+      const hoursRemaining = Math.max(0, Math.round((result.expiresAtMs - Date.now()) / (60 * 60 * 1000)));
+      setActionResult(
+        `Autorização de recuperação de valor do negócio concedida. O dono tem ${hoursRemaining}h para executar a recuperação — a autorização expira automaticamente depois disso.` +
+          (result.auditLogged === false ? ' Aviso: o registo de auditoria falhou ao gravar.' : '')
+      );
+      setPendingAction(null);
+      setActionJustification('');
+      setBusinessWorthTargetSnapshotId('');
+    } catch (err) {
+      if (err instanceof SuperAdminApiError && err.status === 409) {
+        setActionError(err.message || 'Já existe uma autorização ativa, ou este registo não é o atual do negócio.');
       } else {
         setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao autorizar a recuperação.');
       }
@@ -379,6 +429,60 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
               <div style={{ display: 'flex', gap: 8 }}>
                 <button onClick={handleAuthorizeRecovery} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A autorizar…' : 'Sim, autorizar (48h)'}</button>
                 <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setUseAdvancedTarget(false); setRecoveryTargetStockCountId('initial'); }} style={cancelBtn}>Cancelar</button>
+              </div>
+            </div>
+          )}
+
+          {/* [Business Worth Evolution — Implementation Authorization,
+              Increment 8; Specification §26, FR-40-FR-43; Plan §13] A
+              FULLY SEPARATE panel from Initial-Stock recovery above —
+              never sharing state, a route, or a collection with it
+              (FR-43). Same justification-required, same error/result
+              pattern as every other SuperAdmin action on this page. */}
+          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>Recuperação de Valor do Negócio</h3>
+          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: -4, marginBottom: 8 }}>
+            Concede ao dono uma janela de 72 horas para corrigir/recuperar um registo de valor do negócio (Contagem) fora do prazo normal de 3 horas. O SuperAdmin apenas autoriza — quem executa a correção é sempre o dono do negócio, através do fluxo normal de Contagem.
+          </p>
+
+          {pendingAction === null && (
+            <button
+              onClick={() => { setPendingAction('authorize-business-worth-recovery'); setActionError(null); setActionResult(null); }}
+              style={confirmBtn}
+            >
+              Autorizar recuperação de Valor do Negócio
+            </button>
+          )}
+
+          {pendingAction === 'authorize-business-worth-recovery' && (
+            <div style={dialogBox}>
+              <p style={{ marginTop: 0 }}>
+                Autorizar recuperação para <strong>{data.name ?? businessId}</strong>? Isto concede ao dono uma janela de <strong>72 horas</strong> para executar a correção — o SuperAdmin não realiza a correção em si. Só pode existir uma autorização ativa por negócio. É obrigatório indicar uma justificação.
+              </p>
+
+              <div style={{ marginBottom: 8 }}>
+                <label style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+                  Identificador exato do registo de valor do negócio (obtenha-o junto do dono — visível no histórico de Valor do Negócio no Painel do negócio). Um valor incorreto ou já não-atual será rejeitado pelo servidor, nunca aceite às cegas.
+                </label>
+                <input
+                  type="text"
+                  value={businessWorthTargetSnapshotId}
+                  onChange={(e) => setBusinessWorthTargetSnapshotId(e.target.value)}
+                  placeholder="bws-stockcount-periodic-..."
+                  style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 4, fontFamily: 'monospace' }}
+                />
+              </div>
+
+              <textarea
+                value={actionJustification}
+                onChange={(e) => setActionJustification(e.target.value)}
+                placeholder="Motivo da recuperação (ex: cliente contactou o suporte após o prazo de 3 horas)…"
+                rows={3}
+                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+              />
+              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
+              <div style={{ display: 'flex', gap: 8 }}>
+                <button onClick={handleAuthorizeBusinessWorthRecovery} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A autorizar…' : 'Sim, autorizar (72h)'}</button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setBusinessWorthTargetSnapshotId(''); }} style={cancelBtn}>Cancelar</button>
               </div>
             </div>
           )}

@@ -323,6 +323,35 @@ export async function authorizeInitialStockRecovery(
   })) as AuthorizeInitialStockRecoveryResult;
 }
 
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 8; Specification §26, FR-40-FR-43; Plan §13] A FULLY SEPARATE grant
+// call from authorizeInitialStockRecovery immediately above — targets
+// a BusinessWorthSnapshot, not a StockCount, and never touches the
+// Initial-Stock-specific collection/route (FR-43). Same "grant only,
+// never performs the recovery itself" discipline — only the business's
+// own Owner can subsequently consume it, via the existing Contagem
+// confirmation write path (client-side, not a route this SuperAdmin
+// app ever calls).
+export interface AuthorizeBusinessWorthRecoveryResult {
+  outcome: 'granted';
+  businessId: string;
+  targetSnapshotId: string;
+  targetStockCountId: string;
+  expiresAtMs: number;
+  auditLogged?: false;
+}
+
+export async function authorizeBusinessWorthRecovery(
+  businessId: string,
+  targetSnapshotId: string,
+  justification: string
+): Promise<AuthorizeBusinessWorthRecoveryResult> {
+  return (await authedFetch(`/business-worth-recovery/${encodeURIComponent(businessId)}/authorize`, {
+    method: 'POST',
+    body: JSON.stringify({ targetSnapshotId, justification }),
+  })) as AuthorizeBusinessWorthRecoveryResult;
+}
+
 // SuperAdmin V1 Operational Control Plane — Phase D (ADR-0006). Audit
 // Center Filtering. targetUid added to the response shape (Decision C
 // — operator-related events target a uid, not a business). Filters

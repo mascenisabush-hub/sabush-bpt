@@ -31,6 +31,12 @@ interface DashboardViewProps {
   onNavigateToAddStock: (productName?: string) => void;
   onNavigateToAddQuebra: (productId?: string) => void;
   onNavigateToInitialStockCount: () => void;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 8] Navigates to the existing Periodic Stock Count screen (the same
+  // screen an ordinary Contagem already uses) — a correction/recovery
+  // reuses that exact entry form, distinguished only by the pending
+  // correction-mode banner PeriodicStockCountView itself renders.
+  onNavigateToStockCount: () => void;
   onSelectProductDetail: (product: Product) => void;
 }
 
@@ -134,6 +140,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onNavigateToAddStock,
   onNavigateToAddQuebra,
   onNavigateToInitialStockCount,
+  onNavigateToStockCount,
   onSelectProductDetail,
 }) => {
   const {
@@ -144,6 +151,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     activeBatchCount, totalExpensesAllTime, totalWithdrawalsAllTime,
     businessWorth, capitalGrowth, capitalGrowthPct,
     currentBusinessWorth, estimatedBusinessWorth, businessWorthSnapshots,
+    // [Business Worth Evolution — Implementation Authorization, Increment 8]
+    businessWorthCorrectionEligibility, businessWorthAuthorizedRecoveryEligibility,
+    startBusinessWorthCorrection,
   } = useApp();
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -738,23 +748,76 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     return (
                       <div
                         key={snapshot.id}
-                        className="flex items-center justify-between px-4 py-3 rounded-[10px] border border-gray-100 hover:bg-gray-50 transition"
+                        className="flex flex-col gap-1.5 px-4 py-3 rounded-[10px] border border-gray-100 hover:bg-gray-50 transition"
                       >
-                        <span className="flex flex-col">
-                          <span className="text-gray-700 font-semibold flex items-center gap-1.5">
-                            {index === 0 && snapshot.status === 'active' && (
-                              <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
-                                {t('dashboard.historyModal.current')}
-                              </span>
-                            )}
-                            {confirmedDate
-                              ? t('dashboard.historyModal.measuredOn', { date: confirmedDate.toLocaleDateString() })
-                              : snapshot.id}
+                        <div className="flex items-center justify-between">
+                          <span className="flex flex-col">
+                            <span className="text-gray-700 font-semibold flex items-center gap-1.5">
+                              {index === 0 && snapshot.status === 'active' && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-emerald-700 bg-emerald-50 border border-emerald-200 rounded-full px-1.5 py-0.5">
+                                  {t('dashboard.historyModal.current')}
+                                </span>
+                              )}
+                              {snapshot.status === 'corrected' && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                                  {t('dashboard.historyModal.corrected')}
+                                </span>
+                              )}
+                              {snapshot.status === 'superseded-by-recovery' && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-amber-700 bg-amber-50 border border-amber-200 rounded-full px-1.5 py-0.5">
+                                  {t('dashboard.historyModal.recovered')}
+                                </span>
+                              )}
+                              {confirmedDate
+                                ? t('dashboard.historyModal.measuredOn', { date: confirmedDate.toLocaleDateString() })
+                                : snapshot.id}
+                            </span>
                           </span>
-                        </span>
-                        <span className="type-number text-[#8A6D1F] font-bold">
-                          {formatCurrency(snapshot.measuredBusinessWorth, currencySymbol)}
-                        </span>
+                          <span className="type-number text-[#8A6D1F] font-bold">
+                            {formatCurrency(snapshot.measuredBusinessWorth, currencySymbol)}
+                          </span>
+                        </div>
+
+                        {/* [Business Worth Evolution — Implementation
+                            Authorization, Increment 8; Specification
+                            §25, §26, FR-38, FR-40] Only ever rendered
+                            for the business's own current (index 0,
+                            status 'active') snapshot — never any other
+                            row, so the target snapshot id is always
+                            this component's own already-known
+                            latestActiveBusinessWorthSnapshot, never a
+                            free-typed or otherwise arbitrary value.
+                            firestore.rules independently and
+                            authoritatively re-verifies eligibility
+                            regardless of this display. */}
+                        {index === 0 && snapshot.status === 'active' && businessWorthCorrectionEligibility.eligible && (
+                          <button
+                            onClick={() => {
+                              startBusinessWorthCorrection(snapshot.id, 'owner-correction');
+                              setShowWorthHistoryModal(false);
+                              onNavigateToStockCount();
+                            }}
+                            className="w-full py-1.5 rounded-[8px] bg-[#0B1F3A]/5 hover:bg-[#0B1F3A]/10 text-[#0B1F3A] font-bold text-[11px] transition"
+                          >
+                            {t('dashboard.historyModal.correctAction', {
+                              hours: String(Math.max(1, Math.ceil(businessWorthCorrectionEligibility.msRemaining / (60 * 60 * 1000)))),
+                            })}
+                          </button>
+                        )}
+                        {index === 0 && snapshot.status === 'active' && !businessWorthCorrectionEligibility.eligible && businessWorthAuthorizedRecoveryEligibility.eligible && (
+                          <button
+                            onClick={() => {
+                              startBusinessWorthCorrection(snapshot.id, 'superadmin-authorized-recovery');
+                              setShowWorthHistoryModal(false);
+                              onNavigateToStockCount();
+                            }}
+                            className="w-full py-1.5 rounded-[8px] bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 text-[#8A6D1F] font-bold text-[11px] transition"
+                          >
+                            {t('dashboard.historyModal.recoverAction', {
+                              hours: String(Math.max(1, Math.ceil(businessWorthAuthorizedRecoveryEligibility.msRemaining / (60 * 60 * 1000)))),
+                            })}
+                          </button>
+                        )}
                       </div>
                     );
                   })}

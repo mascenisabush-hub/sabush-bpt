@@ -111,6 +111,7 @@ function MainApp() {
             onNavigateToAddStock={handleNavigateToAddStock}
             onNavigateToAddQuebra={handleNavigateToAddQuebra}
             onNavigateToInitialStockCount={handleNavigateToInitialStockCount}
+            onNavigateToStockCount={() => setActiveTab('stock-count')}
             onSelectProductDetail={prod => setSelectedDetailProduct(prod)}
           />
         )}
