@@ -193,6 +193,8 @@ export const fr: TranslationDict = {
       close: 'Fermer',
       corrected: 'Corrigé',
       recovered: 'Récupéré',
+      ownerDeclared: 'Déclaré',
+      ownerDeclaredNotice: "Aucun détail physique ou financier — valeur déclarée directement par le propriétaire, sans comptage physique.",
       correctAction: 'Corriger ce Comptage ({{hours}}h restantes)',
       recoverAction: 'Récupérer (autorisé, {{hours}}h restantes)',
     },
@@ -230,6 +232,7 @@ export const fr: TranslationDict = {
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
       addStock: { label: 'Ajouter un Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Comptage de Stock', shortLabel: 'Comptage' },
+      declareWorth: { label: 'Déclarer la Valeur', shortLabel: 'Déclarer' },
       addQuebra: { label: 'Ajouter une Perte', shortLabel: '+ Perte' },
       addExpense: { label: 'Ajouter une Dépense', shortLabel: '+ Dépense' },
       addWithdrawal: { label: 'Enregistrer un Retrait', shortLabel: '+ Retrait' },
@@ -550,6 +553,20 @@ export const fr: TranslationDict = {
     submitButton: 'Enregistrer le Retrait',
     errors: {
       invalidAmount: 'Veuillez saisir un montant valide supérieur à 0.',
+    },
+  },
+  declareWorth: {
+    title: 'Déclarer la Valeur du Négoce',
+    subtitle: 'Vous savez déjà combien vaut votre négoce ? Déclarez la valeur directement, sans avoir besoin d\'un comptage physique.',
+    infoNote: 'Cette déclaration établit la Valeur du Négoce avec le même poids qu\'un comptage physique — mais, contrairement à un comptage, elle ne comportera aucun détail de stock, de profit intégré ou de position de trésorerie, car aucune mesure physique n\'a été effectuée.',
+    dateLabel: 'Date de la Déclaration',
+    amountLabel: 'Montant Déclaré ({{symbol}})',
+    submitButton: 'Déclarer la Valeur du Négoce',
+    registeredTitle: 'Valeur du Négoce Déclarée !',
+    successMessage: 'Valeur du Négoce de {{amount}} déclarée avec succès.',
+    errors: {
+      invalidAmount: 'Veuillez saisir un montant valide supérieur à 0.',
+      generic: 'Erreur lors de la déclaration de la Valeur du Négoce.',
     },
   },
   stocksView: {

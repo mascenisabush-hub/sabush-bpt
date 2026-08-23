@@ -46,6 +46,12 @@ export const ACTIVITY_ICON: Record<TimelineActivityType, React.ComponentType<{ c
   // [Business Worth Evolution — Implementation Authorization, Increment
   // 9; Specification §34, FR-48]
   'business-worth-snapshot-confirmed': Gem,
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §43] Same Gem icon as an
+  // ordinary Contagem-confirmed snapshot — this is still a Business
+  // Worth establishment event, just via the second method. Distinguished
+  // by label/color instead of icon (below).
+  'business-worth-owner-declared': Gem,
   'business-worth-correction': Undo2,
   'business-worth-recovery-consumed': ShieldCheck,
   'receivable-payment-recorded': Coins,
@@ -76,6 +82,11 @@ export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
   // own correction/recovery banner), payments matching their existing
   // Expense/Withdrawal color family.
   'business-worth-snapshot-confirmed': 'bg-[#D4AF37]/10 text-[#8A6D1F] border-[#D4AF37]/30',
+  // [Increment 10] A distinct sky-blue family, matching the same badge
+  // color DashboardView's history list already uses for the
+  // 'owner-declared' establishmentMethod badge — visibly distinguishes
+  // this Timeline event from an ordinary Contagem confirmation.
+  'business-worth-owner-declared': 'bg-sky-50 text-sky-700 border-sky-200',
   'business-worth-correction': 'bg-amber-50 text-amber-700 border-amber-200',
   'business-worth-recovery-consumed': 'bg-amber-50 text-amber-700 border-amber-200',
   'receivable-payment-recorded': 'bg-emerald-50 text-emerald-600 border-emerald-200',
@@ -103,6 +114,7 @@ export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
   'period-reopened': 'Período Reaberto',
   // [Increment 9]
   'business-worth-snapshot-confirmed': 'Valor do Negócio',
+  'business-worth-owner-declared': 'Valor do Negócio Declarado',
   'business-worth-correction': 'Correção de Contagem',
   'business-worth-recovery-consumed': 'Recuperação de Valor do Negócio',
   'receivable-payment-recorded': 'Pagamento Recebido',

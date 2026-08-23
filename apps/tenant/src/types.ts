@@ -692,8 +692,24 @@ export interface StockCount {
 export interface BusinessWorthSnapshot {
   id: string;
   businessId: string;
-  // The Contagem (StockCount) that produced this snapshot.
-  sourceStockCountId: string;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §8, FR-61] Provenance/display
+  // metadata only — set once at creation, immutable thereafter. Does
+  // NOT gate which downstream consumer may read this snapshot, and
+  // does NOT affect I-2/I-3's existing immutability guarantees. OPTIONAL
+  // at the type level solely to accommodate every pre-Increment-10
+  // snapshot, which predates this field's existence — never backfilled
+  // onto a historical record (same discipline as every other additive
+  // field on this record, e.g. StockCount.producesBusinessWorthSnapshot).
+  // Every NEW write, of either establishment method, MUST set this.
+  establishmentMethod?: 'contagem' | 'owner-declared';
+  // The Contagem (StockCount) that produced this snapshot. OPTIONAL,
+  // Increment 10: genuinely absent (never null/empty-string) on an
+  // Owner-Declared snapshot (establishmentMethod === 'owner-declared'),
+  // which has no StockCount behind it by definition (BDR Decision 36;
+  // Specification §42.3). Required, as before, on every
+  // establishmentMethod === 'contagem' snapshot.
+  sourceStockCountId?: string;
   // Server-recorded (Timestamp, via serverTimestamp()) — never a
   // client-computed value, matching the identical discipline
   // StockCount.confirmedAt already establishes above (Void & Redo
@@ -732,20 +748,28 @@ export interface BusinessWorthSnapshot {
   // the existing Business Worth Engine's market-value convention
   // (calculations.ts calculateInventoryTotals' totalMarketValue), not a
   // new valuation basis.
-  productValuationTotal: number;
+  // OPTIONAL, Increment 10: genuinely OMITTED (never a fabricated 0/[])
+  // on an Owner-Declared snapshot (FR-69) — there is no physical count
+  // to derive this from. Required, as before, on every
+  // establishmentMethod === 'contagem' snapshot.
+  productValuationTotal?: number;
   // Per-product drill-down. A frozen, self-contained line (not merely a
   // productId reference) — chosen here, for historical accuracy, over a
   // bare reference that could break if a Product is later renamed or
   // deleted. The exact reference-vs-frozen-value balance is Rule 8 open
   // question #2 (§36 item 2); this is Increment 1's implementation-time
   // resolution of it, not a business decision.
-  productValuationDetail: BusinessWorthSnapshotProductValuationLine[];
+  // OPTIONAL, Increment 10: see productValuationTotal's own comment
+  // above — identical FR-69 omission discipline.
+  productValuationDetail?: BusinessWorthSnapshotProductValuationLine[];
   // Drill-down/explanatory only (FR-24) — never a second addend to
   // measuredBusinessWorth. Computed fresh, at confirmation time, from
   // the existing calculateInventoryTotals(batches, quebras) — the same
   // single source of truth Dashboard/Reports/Closings already use.
-  embeddedProfitTotal: number;
-  embeddedProfitDetail: BusinessWorthSnapshotEmbeddedProfitLine[];
+  // OPTIONAL, Increment 10: OMITTED on an Owner-Declared snapshot
+  // (FR-69) — same discipline as productValuationTotal, above.
+  embeddedProfitTotal?: number;
+  embeddedProfitDetail?: BusinessWorthSnapshotEmbeddedProfitLine[];
   // [Corrected] Genuinely unavailable until Increment 3 (Cash Ledger/
   // Receivables/Payables) — confirmed, twice now, by direct repository
   // inspection to have no existing source anywhere in this codebase.
@@ -804,9 +828,14 @@ export interface BusinessWorthSnapshot {
   // informational window (since-last-snapshot, not all-time) for
   // reconciliation display only, never a SECOND subtraction on top of
   // the all-time terms already baked into measuredBusinessWorth.
-  expensesSinceLastSnapshot: number;
-  breakagesSinceLastSnapshot: number;
-  levantamentosSinceLastSnapshot: number;
+  // OPTIONAL, Increment 10: all three OMITTED on an Owner-Declared
+  // snapshot (FR-69) — an Owner-Declared establishment has no
+  // "since-last-snapshot" window to compute these against as part of
+  // its own establishment-moment detail (§42.3). Required, as before,
+  // on every establishmentMethod === 'contagem' snapshot.
+  expensesSinceLastSnapshot?: number;
+  breakagesSinceLastSnapshot?: number;
+  levantamentosSinceLastSnapshot?: number;
   // The prior Current Business Worth (the immediately-preceding
   // snapshot's own measuredBusinessWorth) — null ONLY for a business's
   // very first snapshot ever, which is a truthful null (there genuinely
@@ -1563,6 +1592,14 @@ export type TimelineActivityType =
   // existing, authoritative architecture document Specification §34
   // itself cites as its basis, not invented here.
   | 'business-worth-snapshot-confirmed'
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §43; BDR Decision 36] Distinct
+  // from 'business-worth-snapshot-confirmed' (a Contagem-produced
+  // snapshot) — this event marks an Owner-Declared establishment
+  // specifically, so Timeline/audit display can distinguish the two
+  // establishment methods without inspecting the snapshot document
+  // itself.
+  | 'business-worth-owner-declared'
   | 'business-worth-correction'
   | 'business-worth-recovery-consumed'
   | 'receivable-payment-recorded'

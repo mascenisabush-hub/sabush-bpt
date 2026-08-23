@@ -184,6 +184,11 @@ export interface TranslationDict {
       // Increment 8; Specification §25, §26]
       corrected: string;
       recovered: string;
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 10 (Revision 3); Specification §42.1, §42.3, FR-61,
+      // FR-69]
+      ownerDeclared: string;
+      ownerDeclaredNotice: string;
       correctAction: string;
       recoverAction: string;
     };
@@ -221,6 +226,9 @@ export interface TranslationDict {
       stocks: { label: string; shortLabel: string };
       addStock: { label: string; shortLabel: string };
       stockCount: { label: string; shortLabel: string };
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 10 (Revision 3)]
+      declareWorth: { label: string; shortLabel: string };
       addQuebra: { label: string; shortLabel: string };
       addExpense: { label: string; shortLabel: string };
       addWithdrawal: { label: string; shortLabel: string };
@@ -561,6 +569,23 @@ export interface TranslationDict {
     submitButton: string;
     errors: {
       invalidAmount: string;
+    };
+  };
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §6 State 2, FR-61; BDR
+  // Decision 36] Dedicated, separate entry point from stock-count.
+  declareWorth: {
+    title: string;
+    subtitle: string;
+    infoNote: string;
+    dateLabel: string;
+    amountLabel: string;
+    submitButton: string;
+    registeredTitle: string;
+    successMessage: string;
+    errors: {
+      invalidAmount: string;
+      generic: string;
     };
   };
   stocksView: {
@@ -1252,6 +1277,8 @@ export const pt: TranslationDict = {
       close: 'Fechar',
       corrected: 'Corrigido',
       recovered: 'Recuperado',
+      ownerDeclared: 'Declarado',
+      ownerDeclaredNotice: 'Sem detalhe físico ou financeiro — valor declarado diretamente pelo dono, sem Contagem.',
       correctAction: 'Corrigir esta Contagem ({{hours}}h restantes)',
       recoverAction: 'Recuperar (autorizado, {{hours}}h restantes)',
     },
@@ -1289,6 +1316,7 @@ export const pt: TranslationDict = {
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
       addStock: { label: 'Adicionar Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Contagem de Stock', shortLabel: 'Contagem' },
+      declareWorth: { label: 'Declarar Valor do Negócio', shortLabel: 'Declarar' },
       addQuebra: { label: 'Adicionar Quebra', shortLabel: '+ Quebra' },
       addExpense: { label: 'Adicionar Despesa', shortLabel: '+ Despesa' },
       addWithdrawal: { label: 'Registar Levantamento', shortLabel: '+ Levant.' },
@@ -1609,6 +1637,20 @@ export const pt: TranslationDict = {
     submitButton: 'Registar Levantamento',
     errors: {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
+    },
+  },
+  declareWorth: {
+    title: 'Declarar Valor do Negócio',
+    subtitle: 'Já sabe quanto vale o seu negócio? Declare o valor diretamente, sem precisar de fazer uma Contagem física.',
+    infoNote: 'Esta declaração estabelece o Valor do Negócio com o mesmo peso de uma Contagem — mas, ao contrário de uma Contagem, não terá um detalhe de stock, lucro embutido ou posição de caixa associado, porque nenhuma medição física foi feita.',
+    dateLabel: 'Data da Declaração',
+    amountLabel: 'Valor Declarado ({{symbol}})',
+    submitButton: 'Declarar Valor do Negócio',
+    registeredTitle: 'Valor do Negócio Declarado!',
+    successMessage: 'Valor do Negócio de {{amount}} declarado com sucesso.',
+    errors: {
+      invalidAmount: 'Por favor introduza um valor válido superior a 0.',
+      generic: 'Erro ao declarar o Valor do Negócio.',
     },
   },
   stocksView: {

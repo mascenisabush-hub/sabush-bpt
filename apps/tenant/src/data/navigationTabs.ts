@@ -1,6 +1,6 @@
-import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History, Landmark, PiggyBank } from 'lucide-react';
+import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History, Landmark, PiggyBank, Gem } from 'lucide-react';
 
-export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'closing' | 'timeline' | 'debts' | 'startup-investment';
+export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'declare-worth' | 'closing' | 'timeline' | 'debts' | 'startup-investment';
 
 export interface NavTabDefinition {
   id: TabType;
@@ -22,6 +22,17 @@ export const NAV_TABS: NavTabDefinition[] = [
   { id: 'stocks', labelKey: 'nav.tabs.stocks.label', shortLabelKey: 'nav.tabs.stocks.shortLabel', icon: Boxes, color: 'amber', ownerOnly: true },
   { id: 'add-stock', labelKey: 'nav.tabs.addStock.label', shortLabelKey: 'nav.tabs.addStock.shortLabel', icon: PackagePlus, color: 'emerald', ownerOnly: false },
   { id: 'stock-count', labelKey: 'nav.tabs.stockCount.label', shortLabelKey: 'nav.tabs.stockCount.shortLabel', icon: ClipboardList, color: 'indigo', ownerOnly: true },
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §6 State 2; BDR Decision 36]
+  // A DEDICATED, SEPARATE entry point from 'stock-count' above — per
+  // explicit Product Architect decision (Implementation Authorization
+  // Amendment §26): Owner-Declared Business Worth is never a mode/toggle
+  // inside the Contagem flow. Contagem is a physical stock-count
+  // establishment event; this is an explicit declaration by an Owner who
+  // already knows the business's worth — two different establishment
+  // methods, kept clearly distinguishable in the UX by being two
+  // separate tabs, not a shared one with a switch.
+  { id: 'declare-worth', labelKey: 'nav.tabs.declareWorth.label', shortLabelKey: 'nav.tabs.declareWorth.shortLabel', icon: Gem, color: 'sky', ownerOnly: true },
   { id: 'add-quebra', labelKey: 'nav.tabs.addQuebra.label', shortLabelKey: 'nav.tabs.addQuebra.shortLabel', icon: AlertTriangle, color: 'rose', ownerOnly: false },
   { id: 'add-expense', labelKey: 'nav.tabs.addExpense.label', shortLabelKey: 'nav.tabs.addExpense.shortLabel', icon: Receipt, color: 'purple', ownerOnly: false },
   { id: 'add-withdrawal', labelKey: 'nav.tabs.addWithdrawal.label', shortLabelKey: 'nav.tabs.addWithdrawal.shortLabel', icon: HandCoins, color: 'orange', ownerOnly: true },

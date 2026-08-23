@@ -532,12 +532,23 @@ function computeCaseALiveBusinessWorth(params: {
   // Embedded profit delta since the snapshot (see doc comment above) —
   // unchanged by this correction: a live-vs-frozen comparison, not a
   // date-filtered range, so it carries no date-granularity risk.
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.3, FR-69] `embeddedProfitTotal`
+  // is genuinely absent on an Owner-Declared snapshot (FR-69's own
+  // omission list) — falls back to 0, mirroring the identical
+  // `payablesPosition ?? 0` discipline already used below for the same
+  // reason (a genuinely-omitted baseline term, not a fabricated
+  // measurement). This means the live embedded-profit accrual is
+  // measured entirely as "new profit since declaration" from a zero
+  // baseline, which is the correct, honest reading: an Owner-Declared
+  // establishment never measured a batch-ledger embedded-profit figure
+  // to begin with, so there is no non-zero baseline to subtract.
   const currentEmbeddedProfitTotal = calculateInventoryTotals(
     batches.filter((b) => b.status === 'open'),
     quebras
   ).totalEmbeddedProfit;
   const embeddedProfitSinceSnapshot = Number(
-    (currentEmbeddedProfitTotal - latest.embeddedProfitTotal).toFixed(2)
+    (currentEmbeddedProfitTotal - (latest.embeddedProfitTotal ?? 0)).toFixed(2)
   );
 
   // [Corrected] createdAt (a precise timestamp) vs confirmedAt (a precise

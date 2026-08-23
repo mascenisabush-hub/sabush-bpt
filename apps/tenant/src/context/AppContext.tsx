@@ -598,6 +598,21 @@ interface AppContextType {
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
   recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §8, FR-61; BDR Decision 36]
+  // Establishes Business Worth directly from an Owner-entered known
+  // figure, without a physical Contagem — the second, equally
+  // legitimate establishment method. A single-document, trivially
+  // atomic create (Rule 8 Finding OD-3 — no paired StockCount write,
+  // unlike recordStockCount), idempotent against a client-supplied
+  // submissionId. Every FR-69-omitted drill-down field is genuinely
+  // absent from the write, never a fabricated zero (enforced
+  // server-side, firestore.rules).
+  recordOwnerDeclaredBusinessWorth: (params: {
+    declaredAmount: number;
+    date: string;
+    submissionId: string;
+  }) => Promise<{ success: boolean; snapshotId?: string; error?: string }>;
   // [Void & Redo — Implementation Authorization §2 item 5]
   voidInitialStockConfirmation: () => Promise<InitialStockDraft>;
   // [Initial Stock Valuation History] Immutable, append-only audit trail
@@ -3520,6 +3535,152 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3); Specification §42.1, §42.3, §8, FR-61, FR-69; BDR
+  // Decision 36; Plan Amendment §A.1; Rule 8 Finding OD-1-OD-5]
+  // Establishes Business Worth directly from an Owner-declared figure,
+  // with no physical Contagem behind it — the second, equally
+  // legitimate establishment method. Unlike recordStockCount's paired
+  // StockCount + BusinessWorthSnapshot atomic batch write (§5), this is
+  // a SINGLE-DOCUMENT create — trivially atomic by Firestore's own
+  // per-document write guarantee (Rule 8 Finding OD-3), so no batch
+  // write is needed here. Submission-identity idempotency mirrors
+  // recordReceivablePayment's own pattern exactly: the snapshot's own
+  // id is derived from the caller's submissionId, so a retried call
+  // (network retry, double-tap) never produces a duplicate snapshot —
+  // enforced by a pre-write existence check inside a transaction,
+  // exactly like recordReceivablePayment's own paymentRef check above.
+  const recordOwnerDeclaredBusinessWorth = async ({
+    declaredAmount,
+    date,
+    submissionId,
+  }: {
+    declaredAmount: number;
+    date: string;
+    submissionId: string;
+  }): Promise<{ success: boolean; snapshotId?: string; error?: string }> => {
+    if (!activeBusinessId) return { success: false, error: 'Sem negócio associado.' };
+    if (!isOwner) return { success: false, error: 'Apenas o dono pode declarar o Valor do Negócio.' };
+    if (!(Number(declaredAmount) > 0)) return { success: false, error: 'O valor declarado deve ser maior que zero.' };
+
+    const businessId = activeBusinessId;
+    const snapshotId = 'bws-owner-declared-' + submissionId;
+    const roundedAmount = Number(Number(declaredAmount).toFixed(2));
+
+    try {
+      let alreadyApplied = false;
+
+      await runTransaction(db, async (tx) => {
+        const snapshotRef = doc(db, 'businesses', businessId, 'businessWorthSnapshots', snapshotId);
+        const existingSnapshotSnap = await tx.get(snapshotRef);
+
+        if (existingSnapshotSnap.exists()) {
+          // Idempotent retry — this exact submissionId already produced
+          // a snapshot on an earlier attempt. Nothing more to do —
+          // mirrors recordReceivablePayment's own early-return-inside-
+          // transaction pattern exactly.
+          alreadyApplied = true;
+          return;
+        }
+
+        // [Specification §7, §41 corrected meaning; mirrors §5's own
+        // computation exactly] The live Current Business Worth
+        // immediately before this declaration — the prior active
+        // snapshot (of EITHER establishment method — getCurrentBusinessWorth
+        // already reads "the latest active snapshot" generically, per
+        // Rule 8 Finding OD-2) plus governed activity since it, as of
+        // this declaration's own date. 'UNKNOWN' (no prior snapshot at
+        // all) becomes null — a truthful null, not a placeholder,
+        // identical contract to recordStockCount's own
+        // previousCurrentBusinessWorth field.
+        const priorCurrent = getCurrentBusinessWorth({
+          snapshots: businessWorthSnapshots,
+          batches,
+          quebras,
+          expenses,
+          withdrawals,
+          payables,
+          cashLedgerEntries,
+          asOfDate: date,
+        });
+        const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
+
+        // [Reconciliation signal, §22/§42.3 — "meaningfully computable"
+        // reconciliation fields remain populated even for an
+        // Owner-Declared snapshot; only the physical/financial
+        // drill-down detail (productValuationTotal, embeddedProfitTotal,
+        // cashPosition, etc. — FR-69) is genuinely omitted below.]
+        const priorEstimated = getEstimatedBusinessWorth({
+          snapshots: businessWorthSnapshots,
+          initialStockCount,
+          batches,
+          quebras,
+          expenses,
+          withdrawals,
+          payables,
+          cashLedgerEntries,
+          asOfDate: date,
+        });
+        const estimatedBusinessWorthImmediatelyBefore = priorEstimated === 'UNKNOWN' ? undefined : priorEstimated;
+        const difference =
+          estimatedBusinessWorthImmediatelyBefore === undefined
+            ? undefined
+            : Number((roundedAmount - estimatedBusinessWorthImmediatelyBefore).toFixed(2));
+
+        // [Rule 8 Finding OD-1; firestore.rules' own owner-declared
+        // branch independently re-verifies every one of these fields is
+        // absent — this object is deliberately built via a precise
+        // field list, never a spread of a larger object, so there is no
+        // risk of an FR-69-omitted field leaking in from a shared
+        // helper.] Every field FR-69 requires omitted — sourceStockCountId,
+        // productValuationTotal/Detail, embeddedProfitTotal/Detail,
+        // cashPosition, receivablesPosition, payablesPosition,
+        // expenses/breakages/levantamentosSinceLastSnapshot,
+        // ownerInvestmentSinceLastSnapshot — is genuinely absent below,
+        // never written as a fabricated zero/undefined-as-zero.
+        const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
+          id: snapshotId,
+          businessId,
+          establishmentMethod: 'owner-declared',
+          measuredBusinessWorth: roundedAmount,
+          previousCurrentBusinessWorth,
+          ...(estimatedBusinessWorthImmediatelyBefore !== undefined ? { estimatedBusinessWorthImmediatelyBefore } : {}),
+          ...(difference !== undefined ? { difference } : {}),
+          correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
+          status: 'active',
+        };
+        const businessWorthSnapshotWritePayload: WithFieldValue<BusinessWorthSnapshot> = {
+          ...businessWorthSnapshot,
+          confirmedAt: serverTimestamp(),
+        };
+
+        tx.set(snapshotRef, businessWorthSnapshotWritePayload);
+      });
+
+      if (!alreadyApplied) {
+        // [Implementation Authorization, Increment 9 precedent;
+        // Specification §34, FR-48] Fired unconditionally on a genuine
+        // first apply only (never on an idempotent retry no-op) —
+        // deterministic id derived from submissionId, mirroring every
+        // other governed-write Timeline call in this file.
+        await logTimelineEvent({
+          id: 'tl-owner-declared-' + submissionId,
+          type: 'business-worth-owner-declared',
+          date,
+          title: 'Valor do Negócio Declarado',
+          description: `O dono declarou o Valor do Negócio em ${roundedAmount}, sem Contagem física.`,
+          financialImpact: [{ label: 'Valor do Negócio Declarado', amount: roundedAmount, tone: 'neutral' }],
+          details: { snapshotId },
+        });
+      }
+
+      return { success: true, snapshotId };
+    } catch (err: any) {
+      console.error('Error recording owner-declared business worth:', businessId, err);
+      return { success: false, error: err.message || 'Erro ao declarar o Valor do Negócio.' };
+    }
+  };
+
   // Module #19 V1 Manual Payment Bridge — temporary confirmation bridge,
   // not the final payment architecture (PaySuite/PayTED remain
   // deferred). Writes a 'pending' Payment record only — never touches
@@ -4127,6 +4288,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
         id: businessWorthSnapshotId,
         businessId,
+        // [Business Worth Evolution — Implementation Authorization,
+        // Increment 10 (Revision 3); Specification §42.1, FR-61]
+        // REQUIRED as of Increment 10 — firestore.rules' own
+        // businessWorthSnapshots.allow create Contagem branch now
+        // explicitly requires this exact value; omitting it would
+        // reject every ordinary Contagem confirmation outright, not
+        // merely leave the field unset.
+        establishmentMethod: 'contagem',
         sourceStockCountId: newCount.id,
         measuredBusinessWorth,
         productValuationTotal,
@@ -5693,6 +5862,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addReceivable,
         recordReceivablePayment,
         recordPayablePayment,
+        recordOwnerDeclaredBusinessWorth,
         addStartupInvestmentEntry,
         initialStockConfirmationChain,
         initialStockVoidEligibility,

@@ -13,6 +13,7 @@ import { AddWithdrawalView } from './components/AddWithdrawalView';
 import { ReportsView } from './components/ReportsView';
 import { InitialStockCountView } from './components/InitialStockCountView';
 import { PeriodicStockCountView } from './components/PeriodicStockCountView';
+import { DeclareBusinessWorthView } from './components/DeclareBusinessWorthView';
 import { ClosingView } from './components/ClosingView';
 import { BusinessTimelineView } from './components/timeline/BusinessTimelineView';
 import { DebtsView } from './components/DebtsView';
@@ -127,6 +128,10 @@ function MainApp() {
 
         {!isStaff && activeTab === 'stock-count' && (
           <PeriodicStockCountView onComplete={() => setActiveTab('dashboard')} />
+        )}
+
+        {!isStaff && activeTab === 'declare-worth' && (
+          <DeclareBusinessWorthView onComplete={() => setActiveTab('dashboard')} />
         )}
 
         {activeTab === 'add-stock' && (

@@ -193,6 +193,8 @@ export const en: TranslationDict = {
       close: 'Close',
       corrected: 'Corrected',
       recovered: 'Recovered',
+      ownerDeclared: 'Declared',
+      ownerDeclaredNotice: 'No physical or financial breakdown — value declared directly by the owner, without a stock count.',
       correctAction: 'Correct this Count ({{hours}}h remaining)',
       recoverAction: 'Recover (authorized, {{hours}}h remaining)',
     },
@@ -230,6 +232,7 @@ export const en: TranslationDict = {
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
       addStock: { label: 'Add Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Stock Count', shortLabel: 'Count' },
+      declareWorth: { label: 'Declare Business Worth', shortLabel: 'Declare' },
       addQuebra: { label: 'Add Loss', shortLabel: '+ Loss' },
       addExpense: { label: 'Add Expense', shortLabel: '+ Expense' },
       addWithdrawal: { label: 'Record Withdrawal', shortLabel: '+ Withdraw.' },
@@ -550,6 +553,20 @@ export const en: TranslationDict = {
     submitButton: 'Record Withdrawal',
     errors: {
       invalidAmount: 'Please enter a valid amount greater than 0.',
+    },
+  },
+  declareWorth: {
+    title: 'Declare Business Worth',
+    subtitle: 'Already know what your business is worth? Declare it directly, without needing to do a physical stock count.',
+    infoNote: 'This declaration establishes Business Worth with the same weight as a stock count — but, unlike a stock count, it will carry no stock, embedded profit, or cash position detail, because no physical measurement was taken.',
+    dateLabel: 'Declaration Date',
+    amountLabel: 'Declared Amount ({{symbol}})',
+    submitButton: 'Declare Business Worth',
+    registeredTitle: 'Business Worth Declared!',
+    successMessage: 'Business Worth of {{amount}} declared successfully.',
+    errors: {
+      invalidAmount: 'Please enter a valid amount greater than 0.',
+      generic: 'Error declaring Business Worth.',
     },
   },
   stocksView: {

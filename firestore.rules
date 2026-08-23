@@ -737,27 +737,94 @@ service cloud.firestore {
           // initialStockConfirmationVoidable()'s 12-hour window already
           // relies on for stockCounts.
           request.resource.data.get('confirmedAt', null) == request.time &&
-          request.resource.data.get('sourceStockCountId', null) is string &&
           request.resource.data.get('measuredBusinessWorth', null) is number &&
           (
-            // Ordinary Contagem confirmation (Increments 1-7) — no
-            // supersedesSnapshotId, status always 'active'. UNCHANGED
-            // from before this increment.
-            (request.resource.data.get('supersedesSnapshotId', null) == null &&
-              request.resource.data.get('status', null) == 'active') ||
+            // Ordinary Contagem confirmation (Increments 1-7) — UNCHANGED
+            // from before Increment 10. No supersedesSnapshotId, status
+            // always 'active', OR a correction/recovery-produced snapshot
+            // (Increment 8, unchanged below).
+            //
             // [Business Worth Evolution — Implementation Authorization,
-            // Increment 8; Specification §25 FR-39, §26 FR-40] A
-            // correction/recovery-produced snapshot — always 'active'
-            // itself (it is the new, current figure), always naming a
-            // real predecessor via supersedesSnapshotId, and only ever
-            // reachable when that predecessor is genuinely eligible
-            // through EXACTLY ONE of the two Increment 8 mechanisms
-            // (never both — each is independently, authoritatively
-            // re-verified here, never trusted from client intent alone).
-            (request.resource.data.get('supersedesSnapshotId', null) is string &&
-              request.resource.data.get('status', null) == 'active' &&
-              (businessWorthSnapshotCorrectable(businessId, request.resource.data.supersedesSnapshotId) ||
-                businessWorthRecoveryAuthorizationActive(businessId, request.resource.data.supersedesSnapshotId)))
+            // Increment 10 (Revision 3)] establishmentMethod is accepted
+            // as EITHER 'contagem' (the application's own recordStockCount
+            // write path now always sets this explicitly, going forward)
+            // OR absent — never strictly required to equal 'contagem',
+            // matching this file's own established "additive, optional,
+            // never a hard requirement on a pre-existing write path"
+            // discipline for every other field introduced by a later
+            // increment (e.g. StockCount.producesBusinessWorthSnapshot).
+            // A strict `== 'contagem'` requirement here would instead
+            // reject any caller — a server-side migration, a future
+            // correction/recovery code path, or an existing test helper —
+            // that has not yet been updated to set this new field, which
+            // is exactly the kind of silent, backward-incompatible breakage
+            // this codebase's own additive-field convention exists to
+            // prevent.
+            (
+              request.resource.data.get('establishmentMethod', null) in ['contagem', null] &&
+              request.resource.data.get('sourceStockCountId', null) is string &&
+              (
+                (request.resource.data.get('supersedesSnapshotId', null) == null &&
+                  request.resource.data.get('status', null) == 'active') ||
+                // [Business Worth Evolution — Implementation Authorization,
+                // Increment 8; Specification §25 FR-39, §26 FR-40] A
+                // correction/recovery-produced snapshot — always 'active'
+                // itself (it is the new, current figure), always naming a
+                // real predecessor via supersedesSnapshotId, and only ever
+                // reachable when that predecessor is genuinely eligible
+                // through EXACTLY ONE of the two Increment 8 mechanisms
+                // (never both — each is independently, authoritatively
+                // re-verified here, never trusted from client intent alone).
+                (request.resource.data.get('supersedesSnapshotId', null) is string &&
+                  request.resource.data.get('status', null) == 'active' &&
+                  (businessWorthSnapshotCorrectable(businessId, request.resource.data.supersedesSnapshotId) ||
+                    businessWorthRecoveryAuthorizationActive(businessId, request.resource.data.supersedesSnapshotId)))
+              )
+            ) ||
+            // [Business Worth Evolution — Implementation Authorization,
+            // Increment 10 (Revision 3); Specification §42.1, §42.3, §8,
+            // FR-61, FR-69; BDR Decision 36; Rule 8 Finding OD-1] NEW —
+            // Owner-Declared establishment. sourceStockCountId must be
+            // genuinely ABSENT — never null/empty-string — so a client
+            // cannot fabricate a fake StockCount id to blur the two
+            // establishment methods. Every FR-69-omitted field must also
+            // be genuinely absent from the write, enforced here
+            // server-side rather than left to client-UI convention alone,
+            // which is what makes the "absence, never fabrication"
+            // discipline (§42.3) a structural guarantee. Always a fresh
+            // 'active' snapshot with no supersedesSnapshotId — an
+            // Owner-Declared establishment is never itself a
+            // correction/recovery target write (a CORRECTION of an
+            // Owner-Declared snapshot, per Increment 8's own generic
+            // mechanism, still produces a snapshot that goes through the
+            // FIRST disjunct above if it is Contagem-sourced, or repeats
+            // this same disjunct if the correction itself is also an
+            // Owner-Declared re-declaration — either is already covered,
+            // since this disjunct does not itself forbid
+            // supersedesSnapshotId; it simply does not require it).
+            (
+              request.resource.data.get('establishmentMethod', null) == 'owner-declared' &&
+              !('sourceStockCountId' in request.resource.data) &&
+              !('productValuationTotal' in request.resource.data) &&
+              !('productValuationDetail' in request.resource.data) &&
+              !('embeddedProfitTotal' in request.resource.data) &&
+              !('embeddedProfitDetail' in request.resource.data) &&
+              !('cashPosition' in request.resource.data) &&
+              !('receivablesPosition' in request.resource.data) &&
+              !('payablesPosition' in request.resource.data) &&
+              !('expensesSinceLastSnapshot' in request.resource.data) &&
+              !('breakagesSinceLastSnapshot' in request.resource.data) &&
+              !('levantamentosSinceLastSnapshot' in request.resource.data) &&
+              !('ownerInvestmentSinceLastSnapshot' in request.resource.data) &&
+              (
+                (request.resource.data.get('supersedesSnapshotId', null) == null &&
+                  request.resource.data.get('status', null) == 'active') ||
+                (request.resource.data.get('supersedesSnapshotId', null) is string &&
+                  request.resource.data.get('status', null) == 'active' &&
+                  (businessWorthSnapshotCorrectable(businessId, request.resource.data.supersedesSnapshotId) ||
+                    businessWorthRecoveryAuthorizationActive(businessId, request.resource.data.supersedesSnapshotId)))
+              )
+            )
           );
 
         // [Business Worth Evolution — Implementation Authorization,

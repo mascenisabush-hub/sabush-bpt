@@ -768,6 +768,26 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                                   {t('dashboard.historyModal.recovered')}
                                 </span>
                               )}
+                              {/* [Business Worth Evolution — Implementation
+                                  Authorization, Increment 10 (Revision 3);
+                                  Specification §42.1, FR-61] establishmentMethod
+                                  is provenance/display metadata only — this
+                                  badge is the "visibly distinguished in every
+                                  UI surface that displays snapshot history"
+                                  requirement FR-61 names. Absent on every
+                                  pre-Increment-10 snapshot (never backfilled),
+                                  which is why this only renders when the field
+                                  is genuinely present and equal to
+                                  'owner-declared' — a Contagem-sourced snapshot,
+                                  old or new, renders no badge here, matching
+                                  this component's existing "no badge = ordinary
+                                  Contagem" convention for the status field
+                                  above. */}
+                              {snapshot.establishmentMethod === 'owner-declared' && (
+                                <span className="text-[9px] font-bold uppercase tracking-wide text-sky-700 bg-sky-50 border border-sky-200 rounded-full px-1.5 py-0.5">
+                                  {t('dashboard.historyModal.ownerDeclared')}
+                                </span>
+                              )}
                               {confirmedDate
                                 ? t('dashboard.historyModal.measuredOn', { date: confirmedDate.toLocaleDateString() })
                                 : snapshot.id}
@@ -777,6 +797,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             {formatCurrency(snapshot.measuredBusinessWorth, currencySymbol)}
                           </span>
                         </div>
+
+                        {/* [Business Worth Evolution — Implementation
+                            Authorization, Increment 10 (Revision 3);
+                            Specification §42.3, FR-69] "Absence, never
+                            fabrication" made visible: an Owner-Declared
+                            snapshot genuinely has no physical/financial
+                            drill-down detail (productValuationTotal,
+                            embeddedProfitTotal, cashPosition, etc. are all
+                            genuinely absent, never a fabricated zero) — this
+                            notice states that plainly rather than rendering
+                            those fields blank/zero, which FR-69 explicitly
+                            forbids being mistaken for an error or a defect. */}
+                        {snapshot.establishmentMethod === 'owner-declared' && (
+                          <p className="text-[10px] text-gray-400 italic">
+                            {t('dashboard.historyModal.ownerDeclaredNotice')}
+                          </p>
+                        )}
 
                         {/* [Business Worth Evolution — Implementation
                             Authorization, Increment 8; Specification
