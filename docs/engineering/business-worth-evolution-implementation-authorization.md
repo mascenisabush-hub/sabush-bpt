@@ -339,3 +339,48 @@ The whole-capability authorization stated throughout this document (§2, §13, �
 **Status:** ✅ **AUTHORIZED.**
 
 The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction is unaffected and remains intact. This section authorizes only Increment 5's own beginning, per §7's one-increment-at-a-time discipline — Increments 6–9 remain unauthorized to begin until each is separately instructed in turn.
+
+---
+
+## 18. Product Architect Authorization — Increment 6
+
+**Increment 6: FECHO**
+
+**Status:** ✅ **AUTHORIZED TO BEGIN.**
+
+**Prerequisite confirmation:**
+- [x] Increment 1 is complete (`4186357`, plus the corrective commits `779c542`, `4b77b54`, `4a99430`).
+- [x] Increment 2 is complete (`ba2c130`).
+- [x] Increment 3 is complete (`c337ba8`).
+- [x] Increment 4 is complete (`49fb8ab`).
+- [x] Increment 5 is complete and authorized (§17, above).
+- [x] Increment 6 is now authorized to begin.
+
+**This authorization means, and means only:**
+- Implementation remains strictly **one increment at a time** (§7) — Increment 7 and every later increment remain unauthorized to begin.
+- This authorization does **not** authorize implementation of the whole Business Worth Evolution capability at once.
+- This authorization does **not** change any business decision.
+- This authorization does **not** introduce any new business rule, financial formula, ceiling, correction mechanism, reconciliation mechanism, notification mechanism, recovery mechanism, or auditability mechanism.
+- Implementation must follow the already-approved Specification, Rule 8 Assessment, Implementation Plan, and this Authorization — none of which are reopened, reinterpreted, or amended by this section.
+
+**Increment 6 scope, explicitly preserved as already approved (not restated in substance, not redesigned):**
+- Fecho baseline-anchored custom reporting range — Specification §18, FR-25–FR-27, FR-53, FR-54; Plan §9.
+- The additive `ClosingPeriodType` value (illustrative: `'custom'`) — confirmed clean by direct inspection against `closingNotificationProducer.ts`'s existing `periodType` switch, requiring zero code change to that consumer (Rule 8 Finding 8-A).
+- `'custom'`-type `Closing.startDate` populated exclusively from the active baseline's own date (latest `BusinessWorthSnapshot.confirmedAt`, or the historical Capital Inicial baseline date for a State-1a business) — never independently owner-chosen (FR-25).
+- The existing double-close guard (`isPeriodClosed`, keyed on `periodType`+`startDate`+`endDate`) reused unmodified for the new value (FR-26).
+- Fecho's reported Estimated Business Worth computed via the exact same §7/Specification §9 shared calculation function, evaluated as of the selected end date — never a separately re-filtered calculation (FR-53); an arbitrary historical sub-range profit request routes to the existing Reports module, never a new Fecho behavior (FR-54).
+- The `closings` field-level immutability fix (Plan §10, resolving Rule 8 Finding 8-B) — extending `firestore.rules`' `closings.allow update` rule with the same per-field immutability-lock pattern the `notifications` collection already demonstrates, landing in this increment specifically because it is what makes FR-25 actually enforceable rather than merely UI-observed.
+- Rule 8 Findings 8-A and 8-B are resolved and are not reopened by this section.
+
+**No requirement above is added to, removed from, or reinterpreted by this authorization.**
+
+**Formal acceptance:**
+
+> I authorize Increment 6 — Fecho — to begin, per the already-approved scope in Specification §18, Plan §9 and §10, and Rule 8 Findings 8-A and 8-B. Increments 1–5 are confirmed complete/authorized. Implementation remains strictly one increment at a time; Increment 7 and all later increments remain unauthorized. This authorization introduces no new business rule, financial formula, ceiling, correction mechanism, reconciliation mechanism, notification mechanism, recovery mechanism, or auditability mechanism, and does not reopen §16's Finding 3 / Option A or §17's Increment 5 authorization, both of which remain intact. **AUTHORIZED.**
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **AUTHORIZED.**
+
+The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction and §17's Increment 5 authorization are unaffected and remain intact. This section authorizes only Increment 6's own beginning, per §7's one-increment-at-a-time discipline. Increment 7 — Reconciliation / Notifications — remains unauthorized. Increment 8 — Correction / Recovery — remains unauthorized. Increment 9 — Auditability — remains unauthorized. Increments 7–9 remain unauthorized to begin until each is separately instructed in turn. This section authorizes implementation to begin; it does not itself implement any code.

@@ -81,7 +81,7 @@ import {
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -327,6 +327,15 @@ interface RecordClosingParams {
   periodLabel: string;
   startDate: string;
   endDate: string;
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6; FR-53] Optional, additive — monthly/yearly Closings never
+  // pass this and keep reading the existing `businessWorth` closure
+  // variable exactly as before (no redesign of that path). Fecho's own
+  // wrapper (recordFechoClosing, below) supplies this instead: the shared
+  // §9 Estimated Business Worth calculation evaluated as of the selected
+  // end date — never the old pre-Evolution `businessWorth` formula — per
+  // FR-53's "never a separately re-filtered calculation" requirement.
+  businessWorthOverride?: number;
 }
 
 interface AppContextType {
@@ -394,6 +403,16 @@ interface AppContextType {
   // the full doc comment — one shared calculation, two context fields
   // exposing its two named readings.
   estimatedBusinessWorth: number | 'UNKNOWN';
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6; Specification §18, FR-25] The active baseline date
+  // Fecho's own startDate is anchored to — null when no baseline exists
+  // yet. See fechoBaselineDate's own computation site for the full
+  // comment.
+  fechoBaselineDate: string | null;
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6; FR-53] See getEstimatedBusinessWorthAsOf's own
+  // computation site for the full comment.
+  getEstimatedBusinessWorthAsOf: (asOfDate: string) => number | 'UNKNOWN';
   // [Business Worth Evolution — Implementation Authorization, Increment 3;
   // Specification §10-12, §33] Owner-only tier — see the onSnapshot
   // listener setup's own doc comment for why.
@@ -608,6 +627,9 @@ interface AppContextType {
   // Monthly/Yearly Closings — permanently lock a period's figures.
   closings: Closing[];
   recordClosing: (params: RecordClosingParams) => Promise<Closing>;
+  // [Increment 6] Fecho — always periodType: 'custom'; startDate is never
+  // a parameter here, see this function's own comment above (FR-25).
+  recordFechoClosing: (endDate: string, periodLabel?: string) => Promise<Closing>;
   // [Closing Integrity Amendment v1.0] Replaces the old deleteClosing —
   // a Closing is never deleted, only reopened (Owner-only, logged,
   // supersedes in place). See reopenClosing's own comment for the full
@@ -1064,6 +1086,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     payables,
     cashLedgerEntries,
   });
+
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6; Specification §18, FR-25] The active baseline date Fecho
+  // is anchored to — exposed here so ClosingView can display it read-only
+  // without independently re-deriving it (the same single source of truth
+  // recordFechoClosing itself uses to build startDate).
+  const fechoBaselineDate = resolveActiveBusinessWorthBaselineDate({
+    snapshots: businessWorthSnapshots,
+    initialStockCount,
+  });
+
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6; FR-53] Lets ClosingView preview Fecho's own Estimated
+  // Business Worth as of an Owner-selected (not-yet-saved) end date,
+  // without needing every one of this function's own input collections
+  // exposed on the context individually. Uses the exact same shared
+  // function/parameters recordFechoClosing itself uses at save time, so
+  // the preview can never disagree with what actually gets recorded.
+  const getEstimatedBusinessWorthAsOf = (asOfDate: string): number | 'UNKNOWN' =>
+    getEstimatedBusinessWorth({
+      snapshots: businessWorthSnapshots,
+      initialStockCount,
+      batches,
+      quebras,
+      expenses,
+      withdrawals,
+      payables,
+      cashLedgerEntries,
+      asOfDate,
+    });
 
   // ============================================================
   // BUSINESS WORTH — no fabricated cash ledger.
@@ -4473,7 +4525,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // id from an incoming Expense/Withdrawal's own `date` field (via
   // string.split('-'), since rules can't slice/query). Keep both sides in
   // sync if this ever changes.
-  const closedPeriodKey = (periodType: ClosingPeriodType, startDate: string): string => {
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6] 'custom' (Fecho) is NOT given a derivable lock-index key
+  // here. The monthly/yearly scheme works only because firestore.rules
+  // can independently derive the identical id from any Expense/
+  // Withdrawal's own `date` string alone (a plain calendar-boundary
+  // computation) — that is the entire reason this lock-index collection
+  // exists (see ClosedPeriod's own doc comment, types.ts). A Fecho range
+  // is not calendar-aligned and its end date is Owner-chosen per closing,
+  // so no single-date-derived key can identify "does any Fecho cover this
+  // date?" the same deterministic way. Extending this mechanism to
+  // 'custom' is a genuine, undocumented structural question outside what
+  // Plan §9/§10 and Rule 8 Finding 8-A/8-B resolve (both address the
+  // periodType value and the update-immutability fix only, never this
+  // lock-index scheme) — per §8's Governance Boundary, that question is
+  // reported for Product Architect review, not silently decided here.
+  // recordFechoClosing therefore does not write a ClosedPeriod doc; a
+  // Fecho Closing still locks its own Expense/Withdrawal records exactly
+  // like monthly/yearly (closingId/lockedAt), and the in-memory
+  // isPeriodClosed double-close guard (reused unmodified, Finding 8-A)
+  // still fully protects against closing the identical range twice — only
+  // the independent backdated-entry Security Rule block is not extended
+  // to 'custom' by this increment.
+  const closedPeriodKey = (periodType: 'monthly' | 'yearly', startDate: string): string => {
     const [year, month] = startDate.split('-');
     return periodType === 'monthly' ? `monthly:${year}-${month}` : `yearly:${year}`;
   };
@@ -4504,7 +4578,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // backdated Expense/Withdrawal from landing inside this period later.
   // Closings are never edited or deleted — only recorded, or reopened
   // (reopenClosing), which supersedes this one in place.
-  const recordClosing = async ({ periodType, periodLabel, startDate, endDate }: RecordClosingParams) => {
+  const recordClosing = async ({ periodType, periodLabel, startDate, endDate, businessWorthOverride }: RecordClosingParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     if (isPeriodClosed(periodType, startDate, endDate)) {
@@ -4524,28 +4598,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       totalWithdrawals: report.totalWithdrawals,
       inventoryCostAtClose: totalInvestmentValueAllTime,
       inventoryMarketValueAtClose: totalMarketValueAllTime,
-      businessWorthAtClose: businessWorth,
+      businessWorthAtClose: businessWorthOverride ?? businessWorth,
       closedAt: new Date().toISOString(),
       status: 'active',
     };
 
     const lockedAt = newClosing.closedAt;
-    const periodKey = closedPeriodKey(periodType, startDate);
-    const closedPeriod: ClosedPeriod = {
-      id: periodKey,
-      periodType,
-      startDate,
-      endDate,
-      closingId: newClosing.id,
-      closedAt: newClosing.closedAt,
-    };
+    // [Increment 6] 'custom' (Fecho) intentionally has no ClosedPeriod
+    // lock-index doc — see closedPeriodKey's own comment, above, for why
+    // that mechanism does not extend to a non-calendar-aligned range.
+    const periodKey = periodType === 'custom' ? null : closedPeriodKey(periodType, startDate);
+    const closedPeriod: ClosedPeriod | null = periodKey
+      ? { id: periodKey, periodType, startDate, endDate, closingId: newClosing.id, closedAt: newClosing.closedAt }
+      : null;
 
     const expensesToLock = expenses.filter((e) => !e.closingId && isDateInRange(e.date, startDate, endDate));
     const withdrawalsToLock = withdrawals.filter((w) => !w.closingId && isDateInRange(w.date, startDate, endDate));
 
     const ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void> = [
       (b) => b.set(doc(db, 'businesses', activeBusinessId!, 'closings', newClosing.id), newClosing),
-      (b) => b.set(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', periodKey), closedPeriod),
+      ...(periodKey && closedPeriod
+        ? [(b: ReturnType<typeof createFirestoreBatch>) => b.set(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', periodKey), closedPeriod)]
+        : []),
       ...expensesToLock.map((e) => (b: ReturnType<typeof createFirestoreBatch>) =>
         b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: newClosing.id, lockedAt })
       ),
@@ -4555,10 +4629,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     ];
     await commitInChunks(ops);
 
+    const timelineType: TimelineActivityType =
+      periodType === 'monthly' ? 'monthly-closing' : periodType === 'yearly' ? 'yearly-closing' : 'fecho-closing';
+    const timelineTitle =
+      periodType === 'monthly' ? 'Fecho Mensal Concluído' : periodType === 'yearly' ? 'Fecho Anual Concluído' : 'Fecho Concluído';
     await logTimelineEvent({
-      type: periodType === 'monthly' ? 'monthly-closing' : 'yearly-closing',
+      type: timelineType,
       date: endDate,
-      title: periodType === 'monthly' ? 'Fecho Mensal Concluído' : 'Fecho Anual Concluído',
+      title: timelineTitle,
       description: `Período "${periodLabel.trim()}" fechado e bloqueado permanentemente.`,
       financialImpact: [
         { label: 'Lucro Embutido', amount: newClosing.totalEmbeddedProfit, tone: 'positive' },
@@ -4577,6 +4655,46 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return newClosing;
+  };
+
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6; Specification §18, FR-25; Plan §9] Records a Fecho —
+  // always periodType: 'custom'. Deliberately takes only `endDate` (and an
+  // optional display label) as parameters — never a caller-supplied
+  // `startDate` — so FR-25's "start date must always be the active
+  // baseline's own date, never an independently owner-chosen start" is
+  // enforced structurally by this function's own signature, not merely by
+  // UI convention. The baseline is resolved fresh, right here, via the
+  // exact same "latest active snapshot, else historical Capital Inicial"
+  // rule getEstimatedBusinessWorth/getCurrentBusinessWorth and Startup
+  // Investment's own window already use (§9's "exactly one baseline, the
+  // latest, is ever active" rule) — never independently re-derived.
+  // Everything else (the double-close guard, the Expense/Withdrawal
+  // locking, the timeline event) is inherited unmodified from recordClosing,
+  // above — this is a thin wrapper, not a parallel write path.
+  const recordFechoClosing = async (endDate: string, periodLabel?: string): Promise<Closing> => {
+    const startDate = resolveActiveBusinessWorthBaselineDate({
+      snapshots: businessWorthSnapshots,
+      initialStockCount,
+    });
+    if (!startDate) {
+      throw new Error('Ainda não existe uma base (Contagem ou Capital Inicial) para ancorar o Fecho.');
+    }
+    if (endDate < startDate) {
+      throw new Error('A data final do Fecho não pode ser anterior à data base ativa.');
+    }
+    const label = (periodLabel && periodLabel.trim()) || `Fecho ${startDate} — ${endDate}`;
+
+    // [FR-53] Never the old pre-Evolution `businessWorth` formula, and
+    // never a separately re-filtered calculation — the exact same shared
+    // §9 function `currentBusinessWorth`/`estimatedBusinessWorth` above
+    // already use, evaluated as of the Owner-selected end date.
+    const fechoBusinessWorth = getEstimatedBusinessWorthAsOf(endDate);
+    if (fechoBusinessWorth === 'UNKNOWN') {
+      throw new Error('Ainda não existe uma base (Contagem ou Capital Inicial) para ancorar o Fecho.');
+    }
+
+    return recordClosing({ periodType: 'custom', periodLabel: label, startDate, endDate, businessWorthOverride: fechoBusinessWorth });
   };
 
   // [Closing Integrity Amendment v1.0 — Q4: period reopening, Owner-only,
@@ -4619,7 +4737,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     const ops: Array<(batch: ReturnType<typeof createFirestoreBatch>) => void> = [
       (b) => b.update(doc(db, 'businesses', activeBusinessId!, 'closings', id), closingUpdate),
-      (b) => b.delete(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', closedPeriodKey(target.periodType, target.startDate))),
+      // [Increment 6] No ClosedPeriod doc was ever written for a 'custom'
+      // (Fecho) Closing — see recordClosing/closedPeriodKey's own comments
+      // — so there is nothing to delete here for one.
+      ...(target.periodType === 'custom'
+        ? []
+        : [(b: ReturnType<typeof createFirestoreBatch>) =>
+            b.delete(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', closedPeriodKey(target.periodType, target.startDate)))]),
       ...lockedExpenses.map((e) => (b: ReturnType<typeof createFirestoreBatch>) =>
         b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: deleteField(), lockedAt: deleteField() })
       ),
@@ -4663,6 +4787,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let withdrawalsLocked = 0;
 
     for (const c of activeClosings) {
+      // [Increment 6] A 'custom' (Fecho) Closing never has a ClosedPeriod
+      // lock-index doc to backfill — see closedPeriodKey's own comment.
+      if (c.periodType === 'custom') continue;
       const periodKey = closedPeriodKey(c.periodType, c.startDate);
       if (!existingPeriodKeys.has(periodKey)) {
         const closedPeriod: ClosedPeriod = {
@@ -5153,6 +5280,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         businessWorthSnapshots,
         currentBusinessWorth,
         estimatedBusinessWorth,
+        fechoBaselineDate,
+        getEstimatedBusinessWorthAsOf,
         cashLedgerEntries,
         receivables,
         receivablePayments,
@@ -5221,6 +5350,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         capitalGrowthPct,
         closings,
         recordClosing,
+        recordFechoClosing,
         reopenClosing,
         backfillClosingLocks,
         isPeriodClosed,

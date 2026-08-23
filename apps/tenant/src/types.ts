@@ -1276,7 +1276,15 @@ export interface InitialStockPriceChangeEvent {
 // are frozen as historical fact, alongside a snapshot of Business Worth
 // at the moment of closing. Closings are never edited — only recorded
 // or, in case of a mistake, deleted (which simply re-opens the period).
-export type ClosingPeriodType = 'monthly' | 'yearly';
+// [Business Worth Evolution — Implementation Authorization §18, Increment
+// 6] 'custom' is Fecho's own additive period type (Specification §18,
+// FR-25–FR-27; Rule 8 Finding 8-A; Plan §9) — a baseline-anchored range,
+// never an arbitrary Owner-chosen start/end pair. Confirmed clean against
+// the one real code consumer that switches on `periodType`
+// (`closingNotificationProducer.ts`), which already silently and
+// correctly excludes any non-`monthly`/`yearly` Closing with zero code
+// change required (Rule 8 Finding 8-A).
+export type ClosingPeriodType = 'monthly' | 'yearly' | 'custom';
 
 // [Closing Integrity Amendment v1.0] A Firestore security rule cannot run
 // a range query ("does any Closing cover this date?") — it can only
@@ -1410,6 +1418,10 @@ export type TimelineActivityType =
   | 'business-profile-updated'
   | 'monthly-closing'
   | 'yearly-closing'
+  // [Business Worth Evolution — Implementation Authorization §18,
+  // Increment 6] Fecho's own timeline event type, distinct from the
+  // calendar-aligned monthly/yearly closings above (Specification §18).
+  | 'fecho-closing'
   | 'report-exported'
   | 'staff-removed'
   | 'staff-suspended'

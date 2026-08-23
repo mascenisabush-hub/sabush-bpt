@@ -1080,9 +1080,34 @@ service cloud.firestore {
       // Closing — that gap is closed here, not just documented. A Closing
       // is also never deleted anymore — reopening supersedes it in place
       // (recordClosing/reopenClosing, AppContext.tsx).
+      // [Business Worth Evolution — Implementation Authorization §18,
+      // Increment 6; Rule 8 Finding 8-B; Plan §10] `update` was previously
+      // unrestricted beyond isOwnerOf — nothing stopped any client other
+      // than the app's own UI from rewriting a frozen field post-creation,
+      // directly threatening FR-25's "startDate must always be the active
+      // baseline's own date, never owner-chosen" guarantee for a
+      // 'custom'-type (Fecho) Closing. Mirrors the exact per-field
+      // immutability-lock pattern the /notifications collection already
+      // demonstrates, above: every frozen field must be unchanged between
+      // `resource.data` and `request.resource.data`; only the existing
+      // reopen-workflow fields (status, reopenedAt, reopenedByUid,
+      // reopenedByName, reopenReason) may change. This is independent of,
+      // and does not regress, that existing reopen-workflow behavior
+      // itself (reopenClosing, AppContext.tsx).
       match /closings/{closingId} {
         allow read, create: if isOwnerOrGrantedManager(businessId, 'closings');
-        allow update: if isOwnerOf(businessId);
+        allow update: if isOwnerOf(businessId) &&
+          request.resource.data.periodType == resource.data.periodType &&
+          request.resource.data.periodLabel == resource.data.periodLabel &&
+          request.resource.data.startDate == resource.data.startDate &&
+          request.resource.data.endDate == resource.data.endDate &&
+          request.resource.data.totalEmbeddedProfit == resource.data.totalEmbeddedProfit &&
+          request.resource.data.totalExpenses == resource.data.totalExpenses &&
+          request.resource.data.totalWithdrawals == resource.data.totalWithdrawals &&
+          request.resource.data.inventoryCostAtClose == resource.data.inventoryCostAtClose &&
+          request.resource.data.inventoryMarketValueAtClose == resource.data.inventoryMarketValueAtClose &&
+          request.resource.data.businessWorthAtClose == resource.data.businessWorthAtClose &&
+          request.resource.data.closedAt == resource.data.closedAt;
         allow delete: if false;
       }
 
