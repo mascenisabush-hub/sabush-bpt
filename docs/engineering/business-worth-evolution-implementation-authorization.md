@@ -777,3 +777,36 @@ This amendment is now signed (§31, above). The next, separate operational actio
 **Governance compliance re-check against AC-R3-1 (§28):** *"A `BusinessWorthSnapshot` can be created via Owner-Declared establishment only through the dedicated entry point (§26), is `isOwnerOf`-gated, carries `establishmentMethod: 'owner-declared'`, has no `sourceStockCountId`, and omits every field FR-69 names, enforced server-side."* — **Met**, per the emulator results above.
 
 **Not yet done, and not claimed as done by this record:** Increment 10 items 2–7 (§23) and both Post-Implementation Corrections (§24, §25) remain unimplemented and unauthorized to begin until their own separate, explicit per-item instruction, per §23's own execution rule.
+
+---
+
+## 35. Owner-Declared Business Worth — Verification Status Clarification (Approved)
+
+**Status: ✅ SIGNED AND APPROVED (23 August 2026).** Recorded here per this document's own established append-only discipline (§15, §16, §34 above) — §26's UI decision is not rewritten in place; this section qualifies it and Increment 10 item 1's own scope going forward, without reopening the UI-boundary decision §26 already settled.
+
+**Background:** following investigation of the already-shipped Increment 10 item 1 code (Execution Record, §34), a genuine tension was identified between BDR Decision 36's unqualified "same governance weight"/"full stop" language and the Product Architect's clarified intent that an Owner-Declared value is a claim, never a SABUSH-verified measurement. Three options (A/B/C) were traced in full (Dashboard, history, Fecho, live calculation, notifications, corrections/recovery, Contagem-transition, existing/new businesses, Capital Inicial, `establishmentMethod` sufficiency, governance/implementation/test impact) and presented for decision.
+
+**Decision: Option A, approved and signed.**
+
+> I APPROVE OPTION A. Owner-Declared Business Worth remains in the product as a claim, not a system-verified measurement, clearly identified as "Owner Declared / Unverified." Contagem remains the system-measured establishment method. Owner-Declared remains the operational Business Worth baseline for the Dashboard, live calculations, and Fecho until a later Contagem establishes a measured baseline — no Contagem-only filter is introduced in the live calculation or Fecho baseline resolution. Correction/recovery mechanics remain unchanged, applying identically regardless of establishment method. Capital Inicial remains completely separate, never a gate, never a Business Worth or Fecho baseline — the existing decision to remove the Capital Inicial fallback from Fecho remains valid and unaffected. The Dashboard and the Declaration entry screen must visibly and explicitly distinguish an Owner-Declared figure from a Contagem-measured one. `establishmentMethod` remains the sole source of truth for this distinction — no new verification field is added. BDR Decision 36 and Specification §42.1's "same governance weight" language are qualified, not reversed, to narrow their scope to procedural treatment only (correction, recovery, auditability, immutability, snapshot lifecycle) — never numerical-verification equivalence.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Governance amendments made as a direct consequence of this Decision (governance-only, no code/test/rules/index touched by the amendment itself):**
+- BDR Decision 36 qualified with the procedural-vs-verification distinction.
+- Specification §42.1's terminology table gains a Verification Status column; new §42.8 (qualification) and §42.9 (its own Product Architect acceptance); new FR-70.
+- Rule 8 Assessment Addendum's Finding OD-2 qualified: calculation paths confirmed unchanged (no Contagem-only filter); display paths (specifically the Dashboard headline, not just the history list) now require the branch FR-70 defines.
+- Implementation Plan Amendment §A.1 extended with the two concrete display requirements (Dashboard headline framing; declaration-screen pre-confirmation copy) and an explicit "not required" list (no calculation, formula, or Fecho-baseline change; no new field).
+
+**Implementation impact, not yet performed (per this same instruction's own scope control — governance amendment only, this section records the decision, it does not authorize the code change):**
+- `apps/tenant/src/components/DashboardView.tsx` — headline card branch on `establishmentMethod`.
+- `apps/tenant/src/components/DeclareBusinessWorthView.tsx` — strengthened pre-confirmation copy.
+- `apps/tenant/src/i18n/locales/{pt,en,fr}.ts` — new/extended keys for the headline framing.
+- **No change** to `apps/tenant/src/utils/calculations.ts`, `apps/tenant/src/context/AppContext.tsx`, `firestore.rules`, or `apps/tenant/src/types.ts` — explicitly confirmed unnecessary by this Decision.
+
+**Test impact, not yet performed:** a Dashboard-level test proving the headline framing branches correctly by `establishmentMethod`, including the transition case (a later Contagem's snapshot becoming the latest active one reverts the headline to the standard framing). No change to any calculation-layer or rules-layer test file.
+
+**This Decision does not reopen:** the approved Increment 10 item 1 UI-boundary decision (§26 — dedicated entry point, never a Contagem toggle); the Fecho baseline decision (Owner-Declared remains a valid operational and Fecho baseline; Capital Inicial fallback removal remains valid, §24); the already-signed correction/recovery mechanics (§25–§26 of the Specification; unaffected). It also does not authorize Increment 10 items 2–7 or either Post-Implementation Correction, which remain exactly as scoped in §23–§25, above.
+
+**Next governance step for this Decision specifically:** a separate, explicit authorization is required before the display-layer implementation changes named above are written, per the Product Architect's own scope-control instruction accompanying this Decision. This section records the governance amendment only.

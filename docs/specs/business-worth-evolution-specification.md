@@ -868,15 +868,15 @@ Added to §36 rather than decided in this section, per instruction not to invent
 
 ### 42.1 Authoritative Terminology (fixed for the remainder of this document)
 
-| Term | Meaning | Establishes Business Worth? |
-|---|---|---|
-| **Capital Inicial / Initial Investment** | Historical record of capital/stock present at business start; capital-history information only | **No — never** |
-| **Startup Investment** | Governed record of spending to establish the business (labor, wages, transport, preparation, license, other) | **No — explicitly excluded, unchanged (Decision 6/FR-52)** |
-| **Contagem** | A confirmed physical stock count | **Yes — Establishment Method 1** |
-| **Owner-Declared Business Worth** | A confirmed, Owner-entered known value | **Yes — Establishment Method 2** |
-| **Owner Investment** | A later cash injection by the Owner into an already-operating business | **No — does not itself establish Business Worth; it is a governed transaction that increases an already-established Business Worth** |
-| **Business Worth (pre-establishment)** | The business's known operational information (stock, embedded profit, expenses, Startup Investment, etc.), displayed honestly as not-yet-measured | N/A — this state has no Business Worth figure at all (State 1) or an Estimated one only (State 1a) |
-| **Current Business Worth** | The live figure computed from the latest genuine `BusinessWorthSnapshot` (either establishment method) plus every governed transaction since | The display term used once establishment has occurred (State 3) |
+| Term | Meaning | Establishes Business Worth? | Verification Status |
+|---|---|---|---|
+| **Capital Inicial / Initial Investment** | Historical record of capital/stock present at business start; capital-history information only | **No — never** | N/A |
+| **Startup Investment** | Governed record of spending to establish the business (labor, wages, transport, preparation, license, other) | **No — explicitly excluded, unchanged (Decision 6/FR-52)** | N/A |
+| **Contagem** | A confirmed physical stock count | **Yes — Establishment Method 1** | **Measured/Verified** — the system's own independent physical measurement |
+| **Owner-Declared Business Worth** | A confirmed, Owner-entered known value | **Yes — Establishment Method 2** | **Owner-Declared / Unverified** — a claim the Owner asserts, never independently measured or verified by SABUSH BPT (BDR Decision 36, as qualified 23 August 2026) |
+| **Owner Investment** | A later cash injection by the Owner into an already-operating business | **No — does not itself establish Business Worth; it is a governed transaction that increases an already-established Business Worth** | N/A |
+| **Business Worth (pre-establishment)** | The business's known operational information (stock, embedded profit, expenses, Startup Investment, etc.), displayed honestly as not-yet-measured | N/A — this state has no Business Worth figure at all (State 1) or an Estimated one only (State 1a) | N/A |
+| **Current Business Worth** | The live figure computed from the latest genuine `BusinessWorthSnapshot` (either establishment method) plus every governed transaction since | The display term used once establishment has occurred (State 3) | **Corrected, 23 August 2026:** the underlying live-computed number and formula are identical regardless of establishment method (no calculation-layer distinction — see §42.9, below) — but the **display term itself is not uniform**. When the latest active snapshot's `establishmentMethod === 'contagem'`, the existing "Current Business Worth" / measured framing applies unchanged. When `establishmentMethod === 'owner-declared'`, the same live-computed figure must be presented under an explicit "Owner Declared / Unverified" framing (§42.9, FR-70) — never under the plain "Current Business Worth" label alone, and never in a way indistinguishable from a Contagem-measured figure. |
 
 There are exactly two Business Worth establishment methods. No third exists, and none is introduced anywhere in this amendment: Contagem, and Owner-Declared Business Worth.
 
@@ -931,6 +931,7 @@ For a snapshot with `establishmentMethod: 'owner-declared'`:
 | FR-2 Path-B exception | §6/FR-2 | New Decision, approved | FR-2 amended in place | No — names Path B as a second permitted event |
 | Dashboard/report terminology, 3 surfaces | §32 | New Decision, approved | none new | No — extends scope, executes BDR Decision 3 in full |
 | Rule 8 Finding 6-A/8-A | Rule 8 Assessment | Correction addendum | N/A | No — corrects documentation of now-superseded behavior |
+| Owner-Declared verification-status qualification | BDR Decision 36 (qualified); §42.8; Rule 8 Finding OD-2 (qualified) | Qualification, approved | FR-70 | No — narrows "same governance weight" to procedural scope only; no calculation, formula, or Fecho-baseline change |
 
 ### 42.7 Product Architect Acceptance
 
@@ -942,6 +943,32 @@ For a snapshot with `establishmentMethod: 'owner-declared'`:
 **Date:** 23 August 2026
 
 **Scope of this acceptance:** covers this §42 amendment's content in full, as it amends §6, §8, §12, §14/§15, §18, §22, §32 of this Specification, adds new §43, and adds BDR Decision 36 and a Rule 8 Assessment correction addendum — it does not reopen, amend, or re-approve any other portion of the source BDR, POL-0010, or this Specification, and does not itself authorize Increment 10 or any Implementation Plan/Authorization step, each of which remains a distinct, separately-gated artifact.
+
+### 42.8 Owner-Declared Verification Status — Qualification [Amendment, 23 August 2026, Product Architect Decision]
+
+**This subsection qualifies §42.1's "same governance weight"/"full stop" language (and the corresponding BDR Decision 36 text, as qualified) — it does not reopen, reverse, or re-litigate BDR Decision 36 itself, and it does not reopen the earlier Option A/B/C decision process (Option A is approved and signed).**
+
+**The qualification, stated exhaustively:**
+
+- **Procedural equality, unchanged.** Correction eligibility (§25), SuperAdmin-authorized recovery (§26), auditability (§34), immutability (§27), and every snapshot-lifecycle mechanic (supersession, correction/recovery windows, idempotency) apply identically to a `BusinessWorthSnapshot` regardless of `establishmentMethod`. Nothing in this subsection changes any of these mechanics.
+- **Calculation equality, unchanged (explicit, per Product Architect direction).** `getCurrentBusinessWorth`, `getEstimatedBusinessWorth`/`computeCaseALiveBusinessWorth`, and `resolveActiveBusinessWorthBaselineDate` continue to treat the latest active snapshot identically regardless of `establishmentMethod` — **no Contagem-only filter is introduced anywhere in the live calculation or Fecho-baseline resolution by this qualification.** An Owner-Declared snapshot remains a fully valid operational Business Worth baseline and a fully valid Fecho baseline, exactly as §42.1's original, unqualified text already established and as §18/FR-25's Capital-Inicial-fallback removal (unaffected, unchanged by this qualification) already requires in its place.
+- **Display/provenance distinction, newly required.** What changes is presentation, not substance: a live-computed Business Worth figure sourced from the latest active snapshot must be presented under one of exactly two framings, decided solely by that snapshot's `establishmentMethod`:
+  - `establishmentMethod === 'contagem'` → the existing "Current Business Worth" / measured framing, unchanged.
+  - `establishmentMethod === 'owner-declared'` → an explicit "Owner Declared / Unverified" framing (or equivalent wording, localized) — the same underlying number, never presented as though SABUSH BPT independently measured or verified it.
+- **The transition is automatic, not a new mechanic.** When a later Contagem is confirmed, its new `BusinessWorthSnapshot` becomes the latest active one through the existing, unmodified snapshot-selection logic (ordered by `confirmedAt`, `status === 'active'`) — the prior Owner-Declared snapshot simply ceases to be "the latest active snapshot" and the display framing changes as a direct consequence, with no new state-transition event, flag, or mechanic required.
+- **History is preserved, not hidden.** A superseded Owner-Declared snapshot remains in the Business Worth history, visibly marked as Owner-Declared/Unverified for as long as it is displayed — never deleted, hidden, or presented as though it had never existed (§27 immutability, unaffected).
+- **No new establishment method, no new field required by this qualification.** `establishmentMethod: 'contagem' | 'owner-declared'` remains the sole source of truth for this distinction — this qualification is a display/terminology correction, not a data-model change (Product Architect direction: prefer reusing `establishmentMethod`; do not add schema complexity unless proven necessary, which this qualification does not require).
+
+**FR-70 [new, §42.8].** Every UI surface that presents a live Business Worth figure derived from the latest active `BusinessWorthSnapshot` — at minimum, the Dashboard's Business Worth headline presentation and the Owner-Declared entry screen's own pre-confirmation copy — must visibly and explicitly distinguish `establishmentMethod === 'owner-declared'` (an "Owner Declared / Unverified" framing) from `establishmentMethod === 'contagem'` (the existing measured framing), using the same underlying figure and formula in both cases. The entry screen must additionally state, before the Owner confirms a declaration, that: (a) the value is Owner-provided; (b) SABUSH BPT has not independently verified it; (c) a future Contagem will establish the measured Business Worth. This requirement governs presentation only — it introduces no change to FR-3 (Current Business Worth's own calculation), FR-25 (Fecho baseline resolution), or any correction/recovery FR.
+
+### 42.9 Product Architect Acceptance — §42.8 Qualification
+
+**Status:** ✅ **Accepted (23 August 2026).**
+
+> I have reviewed §42.8, qualifying BDR Decision 36 and this Specification's §42.1 "same governance weight" language to distinguish procedural equality (unchanged) from numerical-verification equality (which was never intended and is corrected here). I confirm this introduces no calculation-layer change, no new establishment method, no new data-model field, and does not reopen the approved Option A decision. This qualification, and its new FR-70, are **ACCEPTED and APPROVED**.
+
+**Product Architect:** SABUSHIMIKE Masceni
+**Date:** 23 August 2026
 
 ## 43. Owner Investment
 
