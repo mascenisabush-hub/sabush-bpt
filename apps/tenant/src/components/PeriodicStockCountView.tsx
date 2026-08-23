@@ -211,6 +211,83 @@ const ModeAValuationControl: React.FC<{
   );
 };
 
+// [Business Worth Evolution — Decision 37, B.1: Product-Level
+// First-Time Contagem Information Panel] Renders ONCE per genuinely-new
+// product group — the caller gates this on portionLabel.portionIndex
+// === 1 && isGenuinelyNewProductName(...), exactly mirroring how
+// ModeAValuationControl (Increment 4, above) is already gated to render
+// once per group, never once per portion. Collects the three
+// foundational, product-level pieces of information Decision 37 items
+// 1/2/3 name: product identity (read-only echo of this group's own
+// name — the single per-row name input remains the one editable place
+// that name is typed; a second, independently-editable name field here
+// would create two sources of truth for the same value, which B.1 does
+// not introduce), original purchase/cost basis (purchaseUnit/
+// purchaseCost, new fields), and the unit relationship. The unit-
+// relationship section reuses UnitRelationshipRow completely UNCHANGED
+// — still its existing two-level {sellingUnit, factor} form, still
+// writing to the same newProductSellingUnit/newProductSellingUnitFactor
+// fields it always has. Extending that into an arbitrary-length chain
+// editor is B.2's own, separately-authorized scope (Implementation
+// Plan Amendment §B.2) — this component only relocates the EXISTING
+// control into this new panel and fixes its render cadence (see the
+// call site's own comment for why the old per-row cadence was itself
+// part of the gap this item closes). Purely presentational + the two
+// new field bindings below; introduces no new calculation, no change
+// to submission/normalization, and no change to
+// StockCountWorkingRow.unit/quantity/costPrice/sellingPrice.
+const NewProductInfoPanel: React.FC<{
+  productName: string;
+  currencySymbol: string;
+  purchaseUnit: string;
+  purchaseCost: string;
+  onPurchaseUnitChange: (value: string) => void;
+  onPurchaseCostChange: (value: string) => void;
+  unitRelationshipRow: React.ReactNode;
+}> = ({ productName, currencySymbol, purchaseUnit, purchaseCost, onPurchaseUnitChange, onPurchaseCostChange, unitRelationshipRow }) => {
+  return (
+    <div className="col-span-2 sm:col-span-7 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#B8952F]">Produto novo</span>
+        <span className="text-[12.5px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
+      </div>
+
+      <div>
+        <p className="text-[10.5px] font-bold text-gray-500 mb-1">Custo de Compra Original</p>
+        <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+          <div>
+            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de compra</label>
+            <input
+              type="text"
+              value={purchaseUnit}
+              onChange={(e) => onPurchaseUnitChange(e.target.value)}
+              placeholder="Ex: Cx"
+              className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+          <div>
+            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Custo ({currencySymbol}) por unidade de compra</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={purchaseCost}
+              onChange={(e) => onPurchaseCostChange(e.target.value)}
+              placeholder="Ex: 1250"
+              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+        </div>
+        <p className="mt-1 text-[11px] text-gray-400 leading-relaxed">
+          Introduza o custo original uma única vez, na unidade de compra do produto — nunca por porção.
+        </p>
+      </div>
+
+      {unitRelationshipRow}
+    </div>
+  );
+};
+
 export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ onComplete }) => {
   const {
     business,
@@ -1596,19 +1673,44 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     </div>
                   </div>
 
-                  {/* [Product Memory / UOM — Increment A, Checkpoint
-                      2c] Shown ONLY for a manually-added row whose
-                      product name doesn't match anything already in
-                      the catalog — never shown, never re-asked, for an
-                      already-known product. Entirely optional; leaving
-                      it blank changes nothing from today's behavior. */}
-                  {isGenuinelyNewProductName(row.productName) && (
-                    <UnitRelationshipRow
-                      purchaseUnit={row.unit || 'un'}
-                      sellingUnit={row.newProductSellingUnit || ''}
-                      factor={row.newProductSellingUnitFactor || ''}
-                      onChange={(sellingUnit, factor) =>
-                        updateManualRow(idx, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                  {/* [Business Worth Evolution — Decision 37, B.1]
+                      Shown ONLY for a manually-added row whose product
+                      name doesn't match anything already in the
+                      catalog — never shown, never re-asked, for an
+                      already-known product (isGenuinelyNewProductName,
+                      unchanged) — AND only on this group's FIRST
+                      portion (portionLabel.portionIndex === 1), so a
+                      multi-portion first-time product (e.g. 2 Cx + 3
+                      Emb + 5 Un, three separate manual rows sharing one
+                      name) shows this foundational information exactly
+                      ONCE, not once per portion. Previously this
+                      disclosure rendered unconditionally on EVERY row
+                      of a new product — the portionIndex === 1 gate is
+                      this item's own fix for that duplication, applied
+                      the same way ModeAValuationControl's own
+                      isFirstPortionOfMultiPortionGroup gate already
+                      works above, generalized here to also cover a
+                      still-solo (not yet multi-portion) new product's
+                      very first row. Entirely optional; leaving both
+                      new fields blank changes nothing from today's
+                      behavior. */}
+                  {portionLabel.portionIndex === 1 && isGenuinelyNewProductName(row.productName) && (
+                    <NewProductInfoPanel
+                      productName={row.productName}
+                      currencySymbol={currencySymbol}
+                      purchaseUnit={row.newProductPurchaseUnit || ''}
+                      purchaseCost={row.newProductPurchaseCost || ''}
+                      onPurchaseUnitChange={(value) => updateManualRow(idx, { newProductPurchaseUnit: value })}
+                      onPurchaseCostChange={(value) => updateManualRow(idx, { newProductPurchaseCost: value })}
+                      unitRelationshipRow={
+                        <UnitRelationshipRow
+                          purchaseUnit={row.newProductPurchaseUnit || row.unit || 'un'}
+                          sellingUnit={row.newProductSellingUnit || ''}
+                          factor={row.newProductSellingUnitFactor || ''}
+                          onChange={(sellingUnit, factor) =>
+                            updateManualRow(idx, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                          }
+                        />
                       }
                     />
                   )}

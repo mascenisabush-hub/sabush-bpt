@@ -170,6 +170,23 @@ export interface StockCountWorkingRow {
   // submission time — this type only carries the raw strings.
   newProductSellingUnit?: string;
   newProductSellingUnitFactor?: string;
+  // [Business Worth Evolution — Decision 37, B.1: Product-Level
+  // First-Time Contagem Information Panel] Same UI-only treatment as
+  // newProductSellingUnit/newProductSellingUnitFactor immediately
+  // above, for the exact same reason: meaningful only for a manually-
+  // added row (productId undefined) that does not match any existing
+  // catalog product, deliberately excluded from
+  // workingRowToDraftItem/draftItemToWorkingRow (both build explicit
+  // field-by-field literals, so no change to either function is
+  // needed), and NOT read by tallyStockCountRows or
+  // normalizeStockCountItems — this type only carries the raw
+  // strings. PeriodicStockCountView.tsx's B.1 panel is solely
+  // responsible for reading these two fields; wiring them into the
+  // actual FR-67 Total Cost Value derivation and/or draft persistence
+  // is explicitly out of scope for B.1 (deferred to B.2/B.4, per the
+  // Implementation Plan Amendment).
+  newProductPurchaseUnit?: string;
+  newProductPurchaseCost?: string;
 }
 
 export interface StockCountTallyItem {
