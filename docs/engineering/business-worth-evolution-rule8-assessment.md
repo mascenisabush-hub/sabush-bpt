@@ -435,7 +435,14 @@ Once those three points are acknowledged, this addendum's findings are sufficien
 
 # Rule 8 Assessment Addendum — First-Time Contagem Product-Information Model (BDR Decision 37)
 
-**Status: Draft — awaiting Product Architect acceptance.** Not yet accepted. This addendum was authored on repository-grounded inspection and is presented here for review, distinctly from Revision 3 above (which is already ✅ ACCEPTED and must not be reopened or reinterpreted by anything below).
+**Status: ✅ ACCEPTED (23 August 2026).** Reviewed and accepted by explicit Product Architect decision:
+
+> I have reviewed the Decision 37 Rule 8 Assessment Addendum. I ACCEPT AND SIGN IT.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+Gate status accordingly moves from this addendum's own drafted recommendation to **accepted as READY FOR PLAN** — the Implementation Plan Amendment for Decision 37 may proceed on this basis. This addendum was authored on repository-grounded inspection, distinctly from Revision 3 above (already ✅ ACCEPTED and not reopened or reinterpreted by anything below).
 
 **Target of this addendum:** `docs/engineering/business-worth-evolution-rule8-assessment.md`, appended per this document's own established append-only discipline, matching the Revision 3 addendum's own pattern above.
 

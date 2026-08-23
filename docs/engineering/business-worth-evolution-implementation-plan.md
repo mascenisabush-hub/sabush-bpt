@@ -625,3 +625,81 @@ Mirrors the parent Plan's own §24 format. This is a sequencing proposal only �
 This amendment's own next governance step, per this repository's established sequence, was a signed Implementation Authorization Amendment — now itself drafted, signed, and recorded (see `business-worth-evolution-implementation-authorization.md`'s own recorded Revision 3 sections), including its own "Product Architect Authorization — Increment 10" section and the two Part B "Post-Implementation Correction" sections. No code, test, rules, or index file is created, modified, or authorized by this Plan amendment itself — that remains gated by the separate, explicit per-item implementation instruction the signed Authorization Amendment itself requires.
 
 **Lifecycle (Revision 3):** Signed Revision 3 decisions → Governance recording (Specification/BDR/Rule 8 Assessment, `5870bdd`) → Rule 8 Assessment Addendum (accepted) → Implementation Plan Amendment (accepted, signed, this document) → Implementation Authorization Amendment (accepted, signed). Not yet implemented — implementation begins only per the signed Authorization's own one-item-at-a-time execution rule and a further explicit per-item instruction.
+
+---
+
+# Implementation Plan Amendment — Decision 37 (First-Time Contagem Product-Information Model)
+
+**Status: ✅ ACCEPTED (23 August 2026).** Reviewed and accepted by explicit Product Architect decision:
+
+> I have reviewed the Decision 37 Implementation Plan Amendment. I ACCEPT AND SIGN IT.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+>
+> The approved scope is limited to: first-time product-level information collection in Contagem; one original purchase/cost basis per product; one complete arbitrary-length unit relationship per product; multiple physical portions for one product; a first-class "+ Add Portion" interaction; first-time product setup versus subsequent Contagens; proper suppression of redundant per-portion cost entry; reuse of the already-authorized FR-67 cost-basis conversion; independent selling units/prices; automatic Total Cost Value; automatic Total Selling Valuation; Business Worth continuing to use the selling valuation. Unchanged and out of scope: Business Worth's selling-basis formula, existing Mode A/Mode B selling behavior, `getConversionFactor`, Product/UnitRelationship/StockBatch data models, Owner-Declared Business Worth, Fecho, Owner Portfolio, other Increment 10 items, Firestore rules/indexes.
+>
+> This acceptance authorizes the next governance step only — preparation of the Implementation Authorization Amendment for Decision 37. It does not authorize implementation.
+
+Governing basis: BDR-pending-business-worth-evolution-measurement-model.md §4, Decision 37, and the Rule 8 Assessment Addendum — First-Time Contagem Product-Information Model (✅ ACCEPTED, SABUSHIMIKE Masceni, 23 August 2026, gate READY FOR PLAN). This amendment covers Decision 37's scope only and does not reopen, amend, or reinterpret Revision 3 above, or any Part A/Part B item already recorded there.
+
+**Target of this amendment:** `docs/engineering/business-worth-evolution-implementation-plan.md`, appended per this document's own established append-only discipline. No `apps/`, `server/`, `firestore.rules`, `tests/`, or `firestore.indexes.json` file is touched by this document — plan-drafting only, matching the discipline every prior Plan amendment in this file has followed.
+
+## A. Already-authorized behavior being reused (no new Plan item — named here only so this amendment does not silently duplicate or re-decide it)
+
+- **FR-67 cost-basis conversion** (Specification §15/FR-67; Rule 8 Findings CB-1–CB-3; Plan §"PART A — Contagem Cost-Basis Conversion," above; Authorization §22 item 5/§23 item 5/§25). The silent Total Cost Value derivation this Decision's item 7 requires is exactly that already-planned, already-authorized-pending-execution engine and code change — this amendment adds no second derivation path.
+- **Selling-price independence / Mode A / Mode B** (Specification §15/FR-20; Increment 4, already shipped and tested — `deriveModeAPortionValuations`, `contagemMultiUnitValuation.ts`). Decision 37's items 8–9 (independent selling units/prices, automatic Total Selling Valuation) restate this existing, already-shipped behavior; this amendment changes nothing about it.
+- **`totalSellingValue`/`productValuationTotal`/Business Worth's selling-basis valuation** (`normalizeStockCountItems`, `AppContext.tsx`) — already selling-basis, already correct (confirmed by direct inspection, prior investigation). Decision 37 item 10 restates this; no code change is proposed or needed.
+
+## B. Decision 37's newly approved scope — the actual Plan items
+
+### B.1 Product-Level First-Time Setup Panel (implements Decision 37 items 1, 2, 6; Rule 8 Finding FT-4)
+
+**The actual UI change (`apps/tenant/src/components/PeriodicStockCountView.tsx`):** for a genuinely-new product only (existing `isGenuinelyNewProductName` gate, unchanged), render one product-level panel containing: product name (once), original purchase unit, original purchase cost — in place of today's per-row cost/unit fields duplicated across manual rows for the same product. For an existing product, this panel is replaced by a read-only summary line pulling `Product.unitRelationship`/purchase cost basis via the already-existing `getUnitRelationshipForProductName`/`findMostRecentBatchForProduct` (Finding FT-4 — no new read path required).
+
+### B.2 Arbitrary-Length Unit-Relationship Entry (implements Decision 37 item 3; Rule 8 Findings FT-1, FT-2)
+
+**The actual UI change:** extend `UnitRelationshipRow` (or its replacement) from its current fixed two-level `{sellingUnit, factor}` pair into a repeatable chain-step list ("1 [unit] = [N] [unit]", "+ Adicionar nível"), producing a `UnitRelationship.units[]` of however many levels the Owner enters. **Engine/data-model reuse, confirmed zero new engine (Finding FT-1):** `getConversionFactor` and `Product.unitRelationship.units[]` already accept and correctly compose an arbitrary-length chain — this is a UI/candidate-construction change only, not an engine change.
+
+**Candidate correlation fix (Finding FT-2):** the resulting `UnitRelationship` candidate must be correlated to the entire product **group** (every row/portion sharing the product's name in the current draft), not to whichever single row's disclosure happened to be expanded — replacing the current per-row `unitRelationshipByProductName` construction with a per-group construction.
+
+### B.3 Multiple Current Physical Portions + "+ Add Portion" (implements Decision 37 items 4, 5, 11; Rule 8 Finding FT-3)
+
+**The actual UI change:** port the already-shipped Grouped Initial Stock UX pattern — `groupRowsByProductName`/`RowGroup` (`apps/tenant/src/lib/stockCountPortionGrouping.ts`, already generic, no change needed) and `handleAddPortion`/`handleRenameGroup`/`handleRemoveGroup` (`InitialStockCountView.tsx`) — into `PeriodicStockCountView.tsx`. This replaces the current flat `catalogRows`/`manualRows` list rendering with product-level cards, each listing its own portions, with a **"+ Adicionar Porção"** button pre-filling the product name (never blank), sitting alongside — not replacing — the existing page-level "Adicionar produto" action for a genuinely different product. **Zero risk to `stockCountPortionGrouping.ts` itself** (Finding FT-3): this module is already generic over any `PortionGroupableRow`-shaped row and requires no modification; only its consuming view changes.
+
+### B.4 Cost-Field Suppression on Non-Purchase-Unit Portions (supports Decision 37 items 2, 7; coordinates with, does not duplicate, the already-planned FR-67 item)
+
+**The actual UI change:** once a product-level cost basis + unit relationship exist (B.1/B.2), hide/disable the per-portion `costPrice` input for any portion whose unit differs from the product's purchase unit — this is the presentational counterpart to the already-authorized FR-67 derivation (§A, above): the Owner is never shown a field inviting a second, redundant cost entry for EMB/UN once CX's cost basis is on record. **No new calculation lives here** — this item is UI-only; the actual Total Cost Value figure is produced by the already-planned FR-67 code change in `stockCount.ts`.
+
+### B.5 First-Time vs. Subsequent Contagem Distinction (implements Decision 37 item 6; Rule 8 Finding FT-4)
+
+**Confirmed no new code required beyond B.1's read-only-summary branch.** The existing `isGenuinelyNewProductName` gate already distinguishes the two cases; B.1 above is the only place this distinction needs new rendering logic (first-time editable panel vs. subsequent read-only summary).
+
+## Dependencies
+
+- **B.2 and B.3 are independent of each other and may land in either order** — B.2 changes the relationship-entry form; B.3 changes row/grouping layout. Both touch `PeriodicStockCountView.tsx` but different, non-overlapping sections of it.
+- **B.1 depends on B.2** only insofar as the product-level panel (B.1) is the container the chain-step list (B.2) renders inside.
+- **B.4 depends on B.1** (a cost basis must exist before a per-portion cost field can be meaningfully suppressed) **and coordinates with, but does not depend on the code for,** the separately-authorized-pending-execution FR-67 item (§A) — B.4 can land first (fields hidden, no derived total shown yet) or after (fields hidden, derived total already available), Plan sequencing is a Product Architect/Authorization-stage choice, not fixed here.
+- **No dependency on any other Increment 10 item** (Owner-Declared Business Worth, Owner Investment, receivable reminders, Fecho baseline removal, batch-level profit attribution, three-surface terminology) — confirmed by Rule 8 Finding FT-6 (non-overlapping code paths) and this amendment's own inspection.
+
+## Tests anticipated
+
+- `UnitRelationshipRow`/its replacement: constructing a 3+ level chain from UI input produces a `UnitRelationship` that `isValidUnitRelationship` accepts and `getConversionFactor` composes correctly across all levels (new coverage — today's tests only exercise the 2-level candidate path).
+- Grouping/candidate-correlation: three manual portion rows for one new product name produce exactly one first-time panel and one correctly-correlated `UnitRelationship` candidate for the whole group, not three independent candidates (new coverage, Finding FT-2).
+- `handleAddPortion`-equivalent for Contagem: pre-fills the existing product's name, never creates a blank/generic row (new coverage, mirrors Initial Stock's own existing test pattern for the same handler).
+- Regression: an existing product (already has `unitRelationship`) never renders the first-time editable panel — only the read-only summary (existing `isGenuinelyNewProductName` gate, regression-checked).
+- Regression: `totalSellingValue`, `productValuationTotal`, and `measuredBusinessWorth` are byte-identical before/after this UI change — this amendment touches no selling-side or Business-Worth-path code.
+- Regression: `stockCountPortionGrouping.ts`'s existing exported functions and their existing call sites in `InitialStockCountView.tsx` remain untouched and their existing tests continue to pass unmodified — this amendment only adds a new consumer (`PeriodicStockCountView.tsx`), never edits the shared module's own behavior.
+
+## Explicitly out of scope (restated from Decision 37's own "does not authorize" list, and from this amendment's own inspection)
+
+- `getConversionFactor`, `Product.unitRelationship`'s type shape, `StockBatch`'s cost-basis type shape — no change.
+- Selling-price Mode A/Mode B logic, `totalSellingValue`, `productValuationTotal`, Business Worth's selling-basis formula — no change.
+- `firestore.rules`, `firestore.indexes.json` — no change identified or required by this amendment.
+- Owner-Declared Business Worth, Fecho, Owner Portfolio, and every other Increment 10 item not named in §A/§B above.
+- Any shared-component consolidation of `UnitRelationshipRow`/grouping logic across `InitialStockCountView.tsx`/`AddStockView.tsx`/`PeriodicStockCountView.tsx` — remains the explicitly deferred "future pure-refactor checkpoint" `stockCountPortionGrouping.ts`'s own header comment already names; this amendment introduces a second, duplicated copy in `PeriodicStockCountView.tsx`, consistent with that existing, deliberate discipline, not a refactor of it.
+- The actual FR-67 cost-derivation code change itself (`stockCount.ts`'s per-portion cost-entry path) — that remains the separately-authorized-pending-execution Plan item under "PART A — Contagem Cost-Basis Conversion," above; this amendment's B.4 only prepares the UI to consume its output.
+
+## Next Governance Step
+
+Per this repository's established sequence and identical to Revision 3's own lifecycle, above: this Plan Amendment, once accepted and signed by the Product Architect, is followed by a signed Implementation Authorization item (its own dated section in `business-worth-evolution-implementation-authorization.md`, naming B.1–B.5 individually, subject to that document's existing one-item-at-a-time execution rule). Not created by this document. No code, test, rules, or index file is authorized to be touched by this Plan amendment alone.
