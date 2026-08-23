@@ -6,7 +6,7 @@ import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
-import { computePortionLabels } from '../lib/stockCountPortionGrouping';
+import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 // [Business Worth Evolution — Implementation Authorization, Increment 4;
 // Specification §15, FR-20-FR-23] The ONLY valuation engine this file
 // uses for Mode A — reused exactly as-is, never duplicated. See that
@@ -759,6 +759,54 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     scheduleDraftSave(catalogRows, nextManualRows, type, label, date);
   };
 
+  // [Business Worth Evolution — Decision 37, B.3: Multiple
+  // Current-Stock Portions + First-Class "+ Adicionar Porção" UX]
+  // Adds a new portion row PRE-FILLED with an existing manual-row
+  // group's own name — the only behavioral difference from
+  // handleAddManualRow above, which always creates a wholly blank row.
+  // Everything else about the new row (quantity, unit, costPrice,
+  // sellingPrice) starts blank, exactly like any other new row.
+  // Mirrors InitialStockCountView.tsx's own handleAddPortion exactly
+  // (Grouped Initial Stock UX precedent) — reused as a pattern, not as
+  // shared code (that file is not imported from or modified by this
+  // item, per the explicit instruction not to touch it unless
+  // absolutely necessary). Because grouping (manualRowGroups, below) is
+  // computed fresh from `manualRows` on every render, this new row is
+  // picked up into the SAME card automatically — there is no separate
+  // "group" state to update, and no product-level state (newProductInfo)
+  // is touched by this handler at all.
+  const handleAddPortionToManualGroup = (groupDisplayName: string) => {
+    submissionIdRef.current = null;
+    const nextManualRows = [...manualRows, { ...createManualRow(), productName: groupDisplayName }];
+    setManualRows(nextManualRows);
+    scheduleDraftSave(catalogRows, nextManualRows, type, label, date);
+  };
+
+  // [Business Worth Evolution — Decision 37, B.3] Renames every manual
+  // row currently in the group keyed by `groupKey` (a trimmed,
+  // lowercased product name — see groupRowsByProductName) to `newName`,
+  // in one update — mirroring InitialStockCountView.tsx's own
+  // handleRenameGroup exactly. A plain client-side array transform over
+  // the SAME flat `manualRows` state; writes nothing to Firestore
+  // directly (autosave picks up the result exactly as it already does
+  // for any other edit). Renaming a group to a name that now matches an
+  // existing catalog product, or a different manual group, is correct,
+  // intended behavior — the group simply re-forms under the new name on
+  // the next render (or merges into the matching group), exactly as
+  // typing a matching name into any single row already does today.
+  // Deliberately does NOT touch newProductInfo — that state is already
+  // keyed by CURRENT product name at every read site (the panel's own
+  // call site, and the submit-time correlation loop), so a rename
+  // simply changes which key is read/written next, never requiring an
+  // explicit migration step here.
+  const handleRenameManualGroup = (groupKey: string, newName: string) => {
+    if (!groupKey) return; // a blank/solo group has no shared name to rename — its own input already handles this via updateManualRow
+    submissionIdRef.current = null;
+    const nextManualRows = manualRows.map((row) => (productKeyFor(row.productName) === groupKey ? { ...row, productName: newName } : row));
+    setManualRows(nextManualRows);
+    scheduleDraftSave(catalogRows, nextManualRows, type, label, date);
+  };
+
   const handleTypeChange = (nextType: StockCountType) => {
     submissionIdRef.current = null;
     setType(nextType);
@@ -880,6 +928,37 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     ];
     return computePortionLabels(rowsForGrouping);
   }, [visibleCatalogEntries, manualRows]);
+
+  // [Business Worth Evolution — Decision 37, B.3: Multiple
+  // Current-Stock Portions + First-Class "+ Adicionar Porção" UX]
+  // Reshapes `manualRows` into product-name groups for a
+  // one-card-per-product rendering — reuses groupRowsByProductName
+  // completely UNCHANGED (the same pure, generic function
+  // InitialStockCountView.tsx's own Grouped Initial Stock UX already
+  // uses and already tests; this item adds a second CONSUMER of it,
+  // never a second grouping RULE). Deliberately scoped to `manualRows`
+  // ONLY, not `catalogRows` — a catalog row always represents an
+  // already-known product, which by construction never needs the
+  // first-time "+ Adicionar Porção" affordance this item adds (an
+  // Owner wanting another portion of an already-known product still
+  // uses this SAME mechanism, since that product's extra portions are
+  // themselves manual rows the moment they're added — the catalog
+  // row's own single, auto-populated portion is untouched, exactly as
+  // today). Keeping the catalog-row rendering loop itself completely
+  // untouched is a deliberate scope boundary (governing instruction
+  // §10: "do not silently redesign the whole Contagem screen").
+  // Carries `idx` (this render's own position in `manualRows`) rather
+  // than spreading the full row, so the renderer can still call the
+  // EXISTING updateManualRow(idx, ...)/handleRemoveManualRow(idx)
+  // functions with zero adaptation — mirrors this file's own existing
+  // `manual-${idx}` convention (portionLabels, immediately above).
+  // Recomputed fresh every render from the SAME flat `manualRows`
+  // array, exactly like portionLabels already is — there is no
+  // separate "group" state to keep in sync.
+  const manualRowGroups = useMemo(
+    () => groupRowsByProductName(manualRows.map((row, idx) => ({ id: `manual-${idx}`, idx, productName: row.productName }))),
+    [manualRows]
+  );
 
   const diff = liveTally.totalPurchaseValue - comparisonBaseline;
   const diffPct = comparisonBaseline > 0 ? (diff / comparisonBaseline) * 100 : 0;
@@ -1524,8 +1603,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         key={productId}
                         className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
                       >
-                        <div className="col-span-2 sm:col-span-1 flex items-center">
+                        <div className="col-span-2 sm:col-span-1 flex items-center gap-1">
                           <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
+                          {/* [Business Worth Evolution — Decision 37,
+                              B.3 completion] Reuses
+                              handleAddPortionToManualGroup UNCHANGED —
+                              the exact same handler the manual-row
+                              cards below already call. Clicking this
+                              creates a new manual portion pre-filled
+                              with THIS catalogue product's own name, so
+                              the Owner never retypes it to add a second
+                              (or later) portion of an already-known
+                              product — closing the gap the B.3
+                              completion investigation identified: only
+                              the FIRST additional portion previously
+                              required the generic "Adicionar produto
+                              que não está no catálogo" workaround.
+                              Deliberately does not touch catalogRows,
+                              buildCatalogRow, or this row's own fields
+                              at all — the catalogue row itself remains
+                              exactly what it always was (this
+                              product's own, single, auto-populated
+                              portion); the new portion joins the
+                              EXISTING "Adicionados Manualmente" grouped
+                              card below via the SAME manualRowGroups
+                              computation, with zero new state and zero
+                              new grouping logic. */}
+                          <button
+                            type="button"
+                            onClick={() => handleAddPortionToManualGroup(row.productName)}
+                            aria-label={`Adicionar porção de ${row.productName}`}
+                            title="Adicionar Porção"
+                            className="shrink-0 p-1 rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-[#0B1F3A] hover:bg-[#D4AF37]/10 transition-all duration-150"
+                          >
+                            <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
+                          </button>
                         </div>
                         {/* [Increment B, Checkpoint B6 — Consolidated
                             Specification §17] Shown ONLY when this
@@ -1679,186 +1791,217 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             )}
           </div>
 
-          {/* Manual additions — products not yet in the catalog (Amendment Part 13) */}
+          {/* Manual additions — products not yet in the catalog (Amendment
+              Part 13), grouped into one card per product name (Decision
+              37, B.3). rowGridClass's own 7-column layout is preserved
+              for the shared field row (Qtd/Unid/Compra/Venda/Valor/
+              remove) — only the "Nome" column moves up to the card
+              header, shown once per card instead of once per portion. */}
           {manualRows.length > 0 && (
             <div>
               <p className="text-[12.5px] font-bold text-[#111827] mb-2">Adicionados Manualmente</p>
-              <div className="space-y-1">
-                {manualRows.map((row, idx) => {
-                  const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
-                  // [Business Worth Evolution — Increment 4] Same
-                  // reasoning as the catalog-row loop above — see that
-                  // variable's own comment.
-                  const isFirstPortionOfMultiPortionGroup = portionLabel.isMultiPortion ? portionLabel.portionIndex === 1 : false;
+              <div className="space-y-3">
+                {manualRowGroups.map((group) => {
+                  const firstIdx = group.rows[0].idx;
+                  const firstRowLabel = portionLabels.get(`manual-${firstIdx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+                  // Same semantics as before B.3: Mode A is only ever
+                  // relevant here when this card's own first portion is
+                  // ALSO the group's overall first portion across
+                  // catalog+manual combined (i.e. no catalog row shares
+                  // this name) — otherwise Mode A already renders on the
+                  // catalog side, exactly as it did before this item.
+                  const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.isMultiPortion ? firstRowLabel.portionIndex === 1 : false;
+                  const isNewProduct = isGenuinelyNewProductName(group.displayName);
                   return (
-                  <React.Fragment key={idx}>
-                  <div
-                    className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
-                  >
-                    <div className="col-span-2 sm:col-span-1">
-                      <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
-                      <input
-                        type="text"
-                        placeholder="Ex: Arroz"
-                        value={row.productName}
-                        onChange={(e) => updateManualRow(idx, { productName: e.target.value })}
-                        className={fieldClass}
-                      />
-                      {/* [Increment B, Checkpoint B6 — Consolidated
-                          Specification §17] Same informational-only
-                          label as the catalog-row loop above — shown
-                          whenever this manual row shares a product
-                          name with another row (catalog or manual)
-                          in this same count. */}
-                      {portionLabel.isMultiPortion && (
-                        <p className="mt-1 text-[10.5px] text-[#B8952F] font-medium leading-snug">
-                          Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
-                        </p>
-                      )}
-                    </div>
-
-                    {/* [Business Worth Evolution — Increment 4,
-                        Specification §15] Same control, same group-key
-                        state, as the catalog-row loop above — rendered
-                        here only when this group's first portion happens
-                        to be a manual row (i.e. no catalog row exists for
-                        this product name yet). Hidden when the product
-                        has no confirmed unitRelationship, exactly as
-                        above. */}
-                    {isFirstPortionOfMultiPortionGroup &&
-                      (() => {
-                        const key = productKeyFor(row.productName);
-                        const relationship = getUnitRelationshipForProductName(row.productName);
-                        if (!relationship || !isValidUnitRelationship(relationship)) return null;
-                        const config = modeAGroups[key];
-                        const referenceUnitOptions = relationship.units.map((u) => u.unit);
-                        const effectiveReferenceUnit = config?.referenceUnit || referenceUnitOptions[0] || '';
-                        return (
-                          <ModeAValuationControl
-                            referenceUnitOptions={referenceUnitOptions}
-                            active={!!config}
-                            referenceUnit={effectiveReferenceUnit}
-                            referencePrice={config?.referencePrice || ''}
-                            currencySymbol={currencySymbol}
-                            allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
-                            onToggle={(enable) => handleModeAToggle(key, enable)}
-                            onChange={(fields) => handleModeAFieldChange(key, fields)}
-                          />
-                        );
-                      })()}
-
-                    <div>
-                      <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
-                      <input
-                        type="number"
-                        step="0.01"
-                        placeholder="Ainda não contado"
-                        value={row.quantity}
-                        onChange={(e) => updateManualRow(idx, { quantity: e.target.value })}
-                        className={`${fieldClass} font-mono tabular-nums`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
-                      <input
-                        type="text"
-                        value={row.unit}
-                        onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
-                        className={`${fieldClass} font-mono text-center`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={row.costPrice}
-                        onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
-                        className={`${fieldClass} font-mono tabular-nums`}
-                      />
-                    </div>
-
-                    <div>
-                      <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
-                      <input
-                        type="number"
-                        min="0"
-                        step="0.01"
-                        value={row.sellingPrice}
-                        onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
-                        className={`${fieldClass} font-mono tabular-nums`}
-                      />
-                    </div>
-
-                    <div className="flex items-end gap-1.5">
-                      <div className="flex-1 min-w-0">
-                        <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
-                        <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
-                          {row.quantity.trim() === ''
-                            ? 'Não contado'
-                            : formatCurrency((Number(row.quantity) || 0) * (Number(row.costPrice) || 0), currencySymbol)}
-                        </div>
+                    <div key={group.key || `blank-${firstIdx}`} className="rounded-xl border border-[#E5E7EB] px-2.5 py-2.5 space-y-1.5">
+                      <div>
+                        <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
+                        <input
+                          type="text"
+                          placeholder="Ex: Arroz"
+                          value={group.displayName}
+                          onChange={(e) =>
+                            group.key ? handleRenameManualGroup(group.key, e.target.value) : updateManualRow(firstIdx, { productName: e.target.value })
+                          }
+                          className={`${fieldClass} font-semibold`}
+                        />
                       </div>
+
+                      {/* [Business Worth Evolution — Increment 4,
+                          Specification §15] Same control, same
+                          group-key state, as the catalog-row loop above
+                          — rendered here only when this CARD's first
+                          portion happens to be the group's overall
+                          first portion (i.e. no catalog row exists for
+                          this product name yet). Hidden when the
+                          product has no confirmed unitRelationship,
+                          exactly as before B.3. */}
+                      {cardIsFirstPortionOfMultiPortionGroup &&
+                        (() => {
+                          const key = productKeyFor(group.displayName);
+                          const relationship = getUnitRelationshipForProductName(group.displayName);
+                          if (!relationship || !isValidUnitRelationship(relationship)) return null;
+                          const config = modeAGroups[key];
+                          const referenceUnitOptions = relationship.units.map((u) => u.unit);
+                          const effectiveReferenceUnit = config?.referenceUnit || referenceUnitOptions[0] || '';
+                          return (
+                            <ModeAValuationControl
+                              referenceUnitOptions={referenceUnitOptions}
+                              active={!!config}
+                              referenceUnit={effectiveReferenceUnit}
+                              referencePrice={config?.referencePrice || ''}
+                              currencySymbol={currencySymbol}
+                              allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
+                              onToggle={(enable) => handleModeAToggle(key, enable)}
+                              onChange={(fields) => handleModeAFieldChange(key, fields)}
+                            />
+                          );
+                        })()}
+
+                      {/* [Business Worth Evolution — Decision 37, B.1;
+                          extended by B.2] Shown ONLY for a genuinely-new
+                          product — never re-asked for an already-known
+                          one (isGenuinelyNewProductName, unchanged) —
+                          and now rendered once per CARD (the card
+                          itself already is "once per group", so no
+                          separate portionIndex === 1 check is needed
+                          here the way the pre-B.3 flat rendering
+                          needed). The data lives in newProductInfo,
+                          keyed by the product's own name — completely
+                          unaffected by how many portions this card has,
+                          or which one is visually first. */}
+                      {isNewProduct &&
+                        (() => {
+                          const key = productKeyFor(group.displayName);
+                          const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] };
+                          const setInfo = (
+                            fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
+                          ) =>
+                            setNewProductInfo((prev) => ({
+                              ...prev,
+                              [key]: { ...(prev[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] }), ...fields },
+                            }));
+                          return (
+                            <NewProductInfoPanel
+                              productName={group.displayName}
+                              currencySymbol={currencySymbol}
+                              purchaseUnit={info.purchaseUnit || ''}
+                              purchaseCost={info.purchaseCost || ''}
+                              onPurchaseUnitChange={(value) => setInfo({ purchaseUnit: value })}
+                              onPurchaseCostChange={(value) => setInfo({ purchaseCost: value })}
+                              relationshipSteps={info.relationshipSteps || []}
+                              onRelationshipStepsChange={(steps) => setInfo({ relationshipSteps: steps })}
+                            />
+                          );
+                        })()}
+
+                      <div className="space-y-1">
+                        {group.rows.map(({ idx }) => {
+                          const row = manualRows[idx];
+                          const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+                          return (
+                            <div key={idx} className={`group ${rowGridClass} rounded-xl px-2.5 py-2 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
+                              <div className="col-span-2 sm:col-span-1 flex items-center">
+                                {/* [Increment B, Checkpoint B6 —
+                                    Consolidated Specification §17] Same
+                                    informational-only label as before
+                                    B.3 — still meaningful when this
+                                    card's portions are only PART of a
+                                    larger group that also includes a
+                                    catalog row. */}
+                                {portionLabel.isMultiPortion && (
+                                  <p className="text-[10.5px] text-[#B8952F] font-medium leading-snug">
+                                    Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
+                                  </p>
+                                )}
+                              </div>
+
+                              <div>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
+                                <input
+                                  type="number"
+                                  step="0.01"
+                                  placeholder="Ainda não contado"
+                                  value={row.quantity}
+                                  onChange={(e) => updateManualRow(idx, { quantity: e.target.value })}
+                                  className={`${fieldClass} font-mono tabular-nums`}
+                                />
+                              </div>
+
+                              <div>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
+                                <input
+                                  type="text"
+                                  value={row.unit}
+                                  onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
+                                  className={`${fieldClass} font-mono text-center`}
+                                />
+                              </div>
+
+                              <div>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={row.costPrice}
+                                  onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
+                                  className={`${fieldClass} font-mono tabular-nums`}
+                                />
+                              </div>
+
+                              <div>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
+                                <input
+                                  type="number"
+                                  min="0"
+                                  step="0.01"
+                                  value={row.sellingPrice}
+                                  onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
+                                  className={`${fieldClass} font-mono tabular-nums`}
+                                />
+                              </div>
+
+                              <div className="flex items-end gap-1.5">
+                                <div className="flex-1 min-w-0">
+                                  <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
+                                  <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
+                                    {row.quantity.trim() === ''
+                                      ? 'Não contado'
+                                      : formatCurrency((Number(row.quantity) || 0) * (Number(row.costPrice) || 0), currencySymbol)}
+                                  </div>
+                                </div>
+                                <button
+                                  type="button"
+                                  onClick={() => handleRemoveManualRow(idx)}
+                                  aria-label={`Remover porção`}
+                                  className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                                >
+                                  <Trash2 className="w-3.5 h-3.5" />
+                                </button>
+                              </div>
+                            </div>
+                          );
+                        })}
+                      </div>
+
+                      {/* [Business Worth Evolution — Decision 37, B.3]
+                          THE core new affordance: adds another portion
+                          to THIS SAME product, pre-filled with the
+                          card's own name — the Owner never retypes it.
+                          Replaces, for this exact case, the generic
+                          "Adicionar produto que não está no catálogo"
+                          workaround below, which remains for starting a
+                          genuinely DIFFERENT product. */}
                       <button
                         type="button"
-                        onClick={() => handleRemoveManualRow(idx)}
-                        aria-label={`Remover produto ${idx + 1}`}
-                        className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                        onClick={() => handleAddPortionToManualGroup(group.displayName)}
+                        className="w-full py-2 px-3 rounded-lg border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[11.5px] transition-all duration-150 flex items-center justify-center gap-1.5 group"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        <Plus className="w-3 h-3 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
+                        <span>Adicionar Porção</span>
                       </button>
                     </div>
-                  </div>
-
-                  {/* [Business Worth Evolution — Decision 37, B.1]
-                      Shown ONLY for a manually-added row whose product
-                      name doesn't match anything already in the
-                      catalog — never shown, never re-asked, for an
-                      already-known product (isGenuinelyNewProductName,
-                      unchanged) — AND only on this group's FIRST
-                      portion (portionLabel.portionIndex === 1), so a
-                      multi-portion first-time product (e.g. 2 Cx + 3
-                      Emb + 5 Un, three separate manual rows sharing one
-                      name) shows this foundational information exactly
-                      ONCE, not once per portion. This is a PRESENTATION
-                      gate only — the data itself lives in
-                      newProductInfo, keyed by the product's own name
-                      (productKeyFor), not on this specific row. If this
-                      row is later deleted, the group's remaining
-                      portions simply take over rendering the panel
-                      (whichever becomes portionIndex 1 next) and the
-                      SAME newProductInfo entry is still there, intact —
-                      see newProductInfo's own declaration comment,
-                      above, for the bug this correction fixes. Entirely
-                      optional; leaving every field blank changes
-                      nothing from today's behavior. */}
-                  {portionLabel.portionIndex === 1 && isGenuinelyNewProductName(row.productName) && (() => {
-                    const key = productKeyFor(row.productName);
-                    const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] };
-                    const setInfo = (
-                      fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
-                    ) =>
-                      setNewProductInfo((prev) => ({
-                        ...prev,
-                        [key]: { ...(prev[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] }), ...fields },
-                      }));
-                    return (
-                      <NewProductInfoPanel
-                        productName={row.productName}
-                        currencySymbol={currencySymbol}
-                        purchaseUnit={info.purchaseUnit || ''}
-                        purchaseCost={info.purchaseCost || ''}
-                        onPurchaseUnitChange={(value) => setInfo({ purchaseUnit: value })}
-                        onPurchaseCostChange={(value) => setInfo({ purchaseCost: value })}
-                        relationshipSteps={info.relationshipSteps || []}
-                        onRelationshipStepsChange={(steps) => setInfo({ relationshipSteps: steps })}
-                      />
-                    );
-                  })()}
-                  </React.Fragment>
                   );
                 })}
               </div>

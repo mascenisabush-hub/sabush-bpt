@@ -29,7 +29,14 @@ const source = readFileSync(
 
 describe('PeriodicStockCountView.tsx — B6 portion-grouping wiring (reuses B5\'s shared helper)', () => {
   it('imports computePortionLabels from the SAME shared helper Checkpoint B5 introduced — no duplicate module', () => {
-    assert.match(source, /import\s*\{\s*computePortionLabels\s*\}\s*from\s*'\.\.\/lib\/stockCountPortionGrouping'/);
+    // [Business Worth Evolution — Decision 37, B.3] The import line now
+    // also brings in groupRowsByProductName (B.3's own reuse of the
+    // SAME shared module — see the updated describe block below) —
+    // this assertion is relaxed to confirm computePortionLabels is
+    // still imported from the correct shared file, regardless of what
+    // else shares that import line, rather than requiring an exact,
+    // single-symbol import statement that predates B.3.
+    assert.match(source, /import\s*\{[^}]*\bcomputePortionLabels\b[^}]*\}\s*from\s*'\.\.\/lib\/stockCountPortionGrouping'/);
   });
 
   it('computes portionLabels once, combining visible catalog rows and manual rows (both halves of this surface\'s working-row model)', () => {
@@ -128,21 +135,35 @@ describe('stockCountPortionGrouping.ts — confirms the B5 helper was reused, no
   );
 
   it('still exports computePortionLabels, unchanged, alongside whatever else the shared file has since gained', () => {
-    // [Grouped Initial Stock UX] This shared file gained a second
-    // export, groupRowsByProductName, used ONLY by
-    // InitialStockCountView.tsx's later grouped redesign — confirmed
-    // by the assertion below that PeriodicStockCountView.tsx itself
-    // never references it (B6/Periodic Contagem was not touched by
-    // that later checkpoint). computePortionLabels itself — the
-    // function B6 actually uses — remains present and unmodified;
-    // this test no longer asserts it is the ONLY export, since that
-    // assertion was specific to a point in time before Initial Stock's
-    // own later redesign, not a requirement of B6 itself.
+    // [Grouped Initial Stock UX; extended by Decision 37, B.3]
+    // computePortionLabels — the function B6 originally introduced —
+    // remains present and unmodified. groupRowsByProductName (also
+    // exported here) was originally added for
+    // InitialStockCountView.tsx's own later grouped redesign, and is
+    // now ALSO used by PeriodicStockCountView.tsx (B.3, below) — a
+    // second CONSUMER of the same, still-unforked, still-unmodified
+    // shared function, exactly matching this file's own header comment
+    // discipline ("no new grouping RULE, only a new output SHAPE").
     const exportedFunctionNames = [...helperSource.matchAll(/^export function (\w+)/gm)].map((m) => m[1]);
     assert.ok(exportedFunctionNames.includes('computePortionLabels'));
+    assert.ok(exportedFunctionNames.includes('groupRowsByProductName'));
   });
 
-  it('PeriodicStockCountView.tsx never references groupRowsByProductName — confirms B6 is untouched by the later Grouped Initial Stock UX checkpoint', () => {
-    assert.doesNotMatch(source, /groupRowsByProductName/);
+  it('PeriodicStockCountView.tsx now reuses groupRowsByProductName, unmodified, for Decision 37 B.3 (Multiple Current-Stock Portions + first-class "+ Adicionar Porção")', () => {
+    // [SUPERSEDES a prior B6-era assertion that PeriodicStockCountView.tsx
+    // never referenced groupRowsByProductName.] That assertion recorded
+    // an accurate, but explicitly point-in-time, fact: as of Checkpoint
+    // B6, Periodic Contagem had not yet adopted the Grouped Initial
+    // Stock UX pattern. Decision 37/B.3 (Rule 8 Finding FT-3;
+    // Implementation Plan Amendment §B.3; Implementation Authorization
+    // §36) is the separately-authorized, later work that deliberately
+    // changes this — porting the SAME, unmodified groupRowsByProductName
+    // function into PeriodicStockCountView.tsx's own manual-row
+    // rendering, exactly as FT-3 anticipated ("directly portable to
+    // Periodic Contagem"). This test now asserts the opposite of its
+    // original form: the reference IS present, and stockCountPortionGrouping.ts
+    // itself required zero modification to support it (confirmed by the
+    // test immediately above).
+    assert.match(source, /groupRowsByProductName/);
   });
 });
