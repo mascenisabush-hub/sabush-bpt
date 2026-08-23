@@ -66,71 +66,152 @@ const TYPE_OPTIONS: { value: StockCountType; label: string }[] = [
   { value: 'custom', label: 'Personalizada' },
 ];
 
-// [Product Memory / UOM — Increment A, Checkpoint 2c] Identical
-// component/behavior to InitialStockCountView.tsx's/AddStockView.tsx's
-// own UnitRelationshipRow (Checkpoints 2a/2b) — deliberately duplicated
-// per file rather than extracted into a shared component in this
-// checkpoint, so no already-committed, already-tested surface's
-// behavior is put at risk by a shared-dependency refactor. A future
-// pure-refactor checkpoint may consolidate all three.
-const UnitRelationshipRow: React.FC<{
+// [Business Worth Evolution — Decision 37, B.2: Arbitrary-Length
+// Unit-Relationship Entry] Replaces this file's own former
+// UnitRelationshipRow (a fixed two-level {sellingUnit, factor} pair —
+// identical in spirit to InitialStockCountView.tsx's/AddStockView.tsx's
+// own still-unchanged two-level components, which this item
+// deliberately does NOT touch, per the existing "deliberately
+// duplicated per file, not shared" discipline those files' own header
+// comments already establish; a future consolidation checkpoint may
+// revisit that, not this item).
+//
+// `steps` represents the chain AFTER the product's own purchase unit:
+// `steps[0]` is "1 purchaseUnit = steps[0].factor steps[0].unit",
+// `steps[1]` is "1 steps[0].unit = steps[1].factor steps[1].unit", and
+// so on — i.e. each step's factor is `factorFromPrevious` for the
+// level it introduces, exactly matching Product.unitRelationship.units[]'s
+// own existing, UNCHANGED convention (product-unit-of-measure-
+// specification.md §2; purchaseToSellingConversion.ts's own header
+// comment). The caller (NewProductInfoPanel's call site) is
+// responsible for turning `[{unit: purchaseUnit, factorFromPrevious: 0}]
+// .concat(steps.map(...))` into the actual UnitRelationship candidate —
+// this component only edits the step list, never constructs or
+// validates a UnitRelationship itself (isValidUnitRelationship remains
+// the single source of truth for that, applied at submit time, exactly
+// as before this item).
+//
+// Removing a step truncates the chain from that point onward (never
+// leaves an orphaned later step referencing a since-removed unit) —
+// this is the "prevent nonsensical/inconsistent chain construction"
+// requirement, satisfied structurally rather than by extra validation
+// logic this file would otherwise have to invent. "+ Adicionar nível"
+// is disabled until the current last step has both a unit and a valid
+// positive factor filled in, for the same reason.
+const UnitRelationshipChainEditor: React.FC<{
   purchaseUnit: string;
-  sellingUnit: string;
-  factor: string;
-  onChange: (sellingUnit: string, factor: string) => void;
-}> = ({ purchaseUnit, sellingUnit, factor, onChange }) => {
-  const [expanded, setExpanded] = useState(!!(sellingUnit || factor));
+  steps: { unit: string; factor: string }[];
+  onChange: (steps: { unit: string; factor: string }[]) => void;
+}> = ({ purchaseUnit, steps, onChange }) => {
+  const [expanded, setExpanded] = useState(steps.some((s) => s.unit || s.factor));
 
   if (!expanded) {
     return (
       <button
         type="button"
-        onClick={() => setExpanded(true)}
-        className="col-span-2 sm:col-span-7 flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5 -mt-1"
+        onClick={() => {
+          setExpanded(true);
+          // Seed one real, empty first level in actual state on
+          // expansion (rather than faking a placeholder row in render
+          // only) — a display-only placeholder that doesn't exist in
+          // `steps` would make updateStep(0, ...) a silent no-op the
+          // first time the Owner types into it, since
+          // steps.map(...) over a genuinely empty array touches
+          // nothing. Seeding for real here means every rendered input
+          // always corresponds to a real array index.
+          if (steps.length === 0) onChange([{ unit: '', factor: '' }]);
+        }}
+        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
       >
         <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
-        <span>Produto novo — configurar relação de unidades (opcional)</span>
+        <span>Configurar relação de unidades (opcional)</span>
       </button>
     );
   }
 
+  const lastStep = steps[steps.length - 1];
+  const lastStepFactor = lastStep ? parseFloat(lastStep.factor) : NaN;
+  const canAddLevel = !lastStep || (!!lastStep.unit.trim() && Number.isFinite(lastStepFactor) && lastStepFactor > 0);
+
+  const updateStep = (index: number, fields: Partial<{ unit: string; factor: string }>) => {
+    onChange(steps.map((s, i) => (i === index ? { ...s, ...fields } : s)));
+  };
+
+  const removeFromStep = (index: number) => {
+    // Truncates the chain from `index` onward — the only removal shape
+    // that can never leave a later step referencing a unit that no
+    // longer exists in the chain.
+    onChange(steps.slice(0, index));
+  };
+
+  const addLevel = () => {
+    onChange([...steps, { unit: '', factor: '' }]);
+  };
+
   return (
-    <div className="col-span-2 sm:col-span-7 -mt-1 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
+    <div className="-mt-1 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
       <button
         type="button"
         onClick={() => setExpanded(false)}
         className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
       >
         <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
-        <span>Relação de unidades para este produto novo (opcional)</span>
+        <span>Relação de unidades (opcional)</span>
       </button>
-      <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
-        <span className="text-gray-500 pb-2">
-          1 <strong className="text-[#111827]">{purchaseUnit || 'un'}</strong> =
-        </span>
-        <div>
-          <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Quantidade</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={factor}
-            onChange={(e) => onChange(sellingUnit, e.target.value)}
-            placeholder="Ex: 24"
-            className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          />
-        </div>
-        <div>
-          <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de venda</label>
-          <input
-            type="text"
-            value={sellingUnit}
-            onChange={(e) => onChange(e.target.value, factor)}
-            placeholder="Ex: Un"
-            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          />
-        </div>
+
+      <div className="space-y-1.5">
+        {steps.map((step, index) => {
+          const previousUnitLabel = index === 0 ? purchaseUnit || 'un' : steps[index - 1]?.unit || 'un';
+          return (
+            <div key={index} className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+              <span className="text-gray-500 pb-2">
+                1 <strong className="text-[#111827]">{previousUnitLabel}</strong> =
+              </span>
+              <div>
+                <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Quantidade</label>
+                <input
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  value={step.factor}
+                  onChange={(e) => updateStep(index, { factor: e.target.value })}
+                  placeholder="Ex: 4"
+                  className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                />
+              </div>
+              <div>
+                <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade</label>
+                <input
+                  type="text"
+                  value={step.unit}
+                  onChange={(e) => updateStep(index, { unit: e.target.value })}
+                  placeholder="Ex: Emb"
+                  className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                />
+              </div>
+              <button
+                type="button"
+                onClick={() => removeFromStep(index)}
+                aria-label={`Remover nível ${index + 1} e seguintes`}
+                className="p-1.5 mb-[1px] rounded-lg text-gray-300 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+              >
+                <Trash2 className="w-3.5 h-3.5" />
+              </button>
+            </div>
+          );
+        })}
       </div>
+
+      <button
+        type="button"
+        onClick={addLevel}
+        disabled={!canAddLevel}
+        className="flex items-center gap-1.5 text-[11.5px] font-bold text-[#0B1F3A] hover:text-[#D4AF37] disabled:text-gray-300 disabled:cursor-not-allowed transition-colors duration-150"
+      >
+        <Plus className="w-3.5 h-3.5" />
+        <span>Adicionar nível</span>
+      </button>
+
       <p className="text-[11px] text-gray-400 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
       </p>
@@ -212,7 +293,8 @@ const ModeAValuationControl: React.FC<{
 };
 
 // [Business Worth Evolution — Decision 37, B.1: Product-Level
-// First-Time Contagem Information Panel] Rendered ONCE per genuinely-new
+// First-Time Contagem Information Panel; extended by B.2 for
+// arbitrary-length relationship entry] Rendered ONCE per genuinely-new
 // product group — the caller gates this on portionLabel.portionIndex
 // === 1 && isGenuinelyNewProductName(...), exactly mirroring how
 // ModeAValuationControl (Increment 4, above) is already gated to render
@@ -221,29 +303,28 @@ const ModeAValuationControl: React.FC<{
 // portion) — the data itself is owned by the PRODUCT, via the
 // newProductInfo state (keyed by productKeyFor, same convention as
 // modeAGroups), never by the specific row this panel happens to be
-// rendered next to. This is the corrected design: an earlier pass
-// stored this data on the portionIndex === 1 row's own fields, which
-// meant deleting that one row silently destroyed it — newProductInfo's
-// group-level key means removing or reordering any portion row can
-// never lose this data.
+// rendered next to. B.1's own correction established this: an earlier
+// pass stored this data on the portionIndex === 1 row's own fields,
+// which meant deleting that one row silently destroyed it —
+// newProductInfo's group-level key means removing or reordering any
+// portion row can never lose this data. B.2 extends newProductInfo's
+// own shape (relationshipSteps, an arbitrary-length array) but does
+// not change this ownership model at all.
 //
 // Collects the three foundational, product-level pieces of information
 // Decision 37 items 1/2/3 name: product identity (read-only echo of
 // this group's own name — the single per-row name input remains the
 // one editable place that name is typed; a second, independently-
 // editable name field here would create two sources of truth for the
-// same value, which B.1 does not introduce), original purchase/cost
-// basis (purchaseUnit/purchaseCost), and the unit relationship. The
-// unit-relationship section reuses UnitRelationshipRow completely
-// UNCHANGED — still its existing two-level {sellingUnit, factor} form.
-// Extending that into an arbitrary-length chain editor is B.2's own,
-// separately-authorized scope (Implementation Plan Amendment §B.2) —
-// this component only relocates the EXISTING control into this new
-// panel. Purely presentational + the newProductInfo field bindings
-// below; introduces no new calculation, no change to submission/
-// normalization beyond correctly sourcing the same two relationship
-// values it already sourced before this correction, and no change to
-// StockCountWorkingRow.unit/quantity/costPrice/sellingPrice.
+// same value), original purchase/cost basis (purchaseUnit/
+// purchaseCost), and the unit relationship (relationshipSteps, edited
+// via UnitRelationshipChainEditor). Purely presentational + the
+// newProductInfo field bindings; introduces no new calculation, no
+// change to submission/normalization beyond correctly sourcing the
+// relationship steps this panel already collected, and no change to
+// StockCountWorkingRow.unit/quantity/costPrice/sellingPrice. Does NOT
+// derive or display any per-level cost (e.g. "312.50 MZN/Emb") — that
+// remains explicitly out of scope, deferred to B.4/FR-67.
 const NewProductInfoPanel: React.FC<{
   productName: string;
   currencySymbol: string;
@@ -251,8 +332,18 @@ const NewProductInfoPanel: React.FC<{
   purchaseCost: string;
   onPurchaseUnitChange: (value: string) => void;
   onPurchaseCostChange: (value: string) => void;
-  unitRelationshipRow: React.ReactNode;
-}> = ({ productName, currencySymbol, purchaseUnit, purchaseCost, onPurchaseUnitChange, onPurchaseCostChange, unitRelationshipRow }) => {
+  relationshipSteps: { unit: string; factor: string }[];
+  onRelationshipStepsChange: (steps: { unit: string; factor: string }[]) => void;
+}> = ({
+  productName,
+  currencySymbol,
+  purchaseUnit,
+  purchaseCost,
+  onPurchaseUnitChange,
+  onPurchaseCostChange,
+  relationshipSteps,
+  onRelationshipStepsChange,
+}) => {
   return (
     <div className="col-span-2 sm:col-span-7 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
       <div className="flex items-center gap-1.5">
@@ -291,7 +382,7 @@ const NewProductInfoPanel: React.FC<{
         </p>
       </div>
 
-      {unitRelationshipRow}
+      <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
     </div>
   );
 };
@@ -546,27 +637,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const productKeyFor = (name: string) => name.trim().toLowerCase();
 
-  // [Business Worth Evolution — Decision 37, B.1 correction] Product-
-  // level first-time information (original purchase unit/cost, and the
-  // relationship candidate's own two fields) — keyed by productKeyFor,
-  // the SAME convention modeAGroups already uses immediately above,
-  // for the SAME reason: this data belongs to the PRODUCT, not to
-  // whichever row happens to render its panel. Storing it here instead
-  // of on a specific StockCountWorkingRow means deleting or reordering
-  // any portion row (handleRemoveManualRow) can never destroy it —
-  // fixing a real data-loss bug the original B.1 pass had (product-
-  // level data was stored on the portionIndex === 1 row; deleting that
-  // one row silently lost it). Deliberately transient component state,
-  // never written to PeriodicStockDraft/Firestore — same discipline
-  // modeAGroups itself already documents above (its own output feeds
-  // back into ordinary sellingPrice/unitRelationship writes at
-  // submission time, not persisted as this raw shape). NewProductInfoPanel
-  // reads/writes this map via the product's own key; which row it is
-  // visually rendered on (still portionIndex === 1, for a single,
-  // uncluttered first-time-setup location) is a presentation choice
-  // only and has no bearing on where this data actually lives.
+  // [Business Worth Evolution — Decision 37, B.1: Product-Level
+  // First-Time Contagem Information Panel; B.2: Arbitrary-Length
+  // Unit-Relationship Entry] Product-level first-time information —
+  // keyed by productKeyFor, the SAME convention modeAGroups already
+  // uses immediately above, for the SAME reason: this data belongs to
+  // the PRODUCT, not to whichever row happens to render its panel.
+  // Storing it here instead of on a specific StockCountWorkingRow
+  // means deleting or reordering any portion row (handleRemoveManualRow)
+  // can never destroy it — fixing a real data-loss bug B.1's own
+  // correction found (product-level data was originally stored on the
+  // portionIndex === 1 row; deleting that one row silently lost it).
+  // `relationshipSteps` (added by B.2) replaces what was originally a
+  // fixed {sellingUnit, factor} pair with an arbitrary-length array —
+  // relationshipSteps[i].unit/factor is the (i+1)-th level of the
+  // chain after purchaseUnit, in the SAME order
+  // Product.unitRelationship.units[] already expects (see
+  // UnitRelationshipChainEditor's own header comment for the exact
+  // mapping). Deliberately transient component state, never written to
+  // PeriodicStockDraft/Firestore — same discipline modeAGroups itself
+  // already documents above.
   const [newProductInfo, setNewProductInfo] = useState<
-    Record<string, { purchaseUnit: string; purchaseCost: string; sellingUnit?: string; sellingUnitFactor?: string }>
+    Record<string, { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
   >({});
 
   const getUnitRelationshipForProductName = (name: string) => {
@@ -895,39 +987,47 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
 
       // [Product Memory / UOM — Increment A, Checkpoint 2c; corrected
-      // under Decision 37 B.1] Correlated from newProductInfo — the
-      // product-level, productKeyFor-keyed state (see its own
-      // declaration comment, above) — rather than scanning individual
-      // rows for whichever one happened to carry these fields. This is
-      // the B.1 robustness correction: the OLD version scanned
-      // allWorkingRows for row.newProductSellingUnit/Factor, which
-      // depended on a specific row still existing at submit time; a
-      // deleted first-portion row could silently drop the candidate.
-      // newProductInfo survives row deletion/reordering by
-      // construction, so this loop no longer has that failure mode.
+      // under Decision 37 B.1; extended under B.2 for arbitrary-length
+      // chains] Correlated from newProductInfo — the product-level,
+      // productKeyFor-keyed state (see its own declaration comment,
+      // above) — rather than scanning individual rows for whichever
+      // one happened to carry these fields (B.1's own correction) or
+      // assuming a fixed two-level chain (B.2's own extension).
       // Re-validated here via isValidUnitRelationship regardless, never
-      // trusted merely because the UI fields were non-empty — same
-      // discipline as before.
+      // trusted merely because the UI fields were non-empty.
+      //
+      // relationshipSteps[i] contributes units[i + 1] — factor is
+      // interpreted as factorFromPrevious for the level IT introduces,
+      // exactly Product.unitRelationship.units[]'s own existing,
+      // UNCHANGED convention (product-unit-of-measure-specification.md
+      // §2). A trailing incomplete step (blank unit and/or factor —
+      // the Owner started a level but hasn't finished it) is dropped
+      // rather than truncating the whole candidate to zero levels,
+      // since UnitRelationshipChainEditor's own "+ Adicionar nível"
+      // gating already prevents a genuinely INTERIOR gap from ever
+      // being constructed in the first place; only the very last step
+      // can ever be incomplete. `sellingUnit` is deliberately left
+      // unset — B.2's own scope is the relationship chain only, never
+      // a selling-price/reference-unit decision (that remains Mode
+      // A/B's own, separately-authorized, unmodified mechanism, which
+      // already lets the Owner pick any unit from the full chain as
+      // its reference unit — Product.unitRelationship.sellingUnit is
+      // optional per isValidUnitRelationship's own contract, unchanged
+      // here).
       const unitRelationshipByProductName = new Map<string, UnitRelationship>();
       for (const [key, info] of Object.entries(newProductInfo)) {
-        if (!key || !info.sellingUnit || !info.sellingUnitFactor) continue;
-        const factor = parseFloat(info.sellingUnitFactor);
-        const sellingUnit = info.sellingUnit.trim();
-        if (!sellingUnit || !Number.isFinite(factor) || factor <= 0) continue;
-        // Purchase unit for the relationship's units[0]: prefer the
-        // Owner-entered purchase unit (info.purchaseUnit); fall back to
-        // whichever physical unit this product's own portion rows use,
-        // matching the pre-correction fallback (row.unit || 'un')
-        // exactly, for a product whose Owner filled in the relationship
-        // but left the new purchase-unit field blank.
+        if (!key) continue;
+        const completeSteps = info.relationshipSteps.filter(
+          (s) => s.unit.trim() && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
+        );
+        if (completeSteps.length === 0) continue;
         const fallbackRow = allWorkingRows.find((r) => productKeyFor(r.productName) === key);
         const purchaseUnit = info.purchaseUnit.trim() || fallbackRow?.unit || 'un';
         const candidate: UnitRelationship = {
           units: [
             { unit: purchaseUnit, factorFromPrevious: 0 },
-            { unit: sellingUnit, factorFromPrevious: factor },
+            ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
           ],
-          sellingUnit,
           confirmedAt: new Date().toISOString(),
         };
         if (isValidUnitRelationship(candidate)) {
@@ -1737,9 +1837,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       nothing from today's behavior. */}
                   {portionLabel.portionIndex === 1 && isGenuinelyNewProductName(row.productName) && (() => {
                     const key = productKeyFor(row.productName);
-                    const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '' };
-                    const setInfo = (fields: Partial<{ purchaseUnit: string; purchaseCost: string; sellingUnit: string; sellingUnitFactor: string }>) =>
-                      setNewProductInfo((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { purchaseUnit: '', purchaseCost: '' }), ...fields } }));
+                    const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] };
+                    const setInfo = (
+                      fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
+                    ) =>
+                      setNewProductInfo((prev) => ({
+                        ...prev,
+                        [key]: { ...(prev[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] }), ...fields },
+                      }));
                     return (
                       <NewProductInfoPanel
                         productName={row.productName}
@@ -1748,14 +1853,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         purchaseCost={info.purchaseCost || ''}
                         onPurchaseUnitChange={(value) => setInfo({ purchaseUnit: value })}
                         onPurchaseCostChange={(value) => setInfo({ purchaseCost: value })}
-                        unitRelationshipRow={
-                          <UnitRelationshipRow
-                            purchaseUnit={info.purchaseUnit || row.unit || 'un'}
-                            sellingUnit={info.sellingUnit || ''}
-                            factor={info.sellingUnitFactor || ''}
-                            onChange={(sellingUnit, factor) => setInfo({ sellingUnit, sellingUnitFactor: factor })}
-                          />
-                        }
+                        relationshipSteps={info.relationshipSteps || []}
+                        onRelationshipStepsChange={(steps) => setInfo({ relationshipSteps: steps })}
                       />
                     );
                   })()}
