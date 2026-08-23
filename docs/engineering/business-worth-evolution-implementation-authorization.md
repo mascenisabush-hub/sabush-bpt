@@ -746,3 +746,34 @@ No row above introduces a decision beyond what Revision 3, the Rule 8 Addendum, 
 This amendment is now signed (§31, above). The next, separate operational action — **not performed here** — is an explicit instruction to begin a specific Increment 10 item or Post-Implementation Correction, per §23's own one-item-at-a-time execution rule. No code, test, rules, or index file is created, modified, or authorized by this document itself, even now that it is signed.
 
 **Lifecycle:** Signed Revision 3 decisions → Governance recording (`5870bdd`) → Rule 8 Assessment Addendum (accepted) → Implementation Plan Amendment (accepted, signed) → **Implementation Authorization Amendment (signed, this document)**. Governance chain complete through Authorization. Not yet implemented — implementation begins only per a further, separate, explicit per-item instruction.
+
+---
+
+## 34. Execution Record — Increment 10 Item 1 (Owner-Declared Business Worth)
+
+**Status: ✅ IMPLEMENTED AND VERIFIED.** Per §23's own execution rule (steps 4–7: run verification, inspect the diff, verify governance compliance, record the result). This is an execution log entry, not a new Product Architect decision — no item authorized above is reopened, reweakened, or reinterpreted by this record.
+
+**Commit:** `e122e5c` — "feat(business-worth-evolution): Increment 10 item 1 -- Owner-Declared Business Worth".
+
+**Scope implemented, matching §23 item 1 exactly:**
+- `types.ts`: `BusinessWorthSnapshot.establishmentMethod` field; `sourceStockCountId`, `productValuationTotal`/`Detail`, `embeddedProfitTotal`/`Detail`, `expensesSinceLastSnapshot`/`breakagesSinceLastSnapshot`/`levantamentosSinceLastSnapshot` made optional (FR-69's omission list); new `'business-worth-owner-declared'` `TimelineActivityType`.
+- `firestore.rules`: `businessWorthSnapshots.allow create` gains the Owner-Declared branch (Rule 8 Finding OD-1), enforcing genuinely-absent `sourceStockCountId` and every FR-69-omitted field, server-side. The Contagem branch was corrected to accept `establishmentMethod in ['contagem', null]` rather than a strict `== 'contagem'` requirement — a fix made during implementation, not specified in the Plan Amendment, to preserve backward compatibility with every pre-Increment-10 caller/test (this codebase's own established additive-field discipline).
+- `AppContext.tsx`: new `recordOwnerDeclaredBusinessWorth` (single-document, transactional, submission-id-idempotent, per Rule 8 Finding OD-3); `recordStockCount`'s own write payload now explicitly sets `establishmentMethod: 'contagem'`.
+- `calculations.ts`: a correctness fix found during implementation — `computeCaseALiveBusinessWorth` read `latest.embeddedProfitTotal` with no fallback, which would have produced `NaN` once an Owner-Declared snapshot (which has no `embeddedProfitTotal`) became the active baseline. Fixed with `?? 0`, mirroring the existing `payablesPosition` fallback. Recorded here as a scope-internal fix required to make Item 1 actually function, not a separate item.
+- `DeclareBusinessWorthView.tsx` (new) + `App.tsx` + `navigationTabs.ts` + `i18n/locales/{pt,en,fr}.ts`: the dedicated entry-point screen per the recorded UI decision (§26, above) — its own tab (`declare-worth`), never a mode inside `PeriodicStockCountView`.
+- `DashboardView.tsx` + i18n: Owner-Declared badge and FR-69 omission notice in the existing Business Worth history list, satisfying FR-61's "visibly distinguished" requirement at this codebase's current drill-down depth.
+- `timelineHelpers.ts`: the new Timeline event type registered in all three presentation maps (icon/color/label) — a gap `tsc` itself caught, not found by inspection alone.
+- `tests/business-worth-owner-declared.test.ts` (new): 22 test cases — the positive case, Staff/cross-tenant rejection, `sourceStockCountId`-fabrication rejection (including the empty-string case), an individual rejection test for every FR-69-omitted field, `establishmentMethod` enum/required-field checks, the backward-compatible no-`establishmentMethod` legacy case, idempotency, and immutability.
+
+**Diff scope confirmed:** only the files listed above; no other Increment 10 item and neither Post-Implementation Correction (Fecho baseline, cost-price fallback) touched, verified via `git diff --name-only` against the prior commit.
+
+**Verification results:**
+- `npm run lint:tenant`: clean.
+- `npm run lint:server`: clean, except one pre-existing, unrelated failure in `tests/startup-investment.test.ts` (`BatchStatus` typing), confirmed via `git stash` to predate this change.
+- 51/51 non-emulator-dependent Business Worth tests: pass.
+- **`npm run test:business-worth-snapshot-foundation:emulator`, run locally against a real Firestore emulator: 14/14 pass, 0 failures.** Confirms the Contagem-sourced establishment path (create-time enforcement, tenant isolation, FR-19 no-backfill discipline) is unbroken by the rule change above.
+- **`npm run test:business-worth-owner-declared:emulator`, run locally against a real Firestore emulator: 22/22 pass, 0 failures.** Confirms every case named above, including every individual FR-69 field-leak rejection, the establishment-method discrimination checks, the backward-compatible legacy-write case, idempotency, and immutability.
+
+**Governance compliance re-check against AC-R3-1 (§28):** *"A `BusinessWorthSnapshot` can be created via Owner-Declared establishment only through the dedicated entry point (§26), is `isOwnerOf`-gated, carries `establishmentMethod: 'owner-declared'`, has no `sourceStockCountId`, and omits every field FR-69 names, enforced server-side."* — **Met**, per the emulator results above.
+
+**Not yet done, and not claimed as done by this record:** Increment 10 items 2–7 (§23) and both Post-Implementation Corrections (§24, §25) remain unimplemented and unauthorized to begin until their own separate, explicit per-item instruction, per §23's own execution rule.
