@@ -62,7 +62,7 @@ Per the source BDR §6 item 6 and this task's own Technical Design Discipline: w
 
 **State 1a — Estimated, pre-first-new-model-Contagem (existing business only) [DECIDED — Product Architect review, "Critical Transition Clarification," 22 August 2026].** An **existing business** that already has a preserved historical Capital Inicial does **not** need to perform a new-model Contagem before the system can show Estimated Business Worth. Estimated Business Worth already exists for such a business, computed as `Historical Capital Inicial + embedded profits since the applicable baseline − expenses − breakages − Levantamentos` (§9's transitional formula; source BDR Decision 25; POL-0010 HIST-2). This is a genuinely distinct state from State 1 — an existing business is never UNKNOWN merely because it has not yet performed a Contagem under the new model; only a business with no baseline at all (no historical Capital Inicial and no `BusinessWorthSnapshot`) is UNKNOWN. **Current Business Worth**, as opposed to Estimated, remains absent for such a business until its own first new-model Contagem is confirmed (§7) — State 1a has an Estimated figure but no Current figure yet, exactly as before this amendment; only what "Current Business Worth" itself means once it does exist (State 3, above) has changed.
 
-**State 2 — First confirmed Contagem.** The Owner alone decides the business can stand on its own and confirms a Contagem. Because the existing schema already requires an `initial` `StockCount` before any periodic Contagem, this transition event **is** the same confirmation event as today's Initial Stock/Capital Inicial confirmation, for a genuinely new business (source BDR Decision 1, "logical consequence"; POL-0010 CON-2). For an existing business already in State 1a, this same transition event is instead its **first periodic Contagem confirmed under the new model** — the marker described in §14 is what makes a `StockCount` new-model-eligible in either case, not whether it happens to be the `initial` count specifically. No second, parallel "operational start" control is introduced (FR-1).
+**State 2 — First confirmed Contagem, or Owner-Declared establishment [Corrected, §42].** The Owner alone decides the business can stand on its own. ~~Because the existing schema already requires an `initial` `StockCount` before any periodic Contagem, this transition event **is** the same confirmation event as today's Initial Stock/Capital Inicial confirmation, for a genuinely new business (source BDR Decision 1, "logical consequence"; POL-0010 CON-2).~~ **[Corrected, §42]** A genuinely new business's first confirmed Contagem is never the same event as a Capital Inicial confirmation — the two are independent, optional events (BDR §4 Decision 1, as corrected). State 2 (the transition from no-Business-Worth/Estimated to established Business Worth) occurs at whichever event first produces a `BusinessWorthSnapshot`: a Contagem confirmation, or an Owner-Declared establishment (§42 Decision 11) — never at a Capital Inicial confirmation, which never produces a `BusinessWorthSnapshot` under any circumstance. For an existing business already in State 1a, this same transition event is instead its **first periodic Contagem confirmed under the new model, or its first Owner-Declared establishment** — the marker described in §14 is what makes a `StockCount` new-model-eligible in either case, not whether it happens to be the `initial` count specifically. No second, parallel "operational start" control is introduced (FR-1, as amended, §42).
 
 **State 3 — Current Business Worth [AMENDMENT DRAFT — PENDING PRODUCT ARCHITECT ACCEPTANCE, §41].** From a business's first confirmed Contagem onward, Current Business Worth is the business's live, present-moment Business Worth: the latest confirmed `BusinessWorthSnapshot`'s own `measuredBusinessWorth`, plus every governed Business-Worth-affecting change recorded since that snapshot's own `confirmedAt` — computed via the exact same on-demand formula §9's "Case A" already fully specifies (embedded profit since, minus expenses/breakages/Levantamentos since, plus applicable position changes). **The snapshot itself is not the Current Business Worth** — it is the frozen historical measurement Current Business Worth is currently computed *from*; Current Business Worth keeps evolving as approved activity occurs, while the snapshot it started from never changes (source BDR Decisions 3, 21, 23; POL-0010 BW-2, BW-5).
 
@@ -71,7 +71,7 @@ Per the source BDR §6 item 6 and this task's own Technical Design Discipline: w
 **State 5 — New Contagem.** A newly confirmed Contagem produces a new dated, frozen `BusinessWorthSnapshot` — the new baseline Current Business Worth is thereafter live-computed from; the previous snapshot becomes historical, permanently preserved and never overwritten (source BDR Decision 23; POL-0010 BW-7). Current Business Worth itself is never "reset" to a stored value at this moment — it is recomputed on demand, from the new baseline forward, exactly as it always is.
 
 **FR-1.** The system must never present a **Current** Business Worth figure as known/measured for a business with no confirmed Contagem under this model.
-**FR-2.** The system must not introduce any control, button, or flag whose function is "declare the business operational" independent of Contagem confirmation itself.
+**FR-2 [amended, §42].** The system must not introduce any control, button, or flag whose function is "declare the business operational" independent of a genuine Business Worth establishment event. Exactly two establishment events exist, and no others: (a) a confirmed Contagem (§14), and (b) an Owner-Declared Business Worth establishment (§42 Decision 11) — explicitly named here as the second permitted instance of "a genuine establishment event," per BDR Decision 36 and Specification Decision 11, never as a bypass or shortcut around establishment. No third mechanism, flag, or control of any kind, under any name, may declare a business "operational" or "established" outside these two named events.
 **FR-50 [DECIDED — Product Architect review, 22 August 2026].** For an existing business with a preserved historical Capital Inicial and no `BusinessWorthSnapshot` yet, the system must compute and display Estimated Business Worth without requiring a new-model Contagem first — never presenting such a business as UNKNOWN.
 **I-1 [AMENDMENT DRAFT — PENDING PRODUCT ARCHITECT ACCEPTANCE, §41].** Exactly one of {UNKNOWN (no baseline at all), State 1a (Estimated only, existing business, no snapshot yet), has a Current Business Worth (at least one `BusinessWorthSnapshot` exists, and Current Business Worth is now live-computed from the latest one forward, per State 3)} is true for a business at any instant — never more than one, never none.
 
@@ -135,6 +135,12 @@ BusinessWorthSnapshot {
   status: 'active' | 'corrected' | 'superseded-by-recovery'
   supersedesSnapshotId?: string      // set only if this snapshot exists because an owner correction
                                       // or SuperAdmin-authorized recovery replaced a prior one
+
+  establishmentMethod: 'contagem' | 'owner-declared'   // NEW — §42 Decision 11 (23 August 2026).
+                                     // Immutable, set once at creation. Provenance/display metadata
+                                     // only — does not alter which formula computes
+                                     // measuredBusinessWorth, does not gate which downstream
+                                     // consumer may read the snapshot, and does not affect I-2/I-3.
 }
 ```
 
@@ -144,7 +150,8 @@ BusinessWorthSnapshot {
 
 **FR-5.** Confirming a Contagem under this model must, in the same atomic operation as the `StockCount` write (§23–§24), create exactly one new `BusinessWorthSnapshot` document.
 **FR-6.** A `BusinessWorthSnapshot`'s frozen fields must never be the target of an `update` operation through any path outside §25–§26's governed windows.
-**FR-7.** The Business Worth history view must return every snapshot for a business, ordered by `confirmedAt`, including the current one, each independently drillable into every field listed above.
+**FR-7 [drill-down behavior for Owner-Declared snapshots amended, §42].** The Business Worth history view must return every snapshot for a business, ordered by `confirmedAt`, including the current one, each independently drillable into every field listed above. **For a snapshot with `establishmentMethod: 'owner-declared'`, see §42's amended drill-down rule (FR-69) — FR-7 requires every *available* content item be drillable, and has never required a content item to be fabricated where the establishment method genuinely does not produce it.**
+**FR-61 [new, §42].** Every `BusinessWorthSnapshot` must carry an `establishmentMethod` field of exactly `'contagem'` or `'owner-declared'`, set once at creation, immutable thereafter, and visibly distinguished in every UI surface that displays snapshot history.
 **I-2.** No two `BusinessWorthSnapshot` documents for the same business share a `sourceStockCountId`.
 **I-3.** A `BusinessWorthSnapshot`'s `measuredBusinessWorth`, once written, never changes value — a correction produces a new document, never a field mutation on this one.
 
@@ -264,8 +271,11 @@ An unpaid receivable does **not** contribute to Business Worth (source BDR Decis
 Payable {
   id: string
   businessId: string
-  sourcePurchaseBatchId: string
+  sourcePurchaseBatchId?: string     // NEW, §42 Decision 12 — now OPTIONAL, was required.
+                                      // Required only when origin === 'purchase'.
+  origin: 'purchase' | 'opening-balance' | 'other-obligation'   // NEW — §42 Decision 12
   supplierId?: string        // links to the existing reusable Supplier entity where one was used
+  description?: string       // NEW, §42 Decision 12 — required when origin !== 'purchase'
   totalAmount: number
   amountPaid: number
   amountRemaining: number
@@ -285,6 +295,7 @@ An outstanding `Payable` reduces Business Worth once, at the moment the liabilit
 
 **FR-14.** A supplier-credit purchase must create a `Payable` for the credited amount at the same time it creates its `StockBatch`/`PurchaseBatch` records, without adding the purchase's full cost to any Business Worth figure beyond the resulting embedded profit.
 **FR-15.** A `PayablePayment` must never be counted as an additional Business Worth reduction beyond the reduction the `Payable`'s own outstanding balance already represents.
+**FR-62 [new, §42 Decision 12].** A `Payable` of origin `'opening-balance'` or `'other-obligation'` must be creatable via a standalone path requiring no `PurchaseBatch`/`StockBatch`, must require a non-empty `description`, and must otherwise participate in the exact same payment, settlement, Business Worth, and notification mechanics (FR-14, FR-15, the existing `payable.outstanding` notification) as a purchase-origin `Payable`, without alteration to those existing mechanics.
 **I-6.** For any `Payable`, `amountPaid` equals the sum of its `PayablePayment.amountPaid` values, always — mirroring I-5.
 
 ## 13. Startup Investment
@@ -350,6 +361,10 @@ Physical quantities and entered prices remain in their entered units, unchanged 
 
 **FR-20.** Contagem entry must accept either a single selling-unit price applied uniformly, or multiple independently-entered selling-unit prices applied per physical portion, without forcing a choice the Owner has not made.
 **FR-21.** Neither mode may alter how a physical quantity or its entered unit label is stored or displayed — internal conversion exists solely for the valuation calculation.
+
+**[Amendment, §42] Cost-basis preservation across portions — deterministic, always-on, never Owner-configurable.** A product's cost has exactly one original purchase unit and price (its most recent `StockBatch.costPrice`, in that batch's own purchase unit). Selling price is legitimately Owner-discretionary (Mode A/B above, completely untouched by this addition). Cost has no such discretion — it is a fact to compute, not a preference to set. When a Contagem portion's unit differs from the product's original purchase unit, and a valid, confirmed `unitRelationship` exists covering that unit, the system **automatically and unconditionally** computes that portion's cost price via the existing `getConversionFactor` engine (unmodified, reused exactly as Mode A already reuses it for selling price) — never as an Owner-facing toggle, never opt-in per product, never requiring manual entry, and never silently defaulting to zero. **The one narrow exception, mirroring `getConversionFactor`'s own existing, unmodified null-handling contract exactly:** when no valid/confirmed `unitRelationship` exists, or a portion's unit is outside the confirmed chain, `getConversionFactor` already returns `null` rather than fabricating a factor — in that specific case only, the Owner enters the cost manually, exactly as today.
+
+**FR-67 [new, deterministic, §42].** For a multi-portion Contagem entry where a portion's unit differs from the product's most recent purchase unit, and a valid, confirmed `unitRelationship` exists covering that unit, the system MUST automatically and deterministically compute that portion's cost price via the existing unit-relationship conversion engine — never as an optional or Owner-configurable behavior, never requiring manual entry in this case, and never silently defaulting to zero. Manual cost entry is permitted only in the single case `getConversionFactor` itself already treats as unconvertible.
 **FR-22.** +Stock's existing single-selling-unit-per-batch data model and entry flow must remain entirely unmodified by this capability.
 
 ## 16. Cost Price Preservation
@@ -374,7 +389,7 @@ Embedded profit must never be double-counted on top of a measured valuation wher
 
 **(B) Extends the existing `Closing` record and `isPeriodClosed` guard; does not replace them. [DECIDED — Product Architect review, Decision 8, and the accompanying "Critical Fecho Position Rule," 22 August 2026 — this decision resolves the mechanism the source BDR itself deferred (§6, item 4) and supersedes this section's original "arbitrary Owner-chosen start/end date pair" framing below.]**
 
-**Fecho is not a generic arbitrary-date-range profit report.** **[AMENDMENT DRAFT — PENDING PRODUCT ARCHITECT ACCEPTANCE, §41 — cross-reference only; Fecho's own behavior below is unchanged]** Fecho continues to report its figure as Estimated Business Worth, per §9's own naming convention for a read evaluated as of a specific chosen date rather than "right now" — this is the same formula §7 now also calls Current Business Worth when read live/today; Fecho's own terminology and behavior are not altered by this amendment. Fecho's range always **starts at the latest applicable confirmed Contagem / Current Business Worth baseline** (a `BusinessWorthSnapshot.confirmedAt`, or, for a business still in State 1a §6, its historical Capital Inicial baseline date) and **runs forward to an Owner-selected end date**. The Owner controls the end date; the start date is never independently owner-chosen — it is always the active baseline, consistent with §9's "exactly one baseline, the latest, is ever active" rule. Worked example, exactly as decided: last Contagem `01 May 2026`; Owner opens Fecho on `25 May 2026`; Fecho covers `01 May 2026 → 25 May 2026`.
+**Fecho is not a generic arbitrary-date-range profit report.** **[AMENDMENT DRAFT — PENDING PRODUCT ARCHITECT ACCEPTANCE, §41 — cross-reference only; Fecho's own behavior below is unchanged]** Fecho continues to report its figure as Estimated Business Worth, per §9's own naming convention for a read evaluated as of a specific chosen date rather than "right now" — this is the same formula §7 now also calls Current Business Worth when read live/today; Fecho's own terminology and behavior are not altered by this amendment. Fecho's range always **starts at the latest applicable confirmed Contagem / Current Business Worth baseline** (a `BusinessWorthSnapshot.confirmedAt`, of either `establishmentMethod` — §42 Decision 11) and **runs forward to an Owner-selected end date**. **[Corrected, §42, Correction 4]** A business still in State 1a §6 (historical Capital Inicial only, no `BusinessWorthSnapshot` yet) has no Fecho baseline at all — see FR-25 as corrected, below. The Owner controls the end date; the start date is never independently owner-chosen — it is always the active baseline, consistent with §9's "exactly one baseline, the latest, is ever active" rule. Worked example, exactly as decided: last Contagem `01 May 2026`; Owner opens Fecho on `25 May 2026`; Fecho covers `01 May 2026 → 25 May 2026`.
 
 This does not narrow the source BDR's own business requirement (Decision 24: "a flexible/custom owner-chosen date range... not only calendar month or year") — the Owner is still never restricted to a calendar month or year, and still freely chooses the end date. It fixes, at the Specification level, exactly which of the two boundaries the Owner is free to choose, per the source BDR's own explicit deferral of the arbitrary-range *mechanism* to this stage (§6, item 4; POL-0010 §19).
 
@@ -386,11 +401,12 @@ Per the investigation (§1, item 9): `Closing` already stores free-form `startDa
 
 Fecho must report, for the selected period: (1) embedded profits, (2) Levantamentos, (3) expenses, (4) breakages, (5) Estimated Business Worth as of the selected end date (source BDR Decision 24; POL-0010 FEC-1). Levantamentos remain visible as activity, clearly marked as money removed from the business, never an ordinary operating expense (FEC-3). No other change to Fecho's existing structural role — freezing a period, the existing double-close guard — is authorized (FEC-4).
 
-**FR-25.** Fecho must accept an Owner-chosen **end** date; its **start** date must always be the active baseline's own date (the latest `BusinessWorthSnapshot.confirmedAt`, or the historical Capital Inicial baseline date for a State-1a business) — never an independently owner-chosen start.
+**FR-25 [Corrected, §42].** ~~Fecho must accept an Owner-chosen **end** date; its **start** date must always be the active baseline's own date (the latest `BusinessWorthSnapshot.confirmedAt`, or the historical Capital Inicial baseline date for a State-1a business) — never an independently owner-chosen start.~~ **[Corrected, §42]** Fecho's start date is resolved exclusively from the `confirmedAt` of the latest active `BusinessWorthSnapshot` — of either `establishmentMethod` (§42 Decision 11) — never from Capital Inicial's date under any circumstance. When no `BusinessWorthSnapshot` exists yet — regardless of whether the business has a preserved historical Capital Inicial — Business Worth has not yet been established, and Fecho has no baseline to use. Custom-period Fecho is unavailable in this state. The Owner sees an explicit message directing them to either establishment method: "Estabeleça primeiro o Valor do Negócio através de uma Contagem ou de um Valor de Negócio Declarado para utilizar o Fecho." This is an explicitly accepted behavior change: a business that previously relied on the Capital-Inicial fallback for custom-period Fecho will see it become unavailable until it performs a genuine establishment event.
 **FR-26.** The existing double-close guard must continue to prevent closing the exact same period twice, for the new `periodType` exactly as it already does for `monthly`/`yearly`.
 **FR-27.** No existing `Closing` behavior (freezing `businessWorthAtClose` from the live all-time figures at close time, per `02-business-worth-engine.md`) is altered by this Specification.
 **FR-53 [DECIDED — Product Architect review, 22 August 2026].** Fecho's reported Estimated Business Worth must be computed via the exact same §9 formula and scope as any other Estimated Business Worth read for that business — never a separate calculation re-filtered to a narrower window than "since the active baseline."
 **FR-54 [DECIDED — Product Architect review, 22 August 2026].** A request for profit analysis over a date range not anchored to the active baseline must be served by the existing Reports module (spec #12), never fabricated as a new Fecho behavior or a new reporting module.
+**FR-68 [new, §42].** `ProductReportDetail` must expose a `batchContributions` array reusing the existing per-batch `calculateBatch` computation already performed inside `generateReportSummary`'s own loop, without altering that function's existing aggregate output fields. See §42's Batch-Level Profit Attribution amendment for full detail.
 
 ## 19. Levantamentos
 
@@ -437,7 +453,7 @@ Contagem compares system-recorded financial reality (the Cash Ledger balance, §
 **FR-31.** A cash reconciliation discrepancy must be recorded and displayed as a signed numeric difference with no default classification/label beyond "reconciliation signal."
 **FR-32.** No code path may automatically write "theft," "loss," "error," or "Quebra" as the cause of a reconciliation discrepancy — that determination, if ever recorded, is exclusively an Owner-entered fact, never a system inference.
 **FR-56 [DECIDED — Product Architect review, 22 August 2026].** When a reconciliation discrepancy exists, the system must present a non-exhaustive, evidence-supported list of possible causes drawn from the business's own existing records, and must never present any single cause as a determined fact unless those records already establish it.
-**FR-57 [DECIDED — Product Architect review, 22 August 2026].** The system must be able to generate preventive, actionable, evidence-based, non-accusatory reminders referencing a known prior discrepancy or an outstanding operational gap (an unpaid Receivable, an unpaid Payable, a prior stock or cash variance), delivered through the existing Notifications module's Background Worker trigger path and its (extended, per amendment precedent) `NotificationCategory` enum — never through a new, parallel notification system.
+**FR-57 [amended in place, §42].** The system must be able to generate preventive, actionable, evidence-based, non-accusatory reminders referencing a known prior discrepancy or an outstanding operational gap (an unpaid Receivable, an unpaid Payable, a prior stock or cash variance), delivered through the existing Notifications module's Background Worker trigger path and its (extended, per amendment precedent) `NotificationCategory` enum — never through a new, parallel notification system. **[Amendment, §42] Receivable reminder cadence:** the existing `business_worth.receivable.outstanding` notification is extended from one-shot to recurring: while a `Receivable`'s `status` remains `'unpaid'` or `'partially-paid'`, the system re-notifies every 30 days from the date of the last notification for that receivable. A partial payment does not reset this cadence. Notification ceases immediately and permanently once `status` becomes `'paid'`. **FIN-3 (§11) is entirely unaffected** — an unpaid receivable still contributes nothing to Business Worth regardless of reminder frequency. This extended cadence applies to this event type only; the trial/closing/breakage notification producers' own one-shot precedent is unaffected and remains one-shot for their own event types.
 
 ## 23. Contagem Autosave
 
@@ -656,6 +672,8 @@ The existing Dashboard's nine-KPI-card structure is not redesigned (source BDR D
 
 **FR-47.** Clicking the Dashboard's existing Business Worth card must open the Business Worth history view (§8's `businessWorthSnapshots` collection, ordered), including the current record.
 
+**[Corrected/extended, §42] Three-surface terminology authorization.** The prior "no redesign" scope is extended to explicitly authorize, across exactly three surfaces and no others: (a) the Dashboard's Business Worth summary modal — replacing its "Initial Capital (starting point)" line item and its stale pre-Cash-Ledger `explanation` text with accurate, current-formula copy; (b) `CapitalGrowthReport.tsx` — correcting its use of `initialCapitalValue` as its timeline's starting-point label; (c) `BusinessWorthReport.tsx` — correcting its `kpiInitialCapital`/`kpiInitialCapitalFull` KPI card. In all three surfaces: before Business Worth establishment (State 1/1a), the displayed term is "Business Worth" (Estimated, where Capital Inicial's historical figure supports an Estimate per State 1a, clearly labeled as Estimated). After establishment (State 3, either method), the displayed term is "Current Business Worth," live per §7. Historical Capital Inicial data is never deleted, migrated, or rewritten (HIST-1, unaffected) — it is relocated, in display only, to an "Initial Investment / capital history" section or label, fully executing BDR Decision 3's original conceptual-transfer intent, which this section's prior text authorized in principle but did not fully specify in practice.
+
 ## 33. Security / Authorization
 
 Minimum authorization boundaries, extending the existing `isMemberOf`/`isOwnerOf` tenant-isolation model unmodified:
@@ -843,3 +861,114 @@ Added to §36 rather than decided in this section, per instruction not to invent
 **Scope of this acceptance:** covers this §41 amendment's content in full, as it amends §6, §7, §9, §18, §22, §27, §28, §29, §30a, §32, §36, and §37 of this Specification — it does not reopen, amend, or re-approve the source BDR or POL-0010 themselves (both remain approved exactly as they already were), and it does not itself amend the Rule 8 Assessment, Implementation Plan, or Implementation Authorization, each of which remains a distinct, separately-gated artifact whose consistency with this now-accepted amendment is addressed by a separate Governance Reconciliation Report, not by this acceptance statement itself.
 
 **Continued validity note:** This acceptance does not reopen, alter, or reinterpret §40's original Acceptance, or the two Rule-8-stage decisions recorded in §26/§30b — it is an additive governance event at a later stage of the same chain, exactly as those were additive to what preceded them.
+
+## 42. Amendment — Business Worth First Establishment Lifecycle (23 August 2026)
+
+**Status:** ✅ **ACCEPTED (23 August 2026).** This section records, as final, internally consistent Specification text, the Product Architect's already-approved and signed decisions from `docs/engineering/business-worth-evolution-first-establishment-decision.md` (committed `15767c3` on top of `a544406`), together with the Revision-3 corrections resolving the internal-consistency gaps identified after Revision 2. This section does not reopen, re-litigate, or ask for reconfirmation of any of those decisions. Every passage elsewhere in this document marked `[Corrected, §42]`, `[Amendment, §42]`, or `[new, §42]` is, as of this acceptance, accepted, authoritative Specification content — the bracketed marker text is left in place at each passage as an accurate historical record of what changed and why, following this document's own existing convention (§30a, §30b, §41).
+
+### 42.1 Authoritative Terminology (fixed for the remainder of this document)
+
+| Term | Meaning | Establishes Business Worth? |
+|---|---|---|
+| **Capital Inicial / Initial Investment** | Historical record of capital/stock present at business start; capital-history information only | **No — never** |
+| **Startup Investment** | Governed record of spending to establish the business (labor, wages, transport, preparation, license, other) | **No — explicitly excluded, unchanged (Decision 6/FR-52)** |
+| **Contagem** | A confirmed physical stock count | **Yes — Establishment Method 1** |
+| **Owner-Declared Business Worth** | A confirmed, Owner-entered known value | **Yes — Establishment Method 2** |
+| **Owner Investment** | A later cash injection by the Owner into an already-operating business | **No — does not itself establish Business Worth; it is a governed transaction that increases an already-established Business Worth** |
+| **Business Worth (pre-establishment)** | The business's known operational information (stock, embedded profit, expenses, Startup Investment, etc.), displayed honestly as not-yet-measured | N/A — this state has no Business Worth figure at all (State 1) or an Estimated one only (State 1a) |
+| **Current Business Worth** | The live figure computed from the latest genuine `BusinessWorthSnapshot` (either establishment method) plus every governed transaction since | The display term used once establishment has occurred (State 3) |
+
+There are exactly two Business Worth establishment methods. No third exists, and none is introduced anywhere in this amendment: Contagem, and Owner-Declared Business Worth.
+
+### 42.2 Corrections Made (Corrections 1–4)
+
+- **Correction 1 (terminology consistency)** — resolved by §42.1 above, and applied consistently at §6 State 2, FR-2, §14/§15, §18/FR-25, and §32.
+- **Correction 2 (Owner Investment's three-way distinction)** — resolved at new §43, below.
+- **Correction 3 (snapshot drill-down consistency for Owner-Declared establishments)** — resolved by FR-69, below, and the amended FR-7 cross-reference at §8.
+- **Correction 4 (Fecho baseline consistency across every referencing section)** — resolved at §18/FR-25 (corrected in place), with cross-references rather than restatement at §6, §32, §25–§26, and here.
+
+### 42.3 Snapshot Drill-Down Consistency for Owner-Declared Snapshots (Correction 3)
+
+FR-7 (§8) requires every snapshot to be drillable into all twelve content items. An Owner-Declared snapshot, by its own nature, never contains a physical count, a confirmed cash position, or a measured receivables/payables position **at the moment of establishment** — only the declared total and a date.
+
+**Resolution — absence, never fabrication, exactly matching this codebase's own existing discipline:** the existing `BusinessWorthSnapshot` write path already follows an "omit entirely, never write a fabricated zero/undefined" rule for every optional field. This exact discipline is extended, unmodified in kind, to Owner-Declared snapshots:
+
+For a snapshot with `establishmentMethod: 'owner-declared'`:
+- `measuredBusinessWorth` is the Owner's declared figure — the one genuine, required fact this establishment method provides.
+- `productValuationTotal`, `productValuationDetail`, `embeddedProfitTotal`, `embeddedProfitDetail`, `cashPosition`, `receivablesPosition`, `payablesPosition`, `expensesSinceLastSnapshot`, `breakagesSinceLastSnapshot`, `levantamentosSinceLastSnapshot`, and `ownerInvestmentSinceLastSnapshot` (§43) are all **omitted entirely** — never written as a fabricated zero, never written as `null` standing in for "measured as zero," and never inferred from any other data source.
+- The drill-down UI, for an Owner-Declared snapshot, displays the declared total, its date, its `establishmentMethod` badge, and an explicit notice that no physical/financial breakdown exists for this snapshot because none was measured — never presenting a blank/zero field as though it meant "nothing existed," and never presenting the absence as an error or a defect in the snapshot.
+- **FR-7 is not violated by this absence** — FR-7 requires that every *available* content item be drillable; it has never required a content item to be fabricated where the establishment method genuinely does not produce it.
+- From the moment immediately after an Owner-Declared snapshot's `confirmedAt`, the live "since snapshot" calculation (`computeCaseALiveBusinessWorth`) behaves identically regardless of establishment method — embedded profit changes, expenses, withdrawals, Owner Investments, and receivable/payable payments all accrue against the declared `measuredBusinessWorth` baseline exactly as they would against a Contagem-measured one. No change to the live-calculation engine is required or introduced by this provision.
+
+**FR-69 [new].** A `BusinessWorthSnapshot` with `establishmentMethod: 'owner-declared'` must omit every drill-down field this Specification defines except `measuredBusinessWorth`, `confirmedAt`, `establishmentMethod`, and the reconciliation fields (§8) where meaningfully computable — never fabricating a zero or inferred value for any omitted field. The Dashboard/history UI must display this absence explicitly and never as an error.
+
+### 42.4 Rule 8 Assessment Correction
+
+`docs/engineering/business-worth-evolution-rule8-assessment.md` Finding 6-A/8-A receives a dated correction addendum (applied directly in that file, appended not rewritten in place) stating that the Capital-Inicial Fecho-baseline fallback those findings previously documented as correct is superseded by §18/FR-25 as corrected above.
+
+### 42.5 Confirmations
+
+- No file under `docs/specs/` or `docs/engineering/` other than this Specification, the BDR, and the Rule 8 Assessment addendum was edited to produce this amendment.
+- No code, test, `firestore.rules`, `firestore.indexes.json`, or `package.json` file is touched by this amendment.
+- No Increment 10 is authorized by this amendment. Increments 1–9 are not reopened.
+- All prior BDR decisions remain traceable and unweakened; this amendment adds Decision 36 (BDR) and Decisions 11–12 (this Specification, §8/§12) without reversing any other decision except the single, explicitly-flagged reversal of Gap 2's establishment-mechanism portion (BDR Decision 36).
+- A separate, subsequent Implementation Authorization step remains required before any code is written — unchanged by this amendment.
+
+### 42.6 Traceability
+
+| Item | Section | Class | New FR(s) | Reverses a prior decision? |
+|---|---|---|---|---|
+| §6 State 2 / BDR Decision 1 false premise | §6; BDR §4 Decision 1 | Correction | none (textual) | No — corrects a factual error |
+| Owner-Declared Business Worth | BDR Decision 36; this §42 | New Decision, approved | FR-61 | Yes — reverses Gap 2's establishment-mechanism choice; approved and signed |
+| `establishmentMethod` field | §8 | New Decision, approved | FR-61 | No |
+| Snapshot drill-down for Owner-Declared | §8/FR-7, §42.3 | New Decision, approved | FR-69 | No — resolves an internal-consistency gap, no reversal |
+| Opening Payables/Liabilities | §12 | New Decision, approved | FR-62 | No — extends Decision 5, purchase case unchanged |
+| Additional Owner Investment | §43 | New Decision, approved | FR-63, FR-64, FR-65, FR-66 | No — new territory |
+| Deterministic cost-basis conversion | §15 | New Decision, approved | FR-67 | No — new territory |
+| Fecho baseline correction | §18/FR-25 | Correction | FR-25 amended in place | No — corrects behavior contrary to stated intent |
+| Fecho batch-level profit | §18 | New Decision, approved | FR-68 | No — scoped enhancement |
+| Receivable reminder cadence | §22/FR-57 | New Decision, approved | FR-57 amended in place | No — fills a previously open question |
+| FR-2 Path-B exception | §6/FR-2 | New Decision, approved | FR-2 amended in place | No — names Path B as a second permitted event |
+| Dashboard/report terminology, 3 surfaces | §32 | New Decision, approved | none new | No — extends scope, executes BDR Decision 3 in full |
+| Rule 8 Finding 6-A/8-A | Rule 8 Assessment | Correction addendum | N/A | No — corrects documentation of now-superseded behavior |
+
+### 42.7 Product Architect Acceptance
+
+**Status:** ✅ **Accepted (23 August 2026).**
+
+> I have reviewed the §42 amendment recording the Business Worth First Establishment Lifecycle decisions (BDR §4 Decision 36; this Specification's Decisions 11–12) and the Revision-3 corrections (Corrections 1–4) into final, internally consistent Specification text. This amendment is **ACCEPTED and APPROVED**.
+
+**Product Architect:** SABUSHIMIKE Masceni
+**Date:** 23 August 2026
+
+**Scope of this acceptance:** covers this §42 amendment's content in full, as it amends §6, §8, §12, §14/§15, §18, §22, §32 of this Specification, adds new §43, and adds BDR Decision 36 and a Rule 8 Assessment correction addendum — it does not reopen, amend, or re-approve any other portion of the source BDR, POL-0010, or this Specification, and does not itself authorize Increment 10 or any Implementation Plan/Authorization step, each of which remains a distinct, separately-gated artifact.
+
+## 43. Owner Investment
+
+**(C) New record type, new collection — a genuinely new financial-position input, structurally and conceptually distinct from both Capital Inicial/Initial Investment (historical capital record, never re-entered, never affects Business Worth directly) and Startup Investment (§13, governed spending, permanently excluded from Business Worth, Decision 6/FR-52, unchanged). [Product Architect Decision, 23 August 2026 — SIGNED, §42.]**
+
+**The three-way distinction, stated explicitly and exhaustively:**
+- **Initial Investment / Capital Inicial** — a historical record of capital/stock present at business start. Never re-entered after the fact. Never affects Business Worth as a live transaction. Displayed under "Initial Investment / capital history," never under a Business Worth heading.
+- **Startup Investment** — a governed record of what the Owner spent establishing the business (labor, wages, transport, preparation, license, other). Permanently excluded from Business Worth (Decision 6/FR-52, unaffected by this amendment). `startupInvestmentEntries`'s existing category enum and FR-17's scope restriction are unchanged and are never widened to cover Owner Investment.
+- **Owner Investment (this section)** — money the Owner personally contributes to an **already-operating business, after Business Worth has been established** (by either method). It is a genuine, additive Business Worth transaction, not a historical record and not excluded spending.
+
+**Proposed collection:** `businesses/{businessId}/ownerInvestments/{investmentId}`.
+
+```
+OwnerInvestment {
+  id: string
+  businessId: string
+  amount: number
+  date: string          // Owner-chosen, backdatable, mirroring Expense/Withdrawal precedent
+  description?: string
+  createdAt: Timestamp
+  createdBy: string
+}
+```
+
+Every `OwnerInvestment` produces exactly one linked `CashLedgerEntry` (`direction: 'inflow'`, `category: 'other-governed-movement'` — reusing the existing, previously-unused schema value). It is additive in the live Business Worth calculation, symmetric to how a Withdrawal is subtractive: `computeCaseALiveBusinessWorth` gains a new `+ ownerInvestmentsSinceSnapshot` term, computed and applied exactly once — never double-counted against its own linked `CashLedgerEntry`'s effect, following the identical non-double-counting discipline already governing Receivable/Payable payments. It is frozen onto each `BusinessWorthSnapshot`'s drill-down as `ownerInvestmentSinceLastSnapshot` (§8), present for a Contagem-sourced snapshot's *subsequent* activity and equally present for an Owner-Declared snapshot's subsequent activity (§42.3) — the omission rule in §42.3 applies only to a snapshot's own establishment-moment detail, never to governed activity that occurs *after* establishment, regardless of which method established the baseline. It is logged to the existing per-business Timeline (never `platform_audit_log`, reserved for platform/SuperAdmin events), following the same "log after successful batch commit" discipline every other governed financial event already uses.
+
+**FR-63 [new].** Recording an `OwnerInvestment` must produce exactly one linked `CashLedgerEntry` (inflow, `other-governed-movement`) in the same atomic write.
+**FR-64 [new].** `OwnerInvestment.amount` must be additive in the live "since snapshot" Business Worth calculation, symmetric to how `Withdrawal.amount` is subtractive, applied exactly once, with no double-counting against the linked `CashLedgerEntry`'s own effect.
+**FR-65 [new].** `BusinessWorthSnapshot` must expose `ownerInvestmentSinceLastSnapshot` as a new drill-down field, present for post-establishment activity under either establishment method, following the "reference, don't duplicate" discipline §8 already establishes for its sibling fields.
+**FR-66 [new].** `startupInvestmentEntries`'s existing category enum and FR-17's existing scope restriction remain completely unchanged. `OwnerInvestment` is a wholly separate mechanism and record type — never a reclassification, relabeling, or widening of Startup Investment, Capital Inicial, or any existing transaction type.
