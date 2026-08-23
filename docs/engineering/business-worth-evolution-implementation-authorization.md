@@ -810,3 +810,55 @@ This amendment is now signed (§31, above). The next, separate operational actio
 **This Decision does not reopen:** the approved Increment 10 item 1 UI-boundary decision (§26 — dedicated entry point, never a Contagem toggle); the Fecho baseline decision (Owner-Declared remains a valid operational and Fecho baseline; Capital Inicial fallback removal remains valid, §24); the already-signed correction/recovery mechanics (§25–§26 of the Specification; unaffected). It also does not authorize Increment 10 items 2–7 or either Post-Implementation Correction, which remain exactly as scoped in §23–§25, above.
 
 **Next governance step for this Decision specifically:** a separate, explicit authorization is required before the display-layer implementation changes named above are written, per the Product Architect's own scope-control instruction accompanying this Decision. This section records the governance amendment only.
+
+---
+
+## 36. Product Architect Authorization — Decision 37 (First-Time Contagem Product-Information Model)
+
+**Status: ✅ SIGNED AND AUTHORIZED (23 August 2026).** Signature recorded in the Formal acceptance block, below. Per this document's own established practice (§14/§15/§31), this signature is the governance authorization gate — it does not by itself instruct implementation to begin; that remains a further, separate, explicit per-item instruction (§7/§23-mirrored one-item-at-a-time discipline, restated below).
+
+**Governing basis, in order:** BDR-pending-business-worth-evolution-measurement-model.md §4, Decision 37 (✅ APPROVED AND SIGNED, SABUSHIMIKE Masceni, 23 August 2026) → Rule 8 Assessment Addendum — First-Time Contagem Product-Information Model (✅ ACCEPTED, SABUSHIMIKE Masceni, 23 August 2026, gate READY FOR PLAN) → Implementation Plan Amendment — Decision 37 (✅ ACCEPTED, SABUSHIMIKE Masceni, 23 August 2026) → **this Authorization item (awaiting signature)**.
+
+**One umbrella Authorization, extended, not replaced** (per BDR Decision 35 / this document's own existing "one umbrella Authorization, not nine" statement) — this section does not create a second, separate Implementation Authorization; it extends the single existing document with a new dated item, exactly as §17–§21, §23, and §34–§35 already did for Increments 5–9, Increment 10, and the Owner-Declared verification-status clarification respectively.
+
+**Scope of this authorization item, per the accepted Plan Amendment's §B:**
+
+1. **B.1 — Product-level first-time setup panel** (`PeriodicStockCountView.tsx`): one product name field, one original-purchase-unit field, one original-purchase-cost field, per genuinely-new product; replaced by a read-only summary (reusing existing `getUnitRelationshipForProductName`/`findMostRecentBatchForProduct`) once the product already exists.
+2. **B.2 — Arbitrary-length unit-relationship entry**: extends `UnitRelationshipRow` (or its replacement) from a fixed two-level pair into a repeatable chain-step list; candidate `UnitRelationship` correlated to the entire product **group**, not a single row.
+3. **B.3 — Multiple portions + "+ Add Portion"**: ports the already-shipped Grouped Initial Stock UX (`groupRowsByProductName`, `handleAddPortion`, `handleRenameGroup`, `handleRemoveGroup`) from `InitialStockCountView.tsx` into `PeriodicStockCountView.tsx`, unmodified at the `stockCountPortionGrouping.ts` level.
+4. **B.4 — Cost-field suppression**: hides/disables the per-portion `costPrice` input for a portion whose unit differs from the product's purchase unit, once a cost basis + relationship exist. UI-only; introduces no new calculation.
+5. **B.5 — First-time vs. subsequent distinction**: confirmed to require no code beyond B.1's existing-product read-only branch, reusing the existing `isGenuinelyNewProductName` gate.
+
+**This authorization means, and means only:**
+- Implementation remains strictly **one item at a time**, mirroring §7's and §23's existing discipline exactly — B.2 through B.5 do not become authorized merely because B.1 is instructed to begin, and vice versa; each of B.1–B.5 requires its own separate, explicit "begin this item" instruction before work starts on it.
+- This signature, if given, is the **governance authorization gate only** — it does not itself instruct implementation to begin, exactly as §14/§15/§31's own established language already establishes for every prior increment/amendment in this document.
+- This authorization does **not** change any business decision recorded in Decision 37, does not reopen the accepted Rule 8 Addendum or Plan Amendment, and does not amend `getConversionFactor`, `Product.unitRelationship`, `StockBatch`'s cost-basis model, Mode A/Mode B selling behavior, `totalSellingValue`, `productValuationTotal`, or Business Worth's selling-basis formula — all explicitly preserved, per Decision 37's own "does not authorize" list and the Plan Amendment's own §A/out-of-scope sections.
+- This authorization does **not** touch Owner-Declared Business Worth, Fecho, Owner Portfolio, or any other Increment 10 item (§23–§25, §34–§35, above) — all remain exactly as already scoped there.
+- This authorization does **not** by itself require any `firestore.rules` or `firestore.indexes.json` change — none was identified by the Rule 8 Addendum or Plan Amendment for this scope; should implementation surface a genuine need for one, that would itself require a separate governance step before being written, per §8/§9's existing "no redesign, no silent scope expansion" discipline.
+
+**Execution rule, once signed (mirrors §23's eight-step discipline exactly, applied to B.1–B.5):**
+1. Read the item's scope (above, and the Plan Amendment's own §B.1–§B.5 text) before writing anything.
+2. Verify prerequisites — B.1 before B.2 (the panel B.2's chain-list renders inside); B.4 after B.1 (a cost basis must exist to suppress against).
+3. Implement only that item's own scope — no item may silently implement a later item's functionality.
+4. Run the tests the Plan Amendment names for that item, including the regression checks (`stockCountPortionGrouping.ts`'s existing exports/tests, selling-side/Business-Worth byte-identical checks, existing-product no-panel regression).
+5. Inspect the diff — confirm no file outside `PeriodicStockCountView.tsx` (and its own new test file(s)) was touched, unless a genuinely required change is separately identified and justified.
+6. Verify governance compliance against Decision 37's own items and this section's scope list, above.
+7. Record the result as its own dated Execution Record section, mirroring §34's format.
+8. Only then proceed to the next item.
+
+**Formal acceptance:**
+
+> I have reviewed §36, "Product Architect Authorization — Decision 37". I APPROVE AND SIGN THIS AUTHORIZATION.
+>
+> This authorization formally approves the Decision 37 Implementation Authorization exactly as drafted, including: B.1 — Product-level first-time Contagem information panel; B.2 — Arbitrary-length unit-relationship entry; B.3 — Multiple current-stock portions with a first-class "+ Add Portion" interaction; B.4 — Suppression of redundant per-portion cost entry; B.5 — First-time product setup versus subsequent Contagens.
+>
+> The approved product model is: one product → one original purchase/cost basis + one complete unit relationship; one Contagem → multiple current-stock portions for that product, each with its own quantity/unit and independent selling price. The system automatically calculates Total Cost Value from the original purchase/cost basis and unit relationship, and Total Selling Valuation from the current selling portions/prices. Business Worth continues to use the Total Selling Valuation.
+>
+> The following remain explicitly unchanged and out of scope: `getConversionFactor`; Product/UnitRelationship/StockBatch data models; Mode A/Mode B selling logic; Business Worth's selling-basis formula; Owner-Declared Business Worth; Fecho; Owner Portfolio; other Increment 10 items; Firestore rules and indexes; shared-component refactoring.
+>
+> This signature is governance authorization only. It does not authorize implementation to begin automatically. Implementation of B.1–B.5 begins only upon a further, separate, explicit instruction naming the exact item to begin.
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status: ✅ SIGNED AND AUTHORIZED (23 August 2026).** Per the execution rule above (§7/§23-mirrored discipline), this signature is the governance authorization gate — it does not by itself instruct implementation to begin on B.1, B.2, B.3, B.4, or B.5. Each remains unauthorized to actually start until a further, separate, explicit instruction identifies the specific item to execute.
