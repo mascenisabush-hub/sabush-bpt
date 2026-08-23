@@ -16,6 +16,7 @@ import { PeriodicStockCountView } from './components/PeriodicStockCountView';
 import { ClosingView } from './components/ClosingView';
 import { BusinessTimelineView } from './components/timeline/BusinessTimelineView';
 import { DebtsView } from './components/DebtsView';
+import { StartupInvestmentView } from './components/StartupInvestmentView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
 import { QuickLoginScreen } from './components/QuickLoginScreen';
@@ -43,7 +44,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing' || activeTab === 'timeline' || activeTab === 'debts')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing' || activeTab === 'timeline' || activeTab === 'debts' || activeTab === 'startup-investment')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -52,7 +53,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing' || customEvent.detail === 'timeline' || customEvent.detail === 'debts')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing' || customEvent.detail === 'timeline' || customEvent.detail === 'debts' || customEvent.detail === 'startup-investment')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -173,6 +174,11 @@ function MainApp() {
             Increment 3; Specification §11, §12, §33] Owner-only, same
             gating as add-withdrawal/closing above. */}
         {!isStaff && activeTab === 'debts' && <DebtsView />}
+
+        {/* [Business Worth Evolution — Implementation Authorization,
+            Increment 5; Specification §13, §33] Owner-only, same gating
+            as debts above. */}
+        {!isStaff && activeTab === 'startup-investment' && <StartupInvestmentView />}
       </main>
 
       {/* Product Detail Modal */}

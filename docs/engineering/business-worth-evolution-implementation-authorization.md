@@ -296,3 +296,46 @@ The whole-capability authorization stated throughout this document (§2, §13, �
 **Status:** ✅ **ACCEPTED.**
 
 The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected — this section records a field-level construction correction within already-authorized, already-implemented Increments 1–4; it does not reopen, extend, or advance the incremental sequence. Increment 5 remains unauthorized to begin until separately instructed.
+
+---
+
+## 17. Product Architect Authorization — Increment 5
+
+**Increment 5: STARTUP INVESTMENT**
+
+**Status:** ✅ **AUTHORIZED TO BEGIN.**
+
+**Prerequisite confirmation:**
+- [x] Increment 1 is complete (`4186357`, plus the corrective commits `779c542`, `4b77b54`, `4a99430`).
+- [x] Increment 2 is complete (`ba2c130`).
+- [x] Increment 3 is complete (`c337ba8`).
+- [x] Increment 4 is complete (`49fb8ab`).
+- [x] Increment 5 is now authorized to begin.
+
+**This authorization means, and means only:**
+- Implementation remains strictly **one increment at a time** (§7) — Increment 6 and every later increment remain unauthorized to begin.
+- This authorization does **not** authorize implementation of the whole Business Worth Evolution capability at once.
+- This authorization does **not** change any business decision.
+- This authorization does **not** amend the Startup Investment economic rules.
+- Implementation must follow the already-approved Specification, Rule 8 Assessment, Implementation Plan, and this Authorization — none of which are reopened, reinterpreted, or amended by this section.
+
+**Increment 5 scope, explicitly preserved as already approved (not restated in substance, not redesigned):**
+- `StartupInvestmentEntry` collection — fields per Specification §13 / Plan §3.5.
+- The approved report-time aggregation (never a duplicated ledger, per FR-16): `Σ(pre-baseline PurchaseBatch original-investment totals) + Σ(pre-baseline Expense totals) + Σ(StartupInvestmentEntry.amount)`.
+- The approved `historicalCapitalInicialDate → StockCount.createdAt` date-window resolution for existing businesses (Rule 8 Finding 6-A — `createdAt`, not `confirmedAt`, since `createdAt` is unconditionally set on every `StockCount` with no legacy-absence exception).
+- FR-17's boundary: `StartupInvestmentEntry` is reserved exclusively for spending with no existing Product/Stock/Expense record — never a general-purpose alternative to Expense recording.
+- FR-52's boundary: no code path may compute or display a Startup-Investment-vs-Business-Worth "shortfall," "loss," or "performance" figure — the two totals remain independent, separately-labeled measurements only.
+- Rule 8 Finding 6-A is resolved and is not reopened by this section.
+
+**No requirement above is added to, removed from, or reinterpreted by this authorization.**
+
+**Formal acceptance:**
+
+> I authorize Increment 5 — Startup Investment — to begin, per the already-approved scope in Specification §13, Plan §3.5, and Rule 8 Finding 6-A. Increments 1–4 are confirmed complete. Implementation remains strictly one increment at a time; Increment 6 and all later increments remain unauthorized. This authorization introduces no new business decision, does not amend the Startup Investment economic rules (including FR-16, FR-17, FR-52), and does not reopen Finding 3 / Option A (`BusinessWorthSnapshotProductValuationLine.totalValue = quantity × sellingPrice`), which remains intact. **AUTHORIZED.**
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **AUTHORIZED.**
+
+The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction is unaffected and remains intact. This section authorizes only Increment 5's own beginning, per §7's one-increment-at-a-time discipline — Increments 6–9 remain unauthorized to begin until each is separately instructed in turn.

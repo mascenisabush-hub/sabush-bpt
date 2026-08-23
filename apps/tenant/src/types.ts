@@ -943,6 +943,29 @@ export interface PayablePayment {
   cashLedgerEntryId: string;
 }
 
+// [Business Worth Evolution — Implementation Authorization, Increment 5;
+// Specification §13, FR-16, FR-17] A narrow, residual record for Startup
+// Investment spending that has no existing Product/Stock/Expense home —
+// labor, wages, transport, licensing, preparation/renovation costs (FR-17).
+// This is NEVER a general-purpose alternative to Expense recording, and it
+// is NEVER itself the full Startup Investment figure — the full figure is
+// a report-time aggregation of (referenced pre-baseline PurchaseBatch
+// investment totals) + (referenced pre-baseline Expense totals) + (the sum
+// of these entries), computed by computeStartupInvestmentTotal
+// (calculations.ts), never a duplicated ledger (FR-16). Append-only — no
+// update/delete path exists for any role, at any time, mirroring
+// CashLedgerEntry's own I-4 discipline (see firestore.rules).
+export interface StartupInvestmentEntry {
+  id: string;
+  businessId: string;
+  category: 'labor' | 'wages' | 'transport' | 'preparation' | 'license' | 'other';
+  amount: number;
+  description?: string;
+  recordedAt: string; // ISO string
+  createdAt: string; // ISO string — server-recorded write time
+  createdBy: string; // uid, for auditability
+}
+
 // [Void & Redo — Implementation Authorization §2 item 2; Rule 8 Finding
 // G1, Direction 2 (adopted)] The additive, create-only artifact
 // recording that a given `initial` StockCount confirmation has been

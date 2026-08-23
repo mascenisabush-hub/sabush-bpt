@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine, StartupInvestmentEntry } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -1140,4 +1140,130 @@ export function generateReportSummary(
     totalWithdrawals,
     expensesList: expensesInRange,
   };
+}
+
+// ============================================================
+// BUSINESS WORTH EVOLUTION — INCREMENT 5
+// Startup Investment (Specification §13; Plan §3.5; Rule 8 Finding 6-A).
+// Two pure functions, deliberately separate from every Current/Estimated
+// Business Worth function above (getCurrentBusinessWorth,
+// getEstimatedBusinessWorth, computeMeasuredBusinessWorth): Startup
+// Investment is its own independent measurement, never merged into or
+// netted against Business Worth (FR-52) — see §"Business Worth boundary"
+// below. Neither function reads a BusinessWorthSnapshot, nor is called
+// from any Business Worth function — the isolation is structural, not
+// merely a documented intent.
+// ============================================================
+
+/**
+ * [Specification §13, FR-16; Rule 8 Finding 6-A] Resolves the Startup
+ * Investment date window's end boundary — never its own new business
+ * decision, purely "which of two already-decided dates applies to this
+ * business's own case":
+ *
+ * - **Genuinely new business** (this business's own `initial` StockCount
+ *   already carries `producesBusinessWorthSnapshot: true` — i.e. its own
+ *   Initial Stock/Capital Inicial confirmation IS this model's first
+ *   Contagem confirmation, State 2 directly): window ends at that same
+ *   confirmation's own timestamp (`firstContagemConfirmedAt`).
+ * - **Existing business already in State 1a or beyond** (its `initial`
+ *   StockCount predates this capability, so it does NOT carry the
+ *   marker): window ends at `historicalCapitalInicialDate`, resolved per
+ *   Rule 8 Finding 6-A to that same `initial` StockCount's own
+ *   `createdAt` — never `confirmedAt` (frequently absent on legacy
+ *   records) and never a future new-model Contagem's date, exactly per
+ *   FR-16's own "never using firstContagemConfirmedAt... for an existing
+ *   business already in State 1a" rule.
+ *
+ * Returns `null` when no `initial` StockCount exists yet at all — there is
+ * no baseline to anchor a window to, so nothing is reported (never a
+ * fabricated zero-width or all-time window).
+ */
+export function resolveStartupInvestmentWindow(params: {
+  businessCreatedAt: string;
+  initialStockCount: StockCount | null | undefined;
+}): { startDate: string; endDate: string } | null {
+  const { businessCreatedAt, initialStockCount } = params;
+  if (!initialStockCount) return null;
+
+  const isGenuinelyNewBusiness = initialStockCount.producesBusinessWorthSnapshot === true;
+
+  const endDate = isGenuinelyNewBusiness
+    ? (initialStockCount.confirmedAt ? new Date(toMillis(initialStockCount.confirmedAt)).toISOString() : initialStockCount.createdAt)
+    : initialStockCount.createdAt; // Rule 8 Finding 6-A — createdAt, never confirmedAt
+
+  return { startDate: businessCreatedAt, endDate };
+}
+
+/**
+ * [Specification §13, FR-16, FR-17; Plan §3.5] The report-time Startup
+ * Investment aggregation itself — `businesses/{id}/startupInvestmentEntries`
+ * documents are never the whole figure on their own. Never re-records a
+ * PurchaseBatch/Expense amount into a new transaction (FR-16) — this
+ * function only reads the existing `StockBatch`/`Expense` collections
+ * already maintained by +Stock and Add Expense, scoped to the resolved
+ * window, exactly the same "aggregate and format, never duplicate"
+ * discipline `generateReportSummary` (above) already applies to its own
+ * Fecho range.
+ *
+ * Deliberately returns three separate sub-totals plus their sum, and
+ * NOTHING resembling a "shortfall," "loss," or "performance" figure
+ * relative to Business Worth (FR-52) — no Business Worth value is even a
+ * parameter to this function, so there is nothing here to net against it.
+ */
+export function computeStartupInvestmentTotal(params: {
+  window: { startDate: string; endDate: string } | null;
+  batches: StockBatch[];
+  expenses: Expense[];
+  entries: StartupInvestmentEntry[];
+}): {
+  referencedPurchasesTotal: number;
+  referencedExpensesTotal: number;
+  entriesTotal: number;
+  total: number;
+} {
+  const { window, batches, expenses, entries } = params;
+
+  // FR-17: entries are never window-gated — every StartupInvestmentEntry
+  // ever recorded for this business is its own residual-category record,
+  // regardless of when it was recorded relative to the referenced-record
+  // window below (that window governs ONLY the referenced PurchaseBatch/
+  // Expense aggregation, per FR-16).
+  const entriesTotal = Number(
+    entries.reduce((sum, e) => sum + Number(e.amount || 0), 0).toFixed(2)
+  );
+
+  if (!window) {
+    return { referencedPurchasesTotal: 0, referencedExpensesTotal: 0, entriesTotal, total: entriesTotal };
+  }
+
+  const startMs = new Date(window.startDate).getTime();
+  const endMs = new Date(window.endDate).getTime();
+  const inWindow = (dateStr: string | undefined) => {
+    if (!dateStr) return false;
+    const ms = new Date(dateStr).getTime();
+    return ms >= startMs && ms < endMs;
+  };
+
+  // Investment/purchase spending: only batches linked to a PurchaseBatch
+  // (purchaseBatchId present) represent an actual investment/purchase
+  // event — mirrors the same distinction `04-purchase-batches.md`'s own
+  // aggregation already relies on.
+  const referencedPurchasesTotal = Number(
+    batches
+      .filter((b) => b.purchaseBatchId && inWindow(b.dateEntered))
+      .reduce((sum, b) => sum + Number(b.quantity || 0) * Number(b.costPrice || 0), 0)
+      .toFixed(2)
+  );
+
+  const referencedExpensesTotal = Number(
+    expenses
+      .filter((e) => inWindow(e.date))
+      .reduce((sum, e) => sum + Number(e.amount || 0), 0)
+      .toFixed(2)
+  );
+
+  const total = Number((referencedPurchasesTotal + referencedExpensesTotal + entriesTotal).toFixed(2));
+
+  return { referencedPurchasesTotal, referencedExpensesTotal, entriesTotal, total };
 }

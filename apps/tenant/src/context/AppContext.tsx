@@ -77,10 +77,11 @@ import {
   ReceivablePayment,
   Payable,
   PayablePayment,
+  StartupInvestmentEntry,
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -401,6 +402,17 @@ interface AppContextType {
   receivablePayments: ReceivablePayment[];
   payables: Payable[];
   payablePayments: PayablePayment[];
+  // [Business Worth Evolution — Implementation Authorization, Increment 5;
+  // Specification §13, §33] Owner-only tier, mirrors receivables/payables
+  // above. Never itself the full Startup Investment figure — see
+  // computeStartupInvestmentTotal (calculations.ts) for the report-time
+  // aggregation this collection feeds into.
+  startupInvestmentEntries: StartupInvestmentEntry[];
+  // Creates a residual StartupInvestmentEntry — reserved exclusively for
+  // spending with no existing Product/Stock/Expense record (FR-17). A
+  // single, un-batched, append-only write — no Business Worth field is
+  // touched by this call, and no update/delete path exists afterward.
+  addStartupInvestmentEntry: (params: { category: StartupInvestmentEntry['category']; amount: number; description?: string; recordedAt?: string }) => Promise<{ entryId: string }>;
   // Creates a manually-recorded debt owed TO the business (Specification
   // §11). Contributes nothing to Business Worth until actually paid
   // (FIN-3) — see recordReceivablePayment for the payment side.
@@ -720,6 +732,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // record types.
   const [cashLedgerEntries, setCashLedgerEntries] = useState<CashLedgerEntry[]>([]);
   const [receivables, setReceivables] = useState<Receivable[]>([]);
+  const [startupInvestmentEntries, setStartupInvestmentEntries] = useState<StartupInvestmentEntry[]>([]);
   const [receivablePayments, setReceivablePayments] = useState<ReceivablePayment[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
   const [payablePayments, setPayablePayments] = useState<PayablePayment[]>([]);
@@ -1495,6 +1508,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching payable payments:', err)
     );
 
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 5; Specification §13] StartupInvestmentEntry — Owner-only per
+    // firestore.rules; sorted newest-first by recordedAt, mirroring
+    // receivables' own createdAt-descending convention above.
+    const startupInvestmentEntriesRef = collection(db, 'businesses', businessId, 'startupInvestmentEntries');
+    const unsubStartupInvestmentEntries = onSnapshot(
+      startupInvestmentEntriesRef,
+      (snap) => {
+        const list: StartupInvestmentEntry[] = [];
+        snap.forEach((doc) => list.push(doc.data() as StartupInvestmentEntry));
+        list.sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+        setStartupInvestmentEntries(list);
+      },
+      (err) => console.error('Error fetching startup investment entries:', err)
+    );
+
     // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
     // §2/§17] Single fixed-id document, not a collection — mirrors the
     // subscription doc listener's own shape (1a, above) rather than
@@ -1658,6 +1687,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubReceivablePayments();
       unsubPayables();
       unsubPayablePayments();
+      unsubStartupInvestmentEntries();
       unsubInitialStockRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
@@ -3025,6 +3055,49 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await setDoc(doc(db, 'businesses', businessId, 'receivables', receivableId), newReceivable);
     return { receivableId };
+  };
+
+  // ============================================================
+  // BUSINESS WORTH EVOLUTION — INCREMENT 5
+  // Startup Investment entry recording (Specification §13, FR-17).
+  // ============================================================
+
+  // [Business Worth Evolution — Implementation Authorization, Increment 5;
+  // Specification §13, FR-17] Creating a StartupInvestmentEntry has no
+  // Business Worth effect whatsoever — a single, un-batched write is
+  // sufficient, mirroring addReceivable's own reasoning above. Reserved
+  // exclusively for spending with no existing Product/Stock/Expense
+  // record (FR-17) — this function does not, and must not, become a
+  // general-purpose alternative to Add Expense.
+  const addStartupInvestmentEntry = async ({
+    category,
+    amount,
+    description,
+    recordedAt,
+  }: { category: StartupInvestmentEntry['category']; amount: number; description?: string; recordedAt?: string }) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode registar Investimento Inicial.');
+    if (!(Number(amount) > 0)) throw new Error('O valor deve ser maior que zero.');
+    const allowedCategories: StartupInvestmentEntry['category'][] = ['labor', 'wages', 'transport', 'preparation', 'license', 'other'];
+    if (!allowedCategories.includes(category)) throw new Error('Categoria inválida.');
+
+    const businessId = activeBusinessId;
+    const entryId = 'startup-investment-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const rounded = Number(Number(amount).toFixed(2));
+
+    const newEntry: StartupInvestmentEntry = {
+      id: entryId,
+      businessId,
+      category,
+      amount: rounded,
+      recordedAt: recordedAt || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.uid || '',
+      ...(description?.trim() ? { description: description.trim() } : {}),
+    };
+
+    await setDoc(doc(db, 'businesses', businessId, 'startupInvestmentEntries', entryId), newEntry);
+    return { entryId };
   };
 
   // [Business Worth Evolution — Implementation Authorization, Increment 3;
@@ -5085,9 +5158,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         receivablePayments,
         payables,
         payablePayments,
+        startupInvestmentEntries,
         addReceivable,
         recordReceivablePayment,
         recordPayablePayment,
+        addStartupInvestmentEntry,
         initialStockConfirmationChain,
         initialStockVoidEligibility,
         initialStockRecoveryAuthorization,

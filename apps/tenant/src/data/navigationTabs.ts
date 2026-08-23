@@ -1,6 +1,6 @@
-import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History, Landmark } from 'lucide-react';
+import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History, Landmark, PiggyBank } from 'lucide-react';
 
-export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'closing' | 'timeline' | 'debts';
+export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'closing' | 'timeline' | 'debts' | 'startup-investment';
 
 export interface NavTabDefinition {
   id: TabType;
@@ -30,6 +30,10 @@ export const NAV_TABS: NavTabDefinition[] = [
   // Specification §11, §12, §33] Receivables/Payables — Owner-only, same
   // tier as add-withdrawal above.
   { id: 'debts', labelKey: 'nav.tabs.debts.label', shortLabelKey: 'nav.tabs.debts.shortLabel', icon: Landmark, color: 'blue', ownerOnly: true },
+  // [Business Worth Evolution — Implementation Authorization, Increment 5;
+  // Specification §13, §33] Startup Investment — Owner-only, same tier as
+  // debts above.
+  { id: 'startup-investment', labelKey: 'nav.tabs.startupInvestment.label', shortLabelKey: 'nav.tabs.startupInvestment.shortLabel', icon: PiggyBank, color: 'violet', ownerOnly: true },
   { id: 'reports', labelKey: 'nav.tabs.reports.label', shortLabelKey: 'nav.tabs.reports.shortLabel', icon: BarChart3, color: 'indigo', ownerOnly: true },
   { id: 'timeline', labelKey: 'nav.tabs.timeline.label', shortLabelKey: 'nav.tabs.timeline.shortLabel', icon: History, color: 'blue', ownerOnly: true },
 ];

@@ -802,6 +802,30 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 5; Specification §13, FR-16, FR-17, §33] Owner-only
+      // tier, mirroring cashLedgerEntries' own append-only discipline
+      // exactly (I-4) — no update or delete path exists for any role, at
+      // any time. `category` is restricted to the exact six accepted
+      // values (§13) — never an arbitrary string, the same closed-enum
+      // discipline this file already applies to cashLedgerEntries'
+      // `category` and businessWorthSnapshots' `status`, above. This
+      // collection is never a backdoor for arbitrary Business Worth
+      // manipulation: it has no `update` path at all, and no other rule
+      // in this file reads it when computing any Business Worth figure.
+      match /startupInvestmentEntries/{entryId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('businessId', null) == businessId &&
+          request.resource.data.get('id', null) == entryId &&
+          request.resource.data.get('category', null) in
+            ['labor', 'wages', 'transport', 'preparation', 'license', 'other'] &&
+          request.resource.data.get('amount', null) is number &&
+          request.resource.data.get('amount', 0) > 0 &&
+          request.resource.data.get('createdBy', null) == request.auth.uid;
+        allow update, delete: if false;
+      }
+
       // [Void & Redo — Implementation Authorization §2 item 2; Rule 8
       // Finding G1, Direction 2 (adopted)] The additive, create-only
       // artifact recording that a confirmation event has been voided —

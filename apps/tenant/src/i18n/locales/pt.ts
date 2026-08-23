@@ -222,6 +222,9 @@ export interface TranslationDict {
       // [Business Worth Evolution — Implementation Authorization,
       // Increment 3; Specification §11, §12]
       debts: { label: string; shortLabel: string };
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 5; Specification §13]
+      startupInvestment: { label: string; shortLabel: string };
       reports: { label: string; shortLabel: string };
       timeline: { label: string; shortLabel: string };
     };
@@ -265,6 +268,43 @@ export interface TranslationDict {
       paymentAmountLabel: string;
       paymentDateLabel: string;
       submitPayment: string;
+    };
+  };
+  // [Business Worth Evolution — Implementation Authorization, Increment 5;
+  // Specification §13] Minimal screen for the Owner to record residual
+  // Startup Investment spending (FR-17) and view the report-time
+  // aggregate total (FR-16). Never shows a shortfall/performance figure
+  // relative to Business Worth (FR-52).
+  startupInvestment: {
+    title: string;
+    subtitle: string;
+    reportSection: {
+      totalLabel: string;
+      purchasesLabel: string;
+      expensesLabel: string;
+      entriesLabel: string;
+      noBaselineYet: string;
+    };
+    entriesSection: {
+      title: string;
+      addButton: string;
+      empty: string;
+    };
+    form: {
+      categoryLabel: string;
+      amountLabel: string;
+      dateLabel: string;
+      descriptionLabel: string;
+      submit: string;
+      cancel: string;
+    };
+    categories: {
+      labor: string;
+      wages: string;
+      transport: string;
+      preparation: string;
+      license: string;
+      other: string;
     };
   };
   header: {
@@ -1220,6 +1260,7 @@ export const pt: TranslationDict = {
       addWithdrawal: { label: 'Registar Levantamento', shortLabel: '+ Levant.' },
       closing: { label: 'Fecho Mensal/Anual', shortLabel: 'Fecho' },
       debts: { label: 'Dívidas', shortLabel: 'Dívidas' },
+      startupInvestment: { label: 'Investimento Inicial', shortLabel: 'Invest. Inicial' },
       reports: { label: 'Relatórios', shortLabel: 'Relatórios' },
       timeline: { label: 'Linha do Tempo', shortLabel: 'Histórico' },
     },
@@ -1256,6 +1297,38 @@ export const pt: TranslationDict = {
       paymentAmountLabel: 'Valor Pago',
       paymentDateLabel: 'Data do Pagamento',
       submitPayment: 'Confirmar Pagamento',
+    },
+  },
+  startupInvestment: {
+    title: 'Investimento Inicial',
+    subtitle: 'Quanto investiu para estabelecer o seu negócio — separado do Valor do Negócio.',
+    reportSection: {
+      totalLabel: 'Total Investido',
+      purchasesLabel: 'Compras de Stock (referenciadas)',
+      expensesLabel: 'Despesas (referenciadas)',
+      entriesLabel: 'Outros Investimentos',
+      noBaselineYet: 'Ainda não tem um Capital Inicial confirmado — o total mostrado inclui apenas os registos abaixo.',
+    },
+    entriesSection: {
+      title: 'Registos de Investimento',
+      addButton: '+ Novo Registo',
+      empty: 'Nenhum registo de Investimento Inicial.',
+    },
+    form: {
+      categoryLabel: 'Categoria',
+      amountLabel: 'Valor',
+      dateLabel: 'Data',
+      descriptionLabel: 'Descrição (opcional)',
+      submit: 'Guardar',
+      cancel: 'Cancelar',
+    },
+    categories: {
+      labor: 'Mão de Obra',
+      wages: 'Salários',
+      transport: 'Transporte',
+      preparation: 'Preparação/Remodelação',
+      license: 'Licenças',
+      other: 'Outro',
     },
   },
   header: {
