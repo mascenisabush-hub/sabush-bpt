@@ -473,3 +473,62 @@ The whole-capability authorization stated throughout this document (§2, §13, �
 **Status:** ✅ **AUTHORIZED.**
 
 The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction, §17's Increment 5 authorization, §18's Increment 6 authorization, and §19's Increment 7 authorization are unaffected and remain intact. This section authorizes only Increment 8's own beginning, per §7's one-increment-at-a-time discipline. Increment 9 — Auditability — remains unauthorized to begin until separately instructed. This section authorizes implementation to begin; it does not itself implement any code.
+
+---
+
+## 21. Product Architect Authorization — Increment 9
+
+**Increment 9: AUDITABILITY**
+
+**Status:** ✅ **AUTHORIZED TO BEGIN.**
+
+**Prerequisite confirmation — re-verified, not merely re-investigated:**
+- [x] Increment 1 is complete (`4186357`, plus the corrective commits `779c542`, `4b77b54`, `4a99430`).
+- [x] Increment 2 is complete (`ba2c130`).
+- [x] Increment 3 is complete (`c337ba8`).
+- [x] Increment 4 is complete (`49fb8ab`).
+- [x] Increment 5 is complete and authorized (§17, above).
+- [x] Increment 6 is complete and authorized (§18, above; `b2578d0`, `a060c96`).
+- [x] Increment 7 is complete and authorized (§19, above; implementation commit `ba61fe4`).
+- [x] Increment 8 is complete and closed (§20, above; implementation commits `4a40293`, `957897e`) — independently re-verified this session: branch `main`, working tree clean, HEAD matched `origin/main` at commit `957897e` before this section was recorded; all Increment 8 tests (53 pure-logic/source-inspection, plus 209 tests across five Firestore Rules Emulator suites — `business-worth-snapshot-foundation`, `periodic-stock-finalization`, `open-batch-concurrency`, `supplier-wording-confirmation-concurrency`, and the full `test:rules` suite) confirmed passing against real Firestore semantics, not merely source inspection.
+- [x] Increment 9 is now authorized to begin.
+
+**This authorization means, and means only:**
+- Increment 9 is the **final** increment in the approved sequence (§7's own numbered list ends at item 9; the Implementation Plan's §24 defines no Increment 10 or later). This section authorizes Increment 9 alone — it does **not** authorize, imply, or create any Increment 10 or further future work. No such increment exists in the governance chain for this section to reference.
+- Implementation remains strictly **one increment at a time** (§7) — this section closes out the incremental sequence; there is no next increment to remain unauthorized, and none is implied by the completion of this one.
+- This authorization does **not** authorize implementation of the whole Business Worth Evolution capability at once (§7's own standing prohibition, already stated, unaffected).
+- This authorization does **not** change any business decision.
+- This authorization does **not** introduce any new business rule, financial formula, ceiling, correction mechanism, recovery mechanism, or auditability mechanism beyond what the Specification/Rule 8 Assessment/Implementation Plan already approve.
+- Implementation must follow the already-approved Specification, Rule 8 Assessment, Implementation Plan, and this Authorization — none of which are reopened, reinterpreted, or amended by this section.
+
+**Increment 9 scope, explicitly preserved as already approved (not restated in substance, not redesigned):**
+- Extends the existing `platform_audit_log` schema (`actorUid`, `actorRole`, `actionType`, `justification`, server `timestamp`) rather than inventing a new audit mechanism — Specification §34; Plan §15; Rule 8 Finding 11-A (Class A, not a blocker).
+- **Minimum audit-recorded events (Specification §34, FR-48; Plan §15), across every write path introduced in Increments 1–8, reviewed in one consistent pass rather than piecemeal per increment (Plan §24 item 9):**
+  - A Contagem confirmation that produces a `BusinessWorthSnapshot`.
+  - An Owner correction within the 3-hour window (§25).
+  - A SuperAdmin recovery-Authorization grant, consumption, or unconsumed expiry (§26).
+  - A `Receivable`/`Payable` payment event.
+  - Any reconciliation-signal event (§22).
+  - Any preventive-notification dispatch tied to a discrepancy or an outstanding operational gap (§22).
+- **FR-48**: every event named above must produce a permanent, append-only audit record, distinguishable by event type and business, using existing audit infrastructure where its shape already fits.
+- Proposed `actionType` values follow the existing `support_session.issued`-style naming convention (e.g. `business_worth_recovery.authorized`, `business_worth_recovery.consumed`, `business_worth_recovery.expired`) — the exact strings are an Implementation Plan detail, not decided here (Plan §15's own explicit deferral).
+
+**Explicitly NOT decided by this authorization — left to implementation, per the existing governance chain's own deferral, not invented or resolved here:**
+- The exact `actionType` string for each event (Plan §15).
+- Whether Contagem-confirmation-level (Owner-initiated, not SuperAdmin-initiated) events belong in the existing `platform_audit_log` collection or a separate tenant-scoped audit trail — Rule 8's own open question §36 item 7, classified Class A (resolvable within Rule 8/Implementation's own technical authority, not a blocking Product Architect decision; Rule 8 Assessment §4 row 7: "Yes... Existing schema already fits (Finding 11-A). Implementation Plan detail.").
+- No new numerical ceiling, retention period, or deletion/redaction mechanism is introduced by this authorization — the existing `platform_audit_log`'s own append-only, non-deletable discipline (already governing every other audited action in this codebase) applies unmodified; this Specification does not decide otherwise and this section does not invent an exception.
+
+**No unresolved Product Architect decision or governance contradiction was found for Increment 9.** The Specification (§34), Rule 8 Assessment (Finding 11-A, §36 item 7's own resolution), and Implementation Plan (§15, §24 item 9) are mutually consistent — every open item is classified as an implementation-time technical detail already within Rule 8/Implementation's own authority, never a re-opened business decision. Nothing here was mechanically invented or reinterpreted to force a resolution — where the chain itself defers a detail to implementation time, this section preserves that deferral rather than resolving it.
+
+**No requirement above is added to, removed from, or reinterpreted by this authorization.**
+
+**Formal acceptance:**
+
+> I authorize Increment 9 — Auditability — to begin, per the already-approved scope in Specification §34 (FR-48), Plan §15 and §24 item 9, Authorization §7 item 9, and the Rule 8 Assessment's own resolved finding (11-A). Increments 1–8 are confirmed complete/closed, independently re-verified this session including Increment 8's full Firestore Rules Emulator verification (209 tests, five suites, all passing). Increment 9 is the final increment in the approved sequence — no Increment 10 or later is authorized, implied, or referenced by this section. This authorization introduces no new business rule, financial formula, ceiling, correction mechanism, recovery mechanism, or auditability mechanism beyond what is already approved, and does not reopen §16's Finding 3 / Option A or §17's/§18's/§19's/§20's Increment 5/6/7/8 authorizations, all of which remain intact. **AUTHORIZED.**
+>
+> **Product Architect:** SABUSHIMIKE Masceni
+> **Date:** 23 August 2026
+
+**Status:** ✅ **AUTHORIZED.**
+
+The whole-capability authorization stated throughout this document (§2, §13, §14, §15) is unaffected. §16's Finding 3 / Option A correction, §17's Increment 5 authorization, §18's Increment 6 authorization, §19's Increment 7 authorization, and §20's Increment 8 authorization are unaffected and remain intact. This section authorizes only Increment 9's own beginning, per §7's one-increment-at-a-time discipline — and, being the final increment in the approved sequence, closes that discipline out rather than opening a further unauthorized increment. This section authorizes implementation to begin; it does not itself implement any code.
