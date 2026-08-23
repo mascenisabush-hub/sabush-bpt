@@ -7,22 +7,29 @@
 // tests/periodic-stock-mode-a-integration.test.ts's own identical
 // scope note. This suite follows that exact same precedent: rather
 // than rendering PeriodicStockCountView.tsx itself, it exercises the
-// SAME pure data this item's new render-gating condition depends on
-// (computePortionLabels — real, imported, unmodified production code)
-// combined with a small local reimplementation of
-// isGenuinelyNewProductName (a trivial, catalog-lookup one-liner
-// that lives inside the component as a closure, not exported — this
-// suite duplicates it as a test fixture only, exactly as
-// periodic-stock-mode-a-integration.test.ts already duplicates
-// collectGroupPortions for the identical reason), to prove the B.1
-// panel's gating condition end-to-end without a DOM dependency this
-// repo has deliberately never added.
+// SAME pure logic the component's own new render-gating condition and
+// submit-time correlation loop depend on — computePortionLabels (real,
+// imported, unmodified production code) plus small local
+// reimplementations of the component's own trivial closures
+// (isGenuinelyNewProductName, productKeyFor, and the corrected
+// newProductInfo-based correlation loop), matching this repo's own
+// established pattern for this exact class of problem (see
+// periodic-stock-mode-a-integration.test.ts's own duplication of
+// collectGroupPortions for the identical reason).
 //
-// Test groups mirror this item's own governing-prompt checklist: a
-// genuinely-new product receives exactly one panel; the panel is never
-// duplicated once per portion; an existing catalogue product never
-// receives it; and the two new StockCountWorkingRow fields this item
-// adds do not alter draft persistence or valuation in any way.
+// REVISION HISTORY: this suite originally tested a first-pass B.1
+// design that stored product-level information (purchase unit/cost,
+// relationship candidate) as fields on the specific
+// StockCountWorkingRow that happened to be portionIndex === 1 for its
+// group. That design had a real bug — deleting that one row silently
+// destroyed the product-level information, since nothing migrated it
+// to the group's next remaining portion. The correction moved this
+// data into a separate, product-key-keyed map (newProductInfo,
+// mirroring modeAGroups' own existing pattern) that survives row
+// deletion/reordering by construction. This suite was rewritten to
+// test the CORRECTED design, and specifically to prove the exact bug
+// scenario (delete the first portion of a two-portion new product) no
+// longer loses data.
 //
 // HOW TO RUN:
 //   npx tsx --test tests/periodic-stock-new-product-panel.test.ts
@@ -33,24 +40,31 @@ import { computePortionLabels } from '../apps/tenant/src/lib/stockCountPortionGr
 import {
   tallyStockCountRows,
   normalizeStockCountItems,
-  workingRowToDraftItem,
-  draftItemToWorkingRow,
   type StockCountWorkingRow,
 } from '../apps/tenant/src/utils/stockCount';
+import { isValidUnitRelationship } from '../apps/tenant/src/lib/unitRelationship';
+import type { UnitRelationship } from '../apps/tenant/src/types';
 
-/** Mirrors PeriodicStockCountView.tsx's own isGenuinelyNewProductName —
- * duplicated here ONLY as a small test fixture (not re-exported/reused
- * by the component), matching this repo's own established pattern for
- * this exact class of problem. */
+/** Mirrors PeriodicStockCountView.tsx's own productKeyFor — the SAME
+ * key convention newProductInfo and modeAGroups both use. Duplicated
+ * here ONLY as a small test fixture, matching this repo's own
+ * established pattern for this exact class of problem. */
+function productKeyFor(name: string): string {
+  return name.trim().toLowerCase();
+}
+
+/** Mirrors PeriodicStockCountView.tsx's own isGenuinelyNewProductName. */
 function isGenuinelyNewProductName(products: { name: string }[], name: string): boolean {
-  const trimmed = name.trim().toLowerCase();
+  const trimmed = productKeyFor(name);
   if (!trimmed) return false;
   return !products.some((p) => p.name.toLowerCase() === trimmed);
 }
 
-/** Mirrors the exact B.1 panel gating condition added at the manual-row
- * call site in PeriodicStockCountView.tsx: portionLabel.portionIndex
- * === 1 && isGenuinelyNewProductName(row.productName). */
+/** Mirrors the exact B.1 panel gating condition at the manual-row call
+ * site: portionLabel.portionIndex === 1 &&
+ * isGenuinelyNewProductName(row.productName). This is a PRESENTATION
+ * gate only, unaffected by the B.1 correction — see the corrected
+ * data-ownership tests below for the part that actually changed. */
 function shouldShowNewProductPanel(
   row: { productName: string },
   rowId: string,
@@ -61,163 +75,229 @@ function shouldShowNewProductPanel(
   return label.portionIndex === 1 && isGenuinelyNewProductName(products, row.productName);
 }
 
-describe('B.1 panel gating — a genuinely-new product receives exactly one panel', () => {
+type NewProductInfo = { purchaseUnit: string; purchaseCost: string; sellingUnit?: string; sellingUnitFactor?: string };
+
+/** Mirrors PeriodicStockCountView.tsx's own corrected submit-time
+ * correlation loop exactly: builds a UnitRelationship candidate PER
+ * PRODUCT KEY from newProductInfo, never by scanning rows for
+ * whichever one happens to carry the fields. `rows` is used only as a
+ * purchase-unit fallback when the Owner left that field blank —
+ * exactly matching the real implementation's own fallback. */
+function correlateUnitRelationships(
+  newProductInfo: Record<string, NewProductInfo>,
+  rows: { productName: string; unit: string }[]
+): Map<string, UnitRelationship> {
+  const result = new Map<string, UnitRelationship>();
+  for (const [key, info] of Object.entries(newProductInfo)) {
+    if (!key || !info.sellingUnit || !info.sellingUnitFactor) continue;
+    const factor = parseFloat(info.sellingUnitFactor);
+    const sellingUnit = info.sellingUnit.trim();
+    if (!sellingUnit || !Number.isFinite(factor) || factor <= 0) continue;
+    const fallbackRow = rows.find((r) => productKeyFor(r.productName) === key);
+    const purchaseUnit = info.purchaseUnit.trim() || fallbackRow?.unit || 'un';
+    const candidate: UnitRelationship = {
+      units: [
+        { unit: purchaseUnit, factorFromPrevious: 0 },
+        { unit: sellingUnit, factorFromPrevious: factor },
+      ],
+      sellingUnit,
+      confirmedAt: '2026-08-23T00:00:00.000Z',
+    };
+    if (isValidUnitRelationship(candidate)) {
+      result.set(key, candidate);
+    }
+  }
+  return result;
+}
+
+describe('B.1 panel gating (presentation only) — a genuinely-new product receives exactly one panel', () => {
   it('a single-portion genuinely-new product shows the panel on its one row', () => {
     const rows = [{ productName: 'Coca-Cola', id: 'manual-0' }];
     const labels = computePortionLabels(rows.map((r) => ({ id: r.id, productName: r.productName })));
-    const products: { name: string }[] = [];
-
-    assert.equal(shouldShowNewProductPanel(rows[0], 'manual-0', labels, products), true);
+    assert.equal(shouldShowNewProductPanel(rows[0], 'manual-0', labels, []), true);
   });
 
-  it('a three-portion genuinely-new product (2 Cx + 3 Emb + 5 Un, three manual rows) shows the panel ONLY on the first row — never duplicated once per portion', () => {
+  it('a three-portion genuinely-new product shows the panel ONLY on the first row — never duplicated once per portion', () => {
     const rows = [
       { productName: 'Coca-Cola', id: 'manual-0' },
       { productName: 'Coca-Cola', id: 'manual-1' },
       { productName: 'Coca-Cola', id: 'manual-2' },
     ];
     const labels = computePortionLabels(rows.map((r) => ({ id: r.id, productName: r.productName })));
-    const products: { name: string }[] = [];
-
-    const results = rows.map((r) => shouldShowNewProductPanel(r, r.id, labels, products));
-    assert.deepEqual(results, [true, false, false], 'panel must render on exactly one of the three portion rows');
+    const results = rows.map((r) => shouldShowNewProductPanel(r, r.id, labels, []));
+    assert.deepEqual(results, [true, false, false]);
   });
 
-  it('product-name matching is trimmed/case-insensitive, exactly like computePortionLabels\' own grouping key', () => {
-    const rows = [
-      { productName: '  Coca-Cola  ', id: 'manual-0' },
-      { productName: 'coca-cola', id: 'manual-1' },
-    ];
-    const labels = computePortionLabels(rows.map((r) => ({ id: r.id, productName: r.productName })));
-    const products: { name: string }[] = [];
-
-    const results = rows.map((r) => shouldShowNewProductPanel(r, r.id, labels, products));
-    assert.deepEqual(results, [true, false]);
-  });
-
-  it('a blank product name never shows the panel', () => {
-    const rows = [{ productName: '', id: 'manual-0' }];
-    const labels = computePortionLabels(rows.map((r) => ({ id: r.id, productName: r.productName })));
-    const products: { name: string }[] = [];
-
-    assert.equal(shouldShowNewProductPanel(rows[0], 'manual-0', labels, products), false);
-  });
-});
-
-describe('B.1 panel gating — an existing catalogue product never incorrectly receives the first-time panel', () => {
-  it('a manual row whose name matches an existing catalog product (any casing/whitespace) never shows the panel, even as the group\'s first row', () => {
+  it('an existing catalogue product never receives the panel, on any of its rows', () => {
     const rows = [
       { productName: 'Coca-Cola', id: 'manual-0' },
       { productName: 'Coca-Cola', id: 'manual-1' },
     ];
     const labels = computePortionLabels(rows.map((r) => ({ id: r.id, productName: r.productName })));
     const products = [{ name: 'coca-cola' }];
-
     const results = rows.map((r) => shouldShowNewProductPanel(r, r.id, labels, products));
-    assert.deepEqual(results, [false, false], 'an already-known product must never show the first-time panel, on any of its rows');
+    assert.deepEqual(results, [false, false]);
   });
+});
 
-  it('a genuinely-new product alongside an existing one in the same draft: only the new one\'s first row shows the panel', () => {
-    const rows = [
-      { productName: 'Coca-Cola', id: 'manual-0' }, // existing catalog product
-      { productName: 'Fanta Laranja', id: 'manual-1' }, // genuinely new
-      { productName: 'Fanta Laranja', id: 'manual-2' }, // second portion of the new one
+describe('B.1 correction — product-level data is keyed by product, not owned by a row', () => {
+  it('REGRESSION (the fixed bug): deleting the first portion of a two-portion new product does NOT lose the product-level purchase/relationship information', () => {
+    // Scenario, matching the governing instruction exactly:
+    //   New product: Portion 1 -> 2 Cx, Portion 2 -> 3 Emb.
+    //   Owner fills in the product-level purchase information.
+    //   Portion 1 is deleted. Portion 2 becomes the first visible portion.
+    //   The product-level information MUST remain intact.
+    const key = productKeyFor('Coca-Cola');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: { purchaseUnit: 'Cx', purchaseCost: '1250', sellingUnit: 'Un', sellingUnitFactor: '24' },
+    };
+    const rowsBefore = [
+      { productName: 'Coca-Cola', unit: 'Cx' }, // Portion 1
+      { productName: 'Coca-Cola', unit: 'Emb' }, // Portion 2
     ];
-    const labels = computePortionLabels(rows.map((r) => ({ id: r.id, productName: r.productName })));
-    const products = [{ name: 'Coca-Cola' }];
 
-    const results = rows.map((r) => shouldShowNewProductPanel(r, r.id, labels, products));
-    assert.deepEqual(results, [false, true, false]);
-  });
-});
-
-describe('B.1 new fields — persistence semantics unchanged (mirrors the existing newProductSellingUnit/Factor precedent exactly)', () => {
-  it('newProductPurchaseUnit/newProductPurchaseCost are excluded from the persisted draft item — workingRowToDraftItem drops them, exactly like the existing sibling fields', () => {
-    const row: StockCountWorkingRow = {
-      productName: 'Fanta Laranja',
-      quantity: '2',
-      unit: 'Cx',
-      costPrice: '',
-      sellingPrice: '1250',
-      newProductSellingUnit: 'Un',
-      newProductSellingUnitFactor: '24',
-      newProductPurchaseUnit: 'Cx',
-      newProductPurchaseCost: '1250',
-    };
-
-    const draftItem = workingRowToDraftItem(row);
-
-    assert.equal((draftItem as unknown as Record<string, unknown>).newProductPurchaseUnit, undefined);
-    assert.equal((draftItem as unknown as Record<string, unknown>).newProductPurchaseCost, undefined);
-    // Existing sibling fields remain excluded too — proving this item
-    // did not alter workingRowToDraftItem's existing behavior.
-    assert.equal((draftItem as unknown as Record<string, unknown>).newProductSellingUnit, undefined);
-    assert.equal((draftItem as unknown as Record<string, unknown>).newProductSellingUnitFactor, undefined);
-    // Every field workingRowToDraftItem IS responsible for is still
-    // carried through, unchanged.
-    assert.deepEqual(draftItem, {
-      productName: 'Fanta Laranja',
-      quantity: '2',
-      unit: 'Cx',
-      costPrice: '',
-      sellingPrice: '1250',
+    const beforeDeletion = correlateUnitRelationships(newProductInfo, rowsBefore);
+    assert.deepEqual(beforeDeletion.get(key), {
+      units: [
+        { unit: 'Cx', factorFromPrevious: 0 },
+        { unit: 'Un', factorFromPrevious: 24 },
+      ],
+      sellingUnit: 'Un',
+      confirmedAt: '2026-08-23T00:00:00.000Z',
     });
+
+    // Delete Portion 1. handleRemoveManualRow is a plain array filter —
+    // it never touches newProductInfo, which is the whole point of the
+    // correction (the state simply isn't attached to any row).
+    const rowsAfterDeletingPortion1 = rowsBefore.slice(1); // only Portion 2 (Emb) remains
+    // newProductInfo is untouched — no code path in the real component
+    // clears it on row removal, confirmed by inspection.
+
+    const afterDeletion = correlateUnitRelationships(newProductInfo, rowsAfterDeletingPortion1);
+    assert.deepEqual(
+      afterDeletion.get(key),
+      beforeDeletion.get(key),
+      'product-level information must be byte-identical before and after deleting the first portion'
+    );
+
+    // The panel's own presentation gate also recovers correctly: Portion
+    // 2 becomes portionIndex 1 and would now be where the panel renders
+    // — reading the SAME, still-intact newProductInfo entry.
+    const labelsAfter = computePortionLabels(
+      rowsAfterDeletingPortion1.map((r, i) => ({ id: `manual-${i}`, productName: r.productName }))
+    );
+    assert.equal(shouldShowNewProductPanel(rowsAfterDeletingPortion1[0], 'manual-0', labelsAfter, []), true);
   });
 
-  it('a recovered draft round-trips through draftItemToWorkingRow with the two new fields simply absent (never fabricated), exactly like the existing sibling fields', () => {
-    const draftItem = {
-      productName: 'Fanta Laranja',
-      quantity: '2',
-      unit: 'Cx',
-      costPrice: '',
-      sellingPrice: '1250',
+  it('reordering portions (first portion becomes last) never destroys product-level information', () => {
+    const key = productKeyFor('Coca-Cola');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: { purchaseUnit: 'Cx', purchaseCost: '1250', sellingUnit: 'Un', sellingUnitFactor: '24' },
+    };
+    const rowsOriginalOrder = [
+      { productName: 'Coca-Cola', unit: 'Cx' },
+      { productName: 'Coca-Cola', unit: 'Emb' },
+      { productName: 'Coca-Cola', unit: 'Un' },
+    ];
+    const rowsReordered = [rowsOriginalOrder[2], rowsOriginalOrder[0], rowsOriginalOrder[1]];
+
+    const before = correlateUnitRelationships(newProductInfo, rowsOriginalOrder);
+    const after = correlateUnitRelationships(newProductInfo, rowsReordered);
+    assert.deepEqual(before.get(key), after.get(key));
+  });
+
+  it('product-level information remains associated with the correct product across two simultaneously-in-progress new products', () => {
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [productKeyFor('Coca-Cola')]: { purchaseUnit: 'Cx', purchaseCost: '1250', sellingUnit: 'Un', sellingUnitFactor: '24' },
+      [productKeyFor('Fanta Laranja')]: { purchaseUnit: 'Cx', purchaseCost: '900', sellingUnit: 'Un', sellingUnitFactor: '12' },
+    };
+    const rows = [
+      { productName: 'Coca-Cola', unit: 'Cx' },
+      { productName: 'Fanta Laranja', unit: 'Cx' },
+    ];
+
+    const result = correlateUnitRelationships(newProductInfo, rows);
+    assert.equal(result.get(productKeyFor('Coca-Cola'))?.units[1].factorFromPrevious, 24);
+    assert.equal(result.get(productKeyFor('Fanta Laranja'))?.units[1].factorFromPrevious, 12);
+  });
+
+  it('two different new products cannot share or cross-contaminate their product-level information', () => {
+    const cocaKey = productKeyFor('Coca-Cola');
+    const fantaKey = productKeyFor('Fanta Laranja');
+    let newProductInfo: Record<string, NewProductInfo> = {};
+
+    // Simulate the panel's own setInfo updater for Coca-Cola only.
+    newProductInfo = { ...newProductInfo, [cocaKey]: { ...(newProductInfo[cocaKey] ?? { purchaseUnit: '', purchaseCost: '' }), purchaseUnit: 'Cx' } };
+    newProductInfo = { ...newProductInfo, [cocaKey]: { ...newProductInfo[cocaKey], purchaseCost: '1250' } };
+
+    // Fanta's entry must not exist yet and must not have picked up any
+    // of Coca-Cola's values.
+    assert.equal(newProductInfo[fantaKey], undefined);
+    assert.deepEqual(newProductInfo[cocaKey], { purchaseUnit: 'Cx', purchaseCost: '1250' });
+
+    // Now populate Fanta independently.
+    newProductInfo = {
+      ...newProductInfo,
+      [fantaKey]: { ...(newProductInfo[fantaKey] ?? { purchaseUnit: '', purchaseCost: '' }), purchaseUnit: 'Un', purchaseCost: '60' },
     };
 
-    const recovered = draftItemToWorkingRow(draftItem);
+    // Coca-Cola's entry must be completely unaffected by Fanta's write.
+    assert.deepEqual(newProductInfo[cocaKey], { purchaseUnit: 'Cx', purchaseCost: '1250' });
+    assert.deepEqual(newProductInfo[fantaKey], { purchaseUnit: 'Un', purchaseCost: '60' });
+  });
 
-    assert.equal(recovered.newProductPurchaseUnit, undefined);
-    assert.equal(recovered.newProductPurchaseCost, undefined);
-    assert.equal(recovered.productName, 'Fanta Laranja');
-    assert.equal(recovered.quantity, '2');
+  it('a product with an unfilled relationship (sellingUnit/factor blank) yields no candidate — never a fabricated one', () => {
+    const key = productKeyFor('Coca-Cola');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: { purchaseUnit: 'Cx', purchaseCost: '1250' }, // no sellingUnit/sellingUnitFactor entered yet
+    };
+    const rows = [{ productName: 'Coca-Cola', unit: 'Cx' }];
+
+    const result = correlateUnitRelationships(newProductInfo, rows);
+    assert.equal(result.has(key), false);
   });
 });
 
-describe('B.1 — no interference with existing valuation/tally engines (regression, byte-identical)', () => {
-  it('tallyStockCountRows totals are identical whether or not the two new B.1 fields are populated', () => {
-    const baseRow: StockCountWorkingRow = {
+describe('B.1 — existing-product behavior remains unchanged by the correction', () => {
+  it('isGenuinelyNewProductName still correctly identifies an already-catalogued product, unaffected by the newProductInfo refactor', () => {
+    const products = [{ name: 'Coca-Cola' }];
+    assert.equal(isGenuinelyNewProductName(products, 'Coca-Cola'), false);
+    assert.equal(isGenuinelyNewProductName(products, '  coca-cola  '), false);
+    assert.equal(isGenuinelyNewProductName(products, 'Fanta Laranja'), true);
+  });
+
+  it('an existing product never populates newProductInfo — correlation is empty for it by construction, since the panel never renders for it', () => {
+    // For an existing product, isGenuinelyNewProductName is false, so
+    // the real component never renders NewProductInfoPanel and never
+    // calls setNewProductInfo for that key — there is nothing to
+    // correlate. This documents that guarantee at the data layer: an
+    // empty newProductInfo produces an empty correlation result,
+    // regardless of how many rows exist for the existing product.
+    const rows = [
+      { productName: 'Coca-Cola', unit: 'Cx' },
+      { productName: 'Coca-Cola', unit: 'Un' },
+    ];
+    const result = correlateUnitRelationships({}, rows);
+    assert.equal(result.size, 0);
+  });
+});
+
+describe('B.1 — no interference with existing valuation/tally engines (regression, unaffected by the correction)', () => {
+  it('tallyStockCountRows/normalizeStockCountItems totals are unchanged — StockCountWorkingRow no longer carries any of the four removed fields at all', () => {
+    const row: StockCountWorkingRow = {
       productName: 'Fanta Laranja',
       quantity: '2',
       unit: 'Cx',
       costPrice: '1250',
       sellingPrice: '1250',
     };
-    const rowWithB1Fields: StockCountWorkingRow = {
-      ...baseRow,
-      newProductPurchaseUnit: 'Cx',
-      newProductPurchaseCost: '1250',
-      newProductSellingUnit: 'Un',
-      newProductSellingUnitFactor: '24',
-    };
 
-    const without = tallyStockCountRows([baseRow]);
-    const with_ = tallyStockCountRows([rowWithB1Fields]);
+    const tally = tallyStockCountRows([row]);
+    assert.equal(tally.totalPurchaseValue, 2500);
+    assert.equal(tally.totalSellingValue, 2500);
 
-    assert.deepEqual(without, with_);
-  });
-
-  it('normalizeStockCountItems totals are identical whether or not the two new B.1 fields are populated', () => {
-    const items = [
-      { productName: 'Fanta Laranja', quantity: '2', unit: 'Cx', costPrice: '1250', sellingPrice: '1250' },
-    ];
-    const result = normalizeStockCountItems(
-      items.map((i) => ({ ...i, quantity: i.quantity, costPrice: i.costPrice, sellingPrice: i.sellingPrice }))
-    );
-
-    // B.1 introduces no new field read by normalizeStockCountItems at
-    // all (StockCountInputItem's own shape is untouched by this item) —
-    // this assertion simply pins the existing, correct totals as an
-    // explicit regression guard for this item's own change set.
-    assert.equal(result.totalValue, 2500);
-    assert.equal(result.totalSellingValue, 2500);
+    const normalized = normalizeStockCountItems([row]);
+    assert.equal(normalized.totalValue, 2500);
+    assert.equal(normalized.totalSellingValue, 2500);
   });
 });

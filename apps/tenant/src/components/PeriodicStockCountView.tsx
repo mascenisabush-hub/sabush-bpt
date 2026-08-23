@@ -212,29 +212,37 @@ const ModeAValuationControl: React.FC<{
 };
 
 // [Business Worth Evolution — Decision 37, B.1: Product-Level
-// First-Time Contagem Information Panel] Renders ONCE per genuinely-new
+// First-Time Contagem Information Panel] Rendered ONCE per genuinely-new
 // product group — the caller gates this on portionLabel.portionIndex
 // === 1 && isGenuinelyNewProductName(...), exactly mirroring how
 // ModeAValuationControl (Increment 4, above) is already gated to render
-// once per group, never once per portion. Collects the three
-// foundational, product-level pieces of information Decision 37 items
-// 1/2/3 name: product identity (read-only echo of this group's own
-// name — the single per-row name input remains the one editable place
-// that name is typed; a second, independently-editable name field here
-// would create two sources of truth for the same value, which B.1 does
-// not introduce), original purchase/cost basis (purchaseUnit/
-// purchaseCost, new fields), and the unit relationship. The unit-
-// relationship section reuses UnitRelationshipRow completely UNCHANGED
-// — still its existing two-level {sellingUnit, factor} form, still
-// writing to the same newProductSellingUnit/newProductSellingUnitFactor
-// fields it always has. Extending that into an arbitrary-length chain
-// editor is B.2's own, separately-authorized scope (Implementation
-// Plan Amendment §B.2) — this component only relocates the EXISTING
-// control into this new panel and fixes its render cadence (see the
-// call site's own comment for why the old per-row cadence was itself
-// part of the gap this item closes). Purely presentational + the two
-// new field bindings below; introduces no new calculation, no change
-// to submission/normalization, and no change to
+// once per group, never once per portion. That gate is a PRESENTATION
+// choice only (one visible location to enter this, not one per
+// portion) — the data itself is owned by the PRODUCT, via the
+// newProductInfo state (keyed by productKeyFor, same convention as
+// modeAGroups), never by the specific row this panel happens to be
+// rendered next to. This is the corrected design: an earlier pass
+// stored this data on the portionIndex === 1 row's own fields, which
+// meant deleting that one row silently destroyed it — newProductInfo's
+// group-level key means removing or reordering any portion row can
+// never lose this data.
+//
+// Collects the three foundational, product-level pieces of information
+// Decision 37 items 1/2/3 name: product identity (read-only echo of
+// this group's own name — the single per-row name input remains the
+// one editable place that name is typed; a second, independently-
+// editable name field here would create two sources of truth for the
+// same value, which B.1 does not introduce), original purchase/cost
+// basis (purchaseUnit/purchaseCost), and the unit relationship. The
+// unit-relationship section reuses UnitRelationshipRow completely
+// UNCHANGED — still its existing two-level {sellingUnit, factor} form.
+// Extending that into an arbitrary-length chain editor is B.2's own,
+// separately-authorized scope (Implementation Plan Amendment §B.2) —
+// this component only relocates the EXISTING control into this new
+// panel. Purely presentational + the newProductInfo field bindings
+// below; introduces no new calculation, no change to submission/
+// normalization beyond correctly sourcing the same two relationship
+// values it already sourced before this correction, and no change to
 // StockCountWorkingRow.unit/quantity/costPrice/sellingPrice.
 const NewProductInfoPanel: React.FC<{
   productName: string;
@@ -537,6 +545,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [modeAGroups, setModeAGroups] = useState<Record<string, { referenceUnit: string; referencePrice: string }>>({});
 
   const productKeyFor = (name: string) => name.trim().toLowerCase();
+
+  // [Business Worth Evolution — Decision 37, B.1 correction] Product-
+  // level first-time information (original purchase unit/cost, and the
+  // relationship candidate's own two fields) — keyed by productKeyFor,
+  // the SAME convention modeAGroups already uses immediately above,
+  // for the SAME reason: this data belongs to the PRODUCT, not to
+  // whichever row happens to render its panel. Storing it here instead
+  // of on a specific StockCountWorkingRow means deleting or reordering
+  // any portion row (handleRemoveManualRow) can never destroy it —
+  // fixing a real data-loss bug the original B.1 pass had (product-
+  // level data was stored on the portionIndex === 1 row; deleting that
+  // one row silently lost it). Deliberately transient component state,
+  // never written to PeriodicStockDraft/Firestore — same discipline
+  // modeAGroups itself already documents above (its own output feeds
+  // back into ordinary sellingPrice/unitRelationship writes at
+  // submission time, not persisted as this raw shape). NewProductInfoPanel
+  // reads/writes this map via the product's own key; which row it is
+  // visually rendered on (still portionIndex === 1, for a single,
+  // uncluttered first-time-setup location) is a presentation choice
+  // only and has no bearing on where this data actually lives.
+  const [newProductInfo, setNewProductInfo] = useState<
+    Record<string, { purchaseUnit: string; purchaseCost: string; sellingUnit?: string; sellingUnitFactor?: string }>
+  >({});
 
   const getUnitRelationshipForProductName = (name: string) => {
     const trimmed = productKeyFor(name);
@@ -863,28 +894,37 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         await identityWriteRef.current;
       }
 
-      // [Product Memory / UOM — Increment A, Checkpoint 2c] Correlated
-      // back from allWorkingRows by trimmed, lowercased productName —
-      // the same pattern AppContext.tsx's own recordStockCount
-      // (Checkpoint 1) and InitialStockCountView.tsx (Checkpoint 2a)
-      // already use, since tallyStockCountRows' own StockCountTallyItem
-      // shape deliberately doesn't carry these two UI-only fields (see
-      // StockCountWorkingRow's own comment in utils/stockCount.ts).
-      // Only ever populated for a manually-added row with no existing
-      // product match — see isGenuinelyNewProductName's own gating of
-      // the UI section these values come from; re-validated here via
-      // isValidUnitRelationship regardless, never trusted merely
-      // because the UI fields were non-empty.
+      // [Product Memory / UOM — Increment A, Checkpoint 2c; corrected
+      // under Decision 37 B.1] Correlated from newProductInfo — the
+      // product-level, productKeyFor-keyed state (see its own
+      // declaration comment, above) — rather than scanning individual
+      // rows for whichever one happened to carry these fields. This is
+      // the B.1 robustness correction: the OLD version scanned
+      // allWorkingRows for row.newProductSellingUnit/Factor, which
+      // depended on a specific row still existing at submit time; a
+      // deleted first-portion row could silently drop the candidate.
+      // newProductInfo survives row deletion/reordering by
+      // construction, so this loop no longer has that failure mode.
+      // Re-validated here via isValidUnitRelationship regardless, never
+      // trusted merely because the UI fields were non-empty — same
+      // discipline as before.
       const unitRelationshipByProductName = new Map<string, UnitRelationship>();
-      for (const row of allWorkingRows) {
-        const key = row.productName.trim().toLowerCase();
-        if (!key || !row.newProductSellingUnit || !row.newProductSellingUnitFactor) continue;
-        const factor = parseFloat(row.newProductSellingUnitFactor);
-        const sellingUnit = row.newProductSellingUnit.trim();
+      for (const [key, info] of Object.entries(newProductInfo)) {
+        if (!key || !info.sellingUnit || !info.sellingUnitFactor) continue;
+        const factor = parseFloat(info.sellingUnitFactor);
+        const sellingUnit = info.sellingUnit.trim();
         if (!sellingUnit || !Number.isFinite(factor) || factor <= 0) continue;
+        // Purchase unit for the relationship's units[0]: prefer the
+        // Owner-entered purchase unit (info.purchaseUnit); fall back to
+        // whichever physical unit this product's own portion rows use,
+        // matching the pre-correction fallback (row.unit || 'un')
+        // exactly, for a product whose Owner filled in the relationship
+        // but left the new purchase-unit field blank.
+        const fallbackRow = allWorkingRows.find((r) => productKeyFor(r.productName) === key);
+        const purchaseUnit = info.purchaseUnit.trim() || fallbackRow?.unit || 'un';
         const candidate: UnitRelationship = {
           units: [
-            { unit: row.unit || 'un', factorFromPrevious: 0 },
+            { unit: purchaseUnit, factorFromPrevious: 0 },
             { unit: sellingUnit, factorFromPrevious: factor },
           ],
           sellingUnit,
@@ -1683,37 +1723,42 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       multi-portion first-time product (e.g. 2 Cx + 3
                       Emb + 5 Un, three separate manual rows sharing one
                       name) shows this foundational information exactly
-                      ONCE, not once per portion. Previously this
-                      disclosure rendered unconditionally on EVERY row
-                      of a new product — the portionIndex === 1 gate is
-                      this item's own fix for that duplication, applied
-                      the same way ModeAValuationControl's own
-                      isFirstPortionOfMultiPortionGroup gate already
-                      works above, generalized here to also cover a
-                      still-solo (not yet multi-portion) new product's
-                      very first row. Entirely optional; leaving both
-                      new fields blank changes nothing from today's
-                      behavior. */}
-                  {portionLabel.portionIndex === 1 && isGenuinelyNewProductName(row.productName) && (
-                    <NewProductInfoPanel
-                      productName={row.productName}
-                      currencySymbol={currencySymbol}
-                      purchaseUnit={row.newProductPurchaseUnit || ''}
-                      purchaseCost={row.newProductPurchaseCost || ''}
-                      onPurchaseUnitChange={(value) => updateManualRow(idx, { newProductPurchaseUnit: value })}
-                      onPurchaseCostChange={(value) => updateManualRow(idx, { newProductPurchaseCost: value })}
-                      unitRelationshipRow={
-                        <UnitRelationshipRow
-                          purchaseUnit={row.newProductPurchaseUnit || row.unit || 'un'}
-                          sellingUnit={row.newProductSellingUnit || ''}
-                          factor={row.newProductSellingUnitFactor || ''}
-                          onChange={(sellingUnit, factor) =>
-                            updateManualRow(idx, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
-                          }
-                        />
-                      }
-                    />
-                  )}
+                      ONCE, not once per portion. This is a PRESENTATION
+                      gate only — the data itself lives in
+                      newProductInfo, keyed by the product's own name
+                      (productKeyFor), not on this specific row. If this
+                      row is later deleted, the group's remaining
+                      portions simply take over rendering the panel
+                      (whichever becomes portionIndex 1 next) and the
+                      SAME newProductInfo entry is still there, intact —
+                      see newProductInfo's own declaration comment,
+                      above, for the bug this correction fixes. Entirely
+                      optional; leaving every field blank changes
+                      nothing from today's behavior. */}
+                  {portionLabel.portionIndex === 1 && isGenuinelyNewProductName(row.productName) && (() => {
+                    const key = productKeyFor(row.productName);
+                    const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '' };
+                    const setInfo = (fields: Partial<{ purchaseUnit: string; purchaseCost: string; sellingUnit: string; sellingUnitFactor: string }>) =>
+                      setNewProductInfo((prev) => ({ ...prev, [key]: { ...(prev[key] ?? { purchaseUnit: '', purchaseCost: '' }), ...fields } }));
+                    return (
+                      <NewProductInfoPanel
+                        productName={row.productName}
+                        currencySymbol={currencySymbol}
+                        purchaseUnit={info.purchaseUnit || ''}
+                        purchaseCost={info.purchaseCost || ''}
+                        onPurchaseUnitChange={(value) => setInfo({ purchaseUnit: value })}
+                        onPurchaseCostChange={(value) => setInfo({ purchaseCost: value })}
+                        unitRelationshipRow={
+                          <UnitRelationshipRow
+                            purchaseUnit={info.purchaseUnit || row.unit || 'un'}
+                            sellingUnit={info.sellingUnit || ''}
+                            factor={info.sellingUnitFactor || ''}
+                            onChange={(sellingUnit, factor) => setInfo({ sellingUnit, sellingUnitFactor: factor })}
+                          />
+                        }
+                      />
+                    );
+                  })()}
                   </React.Fragment>
                   );
                 })}
