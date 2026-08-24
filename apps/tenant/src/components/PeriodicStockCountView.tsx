@@ -2259,13 +2259,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               EXISTING "Adicionados Manualmente" grouped
                               card below via the SAME manualRowGroups
                               computation, with zero new state and zero
-                              new grouping logic. */}
+                              new grouping logic.
+
+                              [UI Discoverability & Readability Corrections —
+                              Item 1] Was persistently invisible at ≥640px
+                              (sm:opacity-0, revealed only on row hover or
+                              focus-within) — an add-data capability, not a
+                              secondary/destructive action, so hover-gating
+                              it the same way a delete button is hover-gated
+                              made it undiscoverable without already knowing
+                              it existed. Now persistently visible at every
+                              breakpoint; only the hover COLOR change
+                              (text-gray-300 → navy, transparent →
+                              gold-tinted background) remains
+                              interaction-dependent, exactly as before. No
+                              change to onClick, aria-label, title, icon, or
+                              position. */}
                           <button
                             type="button"
                             onClick={() => handleAddPortionToManualGroup(row.productName)}
                             aria-label={`Adicionar porção de ${row.productName}`}
                             title="Adicionar Porção"
-                            className="shrink-0 p-1 rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-[#0B1F3A] hover:bg-[#D4AF37]/10 transition-all duration-150"
+                            className="shrink-0 p-1 rounded-lg text-gray-300 hover:text-[#0B1F3A] hover:bg-[#D4AF37]/10 transition-all duration-150"
                           >
                             <Plus className="w-3.5 h-3.5" strokeWidth={2.5} />
                           </button>
@@ -2408,7 +2423,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 unit, so the price's real meaning is
                                 unambiguous regardless of which unit is
                                 selected. */}
-                            <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                            <p className="text-[13px] type-body mt-0.5 truncate">
                               {currencySymbol} por {row.unit.trim() || 'un'}
                             </p>
                           </div>
@@ -2427,7 +2442,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           {/* See the Compra/Un caption's own comment,
                               immediately above — identical reasoning,
                               applied to the selling-price field. */}
-                          <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                          <p className="text-[13px] type-body mt-0.5 truncate">
                             {currencySymbol} por {row.unit.trim() || 'un'}
                           </p>
                         </div>
@@ -2455,7 +2470,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               {isBlank ? 'Não contado' : formatCurrency(rowSellingValue, currencySymbol)}
                             </div>
                             {!isBlank && (
-                              <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                              <p className="text-[13px] type-body mt-0.5 truncate">
                                 Custo: {formatCurrency(rowValue, currencySymbol)}
                               </p>
                             )}
@@ -2729,7 +2744,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       reasoning, applied here to a
                                       manually-added product's own portion
                                       rows. */}
-                                  <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                  <p className="text-[13px] type-body mt-0.5 truncate">
                                     {currencySymbol} por {row.unit.trim() || 'un'}
                                   </p>
                                 </div>
@@ -2745,7 +2760,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
                                   className={`${fieldClass} font-mono tabular-nums`}
                                 />
-                                <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                <p className="text-[13px] type-body mt-0.5 truncate">
                                   {currencySymbol} por {row.unit.trim() || 'un'}
                                 </p>
                               </div>
@@ -2770,7 +2785,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                         )}
                                   </div>
                                   {row.quantity.trim() !== '' && (
-                                    <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                    <p className="text-[13px] type-body mt-0.5 truncate">
                                       Custo:{' '}
                                       {formatCurrency(
                                         rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),

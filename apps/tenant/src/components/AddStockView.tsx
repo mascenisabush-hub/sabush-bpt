@@ -1907,11 +1907,22 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             </span>
                           )}
 
+                          {/* [UI Discoverability & Readability Corrections
+                              — Item 3] Was opacity-0 group-hover:opacity-100
+                              group-focus-within:opacity-100 with no sm:
+                              prefix — hidden by default at every
+                              breakpoint including mobile, where there is no
+                              hover to reveal it. Now uses the same
+                              mobile-safe row-action pattern already
+                              established elsewhere (visible by default,
+                              hover-revealed only at sm:+, keyboard/focus
+                              accessible). No change to onClick, title,
+                              icon, or the rows.length > 1 gating. */}
                           {rows.length > 1 && (
                             <button
                               type="button"
                               onClick={() => handleRemoveRow(row.id)}
-                              className="p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all duration-150"
+                              className="p-1.5 text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 rounded-md transition-all duration-150"
                               title={t('addStock.removeBatch')}
                             >
                               <Trash2 className="w-3.5 h-3.5" />

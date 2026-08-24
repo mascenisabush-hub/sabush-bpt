@@ -430,6 +430,17 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                           </p>
                         )}
                       </div>
+                      {/* [UI Discoverability & Readability Corrections —
+                          Item 2] Was opacity-0 group-hover:opacity-100 with
+                          no sm: mobile-safe prefix and no
+                          group-focus-within fallback at all — on a touch
+                          device (no hover) this correction action could be
+                          effectively unreachable. Now uses the same
+                          mobile-safe row-action pattern already
+                          established elsewhere (visible by default,
+                          hover-revealed only at sm:+, keyboard/focus
+                          accessible). No change to onClick, title, icon,
+                          or the isOwner/!isReopened gating. */}
                       {isOwner && !isReopened && (
                         <button
                           type="button"
@@ -439,7 +450,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                             setClosingPendingReopen(c);
                           }}
                           title="Reabrir período (permite corrigir despesas/retiradas)"
-                          className="p-1.5 text-gray-300 opacity-0 group-hover:opacity-100 hover:text-yellow-700 hover:bg-yellow-50 rounded-lg transition-all duration-150"
+                          className="p-1.5 text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-yellow-700 hover:bg-yellow-50 rounded-lg transition-all duration-150"
                         >
                           <LockOpen className="w-3.5 h-3.5" />
                         </button>
