@@ -2063,7 +2063,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.isMultiPortion ? firstRowLabel.portionIndex === 1 : false;
                   const isNewProduct = isGenuinelyNewProductName(group.displayName);
                   return (
-                    <div key={group.key || `blank-${firstIdx}`} className="rounded-xl border border-[#E5E7EB] px-2.5 py-2.5 space-y-1.5">
+                    <div key={`manual-group-${firstIdx}`} className="rounded-xl border border-[#E5E7EB] px-2.5 py-2.5 space-y-1.5">
                       <div>
                         <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
                         <input
