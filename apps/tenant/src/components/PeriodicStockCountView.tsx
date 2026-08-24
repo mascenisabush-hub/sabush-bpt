@@ -1855,10 +1855,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             ))}
           </div>
 
+          {/* [Bug fix — Confirmar Contagem review screen was showing the
+              cost-basis total (totalPurchaseValue) as "Valor Total da
+              Contagem" with no qualifier, silently disagreeing with the
+              live entry screen immediately before it (which already shows
+              liveTally.totalSellingValue as its PRIMARY/hero figure — see
+              that screen's own comment, above). This is the exact figure
+              (pendingTally.totalSellingValue, same shape as
+              productValuationTotal = normalizedTotalSellingValue in
+              AppContext.tsx's recordStockCount) that becomes the new
+              BusinessWorthSnapshot.measuredBusinessWorth's own valuation
+              input the moment this count is confirmed — Business Worth is
+              driven by selling/market value, not cost, exactly as the live
+              screen already establishes. Read-only display fix: does not
+              touch pendingTally itself, what gets saved, or any other
+              field — recordStockCount already persists costPrice and
+              sellingPrice on every item unchanged. */}
           <div className="card-dark-gradient rounded-2xl px-5 py-4 flex items-center justify-between gap-3">
             <span className="font-semibold text-white/70 text-[13px]">Valor Total da Contagem</span>
             <span className="font-display font-semibold text-[22px] text-[#D4AF37] tabular-nums leading-none">
-              {formatCurrency(pendingTally.totalPurchaseValue, currencySymbol)}
+              {formatCurrency(pendingTally.totalSellingValue, currencySymbol)}
             </span>
           </div>
 
