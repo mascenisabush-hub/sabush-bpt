@@ -240,8 +240,14 @@ describe('DashboardView.tsx — Increment 2 wiring (source-inspection)', () => {
     assert.match(dashboardSrc, /estimatedBusinessWorth/);
   });
 
-  it('no redesign — the nine-KPI-card grid structure is untouched (still a single grid of KpiCard elements)', () => {
+  it('KPI card structure — 8 cards after the Owner-requested Capital Inicial → Valor do Negócio merge (was 9; that card is now retired, replaced by Business Worth taking its former slot, never a second competing card)', () => {
     const kpiCardCount = (dashboardSrc.match(/<KpiCard\b/g) ?? []).length;
-    assert.ok(kpiCardCount >= 9, 'Expected the existing nine-KPI-card structure to remain, not be redesigned.');
+    assert.ok(kpiCardCount >= 8, 'Expected 8 KpiCard elements: Capital Inicial\'s own dedicated card was retired at the Owner\'s explicit request, merged into Valor do Negócio\'s card at the same (first, most prominent) slot — not a redesign of anything else.');
+    // The retired card's own label key must never reappear as a live KpiCard
+    // label prop — its underlying VALUE (initialCapitalValue) is still read
+    // and shown elsewhere (the worth modal's own line item, now a button
+    // routing to the same InitialStockPriceChangeModal the old card used to
+    // open directly) — only its dedicated top-level card is gone.
+    assert.doesNotMatch(dashboardSrc, /label=\{t\('dashboard\.kpi\.initialCapital\.label'\)\}/);
   });
 });

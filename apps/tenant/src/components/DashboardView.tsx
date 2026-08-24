@@ -17,7 +17,6 @@ import {
   TrendingUp,
   TrendingDown,
   Boxes,
-  Landmark,
   Tag,
   Receipt,
   HandCoins,
@@ -258,27 +257,70 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           so nothing here competes with the KPI cards for attention. */}
 
 
-      {/* PRIMARY KPI GRID — the 6 core numbers, 2 rows x 3 columns.
-          Every value here reuses the existing calculation engine
-          (calculateBatch / calculateInventoryTotals / AppContext);
-          this is presentation only, nothing is recalculated.
-          Color coding: navy = neutral, gold = business worth,
-          green = profit, red = expenses. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+      {/* PRIMARY KPI GRID — 5 core numbers (was 6; Capital Inicial's own
+          card is retired below, replaced by Valor do Negócio — Owner's
+          explicit choice: the evolving, comprehensive figure Business
+          Worth already is, in the most prominent slot, rather than the
+          static starting baseline that used to occupy it). Every value
+          here reuses the existing calculation engine (calculateBatch /
+          calculateInventoryTotals / AppContext); this is presentation
+          only, nothing is recalculated. Color coding: navy = neutral,
+          gold = business worth, green = profit, red = expenses. */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
+        {/* [Owner-requested — replaces the Capital Inicial card] Same
+            underlying displayedBusinessWorth/displayedBusinessWorthValue
+            this card already computed at its old, less prominent slot
+            (further below in git history) — this is purely a position +
+            presentation change, never a second calculation. Before any
+            figure exists at all (displayedBusinessWorthValue === null —
+            State 1, Specification §6: no historical Capital Inicial AND
+            no BusinessWorthSnapshot yet), this card takes over Capital
+            Inicial's own former "action card" nudge treatment
+            (light/gold, is-action pulse, routes to
+            onNavigateToInitialStockCount) verbatim — a brand-new
+            business still gets the identical prompt to get started that
+            used to live here, just under Business Worth's own name
+            instead of Capital Inicial's. The moment a figure exists
+            (Estimated — State 1a, or Current — State 3), it switches to
+            the dark/gold "Highlight Card" treatment and the existing
+            click-through Business Worth modal, exactly as this card
+            already behaved at its old slot. */}
         <KpiCard
-          icon={Landmark}
-          iconBgClass={hasInitialStockCount ? 'bg-[#0B1F3A]/[0.06]' : 'bg-[#D4AF37]/10'}
-          iconTextClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#8A6D1F]'}
-          label={t('dashboard.kpi.initialCapital.label')}
-          value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('dashboard.kpi.initialCapital.notSet')}
-          valueClass={hasInitialStockCount ? 'text-[#0B1F3A]' : 'text-[#8A6D1F]'}
-          description={
-            hasInitialStockCount
-              ? t('dashboard.kpi.initialCapital.descSet')
-              : t('dashboard.kpi.initialCapital.descUnset')
+          icon={Gem}
+          iconBgClass="bg-[#D4AF37]/10"
+          iconTextClass={displayedBusinessWorthValue === null ? 'text-[#8A6D1F]' : 'text-[#D4AF37]'}
+          label={t('dashboard.kpi.businessWorth.label')}
+          value={
+            displayedBusinessWorthValue === null
+              ? t('dashboard.kpi.businessWorth.unknown')
+              : formatCurrency(displayedBusinessWorthValue, currencySymbol)
           }
-          onClick={!hasInitialStockCount ? onNavigateToInitialStockCount : () => setShowInitialStockValuationModal(true)}
-          action={!hasInitialStockCount}
+          valueClass={displayedBusinessWorthValue === null ? 'text-[#8A6D1F]' : 'text-[#D4AF37]'}
+          description={
+            displayedBusinessWorthValue === null
+              ? t('dashboard.kpi.initialCapital.descUnset')
+              : t('dashboard.kpi.businessWorth.desc')
+          }
+          onClick={displayedBusinessWorthValue === null ? onNavigateToInitialStockCount : () => setShowWorthModal(true)}
+          action={displayedBusinessWorthValue === null}
+          variant={displayedBusinessWorthValue === null ? 'light' : 'dark'}
+          badge={
+            displayedBusinessWorthValue === null ? undefined : displayedBusinessWorthIsEstimated ? (
+              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#D4AF37] bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-full px-2 py-0.5">
+                {t('dashboard.kpi.businessWorth.estimatedLabel')}
+              </span>
+            ) : hasInitialStockCount && capitalGrowth !== 0 ? (
+              <span
+                className={`inline-flex items-center gap-1 text-[10px] type-number ${
+                  capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
+                }`}
+              >
+                {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+                {capitalGrowth >= 0 ? '+' : ''}
+                {capitalGrowthPct.toFixed(1)}%
+              </span>
+            ) : null
+          }
         />
 
         <KpiCard
@@ -314,39 +356,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         />
 
         <KpiCard
-          icon={Gem}
-          iconBgClass="bg-[#D4AF37]/10"
-          iconTextClass="text-[#D4AF37]"
-          label={t('dashboard.kpi.businessWorth.label')}
-          value={
-            displayedBusinessWorthValue === null
-              ? t('dashboard.kpi.businessWorth.unknown')
-              : formatCurrency(displayedBusinessWorthValue, currencySymbol)
-          }
-          valueClass="text-[#D4AF37]"
-          description={t('dashboard.kpi.businessWorth.desc')}
-          onClick={() => setShowWorthModal(true)}
-          variant="dark"
-          badge={
-            displayedBusinessWorthIsEstimated ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#D4AF37] bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-full px-2 py-0.5">
-                {t('dashboard.kpi.businessWorth.estimatedLabel')}
-              </span>
-            ) : hasInitialStockCount && capitalGrowth !== 0 ? (
-              <span
-                className={`inline-flex items-center gap-1 text-[10px] type-number ${
-                  capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
-                }`}
-              >
-                {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {capitalGrowth >= 0 ? '+' : ''}
-                {capitalGrowthPct.toFixed(1)}%
-              </span>
-            ) : null
-          }
-        />
-
-        <KpiCard
           icon={Receipt}
           iconBgClass="bg-rose-500/10"
           iconTextClass="text-rose-600"
@@ -356,6 +365,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           description={t('dashboard.kpi.expenses.desc')}
         />
       </div>
+
+      {/* [Owner-requested] The Capital Inicial figure itself (initialCapitalValue)
+          is NOT deleted or hidden anywhere else this codebase already
+          shows it — showInitialStockValuationModal, the Contagem
+          screens, and Reports all still read it exactly as before. Only
+          its own dedicated KPI card, above, is retired; a business's
+          historical starting point remains fully visible and unchanged
+          everywhere else it already lived. */}
 
       {/* SECONDARY METRICS — same existing cards/data (Levantamentos, Quebras,
           Lotes Ativos), nothing removed. Set apart with a border on a white
@@ -645,12 +662,23 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
               </div>
 
-              <div className="flex items-center justify-between px-4 py-2.5">
-                <span className="text-gray-500">{t('dashboard.worthModal.initialCapital')}</span>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowWorthModal(false);
+                  if (hasInitialStockCount) {
+                    setShowInitialStockValuationModal(true);
+                  } else {
+                    onNavigateToInitialStockCount();
+                  }
+                }}
+                className="w-full flex items-center justify-between px-4 py-2.5 rounded-[10px] hover:bg-gray-50 transition text-left"
+              >
+                <span className="text-gray-500 underline decoration-dotted underline-offset-2">{t('dashboard.worthModal.initialCapital')}</span>
                 <span className="type-number text-slate-600">
                   {formatCurrency(initialCapitalValue, currencySymbol)}
                 </span>
-              </div>
+              </button>
 
               <div
                 className={`flex items-center justify-between p-4 rounded-[10px] border ${
