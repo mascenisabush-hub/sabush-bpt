@@ -1537,8 +1537,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           )}
 
           <div className="rounded-xl bg-[var(--muted)] border border-[#E5E7EB] divide-y divide-[#E5E7EB] max-h-64 overflow-y-auto">
-            {pendingTally.countedItems.map((item) => (
-              <div key={item.productName} className="flex items-center justify-between gap-2 px-4 py-2 text-[12.5px]">
+            {/* [Bug fix — duplicate React keys on multi-portion
+                products] Was keyed by item.productName alone, which
+                collides whenever a single product is counted as more
+                than one portion (e.g. CX + EMB + UN of the same
+                product) — exactly the multi-unit workflow this screen
+                exists to review. React requires sibling keys to be
+                unique; a shared key across same-named portions risks
+                the wrong row's DOM node being reused/left stale on
+                re-render (e.g. "Voltar", edit, then confirm again),
+                on the one screen whose purpose is a reliable last
+                check before the count becomes permanent. Keyed by
+                productName + unit + index — unique per portion, and
+                stable for this array (StockCountTallyItem carries no
+                row id of its own; index is safe here since this list
+                is always freshly rebuilt from scratch by
+                tallyStockCountRows, never reordered/spliced in place). */}
+            {pendingTally.countedItems.map((item, index) => (
+              <div key={`${item.productName}-${item.unit}-${index}`} className="flex items-center justify-between gap-2 px-4 py-2 text-[12.5px]">
                 <span className="text-[#111827] font-medium truncate">{item.productName}</span>
                 <span className="text-gray-500 tabular-nums shrink-0">
                   {item.quantity} {item.unit}
