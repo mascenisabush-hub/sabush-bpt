@@ -2039,6 +2039,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               className={`${fieldClass} font-mono tabular-nums`}
                             />
                           )}
+                          {/* [Bug fix — "Venda/Un"/"Compra/Un" ambiguity]
+                              The shared column header just above always
+                              reads the generic "Compra/Un" — "per unit
+                              (of THIS row)" — but for a multi-unit
+                              product "Un" is ALSO the literal name of
+                              the smallest chain unit (Cx/Emb/Un), so an
+                              Owner easily misreads it as "price per
+                              bottle" even when this row's own Unid is
+                              Cx or Emb. This caption is always visible
+                              (no sm:hidden — the missing-on-desktop gap
+                              this fix also addresses), directly naming
+                              THIS row's actual selected unit, so the
+                              price's real meaning is unambiguous
+                              regardless of viewport or the shared
+                              header's necessarily generic wording. */}
+                          {!isCostFieldSuppressed(row.productName, row.unit) && (
+                            <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                              {currencySymbol} por {row.unit.trim() || 'un'}
+                            </p>
+                          )}
                         </div>
 
                         <div>
@@ -2051,6 +2071,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             onChange={(e) => updateCatalogRow(productId, { sellingPrice: e.target.value })}
                             className={`${fieldClass} font-mono tabular-nums`}
                           />
+                          {/* See the Compra/Un caption's own comment,
+                              immediately above — identical reasoning,
+                              applied to the selling-price field. */}
+                          <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                            {currencySymbol} por {row.unit.trim() || 'un'}
+                          </p>
                         </div>
 
                         <div className="flex items-end gap-1.5">
@@ -2107,6 +2133,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           {manualRows.length > 0 && (
             <div>
               <p className="text-[12.5px] font-bold text-[#111827] mb-2">Adicionados Manualmente</p>
+              {/* [Bug fix — missing desktop column labels] The
+                  per-field labels below (Qtd/Unid/Compra/Venda/Valor)
+                  are all `sm:hidden` — shown on mobile, intentionally
+                  hidden on desktop, because desktop is meant to read
+                  them from a shared header instead. The catalog-rows
+                  section above already has exactly that header
+                  (visibleCatalogEntries.length > 0 block); this
+                  "Adicionados Manualmente" section never had its own
+                  equivalent — meaning a desktop Owner adding a
+                  genuinely new product saw five completely unlabeled
+                  fields (confirmed from a live screenshot: "12 | cx |
+                  620 | 60 | 7.440,0..." with no indication anywhere on
+                  screen of which number was quantity, unit, cost,
+                  price, or value). First column is blank, not "Nome" —
+                  unlike the catalog section, this grid's own first
+                  column is repurposed per-row for the "Porção X de Y"
+                  caption (see the row loop below); the actual product
+                  name is entered once, in the card header above this
+                  grid, not per row. */}
+              <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 border-b border-[#E5E7EB]`}>
+                <span />
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Compra/Un</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Venda/Un</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor</span>
+                <span />
+              </div>
               <div className="space-y-3">
                 {manualRowGroups.map((group) => {
                   const firstIdx = group.rows[0].idx;
@@ -2287,6 +2341,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                     className={`${fieldClass} font-mono tabular-nums`}
                                   />
                                 )}
+                                {/* [Bug fix — "Venda/Un"/"Compra/Un"
+                                    ambiguity] See the catalog-row block's
+                                    identical caption/comment above — same
+                                    reasoning, same always-visible (no
+                                    sm:hidden) unit caption, applied here
+                                    to a manually-added product's own
+                                    portion rows. */}
+                                {!isCostFieldSuppressed(row.productName, row.unit) && (
+                                  <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                    {currencySymbol} por {row.unit.trim() || 'un'}
+                                  </p>
+                                )}
                               </div>
 
                               <div>
@@ -2299,6 +2365,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
                                   className={`${fieldClass} font-mono tabular-nums`}
                                 />
+                                <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                  {currencySymbol} por {row.unit.trim() || 'un'}
+                                </p>
                               </div>
 
                               <div className="flex items-end gap-1.5">
