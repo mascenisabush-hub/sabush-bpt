@@ -26,6 +26,34 @@ off-by-a-few-lines source citations (`firestore.rules`'
 periodic-create-rule citation given as line 439, actually line 441,
 matching what the frozen spec itself cites) — all corrected. No further
 contradiction, drift, or citation error found on this second pass.
+**Amended by:** an Implementation Task Amendment, 24 August 2026,
+operationalizing Decision 38 ("Contagem Draft Data-Durability and
+Interruption Resilience — Extension of Decision 29"), the
+Specification's own amendment (commit `781fbfc`, §5, §6, §12, §13,
+§14), and the [Rule 8 Assessment](../engineering/stock-count-data-loss-resilience-rule8-assessment.md)
+(verdict READY FOR IMPLEMENTATION, commit `570bb2b`) — adding §4c (the
+interruption-durability flush as a third pending-write handle), §5a
+(interruption-durability combined mechanism: navigation/unload flush +
+Firestore persistent local cache), §5b (durable `newProductInfo` draft
+content), §5c (stale/out-of-order autosave-write serialization), §6b
+(file-by-file change-plan additions, including
+`apps/tenant/src/lib/firebase.ts` entering this task's file scope for
+the first time), §7 items 7–15 (additional acceptance criteria), an
+additive extension to §8 (restating the multi-user/multi-device,
+Initial Stock, and Business Worth boundaries unchanged, and recording
+that Decision 38 supersedes — not removes — this document's prior
+blanket exclusion of an app-wide navigation-guard mechanism and
+IndexedDB, mirroring the Specification's own §12 supersession
+technique), and §10 (traceability). **The Specification dependency
+below now refers to its pre-Decision-38 commit (`2306c85`); this
+amendment's own basis is the amended Specification at commit
+`781fbfc`, stated here rather than by editing the historical citation
+below.** This amendment does not reopen, alter, or reinterpret
+anything already resolved in §0–§9: §1's doc-id/scoping decision, §2's
+debounce interval, §3's idempotent-finalization mechanism, §4/§4a/§4b's
+resurrection-protection design, §5's stale-draft UX pattern, and §9's
+`timelineEvents` correction are all preserved exactly as before.
+Sections not named here are unchanged by this amendment.
 **Depends on:** the frozen [Stock Count Data-Loss Resilience
 Specification](./stock-count-data-loss-resilience-specification.md)
 (commit `2306c85`, confirmed present on `origin/main` with Status
@@ -324,6 +352,64 @@ the §4a cancel/await sequence precedes `recordStockCount`, and (b) the
 itself sourced from `establishSubmissionIdentity`, not from
 `scheduleDraftSave`.
 
+## 4c. Resolved (Decision 38 Amendment): The interruption-durability flush — a third kind of pending draft write
+
+Decision 38 item (a) and the amended Specification §6 require that
+every entered product/portion — and, per §5b below, every associated
+`newProductInfo` entry — survive normal interruption, including
+accidental navigation away, tab/app closure, refresh/reload, and
+connection loss, not only the two write paths §4a/§4b above already
+track. This introduces a genuinely new pending-write path. Per Rule 8
+Assessment Finding C1, it must join the exact same cancel/await
+discipline §4a/§4b already enforce, not become an untracked third side
+channel — doing otherwise would reopen the same resurrection defect
+(Section 2's Initial Count bug) against this new write path
+specifically.
+
+**Design:**
+- `flushInFlightSaveRef = useRef<Promise<void> | null>(null)` — a
+  third ref, distinct from `draftDebounceTimerRef`/`draftInFlightSaveRef`
+  (§4a) and `identityWriteRef` (§4b).
+- `flushPeriodicDraftNow()` — a new function in
+  `PeriodicStockCountView.tsx`, its own implementation, per the frozen
+  spec's standing non-authorization of a shared hook with
+  `InitialStockCountView.tsx`'s own `flushDraftNow` (restated unchanged
+  at §8 below) — design precedent only, per §5a item 1 below.
+- On firing, `flushPeriodicDraftNow()` first performs the same cancel
+  step §4a already performs
+  (`if (draftDebounceTimerRef.current) clearTimeout(...)`), then
+  issues its own immediate `savePeriodicStockDraft(...)` call using
+  the current live component state (not the possibly-stale
+  last-scheduled values), and stores the resulting promise in
+  `flushInFlightSaveRef.current`, cleared in `.finally()` — mirroring
+  §4a's own promise-tracking shape exactly.
+- **`handleConfirmSave`'s existing three-step cancel/await sequence
+  (§4b) is extended with one further, ordered step, appended after the
+  existing three:** `if (flushInFlightSaveRef.current) await
+  flushInFlightSaveRef.current`. This runs after the §4a/§4b steps and
+  before `recordStockCount` is called, for the same reason those steps
+  already run in that position: by the time `recordStockCount`'s
+  `fsBatch.commit()` is queued, every draft-write promise the
+  component could have in flight — ordinary autosave, submission
+  identity, and now the flush — has either been
+  cancelled-because-harmless or awaited to completion. No code path
+  issues a new write to `stockCountDrafts/periodic` after that point,
+  extending §4's own "structurally impossible, not merely
+  conventionally avoided" property to this third path.
+- The flush write carries the same live-state content
+  `scheduleDraftSave` would otherwise have written (catalog rows,
+  manual rows, and, per §5b below, `newProductInfo`); it is as safe to
+  discard on an ordinary confirm as §4a's ordinary autosave already
+  is, for the identical reason — `recordStockCount` never reads the
+  Firestore draft for finalization content, it reads live component
+  state. The flush's own purpose is to reduce the interruption-loss
+  window when the operator leaves without confirming, not to
+  participate in the finalization data path.
+
+**Traceability:** Decision 38 item (a); amended Specification §6
+(interruption-durability required outcome); Rule 8 Assessment §5
+Finding A1, §9 Finding C1, §11 items 1–2.
+
 ## 5. Resolved: Stale-draft UX pattern
 
 **Decision:** an explicit, dismissible resume banner — never a silent
@@ -350,6 +436,199 @@ auto-load (§6's requirement).
 - No action is taken automatically. The form does not render its normal
   editable state until one of the two actions is chosen, closing the
   same "operator unaware recovered data is being shown" risk §6 names.
+
+## 5a. Resolved (Decision 38 Amendment): Interruption-durability combined mechanism
+
+**Decision:** the Rule 8-approved combined mechanism — navigation/
+unload flush (§4c above) plus Firestore's own persistent local cache —
+layered onto the existing 800ms-debounce draft architecture (§2),
+which is otherwise unchanged.
+
+1. **Navigation/unload flush.** §4c above specifies the write-path
+   integration; this item specifies the trigger wiring.
+   `PeriodicStockCountView.tsx` adds a `useEffect` registering a
+   `visibilitychange` listener (calling `flushPeriodicDraftNow()` when
+   `document.visibilityState === 'hidden'`) and a `pagehide` listener
+   (calling `flushPeriodicDraftNow()` unconditionally), cleaned up on
+   unmount — the same two events, for the same documented reason
+   (`beforeunload` is unreliable on some browsers, notably older
+   mobile Safari), `InitialStockCountView.tsx` already uses. This is
+   design precedent only: no code, hook, or utility is shared between
+   the two views, per the frozen spec's own standing
+   non-authorization of a shared draft mechanism (§8 below, unchanged).
+
+2. **Firestore persistent local cache.** `apps/tenant/src/lib/firebase.ts`
+   replaces its current `getFirestore(app)` / `getFirestore(app,
+   databaseId)` construction of `db` with `initializeFirestore(app, {
+   localCache: persistentLocalCache({ tabManager:
+   persistentMultipleTabManager() }) }, databaseId)` — the `databaseId`
+   argument passed only in the branch that already passes it today, no
+   change to that existing conditional. All three APIs —
+   `initializeFirestore`, `persistentLocalCache`,
+   `persistentMultipleTabManager` — are confirmed present in the
+   actually-installed `@firebase/firestore@4.16.0` (Rule 8 Assessment
+   §1), and the settings field is `localCache`, not `cache` (the same
+   correction the Rule 8 Assessment already made to the prior
+   investigation).
+
+3. **Explicit app-wide-scope disclosure (required, not optional).**
+   `db`, exported from `lib/firebase.ts`, is the single shared
+   Firestore instance every read/write in the tenant app uses —
+   Periodic Contagem's draft included. Enabling `persistentLocalCache`
+   on this instance is therefore an app-wide setting by construction;
+   there is no SDK-level way to scope it to Periodic Contagem alone.
+   This is a disclosed, accepted consequence of Decision 38 item (c)'s
+   own authorization of "durable local/offline persistence... without
+   limitation" (Rule 8 Assessment §8, §12) — not an unreviewed side
+   effect. `persistentMultipleTabManager` (not
+   `persistentSingleTabManager`) is used specifically because it
+   avoids force-failing persistence in a second tab of the same user's
+   own browser — restated at §8 below with its own explicit
+   multi-device/multi-user caveat.
+
+4. **Explicit residual physical limitation (required, not optional —
+   must not be represented as an absolute zero-loss guarantee).** If
+   an instantaneous power, battery, or blackout event occurs before
+   JavaScript executes at all, and before the specific edit in
+   question has been locally enqueued (i.e., neither the ordinary
+   debounce nor the flush has yet fired for that edit), no client-side
+   web mechanism — this one included — can guarantee recovery of that
+   edit. This is a physical limitation of the browser/JavaScript
+   execution model, not a design gap in this task's mechanism, and the
+   combined mechanism above reduces the loss window to exactly this
+   irreducible case (Rule 8 Assessment §7, §10) rather than closing it
+   entirely. No UI text, log message, or documentation produced by
+   this task may represent the system as providing a mathematically
+   absolute zero-loss guarantee.
+
+5. **New client-side storage surface, disclosed.**
+   `persistentLocalCache` writes to the browser's IndexedDB — zero
+   IndexedDB usage exists anywhere in this codebase today (Rule 8
+   Assessment §8). Per §7 item 14 below, private-browsing/
+   IndexedDB-restricted behavior (where the SDK's documented fallback
+   is to fail open to memory/network-only operation, not to throw)
+   must be manually verified during implementation, since no existing
+   test tier in this repo can simulate that condition.
+
+**Traceability:** Decision 38 items (a), (c); amended Specification §6
+(interruption-durability outcome, "required outcome, not required
+mechanism"), §12 (mechanism-exclusion bullets reframed), §13
+(mechanism selection left to the Implementation Task); Rule 8
+Assessment §1 (SDK API verification), §5 Finding A1, §7 (mechanism
+assessment table), §8 (app-wide scope), §10 (failure-mode table).
+
+## 5b. Resolved (Decision 38 Amendment): Durable `newProductInfo` draft content
+
+**Decision:** the periodic draft schema (`PeriodicStockDraft`,
+`apps/tenant/src/context/AppContext.tsx`) gains one new optional
+field, `newProductInfo`, structurally identical — serialized as-is, no
+restructuring — to the current in-memory shape already declared in
+`PeriodicStockCountView.tsx`:
+
+```text
+newProductInfo?: Record<string, {
+  purchaseUnit: string;
+  purchaseCost: string;
+  relationshipSteps: { unit: string; factor: string }[];
+}>
+```
+
+- **Ordinary debounced draft writes include it:** `scheduleDraftSave`'s
+  signature gains a `nextNewProductInfo` parameter, passed through to
+  `savePeriodicStockDraft`, conditionally spread into the written
+  document only when non-empty (matching this file's own existing
+  conditional-spread discipline for `label`/`submissionId`, and
+  `savePurchaseDraft`'s documented undefined-field-rejection fix) —
+  never assigned the literal value `undefined`.
+- **Interruption flush writes include it:** `flushPeriodicDraftNow()`
+  (§4c) reads the same live `newProductInfo` state and includes it in
+  its own `savePeriodicStockDraft` call, identically to how it
+  includes catalog/manual rows — this is additive draft content, not a
+  second content path.
+- **Resume restores it:** the stale-draft resume banner's "Retomar"
+  action (§5 above) loads `newProductInfo` from the draft into the
+  component's `newProductInfo` state alongside catalog/manual rows and
+  the submission identity, so a genuinely-new product's entered
+  purchase unit, purchase cost, and unit-relationship chain survive
+  interruption exactly as its portion rows already do.
+- **Absence in old drafts remains backward-compatible:** a draft
+  written before this amendment simply lacks the field; the resume
+  path treats it as an empty `{}`, the same discipline this codebase
+  already applies to every other optional draft field. No draft
+  written before this amendment is rendered unreadable or requires
+  reinterpretation.
+- **No migration/backfill is required:** nothing about a pre-existing
+  draft's absence of this field is itself invalid or requires
+  correction.
+- **No `firestore.rules` change is required:** the existing
+  `stockCountDrafts/{draftId}` block (`firestore.rules`, currently
+  lines 1157–1165, re-verified fresh this session — already Owner-only
+  at read/create/update/delete, generic over `{draftId}`) authorizes
+  the document, not an enumerated field set, and already covers a
+  document carrying this additional field with zero rule-text
+  changes — the same reasoning §11 of the frozen spec and §1 of this
+  task already establish for every other draft field.
+- **No restructuring of the existing in-memory shape:**
+  `newProductInfo`'s current `useState` shape in
+  `PeriodicStockCountView.tsx` is reused verbatim as the persisted
+  shape; this task does not rename, flatten, or otherwise reshape it.
+- **Sizing, restated from §2:** `newProductInfo` entries exist only
+  for genuinely new products (Decision 37's first-time flow), a small
+  subset of any count's rows, and are bounded in size the same way
+  ordinary rows already are (§2's sizing check) — no separate
+  size-ceiling risk is introduced.
+
+**Traceability:** Decision 38 item (b); amended Specification §5
+(draft content, Decision 38 addition), §14 item 7; Rule 8 Assessment
+§5 Finding B1, §8 (data model assessment).
+
+## 5c. Resolved (Decision 38 Amendment): Stale/out-of-order autosave-write serialization, single session
+
+**Decision:** per Rule 8 Assessment Finding D1, `scheduleDraftSave`'s
+write path is serialized — before issuing a new
+`savePeriodicStockDraft` call, it awaits any prior in-flight
+ordinary-autosave write, rather than firing overlapping writes whose
+completion order the network does not guarantee.
+
+- **Before an ordinary autosave issues its Firestore write, it awaits
+  any prior in-flight periodic-draft write:** the debounce timer
+  callback in `scheduleDraftSave` (§4a) is extended to, immediately
+  before calling `savePeriodicStockDraft`, do
+  `if (draftInFlightSaveRef.current) await draftInFlightSaveRef.current`
+  — the same ref §4a already tracks, now also read (not only written)
+  at the start of the timer callback, not only at `handleConfirmSave`.
+- **Writes remain full-document overwrites:** no change to
+  `savePeriodicStockDraft`'s own `setDoc` shape (§3, unchanged) —
+  serialization is achieved purely by issue-order, not by any change
+  to what each write contains.
+- **No version/sequence field is required:** because writes are
+  already whole-document overwrites and are now strictly
+  issue-ordered, the later write's content is, by construction, the
+  more current state; no monotonic counter or timestamp comparison is
+  needed to determine which write should win.
+- **The latest state therefore wins within the same active Contagem
+  session,** per Decision 38 item (d) and amended Specification §6's
+  stale/out-of-order requirement.
+
+**Explicitly distinguished from:**
+- **The existing finalization-vs-draft resurrection protection
+  (§4/§4a/§4b/§4c):** that discipline governs an ordinary or flush
+  autosave write racing against *finalization*; this section governs
+  two ordinary autosave writes racing against *each other*, within the
+  same still-unfinalized session. The two are separate properties with
+  separate regression guards (§7 item 1 vs. item 10 below), per the
+  amended Specification's own explicit distinction (§6).
+- **Multi-tab/multi-device/user collaboration:** this serialization
+  operates entirely within one mounted `PeriodicStockCountView`
+  instance's own in-memory refs; it says nothing about, and provides
+  no protection against, two different tabs, devices, or users writing
+  to the same draft concurrently — that remains excluded exactly as §5
+  of the frozen spec and Decision 38 item (f) already state, restated
+  unchanged at §8 below.
+
+**Traceability:** Decision 38 item (d); amended Specification §6
+(stale/out-of-order single-session protection); Rule 8 Assessment §5
+Finding D1, §6 (requirement traceability table).
 
 ---
 
@@ -446,6 +725,59 @@ separate sections:
    would still be idempotent per-attempt while producing two distinct
    "logical" counts overall. Both halves are required simultaneously.
 
+## 6b. File-by-file change-plan additions (Decision 38 Amendment)
+
+Additive to §6 above — extends the same two files already in scope
+and brings one new file into scope for the first time. No bullet in
+§6's original list is removed or rewritten.
+
+**`apps/tenant/src/lib/firebase.ts`** *(entering this task's file
+scope for the first time)*
+- Replace the current `getFirestore(app)` / `getFirestore(app,
+  databaseId)` construction of `db` with `initializeFirestore(app, {
+  localCache: persistentLocalCache({ tabManager:
+  persistentMultipleTabManager() }) }, databaseId)`, preserving the
+  existing conditional (`databaseId` passed only when
+  `firebaseConfig.firestoreDatabaseId` is set, unchanged from today).
+  No other exported value from this file changes (§5a item 2).
+
+**`apps/tenant/src/context/AppContext.tsx`** *(additive to §6's
+existing bullets)*
+- Extend `savePeriodicStockDraft`'s parameters with an optional
+  `newProductInfo` (§5b), conditionally spread into the written
+  `PeriodicStockDraft`, never assigned `undefined`.
+- No further changes to `saveInitialStockDraft`, `clearInitialStockDraft`,
+  the `initial` branch of `recordStockCount`, `logTimelineEvent`, or
+  `triggerTrialActivation` — unchanged by this amendment, exactly as
+  §6's original text already states.
+
+**`apps/tenant/src/components/PeriodicStockCountView.tsx`** *(additive
+to §6's existing bullets)*
+- Add `flushInFlightSaveRef` and `flushPeriodicDraftNow()` (§4c), and
+  the `visibilitychange`/`pagehide` listener `useEffect` (§5a item 1).
+- Extend `scheduleDraftSave`'s timer callback with the
+  await-in-flight-write-before-issuing step (§5c).
+- Extend `scheduleDraftSave`'s call sites and the resume ("Retomar")
+  handler to read/write `newProductInfo` alongside catalog/manual rows
+  (§5b).
+- Extend `handleConfirmSave`'s existing cancel/await sequence with the
+  fourth step named at §4c.
+- No change to the catalog-merge effect, the tally computation, the
+  Counted/Not Counted confirmation screen's structure, or any pricing/
+  quantity business logic — restated unchanged from §6's original
+  text.
+
+**`apps/tenant/src/components/InitialStockCountView.tsx`** — no
+changes (§8, §12 of the frozen spec, unchanged by this amendment).
+
+**`firestore.rules`** — no changes (§5b above; the existing
+`stockCountDrafts/{draftId}` block, currently lines 1157–1165, already
+covers the additional field with zero rule-text changes).
+
+**Traceability:** Decision 38 items (a)–(d); amended Specification §5,
+§6, §11; Rule 8 Assessment §8 (data model assessment), §12 (scope
+boundaries).
+
 ---
 
 ## 7. Acceptance criteria — carried forward from §14, literal and checkable
@@ -508,6 +840,64 @@ separate sections:
 6. **`tests/initial-stock-confirmation.test.ts` is unaffected** — run
    unchanged as part of this task's own verification; any diff in its
    output is a regression per §12 and blocks this task's completion.
+7. **[Added by the Decision 38 amendment, 24 August 2026] Source-level
+   verification that `PeriodicStockCountView.tsx` wires both
+   `visibilitychange` and `pagehide` to `flushPeriodicDraftNow`.**
+   Source-level regression guard (same `readFileSync` +
+   string/regex-assertion technique as item 1), asserting both
+   event-listener registrations exist and reference the flush function
+   (§4c, §5a item 1).
+8. **[Added by the Decision 38 amendment, 24 August 2026] Source-level
+   verification that `flushPeriodicDraftNow` cancels the pending
+   debounce before issuing its own write** — asserting
+   `clearTimeout(draftDebounceTimerRef...)` precedes the
+   `savePeriodicStockDraft(...)` call inside `flushPeriodicDraftNow`'s
+   own body, distinct from item 1's assertions about
+   `handleConfirmSave` (§4c).
+9. **[Added by the Decision 38 amendment, 24 August 2026] Source-level
+   verification that `handleConfirmSave` awaits
+   `flushInFlightSaveRef.current` before calling `recordStockCount`,**
+   extending item 1's existing ordering assertions with this fourth
+   ref — a separate assertion from the three item 1 already checks
+   (§4c).
+10. **[Added by the Decision 38 amendment, 24 August 2026] Source-level
+    verification that `scheduleDraftSave`'s timer callback awaits
+    `draftInFlightSaveRef.current` before issuing its own next write**
+    (§5c) — proving the stale/out-of-order single-session
+    serialization property directly in source, the same technique
+    item 1 uses for the distinct resurrection property.
+11. **[Added by the Decision 38 amendment, 24 August 2026]
+    Firestore-emulator-backed test: a draft including `newProductInfo`
+    round-trips unchanged through write/read** (§5b) — extends item
+    3's tier and technique to this additional field.
+12. **[Added by the Decision 38 amendment, 24 August 2026]
+    Firestore-emulator-backed test (or equivalent direct read
+    assertion): a pre-existing draft written without `newProductInfo`
+    is read back with the field correctly absent/empty, not
+    erroring** — proves §5b's backward-compatibility requirement
+    behaviorally, not merely by inspection.
+13. **[Added by the Decision 38 amendment, 24 August 2026]
+    `lib/firebase.ts` initialization verification:** confirm
+    `initializeFirestore` is called with `localCache:
+    persistentLocalCache({ tabManager: persistentMultipleTabManager()
+    })`, and that the full existing test suite (both tiers, unmodified)
+    still passes — a regression gate, not a new assertion about
+    application behavior (§5a item 2).
+14. **[Added by the Decision 38 amendment, 24 August 2026] Manual,
+    documented verification (not automatable at either existing
+    tier): private-browsing/IndexedDB-restricted behavior does not
+    crash the app.** Flagged as a required verification step during
+    implementation, per §5a item 5 above and Rule 8 Assessment §11
+    item 7 — no new automated-test infrastructure is authorized or
+    required to cover this.
+15. **[Added by the Decision 38 amendment, 24 August 2026]
+    `tests/initial-stock-confirmation.test.ts` remains unaffected,
+    re-confirmed for this amendment specifically** — restated from
+    item 6 above, because `lib/firebase.ts` (item 13) is now a shared
+    file every existing test touches indirectly via `db`, making this
+    an explicit, separately-named regression gate for this amendment's
+    own changes rather than only a restatement of item 6's original
+    scope.
 
 ---
 
@@ -523,6 +913,41 @@ beyond BDR-0009 and the Simplification Amendment, and no new
 component-test harness (jsdom/testing-library/React-DOM) — every test
 above uses either the existing source-level-regression tier or the
 existing Firestore-emulator tier.
+
+**[Added by the Decision 38 amendment, 24 August 2026 — supersedes
+only the two items named below, restated from the paragraph above;
+does not touch any other item in that paragraph.]** The blanket "no
+IndexedDB, no app-wide navigation guard" language above is superseded
+in part, mirroring the frozen Specification's own §12 supersession:
+Decision 38 item (c) and amended Specification §6/§12/§13 now
+authorize both a navigation/unload flush mechanism (§4c, §5a item 1)
+and Firestore's persistent local cache (§5a item 2) as the Rule
+8-approved combined interruption-durability mechanism. Neither is
+prescribed as a general-purpose app-wide "unsaved changes" guard
+beyond the narrow Contagem-draft flush described at §4c/§5a — this
+amendment does not introduce a router-level or global navigation
+interceptor of any kind, only the two named, narrowly-scoped
+mechanisms.
+
+Restated unchanged by this amendment, per Decision 38 items (e)/(f)
+and the Rule 8 Assessment's own explicit re-flagging:
+- **Multi-user/multi-device exclusion:** `persistentMultipleTabManager`
+  (§5a item 2) coordinates Firestore's local cache across multiple
+  tabs of the *same user's own browser/device only* — it authorizes no
+  multi-user editing, no multi-device collaborative editing, and no
+  cross-device conflict resolution of any kind. This terminology
+  caveat, per Rule 8 Assessment Finding E1, is carried into every
+  place this mechanism is described in code or documentation.
+- **Initial Stock exclusion:** `InitialStockCountView.tsx` receives
+  zero code changes under this amendment. Its existing
+  `flushDraftNow`/`visibilitychange`/`pagehide` implementation remains
+  design precedent only, exactly as it already was before this
+  amendment — never shared code, never modified.
+- **Business Worth boundary:** nothing in this amendment touches
+  `recordStockCount`'s semantics, confirmed `StockCount` semantics,
+  Business Worth calculation, or FR-34's draft/confirmed valuation
+  boundary. Every mechanism this amendment adds (§4c, §5a, §5b, §5c)
+  operates exclusively on the unconfirmed periodic draft.
 
 ---
 
@@ -575,6 +1000,29 @@ the exact diff.
 gate, not this document's freeze or a clean `tsc --noEmit` — a
 Firestore-rules-level property can only be verified against Firestore
 rules themselves.
+
+---
+
+## 10. Decision 38 Amendment — Traceability
+
+| New requirement | Decision 38 item | Amended Specification | Rule 8 Assessment |
+|---|---|---|---|
+| Interruption-durability flush (mechanism, wiring) | (a), (c) | §6, §13 | §5 Finding A1, §7, §11 items 1–2 |
+| Firestore persistent local cache (mechanism) | (a), (c) | §6, §12, §13 | §1, §5 Finding A1, §7, §8 |
+| App-wide persistent-cache scope, disclosed | (c) | §12 | §8, §12 |
+| Residual physical limitation, disclosed | (a) | §6 | §7, §10 |
+| Flush joins §4a/§4b cancel/await discipline | (a), (e) | §6 | §5 Finding C1, §9 |
+| `newProductInfo` durable draft content | (b) | §5, §14 item 7 | §5 Finding B1, §8 |
+| Stale/out-of-order autosave-write serialization | (d) | §6, §14 item 8 | §5 Finding D1, §6 |
+| Multi-user/multi-device exclusion, restated | (f) | §5 (unchanged) | §5 Finding E1, §9, §12 |
+| Initial Stock exclusion, restated | — | §12 (unchanged) | §12 |
+| Business Worth boundary, restated | (e) | §1a, §3 (unchanged) | §12 |
+| Additional acceptance criteria (§7 items 7–15) | (a), (b), (d) | §14 items 7–8 | §11 |
+
+No new requirement above lacks a Decision 38 item, an amended
+Specification section, and a Rule 8 Assessment section/finding —
+satisfying this document's own traceability discipline (§0) for the
+amendment as a whole.
 
 ---
 
