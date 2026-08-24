@@ -446,6 +446,8 @@ export const en: TranslationDict = {
       processing: 'Reading document...',
       rejectScan: 'Reject scan',
       noConfidentMatch: "Couldn't confidently match this product \u2014 choose an existing one or create a new one",
+      sellingPriceFromMemory: 'Price from this product\u2019s memory \u2014 confirm or adjust',
+      sellingPriceNotFound: 'No remembered price for this unit \u2014 enter it manually',
       fields: {
         product: 'Product',
         quantity: 'Quantity',

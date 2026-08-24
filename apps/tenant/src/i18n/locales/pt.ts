@@ -460,6 +460,8 @@ export interface TranslationDict {
       processing: string;
       rejectScan: string;
       noConfidentMatch: string;
+      sellingPriceFromMemory: string;
+      sellingPriceNotFound: string;
       fields: {
         product: string;
         quantity: string;
@@ -1545,6 +1547,8 @@ export const pt: TranslationDict = {
       processing: 'A analisar documento...',
       rejectScan: 'Rejeitar digitalização',
       noConfidentMatch: 'Não foi possível confirmar o produto — escolha um existente ou crie um novo',
+      sellingPriceFromMemory: 'Preço da memória do produto — confirme ou ajuste',
+      sellingPriceNotFound: 'Sem preço memorizado para esta unidade — indique o preço',
       fields: {
         product: 'Produto',
         quantity: 'Quantidade',

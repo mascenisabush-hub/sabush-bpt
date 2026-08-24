@@ -10,6 +10,7 @@ import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } fr
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { resolveUnitAwarePrice } from '../lib/productMemoryPriceResolution';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 
 interface AddStockViewProps {
@@ -245,6 +246,14 @@ const UnitRelationshipRow: React.FC<{
     </div>
   );
 };
+
+// [Fix — remembered price silently reused across a genuine unit change]
+// resolveUnitAwarePrice now lives in lib/productMemoryPriceResolution.ts
+// (imported above) — extracted out of this component so it's a plain,
+// dependency-free function directly unit-testable without a React/DOM
+// harness, matching this codebase's own established pattern for every
+// other pure conversion helper (getConversionFactor, deriveCostContribution,
+// etc.). See that module's own header comment for the full rationale.
 
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
   const {
@@ -765,8 +774,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // function NEVER re-guesses or loosens that decision client-side. A
   // 'confident' match additionally reuses Product Memory's EXISTING
   // prefill behavior (latest batch price/unit) — the exact same logic
-  // handleSelectProductForTool already applies for manual selection,
-  // not a new prefill path invented for scanning.
+  // handleSelectProductForTool already applies for manual selection, not
+  // a new prefill path invented for scanning — now unit-aware
+  // (resolveUnitAwarePrice, above) specifically because THIS path is the
+  // one place the target unit can legitimately differ from the
+  // remembered price's own unit (the receipt says what was actually
+  // bought this time, which the AI reads verbatim — see that helper's
+  // own comment for why reusing the raw remembered number across a
+  // genuine unit change would be wrong, not merely imprecise).
   const buildRowFromProposalLineItem = (item: SmartStockEntryLineItemProposal): StockRowItem => {
     let productName = item.productName.value || '';
     let costPrice = item.costPrice.value != null ? String(item.costPrice.value) : '';
@@ -808,9 +823,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         const productBatches = batches.filter(b => b.productId === matched.id);
         if (productBatches.length > 0) {
           const latest = productBatches[0];
-          sellingPrice = String(latest.sellingPrice);
           if (!item.unit.value) unit = latest.unit || unit;
-          if (!costPrice) costPrice = String(latest.costPrice);
+          // [Fix — see resolveUnitAwarePrice's own header comment] `unit`
+          // here is this row's own TARGET unit — the receipt's own
+          // reading when the AI detected one, otherwise latest.unit
+          // (assigned immediately above, in which case this call is a
+          // same-unit no-op returning the remembered price unchanged).
+          // Never blindly reuses latest.sellingPrice/costPrice across a
+          // genuine unit difference the way this line previously did.
+          sellingPrice = resolveUnitAwarePrice(latest.sellingPrice, latest.unit, unit, matched.unitRelationship);
+          if (!costPrice) costPrice = resolveUnitAwarePrice(latest.costPrice, latest.unit, unit, matched.unitRelationship);
           previousCycleQuantity = latest.quantity;
         } else {
           if (!costPrice && matched.costPrice != null) costPrice = String(matched.costPrice);
@@ -1892,6 +1914,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
+                          {/* [Fix — resolveUnitAwarePrice] Deliberately a
+                              SEPARATE, differently-worded indicator from
+                              renderFieldStatusBadge's ✓/⚠/— vocabulary
+                              above — this value was never AI-detected
+                              (BDR-0008: the scan never proposes a selling
+                              price at all), so labeling it with the same
+                              "detected" language would misrepresent its
+                              actual source and violate the Trust Test
+                              (§1b: never let two differently-sourced
+                              values look the same). Only shown for a
+                              scanned row — a manually-typed row has
+                              nothing to report here either. */}
+                          {row.smartEntrySource === 'ai' && (
+                            <p className={`mt-1 text-[9.5px] leading-snug ${row.sellingPrice ? 'text-[#8A6D1F]' : 'text-amber-600 font-semibold'}`}>
+                              {row.sellingPrice ? t('addStock.smartEntry.sellingPriceFromMemory') : t('addStock.smartEntry.sellingPriceNotFound')}
+                            </p>
+                          )}
                         </div>
 
                         {/* Lucro Estimado & Delete Button */}
