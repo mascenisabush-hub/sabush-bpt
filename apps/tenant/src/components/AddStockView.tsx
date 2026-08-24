@@ -10,7 +10,7 @@ import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } fr
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
-import { resolveUnitAwarePrice } from '../lib/productMemoryPriceResolution';
+import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 
 interface AddStockViewProps {
@@ -259,6 +259,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const {
     products,
     batches,
+    stockCounts,
     suppliers,
     addMultipleStockBatches,
     currencySymbol,
@@ -284,15 +285,24 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     if (productName) {
       const match = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
       if (match) {
-        const productBatches = batches.filter(b => b.productId === match.id);
-        if (productBatches.length > 0) {
-          const latest = productBatches[0];
-          initialCost = String(latest.costPrice);
-          initialSell = String(latest.sellingPrice);
-          if (latest.unit) initialUnit = latest.unit;
+        // [Owner-requested — "auto-fill from memory in Contagem or old
+        // Capital Inicial"] Widened from batches-only to also search
+        // confirmed StockCounts (see findLatestRememberedProductMemory's
+        // own header comment) — unit/cost/sell always taken from the
+        // SAME winning record, so this row starts fully self-consistent
+        // regardless of which source actually won. A genuinely new
+        // product (no batch, no priced Contagem entry) leaves
+        // initialCost/initialSell both '' — no hardcoded placeholder
+        // number is invented for it (see the return below).
+        const memory = findLatestRememberedProductMemory(match.id, match.name, batches, stockCounts);
+        if (memory) {
+          initialCost = String(memory.costPrice);
+          initialSell = String(memory.sellingPrice);
+          initialUnit = memory.unit;
         } else if (match.costPrice != null || match.sellingPrice != null) {
-          // No batches yet — fall back to the product's reference price
-          // (set via "Editar Detalhes") instead of the generic defaults.
+          // No batch and no priced Contagem entry — fall back to the
+          // product's own reference price (set via "Editar Detalhes")
+          // instead of the generic defaults.
           if (match.costPrice != null) initialCost = String(match.costPrice);
           if (match.sellingPrice != null) initialSell = String(match.sellingPrice);
         }
@@ -312,8 +322,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       dateEntered: getTodayDateString(),
       quantity: '50',
       unit: initialUnit,
-      costPrice: initialCost || '1.50',
-      sellingPrice: initialSell || '3.00',
+      // [Owner-requested — "never invent those two [selling price and
+      // selling unit] if no memory or for a new product"] The old
+      // '1.50'/'3.00' fallbacks presented a specific, confident-looking
+      // number for a product this system has genuinely never seen
+      // priced anywhere — indistinguishable on screen from a real,
+      // remembered figure. Left blank instead; the required-field
+      // validation already in place (handleSubmit) still catches an
+      // Owner who genuinely forgets to fill it in before confirming.
+      costPrice: initialCost,
+      sellingPrice: initialSell,
       isDropdownOpen: false,
       isUnitPopoverOpen: false,
       previousRemainingQuantity: '',
@@ -601,12 +619,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     let newUnit = suggestedUnits[0] || 'un';
 
     if (match) {
-      const productBatches = batches.filter(b => b.productId === match.id);
-      if (productBatches.length > 0) {
-        const latest = productBatches[0];
-        newCost = String(latest.costPrice);
-        newSell = String(latest.sellingPrice);
-        if (latest.unit) newUnit = latest.unit;
+      // [Owner-requested — see createEmptyRow's identical comment above]
+      // Same widened memory source (StockBatch purchases AND confirmed
+      // StockCounts, unit/cost/sell always from the SAME winning
+      // record), applied identically here for re-selecting a different
+      // existing product mid-form.
+      const memory = findLatestRememberedProductMemory(match.id, match.name, batches, stockCounts);
+      if (memory) {
+        newCost = String(memory.costPrice);
+        newSell = String(memory.sellingPrice);
+        newUnit = memory.unit;
       } else if (match.costPrice != null || match.sellingPrice != null) {
         if (match.costPrice != null) newCost = String(match.costPrice);
         if (match.sellingPrice != null) newSell = String(match.sellingPrice);
@@ -820,20 +842,32 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // does. Applies uniformly whether the match came from the
         // server's exact-name check or a client-side reuse match.
         productName = matched.name;
+
+        // [Restock Observation Amendment v1.0] Deliberately kept
+        // STRICTLY StockBatch-sourced, unlike the unit-aware cost/sell
+        // memory below — "previous cycle" specifically means "the
+        // physical quantity from the last recorded PURCHASE," which a
+        // StockCount entry (a physical count, not a purchase) has no
+        // equivalent of. Unaffected by this fix.
         const productBatches = batches.filter(b => b.productId === matched.id);
-        if (productBatches.length > 0) {
-          const latest = productBatches[0];
-          if (!item.unit.value) unit = latest.unit || unit;
-          // [Fix — see resolveUnitAwarePrice's own header comment] `unit`
-          // here is this row's own TARGET unit — the receipt's own
-          // reading when the AI detected one, otherwise latest.unit
-          // (assigned immediately above, in which case this call is a
-          // same-unit no-op returning the remembered price unchanged).
-          // Never blindly reuses latest.sellingPrice/costPrice across a
-          // genuine unit difference the way this line previously did.
-          sellingPrice = resolveUnitAwarePrice(latest.sellingPrice, latest.unit, unit, matched.unitRelationship);
-          if (!costPrice) costPrice = resolveUnitAwarePrice(latest.costPrice, latest.unit, unit, matched.unitRelationship);
-          previousCycleQuantity = latest.quantity;
+        if (productBatches.length > 0) previousCycleQuantity = productBatches[0].quantity;
+
+        if (!item.unit.value && productBatches.length > 0) unit = productBatches[0].unit || unit;
+
+        // [Owner-requested — "auto-fill from memory in Contagem or old
+        // Capital Inicial"] Widened from batches-only to also search
+        // confirmed StockCounts — see findLatestRememberedProductMemory's
+        // own header comment. `unit` here is this row's own TARGET
+        // unit — the receipt's own reading when the AI detected one,
+        // otherwise the latest batch's unit (assigned immediately
+        // above). resolveUnitAwarePrice never blindly reuses a
+        // remembered price across a genuine unit difference (its own
+        // header comment) — converts when a confirmed relationship
+        // allows it, leaves '' when it can't be sure.
+        const memory = findLatestRememberedProductMemory(matched.id, matched.name, batches, stockCounts);
+        if (memory) {
+          sellingPrice = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, unit, matched.unitRelationship);
+          if (!costPrice) costPrice = resolveUnitAwarePrice(memory.costPrice, memory.unit, unit, matched.unitRelationship);
         } else {
           if (!costPrice && matched.costPrice != null) costPrice = String(matched.costPrice);
           if (matched.sellingPrice != null) sellingPrice = String(matched.sellingPrice);
@@ -920,8 +954,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       // appending the scan's rows, so a fresh Add Stock screen doesn't
       // end up with one useless empty row alongside the real ones —
       // but never drop a row the user has already started filling in.
+      // [Fix — createEmptyRow's own '1.50'/'3.00' placeholder defaults
+      // were removed (never invent a price for a genuinely new/unmatched
+      // product); a pristine row's costPrice/sellingPrice are now '' by
+      // default instead, unless Product Memory found something real to
+      // prefill — this check is updated to match, not to compare against
+      // the removed placeholders.]
       const kept = prev.filter(
-        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '1.50' || r.sellingPrice !== '3.00'
+        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== ''
       );
       return [...kept, ...newRows];
     });
