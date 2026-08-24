@@ -42,6 +42,13 @@
 // been typechecked but NOT run end-to-end. Treat a clean run of
 // `npm run test:periodic-stock-finalization:emulator` as the actual
 // acceptance gate, not this file's existence or a typecheck pass.
+//
+// [Decision 38 Amendment, 24 August 2026 — Implementation Task §7 items
+// 11-12; Implementation Authorization §2 item 2, §8 items 5-6] Extended
+// with a new describe block covering newProductInfo's own round-trip
+// and backward-compatibility properties, same emulator harness, same
+// SANDBOX DISCLOSURE above — these new tests are equally untested
+// end-to-end in this environment for the identical reason.
 
 import { strict as assert } from 'node:assert';
 import { before, after, beforeEach, describe, it } from 'node:test';
@@ -291,5 +298,109 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
     const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
     const restored = snap.data() as Record<string, unknown>;
     assert.equal('submissionId' in restored, false, 'submissionId must be entirely absent before the first confirmation attempt, not present as an empty/placeholder value.');
+  });
+});
+
+// [Stock Count Data-Loss Resilience — Decision 38 Amendment,
+// Implementation Task §7 items 11-12; Implementation Authorization §2
+// item 2, §8 items 5-6]
+describe('§7 items 11-12 (Decision 38 Amendment) — newProductInfo durable draft content', () => {
+  it('item 11: a draft including newProductInfo round-trips unchanged through write/read', async () => {
+    const db = ownerDbFor();
+    const newProductInfo = {
+      'produto novo': {
+        purchaseUnit: 'caixa',
+        purchaseCost: '120.5',
+        relationshipSteps: [
+          { unit: 'unidade', factor: '24' },
+          { unit: 'pacote', factor: '6' },
+        ],
+      },
+      'outro produto': {
+        purchaseUnit: 'saco',
+        purchaseCost: '45',
+        relationshipSteps: [{ unit: 'kg', factor: '25' }],
+      },
+    };
+    const draft = {
+      items: [{ productName: 'Produto Novo', quantity: '3', unit: 'caixa', costPrice: '120.5', sellingPrice: '150' }],
+      type: 'monthly',
+      date: '2026-08-10',
+      newProductInfo,
+      updatedAt: new Date().toISOString(),
+    };
+    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
+    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
+    assert.equal(snap.exists(), true);
+    const restored = snap.data() as typeof draft;
+    assert.deepEqual(
+      restored.newProductInfo,
+      newProductInfo,
+      'newProductInfo must round-trip byte-for-byte through the emulator, including its nested relationshipSteps array and multiple product keys.'
+    );
+  });
+
+  it('item 12: a pre-existing draft written WITHOUT newProductInfo reads back with the field correctly absent/empty, not erroring', async () => {
+    const db = ownerDbFor();
+    // Simulates a draft written before this amendment existed — no
+    // newProductInfo key at all, exactly like the pre-amendment
+    // §14 item 3 draft shape above.
+    const draft = {
+      items: [{ productId: 'p1', productName: 'Arroz', quantity: '10', unit: 'kg', costPrice: '50', sellingPrice: '65' }],
+      type: 'monthly',
+      date: '2026-08-10',
+      submissionId: 'sub-legacy-001',
+      updatedAt: new Date().toISOString(),
+    };
+    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
+    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
+    assert.equal(snap.exists(), true);
+    const restored = snap.data() as Record<string, unknown>;
+    assert.equal(
+      'newProductInfo' in restored,
+      false,
+      'newProductInfo must be entirely absent on a pre-existing draft — never present as an empty object or null placeholder, and reading it back must not throw.'
+    );
+    // The resume path's own `?? {}` fallback (PeriodicStockCountView.tsx
+    // handleResumeDraft) is what turns this absence into an empty
+    // object at the application layer — this test proves the
+    // Firestore-level precondition that fallback depends on: the field
+    // is genuinely undefined/absent here, not some other falsy value
+    // that `?? {}` would not correctly handle the same way.
+    assert.equal((restored as any).newProductInfo, undefined);
+  });
+
+  it('a draft can be resumed, edited to ADD newProductInfo, and re-saved — the field transitions from absent to present across two writes to the same document', async () => {
+    const db = ownerDbFor();
+    const draftRef = doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic');
+
+    // Write 1: no newProductInfo yet (operator hasn't reached a new
+    // product's info panel).
+    await assertSucceeds(
+      setDoc(draftRef, {
+        items: [{ productName: 'Produto Novo', quantity: '1', unit: 'un', costPrice: '', sellingPrice: '' }],
+        type: 'monthly',
+        date: '2026-08-10',
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    let snap = await getDoc(draftRef);
+    assert.equal('newProductInfo' in (snap.data() as object), false);
+
+    // Write 2 (full-document overwrite, same as every write path this
+    // amendment adds): now includes newProductInfo.
+    const newProductInfo = { 'produto novo': { purchaseUnit: 'un', purchaseCost: '10', relationshipSteps: [] } };
+    await assertSucceeds(
+      setDoc(draftRef, {
+        items: [{ productName: 'Produto Novo', quantity: '1', unit: 'un', costPrice: '10', sellingPrice: '15' }],
+        type: 'monthly',
+        date: '2026-08-10',
+        newProductInfo,
+        updatedAt: new Date().toISOString(),
+      })
+    );
+    snap = await getDoc(draftRef);
+    const restored = snap.data() as any;
+    assert.deepEqual(restored.newProductInfo, newProductInfo);
   });
 });

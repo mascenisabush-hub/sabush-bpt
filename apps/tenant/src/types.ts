@@ -1306,6 +1306,21 @@ export interface PeriodicStockDraft {
   // see the Implementation Task's §3/§4b for why this is required, not
   // merely convenient.
   submissionId?: string;
+  // [Stock Count Data-Loss Resilience — Decision 38 Amendment,
+  // Implementation Task §5b; Implementation Authorization §2 item 2]
+  // For a genuinely new product entered through Decision 37's
+  // first-time Contagem flow, that product's own entered purchase
+  // unit, purchase cost, and complete arbitrary-length
+  // unit-relationship chain — structurally identical, serialized
+  // as-is, to PeriodicStockCountView.tsx's own in-memory
+  // `newProductInfo` state. Optional and additive: absent on any
+  // draft written before this field existed, and the resume path
+  // treats that absence as an empty object, never as an error. Never
+  // owned by, or lost with, any single physical portion row.
+  newProductInfo?: Record<
+    string,
+    { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
+  >;
   updatedAt: string; // ISO string
 }
 

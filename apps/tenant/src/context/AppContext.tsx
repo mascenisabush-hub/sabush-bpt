@@ -662,7 +662,11 @@ interface AppContextType {
     type: StockCountType,
     label: string | undefined,
     date: string,
-    submissionId?: string
+    submissionId?: string,
+    newProductInfo?: Record<
+      string,
+      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
+    >
   ) => Promise<void>;
   clearPeriodicStockDraft: () => Promise<void>;
   // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
@@ -4944,12 +4948,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // shape is what `establishSubmissionIdentity`-equivalent calls below
   // rely on to avoid ever persisting a document with the identity but
   // missing row content, or vice versa).
+  // `newProductInfo` [Decision 38 Amendment, Implementation Task §5b;
+  // Implementation Authorization §2 item 3] is optional for the same
+  // reason `label`/`submissionId` are: conditionally spread only when
+  // non-empty, never assigned the literal value `undefined` (Firestore
+  // rejects that). A draft written before this parameter existed
+  // simply lacks the field — no migration, no backward-compatibility
+  // branch is needed here; the resume path (PeriodicStockCountView.tsx)
+  // is what treats absence as an empty object.
   const savePeriodicStockDraft = async (
     items: PeriodicStockDraftItem[],
     type: StockCountType,
     label: string | undefined,
     date: string,
-    submissionId?: string
+    submissionId?: string,
+    newProductInfo?: Record<
+      string,
+      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
+    >
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     const draft: PeriodicStockDraft = {
@@ -4958,6 +4974,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(label ? { label } : {}),
       date,
       ...(submissionId ? { submissionId } : {}),
+      ...(newProductInfo && Object.keys(newProductInfo).length > 0 ? { newProductInfo } : {}),
       updatedAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'), draft);
