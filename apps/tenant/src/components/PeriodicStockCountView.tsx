@@ -418,6 +418,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     batches,
     productsError,
     periodicStockDraft,
+    cashPositionDeclarations,
     periodicStockDraftLoaded,
     savePeriodicStockDraft,
     clearPeriodicStockDraft,
@@ -1578,20 +1579,54 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         })),
         expectedValueAtCount: expectedCurrentStockValue,
         submissionId: submissionIdRef.current || undefined,
+        // [Fix — Business Worth Evolution was never actually switched on]
+        // Specification §14, Decision 1: "producesBusinessWorthSnapshot
+        // is set true on every Contagem confirmed under this model going
+        // forward" — an every-confirmation default, not a
+        // correction-only special case. Until this fix, the ONLY place
+        // in this entire codebase that ever set this flag true was the
+        // correction/recovery branch just below — meaning an ordinary
+        // Confirmar Contagem never actually produced a
+        // BusinessWorthSnapshot at all, and the Dashboard's "Valor do
+        // Negócio" card was permanently stuck showing the Estimated
+        // (Capital-Inicial-anchored) fallback, never Current, for every
+        // business, regardless of how many Contagens were confirmed.
+        // Periodic Contagem has no competing OLDER recovery mechanism of
+        // its own (unlike 'initial' — see InitialStockCountView, which
+        // this fix deliberately does NOT touch: that screen's existing
+        // Void & Redo mechanism, and its own already-confirmed
+        // historical records, are completely unaffected either way —
+        // FR-19 explicitly forbids ever retroactively marking a
+        // historical StockCount, so nothing already confirmed changes).
+        // So turning this on for periodic confirmations has no
+        // Void-&-Redo-exclusivity implication to resolve here.
+        producesBusinessWorthSnapshot: true,
+        // [Fix — same gap, the cash half of it] Specification §10
+        // Decision 3, FR-55: cashPosition is "required product behavior
+        // whenever producesBusinessWorthSnapshot is true." Sourced from
+        // the Owner's own most recent Cash Position declaration
+        // (Dívidas screen, cashPositionDeclarations[0] — already
+        // newest-first, AppContext's own onSnapshot sort) — never a
+        // fabricated 0, and genuinely omitted (not merely defaulted)
+        // when the Owner has never declared one yet, exactly matching
+        // this field's own "genuinely omitted... when the caller
+        // supplies nothing" contract (RecordStockCountParams, above).
+        ...(cashPositionDeclarations.length > 0
+          ? { ownerConfirmedCashPosition: cashPositionDeclarations[0].amount }
+          : {}),
         // [Business Worth Evolution — Implementation Authorization,
         // Increment 8; Specification §25, §26, FR-38, FR-39, FR-58]
         // When this confirmation is a correction/recovery
         // (pendingBusinessWorthCorrection, set only via DashboardView's
-        // own eligibility-gated entry point), producesBusinessWorthSnapshot
-        // is set true so recordStockCount's own correction/recovery
-        // write path actually runs — the target snapshot id and kind
-        // are never free-typed here, only ever the value
-        // startBusinessWorthCorrection already recorded.
-        // firestore.rules independently and authoritatively re-verifies
-        // eligibility regardless of what is asserted here.
+        // own eligibility-gated entry point), the correction-specific
+        // target snapshot id/kind are added on top of the (now always
+        // already-true) producesBusinessWorthSnapshot above — never
+        // free-typed here, only ever the value startBusinessWorthCorrection
+        // already recorded. firestore.rules independently and
+        // authoritatively re-verifies eligibility regardless of what is
+        // asserted here.
         ...(pendingBusinessWorthCorrection
           ? {
-              producesBusinessWorthSnapshot: true,
               correctionOfSnapshotId: pendingBusinessWorthCorrection.snapshotId,
               correctionKind: pendingBusinessWorthCorrection.kind,
             }
