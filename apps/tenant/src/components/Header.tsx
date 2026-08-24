@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
-import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown, Bell, Search } from 'lucide-react';
+import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown, Bell, Search, Package } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
 import { OwnerPortfolioModal } from './OwnerPortfolioModal';
 import { ShopSwitcher } from './ShopSwitcher';
@@ -11,6 +11,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { useNotifications } from '../context/NotificationContext';
 import { formatDate } from '../utils/formatters';
 import { NotificationPriority } from '../types';
+import { setPendingStocksSearch } from '../lib/pendingStocksSearch';
 
 interface HeaderProps {
   activeTab: TabType;
@@ -44,6 +45,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     isBusinessProfileComplete,
     logout,
     ownedBusinesses,
+    products,
   } = useApp();
 
   const { t } = useLanguage();
@@ -64,6 +66,42 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
 
+  // [Fix — global search box was decorative only] A real, controlled
+  // search over the product catalog (the one entity meaningful to
+  // search "across the system" from any screen) — matches by name,
+  // case-insensitive substring. Kept local to Header (not lifted into
+  // App.tsx/context) since its only job is to jump elsewhere; the
+  // actual filtered display lives wherever the Owner lands
+  // (StocksView), exactly like the 'open-settings' CustomEvent just
+  // below already does for a different cross-component jump, so this
+  // reuses an established pattern rather than introducing a new one.
+  const [globalSearchQuery, setGlobalSearchQuery] = useState('');
+  const [showGlobalSearchResults, setShowGlobalSearchResults] = useState(false);
+  const globalSearchRef = useRef<HTMLDivElement>(null);
+  const trimmedGlobalSearch = globalSearchQuery.trim().toLowerCase();
+  const globalSearchMatches = trimmedGlobalSearch
+    ? products.filter((p) => p.name.toLowerCase().includes(trimmedGlobalSearch)).slice(0, 8)
+    : [];
+
+  const goToProductInStocks = (query: string) => {
+    // Covers the "not yet mounted" race (see pendingStocksSearch.ts's own
+    // comment) — set BEFORE switching tabs, always, regardless of
+    // whether StocksView happens to be mounted already.
+    setPendingStocksSearch(query);
+    setActiveTab('stocks');
+    // Covers the "already mounted" case (Owner searches again while
+    // already on Stocks) — a mount effect alone would never re-fire here.
+    window.dispatchEvent(new CustomEvent('navigate-to-stocks-search', { detail: { query } }));
+    setGlobalSearchQuery('');
+    setShowGlobalSearchResults(false);
+  };
+
+  const handleGlobalSearchSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!globalSearchQuery.trim()) return;
+    goToProductInStocks(globalSearchQuery.trim());
+  };
+
   // Close the profile menu on outside click — same behaviour users already
   // expect from any dropdown, just applied to the new consolidated menu.
   useEffect(() => {
@@ -73,6 +111,9 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
       }
       if (notificationsRef.current && !notificationsRef.current.contains(e.target as Node)) {
         setShowNotifications(false);
+      }
+      if (globalSearchRef.current && !globalSearchRef.current.contains(e.target as Node)) {
+        setShowGlobalSearchResults(false);
       }
     };
     document.addEventListener('mousedown', handleClickOutside);
@@ -152,20 +193,51 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               </div>
             )}
 
-            {/* Global search — kept quiet and honest: product-level search
-                still lives in the Dashboard's own toolbar, so this reads as
-                a calm label rather than a fake shortcut promising more
-                than it does. */}
-            <div
-              className="hidden md:flex flex-1 max-w-md mx-auto order-last lg:order-none select-none"
-              aria-hidden="true"
-            >
-              <div className="relative w-full">
+            {/* [Fix — this was a decorative, aria-hidden, non-interactive
+                div, not a real input at all] Now a genuine product search:
+                typing filters the catalog live, and picking a result (or
+                pressing Enter) jumps to Stocks with that search term
+                already applied there — see goToProductInStocks/the
+                'navigate-to-stocks-search' listener in StocksView.tsx.
+                Still desktop-only (hidden md:flex) — that visibility rule
+                predates this fix and is unrelated to it. */}
+            <div className="hidden md:flex flex-1 max-w-md mx-auto order-last lg:order-none" ref={globalSearchRef}>
+              <form onSubmit={handleGlobalSearchSubmit} className="relative w-full">
                 <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-gray-400" />
-                <div className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3.5 py-1.5 text-[13px] text-gray-400 font-medium">
-                  {t('header.searchPlaceholder')}
-                </div>
-              </div>
+                <input
+                  type="text"
+                  value={globalSearchQuery}
+                  onChange={(e) => {
+                    setGlobalSearchQuery(e.target.value);
+                    setShowGlobalSearchResults(true);
+                  }}
+                  onFocus={() => setShowGlobalSearchResults(true)}
+                  placeholder={t('header.searchPlaceholder')}
+                  className="w-full bg-white border border-gray-200 rounded-lg pl-9 pr-3.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 font-medium transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                />
+
+                {showGlobalSearchResults && trimmedGlobalSearch && (
+                  <div className="absolute left-0 right-0 top-full mt-1.5 bg-white border border-gray-200 rounded-lg elevation-2 max-h-72 overflow-y-auto z-40">
+                    {globalSearchMatches.length === 0 ? (
+                      <p className="px-3.5 py-3 text-[12.5px] text-gray-400">
+                        {t('header.searchNoResults', { query: globalSearchQuery.trim() })}
+                      </p>
+                    ) : (
+                      globalSearchMatches.map((product) => (
+                        <button
+                          key={product.id}
+                          type="button"
+                          onClick={() => goToProductInStocks(product.name)}
+                          className="w-full flex items-center gap-2.5 px-3.5 py-2 text-left text-[13px] text-[#111827] hover:bg-[#F5F7FA] transition-colors"
+                        >
+                          <Package className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                          <span className="truncate">{product.name}</span>
+                        </button>
+                      ))
+                    )}
+                  </div>
+                )}
+              </form>
             </div>
 
             {/* Language — same switcher as the login/quick-login screens, so

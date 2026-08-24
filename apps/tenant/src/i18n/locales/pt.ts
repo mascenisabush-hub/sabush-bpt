@@ -341,6 +341,7 @@ export interface TranslationDict {
     registeredBusiness: string;
     contactTitle: string;
     searchPlaceholder: string;
+    searchNoResults: string;
     notifications: string;
     noNotifications: string;
     userFallback: string;
@@ -1427,6 +1428,7 @@ export const pt: TranslationDict = {
     registeredBusiness: 'Negócio Registado',
     contactTitle: 'Contacto: {{contact}}',
     searchPlaceholder: 'Pesquisar no sistema...',
+    searchNoResults: 'Nenhum produto encontrado para "{{query}}".',
     notifications: 'Notificações',
     noNotifications: 'Sem notificações novas.',
     userFallback: 'Utilizador',

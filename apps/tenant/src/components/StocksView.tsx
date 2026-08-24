@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import {
@@ -10,6 +10,7 @@ import {
 } from '../utils/purchaseBatchCalculations';
 import { exportPurchaseBatchToPdf } from '../utils/batchPdfExport';
 import { formatCurrency, formatDate } from '../utils/formatters';
+import { consumePendingStocksSearch } from '../lib/pendingStocksSearch';
 import {
   Boxes,
   Calendar,
@@ -50,11 +51,30 @@ export const StocksView: React.FC = () => {
 
   const statusLabel = (status: PurchaseBatchStatus) => t(`common.purchaseBatchStatus.${status}`);
 
-  const [searchQuery, setSearchQuery] = useState('');
+  const [searchQuery, setSearchQuery] = useState(() => consumePendingStocksSearch() ?? '');
   const [selectedDate, setSelectedDate] = useState('');
   const [supplierFilter, setSupplierFilter] = useState('');
   const [statusFilter, setStatusFilter] = useState<'all' | PurchaseBatchStatus>('all');
   const [showArchived, setShowArchived] = useState(false);
+
+  // [Fix — Header's global search was decorative, non-functional] Picks
+  // up a product name from Header.tsx's own real search box — see its
+  // 'navigate-to-stocks-search' dispatch — and applies it as this
+  // screen's own search filter. The initial-state read above
+  // (consumePendingStocksSearch) covers the "not yet mounted" case (a
+  // tab switch was needed to get here); this listener covers the
+  // "already mounted" case (an Owner searches again from the header
+  // while already on this screen), which a mount-only initializer would
+  // never re-fire for. Same established cross-component-navigation
+  // pattern this codebase already uses for 'open-settings' (Header.tsx).
+  useEffect(() => {
+    const handleNavigateSearch = (e: Event) => {
+      const detail = (e as CustomEvent<{ query?: string }>).detail;
+      if (detail?.query) setSearchQuery(detail.query);
+    };
+    window.addEventListener('navigate-to-stocks-search', handleNavigateSearch);
+    return () => window.removeEventListener('navigate-to-stocks-search', handleNavigateSearch);
+  }, []);
   // [Multi-Supplier Purchase Event Amendment v1.0, Part 10] Opt-in —
   // defaults to off, so the default view is byte-for-byte identical to
   // today's for every business that has never used "Add Another

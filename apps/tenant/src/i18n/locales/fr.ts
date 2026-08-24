@@ -329,6 +329,7 @@ export const fr: TranslationDict = {
     registeredBusiness: 'Entreprise Enregistrée',
     contactTitle: 'Contact : {{contact}}',
     searchPlaceholder: 'Rechercher dans le système...',
+    searchNoResults: 'Aucun produit trouvé pour « {{query}} ».',
     notifications: 'Notifications',
     noNotifications: 'Aucune nouvelle notification.',
     userFallback: 'Utilisateur',
