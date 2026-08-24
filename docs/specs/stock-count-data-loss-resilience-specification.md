@@ -18,6 +18,27 @@ This document itself does not constitute the implementation task — per
 this project's established discipline, a separate, formally-scoped
 Implementation Task is the next artifact, not code changes issued
 directly from this freeze.
+**Amended by:** an amendment, 24 August 2026, operationalizing
+[BDR-pending-business-worth-evolution-measurement-model.md](./BDR-pending-business-worth-evolution-measurement-model.md),
+Decision 38 ("Contagem Draft Data-Durability and Interruption
+Resilience — Extension of Decision 29") — §5 (draft content extended
+to include Decision 37's product-level `newProductInfo`), §6 (two new
+requirements: the broader interruption-durability outcome, and
+protection against stale/out-of-order autosave writes within one
+active session), §12 (its two mechanism-exclusion bullets reframed —
+no longer barred, mechanism selection authorized to engineering per
+Decision 38 item (c), constrained to the outcome §6 now states), §13
+(mechanism selection for both new §6 requirements added as an
+Implementation-Task-level open question, mirroring this document's own
+existing §8a "required property, not mechanism" pattern), and §14
+(two new acceptance-criteria items extending the existing list). This
+amendment does not reopen, alter, or reinterpret any decision this
+document already recorded — the Draft Lifecycle State Model (§4),
+draft-vs-committed distinction (§1a), submission-identity/idempotent-
+finalization design (§7, §8), the existing multi-user/multi-device
+exclusion (§5), and the `InitialStockCountView.tsx`-exclusion boundary
+(§12) are all preserved exactly as before. Sections not named above
+are unchanged by this amendment.
 **Depends on:** the Investigation filed in this session (not yet a
 standalone document; its findings are incorporated directly below
 since they are load-bearing); [Stock Counts (spec #10)](./10-stock-counts.md);
@@ -161,7 +182,18 @@ the same signal.
   of the same periodic count.
 - Content: every catalog row (including `removed` ones — Section 9)
   and every manual row (Section 10), plus `type`, `label`, `date`, and
-  the draft's own submission identity (Section 7).
+  the draft's own submission identity (Section 7). **[Added by the
+  Decision 38 amendment, 24 August 2026]** Content also includes, for
+  a genuinely new product entered through Decision 37's first-time
+  Contagem flow, that product's own entered purchase unit, purchase
+  cost, and complete arbitrary-length unit-relationship chain
+  (`newProductInfo` in the current implementation's own terminology),
+  associated with its product exactly as Decision 37 itself requires —
+  never owned by, or lost with, any single physical portion row. This
+  extends, and does not narrow, the Content definition above: every
+  requirement already stated for catalog/manual rows continues to
+  apply unchanged; this is additive draft content, not a replacement
+  for it.
 - Write pattern: reuse the existing whole-document-overwrite +
   debounce *design* already proven by `saveInitialStockDraft` /
   `savePurchaseDraft` — i.e. the same general shape (debounce, then
@@ -191,6 +223,38 @@ the same signal.
   an explicit resume point — never silently auto-loaded over a blank
   form without the operator's awareness that recovered data is being
   shown.
+- **[Added by the Decision 38 amendment, 24 August 2026] Interruption-
+  durability required outcome.** Per Decision 38 item (a), every
+  product/portion the operator has entered into the draft — and, per
+  Section 5's own Decision-38 addition, every associated product-level
+  first-time entry — must be recoverable from the durable draft after
+  normal interruption, at minimum: accidental navigation away, browser/
+  tab/app closure, refresh/reload, device shutdown, battery loss, power
+  loss, and connection interruption. **This is a required outcome, not
+  a required mechanism** — per Decision 38 item (c), which mechanism(s)
+  achieve it (e.g. navigation/unload-interruption flushing, durable
+  local/offline persistence, stronger draft-write sequencing, or
+  another technically appropriate approach, singly or in combination)
+  is an Implementation-Task-level decision (Section 13), exactly as
+  Section 8a already treats idempotent finalization's own mechanism as
+  open while fixing its required property. This requirement supersedes
+  Section 12's prior blanket exclusion of navigation-guard and offline-
+  persistence mechanisms — see Section 12's own amended text.
+- **[Added by the Decision 38 amendment, 24 August 2026] Protection
+  against stale/out-of-order autosave writes within one active
+  session.** Per Decision 38 item (d), and distinct from the
+  resurrection-protection requirement below (which governs an ordinary
+  autosave write racing against *finalization*): within the operator's
+  own single active Contagem session/draft, an older autosave write
+  must never be permitted to silently overwrite newer entered content
+  because of asynchronous or out-of-order completion between two
+  ordinary, pre-finalization autosave writes. As with the requirement
+  above, this states the required property, not the mechanism — the
+  Implementation Task determines how write ordering is enforced or
+  superseded (Section 13). This requirement does not extend to, and
+  must not be read to authorize, protection against concurrent edits
+  from a different user or device — that remains excluded exactly as
+  Section 5 already states, unchanged by this amendment.
 - **Resurrection protection (the specific defect named in Section 2)
   must be closed by design, not by convention:** the autosave
   mechanism for the periodic draft must make it structurally
@@ -325,21 +389,35 @@ derived from it must not include:
   strictly as prior art / a constraint on the periodic draft's design
   — fixing `InitialStockCountView` itself requires separate
   authorization and, if authorized, its own narrowly-scoped task.
-- `IndexedDB` or any browser-level offline-persistence layer
-  (`enableIndexedDbPersistence` / `persistentLocalCache` or
-  equivalent) — confirmed absent from the codebase today (investigation,
-  `apps/tenant/src/lib/firebase.ts`); introducing one is a separate
-  decision.
-- Any app-wide navigation guard (e.g. a global "you have unsaved
-  changes" `beforeunload`/router interceptor).
+  **Unchanged by the Decision 38 amendment** — Decision 38 is scoped
+  exclusively to the Periodic Contagem draft; it does not touch, and
+  must not be read to authorize any change to, `InitialStockCountView.tsx`
+  or Capital Inicial's own draft mechanism.
+- **[Superseded in part by the Decision 38 amendment, 24 August
+  2026 — see Section 6's new interruption-durability requirement.]**
+  Previously: this specification excluded `IndexedDB` or any
+  browser-level offline-persistence layer (`enableIndexedDbPersistence`
+  / `persistentLocalCache` or equivalent) and any app-wide navigation
+  guard (e.g. a global "you have unsaved changes" `beforeunload`/router
+  interceptor), each requiring "a separate decision." **Decision 38 is
+  that separate decision.** Neither mechanism is excluded any longer,
+  and neither is now prescribed or required either — Section 6's
+  interruption-durability requirement and stale/out-of-order-write
+  requirement state the outcome; Section 13 leaves the exact
+  mechanism(s), including whether either of these two is used, to the
+  Implementation Task, per Decision 38 item (c). This specification
+  still does not itself select `IndexedDB`, `visibilitychange`,
+  `pagehide`, `beforeunload`, or any other specific browser mechanism —
+  it removes the prior blanket prohibition on considering them, nothing
+  more.
 - Any invented business rule beyond what BDR-0009 and the
   Simplification Amendment already establish — in particular, no
   item-level expected-quantity, no inferred sales quantity, no new
-  variance figure.
+  variance figure. **Unchanged by the Decision 38 amendment.**
 - Any change to `addMultipleStockBatches` / `purchaseDrafts`, which
   share a structurally similar random-id/non-idempotent pattern
   (investigation, Section "idempotency") but are explicitly out of
-  scope for this task.
+  scope for this task. **Unchanged by the Decision 38 amendment.**
 
 ## 13. Explicitly Left Open (for the Implementation Task to resolve, not this specification)
 
@@ -359,6 +437,19 @@ derived from it must not include:
   approach) — Section 8 specifies the required property, not the
   mechanism.
 - Exact stale-draft UI copy/resume-or-discard interaction pattern.
+- **[Added by the Decision 38 amendment, 24 August 2026]** Exact
+  mechanism(s) satisfying Section 6's interruption-durability
+  requirement — e.g. navigation/unload-interruption flushing, durable
+  local/offline persistence, stronger draft-write sequencing, or
+  another technically appropriate approach, singly or in combination.
+  Section 6 specifies the required outcome; this specification does
+  not select among these, per Decision 38 item (c).
+- **[Added by the Decision 38 amendment, 24 August 2026]** Exact
+  mechanism enforcing Section 6's stale/out-of-order single-session
+  autosave-write protection (e.g. sequencing each write against any
+  still-in-flight prior write, a monotonic write-version check, or
+  another technically appropriate approach) — Section 6 specifies the
+  required property, not the mechanism.
 
 ## 14. Required Regression Coverage — Non-Negotiable Acceptance Criteria
 
@@ -426,6 +517,24 @@ section does not conflate them:
 6. The existing Initial Count test suite
    (`tests/initial-stock-confirmation.test.ts`) is unaffected — this
    work must not regress it, per Section 12's non-goal.
+7. **[Added by the Decision 38 amendment, 24 August 2026]** The
+   product-level information Section 5 now includes as draft content
+   (purchase unit, purchase cost, complete unit-relationship chain,
+   for a genuinely new product) persists and is recoverable across a
+   simulated reload/remount, at the same test tier as item 3 above —
+   a source-level regression guard proving this content round-trips
+   through the draft-save/recovery path, matching item 4's own
+   round-trip discipline for quantity blank/zero coercion.
+8. **[Added by the Decision 38 amendment, 24 August 2026]** Section
+   6's stale/out-of-order single-session autosave-write protection is
+   proven by a source-level regression guard against the actual
+   Implementation Task mechanism — the same test tier and technique
+   item 1 already uses for the finalization-vs-draft resurrection
+   property, applied to the distinct ordinary-autosave-vs-ordinary-
+   autosave race Section 6 now separately names. A true behavioral/
+   timing test against a live component is not required and is not
+   authorized by this specification, for the same reason stated for
+   item 1.
 
 ---
 
