@@ -113,12 +113,28 @@ export interface RowGroup<T extends PortionGroupableRow> {
    * the trimmed, lowercased product name shared by every row in
    * `rows`. */
   key: string;
-  /** The exact-cased name to show in the group's single, shared name
-   * field — taken from the first row's own typed casing. Every row in
-   * a non-blank group shares this SAME key (case-insensitively) by
-   * construction, but may differ in casing until the group's header
-   * field is edited (which then normalizes every row in the group to
-   * the newly typed casing — see the caller's rename handler). */
+  /** The exact-cased, UNTRIMMED name to show in the group's single,
+   * shared name field — taken verbatim from the first row's own typed
+   * text (never `.trim()`-ed here). Every row in a non-blank group
+   * shares this SAME key (case-insensitively) by construction, but may
+   * differ in casing until the group's header field is edited (which
+   * then normalizes every row in the group to the newly typed casing —
+   * see the caller's rename handler).
+   *
+   * MUST stay untrimmed: this value is bound directly to a live,
+   * controlled <input>'s `value` prop (PeriodicStockCountView.tsx,
+   * InitialStockCountView.tsx). Trimming it here — as this file
+   * previously did — silently deletes a trailing space the operator
+   * just typed on every re-render (this function is recomputed via
+   * useMemo on every keystroke), making it impossible to type a
+   * second word: "Arroz " collapses back to "Arroz" before the next
+   * character lands, so "Arroz Vermelho" becomes "ArrozVermelho".
+   * `key` above stays trimmed/lowercased — that's the only place
+   * trimming is actually needed (grouping identity), and it never
+   * touches what the operator sees while typing. Any caller that
+   * needs a trimmed name for persistence/comparison already trims at
+   * its own read site (normalizeStockCountItems, tallyStockCountRows,
+   * productKeyFor), exactly as before this fix. */
   displayName: string;
   /** The actual row objects belonging to this group, in their original
    * relative order. Never copied/cloned — same object references as
@@ -155,14 +171,19 @@ export function groupRowsByProductName<T extends PortionGroupableRow>(rows: T[])
 
     if (!key) {
       // Never grouped with another blank-name row — its own singleton.
-      groups.push({ key: '', displayName: '', rows: [row] });
+      // displayName is the row's raw, untrimmed text (e.g. a lone
+      // leading space mid-typing) — see this interface's own comment
+      // on why trimming here would break live typing.
+      groups.push({ key: '', displayName: row.productName, rows: [row] });
       continue;
     }
 
     const existingIndex = groupIndexByKey.get(key);
     if (existingIndex === undefined) {
       groupIndexByKey.set(key, groups.length);
-      groups.push({ key, displayName: trimmed, rows: [row] });
+      // displayName is the row's raw, untrimmed text — see this
+      // interface's own comment above.
+      groups.push({ key, displayName: row.productName, rows: [row] });
     } else {
       groups[existingIndex].rows.push(row);
     }
