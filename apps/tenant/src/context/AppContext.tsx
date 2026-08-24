@@ -3821,6 +3821,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const fsBatch = createFirestoreBatch(db);
     const tempProducts = [...products];
 
+    // [Product Memory / UOM — Increment A] Correlates each raw item's
+    // own unitRelationship (attached per-portion by the caller, see
+    // this field's own comment on RecordStockCountItemInput above)
+    // back to its product name — the same key normalizeStockCountItems
+    // itself trims to build NormalizedStockCountItem.productName. Last
+    // matching raw entry wins for a repeated name (mirrors ordinary
+    // "last edit wins" expectations for a single submission); a blank
+    // productName is never a key here since normalizeStockCountItems
+    // already drops those rows entirely.
+    //
+    // MOVED ABOVE costBasisByProductName (was originally built AFTER
+    // it) — see this bug fix's own comment on the merge loop
+    // immediately below for why the ordering itself was the defect.
+    const unitRelationshipByProductName = new Map<string, UnitRelationship>();
+    for (const raw of items) {
+      const key = raw.productName.trim().toLowerCase();
+      if (key && raw.unitRelationship && isValidUnitRelationship(raw.unitRelationship)) {
+        unitRelationshipByProductName.set(key, raw.unitRelationship);
+      }
+    }
+
     // [Business Worth Evolution — Increment 10 Item 5 / Post-
     // Implementation Correction §25, Specification §15/FR-67; Product
     // Architect resolution, 24 August 2026] Resolved BEFORE
@@ -3832,13 +3853,56 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // resolver PeriodicStockCountView.tsx's own preview uses
     // (buildProductCostBasisMap, lib/fr67CostBasisConversion.ts) — one
     // resolution path, not two, so the Owner-facing preview and this
-    // persisted write can never disagree. A genuinely NEW product
-    // introduced in this same Contagem has no Product.costPrice yet
-    // (it does not exist as a Product record until the per-item loop
-    // below creates it), so it is correctly absent from this map by
-    // construction — falling through to §25's unchanged fallback
-    // automatically.
+    // persisted write can never disagree.
     const costBasisByProductName = buildProductCostBasisMap(tempProducts);
+
+    // [Bug fix — cost total silently stayed 0,00 for a genuinely new
+    // multi-unit product's non-purchase-unit portions] The comment
+    // this replaced claimed a new product's absence from this map was
+    // "correct by construction, falls through to §25's fallback
+    // automatically" — true only for a product with NO confirmed
+    // relationship at all. But Decision 37 B.4 SUPPRESSES the
+    // per-portion costPrice input (shows "Definido na compra") the
+    // moment a valid cost basis + relationship exist, INCLUDING for a
+    // brand-new product still being entered in this same Contagem
+    // (getCostBasisForSuppression, PeriodicStockCountView.tsx, already
+    // reads newProductInfo for exactly this case). That left a real
+    // contradiction: the UI confidently hid the field (implying "this
+    // is handled elsewhere"), while this map — built from the SAVED
+    // catalog only, before the new product's own Product document even
+    // gets created a few lines below — had no entry for it at all, so
+    // §25's fallback (raw quantity * costPrice) silently used the
+    // suppressed field's own blank/0 value. Every non-purchase-unit
+    // portion of a brand-new multi-unit product therefore persisted as
+    // 0,00 MT, understating totalValue and StockCount.totalValue with
+    // no error or warning — exactly the defect a live report described
+    // ("cost value total remains zero when the system autocalculated").
+    //
+    // Fixed by synthesizing a cost basis for each genuinely new product
+    // that DOES have a confirmed candidate relationship
+    // (unitRelationshipByProductName, above) — using that SAME
+    // relationship, and reading purchaseCost off whichever raw item is
+    // this product's own purchase-unit portion (the one field Decision
+    // 37 B.4 leaves editable, never suppressed, so it is always the
+    // Owner's own direct entry, never a derived/fabricated number).
+    // Never overrides an EXISTING catalog product's own already-
+    // authoritative basis (the `costBasisByProductName.has(key)` guard)
+    // — this only ever fills the genuinely-new-product gap the
+    // surrounding comment already documents.
+    for (const [key, relationship] of unitRelationshipByProductName) {
+      if (costBasisByProductName.has(key)) continue;
+      const purchaseUnit = relationship.units[0]?.unit?.trim();
+      if (!purchaseUnit) continue;
+      const purchaseUnitItem = items.find(
+        (raw) =>
+          raw.productName.trim().toLowerCase() === key &&
+          (raw.unit ?? '').trim().toLowerCase() === purchaseUnit.toLowerCase()
+      );
+      if (!purchaseUnitItem) continue;
+      const purchaseCost = purchaseUnitItem.costPrice;
+      if (typeof purchaseCost !== 'number' || !Number.isFinite(purchaseCost) || purchaseCost < 0) continue;
+      costBasisByProductName.set(key, { purchaseUnit, purchaseCost, relationship });
+    }
 
     // [Fix — data-flow contract] Normalization happens via the pure,
     // independently-tested normalizeStockCountItems() — operating only
@@ -3853,9 +3917,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // normalizeStockCountItems() call; nothing recomputes either total
     // independently elsewhere.
     // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
-    // costBasisByProductName (immediately above) is now threaded
-    // through as normalizeStockCountItems' own optional second
-    // parameter — this is the ONLY change to this call.
+    // costBasisByProductName (immediately above, now including this
+    // bug fix's synthesized new-product entries) is threaded through
+    // as normalizeStockCountItems' own optional second parameter.
     const { items: normalizedItems, totalSellingValue: normalizedTotalSellingValue } = normalizeStockCountItems(
       items,
       costBasisByProductName
@@ -3866,22 +3930,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // NormalizedStockCountItem shape deliberately carries only
     // productName/quantity/unit/costPrice/sellingPrice/totalValue — it
     // is NOT touched by this feature, to keep that heavily-tested
-    // module's contract exactly as it already is. unitRelationship is
-    // therefore correlated back to each normalized row by trimmed,
-    // lowercased productName, from the raw `items` this function
-    // received directly — the same key normalizeStockCountItems itself
-    // trims to build NormalizedStockCountItem.productName. Last
-    // matching raw entry wins for a repeated name (mirrors ordinary
-    // "last edit wins" expectations for a single submission); a blank
-    // productName is never a key here since normalizeStockCountItems
-    // already drops those rows entirely.
-    const unitRelationshipByProductName = new Map<string, UnitRelationship>();
-    for (const raw of items) {
-      const key = raw.productName.trim().toLowerCase();
-      if (key && raw.unitRelationship && isValidUnitRelationship(raw.unitRelationship)) {
-        unitRelationshipByProductName.set(key, raw.unitRelationship);
-      }
-    }
+    // module's contract exactly as it already is.
 
     const countItems: StockCount['items'] = [];
     let totalValue = 0;

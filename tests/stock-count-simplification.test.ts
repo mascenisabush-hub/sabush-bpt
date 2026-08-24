@@ -165,7 +165,14 @@ describe('PeriodicStockCountView.tsx — source-level wiring guards', () => {
     // authorized costBasisByProductName parameter; `allWorkingRows`
     // remains the sole first argument / source of truth this test
     // protects.
-    assert.match(source, /tallyStockCountRows\(allWorkingRows, costBasisByProductName\)/);
+    //
+    // [Bug fix — cost total stayed 0,00 for a genuinely new multi-unit
+    // product's non-purchase-unit portions] Second argument renamed to
+    // effectiveCostBasisByProductName — see the identical comment in
+    // periodic-stock-portion-grouping-wiring.test.ts for the full
+    // explanation; tallyStockCountRows itself and allWorkingRows as its
+    // first argument are both unchanged.
+    assert.match(source, /tallyStockCountRows\(allWorkingRows, effectiveCostBasisByProductName\)/);
   });
 
   it('shows a mandatory confirmation step before saving (Amendment Part 9)', () => {

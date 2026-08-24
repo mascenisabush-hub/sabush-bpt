@@ -23,7 +23,7 @@ import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuanti
 // what guarantees the live preview total below and the persisted
 // Contagem can never disagree. See that module's own header comment
 // for the full authoritative-cost-basis and fallback rules.
-import { buildProductCostBasisMap, deriveCostContribution } from '../lib/fr67CostBasisConversion';
+import { buildProductCostBasisMap, deriveCostContribution, type ProductCostBasis } from '../lib/fr67CostBasisConversion';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -1157,11 +1157,55 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   // [Business Worth Evolution — Increment 10 Item 5 / §25, FR-67]
   // Resolved from the full catalog (`products`) exactly like
-  // AppContext.tsx's own identical call — a genuinely new product
-  // being entered in this same Contagem (not yet in `products` at
-  // all) is correctly absent, falling through to §25's unchanged
-  // fallback exactly as it will at persistence time.
+  // AppContext.tsx's own identical call.
   const costBasisByProductName = useMemo(() => buildProductCostBasisMap(products), [products]);
+
+  // [Bug fix — cost total silently stayed 0,00 for a genuinely new
+  // multi-unit product's non-purchase-unit portions] costBasisByProductName
+  // above only ever reflects the SAVED catalog — so for a brand-new
+  // product still being entered in this same Contagem (its relationship
+  // lives only in newProductInfo's in-progress panel state, no Product
+  // document exists yet), it always has no entry, and every non-
+  // purchase-unit portion — deliberately cost-field-SUPPRESSED the
+  // moment Decision 37 B.4's own basis check (getCostBasisForSuppression,
+  // which DOES already read newProductInfo) finds a valid basis — falls
+  // through to deriveCostContribution's raw quantity*costPrice fallback
+  // with costPrice permanently blank/0, since the Owner is never even
+  // shown that field to fill in. Net effect: the UI confidently hides
+  // the cost input (implying "this is handled"), while the total
+  // silently computes 0,00 MT for that portion — both here, live, and
+  // (this same defect, fixed identically) in AppContext.tsx's
+  // recordStockCount at actual save time.
+  //
+  // Fixed the same way as getEffectiveUnitRelationshipForProductName,
+  // above: merge in a synthesized ProductCostBasis for every
+  // newProductInfo entry with a complete purchaseUnit + purchaseCost +
+  // at least one relationship step, reusing the identical candidate-
+  // relationship construction — never overriding an EXISTING catalog
+  // product's own already-authoritative basis.
+  const effectiveCostBasisByProductName = useMemo(() => {
+    const map = new Map<string, ProductCostBasis>(costBasisByProductName);
+    for (const [key, info] of Object.entries(newProductInfo)) {
+      if (!key || map.has(key)) continue;
+      const purchaseUnit = info.purchaseUnit.trim();
+      const purchaseCost = Number(info.purchaseCost);
+      if (!purchaseUnit || !Number.isFinite(purchaseCost) || purchaseCost < 0) continue;
+      const completeSteps = info.relationshipSteps.filter(
+        (s) => s.unit.trim() && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
+      );
+      if (completeSteps.length === 0) continue;
+      const candidate: UnitRelationship = {
+        units: [
+          { unit: purchaseUnit, factorFromPrevious: 0 },
+          ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
+        ],
+        confirmedAt: new Date().toISOString(),
+      };
+      if (!isValidUnitRelationship(candidate)) continue;
+      map.set(key, { purchaseUnit, purchaseCost, relationship: candidate });
+    }
+    return map;
+  }, [costBasisByProductName, newProductInfo]);
 
   // [Bug fix — per-row "Valor" preview disagreeing with the actual
   // total] Both per-row "Valor" boxes below (catalog rows, manual
@@ -1177,15 +1221,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // every per-row preview through the exact same derivation, so what
   // an operator sees next to each row always matches what's actually
   // being counted — never a second, independently-invented
-  // calculation.
+  // calculation. Uses effectiveCostBasisByProductName (immediately
+  // above), not the catalog-only costBasisByProductName, so this now
+  // also resolves correctly for a genuinely new product.
   const rowCostValue = (productName: string, unit: string, quantity: number, costPrice: number): number => {
-    const basis = costBasisByProductName.get(productName.trim().toLowerCase());
+    const basis = effectiveCostBasisByProductName.get(productName.trim().toLowerCase());
     return deriveCostContribution(quantity, unit, costPrice, basis).value;
   };
 
   const liveTally = useMemo(
-    () => tallyStockCountRows(allWorkingRows, costBasisByProductName),
-    [allWorkingRows, costBasisByProductName]
+    () => tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName),
+    [allWorkingRows, effectiveCostBasisByProductName]
   );
 
   // [Increment B, Checkpoint B6 — Consolidated Specification §17] Purely
@@ -1273,7 +1319,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
 
-    const tally = tallyStockCountRows(allWorkingRows, costBasisByProductName);
+    const tally = tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName);
     if (tally.countedItems.length === 0) {
       setError('Introduza a quantidade física de pelo menos um produto antes de confirmar.');
       return;

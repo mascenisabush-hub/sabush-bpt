@@ -109,7 +109,19 @@ describe('PeriodicStockCountView.tsx — requirement: draft/finalization pipelin
     // match that authorized second argument; the invariant this test
     // protects — that `allWorkingRows` (unfiltered, ungrouped) remains
     // the sole FIRST argument / source of truth — is unchanged.
-    assert.match(source, /tallyStockCountRows\(allWorkingRows, costBasisByProductName\)/);
+    //
+    // [Bug fix — cost total stayed 0,00 for a genuinely new multi-unit
+    // product's non-purchase-unit portions] The second argument is now
+    // `effectiveCostBasisByProductName` (a merge of the catalog-only
+    // costBasisByProductName above PLUS a synthesized basis for any
+    // genuinely-new product with a complete newProductInfo relationship
+    // + purchase cost) rather than the catalog-only map directly — see
+    // that variable's own declaration comment for the full explanation.
+    // tallyStockCountRows itself is still the SAME unmodified function,
+    // called with the SAME allWorkingRows as its first argument; only
+    // the label of the second argument changed to reflect that it is
+    // now a merged, not catalog-only, cost basis source.
+    assert.match(source, /tallyStockCountRows\(allWorkingRows, effectiveCostBasisByProductName\)/);
   });
 
   it('does not introduce any new "expected"/second valuation field anywhere in the view', () => {
