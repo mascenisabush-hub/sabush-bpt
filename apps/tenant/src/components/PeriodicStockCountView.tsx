@@ -2299,29 +2299,36 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </button>
 
           {/* Total + comparison — hero serif figure, comparison line below a
-              thin divider so both fit within the same navy surface. */}
+              thin divider so both fit within the same navy surface.
+              Selling-price total is the PRIMARY/hero figure: this is the
+              exact figure (liveTally.totalSellingValue, same shape as
+              productValuationTotal = normalizedTotalSellingValue in
+              AppContext.tsx's recordStockCount) that becomes the new
+              BusinessWorthSnapshot.measuredBusinessWorth's own valuation
+              input the moment this count is confirmed — Business Worth is
+              driven by selling/market value here, not cost. */}
           <div className="card-dark-gradient rounded-2xl px-5 py-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-semibold text-white/70 text-[13px]">Valor Físico Contado até Agora</span>
+              <span className="font-semibold text-white/70 text-[13px]">Valor de Venda Contado até Agora</span>
               <span className="font-display font-semibold text-[22px] sm:text-[24px] text-[#D4AF37] tabular-nums leading-none">
-                {formatCurrency(liveTally.totalPurchaseValue, currencySymbol)}
+                {formatCurrency(liveTally.totalSellingValue, currencySymbol)}
               </span>
             </div>
 
-            {/* Additive, informational only — the "vs. Valor Esperado"
+            {/* Secondary, informational only — the "vs. Valor Esperado"
                 comparison below remains strictly cost-basis
                 (totalPurchaseValue vs. comparisonBaseline), per the
                 approved Expected Current Stock Value formula
                 (10-expected-stock-value-amendment.md Part 2: "Confirmed
                 Initial Capital + cost value of governed StockBatch
-                inventory"). This line adds the same tally's own
-                totalSellingValue purely for the operator's reference —
-                it feeds no comparison, no diff, no percentage, and no
-                Business Worth/valuation calculation anywhere. */}
+                inventory") — that comparison is unchanged by which total
+                is shown as primary above; it still compares cost against
+                cost. This line is kept directly above it purely so the
+                cost figure the comparison references is still visible. */}
             <div className="flex items-center justify-between gap-3">
-              <span className="text-white/50 text-xs">Valor de Venda Contado até Agora</span>
+              <span className="text-white/50 text-xs">Valor Físico (Custo) Contado até Agora</span>
               <span className="text-white/70 text-[13px] tabular-nums">
-                {formatCurrency(liveTally.totalSellingValue, currencySymbol)}
+                {formatCurrency(liveTally.totalPurchaseValue, currencySymbol)}
               </span>
             </div>
 
