@@ -1256,6 +1256,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // calculation. Uses effectiveCostBasisByProductName (immediately
   // above), not the catalog-only costBasisByProductName, so this now
   // also resolves correctly for a genuinely new product.
+  // Still the single source powering both the "Custo: X" caption under
+  // each row's Valor box AND the actual Total Cost Value — a suppressed
+  // portion's cost is fully visible there, which is exactly why its own
+  // per-portion Compra/Un field can be removed entirely (see
+  // isCostFieldSuppressed's call sites below) rather than shown a second
+  // time, read-only, right next to it.
   const rowCostValue = (productName: string, unit: string, quantity: number, costPrice: number): number => {
     const basis = effectiveCostBasisByProductName.get(productName.trim().toLowerCase());
     return deriveCostContribution(quantity, unit, costPrice, basis).value;
@@ -2319,52 +2325,58 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         </div>
 
                         <div>
-                          <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
-                          {/* [Decision 37, B.4] Suppressed once a cost
-                              basis + relationship exist AND this
-                              portion's unit differs from the purchase
-                              unit — see isCostFieldSuppressed's own
-                              comment. UI-only: row.costPrice itself is
-                              left completely untouched, never cleared or
-                              derived here. */}
-                          {isCostFieldSuppressed(row.productName, row.unit) ? (
-                            <div
-                              className={`${fieldClass} font-mono text-[11px] text-gray-400 flex items-center bg-gray-50 cursor-not-allowed`}
-                              title="Custo definido pela compra original do produto"
-                            >
-                              Definido na compra
-                            </div>
-                          ) : (
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.costPrice}
-                              onChange={(e) => updateCatalogRow(productId, { costPrice: e.target.value })}
-                              className={`${fieldClass} font-mono tabular-nums`}
-                            />
-                          )}
-                          {/* [Bug fix — "Venda/Un"/"Compra/Un" ambiguity]
-                              The shared column header just above always
-                              reads the generic "Compra/Un" — "per unit
-                              (of THIS row)" — but for a multi-unit
-                              product "Un" is ALSO the literal name of
-                              the smallest chain unit (Cx/Emb/Un), so an
-                              Owner easily misreads it as "price per
-                              bottle" even when this row's own Unid is
-                              Cx or Emb. This caption is always visible
-                              (no sm:hidden — the missing-on-desktop gap
-                              this fix also addresses), directly naming
-                              THIS row's actual selected unit, so the
-                              price's real meaning is unambiguous
-                              regardless of viewport or the shared
-                              header's necessarily generic wording. */}
+                          {/* [Decision 37, B.4 — refined] Once suppressed
+                              (portion's unit differs from the product's
+                              purchase unit, with a confirmed cost basis),
+                              this field is removed entirely rather than
+                              shown read-only — the derived cost is never
+                              lost, it's already surfaced right below in
+                              this row's own "Custo: X" caption (see the
+                              Valor block further down, which reads
+                              rowCostValue — the exact same
+                              deriveCostContribution derivation). Nothing
+                              for the Owner to look at twice: only Qtd,
+                              Unid and Venda/Un need filling in for a
+                              suppressed portion. UI-only: row.costPrice
+                              itself is left completely untouched, never
+                              cleared or derived here — the moment this
+                              portion's unit is edited back to the
+                              purchase unit, the normal editable input
+                              reappears with whatever value was already
+                              there. */}
                           {!isCostFieldSuppressed(row.productName, row.unit) && (
-                            <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
-                              {currencySymbol} por {row.unit.trim() || 'un'}
-                            </p>
+                            <>
+                              <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
+                              <input
+                                type="number"
+                                min="0"
+                                step="0.01"
+                                value={row.costPrice}
+                                onChange={(e) => updateCatalogRow(productId, { costPrice: e.target.value })}
+                                className={`${fieldClass} font-mono tabular-nums`}
+                              />
+                              {/* [Bug fix — "Venda/Un"/"Compra/Un" ambiguity]
+                                  The shared column header just above always
+                                  reads the generic "Compra/Un" — "per unit
+                                  (of THIS row)" — but for a multi-unit
+                                  product "Un" is ALSO the literal name of
+                                  the smallest chain unit (Cx/Emb/Un), so an
+                                  Owner easily misreads it as "price per
+                                  bottle" even when this row's own Unid is
+                                  Cx or Emb. This caption is always visible
+                                  (no sm:hidden — the missing-on-desktop gap
+                                  this fix also addresses), directly naming
+                                  THIS row's actual selected unit, so the
+                                  price's real meaning is unambiguous
+                                  regardless of viewport or the shared
+                                  header's necessarily generic wording. */}
+                              <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                {currencySymbol} por {row.unit.trim() || 'un'}
+                              </p>
+                            </>
                           )}
                         </div>
+
 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
@@ -2663,42 +2675,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               </div>
 
                               <div>
-                                <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
-                                {/* [Decision 37, B.4] Same suppression
-                                    check as the catalog-row cost field,
-                                    above — see isCostFieldSuppressed's
-                                    own comment. UI-only: row.costPrice
-                                    itself is left completely untouched. */}
-                                {isCostFieldSuppressed(row.productName, row.unit) ? (
-                                  <div
-                                    className={`${fieldClass} font-mono text-[11px] text-gray-400 flex items-center bg-gray-50 cursor-not-allowed`}
-                                    title="Custo definido pela compra original do produto"
-                                  >
-                                    Definido na compra
-                                  </div>
-                                ) : (
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={row.costPrice}
-                                    onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
-                                    className={`${fieldClass} font-mono tabular-nums`}
-                                  />
-                                )}
-                                {/* [Bug fix — "Venda/Un"/"Compra/Un"
-                                    ambiguity] See the catalog-row block's
-                                    identical caption/comment above — same
-                                    reasoning, same always-visible (no
-                                    sm:hidden) unit caption, applied here
-                                    to a manually-added product's own
-                                    portion rows. */}
+                                {/* [Decision 37, B.4 — refined] Same
+                                    "remove entirely rather than show
+                                    read-only" change as the catalog-row
+                                    cost field, above — the derived cost
+                                    is already surfaced in this row's own
+                                    "Custo: X" caption further down
+                                    (rowCostValue, same
+                                    deriveCostContribution derivation).
+                                    UI-only: row.costPrice itself is left
+                                    completely untouched. */}
                                 {!isCostFieldSuppressed(row.productName, row.unit) && (
-                                  <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
-                                    {currencySymbol} por {row.unit.trim() || 'un'}
-                                  </p>
+                                  <>
+                                    <label className={`${fieldLabelClass} sm:hidden`}>Compra/Un ({currencySymbol})</label>
+                                    <input
+                                      type="number"
+                                      min="0"
+                                      step="0.01"
+                                      value={row.costPrice}
+                                      onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
+                                      className={`${fieldClass} font-mono tabular-nums`}
+                                    />
+                                    {/* [Bug fix — "Venda/Un"/"Compra/Un"
+                                        ambiguity] See the catalog-row block's
+                                        identical caption/comment above — same
+                                        reasoning, same always-visible (no
+                                        sm:hidden) unit caption, applied here
+                                        to a manually-added product's own
+                                        portion rows. */}
+                                    <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                      {currencySymbol} por {row.unit.trim() || 'un'}
+                                    </p>
+                                  </>
                                 )}
                               </div>
+
 
                               <div>
                                 <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
