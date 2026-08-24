@@ -24,6 +24,15 @@ import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuanti
 // Contagem can never disagree. See that module's own header comment
 // for the full authoritative-cost-basis and fallback rules.
 import { buildProductCostBasisMap, deriveCostContribution, type ProductCostBasis } from '../lib/fr67CostBasisConversion';
+// [Feature — optional local download of a confirmed Contagem]
+// Reuses the SAME PDF/Excel export engine every Relatórios report
+// already uses (reports/shared/reportExport.ts) — jsPDF/xlsx are
+// loaded dynamically inside that module, so importing these two
+// functions here adds nothing to Contagem's own bundle until an
+// Owner actually clicks a download button. No new export logic is
+// introduced; this file only supplies the data (savedTally, savedTotal,
+// savedSellingTotal) and calls the existing, already-tested engine.
+import { exportReportPdf, exportReportExcel } from './reports/shared/reportExport';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -483,7 +492,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [savedTotal, setSavedTotal] = useState<number>(0);
+  // [Feature — optional local download] The selling-basis counterpart
+  // to savedTotal, captured the same way, from the SAME recordStockCount
+  // return value — never recomputed independently, so the downloadable
+  // receipt can never disagree with what was actually persisted.
+  const [savedSellingTotal, setSavedSellingTotal] = useState<number>(0);
   const [savedTally, setSavedTally] = useState<StockCountTallyResult | null>(null);
+  // [Feature — optional local download] Holds the pending auto-navigate
+  // timer (see the existing `setTimeout(() => onComplete(), 2200)` call
+  // below) so a download button can cancel it — without this, clicking
+  // "Descarregar" while the countdown fires mid-download would yank the
+  // Owner away to the Dashboard before the file finishes generating. A
+  // click that DOESN'T touch download is completely unaffected: the
+  // timer still fires normally after 2200ms, exactly as before this
+  // feature.
+  const autoAdvanceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // Unmount cleanup: if the Owner navigates away some other way (top
+  // nav, browser back) before the 2200ms timer fires, this prevents a
+  // stale onComplete() call from firing against an already-unmounted
+  // component.
+  useEffect(() => {
+    return () => {
+      if (autoAdvanceTimerRef.current) clearTimeout(autoAdvanceTimerRef.current);
+    };
+  }, []);
   const [showHistory, setShowHistory] = useState(false);
   // Mandatory Counted/Not Counted confirmation step before an actual
   // save (Amendment Part 9) — holds the tally computed from the
@@ -1542,6 +1574,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           : {}),
       });
       setSavedTotal(saved.totalValue);
+      // [Feature — optional local download] saved.totalSellingValue is
+      // optional on the StockCount type only for historical counts
+      // recorded before this field existed — every count confirmed
+      // through this code path always sets it (normalizeStockCountItems
+      // always returns totalSellingValue), so `?? 0` is a type-safety
+      // fallback only, never an expected runtime path here.
+      setSavedSellingTotal(saved.totalSellingValue ?? 0);
       setSavedTally(pendingTally);
       setSavedMessage(
         pendingBusinessWorthCorrection
@@ -1560,7 +1599,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // this set would otherwise let a later, entirely unrelated count
       // collide with this one's deterministic stockCounts id.
       submissionIdRef.current = null;
-      setTimeout(() => onComplete(), 2200);
+      autoAdvanceTimerRef.current = setTimeout(() => onComplete(), 2200);
     } catch (err: any) {
       setError(err.message || 'Erro ao registar a contagem de stock.');
       setPendingTally(null);
@@ -1573,6 +1612,81 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     } finally {
       setIsSaving(false);
     }
+  };
+
+  // [Feature — optional local download of a confirmed Contagem, Owner-
+  // requested] Builds and triggers a downloadable receipt for the just-
+  // confirmed count — a genuinely optional action; nothing here runs
+  // unless the Owner explicitly taps one of the two buttons on the
+  // success screen below. Cancels the pending auto-navigate timer (see
+  // autoAdvanceTimerRef's own comment) so the Owner isn't swept away to
+  // the Dashboard mid-download. Reuses savedTally/savedTotal/
+  // savedSellingTotal exactly as already captured from
+  // recordStockCount's own return value — never a second, independently
+  // recomputed total, so the receipt can never disagree with what was
+  // actually persisted.
+  const buildReceiptContent = () => {
+    if (!savedTally) return null;
+    const reportTitle = `Comprovativo de Contagem — ${TYPE_LABELS[type]}`;
+    const periodLabel = `${formatDate(date)}${label.trim() ? ` — ${label.trim()}` : ''}`;
+    const kpis = [
+      { label: 'Valor de Venda', value: formatCurrency(savedSellingTotal, currencySymbol) },
+      { label: 'Valor Físico (Custo)', value: formatCurrency(savedTotal, currencySymbol) },
+      { label: 'Produtos Contados', value: String(savedTally.countedItems.length) },
+      ...(savedTally.notCountedProductNames.length > 0
+        ? [{ label: 'Produtos Não Contados', value: String(savedTally.notCountedProductNames.length) }]
+        : []),
+    ];
+    const tables = [
+      {
+        title: 'Produtos Contados',
+        columns: ['Produto', 'Qtd', 'Unid', 'Custo/Un', 'Venda/Un', 'Valor (Custo)', 'Valor (Venda)'],
+        rows: savedTally.countedItems.map((item) => [
+          item.productName,
+          item.quantity,
+          item.unit,
+          formatCurrency(item.costPrice, currencySymbol),
+          formatCurrency(item.sellingPrice, currencySymbol),
+          formatCurrency(item.purchaseValue, currencySymbol),
+          formatCurrency(item.sellingValue, currencySymbol),
+        ]),
+      },
+      ...(savedTally.notCountedProductNames.length > 0
+        ? [
+            {
+              title: 'Produtos Não Contados',
+              columns: ['Produto'],
+              rows: savedTally.notCountedProductNames.map((name) => [name]),
+            },
+          ]
+        : []),
+    ];
+    return { reportTitle, periodLabel, kpis, tables };
+  };
+
+  const handleDownloadReceiptPdf = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    const content = buildReceiptContent();
+    if (!content) return;
+    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables);
+  };
+
+  const handleDownloadReceiptExcel = () => {
+    if (autoAdvanceTimerRef.current) {
+      clearTimeout(autoAdvanceTimerRef.current);
+      autoAdvanceTimerRef.current = null;
+    }
+    const content = buildReceiptContent();
+    if (!content) return;
+    exportReportExcel(content.reportTitle, content.kpis, content.tables, {
+      indicator: 'Indicador',
+      value: 'Valor',
+      summary: 'Resumo',
+      tableFallback: 'Tabela {{n}}',
+    });
   };
 
   if (savedMessage) {
@@ -1595,6 +1709,49 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               ? ` · ${savedTally.notCountedProductNames.length} não contados`
               : ''}
           </p>
+        )}
+        {/* [Feature — optional local download, Owner-requested] Purely
+            optional — tapping neither button changes nothing about the
+            existing 2200ms auto-navigate-to-Dashboard behavior. Tapping
+            either one cancels that timer (see handleDownloadReceiptPdf/
+            Excel's own comment) and generates a downloadable receipt of
+            this exact confirmed count, entirely on-device — no server
+            round-trip, no data leaves the browser beyond the normal
+            Firestore write that already just happened. "Continuar"
+            lets the Owner move on immediately whenever they're ready,
+            whether or not they downloaded anything. */}
+        {savedTally && (
+          <div className="flex flex-col items-center gap-2 pt-2">
+            <div className="flex items-center gap-2">
+              <button
+                type="button"
+                onClick={handleDownloadReceiptPdf}
+                className="btn-secondary py-2 px-3.5 text-xs"
+              >
+                Descarregar Comprovativo (PDF)
+              </button>
+              <button
+                type="button"
+                onClick={handleDownloadReceiptExcel}
+                className="btn-secondary py-2 px-3.5 text-xs"
+              >
+                Descarregar Comprovativo (Excel)
+              </button>
+            </div>
+            <button
+              type="button"
+              onClick={() => {
+                if (autoAdvanceTimerRef.current) {
+                  clearTimeout(autoAdvanceTimerRef.current);
+                  autoAdvanceTimerRef.current = null;
+                }
+                onComplete();
+              }}
+              className="text-[12px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 pt-1"
+            >
+              Continuar →
+            </button>
+          </div>
         )}
       </div>
     );
