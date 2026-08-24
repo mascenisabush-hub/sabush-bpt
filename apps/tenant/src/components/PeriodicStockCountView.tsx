@@ -2211,7 +2211,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
             {visibleCatalogEntries.length > 0 && (
               <>
-                <div className="space-y-1 mt-3">
+                <div className="space-y-2.5 mt-3">
                   {visibleCatalogEntries.map(([productId, row]) => {
                     const isBlank = row.quantity.trim() === '';
                     const q = isBlank ? 0 : Number(row.quantity) || 0;
@@ -2267,9 +2267,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     return (
                       <div
                         key={productId}
-                        className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
+                        className={`group ${rowGridClass} bg-white rounded-2xl border border-[#F0EEE4] shadow-[0_1px_2px_rgba(11,31,58,0.03),0_6px_16px_-10px_rgba(212,175,55,0.16)] hover:shadow-[0_2px_4px_rgba(11,31,58,0.04),0_10px_22px_-10px_rgba(212,175,55,0.24)] px-3.5 py-3.5 transition-shadow duration-150`}
                       >
                         <div className="col-span-2 sm:col-span-1 flex items-center gap-1">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${isBlank ? 'bg-gray-300' : 'bg-emerald-400'}`}
+                            aria-hidden="true"
+                          />
                           <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
                           {/* [Business Worth Evolution — Decision 37,
                               B.3 completion] Reuses
@@ -2483,14 +2487,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 de-emphasized rather than hidden. */}
                             <label className={fieldLabelClass}>Valor</label>
                             <div
-                              className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums truncate ${
-                                isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#0B1F3A]/[0.04] text-[#0B1F3A]'
+                              className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
+                                isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
                               }`}
                             >
                               {isBlank ? 'Não contado' : formatCurrency(rowSellingValue, currencySymbol)}
                             </div>
                             {!isBlank && (
-                              <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                              <p className="text-[11px] text-gray-500 mt-0.5">
                                 Custo: {formatCurrency(rowValue, currencySymbol)}
                               </p>
                             )}
@@ -2584,7 +2588,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.portionIndex === 1;
                   const isNewProduct = isGenuinelyNewProductName(group.displayName);
                   return (
-                    <div key={`manual-group-${firstIdx}`} className="rounded-xl border border-[#E5E7EB] px-2.5 py-2.5 space-y-1.5">
+                    <div key={`manual-group-${firstIdx}`} className="rounded-2xl bg-white border border-[#F0EEE4] shadow-[0_1px_2px_rgba(11,31,58,0.03),0_6px_16px_-10px_rgba(212,175,55,0.16)] px-3.5 py-3.5 space-y-1.5">
                       <div>
                         <label className={fieldLabelClass}>Nome</label>
                         <input
@@ -2698,7 +2702,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           const row = manualRows[idx];
                           const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                           return (
-                            <div key={idx} className={`group ${rowGridClass} rounded-xl px-2.5 py-2 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
+                            <div key={idx} className={`group ${rowGridClass} rounded-xl px-2 py-2 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
                               <div className="col-span-2 sm:col-span-1 flex items-center">
                                 {/* [Increment B, Checkpoint B6 —
                                     Consolidated Specification §17] Same
@@ -2796,7 +2800,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       selling-primary/cost-secondary
                                       pattern. */}
                                   <label className={fieldLabelClass}>Valor</label>
-                                  <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
+                                  <div
+                                    className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
+                                      row.quantity.trim() === '' ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
+                                    }`}
+                                  >
                                     {row.quantity.trim() === ''
                                       ? 'Não contado'
                                       : formatCurrency(
@@ -2805,7 +2813,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                         )}
                                   </div>
                                   {row.quantity.trim() !== '' && (
-                                    <p className="text-[11px] text-gray-500 mt-0.5 truncate">
+                                    <p className="text-[11px] text-gray-500 mt-0.5">
                                       Custo:{' '}
                                       {formatCurrency(
                                         rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),

@@ -98,7 +98,7 @@ function MainApp() {
   };
 
   return (
-  <div className="min-h-screen bg-white text-gray-900 font-sans antialiased flex flex-col">
+  <div className="min-h-screen bg-[#FBF9F4] text-gray-900 font-sans antialiased flex flex-col">
       <div className="sticky top-0 z-30 bg-white border-b border-[#EEF0F3] shadow-[0_1px_0_rgba(11,31,58,0.02)]">
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
