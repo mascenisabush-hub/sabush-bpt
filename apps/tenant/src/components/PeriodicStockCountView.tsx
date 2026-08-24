@@ -1985,6 +1985,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // raw q * c this row previously showed (always 0
                     // for a cost-basis-suppressed multi-unit portion).
                     const rowValue = rowCostValue(row.productName, row.unit, q, c);
+                    // [Selling-first per-row display] Selling value is
+                    // always the raw quantity * sellingPrice — never
+                    // basis-derived like cost, because Mode A already
+                    // writes the DERIVED price directly onto this row's
+                    // own sellingPrice field before this ever runs
+                    // (contagemMultiUnitValuation.ts's own header
+                    // comment: "produces ORDINARY per-portion
+                    // sellingPrice values that flow through the
+                    // EXISTING, UNMODIFIED path" — Mode A and Mode B are
+                    // indistinguishable from this point on, by design).
+                    const rowSellingValue = q * (Number(row.sellingPrice) || 0);
                     const portionLabel = portionLabels.get(productId) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                     // [Business Worth Evolution — Increment 4] Extracted
                     // as its own named boolean, rather than repeating a
@@ -2218,14 +2229,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                         <div className="flex items-end gap-1.5">
                           <div className="flex-1 min-w-0">
+                            {/* [Feature — selling price shown first,
+                                cost as a small secondary figure]
+                                Mirrors the bottom hero card's own
+                                established pattern exactly (Valor de
+                                Venda as the bold primary figure, Valor
+                                Físico/Custo smaller and muted directly
+                                beneath it) — same visual hierarchy, now
+                                also applied per-row so an Owner reading
+                                down the list sees selling value first,
+                                the figure that actually drives Business
+                                Worth, with cost still visible but
+                                de-emphasized rather than hidden. */}
                             <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
                             <div
                               className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums truncate ${
                                 isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#0B1F3A]/[0.04] text-[#0B1F3A]'
                               }`}
                             >
-                              {isBlank ? 'Não contado' : formatCurrency(rowValue, currencySymbol)}
+                              {isBlank ? 'Não contado' : formatCurrency(rowSellingValue, currencySymbol)}
                             </div>
+                            {!isBlank && (
+                              <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                Custo: {formatCurrency(rowValue, currencySymbol)}
+                              </p>
+                            )}
                           </div>
                           <button
                             type="button"
@@ -2532,15 +2560,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                               <div className="flex items-end gap-1.5">
                                 <div className="flex-1 min-w-0">
+                                  {/* [Feature — selling price shown
+                                      first, cost as a small secondary
+                                      figure] Same change, same
+                                      reasoning, as the catalog-row
+                                      block above — mirrors the bottom
+                                      hero card's own established
+                                      selling-primary/cost-secondary
+                                      pattern. */}
                                   <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
                                   <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
                                     {row.quantity.trim() === ''
                                       ? 'Não contado'
                                       : formatCurrency(
-                                          rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),
+                                          (Number(row.quantity) || 0) * (Number(row.sellingPrice) || 0),
                                           currencySymbol
                                         )}
                                   </div>
+                                  {row.quantity.trim() !== '' && (
+                                    <p className="text-[9.5px] text-gray-400 mt-0.5 truncate">
+                                      Custo:{' '}
+                                      {formatCurrency(
+                                        rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),
+                                        currencySymbol
+                                      )}
+                                    </p>
+                                  )}
                                 </div>
                                 <button
                                   type="button"
