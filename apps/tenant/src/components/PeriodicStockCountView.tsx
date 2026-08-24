@@ -23,7 +23,7 @@ import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuanti
 // what guarantees the live preview total below and the persisted
 // Contagem can never disagree. See that module's own header comment
 // for the full authoritative-cost-basis and fallback rules.
-import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
+import { buildProductCostBasisMap, deriveCostContribution } from '../lib/fr67CostBasisConversion';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import {
   ClipboardList,
@@ -1098,6 +1098,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // fallback exactly as it will at persistence time.
   const costBasisByProductName = useMemo(() => buildProductCostBasisMap(products), [products]);
 
+  // [Bug fix — per-row "Valor" preview disagreeing with the actual
+  // total] Both per-row "Valor" boxes below (catalog rows, manual
+  // rows) used to compute a raw `quantity * costPrice` — completely
+  // bypassing deriveCostContribution, the same FR-67 cost-basis helper
+  // liveTally/tallyStockCountRows already use for the real total. For
+  // any multi-unit product with a confirmed cost basis, a portion
+  // counted in a non-purchase unit has its cost input SUPPRESSED
+  // (isCostFieldSuppressed, "Definido na compra") and row.costPrice
+  // left blank/0 by design — so the raw calculation always showed
+  // R$0.00 there, even though that portion's real, correctly-derived
+  // value WAS included in the actual saved total. This helper routes
+  // every per-row preview through the exact same derivation, so what
+  // an operator sees next to each row always matches what's actually
+  // being counted — never a second, independently-invented
+  // calculation.
+  const rowCostValue = (productName: string, unit: string, quantity: number, costPrice: number): number => {
+    const basis = costBasisByProductName.get(productName.trim().toLowerCase());
+    return deriveCostContribution(quantity, unit, costPrice, basis).value;
+  };
+
   const liveTally = useMemo(
     () => tallyStockCountRows(allWorkingRows, costBasisByProductName),
     [allWorkingRows, costBasisByProductName]
@@ -1194,6 +1214,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
     for (const item of tally.countedItems) {
+      // Negative cost/selling price was already guarded here. Negative
+      // quantity was NOT — the Qtd <input> has no min="0" (unlike the
+      // price fields), and nothing downstream (tallyStockCountRows,
+      // normalizeStockCountItems, firestore.rules) rejects it either,
+      // so a stray "-5" silently corrupted every total it fed into
+      // with no error shown. A quantity of exactly 0 remains valid and
+      // intentional here — BDR-0009 Part 4's own "Counted vs Not
+      // Counted" rule treats '0' as a legitimate physical count,
+      // distinct from a blank/Not-Counted row — so this only rejects
+      // strictly negative values, never zero.
+      if (item.quantity < 0) {
+        setError(`Introduza uma quantidade válida (0 ou mais) para "${item.productName}".`);
+        return;
+      }
       if (item.costPrice < 0 || item.sellingPrice < 0) {
         setError(`Introduza um preço válido para "${item.productName}".`);
         return;
@@ -1818,6 +1852,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     const isBlank = row.quantity.trim() === '';
                     const q = isBlank ? 0 : Number(row.quantity) || 0;
                     const c = Number(row.costPrice) || 0;
+                    // Bug fix — see rowCostValue's own comment above:
+                    // the displayed "Valor" now agrees with what's
+                    // actually counted into the total, instead of the
+                    // raw q * c this row previously showed (always 0
+                    // for a cost-basis-suppressed multi-unit portion).
+                    const rowValue = rowCostValue(row.productName, row.unit, q, c);
                     const portionLabel = portionLabels.get(productId) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                     // [Business Worth Evolution — Increment 4] Extracted
                     // as its own named boolean, rather than repeating a
@@ -1937,6 +1977,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
                           <input
                             type="number"
+                            min="0"
                             step="0.01"
                             placeholder="Ainda não contado"
                             value={row.quantity}
@@ -2004,7 +2045,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#0B1F3A]/[0.04] text-[#0B1F3A]'
                               }`}
                             >
-                              {isBlank ? 'Não contado' : formatCurrency(q * c, currencySymbol)}
+                              {isBlank ? 'Não contado' : formatCurrency(rowValue, currencySymbol)}
                             </div>
                           </div>
                           <button
@@ -2187,6 +2228,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
                                 <input
                                   type="number"
+                                  min="0"
                                   step="0.01"
                                   placeholder="Ainda não contado"
                                   value={row.quantity}
@@ -2249,7 +2291,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
                                     {row.quantity.trim() === ''
                                       ? 'Não contado'
-                                      : formatCurrency((Number(row.quantity) || 0) * (Number(row.costPrice) || 0), currencySymbol)}
+                                      : formatCurrency(
+                                          rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),
+                                          currencySymbol
+                                        )}
                                   </div>
                                 </div>
                                 <button
