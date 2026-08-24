@@ -792,6 +792,56 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return products.find((p) => p.name.toLowerCase() === trimmed)?.unitRelationship;
   };
 
+  // [Bug fix — Mode A unavailable for a genuinely new product] Both
+  // ModeAValuationControl render sites previously called
+  // getUnitRelationshipForProductName ALONE, which only ever looks at
+  // the SAVED catalog (`products`) — so for a product still being
+  // entered in THIS SAME Contagem (no Product document exists yet;
+  // its chain lives only in newProductInfo's in-progress panel state),
+  // that lookup always returned undefined, and Mode A's own
+  // `if (!relationship) return null` guard silently hid the entire
+  // control. An Owner typing a brand-new multi-unit product — exactly
+  // the "PRODUTO NOVO" case (a live screenshot's own "Lite 330ml" /
+  // "2m 550ml") — could therefore never see Mode A at all, no matter
+  // how the unit relationship was configured, and had no choice but to
+  // hand-convert the reference price into every other unit themselves
+  // (the exact 1400-vs-correct-1440 slip that surfaced this).
+  //
+  // Fixed by falling back to the SAME newProductInfo-derived candidate
+  // relationship handleConfirmSave already builds and persists at
+  // submit time (unitRelationshipByProductName, further below in this
+  // file) — reusing that exact construction so the live Mode A preview
+  // and the eventually-persisted relationship can never disagree, per
+  // this codebase's own established "one calculation path" discipline
+  // (mirrors getCostBasisForSuppression's own existing dual-source
+  // pattern: confirmed catalog relationship first, then the in-progress
+  // newProductInfo candidate for a product that doesn't exist as a
+  // Product record yet).
+  const getEffectiveUnitRelationshipForProductName = (name: string): UnitRelationship | undefined => {
+    const existing = getUnitRelationshipForProductName(name);
+    if (existing && isValidUnitRelationship(existing)) return existing;
+
+    const key = productKeyFor(name);
+    if (!key) return undefined;
+    const info = newProductInfo[key];
+    if (!info) return undefined;
+
+    const completeSteps = info.relationshipSteps.filter(
+      (s) => s.unit.trim() && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
+    );
+    if (completeSteps.length === 0) return undefined;
+
+    const purchaseUnit = info.purchaseUnit.trim() || 'un';
+    const candidate: UnitRelationship = {
+      units: [
+        { unit: purchaseUnit, factorFromPrevious: 0 },
+        ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
+      ],
+      confirmedAt: new Date().toISOString(),
+    };
+    return isValidUnitRelationship(candidate) ? candidate : undefined;
+  };
+
   // [Business Worth Evolution — Decision 37, B.4: Cost-Field Suppression
   // on Non-Purchase-Unit Portions] Per Implementation Authorization §36
   // item 4 and Plan Amendment §B.4 verbatim: "once a product-level cost
@@ -886,7 +936,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const applyModeAToGroup = (productKey: string, referenceUnit: string, referencePriceRaw: string) => {
     const referencePrice = Number(referencePriceRaw);
     if (!referenceUnit || !Number.isFinite(referencePrice)) return;
-    const relationship = getUnitRelationshipForProductName(productKey);
+    // [Bug fix — Mode A unavailable for a genuinely new product] Was
+    // getUnitRelationshipForProductName alone (catalog-only) — see
+    // that helper's own sibling comment, above, for the full
+    // explanation. Without this, the render-gating fix above would
+    // have let the control APPEAR for a new product while every
+    // reference-price entry silently did nothing (derivedSellingPrice
+    // always null, since the underlying relationship was always
+    // undefined here) — the write path needs the exact same fallback
+    // as the render path, not just the render path alone.
+    const relationship = getEffectiveUnitRelationshipForProductName(productKey);
     const portions = collectGroupPortions(productKey);
     if (!portions.length) return;
     const derived = deriveModeAPortionValuations(portions, referenceUnit, referencePrice, relationship);
@@ -909,7 +968,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       });
       return;
     }
-    const relationship = getUnitRelationshipForProductName(productKey);
+    // [Bug fix — Mode A unavailable for a genuinely new product] Same
+    // fallback as applyModeAToGroup, immediately above — otherwise a
+    // new product's default reference unit would always resolve to
+    // '' (no relationship found), leaving the reference-unit dropdown
+    // empty on first toggle-on instead of correctly defaulting to the
+    // chain's own purchase unit.
+    const relationship = getEffectiveUnitRelationshipForProductName(productKey);
     const defaultReferenceUnit = relationship?.units?.[0]?.unit || '';
     setModeAGroups((prev) => ({ ...prev, [productKey]: { referenceUnit: defaultReferenceUnit, referencePrice: '' } }));
   };
@@ -1887,7 +1952,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // in the catalog loop and one in the manual loop") —
                     // an existing invariant this Increment does not touch
                     // or reinterpret, only avoids colliding with textually.
-                    const isFirstPortionOfMultiPortionGroup = portionLabel.isMultiPortion ? portionLabel.portionIndex === 1 : false;
+                    //
+                    // [Bug fix — Mode A unavailable for a single-portion
+                    // product] Previously required isMultiPortion (2+
+                    // portions of the same product) before Mode A could
+                    // even be offered — meaning a product counted in only
+                    // ONE unit (e.g. "2 Cx", nothing else) never got the
+                    // option at all, forcing a manual reference-price
+                    // conversion by hand (the exact 1400-vs-correct-1440
+                    // slip this fix responds to). Mode A's own arithmetic
+                    // (deriveModeAPortionValuations) never required more
+                    // than one portion — the gate was a stricter UI-only
+                    // restriction than the underlying feature needed.
+                    // Simply "this row is portion #1" now covers both a
+                    // lone portion (portionIndex 1, portionCount 1) and
+                    // the first portion of a genuinely multi-portion
+                    // group identically — the control renders once per
+                    // product either way, never once per portion.
+                    const isFirstPortionOfMultiPortionGroup = portionLabel.portionIndex === 1;
                     return (
                       <div
                         key={productId}
@@ -1961,7 +2043,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         {isFirstPortionOfMultiPortionGroup &&
                           (() => {
                             const key = productKeyFor(row.productName);
-                            const relationship = getUnitRelationshipForProductName(row.productName);
+                            // [Bug fix — Mode A unavailable for a
+                            // genuinely new product] Was
+                            // getUnitRelationshipForProductName alone
+                            // (catalog-only) — see that helper's own
+                            // sibling comment above for the full
+                            // explanation. Falls back to the same
+                            // newProductInfo-derived candidate
+                            // handleConfirmSave already builds at
+                            // submit time.
+                            const relationship = getEffectiveUnitRelationshipForProductName(row.productName);
                             if (!relationship || !isValidUnitRelationship(relationship)) return null;
                             const config = modeAGroups[key];
                             const referenceUnitOptions = relationship.units.map((u) => u.unit);
@@ -2171,7 +2262,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   // catalog+manual combined (i.e. no catalog row shares
                   // this name) — otherwise Mode A already renders on the
                   // catalog side, exactly as it did before this item.
-                  const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.isMultiPortion ? firstRowLabel.portionIndex === 1 : false;
+                  //
+                  // [Bug fix — Mode A unavailable for a single-portion
+                  // product] See the catalog-row loop's identical fix
+                  // and comment, above — same reasoning, same relaxed
+                  // gate. Dropping the isMultiPortion requirement does
+                  // NOT reopen the "avoid rendering Mode A twice for one
+                  // product" property this comment describes:
+                  // portionIndex === 1 already, by itself, identifies
+                  // exactly one portion (the overall first, across both
+                  // loops) regardless of how many total portions exist —
+                  // isMultiPortion was only ever an ADDITIONAL, stricter
+                  // restriction on top of that, never load-bearing for
+                  // this de-duplication.
+                  const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.portionIndex === 1;
                   const isNewProduct = isGenuinelyNewProductName(group.displayName);
                   return (
                     <div key={`manual-group-${firstIdx}`} className="rounded-xl border border-[#E5E7EB] px-2.5 py-2.5 space-y-1.5">
@@ -2200,7 +2304,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       {cardIsFirstPortionOfMultiPortionGroup &&
                         (() => {
                           const key = productKeyFor(group.displayName);
-                          const relationship = getUnitRelationshipForProductName(group.displayName);
+                          // [Bug fix — Mode A unavailable for a
+                          // genuinely new product] See the catalog-row
+                          // loop's identical fix, above, for the full
+                          // explanation — this is precisely the case a
+                          // live screenshot showed: a "PRODUTO NOVO"
+                          // like "Lite 330ml" only ever renders through
+                          // THIS manual-row loop (it has no catalog row
+                          // at all yet), so this call site is the one
+                          // that actually needed the fix for that
+                          // screenshot's own product to get Mode A.
+                          const relationship = getEffectiveUnitRelationshipForProductName(group.displayName);
                           if (!relationship || !isValidUnitRelationship(relationship)) return null;
                           const config = modeAGroups[key];
                           const referenceUnitOptions = relationship.units.map((u) => u.unit);
