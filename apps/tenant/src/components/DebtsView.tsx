@@ -1,16 +1,25 @@
 // [Business Worth Evolution — Implementation Authorization, Increment 3;
-// Specification §11, §12] Minimal screen giving the Owner exactly what
-// this increment requires to operate: create a Receivable (a debt owed
-// TO the business), record payments against it, and view/settle
-// supplier Payables (created automatically by a supplier-credit +Stock
-// purchase, never created manually here). No redesign of the app's
-// navigation/typography — reuses the existing card/button/input styling
-// already established elsewhere (DashboardView, AddExpenseView).
+// Specification §11, §12] Screen giving the Owner exactly what this
+// increment requires to operate: create a Receivable (a debt owed TO
+// the business), record payments against it, and view/settle supplier
+// Payables (created automatically by a supplier-credit +Stock purchase
+// — AND, per the "Owner-recorded opening-balance debts" addition below,
+// also creatable directly here, for an existing business's pre-system
+// supplier debt). No redesign of the app's navigation/typography —
+// reuses the existing card/button/input styling already established
+// elsewhere (DashboardView, AddExpenseView).
+//
+// [Owner-recorded cash position] Also adds a third card, entirely new:
+// letting the Owner declare "cash the business currently has," any time
+// they like — most importantly once, when first onboarding an existing
+// business, so its true starting cash isn't silently treated as zero.
+// See CashPositionDeclaration's own type comment (types.ts) for the full
+// design and how this reaches Business Worth.
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
-import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { Landmark, HandCoins, Plus, X } from 'lucide-react';
+import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
+import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Receivable, Payable } from '../types';
 
 function newSubmissionId(prefix: string): string {
@@ -120,8 +129,11 @@ export const DebtsView: React.FC = () => {
     receivables,
     payables,
     addReceivable,
+    addPayable,
     recordReceivablePayment,
     recordPayablePayment,
+    cashPositionDeclarations,
+    addCashPositionDeclaration,
   } = useApp();
   const { t } = useLanguage();
 
@@ -132,8 +144,27 @@ export const DebtsView: React.FC = () => {
   const [creating, setCreating] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
 
+  const [showAddPayable, setShowAddPayable] = useState(false);
+  const [newPayableAmount, setNewPayableAmount] = useState('');
+  const [newSupplierName, setNewSupplierName] = useState('');
+  const [newPayableDescription, setNewPayableDescription] = useState('');
+  const [creatingPayable, setCreatingPayable] = useState(false);
+  const [createPayableError, setCreatePayableError] = useState<string | null>(null);
+
   const [payingReceivableId, setPayingReceivableId] = useState<string | null>(null);
   const [payingPayableId, setPayingPayableId] = useState<string | null>(null);
+
+  const [showUpdateCash, setShowUpdateCash] = useState(false);
+  const [showCashHistory, setShowCashHistory] = useState(false);
+  const [newCashAmount, setNewCashAmount] = useState('');
+  const [newCashDate, setNewCashDate] = useState(getTodayDateString());
+  const [savingCash, setSavingCash] = useState(false);
+  const [cashError, setCashError] = useState<string | null>(null);
+
+  // [Owner-recorded cash position] cashPositionDeclarations arrives
+  // newest-first (AppContext's own onSnapshot sort) — index 0 is always
+  // the current figure, if any declaration exists yet.
+  const currentCashPosition = cashPositionDeclarations.length > 0 ? cashPositionDeclarations[0] : null;
 
   const handleCreateReceivable = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -161,11 +192,179 @@ export const DebtsView: React.FC = () => {
     }
   };
 
+  const handleCreatePayable = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numAmount = parseFloat(newPayableAmount);
+    if (!numAmount || numAmount <= 0) {
+      setCreatePayableError(t('addExpense.errors.invalidAmount'));
+      return;
+    }
+    setCreatingPayable(true);
+    setCreatePayableError(null);
+    try {
+      await addPayable({
+        totalAmount: numAmount,
+        supplierName: newSupplierName.trim() || undefined,
+        description: newPayableDescription.trim() || undefined,
+      });
+      setNewPayableAmount('');
+      setNewSupplierName('');
+      setNewPayableDescription('');
+      setShowAddPayable(false);
+    } catch (err: any) {
+      setCreatePayableError(err?.message || 'Erro ao registar a dívida.');
+    } finally {
+      setCreatingPayable(false);
+    }
+  };
+
+  const handleUpdateCash = async (e: React.FormEvent) => {
+    e.preventDefault();
+    const numAmount = parseFloat(newCashAmount);
+    if (!(numAmount >= 0) || Number.isNaN(numAmount)) {
+      setCashError(t('addExpense.errors.invalidAmount'));
+      return;
+    }
+    setSavingCash(true);
+    setCashError(null);
+    try {
+      await addCashPositionDeclaration({
+        amount: numAmount,
+        declaredAt: newCashDate ? new Date(newCashDate).toISOString() : undefined,
+      });
+      setNewCashAmount('');
+      setNewCashDate(getTodayDateString());
+      setShowUpdateCash(false);
+    } catch (err: any) {
+      setCashError(err?.message || 'Erro ao registar a posição de caixa.');
+    } finally {
+      setSavingCash(false);
+    }
+  };
+
   return (
     <div className="max-w-3xl mx-auto pb-12 space-y-6">
       <div>
         <h1 className="text-xl font-extrabold text-title">{t('debts.title')}</h1>
         <p className="text-xs text-gray-500 mt-1">{t('debts.subtitle')}</p>
+      </div>
+
+      {/* CASH POSITION */}
+      <div className="bg-white rounded-[10px] elevation-1 p-4">
+        <div className="flex items-center gap-2 mb-1">
+          <Wallet className="w-4 h-4 text-[#0B1F3A]" />
+          <h2 className="text-sm font-bold text-title">{t('debts.cashPositionSection.title')}</h2>
+        </div>
+        <p className="text-[10px] text-gray-400 mb-3">{t('debts.cashPositionSection.subtitle')}</p>
+
+        {currentCashPosition ? (
+          <div className="flex items-center justify-between p-3 rounded-[10px] border border-gray-100 bg-[#0B1F3A]/[0.02]">
+            <div>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{t('debts.cashPositionSection.currentLabel')}</p>
+              <p className="text-lg font-bold text-[#0B1F3A] type-number">{formatCurrency(currentCashPosition.amount, currencySymbol)}</p>
+              <p className="text-[10px] text-gray-400 mt-0.5">
+                {t('debts.cashPositionSection.asOfLabel')} {formatDate(currentCashPosition.declaredAt)}
+              </p>
+            </div>
+            {!showUpdateCash && (
+              <button
+                onClick={() => {
+                  setNewCashAmount(String(currentCashPosition.amount));
+                  setShowUpdateCash(true);
+                }}
+                className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition shrink-0"
+              >
+                {t('debts.cashPositionSection.updateButton')}
+              </button>
+            )}
+          </div>
+        ) : (
+          <div className="flex items-center justify-between p-3 rounded-[10px] border border-dashed border-gray-200">
+            <p className="text-xs text-gray-400">{t('debts.cashPositionSection.empty')}</p>
+            {!showUpdateCash && (
+              <button
+                onClick={() => setShowUpdateCash(true)}
+                className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition shrink-0"
+              >
+                <Plus className="w-3.5 h-3.5" /> {t('debts.cashPositionSection.updateButton')}
+              </button>
+            )}
+          </div>
+        )}
+
+        {showUpdateCash && (
+          <form onSubmit={handleUpdateCash} className="mt-3 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-700">{t('debts.cashPositionSection.updateButton')}</span>
+              <button type="button" onClick={() => setShowUpdateCash(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div className="grid grid-cols-2 gap-2">
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.cashAmountLabel')}</label>
+                <input
+                  type="number"
+                  step="0.01"
+                  min="0"
+                  value={newCashAmount}
+                  onChange={(e) => setNewCashAmount(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
+                  placeholder={`0 ${currencySymbol}`}
+                />
+              </div>
+              <div>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.cashDateLabel')}</label>
+                <input
+                  type="date"
+                  value={newCashDate}
+                  onChange={(e) => setNewCashDate(e.target.value)}
+                  className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
+                />
+              </div>
+            </div>
+            {cashError && <p className="text-[11px] text-rose-600">{cashError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={savingCash}
+                className="flex-1 py-1.5 rounded-md bg-[#0B1F3A] text-white text-xs font-bold disabled:opacity-50"
+              >
+                {t('debts.form.submit')}
+              </button>
+              <button
+                type="button"
+                onClick={() => setShowUpdateCash(false)}
+                className="px-3 py-1.5 rounded-md bg-white border border-gray-300 text-xs font-bold text-gray-700"
+              >
+                {t('debts.form.cancel')}
+              </button>
+            </div>
+          </form>
+        )}
+
+        {cashPositionDeclarations.length > 1 && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowCashHistory((v) => !v)}
+              className="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-gray-700"
+            >
+              {showCashHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {t('debts.cashPositionSection.history')}
+            </button>
+            {showCashHistory && (
+              <div className="mt-2 space-y-1.5">
+                {cashPositionDeclarations.slice(1).map((entry) => (
+                  <div key={entry.id} className="flex items-center justify-between px-3 py-1.5 rounded-md border border-gray-100 text-xs">
+                    <span className="text-gray-400">{formatDate(entry.declaredAt)}</span>
+                    <span className="type-number text-gray-600">{formatCurrency(entry.amount, currencySymbol)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
       </div>
 
       {/* RECEIVABLES */}
@@ -290,11 +489,72 @@ export const DebtsView: React.FC = () => {
 
       {/* PAYABLES */}
       <div className="bg-white rounded-[10px] elevation-1 p-4">
-        <div className="flex items-center gap-2 mb-1">
-          <HandCoins className="w-4 h-4 text-[#0B1F3A]" />
-          <h2 className="text-sm font-bold text-title">{t('debts.payablesSection.title')}</h2>
+        <div className="flex items-center justify-between mb-1">
+          <div className="flex items-center gap-2">
+            <HandCoins className="w-4 h-4 text-[#0B1F3A]" />
+            <h2 className="text-sm font-bold text-title">{t('debts.payablesSection.title')}</h2>
+          </div>
+          {!showAddPayable && (
+            <button
+              onClick={() => setShowAddPayable(true)}
+              className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> {t('debts.payablesSection.addButton')}
+            </button>
+          )}
         </div>
         <p className="text-[10px] text-gray-400 mb-3">{t('debts.payablesSection.hint')}</p>
+
+        {showAddPayable && (
+          <form onSubmit={handleCreatePayable} className="mb-4 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
+            <div className="flex items-center justify-between">
+              <span className="text-xs font-bold text-gray-700">{t('debts.payablesSection.addButton')}</span>
+              <button type="button" onClick={() => setShowAddPayable(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.amountLabel')}</label>
+              <input
+                type="number"
+                step="0.01"
+                min="0"
+                value={newPayableAmount}
+                onChange={(e) => setNewPayableAmount(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
+                placeholder={`0 ${currencySymbol}`}
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.supplierNameLabel')}</label>
+              <input
+                type="text"
+                value={newSupplierName}
+                onChange={(e) => setNewSupplierName(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
+              />
+            </div>
+            <div>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.descriptionLabel')}</label>
+              <input
+                type="text"
+                value={newPayableDescription}
+                onChange={(e) => setNewPayableDescription(e.target.value)}
+                className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
+              />
+            </div>
+            {createPayableError && <p className="text-[11px] text-rose-600">{createPayableError}</p>}
+            <div className="flex gap-2">
+              <button
+                type="submit"
+                disabled={creatingPayable}
+                className="flex-1 py-1.5 rounded-md bg-[#0B1F3A] text-white text-xs font-bold disabled:opacity-50"
+              >
+                {t('debts.form.submit')}
+              </button>
+            </div>
+          </form>
+        )}
 
         {payables.length === 0 ? (
           <p className="text-xs text-gray-400 text-center py-6">{t('debts.payablesSection.empty')}</p>
@@ -303,10 +563,20 @@ export const DebtsView: React.FC = () => {
             {payables.map((p) => (
               <div key={p.id} className="p-3 rounded-[10px] border border-gray-100">
                 <div className="flex items-center justify-between">
-                  <p className="text-xs font-bold text-gray-800">{p.id}</p>
-                  <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 ${statusBadgeClass(p.status)}`}>
-                    {statusLabel(p.status, t)}
-                  </span>
+                  <div>
+                    <p className="text-xs font-bold text-gray-800">{p.supplierName || p.description || p.id}</p>
+                    {p.supplierName && p.description && <p className="text-[10px] text-gray-400">{p.description}</p>}
+                  </div>
+                  <div className="flex items-center gap-1.5 shrink-0">
+                    {p.isManualEntry && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 bg-gray-50 text-gray-500 border-gray-200">
+                        {t('debts.payablesSection.manualBadge')}
+                      </span>
+                    )}
+                    <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 ${statusBadgeClass(p.status)}`}>
+                      {statusLabel(p.status, t)}
+                    </span>
+                  </div>
                 </div>
                 <div className="flex items-center justify-between mt-2 text-xs">
                   <span className="text-gray-500">
@@ -347,3 +617,4 @@ export const DebtsView: React.FC = () => {
     </div>
   );
 };
+

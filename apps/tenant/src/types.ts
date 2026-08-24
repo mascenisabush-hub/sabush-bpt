@@ -1076,13 +1076,36 @@ export interface ReceivablePayment {
 export interface Payable {
   id: string;
   businessId: string;
-  sourcePurchaseBatchId: string;
+  // [Owner-recorded opening-balance debts] OPTIONAL as of this addition —
+  // required and always present for the original, automatic Case-2
+  // supplier-credit path (§12; addMultipleStockBatches). Genuinely absent
+  // ONLY on a manually-recorded Payable (isManualEntry === true, below) —
+  // an Owner-declared starting debt that pre-dates this system and has no
+  // PurchaseBatch behind it. The two paths are mutually exclusive and
+  // both explicitly flagged (never inferred from which fields happen to
+  // be present) — see firestore.rules' own two-branch `create` guard on
+  // this collection.
+  sourcePurchaseBatchId?: string;
   supplierId?: string; // links to the existing reusable SupplierRecord, where one was used
+  // Free-text, owner-entered — mirrors Receivable.debtorName exactly, for
+  // the identical reason: this system has no supplier-account entities,
+  // so a manually-recorded Payable needs its own plain-text label. Never
+  // set on the automatic path (which uses supplierId/SupplierRecord, or
+  // nothing, instead).
+  supplierName?: string;
+  description?: string;
   totalAmount: number;
   amountPaid: number; // denormalized running total — same discipline as Receivable.amountPaid, above
   amountRemaining: number;
   status: 'unpaid' | 'partially-paid' | 'paid';
   createdAt: string; // ISO string
+  // [Owner-recorded opening-balance debts] true ONLY for a Payable the
+  // Owner entered directly (an existing business's pre-system supplier
+  // debt) — explicitly set, never left implicit. Absent (not false) on
+  // every automatically-created Payable, matching this codebase's
+  // existing "absence is the default" convention (e.g.
+  // StockCountItem.valuationMode).
+  isManualEntry?: true;
 }
 
 export interface PayablePayment {
@@ -1113,6 +1136,39 @@ export interface StartupInvestmentEntry {
   amount: number;
   description?: string;
   recordedAt: string; // ISO string
+  createdAt: string; // ISO string — server-recorded write time
+  createdBy: string; // uid, for auditability
+}
+
+// [Owner-recorded cash position] Lets an Owner declare "cash the
+// business currently has" at any time — most importantly, once, when
+// first onboarding an existing business (so its true starting cash
+// isn't silently treated as zero), and again whenever they want to
+// update it afterward. Mirrors StartupInvestmentEntry exactly:
+// append-only (no update/delete path, ever — same I-4 discipline as
+// CashLedgerEntry/StartupInvestmentEntry), a single un-batched write,
+// no Business Worth field touched directly by this write itself. The
+// CURRENT cash position for display is simply the most recent
+// declaration (by declaredAt, tie-broken by createdAt) — never an
+// average or a running total, since each declaration is a full
+// restatement ("cash on hand is now X"), not an incremental movement.
+// This is deliberately NOT a CashLedgerEntry: that collection is
+// reserved for GOVERNED, already-categorized cash-affecting events
+// (customer-payment, supplier-payment, expense, levantamento) that
+// the live Business Worth calculation reads to compute a delta since
+// the last snapshot (calculations.ts, computeCaseALiveBusinessWorth)
+// — a bare "current balance" restatement doesn't fit that delta model
+// and is not read by it. Its authoritative effect on Business Worth
+// happens the same way it already does today: via
+// RecordStockCountParams.ownerConfirmedCashPosition, entered (optionally
+// pre-filled from the latest declaration here) at the next Contagem
+// confirmation, becoming that snapshot's own frozen cashPosition.
+export interface CashPositionDeclaration {
+  id: string;
+  businessId: string;
+  amount: number;
+  declaredAt: string; // ISO string — the date the Owner is declaring this as of
+  description?: string;
   createdAt: string; // ISO string — server-recorded write time
   createdBy: string; // uid, for auditability
 }

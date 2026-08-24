@@ -80,6 +80,7 @@ import {
   Payable,
   PayablePayment,
   StartupInvestmentEntry,
+  CashPositionDeclaration,
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
@@ -465,6 +466,17 @@ interface AppContextType {
   receivablePayments: ReceivablePayment[];
   payables: Payable[];
   payablePayments: PayablePayment[];
+  // [Owner-recorded cash position] Newest-first (see the onSnapshot
+  // listener's own sort). cashPositionDeclarations[0] — if present — is
+  // the current declared cash figure; see CashPositionDeclaration's own
+  // type comment for what this is and how it reaches Business Worth.
+  cashPositionDeclarations: CashPositionDeclaration[];
+  // Records a new cash-position declaration — a full restatement
+  // ("cash on hand is now X"), not an incremental movement. A single,
+  // un-batched, append-only write (mirrors addStartupInvestmentEntry
+  // exactly) — callable as often as the Owner likes, which is what makes
+  // this "updatable any time" rather than a one-time onboarding step.
+  addCashPositionDeclaration: (params: { amount: number; declaredAt?: string; description?: string }) => Promise<{ entryId: string }>;
   // [Business Worth Evolution — Implementation Authorization, Increment 5;
   // Specification §13, §33] Owner-only tier, mirrors receivables/payables
   // above. Never itself the full Startup Investment figure — see
@@ -480,6 +492,17 @@ interface AppContextType {
   // §11). Contributes nothing to Business Worth until actually paid
   // (FIN-3) — see recordReceivablePayment for the payment side.
   addReceivable: (params: { totalAmount: number; description?: string; debtorName?: string }) => Promise<{ receivableId: string }>;
+  // [Owner-recorded opening-balance debts] Creates a manually-recorded
+  // debt the business owes TO a supplier (Payable.isManualEntry === true)
+  // — for an existing business's pre-system supplier debt, which the
+  // automatic Case-2 supplier-credit path (a real +Stock purchase) has
+  // no way to represent. Mirrors addReceivable exactly: a single,
+  // un-batched write; contributes to Business Worth immediately (FIN-4 —
+  // unlike a Receivable, an outstanding Payable DOES reduce Business
+  // Worth the moment it's recorded), via the SAME existing
+  // payables-position-change term every other Payable already flows
+  // through — no change to that calculation was needed for this.
+  addPayable: (params: { totalAmount: number; description?: string; supplierName?: string }) => Promise<{ payableId: string }>;
   // Records a payment against an existing Receivable — atomic with its
   // own linked CashLedgerEntry (FR-13), rejects an amount exceeding what
   // remains outstanding (never an overpayment), and is itself idempotent
@@ -849,6 +872,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [receivablePayments, setReceivablePayments] = useState<ReceivablePayment[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
   const [payablePayments, setPayablePayments] = useState<PayablePayment[]>([]);
+  // [Owner-recorded cash position] Same Owner-only access class as the
+  // three collections immediately above — see CashPositionDeclaration's
+  // own type comment for what this is and isn't.
+  const [cashPositionDeclarations, setCashPositionDeclarations] = useState<CashPositionDeclaration[]>([]);
   // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
   // §17] Null when no Authorization has ever been granted for this
   // business, or once it has been fully superseded (a fresh grant
@@ -1702,6 +1729,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching payable payments:', err)
     );
 
+    // [Owner-recorded cash position] Same listener shape as payables,
+    // above — sorted newest-first so consumers (DebtsView's "current"
+    // reading) can simply take index 0 rather than re-sorting themselves.
+    const cashPositionDeclarationsRef = collection(db, 'businesses', businessId, 'cashPositionDeclarations');
+    const unsubCashPositionDeclarations = onSnapshot(
+      cashPositionDeclarationsRef,
+      (snap) => {
+        const list: CashPositionDeclaration[] = [];
+        snap.forEach((doc) => list.push(doc.data() as CashPositionDeclaration));
+        list.sort((a, b) => new Date(b.declaredAt).getTime() - new Date(a.declaredAt).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+        setCashPositionDeclarations(list);
+      },
+      (err) => console.error('Error fetching cash position declarations:', err)
+    );
+
     // [Business Worth Evolution — Implementation Authorization, Increment
     // 5; Specification §13] StartupInvestmentEntry — Owner-only per
     // firestore.rules; sorted newest-first by recordedAt, mirroring
@@ -1895,6 +1937,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubReceivablePayments();
       unsubPayables();
       unsubPayablePayments();
+      unsubCashPositionDeclarations();
       unsubStartupInvestmentEntries();
       unsubInitialStockRecoveryAuthorization();
       unsubBusinessWorthRecoveryAuthorization();
@@ -3264,6 +3307,70 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await setDoc(doc(db, 'businesses', businessId, 'receivables', receivableId), newReceivable);
     return { receivableId };
+  };
+
+  // [Owner-recorded opening-balance debts] Creating a manually-entered
+  // Payable DOES have an immediate Business Worth effect (FIN-4) —
+  // unlike addReceivable above — but that effect requires no extra write
+  // here: getCurrentBusinessWorth's own payables-position-change term
+  // (calculations.ts) already reduces the live figure the moment this
+  // new Payable simply exists in the `payables` collection with a
+  // positive amountRemaining, exactly as it already does for an
+  // automatically-created one. So, like addReceivable, a single,
+  // un-batched write is sufficient here too.
+  const addPayable = async ({ totalAmount, description, supplierName }: { totalAmount: number; description?: string; supplierName?: string }) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode registar dívidas.');
+    if (!(Number(totalAmount) > 0)) throw new Error('O valor da dívida deve ser maior que zero.');
+
+    const businessId = activeBusinessId;
+    const payableId = 'payable-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const rounded = Number(Number(totalAmount).toFixed(2));
+
+    const newPayable: Payable = {
+      id: payableId,
+      businessId,
+      totalAmount: rounded,
+      amountPaid: 0,
+      amountRemaining: rounded,
+      status: 'unpaid',
+      createdAt: new Date().toISOString(),
+      isManualEntry: true,
+      ...(description?.trim() ? { description: description.trim() } : {}),
+      ...(supplierName?.trim() ? { supplierName: supplierName.trim() } : {}),
+    };
+
+    await setDoc(doc(db, 'businesses', businessId, 'payables', payableId), newPayable);
+    return { payableId };
+  };
+
+  // [Owner-recorded cash position] A full restatement, not an
+  // incremental movement — see CashPositionDeclaration's own type
+  // comment. A single, un-batched, append-only write, mirroring
+  // addStartupInvestmentEntry exactly; no Business Worth field is
+  // touched by this write itself (that happens later, at the next
+  // Contagem confirmation, via RecordStockCountParams.ownerConfirmedCashPosition).
+  const addCashPositionDeclaration = async ({ amount, declaredAt, description }: { amount: number; declaredAt?: string; description?: string }) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode registar a posição de caixa.');
+    if (!(Number(amount) >= 0)) throw new Error('O valor deve ser 0 ou maior.');
+
+    const businessId = activeBusinessId;
+    const entryId = 'cash-position-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const rounded = Number(Number(amount).toFixed(2));
+
+    const newEntry: CashPositionDeclaration = {
+      id: entryId,
+      businessId,
+      amount: rounded,
+      declaredAt: declaredAt || new Date().toISOString(),
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.uid || '',
+      ...(description?.trim() ? { description: description.trim() } : {}),
+    };
+
+    await setDoc(doc(db, 'businesses', businessId, 'cashPositionDeclarations', entryId), newEntry);
+    return { entryId };
   };
 
   // ============================================================
@@ -5951,8 +6058,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         receivablePayments,
         payables,
         payablePayments,
+        cashPositionDeclarations,
         startupInvestmentEntries,
         addReceivable,
+        addPayable,
+        addCashPositionDeclaration,
         recordReceivablePayment,
         recordPayablePayment,
         recordOwnerDeclaredBusinessWorth,

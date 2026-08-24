@@ -267,21 +267,35 @@ export interface TranslationDict {
     };
     payablesSection: {
       title: string;
+      addButton: string;
       empty: string;
       totalLabel: string;
       remainingLabel: string;
       recordPayment: string;
       hint: string;
+      manualBadge: string;
+    };
+    cashPositionSection: {
+      title: string;
+      subtitle: string;
+      currentLabel: string;
+      asOfLabel: string;
+      updateButton: string;
+      empty: string;
+      history: string;
     };
     form: {
       amountLabel: string;
       debtorNameLabel: string;
+      supplierNameLabel: string;
       descriptionLabel: string;
       submit: string;
       cancel: string;
       paymentAmountLabel: string;
       paymentDateLabel: string;
       submitPayment: string;
+      cashAmountLabel: string;
+      cashDateLabel: string;
     };
   };
   // [Business Worth Evolution — Implementation Authorization, Increment 5;
@@ -1344,21 +1358,35 @@ export const pt: TranslationDict = {
     },
     payablesSection: {
       title: 'A Pagar (Fornecedores)',
+      addButton: '+ Nova Dívida',
       empty: 'Nenhuma dívida a fornecedores.',
       totalLabel: 'Total',
       remainingLabel: 'Em Aberto',
       recordPayment: 'Registar Pagamento',
-      hint: 'Criadas automaticamente ao comprar stock a crédito do fornecedor.',
+      hint: 'Criadas automaticamente ao comprar stock a crédito do fornecedor. Já deve dinheiro a um fornecedor desde antes de usar este sistema? Adicione aqui.',
+      manualBadge: 'Saldo Inicial',
+    },
+    cashPositionSection: {
+      title: 'Posição de Caixa',
+      subtitle: 'Dinheiro que o negócio tem em mãos, neste momento.',
+      currentLabel: 'Caixa Atual',
+      asOfLabel: 'A partir de',
+      updateButton: 'Atualizar',
+      empty: 'Ainda não registou a posição de caixa.',
+      history: 'Histórico',
     },
     form: {
       amountLabel: 'Valor',
       debtorNameLabel: 'Quem deve (opcional)',
+      supplierNameLabel: 'Fornecedor (opcional)',
       descriptionLabel: 'Descrição (opcional)',
       submit: 'Guardar',
       cancel: 'Cancelar',
       paymentAmountLabel: 'Valor Pago',
       paymentDateLabel: 'Data do Pagamento',
       submitPayment: 'Confirmar Pagamento',
+      cashAmountLabel: 'Dinheiro em Caixa',
+      cashDateLabel: 'A partir de',
     },
   },
   startupInvestment: {

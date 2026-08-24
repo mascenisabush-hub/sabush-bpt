@@ -65,9 +65,10 @@ describe('Data model (types.ts) — Increment 3 record types', () => {
     assert.match(payableBlock, /status:\s*'unpaid'\s*\|\s*'partially-paid'\s*\|\s*'paid';/);
   });
 
-  it('Payable carries sourcePurchaseBatchId (required) — never independent of the +Stock purchase it originated from', () => {
+  it('Payable carries sourcePurchaseBatchId — required for the automatic Case-2 supplier-credit path, genuinely absent ONLY on an explicitly-flagged manual/opening-balance entry (isManualEntry)', () => {
     const payableBlock = typesSrc.slice(typesSrc.indexOf('export interface Payable {'), typesSrc.indexOf('export interface PayablePayment'));
-    assert.match(payableBlock, /sourcePurchaseBatchId:\s*string;/);
+    assert.match(payableBlock, /sourcePurchaseBatchId\?:\s*string;/);
+    assert.match(payableBlock, /isManualEntry\?:\s*true;/);
   });
 
   it('ReceivablePayment/PayablePayment both carry cashLedgerEntryId — FR-13/mirror, no payment without a linked ledger effect', () => {
@@ -303,10 +304,17 @@ describe('firestore.rules — Increment 3 collections (Specification §33, tenan
 });
 
 describe('DebtsView.tsx / AddStockView.tsx — minimal UI, no redesign', () => {
-  it('DebtsView renders both Receivables and Payables sections, using the existing context functions only', () => {
+  it('DebtsView renders Receivables, Payables, and Cash Position sections, using the existing context functions only', () => {
     assert.match(debtsViewSrc, /addReceivable/);
     assert.match(debtsViewSrc, /recordReceivablePayment/);
     assert.match(debtsViewSrc, /recordPayablePayment/);
+    // [Owner-recorded opening-balance debts / cash position] Added
+    // alongside this increment's original three — see addPayable's own
+    // AppContext.tsx comment and CashPositionDeclaration's own
+    // types.ts comment for why these were added and how they differ
+    // from the auto-created/governed paths above.
+    assert.match(debtsViewSrc, /addPayable/);
+    assert.match(debtsViewSrc, /addCashPositionDeclaration/);
   });
 
   it('each payment submission generates its own fresh submissionId per form instance — never a shared/reused one across different rows', () => {
