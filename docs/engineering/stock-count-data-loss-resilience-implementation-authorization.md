@@ -307,37 +307,35 @@ a signature would enable, not something this document itself performs.
 
 ## 10. Product Architect Signature
 
-**Status:** 🕓 **Not signed. Not authorized.**
+**Status:** ✅ **Signed and Authorized.**
 
-**Product Architect:** *(pending — no signature has been provided in
-this session)*
+**Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** *(pending)*
+**Date:** August 24, 2026
 
-**Authorization decision:** *(pending — no verbatim authorization
-statement has been given)*
+**Authorization decision:** APPROVED — IMPLEMENTATION AUTHORIZED
 
-**To be confirmed as part of signature, once given:**
+**Confirmed as part of this signature:**
 
-- [ ] This authorization's scope (§2) is approved as stated.
-- [ ] This authorization's exclusions (§3) are approved as stated.
-- [ ] The app-wide Firestore-persistent-local-cache consequence (§2
+- [x] This authorization's scope (§2) is approved as stated.
+- [x] This authorization's exclusions (§3) are approved as stated.
+- [x] The app-wide Firestore-persistent-local-cache consequence (§2
       item 1, §5) is acknowledged as a disclosed, unavoidable
       consequence of the authorized mechanism, not an oversight.
-- [ ] The residual physical limitation (§6) is acknowledged and will
+- [x] The residual physical limitation (§6) is acknowledged and will
       not be represented otherwise in any implementation artifact.
-- [ ] No additional scope change is required beyond what §1–§8 of this
+- [x] No additional scope change is required beyond what §1–§8 of this
       document describe.
 
 ---
 
-**This document, unsigned, does not authorize implementation.** No
-code has been written and no schema, `firestore.rules`, or
-`firestore.indexes.json` change has been made as of this filing.
-Implementation must not begin until §10 above is completed by the
-Product Architect.
+**This document, as signed, authorizes implementation strictly per
+§2's scope and §3's exclusions.** No code has been written and no
+schema, `firestore.rules`, or `firestore.indexes.json` change has been
+made as of the filing of this signed authorization — implementation is
+the next, separate execution step this signature enables, not
+something this signature itself performs.
 
-**Lifecycle:** Drafted (this document) → Product Architect review →
-Signature (not yet given) → Authorized (not yet reached) →
-Implementation (not started). **Coding must not begin under this
-document as currently filed.**
+**Lifecycle:** Drafted → Product Architect review → **Authorized**
+(this step, signed). Implementation may now begin, strictly within
+§2/§3.
