@@ -125,12 +125,21 @@ describe('PeriodicStockCountView.tsx — Increment 8 correction/recovery write p
     assert.match(periodicSrc, /clearBusinessWorthCorrection,/);
   });
 
-  it('recordStockCount is called with correctionOfSnapshotId/correctionKind/producesBusinessWorthSnapshot ONLY inside a pendingBusinessWorthCorrection-gated spread — never unconditionally', () => {
+  it('recordStockCount is always called with producesBusinessWorthSnapshot: true (Specification §14 Decision 1: "set true on every Contagem confirmed under this model going forward" — not a correction-only special case); correctionOfSnapshotId/correctionKind remain correction-only, gated inside pendingBusinessWorthCorrection', () => {
     const start = periodicSrc.indexOf('const saved = await recordStockCount({');
     assert.notEqual(start, -1);
-    const callBlock = periodicSrc.slice(start, start + 3000);
-    assert.match(callBlock, /\.\.\.\(pendingBusinessWorthCorrection\s*\?\s*\{\s*producesBusinessWorthSnapshot: true,/);
-    assert.match(callBlock, /correctionOfSnapshotId: pendingBusinessWorthCorrection\.snapshotId,/);
+    const callBlock = periodicSrc.slice(start, start + 6500);
+    // [Fix — Business Worth Evolution was never actually switched on]
+    // producesBusinessWorthSnapshot: true must appear unconditionally in
+    // this call — NOT nested inside the pendingBusinessWorthCorrection
+    // spread, which is exactly the bug this test previously locked in
+    // (asserting the opposite of what the Specification requires).
+    assert.match(callBlock, /^\s*producesBusinessWorthSnapshot: true,/m);
+    assert.doesNotMatch(callBlock, /pendingBusinessWorthCorrection\s*\?\s*\{\s*producesBusinessWorthSnapshot: true,/);
+    // correctionOfSnapshotId/correctionKind still only ever appear
+    // together, inside the pendingBusinessWorthCorrection-gated spread —
+    // unchanged by this fix.
+    assert.match(callBlock, /\.\.\.\(pendingBusinessWorthCorrection\s*\?\s*\{\s*correctionOfSnapshotId: pendingBusinessWorthCorrection\.snapshotId,/);
     assert.match(callBlock, /correctionKind: pendingBusinessWorthCorrection\.kind,/);
   });
 
@@ -141,7 +150,7 @@ describe('PeriodicStockCountView.tsx — Increment 8 correction/recovery write p
 
   it('clears pendingBusinessWorthCorrection after a successful save — a later, unrelated Contagem never silently inherits a stale correction target', () => {
     const start = periodicSrc.indexOf('const saved = await recordStockCount({');
-    const successBlock = periodicSrc.slice(start, start + 3500);
+    const successBlock = periodicSrc.slice(start, start + 6500);
     assert.match(successBlock, /if \(pendingBusinessWorthCorrection\) clearBusinessWorthCorrection\(\);/);
   });
 

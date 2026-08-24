@@ -446,6 +446,8 @@ export const fr: TranslationDict = {
       processing: 'Analyse du document...',
       rejectScan: 'Rejeter la numérisation',
       noConfidentMatch: 'Impossible de confirmer ce produit \u2014 choisissez un produit existant ou créez-en un nouveau',
+      sellingPriceFromMemory: 'Prix de la mémoire du produit \u2014 confirmez ou ajustez',
+      sellingPriceNotFound: 'Aucun prix mémorisé pour cette unité \u2014 indiquez le prix',
       fields: {
         product: 'Produit',
         quantity: 'Quantité',

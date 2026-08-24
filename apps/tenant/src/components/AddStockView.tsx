@@ -10,6 +10,7 @@ import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } fr
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 
 interface AddStockViewProps {
@@ -194,7 +195,7 @@ const UnitRelationshipRow: React.FC<{
       <button
         type="button"
         onClick={() => setExpanded(true)}
-        className="mt-2 flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
+        className="mt-2 flex items-center gap-1.5 text-[13px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
       >
         <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
         <span>Produto novo — configurar relação de unidades (opcional)</span>
@@ -207,12 +208,12 @@ const UnitRelationshipRow: React.FC<{
       <button
         type="button"
         onClick={() => setExpanded(false)}
-        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+        className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
       >
         <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
         <span>Relação de unidades para este produto novo (opcional)</span>
       </button>
-      <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+      <div className="flex flex-wrap items-end gap-2.5 text-[13px]">
         <span className="text-gray-500 pb-2">
           1 <strong className="text-[#111827]">{purchaseUnit || 'un'}</strong> =
         </span>
@@ -239,17 +240,26 @@ const UnitRelationshipRow: React.FC<{
           />
         </div>
       </div>
-      <p className="text-[11px] text-gray-400 leading-relaxed">
+      <p className="text-[13px] text-gray-500 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
       </p>
     </div>
   );
 };
 
+// [Fix — remembered price silently reused across a genuine unit change]
+// resolveUnitAwarePrice now lives in lib/productMemoryPriceResolution.ts
+// (imported above) — extracted out of this component so it's a plain,
+// dependency-free function directly unit-testable without a React/DOM
+// harness, matching this codebase's own established pattern for every
+// other pure conversion helper (getConversionFactor, deriveCostContribution,
+// etc.). See that module's own header comment for the full rationale.
+
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
   const {
     products,
     batches,
+    stockCounts,
     suppliers,
     addMultipleStockBatches,
     currencySymbol,
@@ -275,15 +285,24 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     if (productName) {
       const match = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
       if (match) {
-        const productBatches = batches.filter(b => b.productId === match.id);
-        if (productBatches.length > 0) {
-          const latest = productBatches[0];
-          initialCost = String(latest.costPrice);
-          initialSell = String(latest.sellingPrice);
-          if (latest.unit) initialUnit = latest.unit;
+        // [Owner-requested — "auto-fill from memory in Contagem or old
+        // Capital Inicial"] Widened from batches-only to also search
+        // confirmed StockCounts (see findLatestRememberedProductMemory's
+        // own header comment) — unit/cost/sell always taken from the
+        // SAME winning record, so this row starts fully self-consistent
+        // regardless of which source actually won. A genuinely new
+        // product (no batch, no priced Contagem entry) leaves
+        // initialCost/initialSell both '' — no hardcoded placeholder
+        // number is invented for it (see the return below).
+        const memory = findLatestRememberedProductMemory(match.id, match.name, batches, stockCounts);
+        if (memory) {
+          initialCost = String(memory.costPrice);
+          initialSell = String(memory.sellingPrice);
+          initialUnit = memory.unit;
         } else if (match.costPrice != null || match.sellingPrice != null) {
-          // No batches yet — fall back to the product's reference price
-          // (set via "Editar Detalhes") instead of the generic defaults.
+          // No batch and no priced Contagem entry — fall back to the
+          // product's own reference price (set via "Editar Detalhes")
+          // instead of the generic defaults.
           if (match.costPrice != null) initialCost = String(match.costPrice);
           if (match.sellingPrice != null) initialSell = String(match.sellingPrice);
         }
@@ -303,8 +322,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       dateEntered: getTodayDateString(),
       quantity: '50',
       unit: initialUnit,
-      costPrice: initialCost || '1.50',
-      sellingPrice: initialSell || '3.00',
+      // [Owner-requested — "never invent those two [selling price and
+      // selling unit] if no memory or for a new product"] The old
+      // '1.50'/'3.00' fallbacks presented a specific, confident-looking
+      // number for a product this system has genuinely never seen
+      // priced anywhere — indistinguishable on screen from a real,
+      // remembered figure. Left blank instead; the required-field
+      // validation already in place (handleSubmit) still catches an
+      // Owner who genuinely forgets to fill it in before confirming.
+      costPrice: initialCost,
+      sellingPrice: initialSell,
       isDropdownOpen: false,
       isUnitPopoverOpen: false,
       previousRemainingQuantity: '',
@@ -592,12 +619,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     let newUnit = suggestedUnits[0] || 'un';
 
     if (match) {
-      const productBatches = batches.filter(b => b.productId === match.id);
-      if (productBatches.length > 0) {
-        const latest = productBatches[0];
-        newCost = String(latest.costPrice);
-        newSell = String(latest.sellingPrice);
-        if (latest.unit) newUnit = latest.unit;
+      // [Owner-requested — see createEmptyRow's identical comment above]
+      // Same widened memory source (StockBatch purchases AND confirmed
+      // StockCounts, unit/cost/sell always from the SAME winning
+      // record), applied identically here for re-selecting a different
+      // existing product mid-form.
+      const memory = findLatestRememberedProductMemory(match.id, match.name, batches, stockCounts);
+      if (memory) {
+        newCost = String(memory.costPrice);
+        newSell = String(memory.sellingPrice);
+        newUnit = memory.unit;
       } else if (match.costPrice != null || match.sellingPrice != null) {
         if (match.costPrice != null) newCost = String(match.costPrice);
         if (match.sellingPrice != null) newSell = String(match.sellingPrice);
@@ -765,8 +796,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // function NEVER re-guesses or loosens that decision client-side. A
   // 'confident' match additionally reuses Product Memory's EXISTING
   // prefill behavior (latest batch price/unit) — the exact same logic
-  // handleSelectProductForTool already applies for manual selection,
-  // not a new prefill path invented for scanning.
+  // handleSelectProductForTool already applies for manual selection, not
+  // a new prefill path invented for scanning — now unit-aware
+  // (resolveUnitAwarePrice, above) specifically because THIS path is the
+  // one place the target unit can legitimately differ from the
+  // remembered price's own unit (the receipt says what was actually
+  // bought this time, which the AI reads verbatim — see that helper's
+  // own comment for why reusing the raw remembered number across a
+  // genuine unit change would be wrong, not merely imprecise).
   const buildRowFromProposalLineItem = (item: SmartStockEntryLineItemProposal): StockRowItem => {
     let productName = item.productName.value || '';
     let costPrice = item.costPrice.value != null ? String(item.costPrice.value) : '';
@@ -805,13 +842,32 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // does. Applies uniformly whether the match came from the
         // server's exact-name check or a client-side reuse match.
         productName = matched.name;
+
+        // [Restock Observation Amendment v1.0] Deliberately kept
+        // STRICTLY StockBatch-sourced, unlike the unit-aware cost/sell
+        // memory below — "previous cycle" specifically means "the
+        // physical quantity from the last recorded PURCHASE," which a
+        // StockCount entry (a physical count, not a purchase) has no
+        // equivalent of. Unaffected by this fix.
         const productBatches = batches.filter(b => b.productId === matched.id);
-        if (productBatches.length > 0) {
-          const latest = productBatches[0];
-          sellingPrice = String(latest.sellingPrice);
-          if (!item.unit.value) unit = latest.unit || unit;
-          if (!costPrice) costPrice = String(latest.costPrice);
-          previousCycleQuantity = latest.quantity;
+        if (productBatches.length > 0) previousCycleQuantity = productBatches[0].quantity;
+
+        if (!item.unit.value && productBatches.length > 0) unit = productBatches[0].unit || unit;
+
+        // [Owner-requested — "auto-fill from memory in Contagem or old
+        // Capital Inicial"] Widened from batches-only to also search
+        // confirmed StockCounts — see findLatestRememberedProductMemory's
+        // own header comment. `unit` here is this row's own TARGET
+        // unit — the receipt's own reading when the AI detected one,
+        // otherwise the latest batch's unit (assigned immediately
+        // above). resolveUnitAwarePrice never blindly reuses a
+        // remembered price across a genuine unit difference (its own
+        // header comment) — converts when a confirmed relationship
+        // allows it, leaves '' when it can't be sure.
+        const memory = findLatestRememberedProductMemory(matched.id, matched.name, batches, stockCounts);
+        if (memory) {
+          sellingPrice = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, unit, matched.unitRelationship);
+          if (!costPrice) costPrice = resolveUnitAwarePrice(memory.costPrice, memory.unit, unit, matched.unitRelationship);
         } else {
           if (!costPrice && matched.costPrice != null) costPrice = String(matched.costPrice);
           if (matched.sellingPrice != null) sellingPrice = String(matched.sellingPrice);
@@ -898,8 +954,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       // appending the scan's rows, so a fresh Add Stock screen doesn't
       // end up with one useless empty row alongside the real ones —
       // but never drop a row the user has already started filling in.
+      // [Fix — createEmptyRow's own '1.50'/'3.00' placeholder defaults
+      // were removed (never invent a price for a genuinely new/unmatched
+      // product); a pristine row's costPrice/sellingPrice are now '' by
+      // default instead, unless Product Memory found something real to
+      // prefill — this check is updated to match, not to compare against
+      // the removed placeholders.]
       const kept = prev.filter(
-        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '1.50' || r.sellingPrice !== '3.00'
+        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== ''
       );
       return [...kept, ...newRows];
     });
@@ -939,12 +1001,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const renderFieldStatusBadge = (label: string, status: 'detected' | 'review' | 'not_found') => (
     <span
       key={label}
-      className={`inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md ${
+      className={`inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md ${
         status === 'detected'
           ? 'text-emerald-700 bg-emerald-50'
           : status === 'review'
           ? 'text-amber-700 bg-amber-50'
-          : 'text-gray-400 bg-gray-50'
+          : 'text-gray-500 bg-gray-50'
       }`}
     >
       {status === 'detected' ? (
@@ -1328,7 +1390,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           </div>
           <div>
             <h2 className="type-title">{t('addStock.title')}</h2>
-            <p className="text-[12px] text-gray-500 mt-0.5">
+            <p className="text-[13px] text-gray-500 mt-0.5">
               {t('addStock.subtitle')}
             </p>
           </div>
@@ -1344,15 +1406,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         {!submittedMessage && wasRestoredFromDraft && (
           <div className="bg-[#D4AF37]/[0.08] border border-[#D4AF37]/30 rounded-xl px-4 py-2.5 flex items-start gap-2.5">
             <Info className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[3px]" strokeWidth={2.25} />
-            <p className="text-[11.5px] leading-relaxed text-[#5c4a1a]">
+            <p className="text-[13px] leading-relaxed text-[#5c4a1a]">
               {t('addStock.draft.restoredNotice')}
             </p>
           </div>
         )}
 
         {!submittedMessage && hasDraftContent && (
-          <div className="flex items-center justify-between gap-2 text-[11px]">
-            <span className="text-gray-400 flex items-center gap-1.5">
+          <div className="flex items-center justify-between gap-2 text-[13px]">
+            <span className="text-gray-500 flex items-center gap-1.5">
               {draftSaveState === 'saving' && t('addStock.draft.savingIndicator')}
               {draftSaveState === 'saved' && (
                 <>
@@ -1364,7 +1426,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <button
               type="button"
               onClick={handleDiscardDraft}
-              className="text-gray-400 hover:text-rose-600 font-semibold transition-colors duration-150 flex items-center gap-1"
+              className="text-gray-500 hover:text-rose-600 font-semibold transition-colors duration-150 flex items-center gap-1"
             >
               <Trash2 className="w-3 h-3" />
               {t('addStock.draft.discardButton')}
@@ -1387,7 +1449,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <button
               type="button"
               onClick={handleAddAnotherSupplier}
-              className="inline-flex items-center gap-1.5 text-[12.5px] font-semibold text-[#B8952F] hover:underline"
+              className="inline-flex items-center gap-1.5 text-[13px] font-semibold text-[#B8952F] hover:underline"
             >
               <Truck className="w-3.5 h-3.5" strokeWidth={2.25} />
               {t('addStock.event.addAnotherSupplier')}
@@ -1409,8 +1471,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   <ScanLine className="w-4.5 h-4.5" strokeWidth={2} />
                 </div>
                 <div className="min-w-0">
-                  <p className="text-[12.5px] font-bold text-[#111827]">{t('addStock.smartEntry.title')}</p>
-                  <p className="text-[11px] text-gray-500">{t('addStock.smartEntry.subtitle')}</p>
+                  <p className="text-[13px] font-bold text-[#111827]">{t('addStock.smartEntry.title')}</p>
+                  <p className="text-[13px] text-gray-500">{t('addStock.smartEntry.subtitle')}</p>
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap">
@@ -1418,7 +1480,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   <button
                     type="button"
                     onClick={handleRejectScan}
-                    className="text-[11.5px] font-semibold text-gray-500 hover:text-rose-600 transition-colors duration-150"
+                    className="text-[13px] font-semibold text-gray-500 hover:text-rose-600 transition-colors duration-150"
                   >
                     {t('addStock.smartEntry.rejectScan')}
                   </button>
@@ -1461,7 +1523,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   type="button"
                   disabled={scanState === 'processing'}
                   onClick={() => cameraFileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
                   {scanState === 'processing' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1474,7 +1536,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   type="button"
                   disabled={scanState === 'processing'}
                   onClick={() => uploadFileInputRef.current?.click()}
-                  className="inline-flex items-center gap-1.5 text-[12.5px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
+                  className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
                   {scanState === 'processing' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
@@ -1484,7 +1546,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   {t('addStock.smartEntry.uploadButton')}
                 </button>
                 {scanState === 'processing' && (
-                  <span className="text-[11px] text-gray-500">{t('addStock.smartEntry.processing')}</span>
+                  <span className="text-[13px] text-gray-500">{t('addStock.smartEntry.processing')}</span>
                 )}
               </div>
             </div>
@@ -1496,7 +1558,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
               <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-2.5 flex items-start justify-between gap-2.5">
                 <div className="flex items-start gap-2.5">
                   <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
-                  <p className="text-[11.5px] leading-relaxed text-amber-800">
+                  <p className="text-[13px] leading-relaxed text-amber-800">
                     {t(`addStock.smartEntry.errors.${scanErrorReason}`)}
                   </p>
                 </div>
@@ -1514,7 +1576,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl p-4 space-y-3">
               <div className="flex items-center gap-2">
                 <Truck className="w-4 h-4 text-[#0B1F3A]/60 shrink-0" strokeWidth={2.25} />
-                <span className="text-[12.5px] font-bold text-[#111827]">{t('addStock.supplier.sectionTitle')}</span>
+                <span className="text-[13px] font-bold text-[#111827]">{t('addStock.supplier.sectionTitle')}</span>
               </div>
               <div className="grid grid-cols-1 sm:grid-cols-3 gap-2.5">
                 <div className="sm:col-span-2 relative">
@@ -1531,7 +1593,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       <button
                         type="button"
                         onClick={handleChangeSupplier}
-                        className="text-[11px] font-semibold text-[#B8952F] hover:underline shrink-0"
+                        className="text-[13px] font-semibold text-[#B8952F] hover:underline shrink-0"
                       >
                         {t('addStock.supplier.changeSupplier')}
                       </button>
@@ -1568,7 +1630,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 className="w-full text-left px-3 py-2 hover:bg-[#FAFBFC] transition-colors duration-150 flex items-center justify-between text-xs text-[#111827]"
                               >
                                 <span className="font-semibold">{s.name}</span>
-                                <span className="text-[10px] text-gray-400 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
+                                <span className="text-[11px] text-gray-500 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
                                   {t('addStock.supplier.existingTag')}
                                 </span>
                               </button>
@@ -1610,7 +1672,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 </div>
               </div>
               {supplierId && (
-                <p className="text-[10.5px] text-[#B8952F]">
+                <p className="text-[12px] text-[#B8952F]">
                   {t('addStock.supplier.selectedHint')}
                 </p>
               )}
@@ -1632,7 +1694,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   Owner declaration that this purchase was on supplier
                   credit. Unchecked (the default) is Case 1 (paid
                   immediately) — completely unmodified +Stock behavior. */}
-              <label className="flex items-center gap-2 text-[12px] text-[#111827] cursor-pointer">
+              <label className="flex items-center gap-2 text-[13px] text-[#111827] cursor-pointer">
                 <input
                   type="checkbox"
                   checked={supplierCredit}
@@ -1641,7 +1703,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 />
                 {t('addStock.supplier.creditCheckboxLabel')}
               </label>
-              <p className="text-[10.5px] text-gray-400">
+              <p className="text-[12px] text-gray-500">
                 {t('addStock.supplier.unspecifiedHint')}
               </p>
             </div>
@@ -1658,7 +1720,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             {!readyForFinalReview && rows.length > 1 && (
               <div className="bg-[#FFF8E6] border border-[#D4AF37]/40 rounded-xl px-4 py-3 flex items-center gap-2.5">
                 <AlertTriangle className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />
-                <p className="text-[11.5px] leading-relaxed text-[#7A5C12] font-medium">
+                <p className="text-[13px] leading-relaxed text-[#7A5C12] font-medium">
                   {t('addStock.sequencing.resolveBeforeReview', {
                     n: currentUnresolvedRowNumber ?? 0,
                     total: rows.length,
@@ -1723,7 +1785,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       <div className="hidden md:grid grid-cols-12 gap-2 items-center text-xs">
                         {/* Lote # */}
                         <div className="col-span-1 text-center">
-                          <span className="text-[10px] type-number text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[11px] type-number text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
                             #{index + 1}
                           </span>
                         </div>
@@ -1759,7 +1821,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                     className="w-full text-left px-3 py-2 hover:bg-[#FAFBFC] transition-colors duration-150 flex items-center justify-between text-xs text-[#111827]"
                                   >
                                     <span className="font-semibold">{p.name}</span>
-                                    <span className="text-[10px] text-gray-400 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
+                                    <span className="text-[11px] text-gray-500 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
                                       {t('addStock.existingTag')}
                                     </span>
                                   </button>
@@ -1839,7 +1901,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 onClick={() => updateRow(row.id, { isUnitPopoverOpen: false })}
                               />
                               <div className="absolute right-0 top-full mt-1.5 bg-white border border-[#E5E7EB] rounded-xl shadow-[0_16px_40px_-12px_rgba(11,31,58,0.22)] p-2.5 z-30 w-36 space-y-1.5">
-                                <div className="text-[10px] text-gray-400 font-semibold uppercase tracking-wide mb-1">
+                                <div className="text-[10px] text-gray-500 font-semibold uppercase tracking-wide mb-1">
                                   {t('addStock.unitSuggestionsLabel')}
                                 </div>
                                 <div className="flex flex-wrap gap-1">
@@ -1853,7 +1915,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                           isUnitPopoverOpen: false,
                                         })
                                       }
-                                      className={`text-[10px] px-2 py-1 rounded-md border font-mono transition-colors duration-150 ${
+                                      className={`text-[11px] px-2 py-1 rounded-md border font-mono transition-colors duration-150 ${
                                         row.unit.toLowerCase() === u.toLowerCase()
                                           ? 'bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#B8952F] font-bold'
                                           : 'bg-white border-[#E5E7EB] text-gray-500 hover:text-[#111827] hover:border-gray-300'
@@ -1892,6 +1954,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
+                          {/* [Fix — resolveUnitAwarePrice] Deliberately a
+                              SEPARATE, differently-worded indicator from
+                              renderFieldStatusBadge's ✓/⚠/— vocabulary
+                              above — this value was never AI-detected
+                              (BDR-0008: the scan never proposes a selling
+                              price at all), so labeling it with the same
+                              "detected" language would misrepresent its
+                              actual source and violate the Trust Test
+                              (§1b: never let two differently-sourced
+                              values look the same). Only shown for a
+                              scanned row — a manually-typed row has
+                              nothing to report here either. */}
+                          {row.smartEntrySource === 'ai' && (
+                            <p className={`mt-1 text-[11px] leading-snug ${row.sellingPrice ? 'text-[#8A6D1F]' : 'text-amber-600 font-semibold'}`}>
+                              {row.sellingPrice ? t('addStock.smartEntry.sellingPriceFromMemory') : t('addStock.smartEntry.sellingPriceNotFound')}
+                            </p>
+                          )}
                         </div>
 
                         {/* Lucro Estimado & Delete Button */}
@@ -1949,7 +2028,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             {renderFieldStatusBadge(t('addStock.smartEntry.fields.unit'), row.smartEntryFieldStatus.unit)}
                             {renderFieldStatusBadge(t('addStock.smartEntry.fields.costPrice'), row.smartEntryFieldStatus.costPrice)}
                             {row.smartEntryProductMatchStatus === 'no_match' && (
-                              <span className="inline-flex items-center gap-1 text-[10.5px] font-semibold px-1.5 py-0.5 rounded-md text-amber-700 bg-amber-50">
+                              <span className="inline-flex items-center gap-1 text-[11px] font-semibold px-1.5 py-0.5 rounded-md text-amber-700 bg-amber-50">
                                 <AlertTriangle className="w-3 h-3" />
                                 {t('addStock.smartEntry.noConfidentMatch')}
                               </span>
@@ -2002,7 +2081,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                       : UNKNOWN_PREVIOUS_REMAINING,
                                 })
                               }
-                              className={`text-[11px] font-semibold px-2.5 py-1.5 rounded-[10px] border transition-colors duration-150 shrink-0 ${
+                              className={`text-[12px] font-semibold px-2.5 py-1.5 rounded-[10px] border transition-colors duration-150 shrink-0 ${
                                 row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING
                                   ? 'bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#B8952F]'
                                   : 'bg-white border-[#E5E7EB] text-gray-500 hover:text-[#111827] hover:border-gray-300'
@@ -2011,7 +2090,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               {t('addStock.restockObservation.dontKnow')}
                             </button>
                           </div>
-                          <p className="mt-1 text-[10.5px] leading-relaxed text-gray-400">
+                          <p className="mt-1 text-[12px] leading-relaxed text-gray-500">
                             {t('addStock.restockObservation.helperText')}
                           </p>
                         </div>
@@ -2020,7 +2099,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       {/* Mobile Compact Card/Row Layout (below md breakpoint) */}
                       <div className="md:hidden space-y-2 text-xs">
                         <div className="flex items-center justify-between border-b border-[#E5E7EB] pb-2">
-                          <span className="text-[10px] type-number text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
+                          <span className="text-[11px] type-number text-[#0B1F3A] bg-[#D4AF37]/10 border border-[#D4AF37]/25 px-1.5 py-0.5 rounded-md">
                             {t('addStock.table.batch')} #{index + 1}
                           </span>
                           <div className="flex items-center gap-2">
@@ -2177,10 +2256,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           <div className="flex items-start gap-2">
                             <Sparkles className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[2px]" strokeWidth={2.25} />
                             <div>
-                              <p className="text-[11.5px] font-bold text-[#0B1F3A]">
+                              <p className="text-[13px] font-bold text-[#0B1F3A]">
                                 {t('addStock.supplierWording.candidateTitle')}
                               </p>
-                              <p className="text-[11px] text-gray-600 mt-0.5">
+                              <p className="text-[13px] text-gray-600 mt-0.5">
                                 {t('addStock.supplierWording.candidateHint')}
                               </p>
                             </div>
@@ -2194,13 +2273,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   key={candidate.productId}
                                   className="flex items-center justify-between gap-2 bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5"
                                 >
-                                  <span className="text-[12px] font-semibold text-[#111827] truncate">
+                                  <span className="text-[13px] font-semibold text-[#111827] truncate">
                                     {candidateProduct.name}
                                   </span>
                                   <button
                                     type="button"
                                     onClick={() => handleConfirmSupplierWordingCandidate(row.id, candidate.productId)}
-                                    className="shrink-0 text-[11px] font-bold text-white bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 rounded-md px-2.5 py-1 transition-colors duration-150"
+                                    className="shrink-0 text-[12px] font-bold text-white bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 rounded-md px-2.5 py-1 transition-colors duration-150"
                                   >
                                     {t('addStock.supplierWording.confirmButton')}
                                   </button>
@@ -2211,7 +2290,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           <button
                             type="button"
                             onClick={() => handleDeclineSupplierWordingCandidates(row.id)}
-                            className="text-[11px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+                            className="text-[13px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
                           >
                             {t('addStock.supplierWording.noneOfTheseButton')}
                           </button>
@@ -2221,7 +2300,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                       {row.pendingSupplierWording?.origin === 'reused' && (
                         <div className="mt-2 flex items-start gap-2 bg-[#F0FDF4] border border-emerald-200 rounded-xl px-3 py-2">
                           <CheckCircle2 className="w-3.5 h-3.5 text-emerald-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
-                          <p className="text-[11px] text-emerald-800 leading-snug">
+                          <p className="text-[13px] text-emerald-800 leading-snug">
                             {t('addStock.supplierWording.reusedNotice')}
                           </p>
                         </div>
@@ -2231,7 +2310,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         <div className="mt-2 bg-[#FEF2F2] border border-rose-200 rounded-xl px-3 py-2.5 space-y-1.5">
                           <div className="flex items-start gap-2">
                             <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
-                            <p className="text-[11px] text-rose-800 leading-snug">
+                            <p className="text-[13px] text-rose-800 leading-snug">
                               {t('addStock.supplierWording.conflictWarning')}
                             </p>
                           </div>
@@ -2247,7 +2326,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               onChange={e =>
                                 updateRow(row.id, { supplierWordingDistinguishingInfo: e.target.value })
                               }
-                              className="w-full bg-white border border-rose-200 rounded-lg px-2.5 py-1.5 text-[12px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
+                              className="w-full bg-white border border-rose-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
                             />
                           </div>
                         </div>
@@ -2302,7 +2381,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <button
                   type="button"
                   onClick={handleAddRow}
-                  className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
+                  className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-2 group"
                 >
                   <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
                   <span>{t('addStock.addAnotherProduct')}</span>
@@ -2313,14 +2392,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   <div className="bg-[#FAFBFC] border border-[#E5E7EB] rounded-xl px-4 py-3 flex flex-wrap items-center justify-between gap-2 text-xs">
                     <div className="flex items-center gap-2">
                       <Sparkles className="w-4 h-4 text-[#B8952F] shrink-0" strokeWidth={2.25} />
-                      <span className="font-bold text-[#111827] text-[12.5px]">
+                      <span className="font-bold text-[#111827] text-[13px]">
                         {rows.length === 1
                           ? t('addStock.summary.titleOne', { count: rows.length })
                           : t('addStock.summary.titleOther', { count: rows.length })}
                       </span>
                     </div>
 
-                    <div className="flex items-center gap-4 sm:gap-6 text-[11px]">
+                    <div className="flex items-center gap-4 sm:gap-6 text-[14px]">
                       <div>
                         <span className="text-gray-500 uppercase text-[10px] mr-1 font-semibold tracking-wide">{t('addStock.summary.totalInvestment')}</span>
                         <span className="font-bold text-[#111827] font-mono tabular-nums">
@@ -2352,7 +2431,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 {/* Batch Auto-closing Notice */}
                 <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3 flex items-start gap-2.5">
                   <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-                  <p className="text-[11.5px] leading-relaxed text-gray-600">
+                  <p className="text-[13px] leading-relaxed text-gray-600">
                     {t('addStock.autoCloseNotice')}
                   </p>
                 </div>

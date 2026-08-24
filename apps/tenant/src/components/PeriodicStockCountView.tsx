@@ -138,7 +138,7 @@ const UnitRelationshipChainEditor: React.FC<{
           // always corresponds to a real array index.
           if (steps.length === 0) onChange([{ unit: '', factor: '' }]);
         }}
-        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
+        className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
       >
         <ChevronDown className="w-3 h-3" strokeWidth={2.5} />
         <span>Configurar relação de unidades (opcional)</span>
@@ -170,7 +170,7 @@ const UnitRelationshipChainEditor: React.FC<{
       <button
         type="button"
         onClick={() => setExpanded(false)}
-        className="flex items-center gap-1.5 text-[11.5px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
+        className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150"
       >
         <ChevronUp className="w-3 h-3" strokeWidth={2.5} />
         <span>Relação de unidades (opcional)</span>
@@ -180,12 +180,12 @@ const UnitRelationshipChainEditor: React.FC<{
         {steps.map((step, index) => {
           const previousUnitLabel = index === 0 ? purchaseUnit || 'un' : steps[index - 1]?.unit || 'un';
           return (
-            <div key={index} className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+            <div key={index} className="flex flex-wrap items-end gap-2.5 text-[13px]">
               <span className="text-gray-500 pb-2">
                 1 <strong className="text-[#111827]">{previousUnitLabel}</strong> =
               </span>
               <div>
-                <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Quantidade</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1">Quantidade</label>
                 <input
                   type="number"
                   min="0"
@@ -197,7 +197,7 @@ const UnitRelationshipChainEditor: React.FC<{
                 />
               </div>
               <div>
-                <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade</label>
+                <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade</label>
                 <input
                   type="text"
                   value={step.unit}
@@ -223,13 +223,13 @@ const UnitRelationshipChainEditor: React.FC<{
         type="button"
         onClick={addLevel}
         disabled={!canAddLevel}
-        className="flex items-center gap-1.5 text-[11.5px] font-bold text-[#0B1F3A] hover:text-[#D4AF37] disabled:text-gray-300 disabled:cursor-not-allowed transition-colors duration-150"
+        className="flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] hover:text-[#D4AF37] disabled:text-gray-300 disabled:cursor-not-allowed transition-colors duration-150"
       >
         <Plus className="w-3.5 h-3.5" />
         <span>Adicionar nível</span>
       </button>
 
-      <p className="text-[11px] text-gray-400 leading-relaxed">
+      <p className="text-[13px] text-gray-500 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
       </p>
     </div>
@@ -263,14 +263,14 @@ const ModeAValuationControl: React.FC<{
 }> = ({ referenceUnitOptions, active, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onToggle, onChange }) => {
   return (
     <div className="col-span-2 sm:col-span-7 -mt-1 mb-1">
-      <label className="flex items-center gap-1.5 text-[11px] font-semibold text-gray-500 select-none">
+      <label className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-600 select-none">
         <input type="checkbox" checked={active} onChange={(e) => onToggle(e.target.checked)} className="rounded" />
         Usar um único preço de venda para todas as porções deste produto (convertido automaticamente)
       </label>
       {active && (
         <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
           <div>
-            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de referência</label>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de referência</label>
             <select
               value={referenceUnit}
               onChange={(e) => onChange({ referenceUnit: e.target.value })}
@@ -284,7 +284,7 @@ const ModeAValuationControl: React.FC<{
             </select>
           </div>
           <div>
-            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
             <input
               type="number"
               min="0"
@@ -295,11 +295,11 @@ const ModeAValuationControl: React.FC<{
               className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
             />
           </div>
-          <p className="text-[11px] text-gray-400 leading-relaxed basis-full">
+          <p className="text-[13px] text-gray-500 leading-relaxed basis-full">
             O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas.
           </p>
           {!allPortionsConvertible && (
-            <p className="text-[11px] text-amber-600 font-medium leading-relaxed basis-full">
+            <p className="text-[13px] text-amber-600 font-medium leading-relaxed basis-full">
               Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.
             </p>
           )}
@@ -365,14 +365,14 @@ const NewProductInfoPanel: React.FC<{
     <div className="col-span-2 sm:col-span-7 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
       <div className="flex items-center gap-1.5">
         <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#B8952F]">Produto novo</span>
-        <span className="text-[12.5px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
+        <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
       </div>
 
       <div>
-        <p className="text-[10.5px] font-bold text-gray-500 mb-1">Custo de Compra Original</p>
-        <div className="flex flex-wrap items-end gap-2.5 text-[12.5px]">
+        <p className="text-[11px] font-bold text-gray-500 mb-1">Custo de Compra Original</p>
+        <div className="flex flex-wrap items-end gap-2.5 text-[13px]">
           <div>
-            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Unidade de compra</label>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de compra</label>
             <input
               type="text"
               value={purchaseUnit}
@@ -382,7 +382,7 @@ const NewProductInfoPanel: React.FC<{
             />
           </div>
           <div>
-            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Custo ({currencySymbol}) por unidade de compra</label>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Custo ({currencySymbol}) por unidade de compra</label>
             <input
               type="number"
               min="0"
@@ -394,7 +394,7 @@ const NewProductInfoPanel: React.FC<{
             />
           </div>
         </div>
-        <p className="mt-1 text-[11px] text-gray-400 leading-relaxed">
+        <p className="mt-1 text-[13px] text-gray-500 leading-relaxed">
           Introduza o custo original uma única vez, na unidade de compra do produto — nunca por porção.
         </p>
       </div>
@@ -418,6 +418,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     batches,
     productsError,
     periodicStockDraft,
+    cashPositionDeclarations,
     periodicStockDraftLoaded,
     savePeriodicStockDraft,
     clearPeriodicStockDraft,
@@ -1578,20 +1579,54 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         })),
         expectedValueAtCount: expectedCurrentStockValue,
         submissionId: submissionIdRef.current || undefined,
+        // [Fix — Business Worth Evolution was never actually switched on]
+        // Specification §14, Decision 1: "producesBusinessWorthSnapshot
+        // is set true on every Contagem confirmed under this model going
+        // forward" — an every-confirmation default, not a
+        // correction-only special case. Until this fix, the ONLY place
+        // in this entire codebase that ever set this flag true was the
+        // correction/recovery branch just below — meaning an ordinary
+        // Confirmar Contagem never actually produced a
+        // BusinessWorthSnapshot at all, and the Dashboard's "Valor do
+        // Negócio" card was permanently stuck showing the Estimated
+        // (Capital-Inicial-anchored) fallback, never Current, for every
+        // business, regardless of how many Contagens were confirmed.
+        // Periodic Contagem has no competing OLDER recovery mechanism of
+        // its own (unlike 'initial' — see InitialStockCountView, which
+        // this fix deliberately does NOT touch: that screen's existing
+        // Void & Redo mechanism, and its own already-confirmed
+        // historical records, are completely unaffected either way —
+        // FR-19 explicitly forbids ever retroactively marking a
+        // historical StockCount, so nothing already confirmed changes).
+        // So turning this on for periodic confirmations has no
+        // Void-&-Redo-exclusivity implication to resolve here.
+        producesBusinessWorthSnapshot: true,
+        // [Fix — same gap, the cash half of it] Specification §10
+        // Decision 3, FR-55: cashPosition is "required product behavior
+        // whenever producesBusinessWorthSnapshot is true." Sourced from
+        // the Owner's own most recent Cash Position declaration
+        // (Dívidas screen, cashPositionDeclarations[0] — already
+        // newest-first, AppContext's own onSnapshot sort) — never a
+        // fabricated 0, and genuinely omitted (not merely defaulted)
+        // when the Owner has never declared one yet, exactly matching
+        // this field's own "genuinely omitted... when the caller
+        // supplies nothing" contract (RecordStockCountParams, above).
+        ...(cashPositionDeclarations.length > 0
+          ? { ownerConfirmedCashPosition: cashPositionDeclarations[0].amount }
+          : {}),
         // [Business Worth Evolution — Implementation Authorization,
         // Increment 8; Specification §25, §26, FR-38, FR-39, FR-58]
         // When this confirmation is a correction/recovery
         // (pendingBusinessWorthCorrection, set only via DashboardView's
-        // own eligibility-gated entry point), producesBusinessWorthSnapshot
-        // is set true so recordStockCount's own correction/recovery
-        // write path actually runs — the target snapshot id and kind
-        // are never free-typed here, only ever the value
-        // startBusinessWorthCorrection already recorded.
-        // firestore.rules independently and authoritatively re-verifies
-        // eligibility regardless of what is asserted here.
+        // own eligibility-gated entry point), the correction-specific
+        // target snapshot id/kind are added on top of the (now always
+        // already-true) producesBusinessWorthSnapshot above — never
+        // free-typed here, only ever the value startBusinessWorthCorrection
+        // already recorded. firestore.rules independently and
+        // authoritatively re-verifies eligibility regardless of what is
+        // asserted here.
         ...(pendingBusinessWorthCorrection
           ? {
-              producesBusinessWorthSnapshot: true,
               correctionOfSnapshotId: pendingBusinessWorthCorrection.snapshotId,
               correctionKind: pendingBusinessWorthCorrection.kind,
             }
@@ -1771,7 +1806,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 }
                 onComplete();
               }}
-              className="text-[12px] font-semibold text-gray-400 hover:text-[#0B1F3A] transition-colors duration-150 pt-1"
+              className="text-[13px] font-semibold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150 pt-1"
             >
               Continuar →
             </button>
@@ -1789,7 +1824,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       <div className="max-w-2xl mx-auto py-10 space-y-5">
         {pendingBusinessWorthCorrection && (
           <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-3">
-            <p className="text-[12.5px] font-bold text-amber-800">
+            <p className="text-[13px] font-bold text-amber-800">
               {pendingBusinessWorthCorrection.kind === 'superadmin-authorized-recovery'
                 ? '⚠ A confirmar uma RECUPERAÇÃO de Valor do Negócio (autorizada pelo SuperAdmin) — não uma Contagem normal.'
                 : '⚠ A confirmar uma CORREÇÃO da última Contagem — não uma Contagem normal.'}
@@ -1803,7 +1838,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
             <div>
               <h2 className="type-title">Confirmar Contagem</h2>
-              <p className="text-[12px] text-gray-500 mt-0.5">Reveja antes de guardar — esta contagem é uma fotografia do que existe fisicamente agora.</p>
+              <p className="text-[13px] text-gray-500 mt-0.5">Reveja antes de guardar — esta contagem é uma fotografia do que existe fisicamente agora.</p>
             </div>
           </div>
 
@@ -1821,7 +1856,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           {pendingTally.notCountedProductNames.length > 0 && (
             <div className="bg-amber-50/60 border border-amber-100 rounded-xl px-4 py-3 flex items-start gap-2.5">
               <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
-              <p className="text-[12px] leading-relaxed text-amber-800">
+              <p className="text-[13px] leading-relaxed text-amber-800">
                 Esta será uma contagem <strong>parcial</strong>. Os produtos não contados não entram no total nem
                 recebem quantidade zero — não presuma que ficaram sem stock.
               </p>
@@ -1846,7 +1881,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 is always freshly rebuilt from scratch by
                 tallyStockCountRows, never reordered/spliced in place). */}
             {pendingTally.countedItems.map((item, index) => (
-              <div key={`${item.productName}-${item.unit}-${index}`} className="flex items-center justify-between gap-2 px-4 py-2 text-[12.5px]">
+              <div key={`${item.productName}-${item.unit}-${index}`} className="flex items-center justify-between gap-2 px-4 py-2 text-[13px]">
                 <span className="text-[#111827] font-medium truncate">{item.productName}</span>
                 <span className="text-gray-500 tabular-nums shrink-0">
                   {item.quantity} {item.unit}
@@ -1879,7 +1914,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
 
           {error && (
-            <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12.5px] font-medium">
+            <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[13px] font-medium">
               {error}
             </div>
           )}
@@ -1940,7 +1975,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   if (!periodicStockDraftLoaded) {
     return (
       <div className="max-w-5xl mx-auto pb-12">
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-8 text-center text-sm text-gray-400">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-8 text-center text-sm text-gray-500">
           A verificar contagens por terminar...
         </div>
       </div>
@@ -1957,7 +1992,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
             <div>
               <h2 className="type-title">Contagem por Terminar Encontrada</h2>
-              <p className="text-[12px] text-gray-500 mt-0.5">
+              <p className="text-[13px] text-gray-500 mt-0.5">
                 Existe uma contagem {TYPE_LABELS[periodicStockDraft.type]} por terminar de{' '}
                 {formatDate(periodicStockDraft.date)}.
               </p>
@@ -2005,14 +2040,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 ? 'Está a recuperar um registo de Valor do Negócio (autorizado pelo SuperAdmin)'
                 : 'Está a corrigir a última Contagem'}
             </p>
-            <p className="text-[12px] text-amber-700 mt-0.5">
+            <p className="text-[13px] text-amber-700 mt-0.5">
               Esta contagem substitui o registo de Valor do Negócio atual — o registo anterior fica preservado no
               histórico, nunca é editado ou apagado.
             </p>
             <button
               type="button"
               onClick={() => clearBusinessWorthCorrection()}
-              className="text-[11.5px] text-amber-800 underline mt-2"
+              className="text-[13px] text-amber-800 underline mt-2"
             >
               Cancelar e voltar a uma Contagem normal
             </button>
@@ -2027,7 +2062,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
           <div className="min-w-0 flex-1">
             <h2 className="type-title">Contagem de Stock Periódica</h2>
-            <p className="text-[12px] text-gray-500 mt-0.5">
+            <p className="text-[13px] text-gray-500 mt-0.5">
               Registe uma nova contagem física para acompanhar a evolução do seu capital.
             </p>
           </div>
@@ -2037,7 +2072,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               §1a: "the user's work is durable" and "the final business
               transaction has been committed" must never share a signal). */}
           {draftSaveState !== 'editing' && (
-            <span className="text-[11px] text-gray-400 shrink-0 font-medium">
+            <span className="text-[13px] text-gray-500 shrink-0 font-medium">
               {draftSaveState === 'saving' && 'A guardar rascunho…'}
               {draftSaveState === 'saved' && 'Rascunho guardado'}
               {draftSaveState === 'save-failed' && (
@@ -2059,7 +2094,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
         <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
           <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-          <p className="text-[12px] leading-relaxed text-gray-600">
+          <p className="text-[13px] leading-relaxed text-gray-600">
             Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
             <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> — o Capital Inicial mais o
             valor (a custo) do stock em lote atualmente registado — para mostrar se o valor do seu inventário
@@ -2071,14 +2106,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3.5 flex items-start justify-between gap-3">
             <div className="flex items-start gap-2.5">
               <AlertTriangle className="w-3.5 h-3.5 text-rose-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
-              <p className="text-[12px] leading-relaxed text-rose-700">
+              <p className="text-[13px] leading-relaxed text-rose-700">
                 Não foi possível carregar os produtos. Isto não significa que o seu catálogo esteja vazio.
               </p>
             </div>
             <button
               type="button"
               onClick={() => window.location.reload()}
-              className="shrink-0 inline-flex items-center gap-1.5 text-[11.5px] font-bold text-rose-700 hover:text-rose-900"
+              className="shrink-0 inline-flex items-center gap-1.5 text-[13px] font-bold text-rose-700 hover:text-rose-900"
             >
               <RotateCw className="w-3.5 h-3.5" strokeWidth={2.25} />
               Tentar novamente
@@ -2087,7 +2122,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         )}
 
         {error && (
-          <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12.5px] font-medium">
+          <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[13px] font-medium">
             {error}
           </div>
         )}
@@ -2158,25 +2193,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           {/* Catalog-populated product grid — Amendment Part 7/11 */}
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
-              <p className="text-[12.5px] font-bold text-[#111827]">
+              <p className="text-[13px] font-bold text-[#111827]">
                 Produtos do Catálogo
-                <span className="text-gray-400 font-normal ml-1.5">({visibleCatalogEntries.length})</span>
+                <span className="text-gray-500 font-normal ml-1.5">({visibleCatalogEntries.length})</span>
               </p>
             </div>
 
             {products.length === 0 && !productsError && (
-              <p className="text-[12px] text-gray-400 italic mt-3">
+              <p className="text-[13px] text-gray-500 italic mt-3">
                 Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
               </p>
             )}
 
             {products.length > 0 && productSearch.trim() && visibleCatalogEntries.length === 0 && (
-              <p className="text-[12px] text-gray-400 italic mt-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
+              <p className="text-[13px] text-gray-500 italic mt-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
             )}
 
             {visibleCatalogEntries.length > 0 && (
               <>
-                <div className="space-y-1 mt-3">
+                <div className="space-y-2.5 mt-3">
                   {visibleCatalogEntries.map(([productId, row]) => {
                     const isBlank = row.quantity.trim() === '';
                     const q = isBlank ? 0 : Number(row.quantity) || 0;
@@ -2232,9 +2267,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     return (
                       <div
                         key={productId}
-                        className={`group ${rowGridClass} rounded-xl px-2.5 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}
+                        className={`group ${rowGridClass} bg-white rounded-2xl border border-[#F0EEE4] shadow-[0_1px_2px_rgba(11,31,58,0.03),0_6px_16px_-10px_rgba(212,175,55,0.16)] hover:shadow-[0_2px_4px_rgba(11,31,58,0.04),0_10px_22px_-10px_rgba(212,175,55,0.24)] px-3.5 py-3.5 transition-shadow duration-150`}
                       >
                         <div className="col-span-2 sm:col-span-1 flex items-center gap-1">
+                          <span
+                            className={`w-2 h-2 rounded-full shrink-0 ${isBlank ? 'bg-gray-300' : 'bg-emerald-400'}`}
+                            aria-hidden="true"
+                          />
                           <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
                           {/* [Business Worth Evolution — Decision 37,
                               B.3 completion] Reuses
@@ -2295,7 +2334,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             informational; see portionLabels above. */}
                         {portionLabel.isMultiPortion && (
                           <div className="col-span-2 sm:col-span-7 -mt-1 mb-0.5">
-                            <p className="text-[10.5px] text-[#B8952F] font-medium leading-snug">
+                            <p className="text-[12px] text-[#B8952F] font-medium leading-snug">
                               Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
                             </p>
                           </div>
@@ -2423,7 +2462,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 unit, so the price's real meaning is
                                 unambiguous regardless of which unit is
                                 selected. */}
-                            <p className="text-[13px] type-body mt-0.5 truncate">
+                            <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                               {currencySymbol} por {row.unit.trim() || 'un'}
                             </p>
                           </div>
@@ -2442,7 +2481,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           {/* See the Compra/Un caption's own comment,
                               immediately above — identical reasoning,
                               applied to the selling-price field. */}
-                          <p className="text-[13px] type-body mt-0.5 truncate">
+                          <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                             {currencySymbol} por {row.unit.trim() || 'un'}
                           </p>
                         </div>
@@ -2463,14 +2502,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 de-emphasized rather than hidden. */}
                             <label className={fieldLabelClass}>Valor</label>
                             <div
-                              className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums truncate ${
-                                isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#0B1F3A]/[0.04] text-[#0B1F3A]'
+                              className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
+                                isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
                               }`}
                             >
                               {isBlank ? 'Não contado' : formatCurrency(rowSellingValue, currencySymbol)}
                             </div>
                             {!isBlank && (
-                              <p className="text-[13px] type-body mt-0.5 truncate">
+                              <p className="text-[11px] text-gray-500 mt-0.5">
                                 Custo: {formatCurrency(rowValue, currencySymbol)}
                               </p>
                             )}
@@ -2493,7 +2532,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
             {removedCatalogEntries.length > 0 && (
               <div className="mt-3 flex flex-wrap items-center gap-1.5">
-                <span className="text-[11px] text-gray-500 mr-1">Removidos desta contagem:</span>
+                <span className="text-[13px] text-gray-500 mr-1">Removidos desta contagem:</span>
                 {removedCatalogEntries.map(([productId, row]) => (
                   <button
                     key={productId}
@@ -2517,9 +2556,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               once per card instead of once per portion. */}
           {manualRows.length > 0 && (
             <div>
-              <p className="text-[12.5px] font-bold text-[#111827] mb-2">
+              <p className="text-[13px] font-bold text-[#111827] mb-2">
                 Adicionados Manualmente
-                <span className="text-gray-400 font-normal ml-1.5">({visibleManualRowGroups.length})</span>
+                <span className="text-gray-500 font-normal ml-1.5">({visibleManualRowGroups.length})</span>
               </p>
               {/* [Fix — Owner had to keep scrolling back up to a shared
                   header to know which field was which] The per-field
@@ -2536,7 +2575,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   isCostFieldSuppressed) and present on others; one fixed
                   header could not describe both. */}
               {productSearch.trim() && visibleManualRowGroups.length === 0 && (
-                <p className="text-[12px] text-gray-400 italic py-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
+                <p className="text-[13px] text-gray-500 italic py-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
               )}
               <div className="space-y-3">
                 {visibleManualRowGroups.map((group) => {
@@ -2564,7 +2603,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.portionIndex === 1;
                   const isNewProduct = isGenuinelyNewProductName(group.displayName);
                   return (
-                    <div key={`manual-group-${firstIdx}`} className="rounded-xl border border-[#E5E7EB] px-2.5 py-2.5 space-y-1.5">
+                    <div key={`manual-group-${firstIdx}`} className="rounded-2xl bg-white border border-[#F0EEE4] shadow-[0_1px_2px_rgba(11,31,58,0.03),0_6px_16px_-10px_rgba(212,175,55,0.16)] px-3.5 py-3.5 space-y-1.5">
                       <div>
                         <label className={fieldLabelClass}>Nome</label>
                         <input
@@ -2678,7 +2717,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           const row = manualRows[idx];
                           const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                           return (
-                            <div key={idx} className={`group ${rowGridClass} rounded-xl px-2.5 py-2 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
+                            <div key={idx} className={`group ${rowGridClass} rounded-xl px-2 py-2 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
                               <div className="col-span-2 sm:col-span-1 flex items-center">
                                 {/* [Increment B, Checkpoint B6 —
                                     Consolidated Specification §17] Same
@@ -2688,7 +2727,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                     larger group that also includes a
                                     catalog row. */}
                                 {portionLabel.isMultiPortion && (
-                                  <p className="text-[10.5px] text-[#B8952F] font-medium leading-snug">
+                                  <p className="text-[12px] text-[#B8952F] font-medium leading-snug">
                                     Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
                                   </p>
                                 )}
@@ -2744,7 +2783,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       reasoning, applied here to a
                                       manually-added product's own portion
                                       rows. */}
-                                  <p className="text-[13px] type-body mt-0.5 truncate">
+                                  <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                                     {currencySymbol} por {row.unit.trim() || 'un'}
                                   </p>
                                 </div>
@@ -2760,7 +2799,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
                                   className={`${fieldClass} font-mono tabular-nums`}
                                 />
-                                <p className="text-[13px] type-body mt-0.5 truncate">
+                                <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                                   {currencySymbol} por {row.unit.trim() || 'un'}
                                 </p>
                               </div>
@@ -2776,7 +2815,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       selling-primary/cost-secondary
                                       pattern. */}
                                   <label className={fieldLabelClass}>Valor</label>
-                                  <div className="w-full bg-[#0B1F3A]/[0.04] rounded-[10px] px-2.5 py-2 text-[#0B1F3A] text-[13px] type-number tabular-nums truncate">
+                                  <div
+                                    className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
+                                      row.quantity.trim() === '' ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
+                                    }`}
+                                  >
                                     {row.quantity.trim() === ''
                                       ? 'Não contado'
                                       : formatCurrency(
@@ -2785,7 +2828,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                         )}
                                   </div>
                                   {row.quantity.trim() !== '' && (
-                                    <p className="text-[13px] type-body mt-0.5 truncate">
+                                    <p className="text-[11px] text-gray-500 mt-0.5">
                                       Custo:{' '}
                                       {formatCurrency(
                                         rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),
@@ -2819,7 +2862,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       <button
                         type="button"
                         onClick={() => handleAddPortionToManualGroup(group.displayName)}
-                        className="w-full py-2 px-3 rounded-lg border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[11.5px] transition-all duration-150 flex items-center justify-center gap-1.5 group"
+                        className="w-full py-2 px-3 rounded-lg border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-1.5 group"
                       >
                         <Plus className="w-3 h-3 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
                         <span>Adicionar Porção</span>
@@ -2834,7 +2877,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           <button
             type="button"
             onClick={handleAddManualRow}
-            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[12.5px] transition-all duration-150 flex items-center justify-center gap-2 group"
+            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-2 group"
           >
             <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
             <span>Adicionar produto que não está no catálogo</span>
@@ -2932,10 +2975,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]"
                 >
                   <div>
-                    <p className="text-xs font-bold text-[#111827]">
+                    <p className="text-[13px] font-bold text-[#111827]">
                       {count.label || TYPE_LABELS[count.type]}
                     </p>
-                    <p className="text-[10px] text-gray-500 mt-0.5">{formatDate(count.date)} · {count.items.length} produtos</p>
+                    <p className="text-[13px] text-gray-500 mt-0.5">{formatDate(count.date)} · {count.items.length} produtos</p>
                   </div>
                   <div className="text-right">
                     <span className="type-number text-sm text-[#111827] tabular-nums block">
@@ -2945,7 +2988,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         present on counts recorded after this amendment;
                         never recalculated from the live formula. */}
                     {typeof count.expectedValueAtCount === 'number' && (
-                      <span className="text-[10px] text-gray-500 tabular-nums block mt-0.5">
+                      <span className="text-[12px] text-gray-500 tabular-nums block mt-0.5">
                         vs. {formatCurrency(count.expectedValueAtCount, currencySymbol)} esperado
                       </span>
                     )}
