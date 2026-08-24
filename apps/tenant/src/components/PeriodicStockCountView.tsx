@@ -1333,6 +1333,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     [manualRows]
   );
 
+  // [Fix — product search only filtered the catalog grid, doing nothing
+  // for a manually-added product] productSearch/visibleCatalogEntries
+  // (above) only ever covered "Produtos do Catálogo" — for an Owner
+  // whose product was added via "Adicionar produto que não está no
+  // catálogo" (or whose business has few/no catalog products at all,
+  // everything manual), typing into that search box visibly did
+  // nothing, since nothing here read productSearch against manualRows.
+  // This applies the SAME search text to manualRowGroups' own
+  // displayName — one search box, one query, both places a product
+  // could actually be, so finding a specific product among a long list
+  // (mid-Contagem, after spotting an error) no longer depends on which
+  // of the two sections it happens to live in.
+  const visibleManualRowGroups = useMemo(() => {
+    const search = productSearch.trim().toLowerCase();
+    if (!search) return manualRowGroups;
+    return manualRowGroups.filter((group) => group.displayName.toLowerCase().includes(search));
+  }, [manualRowGroups, productSearch]);
+
   const diff = liveTally.totalPurchaseValue - comparisonBaseline;
   const diffPct = comparisonBaseline > 0 ? (diff / comparisonBaseline) * 100 : 0;
 
@@ -2100,6 +2118,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             )}
           </div>
 
+          {/* [Fix — product search only filtered the catalog grid] One
+              shared search box, above BOTH product sections, filtering
+              catalog rows (visibleCatalogEntries) AND manually-added
+              products (visibleManualRowGroups) by the same query — see
+              visibleManualRowGroups' own comment above for why this
+              moved here rather than staying inside "Produtos do
+              Catálogo"'s own header. Lets an Owner jump straight to one
+              product out of a long list (after spotting an error
+              mid-Contagem, for example) regardless of which of the two
+              sections it happens to live in. */}
+          <div className="relative">
+            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
+            <input
+              type="text"
+              placeholder="Procurar um produto para editar..."
+              value={productSearch}
+              onChange={(e) => setProductSearch(e.target.value)}
+              className={`${fieldClass} pl-8`}
+            />
+          </div>
+
           {/* Catalog-populated product grid — Amendment Part 7/11 */}
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
@@ -2107,22 +2146,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 Produtos do Catálogo
                 <span className="text-gray-400 font-normal ml-1.5">({visibleCatalogEntries.length})</span>
               </p>
-              <div className="relative w-full sm:w-64">
-                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
-                <input
-                  type="text"
-                  placeholder="Pesquisar produto..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className={`${fieldClass} pl-8`}
-                />
-              </div>
             </div>
 
             {products.length === 0 && !productsError && (
               <p className="text-[12px] text-gray-400 italic mt-3">
                 Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
               </p>
+            )}
+
+            {products.length > 0 && productSearch.trim() && visibleCatalogEntries.length === 0 && (
+              <p className="text-[12px] text-gray-400 italic mt-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
             )}
 
             {visibleCatalogEntries.length > 0 && (
@@ -2453,7 +2486,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               once per card instead of once per portion. */}
           {manualRows.length > 0 && (
             <div>
-              <p className="text-[12.5px] font-bold text-[#111827] mb-2">Adicionados Manualmente</p>
+              <p className="text-[12.5px] font-bold text-[#111827] mb-2">
+                Adicionados Manualmente
+                <span className="text-gray-400 font-normal ml-1.5">({visibleManualRowGroups.length})</span>
+              </p>
               {/* [Fix — Owner had to keep scrolling back up to a shared
                   header to know which field was which] The per-field
                   labels below (Qtd/Unid/Compra/Venda/Valor) are no
@@ -2468,8 +2504,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   suppressed, non-purchase-unit portion — see
                   isCostFieldSuppressed) and present on others; one fixed
                   header could not describe both. */}
+              {productSearch.trim() && visibleManualRowGroups.length === 0 && (
+                <p className="text-[12px] text-gray-400 italic py-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
+              )}
               <div className="space-y-3">
-                {manualRowGroups.map((group) => {
+                {visibleManualRowGroups.map((group) => {
                   const firstIdx = group.rows[0].idx;
                   const firstRowLabel = portionLabels.get(`manual-${firstIdx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
                   // Same semantics as before B.3: Mode A is only ever
