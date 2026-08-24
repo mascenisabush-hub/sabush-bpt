@@ -875,7 +875,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       const referenceUnit = relationship.units[0].unit;
       const sellingUnit = relationship.sellingUnit;
 
-      const referenceCostRow = group.rows.find((r) => r.unit === referenceUnit);
+      // [Bug fix — unit matching was case- and whitespace-sensitive]
+      // Same fix as getConversionFactor's own identical change
+      // (purchaseToSellingConversion.ts) — a row typed "Cx" against a
+      // relationship reference unit "cx" is the same unit; a bare `===`
+      // here silently failed to find the reference row at all, breaking
+      // this auto-cost-propagation entirely over a casing difference.
+      const referenceCostRow = group.rows.find((r) => r.unit.trim().toLowerCase() === referenceUnit.trim().toLowerCase());
       const referenceCostRate = referenceCostRow ? parseFloat(referenceCostRow.costPrice) : NaN;
       const hasValidCostReference = !!referenceCostRow && Number.isFinite(referenceCostRate) && referenceCostRate >= 0;
 

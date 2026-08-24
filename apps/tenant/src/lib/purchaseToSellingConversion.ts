@@ -89,8 +89,25 @@ export function getConversionFactor(
   if (!isValidUnitRelationship(relationship)) return null;
   const rel = relationship as UnitRelationship;
 
-  const fromIndex = rel.units.findIndex((u) => u.unit === fromUnit);
-  const toIndex = rel.units.findIndex((u) => u.unit === toUnit);
+  // [Bug fix — unit matching was case- and whitespace-sensitive] Every
+  // OTHER identity check in this codebase (product names throughout —
+  // buildProductCostBasisMap, getUnitRelationshipForProductName,
+  // isGenuinelyNewProductName, groupRowsByProductName, and more — plus
+  // this file's own sibling deriveCostContribution's purchaseUnit
+  // check) normalizes via trim().toLowerCase() before comparing. This
+  // function alone used a bare `===`, so a chain confirmed with unit
+  // "un" silently failed to convert a portion the Owner typed as "Un",
+  // "UN", or " un" — returning null, which every caller (Mode A price
+  // derivation, FR-67 cost-basis derivation) then treats as "outside
+  // the confirmed chain," falling back to a raw, usually-zero
+  // calculation with no error shown. Same physical unit, same product,
+  // same confirmed relationship — a different result purely because of
+  // how the operator happened to capitalize it that one time. Fixed by
+  // normalizing both sides here, the same way every other identity
+  // check in this codebase already does.
+  const normalize = (s: string) => s.trim().toLowerCase();
+  const fromIndex = rel.units.findIndex((u) => normalize(u.unit) === normalize(fromUnit));
+  const toIndex = rel.units.findIndex((u) => normalize(u.unit) === normalize(toUnit));
   if (fromIndex === -1 || toIndex === -1) return null;
 
   const cumulative = buildCumulativeFactors(rel);

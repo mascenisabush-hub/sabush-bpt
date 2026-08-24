@@ -71,7 +71,17 @@ export function isValidUnitRelationship(candidate: UnitRelationship | undefined 
   }
 
   if (candidate.sellingUnit != null) {
-    const isMember = candidate.units.some((u) => u.unit === candidate.sellingUnit);
+    // [Bug fix — unit matching was case- and whitespace-sensitive] See
+    // getConversionFactor's own identical fix (purchaseToSellingConversion.ts)
+    // for the full explanation. Here specifically: a relationship whose
+    // sellingUnit was typed/stored with different casing than its own
+    // units[] entry (e.g. sellingUnit "Un" against a units[] entry "un")
+    // was silently REJECTED as invalid by this exact check — even
+    // though it's unambiguously the same unit — collapsing the whole
+    // relationship to "unconfirmed" for every downstream consumer
+    // (Mode A, cost-basis derivation, suppression) with no error shown.
+    const normalizedSellingUnit = candidate.sellingUnit.trim().toLowerCase();
+    const isMember = candidate.units.some((u) => u.unit.trim().toLowerCase() === normalizedSellingUnit);
     if (!isMember) return false;
   }
 
@@ -121,7 +131,13 @@ export function getDefaultUnit(product: Pick<Product, 'unitRelationship'>): stri
  */
 export function isUnitInChain(product: Pick<Product, 'unitRelationship'>, unit: string): boolean {
   if (!hasConfirmedUnitRelationship(product) || !unit) return false;
-  return product.unitRelationship!.units.some((u) => u.unit === unit);
+  // [Bug fix — unit matching was case- and whitespace-sensitive] Same
+  // fix, same reasoning as getConversionFactor's own identical change
+  // (purchaseToSellingConversion.ts) — a portion typed "UN" against a
+  // confirmed chain unit "un" is the same unit, and must not trigger
+  // Item 6's "unit outside the chain" warning purely over casing.
+  const normalizedUnit = unit.trim().toLowerCase();
+  return product.unitRelationship!.units.some((u) => u.unit.trim().toLowerCase() === normalizedUnit);
 }
 
 /** A Recognition proposal -- transient, never itself Product Memory
