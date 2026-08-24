@@ -2308,6 +2308,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               </span>
             </div>
 
+            {/* Additive, informational only — the "vs. Valor Esperado"
+                comparison below remains strictly cost-basis
+                (totalPurchaseValue vs. comparisonBaseline), per the
+                approved Expected Current Stock Value formula
+                (10-expected-stock-value-amendment.md Part 2: "Confirmed
+                Initial Capital + cost value of governed StockBatch
+                inventory"). This line adds the same tally's own
+                totalSellingValue purely for the operator's reference —
+                it feeds no comparison, no diff, no percentage, and no
+                Business Worth/valuation calculation anywhere. */}
+            <div className="flex items-center justify-between gap-3">
+              <span className="text-white/50 text-xs">Valor de Venda Contado até Agora</span>
+              <span className="text-white/70 text-[13px] tabular-nums">
+                {formatCurrency(liveTally.totalSellingValue, currencySymbol)}
+              </span>
+            </div>
+
             {/* [Amendment v1.0] Shown whenever there's a meaningful baseline to
                 compare against — i.e. Expected Current Stock Value is nonzero
                 (Initial Capital confirmed, or batches already exist). This
