@@ -708,6 +708,101 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded, currentPurchaseEventId]);
 
+  // [Bug fix — unsaved edits lost when leaving the Add Stock tab] Same
+  // root cause and same class of loss as the immediate post-scan save
+  // fix above, but general to ANY edit, not just a scan: App.tsx
+  // renders AddStockView conditionally ({activeTab === 'add-stock' &&
+  // ...}), so switching to any other tab in the app UNMOUNTS this
+  // component outright. The debounced autosave effect just above has
+  // its own cleanup (`return () => clearTimeout(handle)`), which React
+  // runs on unmount exactly like on every dependency change — so any
+  // edit made within the last 800ms, with its save still pending, was
+  // simply discarded the moment someone switched tabs, with nothing
+  // visible to indicate it. Owner-reported: "leave that tab, coming
+  // back you find nothing."
+  //
+  // Fix: mirror the latest values this component would otherwise only
+  // read via closure into refs, updated on every render — refs (not
+  // effect dependencies) specifically because this effect below must
+  // run its cleanup exactly ONCE, on unmount only (empty dependency
+  // array), yet still see the CURRENT form contents at that moment,
+  // not whatever was current when the effect first mounted. On
+  // unmount, if there's real content and nothing is blocking a save
+  // (the exact same three gates the debounced autosave effect already
+  // uses), fire one immediate, best-effort save. Fire-and-forget by
+  // necessity — the component is already gone by the time any
+  // response arrives, so there is no UI left to show a spinner or a
+  // retry button on; console.error is the most this can do for a
+  // failure here, which is still strictly better than the previous
+  // silent data loss.
+  const latestAutosaveInputsRef = useRef({
+    rows,
+    date,
+    supplierId,
+    supplierName,
+    supplierPhone,
+    supplierNotes,
+    batchNotes,
+    currentPurchaseEventId,
+    draftLoaded,
+    isSaving,
+    submittedMessage,
+  });
+  latestAutosaveInputsRef.current = {
+    rows,
+    date,
+    supplierId,
+    supplierName,
+    supplierPhone,
+    supplierNotes,
+    batchNotes,
+    currentPurchaseEventId,
+    draftLoaded,
+    isSaving,
+    submittedMessage,
+  };
+  useEffect(() => {
+    return () => {
+      const {
+        rows: r,
+        date: d,
+        supplierId: sId,
+        supplierName: sName,
+        supplierPhone: sPhone,
+        supplierNotes: sNotes,
+        batchNotes: bNotes,
+        currentPurchaseEventId: eventId,
+        draftLoaded: loaded,
+        isSaving: saving,
+        submittedMessage: submitted,
+      } = latestAutosaveInputsRef.current;
+      // Exactly the same three gates as the debounced autosave effect
+      // above: never write before the initial load, never write over
+      // an in-flight or just-finished submission (that draft has
+      // already been explicitly deleted as part of finalization —
+      // writing stale in-memory rows here would wrongly resurrect it).
+      if (!loaded || saving || submitted) return;
+      const hasAnyContent =
+        r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice) ||
+        sName.trim() ||
+        bNotes.trim();
+      if (!hasAnyContent) return;
+      savePurchaseDraft(
+        r.map(rowToDraftLineItem),
+        { supplierId: sId, supplierName: sName || undefined, supplierPhone: sPhone || undefined, supplierNotes: sNotes || undefined },
+        d,
+        bNotes || undefined,
+        eventId
+      ).catch((err) => {
+        console.error('[AddStockView] flush-on-unmount draft save failed', err);
+      });
+    };
+    // Empty deps — this must run its cleanup exactly once, on unmount,
+    // reading the CURRENT ref contents at that moment, not on every
+    // keystroke like the debounced effect above.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // [Bug fix — silent draft-save failure] Manual retry for the error
   // state above — re-attempts with whatever is CURRENTLY in the form
   // (not the stale snapshot from the failed attempt), since the Owner
