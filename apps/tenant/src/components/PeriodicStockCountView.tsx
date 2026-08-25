@@ -2084,8 +2084,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             {pendingTally.countedItems.map((item, index) => (
               <div key={`${item.productName}-${item.unit}-${index}`} className="flex items-center justify-between gap-2 px-4 py-2 text-[13px]">
                 <span className="text-[#111827] font-medium truncate">{item.productName}</span>
-                <span className="text-gray-500 tabular-nums shrink-0">
-                  {item.quantity} {item.unit}
+                <span className="text-right shrink-0">
+                  <span className="block text-gray-500 tabular-nums">
+                    {item.quantity} {item.unit}
+                  </span>
+                  {/* [Manual data-entry error investigation, Finding 2]
+                      This is the last screen before a Contagem becomes
+                      permanent and directly feeds Business Worth — and
+                      until this fix it showed quantity but never price,
+                      the field a fat-finger typo (an extra/missing
+                      zero) is most likely to hit. Shows each row's own
+                      selling-price line total — the exact figure
+                      (sellingValue = quantity * sellingPrice) that
+                      productValuationTotal sums across every row below
+                      — never a second, independently recomputed value.
+                      Selling, not cost, because that is what actually
+                      drives measuredBusinessWorth (the same "Venda" the
+                      live entry screen's own primary/hero figure
+                      already establishes, above). text-gray-500 (not
+                      -400), matching this file's own established
+                      contrast correction (see the "Custo:" captions'
+                      own history, elsewhere in this file). */}
+                  <span className="block text-[11px] text-gray-500 tabular-nums">
+                    {formatCurrency(item.sellingValue, currencySymbol)}
+                  </span>
                 </span>
               </div>
             ))}
