@@ -601,6 +601,17 @@ export interface TranslationDict {
     submitButton: string;
     registeredTitle: string;
     successMessage: string;
+    currentValueLabel: string;
+    currentValueUnknownNote: string;
+    reviewButton: string;
+    reviewTitle: string;
+    reviewSubtitle: string;
+    reviewAmountLabel: string;
+    reviewCurrentLabel: string;
+    reviewDifferenceLabel: string;
+    deviationWarningAbove: string;
+    deviationWarningBelow: string;
+    backButton: string;
     errors: {
       invalidAmount: string;
       generic: string;
@@ -1685,6 +1696,17 @@ export const pt: TranslationDict = {
     submitButton: 'Declarar Valor do Negócio',
     registeredTitle: 'Valor do Negócio Declarado!',
     successMessage: 'Valor do Negócio de {{amount}} declarado com sucesso.',
+    currentValueLabel: 'Valor do Negócio Atual',
+    currentValueUnknownNote: 'Ainda não há um Valor do Negócio registado para comparar.',
+    reviewButton: 'Rever Declaração',
+    reviewTitle: 'Reveja antes de confirmar',
+    reviewSubtitle: 'Esta declaração substitui o Valor do Negócio atual assim que confirmada.',
+    reviewAmountLabel: 'Valor a Declarar',
+    reviewCurrentLabel: 'Valor Atual',
+    reviewDifferenceLabel: 'Diferença',
+    deviationWarningAbove: 'Este valor é {{percent}}% acima do Valor do Negócio atual — confirme que é isto que pretende declarar antes de continuar.',
+    deviationWarningBelow: 'Este valor é {{percent}}% abaixo do Valor do Negócio atual — confirme que é isto que pretende declarar antes de continuar.',
+    backButton: 'Voltar e Corrigir',
     errors: {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
       generic: 'Erro ao declarar o Valor do Negócio.',
