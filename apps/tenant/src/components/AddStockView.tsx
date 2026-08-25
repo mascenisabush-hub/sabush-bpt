@@ -487,6 +487,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [wasRestoredFromDraft, setWasRestoredFromDraft] = useState(false);
   const skipNextAutosave = useRef(false);
+  // [Bug fix — cross-device draft update missed while a tab stays open]
+  // Tracks which draft VERSION (by updatedAt, or the literal 'none' for
+  // "no draft exists") this component has already adopted into its own
+  // rows/date/supplier state — replaces a one-way "have we ever loaded
+  // once" latch that could never re-fire for a later update arriving on
+  // an already-open tab. See the load effect's own comment, below, for
+  // the full scenario this fixes.
+  const lastProcessedDraftSignature = useRef<string | undefined>(undefined);
   // [Multi-Supplier Purchase Event Amendment v1.0, Part 7] Purely
   // local, in-memory correlation state for an in-progress multi-
   // supplier chain — undefined until the Admin explicitly clicks "Add
@@ -546,6 +554,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     }
     skipNextAutosave.current = false;
     setDraftLoaded(false); // re-arms the load effect below for the new business
+    // [Bug fix — cross-device draft update missed while a tab stays
+    // open] Same re-arming, for the version-signature tracking the
+    // load effect now uses instead of a one-way latch.
+    lastProcessedDraftSignature.current = undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -556,20 +568,44 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // anything local. Directly modeled on InitialStockCountView's own
   // load effect; see that component's comment for the full race this
   // avoids (onSnapshot's first callback is always asynchronous).
+  //
+  // [Bug fix — cross-device draft update missed while a tab stays open]
+  // Previously, `draftLoaded` was a one-way latch: the FIRST time
+  // Firestore answered — even "no draft exists yet" — permanently set
+  // it true, and the guard clause at the top of this effect then
+  // silently ignored every LATER purchaseDraft update for the rest of
+  // this page session. Concretely: open Add Stock on a computer before
+  // a draft exists, then save one from a phone — the live onSnapshot
+  // listener correctly delivers the new draft to this same open tab,
+  // but the effect never re-ran to actually load it into the form.
+  // lastProcessedDraftSignature (below) replaces the one-way latch with
+  // "have I already adopted THIS SPECIFIC draft version" — a genuinely
+  // new/updated draft (including the very first one, arriving after an
+  // initial null) always gets processed, while an unrelated re-render
+  // with the same draft content never re-clobbers in-progress local
+  // edits.
   useEffect(() => {
-    if (draftLoaded) return;
     if (loadedForBusinessId !== activeBusinessId) return; // still catching up to a business switch — the reset effect above will re-run this once it settles
     if (!purchaseDraftLoaded) return; // Firestore hasn't answered yet — wait
+    const draftSignature = purchaseDraft ? purchaseDraft.updatedAt : 'none';
+    if (lastProcessedDraftSignature.current === draftSignature) return; // already adopted this exact version
+    lastProcessedDraftSignature.current = draftSignature;
     if (purchaseDraft === null) {
       // Firestore has now confirmed: no draft exists for this user on
       // this business yet — if a product name was handed in via props
       // (e.g. "add stock for this product" from elsewhere in the app),
       // seed the one initial row with it; otherwise keep the single
-      // default empty row.
-      if (initialProductName) {
-        setRows([createEmptyRow(initialProductName)]);
+      // default empty row. Only on the very first resolution
+      // (!draftLoaded) — once real content has been loaded, a LATER
+      // transition back to null (e.g. the draft was discarded from
+      // another device) must never silently wipe out what's already
+      // on screen here.
+      if (!draftLoaded) {
+        if (initialProductName) {
+          setRows([createEmptyRow(initialProductName)]);
+        }
+        setDraftLoaded(true);
       }
-      setDraftLoaded(true);
       return;
     }
     // Defense in depth: if the user has already started typing into the
