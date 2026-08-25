@@ -413,7 +413,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // exists" so an existing draft isn't overwritten by the two default
   // empty rows before the listener's first snapshot arrives.
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   // [Draft-loss fix] The autosave effect below is debounced by 800ms so
   // a fast typist doesn't trigger a write per keystroke — but that same
   // debounce is exactly what lets a page reload right after a burst of
@@ -576,11 +576,30 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     const handle = setTimeout(() => {
       saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis)
         .then(() => setDraftSaveState('saved'))
-        .catch(() => setDraftSaveState('idle'));
+        .catch((err) => {
+          // [Bug fix — silent draft-save failure, same class as
+          // AddStockView.tsx's own identical fix] Previously reverted
+          // to 'idle' on any failure — no visible sign anything went
+          // wrong. Now surfaces a visible error with a manual retry.
+          console.error('[InitialStockCountView] draft autosave failed', err);
+          setDraftSaveState('error');
+        });
     }, 800);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount]);
+
+  // [Bug fix — silent draft-save failure] Manual retry for the error
+  // state above — re-attempts with whatever is CURRENTLY in the form.
+  const handleRetryDraftSave = () => {
+    setDraftSaveState('saving');
+    saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis)
+      .then(() => setDraftSaveState('saved'))
+      .catch((err) => {
+        console.error('[InitialStockCountView] draft autosave retry failed', err);
+        setDraftSaveState('error');
+      });
+  };
 
   // [Draft-loss fix, part 2 / instant-save] Shared, reusable flush of
   // the current `rows` straight to Firestore, bypassing the 800ms
@@ -598,7 +617,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     setDraftSaveState('saving');
     saveInitialStockDraft(r.map(rowToDraftItem), d, basis)
       .then(() => setDraftSaveState('saved'))
-      .catch(() => setDraftSaveState('idle'));
+      .catch((err) => {
+        console.error('[InitialStockCountView] draft flush-on-exit failed', err);
+        setDraftSaveState('error');
+      });
   };
 
   // [Draft-loss fix, part 2] The 800ms debounce above is exactly what
@@ -1535,8 +1557,25 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             </p>
           </div>
           {draftSaveState !== 'idle' && (
-            <span className="text-[11px] text-gray-400 shrink-0 font-medium">
-              {draftSaveState === 'saving' ? 'A guardar rascunho…' : 'Rascunho guardado'}
+            <span className="text-[11px] text-gray-400 shrink-0 font-medium flex items-center gap-1.5">
+              {draftSaveState === 'saving' && 'A guardar rascunho…'}
+              {draftSaveState === 'saved' && 'Rascunho guardado'}
+              {/* [Bug fix — silent draft-save failure] Previously this
+                  state reverted to 'idle' — nothing rendered here at
+                  all, no sign the save never actually reached the
+                  server. */}
+              {draftSaveState === 'error' && (
+                <>
+                  <span className="text-rose-600 font-semibold">Falha ao guardar</span>
+                  <button
+                    type="button"
+                    onClick={handleRetryDraftSave}
+                    className="text-[#0B1F3A] font-bold underline underline-offset-2 hover:text-[#D4AF37] transition-colors duration-150"
+                  >
+                    Tentar novamente
+                  </button>
+                </>
+              )}
             </span>
           )}
         </div>

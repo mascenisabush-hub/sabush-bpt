@@ -12,6 +12,7 @@ import {
   collection,
   getDocs,
   getDoc,
+  getDocFromServer,
   onSnapshot,
   writeBatch as createFirestoreBatch,
   runTransaction,
@@ -5182,6 +5183,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(initialCapitalBasis ? { initialCapitalBasis } : {}),
     };
     await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'), draft);
+    // [Bug fix — a device with a poor/interrupted connection can show
+    // "saved" while the write never reaches the server] Same fix as
+    // savePurchaseDraft's own identical comment, below — confirmed
+    // empirically via that sibling report, applied here too since this
+    // function has the exact same vulnerability: setDoc's Promise
+    // resolves once applied to the local cache and queued for
+    // delivery, not once Firestore's backend has actually received it
+    // (persistentLocalCache, firebase.ts). getDocFromServer forces an
+    // actual round-trip and only resolves once the server genuinely
+    // has the data.
+    await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'));
   };
 
   // Discards the draft without confirming it — an explicit "start over"
@@ -5248,6 +5260,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       updatedAt: new Date().toISOString(),
     };
     await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'), draft);
+    // [Bug fix — a device with a poor/interrupted connection can show
+    // "saved" while the write never reaches the server] Same fix as
+    // savePurchaseDraft's own identical comment, below — this is the
+    // single most consequential instance of the pattern in this file,
+    // since Contagem is the primary path to establishing Business
+    // Worth: an Owner mid-count who believes their work is safely
+    // synced, when it genuinely never reached the server, risks losing
+    // real physical-count data with no warning at all. getDocFromServer
+    // forces an actual round-trip and only resolves once the server
+    // genuinely has the data.
+    await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
   };
 
   // Discards the periodic draft without finalizing it — the explicit
@@ -5311,7 +5334,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(purchaseEventId ? { purchaseEventId } : {}),
       updatedAt: new Date().toISOString(),
     };
-    await setDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid), draft);
+    const draftRef = doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid);
+    await setDoc(draftRef, draft);
+    // [Bug fix — a device with a poor/interrupted connection can show
+    // "Draft saved" while the write never actually reaches the server]
+    // Confirmed empirically: this repo's own persistentLocalCache
+    // (firebase.ts) means setDoc's Promise resolves once the write is
+    // applied to the LOCAL cache and queued for delivery — NOT once
+    // Firestore's backend has actually received it. On a device with
+    // unstable connectivity, the local write can succeed (and this
+    // function would previously have returned normally) while the
+    // document genuinely never reaches the server at all — confirmed
+    // directly via Firestore Console, no purchaseDrafts document
+    // existed despite the calling UI showing a successful save.
+    // getDocFromServer forces an actual network round-trip, bypassing
+    // the local cache entirely — it only resolves once the server
+    // genuinely has the data, and throws/rejects if it can't reach the
+    // server at all. This makes savePurchaseDraft's own Promise
+    // honestly mean "confirmed on the server, visible to any other
+    // device," not merely "queued locally" — a caller that only ever
+    // reports success once this Promise resolves (AddStockView.tsx's
+    // own autosave, already fixed to surface a real error+retry rather
+    // than a false "saved") now correctly shows an error instead of a
+    // false positive when the server round-trip itself can't complete.
+    await getDocFromServer(draftRef);
   };
 
   // Discards the draft without finalizing it — an explicit "start
