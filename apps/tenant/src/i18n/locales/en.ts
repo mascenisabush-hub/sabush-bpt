@@ -400,6 +400,10 @@ export const en: TranslationDict = {
     unitSuggestionsLabel: 'Units:',
     unitOutsideRelationshipWarning:
       "This unit isn't part of this product's confirmed unit relationship — the price was left unchanged; confirm or adjust it manually.",
+    priceDeviationWarningAbove:
+      'This price is {{percent}}% above the last recorded price for this product — confirm this isn\'t a typo.',
+    priceDeviationWarningBelow:
+      'This price is {{percent}}% below the last recorded price for this product — confirm this isn\'t a typo.',
     totalProfitTitle: 'Total Profit: {{value}}',
     estProfitMobile: 'Est. Profit: {{value}}',
     removeBatch: 'Remove this batch',

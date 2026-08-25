@@ -11,6 +11,10 @@ import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
+// [Manual data-entry error investigation, Finding 3] Shared with
+// Contagem (PeriodicStockCountView.tsx) — see that file's own header
+// comment for why this is a shared utility, not duplicated per screen.
+import { checkPriceDeviation } from '../lib/priceDeviationCheck';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 
 interface AddStockViewProps {
@@ -725,6 +729,35 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     }
 
     updateRow(rowId, updates);
+  };
+
+  // [Manual data-entry error investigation, Finding 3 — Owner-requested]
+  // No price-deviation check existed anywhere in the app — a freshly-
+  // typed price was never compared against the product's own
+  // remembered price to flag the classic fat-finger typo (an extra or
+  // missing zero). Returns the remembered price for `field`, converted
+  // to `row`'s own CURRENT unit via the same resolveUnitAwarePrice
+  // conversion the auto-fill itself already uses — never a second,
+  // independently-invented conversion — so a warning compares like
+  // against like regardless of which unit the row happens to be in
+  // right now. Returns null (never a fabricated number) when the
+  // product has no match, no memory, or the memory can't honestly
+  // convert to this row's unit — checkPriceDeviation's own null-safety
+  // then correctly shows no warning at all in every one of those cases.
+  const getRememberedPriceForRow = (row: StockRowItem, field: 'cost' | 'selling'): number | null => {
+    const matched = products.find(p => p.name.trim().toLowerCase() === row.productName.trim().toLowerCase());
+    if (!matched) return null;
+    const memory = findLatestRememberedProductMemory(
+      matched.id,
+      matched.name,
+      batches,
+      stockCounts,
+      isValidUnitRelationship(matched.unitRelationship) ? matched.unitRelationship?.sellingUnit : undefined
+    );
+    if (!memory) return null;
+    const rememberedRaw = field === 'cost' ? memory.costPrice : memory.sellingPrice;
+    const resolved = resolveUnitAwarePrice(rememberedRaw, memory.unit, row.unit, matched.unitRelationship);
+    return resolved === '' ? null : parseFloat(resolved);
   };
 
   const handleAddRow = () => {
@@ -2132,6 +2165,27 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             onChange={e => updateRow(row.id, { costPrice: e.target.value, costPriceAutoFilled: false })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
+                          {/* [Manual data-entry error investigation,
+                              Finding 3] Live-computed, never stored
+                              state — mirrors the unit-mismatch warning's
+                              own "leave it, signal the mistake"
+                              pattern. Compares the CURRENTLY TYPED price
+                              (regardless of how it got there — auto-
+                              filled-then-edited, or typed from scratch)
+                              against the product's own remembered price
+                              for this row's current unit. */}
+                          {(() => {
+                            const check = checkPriceDeviation(parseFloat(row.costPrice), getRememberedPriceForRow(row, 'cost'));
+                            if (!check.showWarning) return null;
+                            return (
+                              <p className="mt-1 text-[11px] text-amber-600 font-medium leading-snug">
+                                {t(
+                                  check.isAboveRemembered ? 'addStock.priceDeviationWarningAbove' : 'addStock.priceDeviationWarningBelow',
+                                  { percent: Math.round(check.deviationPercent! * 100) }
+                                )}
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         {/* Preço Venda */}
@@ -2162,6 +2216,24 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               {row.sellingPrice ? t('addStock.smartEntry.sellingPriceFromMemory') : t('addStock.smartEntry.sellingPriceNotFound')}
                             </p>
                           )}
+                          {/* [Manual data-entry error investigation,
+                              Finding 3] Same check as Preço Compra,
+                              above — a separate, additional note; this
+                              and the AI-detection caption above serve
+                              different purposes and can both show at
+                              once when relevant. */}
+                          {(() => {
+                            const check = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                            if (!check.showWarning) return null;
+                            return (
+                              <p className="mt-1 text-[11px] text-amber-600 font-medium leading-snug">
+                                {t(
+                                  check.isAboveRemembered ? 'addStock.priceDeviationWarningAbove' : 'addStock.priceDeviationWarningBelow',
+                                  { percent: Math.round(check.deviationPercent! * 100) }
+                                )}
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         {/* Lucro Estimado & Delete Button */}
@@ -2436,6 +2508,22 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               onChange={e => updateRow(row.id, { costPrice: e.target.value, costPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
+                            {/* [Manual data-entry error investigation,
+                                Finding 3] Same check as the desktop
+                                layout's own identical field — see that
+                                copy's own comment. */}
+                            {(() => {
+                              const check = checkPriceDeviation(parseFloat(row.costPrice), getRememberedPriceForRow(row, 'cost'));
+                              if (!check.showWarning) return null;
+                              return (
+                                <p className="mt-1 text-[11px] text-amber-600 font-medium leading-snug">
+                                  {t(
+                                    check.isAboveRemembered ? 'addStock.priceDeviationWarningAbove' : 'addStock.priceDeviationWarningBelow',
+                                    { percent: Math.round(check.deviationPercent! * 100) }
+                                  )}
+                                </p>
+                              );
+                            })()}
                           </div>
 
                           <div>
@@ -2451,6 +2539,21 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               onChange={e => updateRow(row.id, { sellingPrice: e.target.value, sellingPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
+                            {/* [Manual data-entry error investigation,
+                                Finding 3] Same check as the desktop
+                                layout's own identical field. */}
+                            {(() => {
+                              const check = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                              if (!check.showWarning) return null;
+                              return (
+                                <p className="mt-1 text-[11px] text-amber-600 font-medium leading-snug">
+                                  {t(
+                                    check.isAboveRemembered ? 'addStock.priceDeviationWarningAbove' : 'addStock.priceDeviationWarningBelow',
+                                    { percent: Math.round(check.deviationPercent! * 100) }
+                                  )}
+                                </p>
+                              );
+                            })()}
                           </div>
                         </div>
                       </div>

@@ -6,6 +6,11 @@ import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+// [Manual data-entry error investigation, Finding 3] Shared with Add
+// Stock (AddStockView.tsx) — see that utility's own header comment for
+// why this is a shared utility, not duplicated per screen.
+import { checkPriceDeviation } from '../lib/priceDeviationCheck';
+import { resolveUnitAwarePrice } from '../lib/productMemoryPriceResolution';
 // [Business Worth Evolution — Decision 37, B.1 completion] Same import
 // InitialStockCountView.tsx already uses for its own read-only
 // relationship-chain display — reused as a pattern, not shared code,
@@ -815,6 +820,55 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...fields } };
     setCatalogRows(nextCatalogRows);
     scheduleDraftSave(nextCatalogRows, manualRows, type, label, date, newProductInfo);
+  };
+
+  // [Manual data-entry error investigation, Finding 3 — Owner-requested]
+  // No price-deviation check existed anywhere in the app — a freshly-
+  // typed price was never compared against the product's own
+  // remembered price to flag the classic fat-finger typo (an extra or
+  // missing zero). Shared with Add Stock (checkPriceDeviation itself),
+  // but the "what counts as remembered" source here deliberately
+  // mirrors buildCatalogRow's own existing prefill logic exactly
+  // (findMostRecentBatchForProduct, falling back to the Product's own
+  // static reference price) — never a second, independently-invented
+  // memory source, and never the wider findLatestRememberedProductMemory
+  // Add Stock uses (which also searches StockCounts) — that would let a
+  // Contagem's own just-typed price warn against an EARLIER portion of
+  // the SAME Contagem still being entered, which is not what this
+  // check is for.
+  //
+  // Reused for BOTH catalog rows and manual rows (the latter used by
+  // "+ Adicionar Porção" on an existing product, or a genuinely new
+  // product) — a catalogRows entry always already carries a productId
+  // (buildCatalogRow), but a manualRows entry NEVER does (createManualRow
+  // sets it undefined unconditionally, matched by name instead — see
+  // that function's own comment) even when it represents an existing,
+  // already-catalogued product. Resolves by productId when present,
+  // falling back to a case-insensitive name match otherwise — the same
+  // lookup this file already uses elsewhere (isGenuinelyNewProductName)
+  // — so a manual portion of an existing product gets the same
+  // protection a catalog row does. Returns null (never a fabricated
+  // number) when the row matches no product at all, or the product has
+  // no batch and no reference price — checkPriceDeviation's own
+  // null-safety then correctly shows no warning at all.
+  const getRememberedPriceForRow = (row: StockCountWorkingRow, field: 'cost' | 'selling'): number | null => {
+    const trimmedName = row.productName.trim().toLowerCase();
+    const product = row.productId
+      ? products.find((p) => p.id === row.productId)
+      : products.find((p) => p.name.trim().toLowerCase() === trimmedName);
+    if (!product) return null;
+    const latestBatch = findMostRecentBatchForProduct(batches, product.id);
+    if (latestBatch) {
+      const rememberedRaw = field === 'cost' ? latestBatch.costPrice : latestBatch.sellingPrice;
+      const resolved = resolveUnitAwarePrice(rememberedRaw, latestBatch.unit || row.unit, row.unit, product.unitRelationship);
+      return resolved === '' ? null : parseFloat(resolved);
+    }
+    // No batch — same fallback tier buildCatalogRow itself uses, and
+    // (matching that same prefill's own behavior) no unit conversion
+    // attempted here either: the Product's own reference price carries
+    // no unit of its own to convert from.
+    const reference = field === 'cost' ? product.costPrice : product.sellingPrice;
+    return reference != null ? reference : null;
   };
 
   // Not a delete — flips `removed`, so the product stays represented
@@ -2709,6 +2763,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                               {currencySymbol} por {row.unit.trim() || 'un'}
                             </p>
+                            {/* [Manual data-entry error investigation,
+                                Finding 3] Live-computed, never stored
+                                state — same "leave it, signal the
+                                mistake" pattern as Mode A's own
+                                unit-mismatch warning, above. Compares
+                                the CURRENTLY TYPED price against the
+                                product's own remembered price
+                                (getRememberedPriceForRow, above),
+                                converted to this row's current unit. */}
+                            {(() => {
+                              const check = checkPriceDeviation(parseFloat(row.costPrice), getRememberedPriceForRow(row, 'cost'));
+                              if (!check.showWarning) return null;
+                              return (
+                                <p className="text-[11px] text-amber-600 font-medium mt-0.5 leading-snug">
+                                  Este preço é {Math.round(check.deviationPercent! * 100)}%{' '}
+                                  {check.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para
+                                  este produto — confirme que não é um erro de digitação.
+                                </p>
+                              );
+                            })()}
                           </div>
                         )}
 
@@ -2728,6 +2802,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                             {currencySymbol} por {row.unit.trim() || 'un'}
                           </p>
+                          {/* [Manual data-entry error investigation,
+                              Finding 3] Same check as Compra/Un, above. */}
+                          {(() => {
+                            const check = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                            if (!check.showWarning) return null;
+                            return (
+                              <p className="text-[11px] text-amber-600 font-medium mt-0.5 leading-snug">
+                                Este preço é {Math.round(check.deviationPercent! * 100)}%{' '}
+                                {check.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para
+                                este produto — confirme que não é um erro de digitação.
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         <div className="flex items-end gap-1.5">
@@ -3055,6 +3142,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                                     {currencySymbol} por {row.unit.trim() || 'un'}
                                   </p>
+                                  {/* [Manual data-entry error
+                                      investigation, Finding 3] Same
+                                      check as the catalog-row block's
+                                      own identical field, above —
+                                      getRememberedPriceForRow resolves
+                                      this manual row's product by NAME
+                                      (it carries no productId), so an
+                                      existing product's portion added
+                                      via "+ Adicionar Porção" gets the
+                                      same protection a catalog row
+                                      does. */}
+                                  {(() => {
+                                    const check = checkPriceDeviation(parseFloat(row.costPrice), getRememberedPriceForRow(row, 'cost'));
+                                    if (!check.showWarning) return null;
+                                    return (
+                                      <p className="text-[11px] text-amber-600 font-medium mt-0.5 leading-snug">
+                                        Este preço é {Math.round(check.deviationPercent! * 100)}%{' '}
+                                        {check.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado
+                                        para este produto — confirme que não é um erro de digitação.
+                                      </p>
+                                    );
+                                  })()}
                                 </div>
                               )}
 
@@ -3071,6 +3180,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                                   {currencySymbol} por {row.unit.trim() || 'un'}
                                 </p>
+                                {/* [Manual data-entry error investigation,
+                                    Finding 3] Same check as Compra/Un,
+                                    above. */}
+                                {(() => {
+                                  const check = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                                  if (!check.showWarning) return null;
+                                  return (
+                                    <p className="text-[11px] text-amber-600 font-medium mt-0.5 leading-snug">
+                                      Este preço é {Math.round(check.deviationPercent! * 100)}%{' '}
+                                      {check.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado
+                                      para este produto — confirme que não é um erro de digitação.
+                                    </p>
+                                  );
+                                })()}
                               </div>
 
                               <div className="flex items-end gap-1.5">

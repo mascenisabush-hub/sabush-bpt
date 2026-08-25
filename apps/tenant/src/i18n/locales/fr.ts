@@ -400,6 +400,10 @@ export const fr: TranslationDict = {
     unitSuggestionsLabel: 'Unités :',
     unitOutsideRelationshipWarning:
       'Cette unité ne fait pas partie de la relation d\u2019unités confirmée de ce produit — le prix n\u2019a pas été modifié ; confirmez ou ajustez-le manuellement.',
+    priceDeviationWarningAbove:
+      'Ce prix est {{percent}}% au-dessus du dernier prix enregistré pour ce produit — confirmez qu\u2019il ne s\u2019agit pas d\u2019une erreur de saisie.',
+    priceDeviationWarningBelow:
+      'Ce prix est {{percent}}% en-dessous du dernier prix enregistré pour ce produit — confirmez qu\u2019il ne s\u2019agit pas d\u2019une erreur de saisie.',
     totalProfitTitle: 'Profit Total : {{value}}',
     estProfitMobile: 'Profit Est. : {{value}}',
     removeBatch: 'Supprimer ce lot',

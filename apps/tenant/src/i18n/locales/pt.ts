@@ -411,6 +411,8 @@ export interface TranslationDict {
     unitSuggestionsTitle: string;
     unitSuggestionsLabel: string;
     unitOutsideRelationshipWarning: string;
+    priceDeviationWarningAbove: string;
+    priceDeviationWarningBelow: string;
     totalProfitTitle: string;
     estProfitMobile: string;
     removeBatch: string;
@@ -1513,6 +1515,10 @@ export const pt: TranslationDict = {
     unitSuggestionsLabel: 'Unidades:',
     unitOutsideRelationshipWarning:
       'Esta unidade não faz parte da relação de unidades confirmada deste produto — o preço não foi alterado; confirme ou ajuste manualmente.',
+    priceDeviationWarningAbove:
+      'Este preço é {{percent}}% acima do último preço registado para este produto — confirme que não é um erro de digitação.',
+    priceDeviationWarningBelow:
+      'Este preço é {{percent}}% abaixo do último preço registado para este produto — confirme que não é um erro de digitação.',
     totalProfitTitle: 'Lucro Total: {{value}}',
     estProfitMobile: 'Lucro Est: {{value}}',
     removeBatch: 'Remover este lote',
