@@ -443,6 +443,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // form, exactly per the ADR.
   const [scanState, setScanState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [scanErrorReason, setScanErrorReason] = useState<SmartStockEntryFailureReason | null>(null);
+  // [Bug fix — both scan buttons spun at once] scanState alone can't
+  // tell the two buttons apart — "Take Picture" and "Upload" both read
+  // the same 'processing' flag, so clicking either one spun BOTH
+  // buttons even though only one file was actually being scanned.
+  // scanInputMethod records which button was actually pressed, so only
+  // that one animates; the other stays merely disabled (still correct —
+  // a second scan really can't start mid-flight — just not misleadingly
+  // spinning).
+  const [scanInputMethod, setScanInputMethod] = useState<'camera' | 'upload' | null>(null);
   // [Smart Stock Entry — Tier 1, input-method expansion] Two separate
   // hidden file inputs, not one — the ONLY difference between them is
   // the `capture` attribute (camera vs. normal file/gallery picker).
@@ -1264,9 +1273,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // unreadable document) is handled gracefully — rows are left exactly
   // as they were, and the user can always continue manually. Nothing is
   // ever written to Firestore by this function.
-  const handleFileSelected = async (file: File | undefined | null) => {
+  const handleFileSelected = async (file: File | undefined | null, method: 'camera' | 'upload') => {
     if (!file) return;
     setScanState('processing');
+    setScanInputMethod(method);
     setScanErrorReason(null);
 
     let base64: string;
@@ -1289,6 +1299,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       });
     } catch {
       setScanState('error');
+      setScanInputMethod(null);
       setScanErrorReason('unreadable');
       return;
     }
@@ -1297,6 +1308,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
     if (result.success === false) {
       setScanState('error');
+      setScanInputMethod(null);
       setScanErrorReason(result.reason);
       return;
     }
@@ -1331,6 +1343,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     }
 
     setScanState('idle');
+    setScanInputMethod(null);
   };
 
   // Explicit "reject this scan" — removes only the AI-sourced rows,
@@ -1343,6 +1356,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       return remaining.length > 0 ? remaining : [createEmptyRow('')];
     });
     setScanState('idle');
+    setScanInputMethod(null);
     setScanErrorReason(null);
   };
 
@@ -1869,7 +1883,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   className="hidden"
                   onChange={e => {
                     const file = e.target.files?.[0];
-                    handleFileSelected(file);
+                    handleFileSelected(file, 'camera');
                     e.target.value = '';
                   }}
                 />
@@ -1886,7 +1900,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   className="hidden"
                   onChange={e => {
                     const file = e.target.files?.[0];
-                    handleFileSelected(file);
+                    handleFileSelected(file, 'upload');
                     e.target.value = '';
                   }}
                 />
@@ -1896,7 +1910,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   onClick={() => cameraFileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
-                  {scanState === 'processing' ? (
+                  {scanState === 'processing' && scanInputMethod === 'camera' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Camera className="w-3.5 h-3.5 text-[#B8952F]" />
@@ -1909,7 +1923,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   onClick={() => uploadFileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
-                  {scanState === 'processing' ? (
+                  {scanState === 'processing' && scanInputMethod === 'upload' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Upload className="w-3.5 h-3.5 text-[#B8952F]" />
