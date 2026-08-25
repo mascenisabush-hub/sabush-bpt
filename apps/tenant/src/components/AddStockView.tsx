@@ -484,7 +484,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // per-business draft to a per-(business, user) one. See Rule 8
   // Assessment, Section 12 for the full lifecycle this implements.
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved'>('idle');
+  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
   const [wasRestoredFromDraft, setWasRestoredFromDraft] = useState(false);
   const skipNextAutosave = useRef(false);
   // [Multi-Supplier Purchase Event Amendment v1.0, Part 7] Purely
@@ -642,11 +642,51 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         currentPurchaseEventId
       )
         .then(() => setDraftSaveState('saved'))
-        .catch(() => setDraftSaveState('idle'));
+        .catch((err) => {
+          // [Bug fix — silent draft-save failure] Previously reverted
+          // to 'idle' on ANY failure (permissions, network, a business
+          // switch mid-save, anything) with no visible sign anything
+          // went wrong — an Owner scanning a receipt on one device,
+          // expecting to resume on another, would see the "Guardando…"
+          // indicator simply vanish and have no way to know their data
+          // never actually reached the server. Now surfaces a visible
+          // error with a manual retry, instead of silently discarding
+          // the failure. console.error preserves whatever diagnostic
+          // detail is available (e.g. a Firestore permission-denied
+          // reason) for anyone investigating later, without exposing
+          // raw error internals in the Owner-facing UI itself.
+          console.error('[AddStockView] purchase draft autosave failed', err);
+          setDraftSaveState('error');
+        });
     }, 800);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded, currentPurchaseEventId]);
+
+  // [Bug fix — silent draft-save failure] Manual retry for the error
+  // state above — re-attempts with whatever is CURRENTLY in the form
+  // (not the stale snapshot from the failed attempt), since the Owner
+  // may have kept typing in the meantime. Deliberately not an
+  // automatic retry-on-a-timer: a genuinely offline device retrying
+  // silently in the background would give exactly the same false sense
+  // of safety this fix exists to remove — the Owner sees the error and
+  // chooses to retry, the same "visible, not silent" principle as the
+  // failure itself.
+  const handleRetryDraftSave = () => {
+    setDraftSaveState('saving');
+    savePurchaseDraft(
+      rows.map(rowToDraftLineItem),
+      { supplierId, supplierName: supplierName || undefined, supplierPhone: supplierPhone || undefined, supplierNotes: supplierNotes || undefined },
+      date,
+      batchNotes || undefined,
+      currentPurchaseEventId
+    )
+      .then(() => setDraftSaveState('saved'))
+      .catch((err) => {
+        console.error('[AddStockView] purchase draft autosave retry failed', err);
+        setDraftSaveState('error');
+      });
+  };
 
   // Explicit discard — clears the persisted draft and resets the form
   // to a single empty row, per the amendment's "must be discardable"
@@ -1697,6 +1737,24 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <>
                   <CheckCircle2 className="w-3 h-3 text-emerald-500" />
                   {t('addStock.draft.savedIndicator')}
+                </>
+              )}
+              {/* [Bug fix — silent draft-save failure] Previously this
+                  state reverted to 'idle' on any failure — nothing
+                  rendered here at all, no sign the save never actually
+                  reached the server. Now visible, with an immediate way
+                  to do something about it. */}
+              {draftSaveState === 'error' && (
+                <>
+                  <AlertTriangle className="w-3 h-3 text-rose-600" />
+                  <span className="text-rose-600 font-semibold">{t('addStock.draft.saveErrorIndicator')}</span>
+                  <button
+                    type="button"
+                    onClick={handleRetryDraftSave}
+                    className="text-[#0B1F3A] font-bold underline underline-offset-2 hover:text-[#D4AF37] transition-colors duration-150"
+                  >
+                    {t('addStock.draft.retryButton')}
+                  </button>
                 </>
               )}
             </span>

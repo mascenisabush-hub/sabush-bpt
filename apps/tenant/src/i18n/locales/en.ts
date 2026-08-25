@@ -430,6 +430,8 @@ export const en: TranslationDict = {
     draft: {
       savingIndicator: 'Saving draft...',
       savedIndicator: 'Draft saved',
+      saveErrorIndicator: "Save failed \u2014 not synced to other devices",
+      retryButton: 'Try again',
       restoredNotice: 'Resumed a purchase in progress \u2014 the products you already saved were restored.',
       discardButton: 'Discard Draft',
       discardConfirm: 'Are you sure you want to discard this draft? The products you already saved will be lost.',

@@ -439,6 +439,8 @@ export interface TranslationDict {
     draft: {
       savingIndicator: string;
       savedIndicator: string;
+      saveErrorIndicator: string;
+      retryButton: string;
       restoredNotice: string;
       discardButton: string;
       discardConfirm: string;
@@ -1545,6 +1547,8 @@ export const pt: TranslationDict = {
     draft: {
       savingIndicator: 'A guardar rascunho...',
       savedIndicator: 'Rascunho guardado',
+      saveErrorIndicator: 'Falha ao guardar — não sincronizado com outros dispositivos',
+      retryButton: 'Tentar novamente',
       restoredNotice: 'Continuou uma compra em curso — os produtos já guardados foram restaurados.',
       discardButton: 'Descartar Rascunho',
       discardConfirm: 'Tem a certeza que quer descartar este rascunho? Os produtos já guardados serão perdidos.',

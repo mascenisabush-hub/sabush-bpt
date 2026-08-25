@@ -430,6 +430,8 @@ export const fr: TranslationDict = {
     draft: {
       savingIndicator: 'Enregistrement du brouillon...',
       savedIndicator: 'Brouillon enregistré',
+      saveErrorIndicator: 'Échec de l\u2019enregistrement \u2014 non synchronisé avec les autres appareils',
+      retryButton: 'Réessayer',
       restoredNotice: 'Achat en cours repris \u2014 les produits déjà enregistrés ont été restaurés.',
       discardButton: 'Supprimer le Brouillon',
       discardConfirm: 'Êtes-vous sûr de vouloir supprimer ce brouillon ? Les produits déjà enregistrés seront perdus.',
