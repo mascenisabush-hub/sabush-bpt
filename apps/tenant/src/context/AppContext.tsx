@@ -256,6 +256,21 @@ interface RecordStockCountItemInput {
   valuationMode?: ContagemValuationMode;
 }
 
+// [Feature — reconciliation signal reaching the Owner, Owner-requested]
+// Response-only enrichment attached to recordStockCount's own return
+// value — never persisted to Firestore, never a StockCount field. See
+// businessWorthReconciliationForReturn's own declaration comment
+// (inside recordStockCount, below) for exactly what this is and how it
+// gets populated. Exported so PeriodicStockCountView.tsx's success
+// screen can read it without duplicating this shape.
+export interface StockCountReconciliationSignal {
+  difference?: number;
+  cashReconciliationDifference?: number;
+  expensesSinceLastSnapshot?: number;
+  breakagesSinceLastSnapshot?: number;
+  levantamentosSinceLastSnapshot?: number;
+}
+
 interface RecordStockCountParams {
   type: StockCountType;
   label?: string;
@@ -628,7 +643,7 @@ interface AppContextType {
   hasInitialStockCount: boolean;
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
-  recordStockCount: (params: RecordStockCountParams) => Promise<StockCount>;
+  recordStockCount: (params: RecordStockCountParams) => Promise<StockCount & { businessWorthReconciliation?: StockCountReconciliationSignal }>;
   // [Business Worth Evolution — Implementation Authorization, Increment
   // 10 (Revision 3); Specification §42.1, §8, FR-61; BDR Decision 36]
   // Establishes Business Worth directly from an Owner-entered known
@@ -4291,6 +4306,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       | { id: string; measuredBusinessWorth: number; difference?: number; cashReconciliationDifference?: number }
       | undefined;
 
+    // [Feature — reconciliation signal reaching the Owner, Owner-
+    // requested] Same hoisting reason as businessWorthSnapshotForTimeline
+    // immediately above — captured inside the producesBusinessWorthSnapshot
+    // block below, read after it, attached to this function's own return
+    // value so the caller (PeriodicStockCountView's Confirmar Contagem
+    // success screen) can show getPossibleReconciliationCauses'
+    // (calculations.ts) evidence-bound guidance at the exact moment the
+    // discrepancy becomes knowable — never a second, separately-invented
+    // calculation; every figure here is read verbatim from the SAME
+    // local variables the Timeline entry above already uses, or (for the
+    // three "sinceLastSnapshot" figures) computed once, inside that same
+    // block, for exactly this purpose. Never persisted to Firestore —
+    // this is a response-only enrichment, not a StockCount field.
+    let businessWorthReconciliationForReturn: StockCountReconciliationSignal | undefined;
+
     // [Business Worth Evolution — Implementation Authorization,
     // Increment 1; Specification §5 (Plan), §8, FR-5, FR-36, FR-37]
     // Writes exactly one BusinessWorthSnapshot in the SAME batch as the
@@ -4613,6 +4643,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...(difference !== undefined ? { difference } : {}),
         ...(cashReconciliationDifference !== undefined ? { cashReconciliationDifference } : {}),
       };
+      businessWorthReconciliationForReturn = {
+        ...(difference !== undefined ? { difference } : {}),
+        ...(cashReconciliationDifference !== undefined ? { cashReconciliationDifference } : {}),
+        ...(expensesSinceLastSnapshot > 0 ? { expensesSinceLastSnapshot } : {}),
+        ...(breakagesSinceLastSnapshot > 0 ? { breakagesSinceLastSnapshot } : {}),
+        ...(levantamentosSinceLastSnapshot > 0 ? { levantamentosSinceLastSnapshot } : {}),
+      };
 
       // [Business Worth Evolution — Implementation Authorization,
       // Increment 8; Specification §25 FR-39, §26 FR-40-FR-43, FR-58;
@@ -4865,7 +4902,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // Gating it would add complexity without changing the observable
     // outcome the frozen spec's §8a requires.
     triggerTrialActivation(businessId);
-    return newCount;
+    // [Feature — reconciliation signal reaching the Owner] Attached only
+    // when this confirmation actually produced a snapshot with
+    // something to report — omitted entirely (never an empty {}) on an
+    // ordinary confirmation with no snapshot, or one whose difference
+    // and every "since" figure were genuinely zero. See
+    // businessWorthReconciliationForReturn's own declaration comment,
+    // above, for what this is and isn't. Checked by key count, not mere
+    // object presence — the object itself is always assigned inside the
+    // producesBusinessWorthSnapshot block above, even when every one of
+    // its conditionally-spread fields ends up empty; a truthy-but-empty
+    // {} would otherwise incorrectly attach a reconciliation payload
+    // with nothing in it.
+    return businessWorthReconciliationForReturn && Object.keys(businessWorthReconciliationForReturn).length > 0
+      ? { ...newCount, businessWorthReconciliation: businessWorthReconciliationForReturn }
+      : newCount;
   };
 
   // [Void & Redo — Implementation Authorization §2 item 5; Rule 8

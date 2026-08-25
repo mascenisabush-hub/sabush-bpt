@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
-import { useApp } from '../context/AppContext';
+import { useApp, type StockCountReconciliationSignal } from '../context/AppContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
@@ -13,6 +13,11 @@ import { isValidUnitRelationship } from '../lib/unitRelationship';
 // own header comment, below).
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
+// [Feature — reconciliation signal reaching the Owner] The SAME pure,
+// independently-tested function calculations.ts already exports for
+// exactly this purpose — never a second, separately-invented
+// possible-cause derivation.
+import { getPossibleReconciliationCauses, type PossibleReconciliationCause } from '../utils/calculations';
 // [Business Worth Evolution — Implementation Authorization, Increment 4;
 // Specification §15, FR-20-FR-23] The ONLY valuation engine this file
 // uses for Mode A — reused exactly as-is, never duplicated. See that
@@ -481,6 +486,33 @@ const ExistingProductSummary: React.FC<{
   );
 };
 
+// [Feature — reconciliation signal reaching the Owner, Owner-requested]
+// Maps a PossibleReconciliationCause (calculations.ts) to a
+// human-readable Portuguese label carrying its own evidence figure —
+// matching this file's existing convention (no i18n/t() anywhere in
+// this component; see the header comment at getPossibleReconciliationCauses'
+// own import, above). Pure, presentation-only — never re-derives or
+// second-guesses the evidence itself, only formats what the pure
+// function already computed.
+function renderReconciliationCauseLabel(cause: PossibleReconciliationCause, currencySymbol: string): string {
+  switch (cause.key) {
+    case 'unrecordedExpense':
+      return `Despesas registadas desde a última medição: ${formatCurrency(cause.evidenceAmount ?? 0, currencySymbol)}`;
+    case 'unrecordedBreakage':
+      return `Quebras registadas desde a última medição: ${formatCurrency(cause.evidenceAmount ?? 0, currencySymbol)}`;
+    case 'unrecordedLevantamento':
+      return `Levantamentos registados desde a última medição: ${formatCurrency(cause.evidenceAmount ?? 0, currencySymbol)}`;
+    case 'supplierPaymentNotUpdated':
+      return `${cause.evidenceCount ?? 0} dívida(s) a fornecedores por pagar, totalizando ${formatCurrency(cause.evidenceAmount ?? 0, currencySymbol)}`;
+    case 'receivablesRequireFollowUp':
+      return `${cause.evidenceCount ?? 0} dívida(s) a receber de clientes, totalizando ${formatCurrency(cause.evidenceAmount ?? 0, currencySymbol)}`;
+    case 'incorrectStockCount':
+      return 'Uma contagem física pode sempre conter um erro de contagem';
+    case 'stockNotProperlyRecorded':
+      return 'Pode haver stock que não foi devidamente registado (compra, quebra ou venda)';
+  }
+}
+
 export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ onComplete }) => {
   const {
     business,
@@ -508,6 +540,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // review/confirm flow every ordinary Contagem already uses.
     pendingBusinessWorthCorrection,
     clearBusinessWorthCorrection,
+    // [Feature — reconciliation signal reaching the Owner] Needed by
+    // getPossibleReconciliationCauses (calculations.ts) — the SAME
+    // live payables/receivables arrays already used everywhere else in
+    // this codebase for this purpose, never a second, separately
+    // fetched copy.
+    payables,
+    receivables,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -576,6 +615,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // receipt can never disagree with what was actually persisted.
   const [savedSellingTotal, setSavedSellingTotal] = useState<number>(0);
   const [savedTally, setSavedTally] = useState<StockCountTallyResult | null>(null);
+  // [Feature — reconciliation signal reaching the Owner] Captured the
+  // same way as savedTotal/savedSellingTotal, from the SAME
+  // recordStockCount return value — undefined on an ordinary
+  // confirmation with nothing to report (no snapshot produced, or a
+  // snapshot whose difference and every "since" figure were genuinely
+  // zero), never a fabricated empty object. The success screen below
+  // only renders this section when it is genuinely present.
+  const [savedReconciliation, setSavedReconciliation] = useState<StockCountReconciliationSignal | undefined>(undefined);
   // [Feature — optional local download] Holds the pending auto-navigate
   // timer (see the existing `setTimeout(() => onComplete(), 2200)` call
   // below) so a download button can cancel it — without this, clicking
@@ -1718,6 +1765,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // fallback only, never an expected runtime path here.
       setSavedSellingTotal(saved.totalSellingValue ?? 0);
       setSavedTally(pendingTally);
+      setSavedReconciliation(saved.businessWorthReconciliation);
       setSavedMessage(
         pendingBusinessWorthCorrection
           ? 'Correção registada com sucesso!'
@@ -1735,7 +1783,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // this set would otherwise let a later, entirely unrelated count
       // collide with this one's deterministic stockCounts id.
       submissionIdRef.current = null;
-      autoAdvanceTimerRef.current = setTimeout(() => onComplete(), 2200);
+      // [Feature — reconciliation signal reaching the Owner] An ordinary
+      // confirmation with nothing to report still auto-advances after
+      // 2200ms exactly as before. When there IS something meaningful to
+      // show, the auto-advance is skipped entirely — 2.2 seconds isn't
+      // enough time to read a reconciliation note, and sweeping the
+      // Owner to the Dashboard before they've seen it would defeat the
+      // entire point of surfacing it. "Continuar →" (below) still lets
+      // them move on immediately whenever they're ready.
+      if (!saved.businessWorthReconciliation) {
+        autoAdvanceTimerRef.current = setTimeout(() => onComplete(), 2200);
+      }
     } catch (err: any) {
       setError(err.message || 'Erro ao registar a contagem de stock.');
       setPendingTally(null);
@@ -1846,6 +1904,72 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               : ''}
           </p>
         )}
+        {/* [Feature — reconciliation signal reaching the Owner, Owner-
+            requested] Rendered only when recordStockCount's own return
+            value actually carried something to report (see
+            savedReconciliation's own declaration comment, above) — an
+            ordinary confirmation with nothing unusual renders nothing
+            here at all, not an empty card. Deliberately calm, neutral
+            framing throughout ("possíveis causas a investigar," never
+            "erro"/"problema") — matching FR-56's own "never asserted as
+            fact" discipline; this is evidence to consider, not an
+            accusation or a determined explanation. getPossibleReconciliationCauses
+            (calculations.ts) is a pure function reading only
+            savedReconciliation's own already-captured figures plus the
+            live payables/receivables arrays — never a second,
+            independently-invented evidence check. */}
+        {savedReconciliation && (() => {
+          const possibleCauses = getPossibleReconciliationCauses({
+            expensesSinceLastSnapshot: savedReconciliation.expensesSinceLastSnapshot,
+            breakagesSinceLastSnapshot: savedReconciliation.breakagesSinceLastSnapshot,
+            levantamentosSinceLastSnapshot: savedReconciliation.levantamentosSinceLastSnapshot,
+            outstandingPayables: payables,
+            outstandingReceivables: receivables,
+          });
+          const hasWorthDifference =
+            typeof savedReconciliation.difference === 'number' && Math.abs(savedReconciliation.difference) >= 0.01;
+          const hasCashDifference =
+            typeof savedReconciliation.cashReconciliationDifference === 'number' &&
+            Math.abs(savedReconciliation.cashReconciliationDifference) >= 0.01;
+          if (!hasWorthDifference && !hasCashDifference) return null;
+          return (
+            <div className="w-full max-w-md bg-amber-50/60 border border-amber-200 rounded-2xl px-4 py-3.5 text-left space-y-2">
+              <p className="text-[11px] font-bold uppercase tracking-wide text-amber-700">
+                Nota de Reconciliação
+              </p>
+              {hasWorthDifference && (
+                <p className="text-[13px] text-gray-700">
+                  O Valor do Negócio medido ficou{' '}
+                  <span className="font-semibold">
+                    {formatCurrency(Math.abs(savedReconciliation.difference!), currencySymbol)}
+                  </span>{' '}
+                  {savedReconciliation.difference! < 0 ? 'abaixo' : 'acima'} do valor estimado antes desta contagem.
+                </p>
+              )}
+              {hasCashDifference && (
+                <p className="text-[13px] text-gray-700">
+                  A posição de caixa declarada difere em{' '}
+                  <span className="font-semibold">
+                    {formatCurrency(Math.abs(savedReconciliation.cashReconciliationDifference!), currencySymbol)}
+                  </span>{' '}
+                  do que o registo de caixa (Dívidas) indica.
+                </p>
+              )}
+              {possibleCauses.length > 0 && (
+                <div className="pt-1 space-y-1">
+                  <p className="text-[11px] font-semibold text-amber-700">
+                    Possíveis causas a investigar:
+                  </p>
+                  <ul className="text-[12.5px] text-gray-600 space-y-1 list-disc list-inside">
+                    {possibleCauses.map((cause) => (
+                      <li key={cause.key}>{renderReconciliationCauseLabel(cause, currencySymbol)}</li>
+                    ))}
+                  </ul>
+                </div>
+              )}
+            </div>
+          );
+        })()}
         {/* [Feature — optional local download, Owner-requested] Purely
             optional — tapping neither button changes nothing about the
             existing 2200ms auto-navigate-to-Dashboard behavior. Tapping
