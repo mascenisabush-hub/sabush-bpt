@@ -1314,36 +1314,93 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     }
 
     const newRows = result.proposal.lineItems.map(buildRowFromProposalLineItem);
-    setRows(prev => {
-      // Drop any still-pristine, never-typed-into default row before
-      // appending the scan's rows, so a fresh Add Stock screen doesn't
-      // end up with one useless empty row alongside the real ones —
-      // but never drop a row the user has already started filling in.
-      // [Fix — createEmptyRow's own '1.50'/'3.00' placeholder defaults
-      // were removed (never invent a price for a genuinely new/unmatched
-      // product); a pristine row's costPrice/sellingPrice are now '' by
-      // default instead, unless Product Memory found something real to
-      // prefill — this check is updated to match, not to compare against
-      // the removed placeholders.]
-      const kept = prev.filter(
-        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== ''
-      );
-      return [...kept, ...newRows];
-    });
+    // [Bug fix — scanned receipt data lost if the user leaves the page
+    // within the autosave debounce window] Previously this only called
+    // setRows(prev => ...) with a functional updater, relying entirely
+    // on the ordinary autosave effect below (800ms debounced, by
+    // design, so a fast typist doesn't trigger a write per keystroke)
+    // to eventually persist it. A completed scan is not typing — it's
+    // a single, already-finished batch of real data. Confirmed via
+    // Firestore Console: an Owner's purchaseDrafts document contained
+    // only the pristine default empty row (productName: "", quantity
+    // the '50' placeholder), even though the phone's screen had shown
+    // the receipt's real items filled in moments earlier — the exact
+    // symptom of the debounced save's pending setTimeout being
+    // cancelled by the effect's own cleanup before it ever fired
+    // (backgrounding the tab, switching apps, or navigating off to
+    // continue on another device — precisely the cross-device workflow
+    // this feature exists for). `kept`/`finalRows` are now computed
+    // directly from the current `rows` (not inside setRows' own
+    // functional updater) specifically so this same, concrete array is
+    // available a few lines down to save immediately, not just to
+    // render.
+    const kept = rows.filter(
+      r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== ''
+    );
+    const finalRows = [...kept, ...newRows];
+    setRows(finalRows);
 
     // [Smart Stock Entry — Tier 1] Supplier/date, when the document
     // clearly contained them — free-text only, never an existing
     // SupplierRecord auto-selected (that remains a separate, explicit
     // user action via the existing supplier autocomplete below).
-    if (result.proposal.supplierName.value && !supplierId && !supplierName.trim()) {
-      setSupplierName(result.proposal.supplierName.value);
+    // Mirrored into finalSupplierName/finalDate (not just the state
+    // setters) for the exact same immediate-save reason as finalRows
+    // above — the debounced autosave effect would otherwise still be
+    // working off the PRE-scan supplierName/date closure value for the
+    // rest of this render.
+    const finalSupplierName =
+      result.proposal.supplierName.value && !supplierId && !supplierName.trim()
+        ? result.proposal.supplierName.value
+        : supplierName;
+    if (finalSupplierName !== supplierName) {
+      setSupplierName(finalSupplierName);
     }
-    if (result.proposal.documentDate.value && /^\d{4}-\d{2}-\d{2}$/.test(result.proposal.documentDate.value)) {
-      setDate(result.proposal.documentDate.value);
+    const finalDate =
+      result.proposal.documentDate.value && /^\d{4}-\d{2}-\d{2}$/.test(result.proposal.documentDate.value)
+        ? result.proposal.documentDate.value
+        : date;
+    if (finalDate !== date) {
+      setDate(finalDate);
     }
 
     setScanState('idle');
     setScanInputMethod(null);
+
+    // [Bug fix — scanned receipt data lost if the user leaves the page
+    // within the autosave debounce window, continued from finalRows'
+    // own comment above] Save immediately here, right after a
+    // successful scan merge — bypassing the 800ms debounce entirely —
+    // so the receipt's data is durably on the server BEFORE the person
+    // can navigate away, background the tab, or switch devices. The
+    // ordinary debounced autosave effect below will still also fire
+    // shortly after (its dependencies include `rows`, which just
+    // changed) — that's fine and deliberately left alone: same data,
+    // same document, last-write-wins, no harm in it running twice.
+    // Errors here reuse the exact same visible error+retry UI as the
+    // debounced autosave's own failure path (draftSaveState === 'error'
+    // below), rather than a separate/silent failure mode — a scan that
+    // succeeded but couldn't reach the server is exactly the situation
+    // that visible state exists to surface.
+    try {
+      setDraftSaveState('saving');
+      await savePurchaseDraft(
+        finalRows.map(rowToDraftLineItem),
+        {
+          supplierId,
+          supplierName: finalSupplierName || undefined,
+          supplierPhone: supplierPhone || undefined,
+          supplierNotes: supplierNotes || undefined,
+        },
+        finalDate,
+        batchNotes || undefined,
+        currentPurchaseEventId
+      );
+      setDraftSaveState('saved');
+    } catch (err) {
+      console.error('[AddStockView] immediate post-scan draft save failed', err);
+      setDraftSaveState('error');
+    }
   };
 
   // Explicit "reject this scan" — removes only the AI-sourced rows,
