@@ -708,33 +708,46 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded, currentPurchaseEventId]);
 
-  // [Bug fix — unsaved edits lost when leaving the Add Stock tab] Same
-  // root cause and same class of loss as the immediate post-scan save
-  // fix above, but general to ANY edit, not just a scan: App.tsx
-  // renders AddStockView conditionally ({activeTab === 'add-stock' &&
-  // ...}), so switching to any other tab in the app UNMOUNTS this
-  // component outright. The debounced autosave effect just above has
-  // its own cleanup (`return () => clearTimeout(handle)`), which React
-  // runs on unmount exactly like on every dependency change — so any
-  // edit made within the last 800ms, with its save still pending, was
-  // simply discarded the moment someone switched tabs, with nothing
-  // visible to indicate it. Owner-reported: "leave that tab, coming
-  // back you find nothing."
+  // [Bug fix — unsaved edits lost on internal tab switch AND on a real
+  // hard refresh/tab close] Two related but distinct gaps, both closed
+  // here together:
   //
-  // Fix: mirror the latest values this component would otherwise only
-  // read via closure into refs, updated on every render — refs (not
-  // effect dependencies) specifically because this effect below must
-  // run its cleanup exactly ONCE, on unmount only (empty dependency
-  // array), yet still see the CURRENT form contents at that moment,
-  // not whatever was current when the effect first mounted. On
-  // unmount, if there's real content and nothing is blocking a save
-  // (the exact same three gates the debounced autosave effect already
-  // uses), fire one immediate, best-effort save. Fire-and-forget by
-  // necessity — the component is already gone by the time any
-  // response arrives, so there is no UI left to show a spinner or a
-  // retry button on; console.error is the most this can do for a
-  // failure here, which is still strictly better than the previous
-  // silent data loss.
+  // (1) App.tsx renders AddStockView conditionally ({activeTab ===
+  //     'add-stock' && ...}), so switching to any other tab in the app
+  //     UNMOUNTS this component outright. The debounced autosave
+  //     effect above has its own cleanup (clearTimeout), which React
+  //     runs on unmount exactly like on every dependency change — any
+  //     edit made within the last 800ms, with its save still pending,
+  //     was simply discarded. Owner-reported: "leave that tab, coming
+  //     back you find nothing."
+  //
+  // (2) A genuine hard refresh, tab close, or browser navigation is
+  //     NOT a React unmount at all — the whole JS context is torn down
+  //     by the browser, so React never gets to run (1)'s cleanup in
+  //     the first place. Owner-reported, separately: "hard refreshing
+  //     when I have draft in add stock, they disappear." This is the
+  //     exact same root cause and exact same fix InitialStockCountView
+  //     and PeriodicStockCountView already carry for this same class
+  //     of form (see InitialStockCountView.tsx's own identical-purpose
+  //     effect, "Draft-loss fix, part 2") — AddStockView was simply
+  //     missing it, despite useUnsavedChangesWarning.ts's own comment
+  //     already claiming "+Stock" had this. It didn't; now it does,
+  //     using the exact same proven mechanism: 'visibilitychange'
+  //     (tab hidden — covers switching apps/minimizing, the most
+  //     reliable signal on mobile) and 'pagehide' (covers an actual
+  //     reload/close/navigation) rather than 'beforeunload', which
+  //     mobile Safari and some other browsers don't reliably fire at
+  //     all. Best-effort, fire-and-forget — the browser gives no
+  //     guarantee an async write completes once the page is actually
+  //     gone — but it closes the large, common window (scan or type,
+  //     then immediately refresh/switch away) that caused the loss
+  //     here; it does not claim to make loss impossible in literally
+  //     every case (e.g. the device losing power mid-write).
+  //
+  // Refs (not effect dependencies) specifically because flushDraftNow
+  // must always see the CURRENT form contents at the moment it fires,
+  // not whatever was current when an effect first mounted — updated on
+  // every render, read only inside the flush itself.
   const latestAutosaveInputsRef = useRef({
     rows,
     date,
@@ -761,45 +774,58 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     isSaving,
     submittedMessage,
   };
+  const flushDraftNow = () => {
+    const {
+      rows: r,
+      date: d,
+      supplierId: sId,
+      supplierName: sName,
+      supplierPhone: sPhone,
+      supplierNotes: sNotes,
+      batchNotes: bNotes,
+      currentPurchaseEventId: eventId,
+      draftLoaded: loaded,
+      isSaving: saving,
+      submittedMessage: submitted,
+    } = latestAutosaveInputsRef.current;
+    // Exactly the same three gates as the debounced autosave effect
+    // above: never write before the initial load, never write over an
+    // in-flight or just-finished submission (that draft has already
+    // been explicitly deleted as part of finalization — writing stale
+    // in-memory rows here would wrongly resurrect it).
+    if (!loaded || saving || submitted) return;
+    const hasAnyContent =
+      r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice) ||
+      sName.trim() ||
+      bNotes.trim();
+    if (!hasAnyContent) return;
+    savePurchaseDraft(
+      r.map(rowToDraftLineItem),
+      { supplierId: sId, supplierName: sName || undefined, supplierPhone: sPhone || undefined, supplierNotes: sNotes || undefined },
+      d,
+      bNotes || undefined,
+      eventId
+    ).catch((err) => {
+      console.error('[AddStockView] draft flush-on-exit failed', err);
+    });
+  };
+  // Empty deps — this must run its cleanup exactly once, on unmount,
+  // reading the CURRENT ref contents at that moment, not on every
+  // keystroke like the debounced effect above.
   useEffect(() => {
-    return () => {
-      const {
-        rows: r,
-        date: d,
-        supplierId: sId,
-        supplierName: sName,
-        supplierPhone: sPhone,
-        supplierNotes: sNotes,
-        batchNotes: bNotes,
-        currentPurchaseEventId: eventId,
-        draftLoaded: loaded,
-        isSaving: saving,
-        submittedMessage: submitted,
-      } = latestAutosaveInputsRef.current;
-      // Exactly the same three gates as the debounced autosave effect
-      // above: never write before the initial load, never write over
-      // an in-flight or just-finished submission (that draft has
-      // already been explicitly deleted as part of finalization —
-      // writing stale in-memory rows here would wrongly resurrect it).
-      if (!loaded || saving || submitted) return;
-      const hasAnyContent =
-        r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice) ||
-        sName.trim() ||
-        bNotes.trim();
-      if (!hasAnyContent) return;
-      savePurchaseDraft(
-        r.map(rowToDraftLineItem),
-        { supplierId: sId, supplierName: sName || undefined, supplierPhone: sPhone || undefined, supplierNotes: sNotes || undefined },
-        d,
-        bNotes || undefined,
-        eventId
-      ).catch((err) => {
-        console.error('[AddStockView] flush-on-unmount draft save failed', err);
-      });
+    return () => flushDraftNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraftNow();
     };
-    // Empty deps — this must run its cleanup exactly once, on unmount,
-    // reading the CURRENT ref contents at that moment, not on every
-    // keystroke like the debounced effect above.
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', flushDraftNow);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', flushDraftNow);
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
