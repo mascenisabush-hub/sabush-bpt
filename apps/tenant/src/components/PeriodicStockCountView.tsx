@@ -6,6 +6,12 @@ import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+// [Business Worth Evolution — Decision 37, B.1 completion] Same import
+// InitialStockCountView.tsx already uses for its own read-only
+// relationship-chain display — reused as a pattern, not shared code,
+// per this file's own established precedent (see ExistingProductSummary's
+// own header comment, below).
+import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 // [Business Worth Evolution — Implementation Authorization, Increment 4;
 // Specification §15, FR-20-FR-23] The ONLY valuation engine this file
@@ -400,6 +406,77 @@ const NewProductInfoPanel: React.FC<{
       </div>
 
       <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
+    </div>
+  );
+};
+
+// [Business Worth Evolution — Decision 37, B.1 completion; Plan §B.1,
+// Rule 8 Finding FT-4] The read-only counterpart NewProductInfoPanel's
+// own Plan text named explicitly but was never actually built when
+// B.1 first shipped (Execution Record §37 implemented only the
+// editable, genuinely-new-product branch above — "never for an
+// already-catalogued product" — leaving nothing rendered in this
+// panel's place for an existing product at all). B.1's own text:
+// "For an existing product, this panel is replaced by a read-only
+// summary line pulling Product.unitRelationship/purchase cost basis
+// via the already-existing getUnitRelationshipForProductName/
+// findMostRecentBatchForProduct (Finding FT-4 — no new read path
+// required)." This completes that already-authorized scope — not a
+// new capability, and not B.5 (a separate, still-unstarted item whose
+// own Plan text says it needs no new code "beyond B.1's read-only-
+// summary branch" — i.e. this one).
+//
+// Read path: costBasisByProductName (buildProductCostBasisMap,
+// already computed above for FR-67) is the exact
+// Product.costPrice + Product.unitRelationship.units[0].unit pair
+// Finding FT-4 points to — reused verbatim, no new lookup. The
+// relationship-chain display mirrors InitialStockCountView.tsx's own
+// existing "1 Cx = 4 Emb = 24 Un" read-only pattern (reused as a
+// pattern per this file's own established precedent — see
+// NewProductInfoPanel's sibling comment above — never imported from
+// that file). Purely a display: no state, no onChange, no write path.
+//
+// Nothing is fabricated when a product has only partial memory (e.g.
+// a confirmed relationship but no recorded cost, or vice versa) — each
+// half renders independently and is simply omitted, never defaulted,
+// when its own data is absent; the whole summary renders nothing at
+// all when NEITHER half exists, so a product with no memory yet shows
+// no empty box.
+const ExistingProductSummary: React.FC<{
+  productName: string;
+  currencySymbol: string;
+  costBasis: ProductCostBasis | undefined;
+  relationship: UnitRelationship | undefined;
+}> = ({ productName, currencySymbol, costBasis, relationship }) => {
+  const hasRelationship = !!relationship && isValidUnitRelationship(relationship);
+  const hasCostBasis = !!costBasis && Number.isFinite(costBasis.purchaseCost) && costBasis.purchaseCost >= 0 && !!costBasis.purchaseUnit;
+  if (!hasRelationship && !hasCostBasis) return null;
+  return (
+    <div className="col-span-2 sm:col-span-7 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-1.5">
+      <div className="flex items-center gap-1.5">
+        <span className="text-[10.5px] font-bold uppercase tracking-wide text-gray-500">Memória do produto</span>
+        <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
+      </div>
+      {hasCostBasis && (
+        <p className="text-[12.5px] text-gray-600">
+          Custo de compra original:{' '}
+          <span className="font-mono font-semibold text-[#111827]">{formatCurrency(costBasis!.purchaseCost, currencySymbol)}</span>
+          {' '}/ {costBasis!.purchaseUnit}
+        </p>
+      )}
+      {hasRelationship && (
+        <p className="text-[12.5px] text-gray-600 font-mono">
+          1 {relationship!.units[0].unit}
+          {relationship!.units.slice(1).map((u, i) => {
+            const factor = getConversionFactor(relationship!, relationship!.units[0].unit, u.unit);
+            return (
+              <span key={i}>
+                {' '}= <strong className="text-[#111827]">{factor ?? '?'}</strong> {u.unit}
+              </span>
+            );
+          })}
+        </p>
+      )}
     </div>
   );
 };
@@ -2393,6 +2470,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             );
                           })()}
 
+                        {/* [Business Worth Evolution — Decision 37, B.1
+                            completion] Read-only counterpart to
+                            NewProductInfoPanel — every catalog row is,
+                            by construction, never "genuinely new"
+                            (isGenuinelyNewProductName, unchanged), so
+                            no additional gate beyond
+                            isFirstPortionOfMultiPortionGroup is needed
+                            here, mirroring Mode A's own identical gate
+                            immediately above. Renders nothing when the
+                            product has no remembered cost basis or
+                            relationship yet (ExistingProductSummary's
+                            own null-return). */}
+                        {isFirstPortionOfMultiPortionGroup && (
+                          <ExistingProductSummary
+                            productName={row.productName}
+                            currencySymbol={currencySymbol}
+                            costBasis={costBasisByProductName.get(productKeyFor(row.productName))}
+                            relationship={getUnitRelationshipForProductName(row.productName)}
+                          />
+                        )}
+
                         <div>
                           <label className={fieldLabelClass}>Qtd</label>
                           <input
@@ -2711,6 +2809,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             />
                           );
                         })()}
+
+                      {/* [Business Worth Evolution — Decision 37, B.1
+                          completion] Sibling of NewProductInfoPanel
+                          immediately above — renders instead of it
+                          when this card's product already exists in
+                          the catalog (!isNewProduct), for the one case
+                          NewProductInfoPanel's own gate deliberately
+                          excludes: an existing product whose current
+                          Contagem portions are entirely manual rows
+                          (e.g. its catalog row was removed from this
+                          count — handleRemoveCatalogRow — and
+                          re-typed manually). Same
+                          cardIsFirstPortionOfMultiPortionGroup gate as
+                          NewProductInfoPanel, so exactly one of the two
+                          ever renders per card, never both. Renders
+                          nothing when the product has no remembered
+                          cost basis or relationship yet. */}
+                      {!isNewProduct && cardIsFirstPortionOfMultiPortionGroup && (
+                        <ExistingProductSummary
+                          productName={group.displayName}
+                          currencySymbol={currencySymbol}
+                          costBasis={costBasisByProductName.get(productKeyFor(group.displayName))}
+                          relationship={getUnitRelationshipForProductName(group.displayName)}
+                        />
+                      )}
 
                       <div className="space-y-1">
                         {group.rows.map(({ idx }) => {
