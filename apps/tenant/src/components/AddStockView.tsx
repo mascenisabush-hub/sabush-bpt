@@ -26,6 +26,37 @@ interface StockRowItem {
   unit: string;
   costPrice: string;
   sellingPrice: string;
+  // [Feature — unit-aware price re-derivation on manual unit change]
+  // True only while this row's costPrice/sellingPrice still reflects an
+  // untouched Product Memory auto-fill (initial fill, product
+  // reselection, or a prior unit-change re-derivation) — cleared the
+  // moment the Owner types directly into the corresponding price field.
+  // Read by handleUnitChange (below) to decide whether changing the
+  // unit should re-derive that specific price via
+  // resolveUnitAwarePrice, or leave an Owner-entered price untouched —
+  // per the Owner's own explicit choice: "leave my manual price alone,
+  // only auto-convert if I haven't touched it." Independent per field
+  // (costPrice/sellingPrice) since an Owner may hand-edit only one of
+  // the two. Undefined (never auto-filled, e.g. a genuinely new
+  // product with no memory) is treated identically to false — no
+  // re-derivation is attempted either way.
+  costPriceAutoFilled?: boolean;
+  sellingPriceAutoFilled?: boolean;
+  // [Bug fix — recovering from a mismatched unit] The unit
+  // costPrice/sellingPrice is CURRENTLY, truly expressed in — separate
+  // from `unit` above, which is simply whatever the Owner has typed/
+  // selected as the row's own unit right now. These stay pinned to
+  // the last unit a conversion actually succeeded against; `unit`
+  // itself is free to become something genuinely unconvertible (e.g.
+  // a typo, or a real but unrelated unit) without disturbing them.
+  // Without this distinction, typing an out-of-chain unit and THEN
+  // correcting to a different, genuinely valid one would try to
+  // convert from the out-of-chain unit (which was never the price's
+  // real basis) and fail a second time, even though the original,
+  // still-untouched price was perfectly convertible from where it
+  // actually started.
+  costPriceBasisUnit?: string;
+  sellingPriceBasisUnit?: string;
   isDropdownOpen?: boolean;
   isUnitPopoverOpen?: boolean;
   // [Restock Observation Amendment v1.0] Optional, existing-product-only
@@ -332,6 +363,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       // Owner who genuinely forgets to fill it in before confirming.
       costPrice: initialCost,
       sellingPrice: initialSell,
+      // [Feature — unit-aware price re-derivation] Marked auto-filled
+      // only when a real memory record actually supplied the price —
+      // an empty '' (no memory at all) is not a fill, so nothing would
+      // need re-deriving on a later unit change anyway.
+      costPriceAutoFilled: initialCost !== '',
+      sellingPriceAutoFilled: initialSell !== '',
+      costPriceBasisUnit: initialCost !== '' ? initialUnit : undefined,
+      sellingPriceBasisUnit: initialSell !== '' ? initialUnit : undefined,
       isDropdownOpen: false,
       isUnitPopoverOpen: false,
       previousRemainingQuantity: '',
@@ -603,6 +642,78 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     );
   };
 
+  // [Feature — unit-aware price re-derivation on manual unit change,
+  // Owner-requested: "I still want it editable — if I fill in Emb,
+  // knowing the relationship, still give me the right results."]
+  // Re-derives costPrice/sellingPrice for the row's NEW unit whenever
+  // the Owner changes it — reusing resolveUnitAwarePrice, the exact
+  // same conversion machinery the initial auto-fill already uses, so
+  // there is no second, independently-invented calculation.
+  //
+  // Per the Owner's own explicit decisions:
+  // - A price the Owner has manually typed since the last auto-fill
+  //   (costPriceAutoFilled/sellingPriceAutoFilled false) is NEVER
+  //   overwritten here — only an untouched, still-auto-filled price is
+  //   re-derived.
+  // - When the new unit falls outside the product's confirmed
+  //   relationship chain, the price is left exactly as it stands
+  //   (never blanked, never fabricated) — a live warning renders
+  //   instead (see the unit-mismatch caption in the row JSX, below),
+  //   the same "leave it, signal the mistake" pattern Mode A's own
+  //   allPortionsConvertible warning already establishes in Contagem.
+  //
+  // Converts from the row's own CURRENT price/unit (not by re-querying
+  // Product Memory from scratch) — this uniformly covers a price that
+  // originated from the receipt's own AI-detected reading just as
+  // correctly as one that originated from memory, since both are, at
+  // the moment this runs, already correctly expressed in the row's
+  // OLD unit; only the target changes.
+  const handleUnitChange = (rowId: string, newUnit: string) => {
+    const row = rows.find(r => r.id === rowId);
+    if (!row) return;
+    if (row.unit.trim().toLowerCase() === newUnit.trim().toLowerCase()) {
+      updateRow(rowId, { unit: newUnit });
+      return;
+    }
+    const matched = products.find(p => p.name.trim().toLowerCase() === row.productName.trim().toLowerCase());
+    const relationship = matched?.unitRelationship;
+    const updates: Partial<StockRowItem> = { unit: newUnit };
+
+    if (row.costPriceAutoFilled && row.costPrice !== '') {
+      // Converts from the price's own recorded TRUE basis unit — never
+      // from `row.unit` directly, which may itself already be a
+      // previously-typed, unconvertible unit that was never the
+      // price's real origin (see costPriceBasisUnit's own comment).
+      // Falls back to row.unit only for a row created before this
+      // field existed.
+      const basisUnit = row.costPriceBasisUnit ?? row.unit;
+      const resolved = resolveUnitAwarePrice(parseFloat(row.costPrice) || 0, basisUnit, newUnit, relationship);
+      if (resolved !== '') {
+        updates.costPrice = resolved;
+        updates.costPriceAutoFilled = true;
+        updates.costPriceBasisUnit = newUnit;
+      }
+      // resolved === '' (new unit outside the confirmed chain, or no
+      // relationship at all): costPrice AND costPriceBasisUnit are
+      // both left completely untouched — never cleared, never
+      // fabricated. A later switch to a THIRD unit that IS
+      // convertible still re-derives correctly from this same
+      // known-good price and its own true basis, not from the
+      // unconvertible unit that was just rejected.
+    }
+    if (row.sellingPriceAutoFilled && row.sellingPrice !== '') {
+      const basisUnit = row.sellingPriceBasisUnit ?? row.unit;
+      const resolvedSell = resolveUnitAwarePrice(parseFloat(row.sellingPrice) || 0, basisUnit, newUnit, relationship);
+      if (resolvedSell !== '') {
+        updates.sellingPrice = resolvedSell;
+        updates.sellingPriceAutoFilled = true;
+        updates.sellingPriceBasisUnit = newUnit;
+      }
+    }
+
+    updateRow(rowId, updates);
+  };
+
   const handleAddRow = () => {
     setRows(prev => [...prev, createEmptyRow('')]);
   };
@@ -662,6 +773,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       costPrice: newCost || undefined,
       sellingPrice: newSell || undefined,
       unit: newUnit || undefined,
+      // [Feature — unit-aware price re-derivation] Same convention as
+      // createEmptyRow's own identical fields — marks the price
+      // auto-filled only when a real memory record actually supplied
+      // it, so a later manual unit change knows it's still safe to
+      // re-derive.
+      costPriceAutoFilled: !!newCost,
+      sellingPriceAutoFilled: !!newSell,
+      costPriceBasisUnit: newCost ? newUnit : undefined,
+      sellingPriceBasisUnit: newSell ? newUnit : undefined,
       isDropdownOpen: false,
       // Switching products resets any previously-entered observation —
       // it was physically describing the OLD product's prior cycle and
@@ -883,6 +1003,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       unit,
       costPrice,
       sellingPrice,
+      // [Feature — unit-aware price re-derivation] Any non-empty value
+      // here is, at construction time, either the receipt's own
+      // AI-detected cost (correctly expressed in THIS row's own unit,
+      // since that's the unit the AI read it against) or a memory-
+      // derived figure already converted to this row's unit via
+      // resolveUnitAwarePrice above — never yet manually edited, since
+      // this row does not exist until this function returns it. A
+      // later manual unit change (handleUnitChange, below) is
+      // therefore safe to re-derive from whichever of these is still
+      // true.
+      costPriceAutoFilled: costPrice !== '',
+      sellingPriceAutoFilled: sellingPrice !== '',
+      costPriceBasisUnit: costPrice !== '' ? unit : undefined,
+      sellingPriceBasisUnit: sellingPrice !== '' ? unit : undefined,
       isDropdownOpen: false,
       isUnitPopoverOpen: false,
       previousRemainingQuantity: '',
@@ -1878,7 +2012,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               placeholder="un"
                               value={row.unit}
-                              onChange={e => updateRow(row.id, { unit: e.target.value })}
+                              onChange={e => handleUnitChange(row.id, e.target.value)}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-1.5 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
                             />
                             <button
@@ -1909,12 +2043,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                     <button
                                       key={u}
                                       type="button"
-                                      onClick={() =>
-                                        updateRow(row.id, {
-                                          unit: u,
-                                          isUnitPopoverOpen: false,
-                                        })
-                                      }
+                                      onClick={() => {
+                                        handleUnitChange(row.id, u);
+                                        updateRow(row.id, { isUnitPopoverOpen: false });
+                                      }}
                                       className={`text-[11px] px-2 py-1 rounded-md border font-mono transition-colors duration-150 ${
                                         row.unit.toLowerCase() === u.toLowerCase()
                                           ? 'bg-[#D4AF37]/10 border-[#D4AF37]/40 text-[#B8952F] font-bold'
@@ -1928,6 +2060,36 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               </div>
                             </>
                           )}
+
+                          {/* [Feature — unit-aware price re-derivation]
+                              Live-computed warning, never stored state
+                              — mirrors PeriodicStockCountView.tsx's own
+                              identical Mode A warning
+                              (allPortionsConvertible) both in wording
+                              and in "leave it, signal the mistake"
+                              intent. Shown only when this row matches a
+                              catalog product with a confirmed
+                              relationship AND the row's current unit
+                              falls outside that relationship's own
+                              chain — the exact case where
+                              handleUnitChange above could not re-derive
+                              a price and left whatever was already
+                              there untouched. */}
+                          {(() => {
+                            const matched = products.find(
+                              p => p.name.trim().toLowerCase() === row.productName.trim().toLowerCase()
+                            );
+                            if (!matched?.unitRelationship || !isValidUnitRelationship(matched.unitRelationship)) return null;
+                            const inChain = matched.unitRelationship.units.some(
+                              u => u.unit.trim().toLowerCase() === row.unit.trim().toLowerCase()
+                            );
+                            if (inChain) return null;
+                            return (
+                              <p className="mt-1 text-[11px] text-amber-600 font-medium leading-snug">
+                                {t('addStock.unitOutsideRelationshipWarning')}
+                              </p>
+                            );
+                          })()}
                         </div>
 
                         {/* Preço Compra */}
@@ -1938,7 +2100,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             min="0"
                             required
                             value={row.costPrice}
-                            onChange={e => updateRow(row.id, { costPrice: e.target.value })}
+                            onChange={e => updateRow(row.id, { costPrice: e.target.value, costPriceAutoFilled: false })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
                         </div>
@@ -1951,7 +2113,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             min="0"
                             required
                             value={row.sellingPrice}
-                            onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
+                            onChange={e => updateRow(row.id, { sellingPrice: e.target.value, sellingPriceAutoFilled: false })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
                           {/* [Fix — resolveUnitAwarePrice] Deliberately a
@@ -2207,9 +2369,28 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 type="text"
                                 required
                                 value={row.unit}
-                                onChange={e => updateRow(row.id, { unit: e.target.value })}
+                                onChange={e => handleUnitChange(row.id, e.target.value)}
                                 className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-1 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
                               />
+                              {/* [Feature — unit-aware price
+                                  re-derivation] Same live-computed
+                                  warning as the desktop layout above —
+                                  see that copy's own comment. */}
+                              {(() => {
+                                const matched = products.find(
+                                  p => p.name.trim().toLowerCase() === row.productName.trim().toLowerCase()
+                                );
+                                if (!matched?.unitRelationship || !isValidUnitRelationship(matched.unitRelationship)) return null;
+                                const inChain = matched.unitRelationship.units.some(
+                                  u => u.unit.trim().toLowerCase() === row.unit.trim().toLowerCase()
+                                );
+                                if (inChain) return null;
+                                return (
+                                  <p className="mt-1 text-[11px] text-amber-600 font-medium leading-snug">
+                                    {t('addStock.unitOutsideRelationshipWarning')}
+                                  </p>
+                                );
+                              })()}
                             </div>
                           </div>
 
@@ -2223,7 +2404,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               min="0"
                               required
                               value={row.costPrice}
-                              onChange={e => updateRow(row.id, { costPrice: e.target.value })}
+                              onChange={e => updateRow(row.id, { costPrice: e.target.value, costPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
                           </div>
@@ -2238,7 +2419,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               min="0"
                               required
                               value={row.sellingPrice}
-                              onChange={e => updateRow(row.id, { sellingPrice: e.target.value })}
+                              onChange={e => updateRow(row.id, { sellingPrice: e.target.value, sellingPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
                           </div>

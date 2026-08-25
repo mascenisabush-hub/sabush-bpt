@@ -410,6 +410,7 @@ export interface TranslationDict {
     createNewShort: string;
     unitSuggestionsTitle: string;
     unitSuggestionsLabel: string;
+    unitOutsideRelationshipWarning: string;
     totalProfitTitle: string;
     estProfitMobile: string;
     removeBatch: string;
@@ -1499,6 +1500,8 @@ export const pt: TranslationDict = {
     createNewShort: '+ Criar "{{name}}"',
     unitSuggestionsTitle: 'Sugestões de unidades',
     unitSuggestionsLabel: 'Unidades:',
+    unitOutsideRelationshipWarning:
+      'Esta unidade não faz parte da relação de unidades confirmada deste produto — o preço não foi alterado; confirme ou ajuste manualmente.',
     totalProfitTitle: 'Lucro Total: {{value}}',
     estProfitMobile: 'Lucro Est: {{value}}',
     removeBatch: 'Remover este lote',

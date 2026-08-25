@@ -398,6 +398,8 @@ export const en: TranslationDict = {
     createNewShort: '+ Create "{{name}}"',
     unitSuggestionsTitle: 'Unit suggestions',
     unitSuggestionsLabel: 'Units:',
+    unitOutsideRelationshipWarning:
+      "This unit isn't part of this product's confirmed unit relationship — the price was left unchanged; confirm or adjust it manually.",
     totalProfitTitle: 'Total Profit: {{value}}',
     estProfitMobile: 'Est. Profit: {{value}}',
     removeBatch: 'Remove this batch',
