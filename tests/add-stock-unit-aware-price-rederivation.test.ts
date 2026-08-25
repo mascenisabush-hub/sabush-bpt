@@ -208,3 +208,20 @@ describe('AddStockView.tsx — handleUnitChange is actually wired in (source-str
     assert.doesNotMatch(addStockSrc, /unitMismatch:\s*boolean/); // never a stored StockRowItem field
   });
 });
+
+describe('AddStockView.tsx — all three findLatestRememberedProductMemory call sites pass the product\'s confirmed selling unit (Owner-requested: "it should pull the selling unit")', () => {
+  it('every call site passes a 5th argument derived from unitRelationship.sellingUnit, guarded by isValidUnitRelationship — never an unvalidated read', () => {
+    const callSites = addStockSrc.match(/findLatestRememberedProductMemory\(\s*[\s\S]*?\);/g) || [];
+    assert.equal(callSites.length, 3, 'Expected exactly 3 call sites (createEmptyRow, handleSelectProductForTool, buildRowFromProposalLineItem)');
+    for (const call of callSites) {
+      assert.match(call, /isValidUnitRelationship\(\w+\.unitRelationship\)/);
+      assert.match(call, /\w+\.unitRelationship\?\.sellingUnit/);
+    }
+  });
+
+  it('cost price still starts from the receipt\'s own reading, never from memory, in the Smart Stock Entry path — unaffected by this change', () => {
+    const start = addStockSrc.indexOf('const buildRowFromProposalLineItem = (item: SmartStockEntryLineItemProposal): StockRowItem => {');
+    const nearby = addStockSrc.slice(start, start + 400);
+    assert.match(nearby, /let costPrice = item\.costPrice\.value != null \? String\(item\.costPrice\.value\) : '';/);
+  });
+});

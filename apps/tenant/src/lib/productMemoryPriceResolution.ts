@@ -144,7 +144,23 @@ export function findLatestRememberedProductMemory(
   productId: string,
   productName: string,
   batches: RememberedBatchSource[],
-  stockCounts: RememberedStockCountSource[]
+  stockCounts: RememberedStockCountSource[],
+  // [Owner-requested — "it should pull the selling unit"] When a
+  // Contagem counted this product as multiple portions (e.g. some Cx,
+  // some Un, each independently priced — the multi-unit valuation
+  // capability), more than one item in the same count can match. This
+  // resolves the ambiguity: prefer whichever portion is denominated in
+  // the product's own CONFIRMED designated selling unit
+  // (Product.unitRelationship.sellingUnit) over "whichever happens to
+  // be stored first." Purely a tie-break among otherwise-equally-valid
+  // candidates within the SAME winning count — never changes which
+  // count/batch wins overall, and every conversion this memory then
+  // feeds (resolveUnitAwarePrice) was already correct regardless of
+  // which portion was picked; this only makes the picked source more
+  // intuitive to the Owner, not more mathematically correct than
+  // before. Optional and backward-compatible: omitted entirely, this
+  // falls back to the previous "first match" behavior unchanged.
+  preferredSellingUnit?: string
 ): RememberedProductMemory | null {
   const latestBatch = batches.find((b) => b.productId === productId && !!b.unit);
   const batchCandidate = latestBatch
@@ -152,19 +168,26 @@ export function findLatestRememberedProductMemory(
     : null;
 
   const trimmedName = productName.trim().toLowerCase();
+  const trimmedPreferredUnit = preferredSellingUnit?.trim().toLowerCase();
   let countCandidate: { unit: string; costPrice: number; sellingPrice: number; asOfDate: string } | null = null;
   for (const count of stockCounts) {
-    const item = count.items.find(
+    const matches = count.items.filter(
       (i) =>
         (i.productId === productId || i.productName.trim().toLowerCase() === trimmedName) &&
         typeof i.sellingPrice === 'number' &&
         i.sellingPrice > 0 &&
         !!i.unit
     );
-    if (item) {
-      countCandidate = { unit: item.unit as string, costPrice: item.costPrice, sellingPrice: item.sellingPrice as number, asOfDate: count.date };
-      break; // stockCounts is newest-first — the first match is the most recent
-    }
+    if (matches.length === 0) continue;
+    const preferredMatch = trimmedPreferredUnit
+      ? matches.find((m) => m.unit!.trim().toLowerCase() === trimmedPreferredUnit)
+      : undefined;
+    // Falls back to the first match — byte-for-byte the previous
+    // behavior — whenever no preferred unit was supplied, or none of
+    // this count's matching portions happen to use it.
+    const item = preferredMatch || matches[0];
+    countCandidate = { unit: item.unit as string, costPrice: item.costPrice, sellingPrice: item.sellingPrice as number, asOfDate: count.date };
+    break; // stockCounts is newest-first — the first (qualifying) count is the most recent
   }
 
   const winner =

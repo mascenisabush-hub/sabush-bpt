@@ -183,3 +183,96 @@ describe('findLatestRememberedProductMemory — the actual Owner-reported gap: C
     assert.equal(result, null);
   });
 });
+
+describe('findLatestRememberedProductMemory — preferredSellingUnit (Owner-requested: "it should pull the selling unit")', () => {
+  it('with multiple priced portions in the same Contagem, picks the one matching preferredSellingUnit, not merely the first one stored', () => {
+    const result = findLatestRememberedProductMemory(
+      'prod-1',
+      'Heineken Txoti',
+      [],
+      [{
+        date: '2026-08-24',
+        items: [
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Cx', costPrice: 1500, sellingPrice: 1800 }, // stored first
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Un', costPrice: 62.5, sellingPrice: 75 },   // the product's own designated selling unit
+        ],
+      }],
+      'Un'
+    );
+    assert.deepEqual(result, { unit: 'Un', costPrice: 62.5, sellingPrice: 75 });
+  });
+
+  it('is case- and whitespace-insensitive when matching preferredSellingUnit, mirroring every other unit comparison in this codebase', () => {
+    const result = findLatestRememberedProductMemory(
+      'prod-1',
+      'Heineken Txoti',
+      [],
+      [{
+        date: '2026-08-24',
+        items: [
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Cx', costPrice: 1500, sellingPrice: 1800 },
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Un', costPrice: 62.5, sellingPrice: 75 },
+        ],
+      }],
+      ' un '
+    );
+    assert.equal(result?.unit, 'Un');
+  });
+
+  it('falls back to the first matching portion when none of them use preferredSellingUnit — never returns null just because the preference missed', () => {
+    const result = findLatestRememberedProductMemory(
+      'prod-1',
+      'Heineken Txoti',
+      [],
+      [{
+        date: '2026-08-24',
+        items: [
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Cx', costPrice: 1500, sellingPrice: 1800 },
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Emb', costPrice: 375, sellingPrice: 450 },
+        ],
+      }],
+      'Un' // present on neither portion
+    );
+    assert.deepEqual(result, { unit: 'Cx', costPrice: 1500, sellingPrice: 1800 });
+  });
+
+  it('omitted entirely (no 5th argument) behaves byte-for-byte identically to before this feature existed — first match wins', () => {
+    const result = findLatestRememberedProductMemory(
+      'prod-1',
+      'Heineken Txoti',
+      [],
+      [{
+        date: '2026-08-24',
+        items: [
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Cx', costPrice: 1500, sellingPrice: 1800 },
+          { productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Un', costPrice: 62.5, sellingPrice: 75 },
+        ],
+      }]
+    );
+    assert.deepEqual(result, { unit: 'Cx', costPrice: 1500, sellingPrice: 1800 });
+  });
+
+  it('a single portion (the ordinary case) is entirely unaffected by preferredSellingUnit, matched or not', () => {
+    const singlePortionCount = { date: '2026-08-24', items: [{ productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Cx', costPrice: 1500, sellingPrice: 1800 }] };
+    const withPreference = findLatestRememberedProductMemory('prod-1', 'Heineken Txoti', [], [singlePortionCount], 'Un');
+    const withoutPreference = findLatestRememberedProductMemory('prod-1', 'Heineken Txoti', [], [singlePortionCount]);
+    assert.deepEqual(withPreference, withoutPreference);
+  });
+
+  it('preferredSellingUnit only tie-breaks WITHIN the winning count — never changes which count/batch wins overall', () => {
+    // A newer StockBatch (Cx-only, no preference possible) still beats
+    // an older StockCount that happens to have a Un-matching portion —
+    // the preference never overrides "which source is more recent."
+    const result = findLatestRememberedProductMemory(
+      'prod-1',
+      'Heineken Txoti',
+      [{ productId: 'prod-1', unit: 'Cx', costPrice: 1600, sellingPrice: 1900, dateEntered: '2026-08-24' }],
+      [{
+        date: '2026-01-01',
+        items: [{ productId: 'prod-1', productName: 'Heineken Txoti', unit: 'Un', costPrice: 62.5, sellingPrice: 75 }],
+      }],
+      'Un'
+    );
+    assert.deepEqual(result, { unit: 'Cx', costPrice: 1600, sellingPrice: 1900 });
+  });
+});

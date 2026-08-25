@@ -325,7 +325,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // product (no batch, no priced Contagem entry) leaves
         // initialCost/initialSell both '' — no hardcoded placeholder
         // number is invented for it (see the return below).
-        const memory = findLatestRememberedProductMemory(match.id, match.name, batches, stockCounts);
+        // [Owner-requested — "it should pull the selling unit"] When a
+        // Contagem counted this product as multiple portions, prefer
+        // whichever is denominated in the product's own confirmed
+        // designated selling unit — see findLatestRememberedProductMemory's
+        // own header comment on this parameter. isValidUnitRelationship
+        // guards against reading sellingUnit off an unconfirmed/invalid
+        // relationship, matching every other read of it in this codebase.
+        const memory = findLatestRememberedProductMemory(
+          match.id,
+          match.name,
+          batches,
+          stockCounts,
+          isValidUnitRelationship(match.unitRelationship) ? match.unitRelationship?.sellingUnit : undefined
+        );
         if (memory) {
           initialCost = String(memory.costPrice);
           initialSell = String(memory.sellingPrice);
@@ -734,8 +747,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       // Same widened memory source (StockBatch purchases AND confirmed
       // StockCounts, unit/cost/sell always from the SAME winning
       // record), applied identically here for re-selecting a different
-      // existing product mid-form.
-      const memory = findLatestRememberedProductMemory(match.id, match.name, batches, stockCounts);
+      // existing product mid-form. Same selling-unit preference too —
+      // see findLatestRememberedProductMemory's own header comment on
+      // this parameter.
+      const memory = findLatestRememberedProductMemory(
+        match.id,
+        match.name,
+        batches,
+        stockCounts,
+        isValidUnitRelationship(match.unitRelationship) ? match.unitRelationship?.sellingUnit : undefined
+      );
       if (memory) {
         newCost = String(memory.costPrice);
         newSell = String(memory.sellingPrice);
@@ -983,8 +1004,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // above). resolveUnitAwarePrice never blindly reuses a
         // remembered price across a genuine unit difference (its own
         // header comment) — converts when a confirmed relationship
-        // allows it, leaves '' when it can't be sure.
-        const memory = findLatestRememberedProductMemory(matched.id, matched.name, batches, stockCounts);
+        // allows it, leaves '' when it can't be sure. Same
+        // selling-unit preference on multi-portion Contagem entries as
+        // the two manual-selection call sites above.
+        const memory = findLatestRememberedProductMemory(
+          matched.id,
+          matched.name,
+          batches,
+          stockCounts,
+          isValidUnitRelationship(matched.unitRelationship) ? matched.unitRelationship?.sellingUnit : undefined
+        );
         if (memory) {
           sellingPrice = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, unit, matched.unitRelationship);
           if (!costPrice) costPrice = resolveUnitAwarePrice(memory.costPrice, memory.unit, unit, matched.unitRelationship);
