@@ -88,6 +88,7 @@ export const StartupInvestmentView: React.FC = () => {
         amount: numAmount,
         description: newDescription.trim() || undefined,
         recordedAt: newRecordedAt ? new Date(newRecordedAt).toISOString() : undefined,
+        submissionId: submissionIdRef.current,
       });
       setNewAmount('');
       setNewDescription('');

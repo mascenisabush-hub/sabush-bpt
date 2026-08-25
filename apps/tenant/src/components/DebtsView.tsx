@@ -21,6 +21,7 @@ import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
 import { Receivable, Payable } from '../types';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 
 function newSubmissionId(prefix: string): string {
   return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
@@ -43,7 +44,7 @@ function statusBadgeClass(status: Receivable['status'] | Payable['status']): str
 // context function it invokes.
 const PaymentForm: React.FC<{
   currencySymbol: string;
-  onSubmit: (amount: number, date: string) => Promise<{ success: boolean; error?: string }>;
+  onSubmit: (amount: number, date: string, submissionId: string) => Promise<{ success: boolean; error?: string }>;
   onDone: () => void;
 }> = ({ currencySymbol, onSubmit, onDone }) => {
   const { t } = useLanguage();
@@ -52,6 +53,12 @@ const PaymentForm: React.FC<{
   const [date, setDate] = useState(getTodayDateString());
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState<string | null>(null);
+
+  // [Finding 3 fix — no leave-page warning] Same rationale as
+  // AddExpenseView.tsx's own identical addition — a payment amount
+  // typed here and then lost to an accidental tab close is real,
+  // avoidable data loss.
+  useUnsavedChangesWarning(amount.trim() !== '');
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -62,7 +69,17 @@ const PaymentForm: React.FC<{
     }
     setSaving(true);
     setError(null);
-    const result = await onSubmit(numAmount, date);
+    // [Bug fix — duplicate-payment risk on retry] submissionIdRef.current
+    // is passed here, not a freshly generated id — this is the entire
+    // point of the ref: a re-click after a transient failure (network
+    // blip, timeout) reuses the SAME id, so recordReceivablePayment/
+    // recordPayablePayment's own transaction-based idempotency check
+    // (a deterministic doc id at businesses/{id}/receivablePayments/
+    // {submissionId}) recognizes the retry and safely no-ops instead of
+    // recording the same payment twice. Previously this call site
+    // generated a brand-new id on every submit, silently defeating that
+    // protection — the exact bug this fix corrects.
+    const result = await onSubmit(numAmount, date, submissionIdRef.current);
     setSaving(false);
     if (result.success) {
       onDone();
@@ -70,12 +87,6 @@ const PaymentForm: React.FC<{
       setError(result.error || 'Erro ao registar o pagamento.');
     }
   };
-  // Note: submissionIdRef is stable across retries of the SAME form
-  // instance (a re-click after a transient failure reuses it), matching
-  // this capability's own idempotency contract — a genuinely new
-  // payment attempt only gets a new id once this form is unmounted and
-  // a fresh one is opened.
-  void submissionIdRef;
 
   return (
     <form onSubmit={handleSubmit} className="mt-2 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
@@ -160,6 +171,19 @@ export const DebtsView: React.FC = () => {
   const [newCashDate, setNewCashDate] = useState(getTodayDateString());
   const [savingCash, setSavingCash] = useState(false);
   const [cashError, setCashError] = useState<string | null>(null);
+
+  // [Finding 3 fix — no leave-page warning] Covers whichever of this
+  // screen's three quick-add forms (Nova Dívida a Receber, Nova
+  // Dívida, Atualizar Posição de Caixa) is currently open and has real
+  // content typed into it — same rationale as AddExpenseView.tsx's own
+  // identical addition. At most one of these is normally open at a
+  // time (each is its own toggle button), but the condition is written
+  // to cover any combination safely regardless.
+  useUnsavedChangesWarning(
+    (showAddReceivable && (newAmount.trim() !== '' || newDebtorName.trim() !== '' || newDescription.trim() !== '')) ||
+    (showAddPayable && (newPayableAmount.trim() !== '' || newSupplierName.trim() !== '' || newPayableDescription.trim() !== '')) ||
+    (showUpdateCash && newCashAmount.trim() !== '')
+  );
 
   // [Owner-recorded cash position] cashPositionDeclarations arrives
   // newest-first (AppContext's own onSnapshot sort) — index 0 is always
@@ -462,12 +486,12 @@ export const DebtsView: React.FC = () => {
                   payingReceivableId === r.id ? (
                     <PaymentForm
                       currencySymbol={currencySymbol}
-                      onSubmit={(amount, date) =>
+                      onSubmit={(amount, date, submissionId) =>
                         recordReceivablePayment({
                           receivableId: r.id,
                           amountPaid: amount,
                           paidAt: date,
-                          submissionId: newSubmissionId('recv-pay'),
+                          submissionId,
                         })
                       }
                       onDone={() => setPayingReceivableId(null)}
@@ -590,12 +614,12 @@ export const DebtsView: React.FC = () => {
                   payingPayableId === p.id ? (
                     <PaymentForm
                       currencySymbol={currencySymbol}
-                      onSubmit={(amount, date) =>
+                      onSubmit={(amount, date, submissionId) =>
                         recordPayablePayment({
                           payableId: p.id,
                           amountPaid: amount,
                           paidAt: date,
-                          submissionId: newSubmissionId('pay-pay'),
+                          submissionId,
                         })
                       }
                       onDone={() => setPayingPayableId(null)}

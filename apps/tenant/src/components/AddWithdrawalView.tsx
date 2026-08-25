@@ -1,9 +1,17 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { HandCoins, CheckCircle2, ArrowRight, Info } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+
+// [Bug fix — no duplicate-submission protection] Same small local
+// helper as AddExpenseView.tsx's own identical function — see that
+// file's own comment for the full rationale.
+function newSubmissionId(prefix: string): string {
+  return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+}
 
 interface AddWithdrawalViewProps {
   onComplete: () => void;
@@ -33,6 +41,16 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // [Bug fix — no duplicate-submission protection] Stable across
+  // retries of the same in-progress submission; reset to a fresh id
+  // only after a successful save (below).
+  const submissionIdRef = useRef(newSubmissionId('wd'));
+
+  // [Finding 3 fix — no leave-page warning] Same rationale as
+  // AddExpenseView.tsx's own identical addition.
+  useUnsavedChangesWarning(
+    !submittedMessage && (amount.trim() !== '' || reason.trim() !== '' || notes.trim() !== '')
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -53,8 +71,10 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
         amount: numAmount,
         reason: reason.trim() || undefined,
         notes: notes.trim() || undefined,
+        submissionId: submissionIdRef.current,
       });
 
+      submissionIdRef.current = newSubmissionId('wd');
       setSubmittedMessage(t('addWithdrawal.successMessage', { amount: formatCurrency(numAmount, currencySymbol) }));
 
       setTimeout(() => {

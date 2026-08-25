@@ -533,7 +533,15 @@ service cloud.firestore {
         allow read: if isMemberOf(businessId);
         // [Module #19 Phase 2] Inventory adjustment — restricted once
         // trial completes/expires (Business Rule 6 / Decision 2).
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
+        // [Data-entry error-resilience audit, Finding 4] quantityLost
+        // validation added — previously only enforced client-side
+        // (AddQuebraView.tsx's own numLoss check), with no server-side
+        // backstop at all, unlike newer collections (Cash Position,
+        // Startup Investment) which already validate their own amount
+        // field this way.
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
+          request.resource.data.get('quantityLost', null) is number &&
+          request.resource.data.get('quantityLost', 0) > 0;
         allow update: if isMemberOf(businessId);
         allow delete: if isOwnerOf(businessId);
       }
@@ -551,9 +559,14 @@ service cloud.firestore {
         // [Module #19 Phase 2] Restricted once trial completes/expires
         // (Business Rule 6 / Decision 2), independent of and in addition
         // to the closed-period check already here.
+        // [Data-entry error-resilience audit, Finding 4] amount
+        // validation added — same rationale as quebras' own identical
+        // addition above.
         allow create: if isMemberOf(businessId) &&
           !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
-          subscriptionAllowsNewRecords(businessId);
+          subscriptionAllowsNewRecords(businessId) &&
+          request.resource.data.get('amount', null) is number &&
+          request.resource.data.get('amount', 0) > 0;
         allow update: if isMemberOf(businessId) && (
           resource.data.get('closingId', null) == null ||
           (isOwnerOf(businessId) && request.resource.data.get('closingId', null) == null)
@@ -1282,9 +1295,14 @@ service cloud.firestore {
         // [Module #19 Phase 2] Changes financial position directly —
         // restricted once trial completes/expires (Business Rule 6 /
         // Decision 2), same as Expenses above.
+        // [Data-entry error-resilience audit, Finding 4] amount
+        // validation added — same rationale as Expenses' own identical
+        // addition.
         allow create: if isOwnerOf(businessId) &&
           !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
-          subscriptionAllowsNewRecords(businessId);
+          subscriptionAllowsNewRecords(businessId) &&
+          request.resource.data.get('amount', null) is number &&
+          request.resource.data.get('amount', 0) > 0;
         allow update: if isOwnerOf(businessId) && (
           resource.data.get('closingId', null) == null ||
           request.resource.data.get('closingId', null) == null

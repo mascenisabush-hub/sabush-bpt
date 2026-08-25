@@ -1,9 +1,20 @@
-import React, { useState } from 'react';
+import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { Receipt, CheckCircle2, ArrowRight } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+
+// [Bug fix — no duplicate-submission protection] Same small local
+// helper as DebtsView.tsx's/StartupInvestmentView.tsx's own identical
+// function — a stable id reused across retries of the SAME submit
+// attempt (double-click, or a resubmit after an ambiguous network
+// error), letting addExpense's own idempotency check recognize the
+// retry and safely no-op instead of creating a duplicate expense.
+function newSubmissionId(prefix: string): string {
+  return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+}
 
 interface AddExpenseViewProps {
   onComplete: () => void;
@@ -32,6 +43,20 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // [Bug fix — no duplicate-submission protection] Stable across
+  // retries of the same in-progress submission; reset to a fresh id
+  // only after a successful save (below), never before — matching
+  // StartupInvestmentView.tsx's own established pattern.
+  const submissionIdRef = useRef(newSubmissionId('exp'));
+
+  // [Finding 3 fix — no leave-page warning] Any real content typed
+  // into this short form, before a successful save, counts as
+  // "unsaved" — cleared the moment submittedMessage is set, so the
+  // warning doesn't fire during the brief success state right before
+  // handleSubmit's own onComplete() navigates away.
+  useUnsavedChangesWarning(
+    !submittedMessage && (description.trim() !== '' || amount.trim() !== '' || category.trim() !== '')
+  );
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -58,8 +83,10 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
         description: description.trim(),
         amount: numAmount,
         category: category.trim() || undefined,
+        submissionId: submissionIdRef.current,
       });
 
+      submissionIdRef.current = newSubmissionId('exp');
       setSubmittedMessage(t('addExpense.successMessage', { amount: formatCurrency(numAmount, currencySymbol) }));
 
       setTimeout(() => {

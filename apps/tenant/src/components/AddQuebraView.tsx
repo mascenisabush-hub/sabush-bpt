@@ -6,6 +6,14 @@ import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
 import { detectShopSwitch, isBusinessDataReady, isSelectionSafeToSubmit } from '../lib/shopSwitchGuard';
+import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+
+// [Bug fix — no duplicate-submission protection] Same small local
+// helper as AddExpenseView.tsx's own identical function — see that
+// file's own comment for the full rationale.
+function newSubmissionId(prefix: string): string {
+  return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
+}
 
 interface AddQuebraViewProps {
   initialProductId?: string;
@@ -36,6 +44,18 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
 
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
+  // [Bug fix — no duplicate-submission protection] Stable across
+  // retries of the same in-progress submission; reset to a fresh id
+  // only after a successful save (below).
+  const submissionIdRef = useRef(newSubmissionId('quebra'));
+
+  // [Finding 3 fix — no leave-page warning] Selecting a product is the
+  // meaningful "started this form" signal here — quantityLost defaults
+  // to '1' unconditionally, so its own presence alone isn't a useful
+  // indicator.
+  useUnsavedChangesWarning(
+    !submittedMessage && (selectedProductId !== '' || reason.trim() !== '')
+  );
 
   // [Fix #9 — multi-shop stale product/batch reference protection]
   // `products`/`batches` are shared AppContext state, subscribed to
@@ -166,8 +186,10 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
         date,
         quantityLost: numLoss,
         reason: reason.trim(),
+        submissionId: submissionIdRef.current,
       });
 
+      submissionIdRef.current = newSubmissionId('quebra');
       setSubmittedMessage(
         numLoss === 1
           ? t('addQuebra.successMessageOne', { count: numLoss })

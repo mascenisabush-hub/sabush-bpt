@@ -11,6 +11,7 @@ import {
   deleteDoc,
   collection,
   getDocs,
+  getDoc,
   onSnapshot,
   writeBatch as createFirestoreBatch,
   runTransaction,
@@ -205,6 +206,10 @@ interface AddQuebraParams {
   date: string;
   quantityLost: number;
   reason: string;
+  // [Bug fix — no duplicate-submission protection] Optional, backward-
+  // compatible — see addQuebra's own comment for the full idempotency
+  // mechanism this enables.
+  submissionId?: string;
 }
 
 interface AddExpenseParams {
@@ -212,6 +217,7 @@ interface AddExpenseParams {
   description: string;
   amount: number;
   category?: string;
+  submissionId?: string;
 }
 
 interface AddWithdrawalParams {
@@ -219,6 +225,7 @@ interface AddWithdrawalParams {
   amount: number;
   reason?: string;
   notes?: string;
+  submissionId?: string;
 }
 
 interface RecordStockCountItemInput {
@@ -487,7 +494,7 @@ interface AppContextType {
   // spending with no existing Product/Stock/Expense record (FR-17). A
   // single, un-batched, append-only write — no Business Worth field is
   // touched by this call, and no update/delete path exists afterward.
-  addStartupInvestmentEntry: (params: { category: StartupInvestmentEntry['category']; amount: number; description?: string; recordedAt?: string }) => Promise<{ entryId: string }>;
+  addStartupInvestmentEntry: (params: { category: StartupInvestmentEntry['category']; amount: number; description?: string; recordedAt?: string; submissionId?: string }) => Promise<{ entryId: string }>;
   // Creates a manually-recorded debt owed TO the business (Specification
   // §11). Contributes nothing to Business Worth until actually paid
   // (FIN-3) — see recordReceivablePayment for the payment side.
@@ -3093,11 +3100,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addQuebra = async ({ productId, batchId, date, quantityLost, reason }: AddQuebraParams) => {
+  const addQuebra = async ({ productId, batchId, date, quantityLost, reason, submissionId }: AddQuebraParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
+    const businessId = activeBusinessId;
+    // [Bug fix — no duplicate-submission protection] Same discipline as
+    // addExpense/addWithdrawal's own identical fix, above.
+    const quebraId = submissionId || 'quebra-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const quebraRef = doc(db, 'businesses', businessId, 'quebras', quebraId);
+    const existingSnap = await getDoc(quebraRef);
+    if (existingSnap.exists()) {
+      return existingSnap.data() as Quebra;
+    }
+
     const newQuebra: Quebra = {
-      id: 'quebra-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      id: quebraId,
       productId,
       batchId,
       date,
@@ -3106,7 +3123,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       createdAt: new Date().toISOString(),
     };
 
-    await setDoc(doc(db, 'businesses', activeBusinessId, 'quebras', newQuebra.id), newQuebra);
+    await setDoc(quebraRef, newQuebra);
 
     const relatedBatch = batches.find((b) => b.id === batchId);
     const relatedProduct = products.find((p) => p.id === productId);
@@ -3142,7 +3159,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const findClosedPeriodConflict = (date: string): Closing | undefined =>
     closings.find((c) => (c.status ?? 'active') === 'active' && isDateInRange(date, c.startDate, c.endDate));
 
-  const addExpense = async ({ date, description, amount, category }: AddExpenseParams) => {
+  const addExpense = async ({ date, description, amount, category, submissionId }: AddExpenseParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const conflict = findClosedPeriodConflict(date);
@@ -3153,8 +3170,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const businessId = activeBusinessId;
+    // [Bug fix — no duplicate-submission protection] Same discipline as
+    // recordStockCount/recordReceivablePayment: a caller-supplied
+    // submissionId becomes the expense's own deterministic id, so a
+    // retry (double-click, or a resubmit after an ambiguous network
+    // error) with the SAME id is recognized and safely no-ops instead
+    // of creating a second expense. Falls back to the previous random
+    // id for any caller that doesn't yet supply one — fully backward
+    // compatible, never a behavior change for an existing call site.
+    const expenseId = submissionId || 'exp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const expenseRef = doc(db, 'businesses', businessId, 'expenses', expenseId);
+    const existingSnap = await getDoc(expenseRef);
+    if (existingSnap.exists()) {
+      // Idempotent retry — already applied by an earlier attempt with
+      // this exact submissionId. Return the existing record unchanged
+      // rather than re-running the write (which would silently
+      // overwrite createdAt and create a duplicate timeline event).
+      return existingSnap.data() as Expense;
+    }
+
     const newExpense: Expense = {
-      id: 'exp-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      id: expenseId,
       date,
       description: description.trim(),
       amount: Number(amount),
@@ -3213,7 +3249,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // Owner Withdrawals: money taken by the owner for personal use. This is
   // NOT an expense — it reduces available business capital directly,
   // without affecting profit/loss the way an operating expense does.
-  const addWithdrawal = async ({ date, amount, reason, notes }: AddWithdrawalParams) => {
+  const addWithdrawal = async ({ date, amount, reason, notes, submissionId }: AddWithdrawalParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const conflict = findClosedPeriodConflict(date);
@@ -3224,8 +3260,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const businessId = activeBusinessId;
+    // [Bug fix — no duplicate-submission protection] Same discipline as
+    // addExpense's own identical fix, immediately above.
+    const withdrawalId = submissionId || 'wd-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const withdrawalRef = doc(db, 'businesses', businessId, 'withdrawals', withdrawalId);
+    const existingSnap = await getDoc(withdrawalRef);
+    if (existingSnap.exists()) {
+      return existingSnap.data() as Withdrawal;
+    }
+
     const newWithdrawal: Withdrawal = {
-      id: 'wd-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
+      id: withdrawalId,
       date,
       amount: Number(amount),
       reason: reason ? reason.trim() : undefined,
@@ -3390,7 +3435,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     amount,
     description,
     recordedAt,
-  }: { category: StartupInvestmentEntry['category']; amount: number; description?: string; recordedAt?: string }) => {
+    submissionId,
+  }: {
+    category: StartupInvestmentEntry['category'];
+    amount: number;
+    description?: string;
+    recordedAt?: string;
+    submissionId?: string;
+  }) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!isOwner) throw new Error('Apenas o dono pode registar Investimento Inicial.');
     if (!(Number(amount) > 0)) throw new Error('O valor deve ser maior que zero.');
@@ -3398,7 +3450,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!allowedCategories.includes(category)) throw new Error('Categoria inválida.');
 
     const businessId = activeBusinessId;
-    const entryId = 'startup-investment-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    // [Bug fix — no duplicate-submission protection] Same discipline as
+    // addExpense/addWithdrawal/addQuebra's own identical fix, above.
+    // StartupInvestmentView.tsx already declares a stable
+    // submissionIdRef for exactly this purpose — this parameter is
+    // what actually lets it do its job, closing the gap where it was
+    // previously reset after every success but never passed anywhere.
+    const entryId = submissionId || 'startup-investment-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const entryRef = doc(db, 'businesses', businessId, 'startupInvestmentEntries', entryId);
+    const existingSnap = await getDoc(entryRef);
+    if (existingSnap.exists()) {
+      return { entryId };
+    }
     const rounded = Number(Number(amount).toFixed(2));
 
     const newEntry: StartupInvestmentEntry = {
@@ -3412,7 +3475,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(description?.trim() ? { description: description.trim() } : {}),
     };
 
-    await setDoc(doc(db, 'businesses', businessId, 'startupInvestmentEntries', entryId), newEntry);
+    await setDoc(entryRef, newEntry);
     return { entryId };
   };
 
