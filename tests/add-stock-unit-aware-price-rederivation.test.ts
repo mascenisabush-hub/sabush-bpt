@@ -209,15 +209,19 @@ describe('AddStockView.tsx — handleUnitChange is actually wired in (source-str
   });
 });
 
-describe('AddStockView.tsx — all four findLatestRememberedProductMemory call sites pass the product\'s confirmed selling unit (Owner-requested: "it should pull the selling unit")', () => {
+describe('AddStockView.tsx — all five findLatestRememberedProductMemory call sites pass the product\'s confirmed selling unit (Owner-requested: "it should pull the selling unit")', () => {
   it('every call site passes a 5th argument derived from unitRelationship.sellingUnit, guarded by isValidUnitRelationship — never an unvalidated read', () => {
     const callSites = addStockSrc.match(/findLatestRememberedProductMemory\(\s*[\s\S]*?\);/g) || [];
     // [Manual data-entry error investigation, Finding 3] A 4th call
     // site (getRememberedPriceForRow) was added for the price-
     // deviation warning — see tests/price-deviation-warning-wiring.test.ts
-    // for that feature's own dedicated coverage. Still guarded the
-    // same way as the original three, verified by the loop below.
-    assert.equal(callSites.length, 4, 'Expected exactly 4 call sites (createEmptyRow, handleSelectProductForTool, buildRowFromProposalLineItem, getRememberedPriceForRow)');
+    // for that feature's own dedicated coverage. A 5th
+    // (handleConfirmSupplierWordingCandidate) was added by the bug fix
+    // covered in tests/add-stock-mobile-caption-and-candidate-price-fill.test.ts
+    // — confirming a supplier-wording candidate now fills price from
+    // memory too. Still guarded the same way as the original three,
+    // verified by the loop below.
+    assert.equal(callSites.length, 5, 'Expected exactly 5 call sites (createEmptyRow, handleSelectProductForTool, buildRowFromProposalLineItem, getRememberedPriceForRow, handleConfirmSupplierWordingCandidate)');
     for (const call of callSites) {
       assert.match(call, /isValidUnitRelationship\(\w+\.unitRelationship\)/);
       assert.match(call, /\w+\.unitRelationship\?\.sellingUnit/);

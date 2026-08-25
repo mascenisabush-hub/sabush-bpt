@@ -942,9 +942,70 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     if (!matchedProduct) return;
     const wording = row.productName.trim();
     const previousCycleQuantity = resolvePreviousCycleQuantity(matchedProduct.name);
+    // [Bug fix — confirming a supplier-wording candidate never filled
+    // selling price/unit] Every OTHER path that resolves a row to an
+    // existing product (buildRowFromProposalLineItem's own exact-match
+    // branch, handleSelectProductForTool) immediately looks up and
+    // fills Product Memory's own remembered price. This path — the
+    // Owner explicitly confirming "yes, this candidate IS the same
+    // product" — updated the product name/id association but never
+    // did the same lookup, so sellingPrice stayed blank and costPrice
+    // stayed whatever the receipt itself provided (or blank), even
+    // though a genuine match had just been established. Same
+    // discipline as every other fill site: costPrice only fills when
+    // still blank (the receipt's own reading, if any, keeps priority
+    // over memory); sellingPrice always fills from memory here, since
+    // it is never proposed by the scan itself and was therefore always
+    // blank going into this confirmation.
+    const memory = findLatestRememberedProductMemory(
+      matchedProduct.id,
+      matchedProduct.name,
+      batches,
+      stockCounts,
+      isValidUnitRelationship(matchedProduct.unitRelationship) ? matchedProduct.unitRelationship?.sellingUnit : undefined
+    );
+    let costPrice = row.costPrice;
+    let sellingPrice = row.sellingPrice;
+    let costPriceAutoFilled = row.costPriceAutoFilled;
+    let sellingPriceAutoFilled = row.sellingPriceAutoFilled;
+    let costPriceBasisUnit = row.costPriceBasisUnit;
+    let sellingPriceBasisUnit = row.sellingPriceBasisUnit;
+    if (memory) {
+      const resolvedSell = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, row.unit, matchedProduct.unitRelationship);
+      if (resolvedSell !== '') {
+        sellingPrice = resolvedSell;
+        sellingPriceAutoFilled = true;
+        sellingPriceBasisUnit = row.unit;
+      }
+      if (!costPrice) {
+        const resolvedCost = resolveUnitAwarePrice(memory.costPrice, memory.unit, row.unit, matchedProduct.unitRelationship);
+        if (resolvedCost !== '') {
+          costPrice = resolvedCost;
+          costPriceAutoFilled = true;
+          costPriceBasisUnit = row.unit;
+        }
+      }
+    } else {
+      if (!costPrice && matchedProduct.costPrice != null) {
+        costPrice = String(matchedProduct.costPrice);
+        costPriceAutoFilled = true;
+        costPriceBasisUnit = row.unit;
+      }
+      if (matchedProduct.sellingPrice != null) {
+        sellingPrice = String(matchedProduct.sellingPrice);
+        sellingPriceAutoFilled = true;
+        sellingPriceBasisUnit = row.unit;
+      }
+    }
     updateRow(rowId, {
       productName: matchedProduct.name,
       previousCycleQuantity,
+      costPrice,
+      sellingPrice,
+      costPriceAutoFilled,
+      sellingPriceAutoFilled,
+      costPriceBasisUnit,
+      sellingPriceBasisUnit,
       pendingSupplierWording: {
         wording,
         productId: matchedProduct.id,
@@ -2559,6 +2620,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               onChange={e => updateRow(row.id, { sellingPrice: e.target.value, sellingPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
+                            {/* [Bug fix — mobile layout never showed
+                                whether the selling price came from
+                                memory or wasn't found] This caption
+                                existed only in the desktop table layout
+                                — completely absent here, so on a phone
+                                (this layout) an Owner had no way to see
+                                either "preço da memória" or "sem preço
+                                memorizado para esta unidade" at all,
+                                regardless of which actually happened.
+                                Same condition, same two messages, same
+                                Trust Test reasoning as the desktop
+                                copy's own comment. */}
+                            {row.smartEntrySource === 'ai' && (
+                              <p className={`mt-1 text-[11px] leading-snug ${row.sellingPrice ? 'text-[#8A6D1F]' : 'text-amber-600 font-semibold'}`}>
+                                {row.sellingPrice ? t('addStock.smartEntry.sellingPriceFromMemory') : t('addStock.smartEntry.sellingPriceNotFound')}
+                              </p>
+                            )}
                             {/* [Manual data-entry error investigation,
                                 Finding 3] Same check as the desktop
                                 layout's own identical field. */}
