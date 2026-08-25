@@ -1408,6 +1408,25 @@ export interface PurchaseDraftLineItem {
   // draft row, same "never invent 0" discipline as the finalized
   // observation itself.
   previousRemainingQuantity?: number;
+  // [Bug fix — cross-device draft restore silently disabled unit-aware
+  // re-derivation] StockRowItem's own identical fields (AddStockView.tsx)
+  // track whether costPrice/sellingPrice still reflect an untouched
+  // memory auto-fill, and which unit that auto-fill is truly expressed
+  // in — read by handleUnitChange to decide whether changing a row's
+  // unit should re-derive its price. These were never part of the
+  // draft, so restoring a draft (most visibly on a different device,
+  // but identically on a page reload) silently dropped them — the
+  // price value itself always survived correctly, but the system's own
+  // knowledge of how it got there did not, so a unit change after
+  // restore stopped re-deriving prices that were, in truth, still
+  // untouched auto-fills. Optional and additive: an older draft
+  // document with none of these fields restores exactly as it always
+  // did (both AutoFilled flags absent/falsy, matching the prior,
+  // unfixed behavior) — this is not a breaking schema change.
+  costPriceAutoFilled?: boolean;
+  sellingPriceAutoFilled?: boolean;
+  costPriceBasisUnit?: string;
+  sellingPriceBasisUnit?: string;
 }
 
 export interface PurchaseDraft {

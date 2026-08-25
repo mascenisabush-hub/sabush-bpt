@@ -189,6 +189,17 @@ const rowToDraftLineItem = (row: StockRowItem): PurchaseDraftLineItem => ({
   ...(hasKnownPreviousRemainingInput(row.previousRemainingQuantity)
     ? { previousRemainingQuantity: parseFloat(row.previousRemainingQuantity) }
     : {}),
+  // [Bug fix — cross-device draft restore silently disabled unit-aware
+  // re-derivation] See PurchaseDraftLineItem's own comment (types.ts)
+  // for the full history. Only carried when actually true/set — an
+  // untouched, never-auto-filled row (a brand-new product, or one the
+  // Owner typed by hand from the start) writes none of these fields,
+  // matching this draft type's own existing "absent, never a
+  // fabricated false/empty-string" discipline throughout.
+  ...(row.costPriceAutoFilled ? { costPriceAutoFilled: true } : {}),
+  ...(row.sellingPriceAutoFilled ? { sellingPriceAutoFilled: true } : {}),
+  ...(row.costPriceBasisUnit ? { costPriceBasisUnit: row.costPriceBasisUnit } : {}),
+  ...(row.sellingPriceBasisUnit ? { sellingPriceBasisUnit: row.sellingPriceBasisUnit } : {}),
 });
 
 const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
@@ -207,6 +218,15 @@ const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
   // it's always freshly re-resolved against the live `products`/
   // `batches` state right after restore (see the draft-load effect
   // below), since it may have changed since the draft was saved.
+  //
+  // [Bug fix — cross-device draft restore silently disabled unit-aware
+  // re-derivation] Restored verbatim, same "absent means false/unset"
+  // reading as everywhere else these fields appear — an older draft
+  // with none of these fields restores exactly as it always did.
+  costPriceAutoFilled: item.costPriceAutoFilled,
+  sellingPriceAutoFilled: item.sellingPriceAutoFilled,
+  costPriceBasisUnit: item.costPriceBasisUnit,
+  sellingPriceBasisUnit: item.sellingPriceBasisUnit,
 });
 
 // [Product Memory / UOM — Increment A, Checkpoint 2b] Identical
