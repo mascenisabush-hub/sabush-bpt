@@ -426,6 +426,7 @@ export interface TranslationDict {
     totalProfitTitle: string;
     estProfitMobile: string;
     removeBatch: string;
+    removeRowConfirm: string;
     addAnotherProduct: string;
     summary: {
       titleOne: string;
@@ -1552,6 +1553,7 @@ export const pt: TranslationDict = {
     totalProfitTitle: 'Lucro Total: {{value}}',
     estProfitMobile: 'Lucro Est: {{value}}',
     removeBatch: 'Remover este lote',
+    removeRowConfirm: 'Remover esta linha? Os dados já preenchidos (produto, quantidade, preços) serão perdidos.',
     addAnotherProduct: '+ Adicionar outro produto',
     summary: {
       titleOne: 'Resumo ({{count}} lote)',

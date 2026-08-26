@@ -1232,6 +1232,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
   const handleRemoveRow = (id: string) => {
     if (rows.length <= 1) return;
+    // [Bug fix — Owner-reported: the row delete button had no
+    // confirmation at all, and sits right next to other interactive
+    // controls (price/quantity fields, the profit figure) — a single
+    // misclick permanently discarded that line's typed/scanned data
+    // with no undo. Mirrors the existing "Discard Draft" confirm
+    // pattern (handleDiscardDraft, above): only prompt when there is
+    // actually something meaningful to lose — a still-blank row (the
+    // default placeholder, or one added and not yet filled in) removes
+    // instantly, exactly as before, so this never turns routine
+    // cleanup of empty rows into an annoying extra click.
+    const row = rows.find(r => r.id === id);
+    if (row && rowHasRealContent(row) && !window.confirm(t('addStock.removeRowConfirm'))) return;
     setRows(prev => prev.filter(row => row.id !== id));
   };
 

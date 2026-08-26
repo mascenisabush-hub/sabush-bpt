@@ -417,6 +417,7 @@ export const en: TranslationDict = {
     totalProfitTitle: 'Total Profit: {{value}}',
     estProfitMobile: 'Est. Profit: {{value}}',
     removeBatch: 'Remove this batch',
+    removeRowConfirm: 'Remove this row? The data already entered (product, quantity, prices) will be lost.',
     addAnotherProduct: '+ Add another product',
     summary: {
       titleOne: 'Summary ({{count}} batch)',
