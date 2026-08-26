@@ -657,8 +657,8 @@ describe('purchaseBatches', () => {
 describe('quebras', () => {
   it('Any team member can read, create, and update; only Owner can delete', async () => {
     const staffDb = ctxFor(STAFF_UID).firestore();
-    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1'), { id: 'q1', quantity: 2 }));
-    await assertSucceeds(updateDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1'), { quantity: 3 }));
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1'), { id: 'q1', quantityLost: 2 }));
+    await assertSucceeds(updateDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1'), { quantityLost: 3 }));
     await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'quebras', 'q1')));
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'q1')));
@@ -666,12 +666,12 @@ describe('quebras', () => {
 
   it('A user from another business cannot read, create, update, or delete this business\'s quebras', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'quebras', 'q2'), { id: 'q2', quantity: 5 });
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'quebras', 'q2'), { id: 'q2', quantityLost: 5 });
     });
     const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
     await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2')));
-    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q3'), { id: 'q3', quantity: 1 }));
-    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2'), { quantity: 99 }));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q3'), { id: 'q3', quantityLost: 1 }));
+    await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2'), { quantityLost: 99 }));
     await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'quebras', 'q2')));
   });
 });
@@ -2070,7 +2070,7 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ta-b1'), validBatchFor('ta-b1')));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'ta-pb1'), { id: 'ta-pb1', archived: false }));
-    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'ta-q1'), { id: 'ta-q1', quantity: 1 }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'ta-q1'), { id: 'ta-q1', quantityLost: 1 }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ta-e1'), { id: 'ta-e1', date: '2026-06-01', amount: 10 }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'ta-w1'), { id: 'ta-w1', date: '2026-06-01', amount: 10 }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'ta-sc1'), { id: 'ta-sc1', countedAt: '2026-06-01' }));
@@ -2084,7 +2084,7 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'tc-b1'), validBatchFor('tc-b1')));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'tc-pb1'), { id: 'tc-pb1', archived: false }));
-    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'tc-q1'), { id: 'tc-q1', quantity: 1 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'tc-q1'), { id: 'tc-q1', quantityLost: 1 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'tc-e1'), { id: 'tc-e1', date: '2026-06-01', amount: 10 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'tc-w1'), { id: 'tc-w1', date: '2026-06-01', amount: 10 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'tc-sc1'), { id: 'tc-sc1', countedAt: '2026-06-01' }));
