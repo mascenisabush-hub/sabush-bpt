@@ -67,7 +67,8 @@ describe('AddStockView.tsx — the load effect no longer has a one-way "already 
     assert.match(nearby, /lastProcessedDraftSignature\.current = undefined;/);
   });
 
-  it('"already started typing" protection is unaffected — still checked before adopting a real (non-null) draft, exactly as before this fix', () => {
-    assert.match(addStockSrc, /const userHasStartedTyping = rows\.some\(/);
+  it('"already started typing" protection still exists — now as hasLocalUnsyncedEdits, a stricter, correctly-scoped replacement for the original rowHasRealContent-only check (see add-stock-draft-remote-update-adoption.test.ts for that fix\'s own full coverage)', () => {
+    assert.match(addStockSrc, /const hasLocalUnsyncedEdits =/);
+    assert.doesNotMatch(addStockSrc, /const userHasStartedTyping = rows\.some\(rowHasRealContent\);/);
   });
 });

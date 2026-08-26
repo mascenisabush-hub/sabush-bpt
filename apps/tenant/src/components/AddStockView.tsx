@@ -230,6 +230,37 @@ const draftLineItemToRow = (item: PurchaseDraftLineItem): StockRowItem => ({
   sellingPriceBasisUnit: item.sellingPriceBasisUnit,
 });
 
+// [Bug fix — a tab that already loaded a draft once could never adopt
+// a LATER update from another device] Normalizes the form's own
+// meaningful content into a stable, comparable string — reusing
+// rowToDraftLineItem for the rows themselves (so transient UI-only
+// fields like isDropdownOpen/isUnitPopoverOpen never cause a false
+// "diverged" reading) plus the supplier/date/notes fields the load
+// effect also restores. Two calls with logically identical content
+// always produce identical strings, regardless of object identity —
+// this is what lets the load effect tell "nothing has changed since
+// the last sync" apart from "the Owner is genuinely mid-edit," where
+// a simple reference/array-identity check could not.
+function computeDraftContentSnapshot(
+  rows: StockRowItem[],
+  date: string,
+  supplierId: string | undefined,
+  supplierName: string,
+  supplierPhone: string,
+  supplierNotes: string,
+  batchNotes: string
+): string {
+  return JSON.stringify({
+    items: rows.map(rowToDraftLineItem),
+    date,
+    supplierId: supplierId || undefined,
+    supplierName: supplierName || undefined,
+    supplierPhone: supplierPhone || undefined,
+    supplierNotes: supplierNotes || undefined,
+    notes: batchNotes || undefined,
+  });
+}
+
 // [Product Memory / UOM — Increment A, Checkpoint 2b] Identical
 // component/behavior to InitialStockCountView.tsx's own
 // UnitRelationshipRow (Checkpoint 2a) — deliberately duplicated rather
@@ -545,6 +576,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // an already-open tab. See the load effect's own comment, below, for
   // the full scenario this fixes.
   const lastProcessedDraftSignature = useRef<string | undefined>(undefined);
+  // [Bug fix — a tab that already loaded a draft once could never
+  // adopt a LATER update from another device] The load effect's own
+  // "defense in depth" check used to be `rows.some(rowHasRealContent)`
+  // — "does my form currently have anything in it." That's true
+  // forever after the FIRST successful load, on ANY device, even when
+  // nothing has been typed since — so once a phone loaded the original
+  // draft, it would refuse every subsequent update from a computer
+  // (or any other device) permanently, mistaking "I loaded data
+  // earlier" for "I am actively typing right now." This ref instead
+  // snapshots the form's own content at the moment it was LAST
+  // synchronized with Firestore (on load, and again after a
+  // successful autosave of this device's own edits) — the load
+  // effect then only treats a genuine DIVERGENCE from that snapshot
+  // as "the Owner has unsaved local typing, don't clobber it," never
+  // mere presence of content. See computeDraftContentSnapshot's own
+  // comment, and the load effect's own updated comment, below.
+  const lastSyncedContentSnapshot = useRef<string | undefined>(undefined);
   // [Multi-Supplier Purchase Event Amendment v1.0, Part 7] Purely
   // local, in-memory correlation state for an in-progress multi-
   // supplier chain — undefined until the Admin explicitly clicks "Add
@@ -608,6 +656,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // open] Same re-arming, for the version-signature tracking the
     // load effect now uses instead of a one-way latch.
     lastProcessedDraftSignature.current = undefined;
+    // [Bug fix — a tab that already loaded a draft once could never
+    // adopt a LATER update from another device] Same re-arming — a
+    // new business has an entirely different draft document; any
+    // snapshot from the PREVIOUS business must not be compared against
+    // it.
+    lastSyncedContentSnapshot.current = undefined;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -619,21 +673,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // load effect; see that component's comment for the full race this
   // avoids (onSnapshot's first callback is always asynchronous).
   //
-  // [Bug fix — cross-device draft update missed while a tab stays open]
-  // Previously, `draftLoaded` was a one-way latch: the FIRST time
-  // Firestore answered — even "no draft exists yet" — permanently set
-  // it true, and the guard clause at the top of this effect then
-  // silently ignored every LATER purchaseDraft update for the rest of
-  // this page session. Concretely: open Add Stock on a computer before
-  // a draft exists, then save one from a phone — the live onSnapshot
-  // listener correctly delivers the new draft to this same open tab,
-  // but the effect never re-ran to actually load it into the form.
-  // lastProcessedDraftSignature (below) replaces the one-way latch with
-  // "have I already adopted THIS SPECIFIC draft version" — a genuinely
-  // new/updated draft (including the very first one, arriving after an
-  // initial null) always gets processed, while an unrelated re-render
-  // with the same draft content never re-clobbers in-progress local
-  // edits.
+  // [Bug fix — a tab that already loaded a draft once could never
+  // adopt a LATER update from another device] The "defense in depth"
+  // check immediately below used to be `rows.some(rowHasRealContent)`
+  // — "does my form currently have anything in it." That is true
+  // forever after the FIRST successful load, so once a device had
+  // loaded the draft once, it would refuse every subsequent update
+  // from any other device permanently — mistaking "I loaded data
+  // earlier" for "I am actively typing right now." Now compares the
+  // CURRENT form content against a snapshot of what was true at the
+  // moment of the LAST sync (set here, and again after this device's
+  // own successful autosave, below) — only a genuine divergence since
+  // that point (the Owner has typed something new that hasn't been
+  // saved yet) is treated as in-progress local editing worth
+  // protecting.
   useEffect(() => {
     if (loadedForBusinessId !== activeBusinessId) return; // still catching up to a business switch — the reset effect above will re-run this once it settles
     if (!purchaseDraftLoaded) return; // Firestore hasn't answered yet — wait
@@ -658,13 +711,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       }
       return;
     }
-    // Defense in depth: if the user has already started typing into the
-    // default row during the (small, but non-zero) window before
-    // Firestore's answer arrived, don't clobber their in-progress input
-    // with an older saved draft — their current typing wins, and it
-    // will autosave over the old draft shortly.
-    const userHasStartedTyping = rows.some(rowHasRealContent);
-    if (!userHasStartedTyping) {
+    const currentSnapshot = computeDraftContentSnapshot(
+      rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes
+    );
+    const hasLocalUnsyncedEdits =
+      lastSyncedContentSnapshot.current !== undefined &&
+      currentSnapshot !== lastSyncedContentSnapshot.current;
+    if (!hasLocalUnsyncedEdits) {
       skipNextAutosave.current = true;
       if (purchaseDraft.items.length > 0) {
         // [Restock Observation Amendment v1.0] previousCycleQuantity is
@@ -688,6 +741,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       setSupplierPhone(purchaseDraft.supplierPhone || '');
       setSupplierNotes(purchaseDraft.supplierNotes || '');
       setBatchNotes(purchaseDraft.notes || '');
+      // The snapshot must reflect what was JUST adopted, not what was
+      // true before this effect ran — computed fresh from the draft's
+      // own items (via the same draftLineItemToRow/rowToDraftLineItem
+      // round-trip the rest of this fix already relies on) rather than
+      // re-reading React state, which would not have updated yet.
+      lastSyncedContentSnapshot.current = computeDraftContentSnapshot(
+        purchaseDraft.items.map(draftLineItemToRow),
+        purchaseDraft.date,
+        purchaseDraft.supplierId,
+        purchaseDraft.supplierName || '',
+        purchaseDraft.supplierPhone || '',
+        purchaseDraft.supplierNotes || '',
+        purchaseDraft.notes || ''
+      );
     }
     setDraftLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -713,6 +780,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
     setDraftSaveState('saving');
     const handle = setTimeout(() => {
+      // [Bug fix — a tab that already loaded a draft once could never
+      // adopt a LATER update from another device] Captured from this
+      // same closure as the savePurchaseDraft call immediately below,
+      // so the snapshot always reflects exactly what was actually
+      // saved — never a value that could have changed in between.
+      const savedSnapshot = computeDraftContentSnapshot(
+        rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes
+      );
       savePurchaseDraft(
         rows.map(rowToDraftLineItem),
         { supplierId, supplierName: supplierName || undefined, supplierPhone: supplierPhone || undefined, supplierNotes: supplierNotes || undefined },
@@ -725,7 +800,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // exactly.
         currentPurchaseEventId
       )
-        .then(() => setDraftSaveState('saved'))
+        .then(() => {
+          setDraftSaveState('saved');
+          // This device's own edits are now the new server-confirmed
+          // baseline — a future remote update arriving on this same
+          // tab should be compared against THIS content, not the
+          // content from before this save.
+          lastSyncedContentSnapshot.current = savedSnapshot;
+        })
         .catch((err) => {
           // [Bug fix — silent draft-save failure] Previously reverted
           // to 'idle' on ANY failure (permissions, network, a business
@@ -838,13 +920,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       sName.trim() ||
       bNotes.trim();
     if (!hasAnyContent) return;
+    // [Bug fix — a tab that already loaded a draft once could never
+    // adopt a LATER update from another device] Same snapshot-capture
+    // as the debounced autosave's own identical fix — matters here
+    // specifically for the "tab hidden, not unmounted" case (the
+    // component stays mounted and can return to the foreground later,
+    // at which point a stale snapshot would wrongly look like
+    // divergence against this flush's own just-saved content).
+    const savedSnapshot = computeDraftContentSnapshot(r, d, sId, sName, sPhone, sNotes, bNotes);
     savePurchaseDraft(
       r.map(rowToDraftLineItem),
       { supplierId: sId, supplierName: sName || undefined, supplierPhone: sPhone || undefined, supplierNotes: sNotes || undefined },
       d,
       bNotes || undefined,
       eventId
-    ).catch((err) => {
+    ).then(() => {
+      lastSyncedContentSnapshot.current = savedSnapshot;
+    }).catch((err) => {
       console.error('[AddStockView] draft flush-on-exit failed', err);
     });
   };
@@ -879,6 +971,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // failure itself.
   const handleRetryDraftSave = () => {
     setDraftSaveState('saving');
+    // [Bug fix — a tab that already loaded a draft once could never
+    // adopt a LATER update from another device] Same snapshot-capture
+    // as the debounced autosave's own identical fix, above.
+    const savedSnapshot = computeDraftContentSnapshot(
+      rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes
+    );
     savePurchaseDraft(
       rows.map(rowToDraftLineItem),
       { supplierId, supplierName: supplierName || undefined, supplierPhone: supplierPhone || undefined, supplierNotes: supplierNotes || undefined },
@@ -886,7 +984,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       batchNotes || undefined,
       currentPurchaseEventId
     )
-      .then(() => setDraftSaveState('saved'))
+      .then(() => {
+        setDraftSaveState('saved');
+        lastSyncedContentSnapshot.current = savedSnapshot;
+      })
       .catch((err) => {
         console.error('[AddStockView] purchase draft autosave retry failed', err);
         setDraftSaveState('error');
@@ -1565,6 +1666,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // that visible state exists to surface.
     try {
       setDraftSaveState('saving');
+      // [Bug fix — a tab that already loaded a draft once could never
+      // adopt a LATER update from another device] Same snapshot-
+      // capture as the debounced autosave's own identical fix.
+      const savedSnapshot = computeDraftContentSnapshot(
+        finalRows, finalDate, supplierId, finalSupplierName, supplierPhone, supplierNotes, batchNotes
+      );
       await savePurchaseDraft(
         finalRows.map(rowToDraftLineItem),
         {
@@ -1578,6 +1685,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         currentPurchaseEventId
       );
       setDraftSaveState('saved');
+      lastSyncedContentSnapshot.current = savedSnapshot;
     } catch (err) {
       console.error('[AddStockView] immediate post-scan draft save failed', err);
       setDraftSaveState('error');

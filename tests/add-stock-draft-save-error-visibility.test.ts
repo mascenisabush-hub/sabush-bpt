@@ -32,9 +32,9 @@ describe('AddStockView.tsx — draft autosave failure is now visible, never sile
   });
 
   it('the autosave .catch no longer reverts to \'idle\' — it sets \'error\' and logs diagnostic detail', () => {
-    const start = addStockSrc.indexOf(".then(() => setDraftSaveState('saved'))\n        .catch((err) => {");
-    assert.notEqual(start, -1, 'Expected the fixed catch handler to exist');
-    const end = addStockSrc.indexOf('});', start);
+    const start = addStockSrc.indexOf(".then(() => {\n          setDraftSaveState('saved');");
+    assert.notEqual(start, -1, 'Expected the fixed .then/.catch handler to exist');
+    const end = addStockSrc.indexOf('});', addStockSrc.indexOf('.catch((err) => {', start));
     const body = addStockSrc.slice(start, end);
     assert.match(body, /console\.error\('\[AddStockView\] purchase draft autosave failed', err\)/);
     assert.match(body, /setDraftSaveState\('error'\)/);
@@ -48,7 +48,7 @@ describe('AddStockView.tsx — draft autosave failure is now visible, never sile
     const body = addStockSrc.slice(start, end);
     assert.match(body, /savePurchaseDraft\(\s*rows\.map\(rowToDraftLineItem\),/);
     assert.match(body, /setDraftSaveState\('saving'\)/);
-    assert.match(body, /\.then\(\(\) => setDraftSaveState\('saved'\)\)/);
+    assert.match(body, /setDraftSaveState\('saved'\);/);
   });
 
   it('the error state renders a visible, distinctly-colored indicator with a retry button — not merely absent/blank like the old silent failure', () => {
