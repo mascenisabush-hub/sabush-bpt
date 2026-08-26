@@ -267,6 +267,7 @@ export const fr: TranslationDict = {
       recordPayment: 'Enregistrer un Paiement',
       hint: "Créée automatiquement lors d'un achat de stock à crédit fournisseur. Vous deviez déjà de l'argent à un fournisseur avant d'utiliser ce système ? Ajoutez-le ici.",
       manualBadge: 'Solde d\'Ouverture',
+      unknownSupplier: 'Fournisseur non identifié',
     },
     cashPositionSection: {
       title: 'Position de Trésorerie',
@@ -375,6 +376,7 @@ export const fr: TranslationDict = {
       notesPlaceholder: 'Ex. : Achat comptant, livraison partielle...',
       unspecifiedHint: 'Si vous n\u2019indiquez pas de fournisseur, ce lot sera enregistré comme « Fournisseur Non Spécifié ».',
       creditCheckboxLabel: "Cet achat a été fait à crédit fournisseur (pas encore payé)",
+      outstandingBalanceWarning: 'Ce fournisseur a déjà {{amount}} de dettes impayées.',
       searchPlaceholder: 'Rechercher/créer un fournisseur...',
       existingTag: 'Existant',
       createNewShort: '+ Créer « {{name}} »',

@@ -316,6 +316,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     batches,
     stockCounts,
     suppliers,
+    // [Feature — outstanding-balance warning on the credit checkbox,
+    // Owner-requested] Needed to look up whether the selected supplier
+    // already has an unpaid/partially-paid balance — see
+    // getSupplierOutstandingBalance's own comment, below, for the full
+    // rationale.
+    payables,
     addMultipleStockBatches,
     currencySymbol,
     businessCategory,
@@ -854,6 +860,29 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     const rememberedRaw = field === 'cost' ? memory.costPrice : memory.sellingPrice;
     const resolved = resolveUnitAwarePrice(rememberedRaw, memory.unit, row.unit, matched.unitRelationship);
     return resolved === '' ? null : parseFloat(resolved);
+  };
+
+  // [Feature — outstanding-balance warning on the credit checkbox,
+  // Owner-requested — "does the system recognize there is a pending
+  // unpaid receipt?"] Sums amountRemaining across every payable
+  // (status 'unpaid' or 'partially-paid') already on record for the
+  // CURRENTLY SELECTED existing supplier — only meaningful for an
+  // already-known supplier (a brand-new/free-text one obviously has no
+  // prior balance, since supplierId is how every automatic Payable
+  // links back to its supplier — see Payable.supplierId's own comment,
+  // types.ts). Returns null (never a fabricated 0) when no existing
+  // supplier is selected at all, or when that supplier genuinely has
+  // nothing outstanding — the caller only renders a warning when this
+  // is a real, positive number, matching this file's own "warn, never
+  // block" discipline (the price-deviation warning, the unit-mismatch
+  // warning) — informational only, never gating the credit checkbox
+  // itself.
+  const getSupplierOutstandingBalance = (forSupplierId: string | undefined): number | null => {
+    if (!forSupplierId) return null;
+    const total = payables
+      .filter((p) => p.supplierId === forSupplierId && (p.status === 'unpaid' || p.status === 'partially-paid'))
+      .reduce((sum, p) => sum + p.amountRemaining, 0);
+    return total > 0 ? total : null;
   };
 
   const handleAddRow = () => {
@@ -2074,6 +2103,29 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 />
                 {t('addStock.supplier.creditCheckboxLabel')}
               </label>
+              {/* [Feature — outstanding-balance warning, Owner-requested]
+                  Live-computed, never stored state — same "leave it,
+                  signal the mistake" pattern as the price-deviation and
+                  unit-mismatch warnings elsewhere in this file. Shown
+                  whenever the selected EXISTING supplier already has a
+                  real outstanding balance — regardless of whether this
+                  particular purchase is itself on credit, since it's
+                  relevant context for that decision either way. Never
+                  blocks the checkbox; purely informational. */}
+              {(() => {
+                const outstanding = getSupplierOutstandingBalance(supplierId);
+                if (outstanding === null) return null;
+                return (
+                  <p className="text-[12px] text-amber-700 bg-amber-50/60 border border-amber-200 rounded-lg px-2.5 py-1.5 flex items-start gap-1.5">
+                    <AlertTriangle className="w-3.5 h-3.5 shrink-0 mt-[1px]" strokeWidth={2.25} />
+                    <span>
+                      {t('addStock.supplier.outstandingBalanceWarning', {
+                        amount: formatCurrency(outstanding, currencySymbol),
+                      })}
+                    </span>
+                  </p>
+                );
+              })()}
               <p className="text-[12px] text-gray-500">
                 {t('addStock.supplier.unspecifiedHint')}
               </p>

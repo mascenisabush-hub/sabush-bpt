@@ -267,6 +267,7 @@ export const en: TranslationDict = {
       recordPayment: 'Record Payment',
       hint: 'Created automatically when stock is bought on supplier credit. Already owe a supplier money from before you started using this system? Add it here.',
       manualBadge: 'Opening Balance',
+      unknownSupplier: 'Unidentified Supplier',
     },
     cashPositionSection: {
       title: 'Cash Position',
@@ -375,6 +376,7 @@ export const en: TranslationDict = {
       notesPlaceholder: 'e.g. Cash purchase, partial delivery...',
       unspecifiedHint: 'If you don\u2019t specify a supplier, this batch will be saved as "Unspecified Supplier".',
       creditCheckboxLabel: 'This purchase was made on supplier credit (not yet paid)',
+      outstandingBalanceWarning: 'This supplier already has {{amount}} in unpaid debts.',
       searchPlaceholder: 'Search/create supplier...',
       existingTag: 'Existing',
       createNewShort: '+ Create "{{name}}"',

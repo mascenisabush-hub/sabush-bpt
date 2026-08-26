@@ -20,7 +20,7 @@ import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
-import { Receivable, Payable } from '../types';
+import { Receivable, Payable, type SupplierRecord } from '../types';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 
 function newSubmissionId(prefix: string): string {
@@ -37,6 +37,33 @@ function statusBadgeClass(status: Receivable['status'] | Payable['status']): str
   if (status === 'paid') return 'bg-emerald-50 text-emerald-700 border-emerald-200';
   if (status === 'partially-paid') return 'bg-amber-50 text-amber-700 border-amber-200';
   return 'bg-rose-50 text-rose-700 border-rose-200';
+}
+
+// [Bug fix — auto-created Payables displayed a meaningless raw document
+// ID instead of the supplier's name] Payable.supplierName is, by its
+// own documented contract (types.ts), "Never set on the automatic path"
+// — the exact path every +Stock supplier-credit purchase uses
+// (addMultipleStockBatches only ever writes supplierId there, never a
+// name). Without this resolution, {p.supplierName || p.description ||
+// p.id} fell all the way through to the raw document id for every
+// single auto-created Payable — the overwhelming majority of real-world
+// entries in this list, since manual/opening-balance Payables
+// (isManualEntry) are the narrower case. Resolves supplierId against
+// the live suppliers array (already fetched for this screen's own
+// receivable/payable-adding forms elsewhere) — never a second,
+// independently-invented lookup or a new Firestore read.
+function resolvePayableDisplayName(p: Payable, suppliers: SupplierRecord[], t: (key: string) => string): string {
+  if (p.supplierName) return p.supplierName;
+  if (p.supplierId) {
+    const matched = suppliers.find((s) => s.id === p.supplierId);
+    if (matched) return matched.name;
+  }
+  if (p.description) return p.description;
+  // Genuinely nothing to identify this by (a supplierId that no longer
+  // resolves to any existing SupplierRecord, or an automatic Payable
+  // with neither) — an honest, translated placeholder, never the raw
+  // document id, which was never meant to be Owner-facing at all.
+  return t('debts.payablesSection.unknownSupplier');
 }
 
 // A single row's inline payment-recording form — shared shape for both
@@ -145,6 +172,12 @@ export const DebtsView: React.FC = () => {
     recordPayablePayment,
     cashPositionDeclarations,
     addCashPositionDeclaration,
+    // [Bug fix — auto-created Payables displayed a meaningless raw
+    // document ID instead of the supplier's name] Needed to resolve
+    // Payable.supplierId back to an actual name — see
+    // resolvePayableDisplayName's own comment, below, for the full
+    // history.
+    suppliers,
   } = useApp();
   const { t } = useLanguage();
 
@@ -584,12 +617,24 @@ export const DebtsView: React.FC = () => {
           <p className="text-xs text-gray-400 text-center py-6">{t('debts.payablesSection.empty')}</p>
         ) : (
           <div className="space-y-2">
-            {payables.map((p) => (
+            {payables.map((p) => {
+              // [Bug fix — auto-created Payables displayed a meaningless
+              // raw document ID instead of the supplier's name] See
+              // resolvePayableDisplayName's own comment, above. The
+              // secondary description line below only shows p.description
+              // when it genuinely adds information beyond the resolved
+              // title — previously this required BOTH supplierName and
+              // description to be present, which never happened for the
+              // automatic path this fix targets (supplierName is never
+              // set there at all).
+              const displayName = resolvePayableDisplayName(p, suppliers, t);
+              const showDescriptionAsSubtitle = !!p.description && p.description !== displayName;
+              return (
               <div key={p.id} className="p-3 rounded-[10px] border border-gray-100">
                 <div className="flex items-center justify-between">
                   <div>
-                    <p className="text-xs font-bold text-gray-800">{p.supplierName || p.description || p.id}</p>
-                    {p.supplierName && p.description && <p className="text-[10px] text-gray-400">{p.description}</p>}
+                    <p className="text-xs font-bold text-gray-800">{displayName}</p>
+                    {showDescriptionAsSubtitle && <p className="text-[10px] text-gray-400">{p.description}</p>}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {p.isManualEntry && (
@@ -634,7 +679,8 @@ export const DebtsView: React.FC = () => {
                   )
                 )}
               </div>
-            ))}
+              );
+            })}
           </div>
         )}
       </div>

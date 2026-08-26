@@ -274,6 +274,7 @@ export interface TranslationDict {
       recordPayment: string;
       hint: string;
       manualBadge: string;
+      unknownSupplier: string;
     };
     cashPositionSection: {
       title: string;
@@ -387,6 +388,7 @@ export interface TranslationDict {
       notesPlaceholder: string;
       unspecifiedHint: string;
       creditCheckboxLabel: string;
+      outstandingBalanceWarning: string;
       searchPlaceholder: string;
       existingTag: string;
       createNewShort: string;
@@ -1384,6 +1386,7 @@ export const pt: TranslationDict = {
       recordPayment: 'Registar Pagamento',
       hint: 'Criadas automaticamente ao comprar stock a crédito do fornecedor. Já deve dinheiro a um fornecedor desde antes de usar este sistema? Adicione aqui.',
       manualBadge: 'Saldo Inicial',
+      unknownSupplier: 'Fornecedor não identificado',
     },
     cashPositionSection: {
       title: 'Posição de Caixa',
@@ -1492,6 +1495,7 @@ export const pt: TranslationDict = {
       notesPlaceholder: 'Ex.: Compra à vista, entrega parcial...',
       unspecifiedHint: 'Se não indicar um fornecedor, este lote será guardado como "Fornecedor Não Especificado".',
       creditCheckboxLabel: 'Esta compra foi feita a crédito do fornecedor (ainda não paga)',
+      outstandingBalanceWarning: 'Este fornecedor já tem {{amount}} em dívidas por pagar.',
       searchPlaceholder: 'Pesquisar/criar fornecedor...',
       existingTag: 'Existente',
       createNewShort: '+ Criar "{{name}}"',
