@@ -718,10 +718,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // fresh blank row; a product that no longer exists in `products` at
   // all (hard-deleted) is dropped, since Amendment Part 6 has nothing
   // left to source it from.
+  // [Feature — Owner-requested "black list" for discontinued products]
+  // A product explicitly marked inactive (Product.active === false, a
+  // DIFFERENT concept from the "active = exists in products" language
+  // above) is skipped here exactly like a hard-deleted one — dropped
+  // from Contagem's catalog list entirely, without deleting anything
+  // about the product itself. Reactivating it (see AddStockView) flips
+  // Product.active back, at which point this same effect picks it back
+  // up on its next run.
   useEffect(() => {
     setCatalogRows((prev) => {
       const next: CatalogRowState = {};
       for (const product of products) {
+        if (product.active === false) continue;
         next[product.id] = prev[product.id] || buildCatalogRow(product);
       }
       return next;
@@ -874,6 +883,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const message = validateWorkingRowForSave(row);
     if (message) {
       setCatalogRowSaveError((prev) => ({ ...prev, [productId]: message }));
+      return;
+    }
+    // [Feature — Owner-requested] Quantity 0 passes validation (it's a
+    // legitimate, deliberate "genuinely out of stock" result — never
+    // an error), but is exactly the value most likely to be a genuine
+    // slip (an empty field parsed as 0, a stray keystroke). Confirmed
+    // explicitly before it's locked in, distinct from every other
+    // valid quantity, which saves immediately with no extra step.
+    if (parseFloat(row.quantity) === 0 && !window.confirm(`Confirmas que "${row.productName}" tem mesmo 0 em stock?`)) {
       return;
     }
     setCatalogRowSaveError((prev) => {
@@ -1347,6 +1365,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const message = validateWorkingRowForSave(row);
     if (message) {
       setManualRowSaveError((prev) => ({ ...prev, [index]: message }));
+      return;
+    }
+    // [Feature — Owner-requested] Manual-row counterpart to
+    // handleSaveCatalogRow's own identical confirmation, above.
+    if (parseFloat(row.quantity) === 0 && !window.confirm(`Confirmas que "${row.productName}" tem mesmo 0 em stock?`)) {
       return;
     }
     setManualRowSaveError((prev) => {

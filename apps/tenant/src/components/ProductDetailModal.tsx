@@ -3,7 +3,7 @@ import { Product, StockCountType } from '../types';
 import { useApp } from '../context/AppContext';
 import { calculateBatch } from '../utils/calculations';
 import { formatCurrency, formatDate } from '../utils/formatters';
-import { X, AlertTriangle, Trash2, Package, Layers, ClipboardList } from 'lucide-react';
+import { X, AlertTriangle, Trash2, EyeOff, Package, Layers, ClipboardList } from 'lucide-react';
 
 // [Bug fix — a product whose only history is a Contagem count looked
 // "waiting for setup"] Owner-reported: clicking a product on the
@@ -42,7 +42,7 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
   onNavigateToAddStock,
   onNavigateToAddQuebra,
 }) => {
-  const { batches, quebras, stockCounts, currencySymbol, deleteProduct, deleteQuebra } = useApp();
+  const { batches, quebras, stockCounts, currencySymbol, deleteProduct, deleteQuebra, updateProduct } = useApp();
 
   const productBatches = batches
     .filter(b => b.productId === product.id)
@@ -73,6 +73,29 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
     .sort((a, b) => new Date(b.count.date).getTime() - new Date(a.count.date).getTime());
 
   const [isDeleting, setIsDeleting] = useState(false);
+  const [isArchiving, setIsArchiving] = useState(false);
+
+  // [Feature — Owner-requested "black list" for discontinued products]
+  // The reversible, non-destructive alternative to handleDeleteProduct
+  // below: keeps every batch/quebra/count record intact, just flips
+  // one field. Owner-requested explicit confirmation before it takes
+  // effect — same pattern as the destructive delete action, even
+  // though this one is easily undone (see AddStockView's reactivation
+  // prompt) rather than permanent.
+  const handleInactivateProduct = async () => {
+    if (!window.confirm(`Marcar "${product.name}" como inativo? Deixa de aparecer na Contagem, mas todo o histórico é mantido. Podes reativá-lo mais tarde ao repor stock em Adicionar Stock.`)) {
+      return;
+    }
+    setIsArchiving(true);
+    try {
+      await updateProduct(product.id, { active: false });
+      onClose();
+    } catch (err: any) {
+      alert(err?.message || 'Erro ao marcar o produto como inativo.');
+    } finally {
+      setIsArchiving(false);
+    }
+  };
 
   // deleteProduct is async and cascades across multiple sequential
   // Firestore calls (the product doc, then each of its batches, then each
@@ -106,8 +129,13 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               <Package className="w-5 h-5" strokeWidth={2} />
             </div>
             <div className="min-w-0">
-              <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight truncate">
+              <h2 className="font-bold text-[17px] sm:text-lg text-[#111827] tracking-tight leading-tight truncate flex items-center gap-2">
                 {product.name}
+                {product.active === false && (
+                  <span className="px-2 py-0.5 rounded-md text-[10px] font-bold uppercase tracking-wide bg-amber-100 text-amber-700 border border-amber-200 shrink-0">
+                    Inativo
+                  </span>
+                )}
               </h2>
               <p className="text-[12px] text-gray-500 mt-0.5">
                 Histórico completo de lotes e registo de perdas
@@ -116,9 +144,21 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
           </div>
 
           <div className="flex items-center gap-2 shrink-0">
+            {product.active !== false && (
+              <button
+                onClick={handleInactivateProduct}
+                disabled={isArchiving || isDeleting}
+                className="p-2 rounded-xl bg-amber-50 hover:bg-amber-100 border border-amber-200 text-amber-700 text-xs font-semibold transition-colors duration-150 flex items-center gap-1.5 disabled:opacity-60"
+                title="Marcar como Inativo"
+              >
+                <EyeOff className="w-4 h-4" strokeWidth={2.25} />
+                <span className="hidden sm:inline">{isArchiving ? 'A marcar...' : 'Marcar Inativo'}</span>
+              </button>
+            )}
+
             <button
               onClick={handleDeleteProduct}
-              disabled={isDeleting}
+              disabled={isDeleting || isArchiving}
               className="p-2 rounded-xl bg-rose-50 hover:bg-rose-100 border border-rose-200 text-rose-700 text-xs font-semibold transition-colors duration-150 flex items-center gap-1.5 disabled:opacity-60"
               title="Eliminar Produto"
             >

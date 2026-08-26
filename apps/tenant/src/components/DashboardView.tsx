@@ -209,7 +209,14 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
 
   // Filter products by search (name, SKU, barcode, category, supplier)
   // and by the category/supplier dropdowns.
+  // [Feature — Owner-requested "black list" for discontinued products]
+  // An inactive product (active === false) never appears in this
+  // catalog list at all — it's still fully intact in Firestore (batch/
+  // quebra/count history untouched), just not shown here. The only way
+  // back is Add Stock's own reactivation prompt when that product's
+  // name is matched again, not a toggle on this screen.
   let filteredProducts = products.filter(p => {
+    if (p.active === false) return false;
     const query = searchQuery.toLowerCase().trim();
     const matchesQuery =
       !query ||

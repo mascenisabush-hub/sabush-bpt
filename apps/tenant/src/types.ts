@@ -437,6 +437,17 @@ export interface Product {
   // §5.A Item 6) — this field's absence is an ordinary, fully
   // anticipated state, not an error.
   unitRelationship?: UnitRelationship;
+  // [Feature — Owner-requested "black list" for discontinued products]
+  // undefined or true = active (every product created before this
+  // field existed is active with zero migration needed). false = the
+  // Owner explicitly marked this product as no longer sold — it drops
+  // out of Contagem's catalog list (fewer rows to fill in each count)
+  // but is NEVER deleted and NEVER loses its batch/quebra/count
+  // history; Add Stock still recognizes it by name and offers to
+  // reactivate it right there the moment someone tries to restock it
+  // (see the reactivation prompt in AddStockView), rather than
+  // requiring a separate "manage inactive products" screen anywhere.
+  active?: boolean;
 }
 
 // [Closing Integrity Amendment v1.0 — Option B] closingId/lockedAt are

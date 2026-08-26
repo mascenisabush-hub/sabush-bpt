@@ -366,6 +366,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     attachPurchaseEventId,
     activeBusinessId,
     scanPurchaseDocument,
+    updateProduct,
   } = useApp();
   const { t } = useLanguage();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
@@ -503,6 +504,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     r.productName.trim() !== '' || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== '';
 
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
+  // [Feature — Owner-requested "black list" for discontinued products]
+  // Composite `${rowId}:${productId}` keys — a row's reactivation
+  // prompt is dismissed (either "Sim, reativar" was clicked, handled
+  // optimistically here without waiting for the products listener to
+  // catch up, or "Não" was clicked) so it doesn't keep reappearing on
+  // every render while the row's typed name still matches that same
+  // now-handled inactive product.
+  const [dismissedInactiveMatches, setDismissedInactiveMatches] = useState<Set<string>>(new Set());
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [date, setDate] = useState(getTodayDateString());
   const [isSaving, setIsSaving] = useState(false);
@@ -1224,6 +1233,33 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       .filter((p) => p.supplierId === forSupplierId && (p.status === 'unpaid' || p.status === 'partially-paid'))
       .reduce((sum, p) => sum + p.amountRemaining, 0);
     return total > 0 ? total : null;
+  };
+
+  // [Feature — Owner-requested "black list" for discontinued products]
+  // Called from the "Sim, reativar" button on the always-visible
+  // inactive-product banner, below (mirrors the always-visible "did
+  // you mean an existing product?" banner's own placement rationale —
+  // a receipt-scanned name is pre-filled without ever being clicked
+  // into, so anything gated behind focus/hover would silently never be
+  // seen for that case). Optimistically dismissed immediately rather
+  // than waiting for the products listener to reflect the write, so
+  // there's no flicker between clicking and the banner actually going
+  // away.
+  const handleReactivateProduct = async (rowId: string, product: { id: string; name: string }) => {
+    setDismissedInactiveMatches((prev) => new Set(prev).add(`${rowId}:${product.id}`));
+    try {
+      await updateProduct(product.id, { active: true });
+    } catch (err: any) {
+      alert(err?.message || `Erro ao reativar "${product.name}".`);
+      // Roll back the optimistic dismissal so the Owner can see the
+      // banner (and retry) again — a failed reactivation must not
+      // silently look like it succeeded.
+      setDismissedInactiveMatches((prev) => {
+        const next = new Set(prev);
+        next.delete(`${rowId}:${product.id}`);
+        return next;
+      });
+    }
   };
 
   const handleAddRow = () => {
@@ -3456,6 +3492,59 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           }
                         />
                       )}
+
+                      {/* [Feature — Owner-requested "black list" for
+                          discontinued products] Deliberately always
+                          visible (not gated behind focus/hover) for
+                          the exact same reason as the "did you mean an
+                          existing product?" banner just above: a
+                          receipt-scanned name is pre-filled without
+                          ever being clicked into, and this is exactly
+                          the moment that matters most — someone is
+                          about to restock a product they'd previously
+                          marked as no longer sold. Matched by exact
+                          name (case-insensitive), same rule already
+                          used for the ordinary active-product
+                          exactMatchExists check elsewhere in this
+                          file — never fabricates a match, never
+                          silently reactivates anything on its own. */}
+                      {(() => {
+                        const trimmedName = row.productName.trim().toLowerCase();
+                        if (!trimmedName) return null;
+                        const inactiveMatch = products.find(
+                          p => p.active === false && p.name.trim().toLowerCase() === trimmedName
+                        );
+                        if (!inactiveMatch) return null;
+                        if (dismissedInactiveMatches.has(`${row.id}:${inactiveMatch.id}`)) return null;
+                        return (
+                          <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 space-y-1.5">
+                            <div className="flex items-start gap-2">
+                              <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
+                              <p className="text-[13px] text-amber-800 leading-snug">
+                                {`"${inactiveMatch.name}" está marcado como inativo. Queres reativá-lo para repor stock?`}
+                              </p>
+                            </div>
+                            <div className="flex flex-wrap gap-1.5">
+                              <button
+                                type="button"
+                                onClick={() => handleReactivateProduct(row.id, inactiveMatch)}
+                                className="text-[12.5px] font-bold text-white bg-emerald-600 hover:bg-emerald-700 rounded-lg px-2.5 py-1.5 transition-colors duration-150"
+                              >
+                                Sim, reativar
+                              </button>
+                              <button
+                                type="button"
+                                onClick={() =>
+                                  setDismissedInactiveMatches(prev => new Set(prev).add(`${row.id}:${inactiveMatch.id}`))
+                                }
+                                className="text-[12.5px] font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 hover:bg-amber-100 transition-colors duration-150"
+                              >
+                                Não
+                              </button>
+                            </div>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}

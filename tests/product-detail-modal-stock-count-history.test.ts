@@ -40,7 +40,7 @@ const modalSrc = src('apps/tenant/src/components/ProductDetailModal.tsx');
 
 describe('ProductDetailModal.tsx — Contagem/stock count history is now read and displayed, not just batches', () => {
   it('stockCounts is destructured from useApp(), alongside the pre-existing batches', () => {
-    assert.match(modalSrc, /const \{ batches, quebras, stockCounts, currencySymbol, deleteProduct, deleteQuebra \} = useApp\(\);/);
+    assert.match(modalSrc, /const \{ batches, quebras, stockCounts, currencySymbol, deleteProduct, deleteQuebra, updateProduct \} = useApp\(\);/);
   });
 
   it('productStockCountEntries matches items by productId OR by normalized name, mirroring findLatestRememberedProductMemory\'s own dual-matching rule', () => {
