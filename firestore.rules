@@ -450,7 +450,17 @@ service cloud.firestore {
       // ----------------------------------------------------------
       match /products/{productId} {
         allow read: if isMemberOf(businessId);
-        allow create: if isMemberOf(businessId);
+        // [Data integrity audit — Owner-requested] Minimal field
+        // validation on create: every product-creation call site
+        // (addStockBatch, addMultipleStockBatches, recordStockCount —
+        // all in AppContext.tsx) always sends `name` as the trimmed
+        // product name, and never sends costPrice/sellingPrice/active/
+        // category/etc. at creation (those are only ever set later via
+        // updateProduct, an UPDATE — deliberately left untouched here,
+        // same create-only scope as the batches validation above).
+        allow create: if isMemberOf(businessId) &&
+          request.resource.data.get('name', null) is string &&
+          request.resource.data.get('name', '') != '';
         allow update, delete: if isOwnerOf(businessId);
       }
 

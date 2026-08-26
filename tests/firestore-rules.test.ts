@@ -514,6 +514,37 @@ describe('products', () => {
     await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'products', 'p2'), { name: 'Hijacked' }));
     await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'products', 'p2')));
   });
+
+  // [Data integrity audit — Owner-requested] New field validation on
+  // create — only ever `name`, matching exactly what every product-
+  // creation call site (addStockBatch, addMultipleStockBatches,
+  // recordStockCount, all in AppContext.tsx) sends. Deliberately does
+  // NOT test update — the rule change is create-only by design.
+  describe('field validation on create (Data integrity audit)', () => {
+    const staffDbFor = () => ctxFor(STAFF_UID).firestore();
+
+    it('rejects a missing name', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'products', 'no-name'), { id: 'no-name' }));
+    });
+
+    it('rejects an empty-string name', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'products', 'empty-name'), { id: 'empty-name', name: '' }));
+    });
+
+    it('rejects a non-string name', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'products', 'num-name'), { id: 'num-name', name: 123 }));
+    });
+
+    it('accepts a real product with just name — the actual shape every real create call site sends (never costPrice/sellingPrice/active at creation)', async () => {
+      await assertSucceeds(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'products', 'real1'), { id: 'real1', name: 'Widget', createdAt: '2026-06-01T00:00:00.000Z' }));
+    });
+
+    it('an update is completely unaffected by the new create-only validation — Owner can still clear name-adjacent fields or set active/costPrice freely', async () => {
+      await assertSucceeds(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'products', 'upd1'), { id: 'upd1', name: 'Widget' }));
+      const ownerDb = ctxFor(OWNER_UID).firestore();
+      await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'products', 'upd1'), { active: false, costPrice: 5 }));
+    });
+  });
 });
 
 // ---------------------------------------------------------------------
