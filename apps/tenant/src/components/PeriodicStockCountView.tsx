@@ -1214,7 +1214,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
   };
 
+  // [Bug fix — same class as AddStockView's/InitialStockCountView's own
+  // identical fix: a row delete button with no confirmation, sitting
+  // right next to other interactive fields, could permanently discard
+  // typed quantity/price data on a single misclick] Only prompts when
+  // there's real data to lose — a still-blank manually-added row
+  // removes instantly, same as before.
   const handleRemoveManualRow = (index: number) => {
+    const row = manualRows[index];
+    if (
+      row &&
+      (row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice) &&
+      !window.confirm('Remover esta porção? Os dados já preenchidos (quantidade, preços) serão perdidos.')
+    ) {
+      return;
+    }
     submissionIdRef.current = null;
     const nextManualRows = manualRows.filter((_, i) => i !== index);
     setManualRows(nextManualRows);

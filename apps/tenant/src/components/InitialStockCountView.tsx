@@ -660,8 +660,27 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
 
   const handleAddRow = () => setRows((prev) => [...prev, createEmptyRow()]);
 
+  // [Bug fix — same class as AddStockView's own identical fix: a row
+  // delete button with no confirmation, sitting right next to other
+  // interactive fields, could permanently discard typed quantity/price
+  // data on a single misclick] Centralizes the "does this row have
+  // anything worth confirming before removing" check — the same
+  // condition already used inline in a few places in this file (the
+  // draft-worthiness checks above) — so handleRemoveRow/handleRemoveGroup
+  // below share one definition instead of re-deriving it.
+  const rowHasRealContent = (r: CountRowItem): boolean =>
+    !!(r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice);
+
   const handleRemoveRow = (id: string) => {
     if (rows.length <= 1) return;
+    const row = rows.find((r) => r.id === id);
+    if (
+      row &&
+      rowHasRealContent(row) &&
+      !window.confirm('Remover esta porção? Os dados já preenchidos (quantidade, preços) serão perdidos.')
+    ) {
+      return;
+    }
     setRows((prev) => prev.filter((row) => row.id !== id));
   };
 
@@ -713,8 +732,21 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // guarantee: refuses (no-op) if removing this whole group would
   // leave zero rows, rather than ever leaving the form with nothing to
   // edit.
-  const handleRemoveGroup = (rowIds: string[]) => {
+  const handleRemoveGroup = (rowIds: string[], displayName?: string) => {
     const idsToRemove = new Set(rowIds);
+    const rowsToRemove = rows.filter((row) => idsToRemove.has(row.id));
+    // [Bug fix — same class as handleRemoveRow's own identical fix,
+    // above] This removes an entire product's worth of portions in one
+    // click — more destructive than a single row, so it's confirmed
+    // whenever ANY of those portions has real data, not just the first.
+    if (
+      rowsToRemove.some(rowHasRealContent) &&
+      !window.confirm(
+        `Remover "${displayName || 'este produto'}" e ${rowsToRemove.length > 1 ? `as suas ${rowsToRemove.length} porções` : 'a sua porção'}? Os dados já preenchidos serão perdidos.`
+      )
+    ) {
+      return;
+    }
     setRows((prev) => {
       const remaining = prev.filter((row) => !idsToRemove.has(row.id));
       if (remaining.length === 0) return prev;
@@ -1791,7 +1823,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                             </div>
                             <button
                               type="button"
-                              onClick={() => handleRemoveGroup(group.rows.map((r) => r.id))}
+                              onClick={() => handleRemoveGroup(group.rows.map((r) => r.id), group.displayName)}
                               aria-label={`Remover produto ${group.displayName}`}
                               className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
                             >
