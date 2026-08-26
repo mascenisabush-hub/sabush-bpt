@@ -430,6 +430,40 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     return productBatches.length > 0 ? productBatches[0].quantity : undefined;
   };
 
+  // [Critical bug fix — draft never loads, "Draft saved" shown on an
+  // empty form] Owner-reported and confirmed on screen: "Rascunho
+  // guardado" (Draft saved) appeared on a completely untouched, blank
+  // Add Stock screen, and — far more seriously — a REAL draft sitting
+  // correctly in Firestore never visibly loaded back in on a fresh
+  // mount, no matter how many times the SAVE-side bugs above were
+  // fixed. Root cause, found by tracing this exact discrepancy:
+  // createEmptyRow's own default `quantity: '50'` is a non-empty
+  // string — truthy — so FOUR separate places in this file that
+  // needed to ask "does this row actually have anything real in it?"
+  // were instead asking "is quantity non-empty?", which is true for
+  // every pristine, never-touched row from the moment the component
+  // mounts, before a single keystroke.
+  //
+  // The single most damaging instance was userHasStartedTyping,
+  // below, in the load effect: since `rows` starts as exactly one
+  // pristine default row, userHasStartedTyping was ALWAYS (falsely)
+  // true on every fresh mount — so the `if (!userHasStartedTyping)`
+  // block that actually calls setRows(purchaseDraft.items...) to
+  // display a genuinely saved draft NEVER ran. This means a real,
+  // correctly-saved, correctly-fetched draft was silently discarded
+  // at the very last step, on every single load, independent of and
+  // undoing the value of every save-side fix already made above.
+  //
+  // rowHasRealContent replaces all four ad hoc inline checks with one
+  // single, correct, shared definition — matching the ALREADY-correct
+  // comparison the receipt-merge code elsewhere in this file used all
+  // along (`r.quantity !== '50'`, not merely `r.quantity`) — so this
+  // exact class of drift (one correct check existing, three
+  // independently-written incorrect copies of the same intent) cannot
+  // recur silently.
+  const rowHasRealContent = (r: StockRowItem): boolean =>
+    r.productName.trim() !== '' || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== '';
+
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [date, setDate] = useState(getTodayDateString());
@@ -622,9 +656,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // Firestore's answer arrived, don't clobber their in-progress input
     // with an older saved draft — their current typing wins, and it
     // will autosave over the old draft shortly.
-    const userHasStartedTyping = rows.some(
-      (r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice
-    );
+    const userHasStartedTyping = rows.some(rowHasRealContent);
     if (!userHasStartedTyping) {
       skipNextAutosave.current = true;
       if (purchaseDraft.items.length > 0) {
@@ -667,7 +699,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       return;
     }
     const hasAnyContent =
-      rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice) ||
+      rows.some(rowHasRealContent) ||
       supplierName.trim() ||
       batchNotes.trim();
     if (!hasAnyContent) return;
@@ -795,7 +827,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // in-memory rows here would wrongly resurrect it).
     if (!loaded || saving || submitted) return;
     const hasAnyContent =
-      r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice) ||
+      r.some(rowHasRealContent) ||
       sName.trim() ||
       bNotes.trim();
     if (!hasAnyContent) return;
@@ -1455,9 +1487,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // functional updater) specifically so this same, concrete array is
     // available a few lines down to save immediately, not just to
     // render.
-    const kept = rows.filter(
-      r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== ''
-    );
+    const kept = rows.filter(rowHasRealContent);
     const finalRows = [...kept, ...newRows];
     setRows(finalRows);
 
@@ -1914,7 +1944,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     : suppliers;
   const exactSupplierMatchExists = suppliers.some((s) => s.name.toLowerCase() === supplierSearchLower);
   const hasDraftContent =
-    rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice) ||
+    rows.some(rowHasRealContent) ||
     supplierName.trim() ||
     batchNotes.trim();
 
