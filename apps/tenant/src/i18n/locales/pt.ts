@@ -53,6 +53,10 @@ export interface TranslationDict {
     submitLogin: string;
     submitRegister: string;
     googleLogin: string;
+    continueAsGoogleAccount: string;
+    chooseAnotherGoogleAccount: string;
+    forgetAccount: string;
+    backToSavedAccounts: string;
     demoLogin: string;
     secureFooter: string;
     errors: {
@@ -1180,6 +1184,10 @@ export const pt: TranslationDict = {
     submitLogin: 'Entrar no Sistema',
     submitRegister: 'Criar Conta e Negócio',
     googleLogin: 'Entrar com Conta Google',
+    continueAsGoogleAccount: 'Continuar como {name}',
+    chooseAnotherGoogleAccount: 'Escolher outra conta',
+    forgetAccount: 'Remover esta conta da lista',
+    backToSavedAccounts: 'Voltar às contas guardadas',
     demoLogin: 'Entrar em Modo Demonstração (Sem Email)',
     secureFooter: '🔒 Acesso seguro com isolamento total de dados por empresa.',
     errors: {

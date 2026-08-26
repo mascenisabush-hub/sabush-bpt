@@ -57,6 +57,10 @@ export const fr: TranslationDict = {
     submitLogin: 'Se connecter',
     submitRegister: "Créer le compte et l'entreprise",
     googleLogin: 'Se connecter avec Google',
+    continueAsGoogleAccount: 'Continuer en tant que {name}',
+    chooseAnotherGoogleAccount: 'Choisir un autre compte',
+    forgetAccount: 'Retirer ce compte de la liste',
+    backToSavedAccounts: 'Retour aux comptes enregistrés',
     demoLogin: 'Mode démo (sans e-mail)',
     secureFooter: '🔒 Accès sécurisé avec isolation totale des données par entreprise.',
     errors: {

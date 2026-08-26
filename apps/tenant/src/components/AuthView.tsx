@@ -114,6 +114,69 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Remembers the Google accounts used on this device/browser so we can
+  // offer one-tap "Continue as {name}" buttons instead of forcing the
+  // account chooser every time — matching the stacked-account pattern
+  // Google's own sign-in surfaces use. Survives sign-out on purpose
+  // (logout() only clears the Firebase session, never this). Most
+  // recently used account is always first; capped at 5 so the list
+  // can't grow unbounded on a shared device.
+  type RememberedAccount = { uid: string; name: string; email: string; photoURL: string | null };
+  const MAX_REMEMBERED_ACCOUNTS = 5;
+  const REMEMBERED_ACCOUNTS_KEY = 'sabush.googleAccounts';
+
+  const [rememberedAccounts, setRememberedAccounts] = useState<RememberedAccount[]>([]);
+  const [showAccountChooser, setShowAccountChooser] = useState(false);
+
+  useEffect(() => {
+    try {
+      const raw = localStorage.getItem(REMEMBERED_ACCOUNTS_KEY);
+      if (raw) {
+        setRememberedAccounts(JSON.parse(raw));
+        return;
+      }
+      // Migrate from the old single-account key so anyone who already
+      // has a remembered account from before this change doesn't lose it.
+      const legacyRaw = localStorage.getItem('sabush.lastGoogleAccount');
+      if (legacyRaw) {
+        const legacy = JSON.parse(legacyRaw);
+        if (legacy?.email) {
+          const migrated: RememberedAccount[] = [{ uid: legacy.uid || legacy.email, name: legacy.name, email: legacy.email, photoURL: legacy.photoURL ?? null }];
+          setRememberedAccounts(migrated);
+          localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(migrated));
+        }
+        localStorage.removeItem('sabush.lastGoogleAccount');
+      }
+    } catch {
+      // corrupt/unavailable localStorage — just skip the remembered-account UI
+    }
+  }, []);
+
+  const rememberAccount = (account: RememberedAccount) => {
+    setRememberedAccounts((prev) => {
+      const next = [account, ...prev.filter((a) => a.uid !== account.uid)].slice(0, MAX_REMEMBERED_ACCOUNTS);
+      try {
+        localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(next));
+      } catch {
+        // localStorage unavailable — the list just won't persist across reloads
+      }
+      return next;
+    });
+  };
+
+  const forgetAccount = (uid: string, e: React.MouseEvent) => {
+    e.stopPropagation();
+    setRememberedAccounts((prev) => {
+      const next = prev.filter((a) => a.uid !== uid);
+      try {
+        localStorage.setItem(REMEMBERED_ACCOUNTS_KEY, JSON.stringify(next));
+      } catch {
+        // localStorage unavailable — nothing further to persist
+      }
+      return next;
+    });
+  };
+
   const handleAuth = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
@@ -218,16 +281,32 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
     }
   };
 
-  const handleGoogleAuth = async () => {
+  // loginHint, when provided, sends the user straight to that specific
+  // Google account instead of showing the picker (used by each "Continue
+  // as {name}" row for a remembered account). With no hint, Google shows
+  // its account chooser as normal — used by "Use another account" and by
+  // the default button when nothing is remembered yet.
+  const handleGoogleAuth = async (loginHint?: string) => {
     setError(null);
     setLoading(true);
 
     try {
       const provider = new GoogleAuthProvider();
+      if (loginHint) {
+        provider.setCustomParameters({ login_hint: loginHint });
+      } else {
+        // Force the account chooser. Without this, Google reuses the
+        // browser's existing session and signs the user straight back
+        // into the same account after sign-out, instead of letting them
+        // pick a different one.
+        provider.setCustomParameters({ prompt: 'select_account' });
+      }
       const userCred = await signInWithPopup(auth, provider);
       const uid = userCred.user.uid;
       const userEmail = userCred.user.email || '';
       const userName = userCred.user.displayName || name || t('auth.defaults.ownerFallback');
+
+      rememberAccount({ uid, name: userName, email: userEmail, photoURL: userCred.user.photoURL || null });
 
       // Check if user doc exists in Firestore
       const userDoc = await getDoc(doc(db, 'users', uid));
@@ -613,33 +692,79 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             </button>
           </form>
 
-          <div className="mt-4 pt-3 border-t border-white/10 flex flex-col space-y-2 relative z-10">
-            <button
-              type="button"
-              onClick={handleGoogleAuth}
-              disabled={loading}
-              className="w-full py-2.5 px-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2 shadow"
-            >
-              <svg className="w-4 h-4" viewBox="0 0 24 24">
-                <path
-                  fill="#4285F4"
-                  d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z"
-                />
-                <path
-                  fill="#34A853"
-                  d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z"
-                />
-                <path
-                  fill="#FBBC05"
-                  d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z"
-                />
-                <path
-                  fill="#EA4335"
-                  d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z"
-                />
-              </svg>
-              <span>{t('auth.googleLogin')}</span>
-            </button>
+          <div className="mt-4 pt-3 border-t border-white/10 flex flex-col space-y-1.5 relative z-10">
+            {rememberedAccounts.length > 0 && !showAccountChooser ? (
+              <>
+                {rememberedAccounts.map((account) => (
+                  <button
+                    key={account.uid}
+                    type="button"
+                    onClick={() => handleGoogleAuth(account.email)}
+                    disabled={loading}
+                    className="group w-full py-2.5 px-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold rounded-xl text-xs transition flex items-center justify-between shadow disabled:opacity-50"
+                  >
+                    <span className="flex items-center space-x-2 min-w-0">
+                      {account.photoURL ? (
+                        <img src={account.photoURL} alt="" className="w-4 h-4 rounded-full flex-shrink-0" referrerPolicy="no-referrer" />
+                      ) : (
+                        <svg className="w-4 h-4 flex-shrink-0" viewBox="0 0 24 24">
+                          <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                          <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                          <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                          <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                        </svg>
+                      )}
+                      <span className="truncate">{t('auth.continueAsGoogleAccount', { name: account.name })}</span>
+                    </span>
+                    <span
+                      role="button"
+                      tabIndex={0}
+                      onClick={(e) => forgetAccount(account.uid, e)}
+                      onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') forgetAccount(account.uid, e as any); }}
+                      title={t('auth.forgetAccount')}
+                      className="flex-shrink-0 text-gray-400 hover:text-gray-700 opacity-0 group-hover:opacity-100 transition ml-2 px-1"
+                    >
+                      ✕
+                    </span>
+                  </button>
+                ))}
+                <button
+                  type="button"
+                  onClick={() => setShowAccountChooser(true)}
+                  disabled={loading}
+                  className="w-full py-2 px-3 text-slate-400 hover:text-slate-200 font-medium rounded-xl text-[11px] transition disabled:opacity-50"
+                >
+                  {t('auth.chooseAnotherGoogleAccount')}
+                </button>
+              </>
+            ) : (
+              <>
+                <button
+                  type="button"
+                  onClick={() => handleGoogleAuth()}
+                  disabled={loading}
+                  className="w-full py-2.5 px-3 bg-white hover:bg-gray-100 text-gray-900 font-semibold rounded-xl text-xs transition flex items-center justify-center space-x-2 shadow disabled:opacity-50"
+                >
+                  <svg className="w-4 h-4" viewBox="0 0 24 24">
+                    <path fill="#4285F4" d="M22.56 12.25c0-.78-.07-1.53-.2-2.25H12v4.26h5.92c-.26 1.37-1.04 2.53-2.21 3.31v2.77h3.57c2.08-1.92 3.28-4.74 3.28-8.09z" />
+                    <path fill="#34A853" d="M12 23c2.97 0 5.46-.98 7.28-2.66l-3.57-2.77c-.98.66-2.23 1.06-3.71 1.06-2.86 0-5.29-1.93-6.16-4.53H2.18v2.84C3.99 20.53 7.7 23 12 23z" />
+                    <path fill="#FBBC05" d="M5.84 14.09c-.22-.66-.35-1.36-.35-2.09s.13-1.43.35-2.09V7.06H2.18C1.43 8.55 1 10.22 1 12s.43 3.45 1.18 4.94l2.85-2.22.81-.63z" />
+                    <path fill="#EA4335" d="M12 5.38c1.62 0 3.06.56 4.21 1.64l3.15-3.15C17.45 2.09 14.97 1 12 1 7.7 1 3.99 3.47 2.18 7.06l3.66 2.84c.87-2.6 3.3-4.52 6.16-4.52z" />
+                  </svg>
+                  <span>{t('auth.googleLogin')}</span>
+                </button>
+                {rememberedAccounts.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => setShowAccountChooser(false)}
+                    disabled={loading}
+                    className="w-full py-2 px-3 text-slate-400 hover:text-slate-200 font-medium rounded-xl text-[11px] transition disabled:opacity-50"
+                  >
+                    {t('auth.backToSavedAccounts')}
+                  </button>
+                )}
+              </>
+            )}
           </div>
 
           <div className="mt-4 text-center text-[11px] text-slate-500 relative z-10">
