@@ -408,6 +408,10 @@ export interface TranslationDict {
     };
     productSearchPlaceholder: string;
     existingTag: string;
+    maybeTag: string;
+    similarProduct: {
+      warning: string;
+    };
     createNew: string;
     createNewShort: string;
     unitSuggestionsTitle: string;
@@ -1515,6 +1519,14 @@ export const pt: TranslationDict = {
     },
     productSearchPlaceholder: 'Pesquisar/criar produto...',
     existingTag: 'Existente',
+    // [Feature — "did you mean an existing product?"] Deliberately
+    // distinct wording/color from existingTag above — this is a
+    // forgiving similarity guess (productNameSimilarity.ts), never a
+    // confirmed match, and must never look like one.
+    maybeTag: 'Talvez',
+    similarProduct: {
+      warning: 'Este nome não corresponde exatamente a nenhum produto — pode ser um destes já existentes?',
+    },
     createNew: '+ Criar novo produto "{{name}}"',
     createNewShort: '+ Criar "{{name}}"',
     unitSuggestionsTitle: 'Sugestões de unidades',

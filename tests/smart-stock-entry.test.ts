@@ -158,8 +158,13 @@ describe('Input-method convergence (camera capture vs. file upload)', () => {
       addStockViewSrc.indexOf('ref={uploadFileInputRef}'),
       addStockViewSrc.indexOf('onClick={() => cameraFileInputRef.current?.click()}')
     );
-    assert.ok(cameraInputBlock.includes('handleFileSelected(file)'), 'Camera input must call handleFileSelected.');
-    assert.ok(uploadInputBlock.includes('handleFileSelected(file)'), 'Upload input must call handleFileSelected.');
+    // [Bug fix — both scan buttons spun at once] Each input now also
+    // tells handleFileSelected which method it is ('camera'/'upload'),
+    // purely so the two buttons can animate independently — the
+    // pipeline itself is still the exact same shared function, still
+    // asserted below via the single-definition count.
+    assert.ok(cameraInputBlock.includes("handleFileSelected(file, 'camera')"), 'Camera input must call handleFileSelected with the camera method.');
+    assert.ok(uploadInputBlock.includes("handleFileSelected(file, 'upload')"), 'Upload input must call handleFileSelected with the upload method.');
     // Only ONE handleFileSelected definition exists at all — proving
     // there is no parallel/second implementation either input could be
     // routed to instead.

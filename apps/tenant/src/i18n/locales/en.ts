@@ -396,6 +396,10 @@ export const en: TranslationDict = {
     },
     productSearchPlaceholder: 'Search/create product...',
     existingTag: 'Existing',
+    maybeTag: 'Maybe',
+    similarProduct: {
+      warning: "This name doesn't exactly match any product — could it be one of these already-existing ones?",
+    },
     createNew: '+ Create new product "{{name}}"',
     createNewShort: '+ Create "{{name}}"',
     unitSuggestionsTitle: 'Unit suggestions',

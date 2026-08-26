@@ -343,17 +343,22 @@ const EXTRACTION_RESPONSE_SCHEMA = {
 const EXTRACTION_PROMPT =
   'You are reading a photographed purchase receipt or invoice for a small ' +
   'business inventory app. Extract ONLY what is clearly, literally present ' +
-  'in the document. For each purchased line item, extract productName, ' +
-  'quantity, unit (e.g. un, cx, kg, saco, carton — copy the document\'s own ' +
-  'wording, never convert or infer a different unit), and costPrice (the ' +
-  'PURCHASE/cost price paid, never a selling or retail price — if the ' +
-  'document shows no purchase price for a line, omit costPrice for it). ' +
-  'Also extract supplierName and documentDate if clearly present. If a ' +
-  'field is not clearly present, OMIT it entirely rather than guessing — ' +
-  'never invent, estimate, or infer a value that is not directly legible ' +
-  'in the document. Never extract a selling price under any field name. ' +
-  'Never infer how much stock remained before this purchase. Respond with ' +
-  'JSON matching the provided schema only.';
+  'in the document. The document may list several different products — ' +
+  'extract EVERY line item on it, in the order they appear, not just the ' +
+  'first or clearest one; a receipt with five products must produce five ' +
+  'entries in lineItems, not one. For each purchased line item, extract ' +
+  'productName, quantity, unit (e.g. un, cx, kg, saco, carton — copy the ' +
+  'document\'s own wording, never convert or infer a different unit), and ' +
+  'costPrice (the PURCHASE/cost price paid, never a selling or retail ' +
+  'price — if the document shows no purchase price for a line, omit ' +
+  'costPrice for that one line only; still include the rest of that ' +
+  'line\'s known fields, and still include every other line item). Also ' +
+  'extract supplierName and documentDate if clearly present. If a field ' +
+  'is not clearly present, OMIT it entirely rather than guessing — never ' +
+  'invent, estimate, or infer a value that is not directly legible in the ' +
+  'document. Never extract a selling price under any field name. Never ' +
+  'infer how much stock remained before this purchase. Respond with JSON ' +
+  'matching the provided schema only.';
 
 /**
  * Calls the configured AI vision provider with one image and returns its
@@ -413,6 +418,26 @@ export async function callVisionExtractionProvider(
         config: {
           responseMimeType: 'application/json',
           responseSchema: EXTRACTION_RESPONSE_SCHEMA,
+          // [Bug fix — repeated scans of the SAME receipt returning
+          // DIFFERENT results] Owner-reported: scanning one multi-item
+          // receipt three separate times produced three different
+          // totals, none matching the receipt's own printed total.
+          // Root cause: no temperature was set at all, so the
+          // provider's own non-zero default sampling temperature
+          // applied — meaning genuine run-to-run randomness on the
+          // EXACT SAME image, not merely "hard to read" variance. For
+          // a bookkeeping feature where the whole point is a reliable,
+          // literal reading of a document (never an invented or
+          // estimated value, per this prompt's own explicit rule
+          // above), that randomness is actively harmful — the same
+          // photo should extract the same numbers every time. 0 is
+          // Gemini's minimum/most-deterministic setting; it does not
+          // guarantee byte-for-byte identical output on every possible
+          // input (some residual variance can remain from the
+          // provider's own infrastructure), but it removes the
+          // avoidable, deliberate randomness this call was previously
+          // leaving fully uncontrolled.
+          temperature: 0,
         },
       }),
       new Promise((_resolve, reject) =>

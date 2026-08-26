@@ -11,6 +11,7 @@ import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
+import { findSimilarProducts } from '../lib/productNameSimilarity';
 // [Manual data-entry error investigation, Finding 3] Shared with
 // Contagem (PeriodicStockCountView.tsx) — see that file's own header
 // comment for why this is a shared utility, not duplicated per screen.
@@ -436,6 +437,40 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     return productBatches.length > 0 ? productBatches[0].quantity : undefined;
   };
 
+  // [Critical bug fix — draft never loads, "Draft saved" shown on an
+  // empty form] Owner-reported and confirmed on screen: "Rascunho
+  // guardado" (Draft saved) appeared on a completely untouched, blank
+  // Add Stock screen, and — far more seriously — a REAL draft sitting
+  // correctly in Firestore never visibly loaded back in on a fresh
+  // mount, no matter how many times the SAVE-side bugs above were
+  // fixed. Root cause, found by tracing this exact discrepancy:
+  // createEmptyRow's own default `quantity: '50'` is a non-empty
+  // string — truthy — so FOUR separate places in this file that
+  // needed to ask "does this row actually have anything real in it?"
+  // were instead asking "is quantity non-empty?", which is true for
+  // every pristine, never-touched row from the moment the component
+  // mounts, before a single keystroke.
+  //
+  // The single most damaging instance was userHasStartedTyping,
+  // below, in the load effect: since `rows` starts as exactly one
+  // pristine default row, userHasStartedTyping was ALWAYS (falsely)
+  // true on every fresh mount — so the `if (!userHasStartedTyping)`
+  // block that actually calls setRows(purchaseDraft.items...) to
+  // display a genuinely saved draft NEVER ran. This means a real,
+  // correctly-saved, correctly-fetched draft was silently discarded
+  // at the very last step, on every single load, independent of and
+  // undoing the value of every save-side fix already made above.
+  //
+  // rowHasRealContent replaces all four ad hoc inline checks with one
+  // single, correct, shared definition — matching the ALREADY-correct
+  // comparison the receipt-merge code elsewhere in this file used all
+  // along (`r.quantity !== '50'`, not merely `r.quantity`) — so this
+  // exact class of drift (one correct check existing, three
+  // independently-written incorrect copies of the same intent) cannot
+  // recur silently.
+  const rowHasRealContent = (r: StockRowItem): boolean =>
+    r.productName.trim() !== '' || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== '';
+
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
   const [submittedMessage, setSubmittedMessage] = useState<string | null>(null);
   const [date, setDate] = useState(getTodayDateString());
@@ -449,6 +484,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // form, exactly per the ADR.
   const [scanState, setScanState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [scanErrorReason, setScanErrorReason] = useState<SmartStockEntryFailureReason | null>(null);
+  // [Bug fix — both scan buttons spun at once] scanState alone can't
+  // tell the two buttons apart — "Take Picture" and "Upload" both read
+  // the same 'processing' flag, so clicking either one spun BOTH
+  // buttons even though only one file was actually being scanned.
+  // scanInputMethod records which button was actually pressed, so only
+  // that one animates; the other stays merely disabled (still correct —
+  // a second scan really can't start mid-flight — just not misleadingly
+  // spinning).
+  const [scanInputMethod, setScanInputMethod] = useState<'camera' | 'upload' | null>(null);
   // [Smart Stock Entry — Tier 1, input-method expansion] Two separate
   // hidden file inputs, not one — the ONLY difference between them is
   // the `capture` attribute (camera vs. normal file/gallery picker).
@@ -619,9 +663,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // Firestore's answer arrived, don't clobber their in-progress input
     // with an older saved draft — their current typing wins, and it
     // will autosave over the old draft shortly.
-    const userHasStartedTyping = rows.some(
-      (r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice
-    );
+    const userHasStartedTyping = rows.some(rowHasRealContent);
     if (!userHasStartedTyping) {
       skipNextAutosave.current = true;
       if (purchaseDraft.items.length > 0) {
@@ -664,7 +706,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       return;
     }
     const hasAnyContent =
-      rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice) ||
+      rows.some(rowHasRealContent) ||
       supplierName.trim() ||
       batchNotes.trim();
     if (!hasAnyContent) return;
@@ -704,6 +746,127 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes, draftLoaded, currentPurchaseEventId]);
+
+  // [Bug fix — unsaved edits lost on internal tab switch AND on a real
+  // hard refresh/tab close] Two related but distinct gaps, both closed
+  // here together:
+  //
+  // (1) App.tsx renders AddStockView conditionally ({activeTab ===
+  //     'add-stock' && ...}), so switching to any other tab in the app
+  //     UNMOUNTS this component outright. The debounced autosave
+  //     effect above has its own cleanup (clearTimeout), which React
+  //     runs on unmount exactly like on every dependency change — any
+  //     edit made within the last 800ms, with its save still pending,
+  //     was simply discarded. Owner-reported: "leave that tab, coming
+  //     back you find nothing."
+  //
+  // (2) A genuine hard refresh, tab close, or browser navigation is
+  //     NOT a React unmount at all — the whole JS context is torn down
+  //     by the browser, so React never gets to run (1)'s cleanup in
+  //     the first place. Owner-reported, separately: "hard refreshing
+  //     when I have draft in add stock, they disappear." This is the
+  //     exact same root cause and exact same fix InitialStockCountView
+  //     and PeriodicStockCountView already carry for this same class
+  //     of form (see InitialStockCountView.tsx's own identical-purpose
+  //     effect, "Draft-loss fix, part 2") — AddStockView was simply
+  //     missing it, despite useUnsavedChangesWarning.ts's own comment
+  //     already claiming "+Stock" had this. It didn't; now it does,
+  //     using the exact same proven mechanism: 'visibilitychange'
+  //     (tab hidden — covers switching apps/minimizing, the most
+  //     reliable signal on mobile) and 'pagehide' (covers an actual
+  //     reload/close/navigation) rather than 'beforeunload', which
+  //     mobile Safari and some other browsers don't reliably fire at
+  //     all. Best-effort, fire-and-forget — the browser gives no
+  //     guarantee an async write completes once the page is actually
+  //     gone — but it closes the large, common window (scan or type,
+  //     then immediately refresh/switch away) that caused the loss
+  //     here; it does not claim to make loss impossible in literally
+  //     every case (e.g. the device losing power mid-write).
+  //
+  // Refs (not effect dependencies) specifically because flushDraftNow
+  // must always see the CURRENT form contents at the moment it fires,
+  // not whatever was current when an effect first mounted — updated on
+  // every render, read only inside the flush itself.
+  const latestAutosaveInputsRef = useRef({
+    rows,
+    date,
+    supplierId,
+    supplierName,
+    supplierPhone,
+    supplierNotes,
+    batchNotes,
+    currentPurchaseEventId,
+    draftLoaded,
+    isSaving,
+    submittedMessage,
+  });
+  latestAutosaveInputsRef.current = {
+    rows,
+    date,
+    supplierId,
+    supplierName,
+    supplierPhone,
+    supplierNotes,
+    batchNotes,
+    currentPurchaseEventId,
+    draftLoaded,
+    isSaving,
+    submittedMessage,
+  };
+  const flushDraftNow = () => {
+    const {
+      rows: r,
+      date: d,
+      supplierId: sId,
+      supplierName: sName,
+      supplierPhone: sPhone,
+      supplierNotes: sNotes,
+      batchNotes: bNotes,
+      currentPurchaseEventId: eventId,
+      draftLoaded: loaded,
+      isSaving: saving,
+      submittedMessage: submitted,
+    } = latestAutosaveInputsRef.current;
+    // Exactly the same three gates as the debounced autosave effect
+    // above: never write before the initial load, never write over an
+    // in-flight or just-finished submission (that draft has already
+    // been explicitly deleted as part of finalization — writing stale
+    // in-memory rows here would wrongly resurrect it).
+    if (!loaded || saving || submitted) return;
+    const hasAnyContent =
+      r.some(rowHasRealContent) ||
+      sName.trim() ||
+      bNotes.trim();
+    if (!hasAnyContent) return;
+    savePurchaseDraft(
+      r.map(rowToDraftLineItem),
+      { supplierId: sId, supplierName: sName || undefined, supplierPhone: sPhone || undefined, supplierNotes: sNotes || undefined },
+      d,
+      bNotes || undefined,
+      eventId
+    ).catch((err) => {
+      console.error('[AddStockView] draft flush-on-exit failed', err);
+    });
+  };
+  // Empty deps — this must run its cleanup exactly once, on unmount,
+  // reading the CURRENT ref contents at that moment, not on every
+  // keystroke like the debounced effect above.
+  useEffect(() => {
+    return () => flushDraftNow();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+  useEffect(() => {
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'hidden') flushDraftNow();
+    };
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    window.addEventListener('pagehide', flushDraftNow);
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      window.removeEventListener('pagehide', flushDraftNow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // [Bug fix — silent draft-save failure] Manual retry for the error
   // state above — re-attempts with whatever is CURRENTLY in the form
@@ -1293,9 +1456,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // unreadable document) is handled gracefully — rows are left exactly
   // as they were, and the user can always continue manually. Nothing is
   // ever written to Firestore by this function.
-  const handleFileSelected = async (file: File | undefined | null) => {
+  const handleFileSelected = async (file: File | undefined | null, method: 'camera' | 'upload') => {
     if (!file) return;
     setScanState('processing');
+    setScanInputMethod(method);
     setScanErrorReason(null);
 
     let base64: string;
@@ -1318,6 +1482,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       });
     } catch {
       setScanState('error');
+      setScanInputMethod(null);
       setScanErrorReason('unreadable');
       return;
     }
@@ -1326,40 +1491,97 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
     if (result.success === false) {
       setScanState('error');
+      setScanInputMethod(null);
       setScanErrorReason(result.reason);
       return;
     }
 
     const newRows = result.proposal.lineItems.map(buildRowFromProposalLineItem);
-    setRows(prev => {
-      // Drop any still-pristine, never-typed-into default row before
-      // appending the scan's rows, so a fresh Add Stock screen doesn't
-      // end up with one useless empty row alongside the real ones —
-      // but never drop a row the user has already started filling in.
-      // [Fix — createEmptyRow's own '1.50'/'3.00' placeholder defaults
-      // were removed (never invent a price for a genuinely new/unmatched
-      // product); a pristine row's costPrice/sellingPrice are now '' by
-      // default instead, unless Product Memory found something real to
-      // prefill — this check is updated to match, not to compare against
-      // the removed placeholders.]
-      const kept = prev.filter(
-        r => r.productName.trim() || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== ''
-      );
-      return [...kept, ...newRows];
-    });
+    // [Bug fix — scanned receipt data lost if the user leaves the page
+    // within the autosave debounce window] Previously this only called
+    // setRows(prev => ...) with a functional updater, relying entirely
+    // on the ordinary autosave effect below (800ms debounced, by
+    // design, so a fast typist doesn't trigger a write per keystroke)
+    // to eventually persist it. A completed scan is not typing — it's
+    // a single, already-finished batch of real data. Confirmed via
+    // Firestore Console: an Owner's purchaseDrafts document contained
+    // only the pristine default empty row (productName: "", quantity
+    // the '50' placeholder), even though the phone's screen had shown
+    // the receipt's real items filled in moments earlier — the exact
+    // symptom of the debounced save's pending setTimeout being
+    // cancelled by the effect's own cleanup before it ever fired
+    // (backgrounding the tab, switching apps, or navigating off to
+    // continue on another device — precisely the cross-device workflow
+    // this feature exists for). `kept`/`finalRows` are now computed
+    // directly from the current `rows` (not inside setRows' own
+    // functional updater) specifically so this same, concrete array is
+    // available a few lines down to save immediately, not just to
+    // render.
+    const kept = rows.filter(rowHasRealContent);
+    const finalRows = [...kept, ...newRows];
+    setRows(finalRows);
 
     // [Smart Stock Entry — Tier 1] Supplier/date, when the document
     // clearly contained them — free-text only, never an existing
     // SupplierRecord auto-selected (that remains a separate, explicit
     // user action via the existing supplier autocomplete below).
-    if (result.proposal.supplierName.value && !supplierId && !supplierName.trim()) {
-      setSupplierName(result.proposal.supplierName.value);
+    // Mirrored into finalSupplierName/finalDate (not just the state
+    // setters) for the exact same immediate-save reason as finalRows
+    // above — the debounced autosave effect would otherwise still be
+    // working off the PRE-scan supplierName/date closure value for the
+    // rest of this render.
+    const finalSupplierName =
+      result.proposal.supplierName.value && !supplierId && !supplierName.trim()
+        ? result.proposal.supplierName.value
+        : supplierName;
+    if (finalSupplierName !== supplierName) {
+      setSupplierName(finalSupplierName);
     }
-    if (result.proposal.documentDate.value && /^\d{4}-\d{2}-\d{2}$/.test(result.proposal.documentDate.value)) {
-      setDate(result.proposal.documentDate.value);
+    const finalDate =
+      result.proposal.documentDate.value && /^\d{4}-\d{2}-\d{2}$/.test(result.proposal.documentDate.value)
+        ? result.proposal.documentDate.value
+        : date;
+    if (finalDate !== date) {
+      setDate(finalDate);
     }
 
     setScanState('idle');
+    setScanInputMethod(null);
+
+    // [Bug fix — scanned receipt data lost if the user leaves the page
+    // within the autosave debounce window, continued from finalRows'
+    // own comment above] Save immediately here, right after a
+    // successful scan merge — bypassing the 800ms debounce entirely —
+    // so the receipt's data is durably on the server BEFORE the person
+    // can navigate away, background the tab, or switch devices. The
+    // ordinary debounced autosave effect below will still also fire
+    // shortly after (its dependencies include `rows`, which just
+    // changed) — that's fine and deliberately left alone: same data,
+    // same document, last-write-wins, no harm in it running twice.
+    // Errors here reuse the exact same visible error+retry UI as the
+    // debounced autosave's own failure path (draftSaveState === 'error'
+    // below), rather than a separate/silent failure mode — a scan that
+    // succeeded but couldn't reach the server is exactly the situation
+    // that visible state exists to surface.
+    try {
+      setDraftSaveState('saving');
+      await savePurchaseDraft(
+        finalRows.map(rowToDraftLineItem),
+        {
+          supplierId,
+          supplierName: finalSupplierName || undefined,
+          supplierPhone: supplierPhone || undefined,
+          supplierNotes: supplierNotes || undefined,
+        },
+        finalDate,
+        batchNotes || undefined,
+        currentPurchaseEventId
+      );
+      setDraftSaveState('saved');
+    } catch (err) {
+      console.error('[AddStockView] immediate post-scan draft save failed', err);
+      setDraftSaveState('error');
+    }
   };
 
   // Explicit "reject this scan" — removes only the AI-sourced rows,
@@ -1372,6 +1594,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       return remaining.length > 0 ? remaining : [createEmptyRow('')];
     });
     setScanState('idle');
+    setScanInputMethod(null);
     setScanErrorReason(null);
   };
 
@@ -1751,7 +1974,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     : suppliers;
   const exactSupplierMatchExists = suppliers.some((s) => s.name.toLowerCase() === supplierSearchLower);
   const hasDraftContent =
-    rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice) ||
+    rows.some(rowHasRealContent) ||
     supplierName.trim() ||
     batchNotes.trim();
 
@@ -1898,7 +2121,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   className="hidden"
                   onChange={e => {
                     const file = e.target.files?.[0];
-                    handleFileSelected(file);
+                    handleFileSelected(file, 'camera');
                     e.target.value = '';
                   }}
                 />
@@ -1915,7 +2138,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   className="hidden"
                   onChange={e => {
                     const file = e.target.files?.[0];
-                    handleFileSelected(file);
+                    handleFileSelected(file, 'upload');
                     e.target.value = '';
                   }}
                 />
@@ -1925,7 +2148,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   onClick={() => cameraFileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
-                  {scanState === 'processing' ? (
+                  {scanState === 'processing' && scanInputMethod === 'camera' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Camera className="w-3.5 h-3.5 text-[#B8952F]" />
@@ -1938,7 +2161,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   onClick={() => uploadFileInputRef.current?.click()}
                   className="inline-flex items-center gap-1.5 text-[13px] font-bold text-[#0B1F3A] bg-white border border-[#E5E7EB] hover:border-[#D4AF37]/50 rounded-[10px] px-3 py-2 transition-colors duration-150 disabled:opacity-60"
                 >
-                  {scanState === 'processing' ? (
+                  {scanState === 'processing' && scanInputMethod === 'upload' ? (
                     <Loader2 className="w-3.5 h-3.5 animate-spin" />
                   ) : (
                     <Upload className="w-3.5 h-3.5 text-[#B8952F]" />
@@ -2196,6 +2419,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   const exactMatchExists = products.some(
                     p => p.name.toLowerCase() === searchLower
                   );
+                  // [Feature — "did you mean an existing product?"
+                  // suggestions] Only computed when there's real,
+                  // unmatched text and no exact match already — see
+                  // productNameSimilarity.ts's own header for the full
+                  // scenario. Deduplicated against filteredProducts
+                  // (substring matches already shown above) so the same
+                  // product is never suggested twice under two
+                  // different badges.
+                  const similarProducts =
+                    row.productName.trim() && !exactMatchExists
+                      ? findSimilarProducts(row.productName, products).filter(
+                          (s) => !filteredProducts.some((fp) => fp.id === s.id)
+                        )
+                      : [];
 
                   return (
                     <div
@@ -2246,6 +2483,33 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                     <span className="font-semibold">{p.name}</span>
                                     <span className="text-[11px] text-gray-500 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
                                       {t('addStock.existingTag')}
+                                    </span>
+                                  </button>
+                                ))}
+
+                                {/* [Feature — "did you mean an existing
+                                    product?"] Distinctly badged
+                                    ("Talvez"/Maybe, amber) from the
+                                    substring matches above ("Existente"/
+                                    Existing, gray) — this is a forgiving
+                                    similarity guess, never a confirmed
+                                    match, so it must never look
+                                    identical to one. Selecting it just
+                                    rewrites productName to the existing
+                                    product's own exact name, which then
+                                    flows through the ordinary,
+                                    unchanged exact-match prefill logic
+                                    completely normally. */}
+                                {similarProducts.map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => handleSelectProductForTool(row.id, p.name)}
+                                    className="w-full text-left px-3 py-2 hover:bg-amber-50 transition-colors duration-150 flex items-center justify-between text-xs text-[#111827]"
+                                  >
+                                    <span className="font-semibold">{p.name}</span>
+                                    <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                      {t('addStock.maybeTag')}
                                     </span>
                                   </button>
                                 ))}
@@ -2643,6 +2907,19 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                       {p.name}
                                     </button>
                                   ))}
+                                  {similarProducts.map(p => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => handleSelectProductForTool(row.id, p.name)}
+                                      className="w-full text-left px-3 py-2 text-xs text-[#111827] hover:bg-amber-50 transition-colors duration-150 flex items-center justify-between gap-2"
+                                    >
+                                      <span>{p.name}</span>
+                                      <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                        {t('addStock.maybeTag')}
+                                      </span>
+                                    </button>
+                                  ))}
                                   {row.productName.trim() && !exactMatchExists && (
                                     <button
                                       type="button"
@@ -2885,6 +3162,46 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               }
                               className="w-full bg-white border border-rose-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
                             />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* [Feature — "did you mean an existing product?"]
+                          Deliberately ALWAYS VISIBLE here — unlike the
+                          dropdown suggestions above, which require
+                          clicking into the product field to even see —
+                          because this is exactly the moment a scanned
+                          or typed name is about to be treated as a
+                          brand-new product needing its own setup
+                          (UnitRelationshipRow just below). A receipt-
+                          scanned name is pre-filled without ever being
+                          clicked into, so a suggestion that only shows
+                          on focus would silently never be seen for the
+                          single highest-value case this feature exists
+                          for. Still purely a suggestion — selecting it
+                          only rewrites productName to the existing
+                          product's own exact name and lets the
+                          ordinary, unchanged exact-match logic take it
+                          from there; leaving it alone changes nothing. */}
+                      {row.productName.trim() && !exactMatchExists && similarProducts.length > 0 && (
+                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
+                            <p className="text-[13px] text-amber-800 leading-snug">
+                              {t('addStock.similarProduct.warning')}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {similarProducts.map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => handleSelectProductForTool(row.id, p.name)}
+                                className="text-[12.5px] font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 hover:bg-amber-100 transition-colors duration-150"
+                              >
+                                {p.name}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       )}
