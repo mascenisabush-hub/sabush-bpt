@@ -778,6 +778,29 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       batchNotes.trim();
     if (!hasAnyContent) return;
 
+    // [Bug fix — merely VIEWING a draft on another device could
+    // silently overwrite a newer edit] `rows` also carries UI-only
+    // fields (isDropdownOpen, isUnitPopoverOpen) that updateRow flips
+    // via a brand-new array reference on something as small as tapping
+    // into a field to look at it — e.g. onFocus={() =>
+    // updateRow(row.id, { isDropdownOpen: true })}. That reference
+    // change alone used to be enough to re-arm this effect and
+    // schedule a real Firestore write 800ms later, even though nothing
+    // about the actual DATA had changed. Owner-reported: "I edit a
+    // receipt, check another device to see if it's live, and the edit
+    // immediately becomes unedited (or disappears)" — the checking
+    // device's own harmless-looking tap resaved whatever content IT
+    // had loaded, and if that landed on the server after the editing
+    // device's newer save, it silently won (last-write-wins, no
+    // merge). Comparing against lastSyncedContentSnapshot — the same
+    // mechanism the load effect already uses to detect genuine local
+    // edits — closes this: a pure UI-state change produces an
+    // identical content snapshot, so no write is scheduled at all.
+    const currentSnapshot = computeDraftContentSnapshot(
+      rows, date, supplierId, supplierName, supplierPhone, supplierNotes, batchNotes
+    );
+    if (currentSnapshot === lastSyncedContentSnapshot.current) return;
+
     setDraftSaveState('saving');
     const handle = setTimeout(() => {
       // [Bug fix — a tab that already loaded a draft once could never
@@ -909,25 +932,17 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       isSaving: saving,
       submittedMessage: submitted,
     } = latestAutosaveInputsRef.current;
-    // Exactly the same three gates as the debounced autosave effect
-    // above: never write before the initial load, never write over an
-    // in-flight or just-finished submission (that draft has already
-    // been explicitly deleted as part of finalization — writing stale
-    // in-memory rows here would wrongly resurrect it).
+    // Same three gates as the debounced autosave effect above: never
+    // write before load, never write over an in-flight/just-finished
+    // submission (already deleted as part of finalization).
     if (!loaded || saving || submitted) return;
     const hasAnyContent =
       r.some(rowHasRealContent) ||
       sName.trim() ||
       bNotes.trim();
     if (!hasAnyContent) return;
-    // [Bug fix — a tab that already loaded a draft once could never
-    // adopt a LATER update from another device] Same snapshot-capture
-    // as the debounced autosave's own identical fix — matters here
-    // specifically for the "tab hidden, not unmounted" case (the
-    // component stays mounted and can return to the foreground later,
-    // at which point a stale snapshot would wrongly look like
-    // divergence against this flush's own just-saved content).
     const savedSnapshot = computeDraftContentSnapshot(r, d, sId, sName, sPhone, sNotes, bNotes);
+    if (savedSnapshot === lastSyncedContentSnapshot.current) return;
     savePurchaseDraft(
       r.map(rowToDraftLineItem),
       { supplierId: sId, supplierName: sName || undefined, supplierPhone: sPhone || undefined, supplierNotes: sNotes || undefined },
