@@ -11,6 +11,7 @@ import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
+import { findSimilarProducts } from '../lib/productNameSimilarity';
 // [Manual data-entry error investigation, Finding 3] Shared with
 // Contagem (PeriodicStockCountView.tsx) — see that file's own header
 // comment for why this is a shared utility, not duplicated per screen.
@@ -2366,6 +2367,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   const exactMatchExists = products.some(
                     p => p.name.toLowerCase() === searchLower
                   );
+                  // [Feature — "did you mean an existing product?"
+                  // suggestions] Only computed when there's real,
+                  // unmatched text and no exact match already — see
+                  // productNameSimilarity.ts's own header for the full
+                  // scenario. Deduplicated against filteredProducts
+                  // (substring matches already shown above) so the same
+                  // product is never suggested twice under two
+                  // different badges.
+                  const similarProducts =
+                    row.productName.trim() && !exactMatchExists
+                      ? findSimilarProducts(row.productName, products).filter(
+                          (s) => !filteredProducts.some((fp) => fp.id === s.id)
+                        )
+                      : [];
 
                   return (
                     <div
@@ -2416,6 +2431,33 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                     <span className="font-semibold">{p.name}</span>
                                     <span className="text-[11px] text-gray-500 bg-[#F5F7FA] px-2 py-0.5 rounded border border-[#E5E7EB]">
                                       {t('addStock.existingTag')}
+                                    </span>
+                                  </button>
+                                ))}
+
+                                {/* [Feature — "did you mean an existing
+                                    product?"] Distinctly badged
+                                    ("Talvez"/Maybe, amber) from the
+                                    substring matches above ("Existente"/
+                                    Existing, gray) — this is a forgiving
+                                    similarity guess, never a confirmed
+                                    match, so it must never look
+                                    identical to one. Selecting it just
+                                    rewrites productName to the existing
+                                    product's own exact name, which then
+                                    flows through the ordinary,
+                                    unchanged exact-match prefill logic
+                                    completely normally. */}
+                                {similarProducts.map(p => (
+                                  <button
+                                    key={p.id}
+                                    type="button"
+                                    onClick={() => handleSelectProductForTool(row.id, p.name)}
+                                    className="w-full text-left px-3 py-2 hover:bg-amber-50 transition-colors duration-150 flex items-center justify-between text-xs text-[#111827]"
+                                  >
+                                    <span className="font-semibold">{p.name}</span>
+                                    <span className="text-[11px] text-amber-700 bg-amber-50 px-2 py-0.5 rounded border border-amber-200">
+                                      {t('addStock.maybeTag')}
                                     </span>
                                   </button>
                                 ))}
@@ -2813,6 +2855,19 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                       {p.name}
                                     </button>
                                   ))}
+                                  {similarProducts.map(p => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => handleSelectProductForTool(row.id, p.name)}
+                                      className="w-full text-left px-3 py-2 text-xs text-[#111827] hover:bg-amber-50 transition-colors duration-150 flex items-center justify-between gap-2"
+                                    >
+                                      <span>{p.name}</span>
+                                      <span className="text-[10px] text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded border border-amber-200 shrink-0">
+                                        {t('addStock.maybeTag')}
+                                      </span>
+                                    </button>
+                                  ))}
                                   {row.productName.trim() && !exactMatchExists && (
                                     <button
                                       type="button"
@@ -3055,6 +3110,46 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               }
                               className="w-full bg-white border border-rose-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-rose-400 focus:ring-2 focus:ring-rose-200"
                             />
+                          </div>
+                        </div>
+                      )}
+
+                      {/* [Feature — "did you mean an existing product?"]
+                          Deliberately ALWAYS VISIBLE here — unlike the
+                          dropdown suggestions above, which require
+                          clicking into the product field to even see —
+                          because this is exactly the moment a scanned
+                          or typed name is about to be treated as a
+                          brand-new product needing its own setup
+                          (UnitRelationshipRow just below). A receipt-
+                          scanned name is pre-filled without ever being
+                          clicked into, so a suggestion that only shows
+                          on focus would silently never be seen for the
+                          single highest-value case this feature exists
+                          for. Still purely a suggestion — selecting it
+                          only rewrites productName to the existing
+                          product's own exact name and lets the
+                          ordinary, unchanged exact-match logic take it
+                          from there; leaving it alone changes nothing. */}
+                      {row.productName.trim() && !exactMatchExists && similarProducts.length > 0 && (
+                        <div className="mt-2 bg-amber-50 border border-amber-200 rounded-xl px-3 py-2.5 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[1px]" strokeWidth={2.25} />
+                            <p className="text-[13px] text-amber-800 leading-snug">
+                              {t('addStock.similarProduct.warning')}
+                            </p>
+                          </div>
+                          <div className="flex flex-wrap gap-1.5">
+                            {similarProducts.map(p => (
+                              <button
+                                key={p.id}
+                                type="button"
+                                onClick={() => handleSelectProductForTool(row.id, p.name)}
+                                className="text-[12.5px] font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 hover:bg-amber-100 transition-colors duration-150"
+                              >
+                                {p.name}
+                              </button>
+                            ))}
                           </div>
                         </div>
                       )}

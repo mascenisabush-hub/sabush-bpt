@@ -394,6 +394,10 @@ export const fr: TranslationDict = {
     },
     productSearchPlaceholder: 'Rechercher/créer un produit...',
     existingTag: 'Existant',
+    maybeTag: 'Peut-être',
+    similarProduct: {
+      warning: "Ce nom ne correspond exactement à aucun produit — pourrait-il s'agir de l'un de ceux-ci déjà existants ?",
+    },
     createNew: '+ Créer un nouveau produit « {{name}} »',
     createNewShort: '+ Créer « {{name}} »',
     unitSuggestionsTitle: 'Suggestions d\u2019unités',
