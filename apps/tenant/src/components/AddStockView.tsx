@@ -5,7 +5,7 @@ import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
-import { PurchaseDraftLineItem, UnitRelationship } from '../types';
+import { PurchaseDraft, PurchaseDraftLineItem, UnitRelationship } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
@@ -593,6 +593,23 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // mere presence of content. See computeDraftContentSnapshot's own
   // comment, and the load effect's own updated comment, below.
   const lastSyncedContentSnapshot = useRef<string | undefined>(undefined);
+  // [Feature — surface concurrent-edit conflicts instead of silently
+  // discarding them] Previously, when hasLocalUnsyncedEdits was true
+  // (the Owner has typed something here that hasn't been saved yet,
+  // AND a genuinely different version just arrived from another
+  // device), the load effect below simply skipped adopting the remote
+  // version with no visible sign anything happened — this device's
+  // own next autosave would then silently overwrite that other
+  // device's edit, last-write-wins, no warning. This still can't be
+  // fully prevented (no real locking exists, by design — see
+  // firebase.ts's own comment on persistentMultipleTabManager not
+  // being multi-device collaboration authorization), but the Owner
+  // can now at least SEE it happening and choose: adopt the other
+  // device's version (discarding what's typed here), or keep what's
+  // typed here (which will overwrite the other device's version on
+  // the next save, now as an explicit choice rather than a silent
+  // accident).
+  const [conflictingRemoteDraft, setConflictingRemoteDraft] = useState<PurchaseDraft | null>(null);
   // [Multi-Supplier Purchase Event Amendment v1.0, Part 7] Purely
   // local, in-memory correlation state for an in-progress multi-
   // supplier chain — undefined until the Admin explicitly clicks "Add
@@ -662,6 +679,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // snapshot from the PREVIOUS business must not be compared against
     // it.
     lastSyncedContentSnapshot.current = undefined;
+    // [Feature — surface concurrent-edit conflicts] A conflict banner
+    // from the PREVIOUS business's draft is meaningless under a new
+    // one — clear it alongside everything else above.
+    setConflictingRemoteDraft(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -687,6 +708,51 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // that point (the Owner has typed something new that hasn't been
   // saved yet) is treated as in-progress local editing worth
   // protecting.
+  // Applies a PurchaseDraft (this device's own load, or a remote
+  // version the Owner explicitly chose to adopt from the conflict
+  // banner below) into local form state. Extracted so both call sites
+  // share identical behavior — see the load effect and the conflict
+  // banner's "use their version" action.
+  const adoptRemoteDraft = (draft: PurchaseDraft) => {
+    skipNextAutosave.current = true;
+    if (draft.items.length > 0) {
+      // [Restock Observation Amendment v1.0] previousCycleQuantity is
+      // never itself stored in the draft (see PurchaseDraftLineItem's
+      // own comment) — re-resolve it fresh against current products/
+      // batches right after restore, so the field's visibility is
+      // always based on live data, not a possibly-stale snapshot.
+      setRows(
+        draft.items
+          .map(draftLineItemToRow)
+          .map(row => ({
+            ...row,
+            previousCycleQuantity: resolvePreviousCycleQuantity(row.productName),
+          }))
+      );
+      setWasRestoredFromDraft(true);
+    }
+    setDate(draft.date);
+    setSupplierId(draft.supplierId);
+    setSupplierName(draft.supplierName || '');
+    setSupplierPhone(draft.supplierPhone || '');
+    setSupplierNotes(draft.supplierNotes || '');
+    setBatchNotes(draft.notes || '');
+    // The snapshot must reflect what was JUST adopted, not what was
+    // true before this call — computed fresh from the draft's own
+    // items (via the same draftLineItemToRow/rowToDraftLineItem
+    // round-trip the rest of this fix already relies on) rather than
+    // re-reading React state, which would not have updated yet.
+    lastSyncedContentSnapshot.current = computeDraftContentSnapshot(
+      draft.items.map(draftLineItemToRow),
+      draft.date,
+      draft.supplierId,
+      draft.supplierName || '',
+      draft.supplierPhone || '',
+      draft.supplierNotes || '',
+      draft.notes || ''
+    );
+  };
+
   useEffect(() => {
     if (loadedForBusinessId !== activeBusinessId) return; // still catching up to a business switch — the reset effect above will re-run this once it settles
     if (!purchaseDraftLoaded) return; // Firestore hasn't answered yet — wait
@@ -718,47 +784,38 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       lastSyncedContentSnapshot.current !== undefined &&
       currentSnapshot !== lastSyncedContentSnapshot.current;
     if (!hasLocalUnsyncedEdits) {
-      skipNextAutosave.current = true;
-      if (purchaseDraft.items.length > 0) {
-        // [Restock Observation Amendment v1.0] previousCycleQuantity is
-        // never itself stored in the draft (see PurchaseDraftLineItem's
-        // own comment) — re-resolve it fresh against current products/
-        // batches right after restore, so the field's visibility is
-        // always based on live data, not a possibly-stale snapshot.
-        setRows(
-          purchaseDraft.items
-            .map(draftLineItemToRow)
-            .map(row => ({
-              ...row,
-              previousCycleQuantity: resolvePreviousCycleQuantity(row.productName),
-            }))
-        );
-        setWasRestoredFromDraft(true);
-      }
-      setDate(purchaseDraft.date);
-      setSupplierId(purchaseDraft.supplierId);
-      setSupplierName(purchaseDraft.supplierName || '');
-      setSupplierPhone(purchaseDraft.supplierPhone || '');
-      setSupplierNotes(purchaseDraft.supplierNotes || '');
-      setBatchNotes(purchaseDraft.notes || '');
-      // The snapshot must reflect what was JUST adopted, not what was
-      // true before this effect ran — computed fresh from the draft's
-      // own items (via the same draftLineItemToRow/rowToDraftLineItem
-      // round-trip the rest of this fix already relies on) rather than
-      // re-reading React state, which would not have updated yet.
-      lastSyncedContentSnapshot.current = computeDraftContentSnapshot(
-        purchaseDraft.items.map(draftLineItemToRow),
-        purchaseDraft.date,
-        purchaseDraft.supplierId,
-        purchaseDraft.supplierName || '',
-        purchaseDraft.supplierPhone || '',
-        purchaseDraft.supplierNotes || '',
-        purchaseDraft.notes || ''
-      );
+      adoptRemoteDraft(purchaseDraft);
+      // Any earlier conflict banner is now moot — this update was just
+      // cleanly adopted (no local divergence existed at this point).
+      setConflictingRemoteDraft(null);
+    } else {
+      // [Feature — surface concurrent-edit conflicts] Genuine
+      // conflict: this device has unsaved local typing, AND Firestore
+      // now holds a DIFFERENT version than what this device last
+      // synced. Previously silently ignored; now surfaced via the
+      // conflict banner instead, so the Owner can choose rather than
+      // unknowingly overwrite it on the next autosave.
+      setConflictingRemoteDraft(purchaseDraft);
     }
+
     setDraftLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [purchaseDraft, purchaseDraftLoaded, loadedForBusinessId, activeBusinessId]);
+
+  // [Feature — surface concurrent-edit conflicts] The two actions on
+  // the conflict banner below: adopt the other device's version
+  // (discarding what's typed here), or explicitly keep what's typed
+  // here (which will overwrite the other device's version on this
+  // device's next save — same outcome as before this feature existed,
+  // but now a deliberate choice instead of a silent accident).
+  const handleAdoptConflictingDraft = () => {
+    if (!conflictingRemoteDraft) return;
+    adoptRemoteDraft(conflictingRemoteDraft);
+    setConflictingRemoteDraft(null);
+  };
+  const handleKeepLocalChangesOverConflict = () => {
+    setConflictingRemoteDraft(null);
+  };
 
   // Autosave to the persistent draft on every meaningful change,
   // debounced (same 800ms interval as Module #10's Initial Stock
@@ -830,6 +887,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           // tab should be compared against THIS content, not the
           // content from before this save.
           lastSyncedContentSnapshot.current = savedSnapshot;
+          // This device's version is now authoritative in Firestore —
+          // any earlier conflict warning is resolved.
+          setConflictingRemoteDraft(null);
         })
         .catch((err) => {
           // [Bug fix — silent draft-save failure] Previously reverted
@@ -951,6 +1011,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       eventId
     ).then(() => {
       lastSyncedContentSnapshot.current = savedSnapshot;
+      setConflictingRemoteDraft(null);
     }).catch((err) => {
       console.error('[AddStockView] draft flush-on-exit failed', err);
     });
@@ -1002,6 +1063,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       .then(() => {
         setDraftSaveState('saved');
         lastSyncedContentSnapshot.current = savedSnapshot;
+        setConflictingRemoteDraft(null);
       })
       .catch((err) => {
         console.error('[AddStockView] purchase draft autosave retry failed', err);
@@ -1701,6 +1763,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       );
       setDraftSaveState('saved');
       lastSyncedContentSnapshot.current = savedSnapshot;
+      setConflictingRemoteDraft(null);
     } catch (err) {
       console.error('[AddStockView] immediate post-scan draft save failed', err);
       setDraftSaveState('error');
@@ -2131,6 +2194,36 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             indicator, and a discard action, but only once there's
             actual draft content — an empty, never-touched form has
             nothing to discard and nothing to report. */}
+        {!submittedMessage && conflictingRemoteDraft && (
+          <div className="bg-rose-50 border border-rose-300 rounded-xl px-4 py-3 flex items-start gap-2.5">
+            <AlertTriangle className="w-4 h-4 text-rose-600 shrink-0 mt-[2px]" strokeWidth={2.25} />
+            <div className="flex-1 min-w-0">
+              <p className="text-[13px] leading-relaxed text-rose-900 font-semibold">
+                {t('addStock.draft.conflictTitle')}
+              </p>
+              <p className="text-[13px] leading-relaxed text-rose-800 mt-0.5">
+                {t('addStock.draft.conflictBody')}
+              </p>
+              <div className="flex flex-wrap gap-x-4 gap-y-1.5 mt-2">
+                <button
+                  type="button"
+                  onClick={handleAdoptConflictingDraft}
+                  className="text-[13px] font-bold text-rose-900 underline underline-offset-2 hover:text-rose-700 transition-colors duration-150"
+                >
+                  {t('addStock.draft.conflictUseTheirs')}
+                </button>
+                <button
+                  type="button"
+                  onClick={handleKeepLocalChangesOverConflict}
+                  className="text-[13px] font-bold text-rose-900 underline underline-offset-2 hover:text-rose-700 transition-colors duration-150"
+                >
+                  {t('addStock.draft.conflictKeepMine')}
+                </button>
+              </div>
+            </div>
+          </div>
+        )}
+
         {!submittedMessage && wasRestoredFromDraft && (
           <div className="bg-[#D4AF37]/[0.08] border border-[#D4AF37]/30 rounded-xl px-4 py-2.5 flex items-start gap-2.5">
             <Info className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[3px]" strokeWidth={2.25} />

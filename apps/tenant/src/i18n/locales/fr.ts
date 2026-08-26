@@ -445,6 +445,10 @@ export const fr: TranslationDict = {
       restoredNotice: 'Achat en cours repris \u2014 les produits déjà enregistrés ont été restaurés.',
       discardButton: 'Supprimer le Brouillon',
       discardConfirm: 'Êtes-vous sûr de vouloir supprimer ce brouillon ? Les produits déjà enregistrés seront perdus.',
+      conflictTitle: 'Ce brouillon a été modifié sur un autre appareil',
+      conflictBody: 'Pendant que vous modifiiez ceci ici, une version différente de ce brouillon a été enregistrée sur un autre appareil. Si vous continuez ici, votre prochain enregistrement remplacera cette version.',
+      conflictUseTheirs: 'Utiliser la version la plus récente',
+      conflictKeepMine: 'Conserver mes modifications',
     },
     event: {
       addAnotherSupplier: 'Ajouter un Autre Fournisseur à Cet Achat',

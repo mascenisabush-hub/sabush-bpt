@@ -58,11 +58,17 @@ describe('AddStockView.tsx — the load effect no longer mistakes "has content" 
     assert.match(body, /lastSyncedContentSnapshot\.current !== undefined &&/);
   });
 
-  it('adopting a draft updates lastSyncedContentSnapshot from the DRAFT\'s own just-adopted content, not stale pre-render React state', () => {
+  it('adopting a draft updates lastSyncedContentSnapshot from the DRAFT\'s own just-adopted content, not stale pre-render React state — now via the shared adoptRemoteDraft(draft) function, reused by the conflict-banner\'s "use their version" action', () => {
+    const fnStart = addStockSrc.indexOf('const adoptRemoteDraft = (draft: PurchaseDraft) => {');
+    assert.notEqual(fnStart, -1, 'Expected adoptRemoteDraft to be defined');
+    const fnEnd = addStockSrc.indexOf('\n  };', fnStart);
+    const fnBody = addStockSrc.slice(fnStart, fnEnd);
+    assert.match(fnBody, /lastSyncedContentSnapshot\.current = computeDraftContentSnapshot\(\s*draft\.items\.map\(draftLineItemToRow\),/);
+
     const start = addStockSrc.indexOf('const hasLocalUnsyncedEdits =');
     const end = addStockSrc.indexOf('setDraftLoaded(true);', start);
     const body = addStockSrc.slice(start, end);
-    assert.match(body, /lastSyncedContentSnapshot\.current = computeDraftContentSnapshot\(\s*purchaseDraft\.items\.map\(draftLineItemToRow\),/);
+    assert.match(body, /adoptRemoteDraft\(purchaseDraft\);/, 'Expected the load effect to adopt via the shared function, not a second inlined copy');
   });
 });
 
@@ -94,7 +100,7 @@ describe('AddStockView.tsx — every save path refreshes lastSyncedContentSnapsh
   it('the immediate post-scan save does the same', () => {
     const start = addStockSrc.indexOf('immediate post-scan draft save failed');
     assert.notEqual(start, -1);
-    const nearby = addStockSrc.slice(Math.max(0, start - 700), start + 100);
+    const nearby = addStockSrc.slice(Math.max(0, start - 800), start + 100);
     assert.match(nearby, /const savedSnapshot = computeDraftContentSnapshot\(/);
     assert.match(nearby, /lastSyncedContentSnapshot\.current = savedSnapshot;/);
   });

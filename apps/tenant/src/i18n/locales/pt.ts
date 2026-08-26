@@ -454,6 +454,10 @@ export interface TranslationDict {
       restoredNotice: string;
       discardButton: string;
       discardConfirm: string;
+      conflictTitle: string;
+      conflictBody: string;
+      conflictUseTheirs: string;
+      conflictKeepMine: string;
     };
     event: {
       addAnotherSupplier: string;
@@ -1576,6 +1580,10 @@ export const pt: TranslationDict = {
       restoredNotice: 'Continuou uma compra em curso — os produtos já guardados foram restaurados.',
       discardButton: 'Descartar Rascunho',
       discardConfirm: 'Tem a certeza que quer descartar este rascunho? Os produtos já guardados serão perdidos.',
+      conflictTitle: 'Este rascunho foi editado noutro dispositivo',
+      conflictBody: 'Enquanto editava aqui, alguém guardou uma versão diferente deste rascunho noutro dispositivo. Se continuar aqui, a sua próxima gravação irá substituir essa versão.',
+      conflictUseTheirs: 'Usar a versão mais recente',
+      conflictKeepMine: 'Manter as minhas alterações',
     },
     event: {
       addAnotherSupplier: 'Adicionar Outro Fornecedor a Esta Compra',

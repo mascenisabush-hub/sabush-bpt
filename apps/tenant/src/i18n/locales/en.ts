@@ -445,6 +445,10 @@ export const en: TranslationDict = {
       restoredNotice: 'Resumed a purchase in progress \u2014 the products you already saved were restored.',
       discardButton: 'Discard Draft',
       discardConfirm: 'Are you sure you want to discard this draft? The products you already saved will be lost.',
+      conflictTitle: 'This draft was edited on another device',
+      conflictBody: 'While you were editing here, someone saved a different version of this draft on another device. If you continue here, your next save will overwrite that version.',
+      conflictUseTheirs: 'Use the latest version',
+      conflictKeepMine: 'Keep my changes',
     },
     event: {
       addAnotherSupplier: 'Add Another Supplier to This Purchase',
