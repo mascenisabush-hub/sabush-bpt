@@ -470,7 +470,29 @@ service cloud.firestore {
         allow read: if isMemberOf(businessId);
         // [Module #19 Phase 2] Stock receipt — restricted once trial
         // completes/expires (Business Rule 6 / Decision 2).
-        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId);
+        // [Data integrity audit — Owner-requested] Field validation
+        // added, matching the exact shape both addStockBatch and
+        // addMultipleStockBatches (AppContext.tsx) always send on
+        // create — quantity/costPrice/sellingPrice as numbers,
+        // status always 'open' at creation (it only ever becomes
+        // 'closed' via a later UPDATE, which this check does not
+        // touch). Same is-number + value-range idiom already used for
+        // quebras/expenses/withdrawals above. Deliberately CREATE ONLY
+        // — `allow update` below is completely unchanged, so the
+        // existing status-only close-out update, or any other update
+        // path, can never be newly rejected by this addition.
+        allow create: if isMemberOf(businessId) && subscriptionAllowsNewRecords(businessId) &&
+          request.resource.data.get('productId', null) is string &&
+          request.resource.data.get('productId', '') != '' &&
+          request.resource.data.get('dateEntered', null) is string &&
+          request.resource.data.get('unit', null) is string &&
+          request.resource.data.get('quantity', null) is number &&
+          request.resource.data.get('quantity', 0) > 0 &&
+          request.resource.data.get('costPrice', null) is number &&
+          request.resource.data.get('costPrice', -1) >= 0 &&
+          request.resource.data.get('sellingPrice', null) is number &&
+          request.resource.data.get('sellingPrice', -1) >= 0 &&
+          request.resource.data.get('status', null) == 'open';
         // Batches are also updated by staff/owner alike when a new batch
         // closes out the previous open one (addStockBatch / addMultipleStockBatches).
         allow update: if isMemberOf(businessId);

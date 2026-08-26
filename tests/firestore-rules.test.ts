@@ -520,9 +520,26 @@ describe('products', () => {
 // Batches — any team member reads/creates/updates; only Owner deletes.
 // ---------------------------------------------------------------------
 describe('batches', () => {
+  // A complete, realistic batch document — exactly the shape
+  // addStockBatch/addMultipleStockBatches (AppContext.tsx) actually
+  // send. Used as the baseline for every test below; each invalid-data
+  // test starts from a shallow copy of this with exactly one field
+  // broken, so a failure can only be attributed to that one field.
+  const validBatch = {
+    id: 'b1',
+    productId: 'prod1',
+    dateEntered: '2026-01-01',
+    unit: 'un',
+    quantity: 10,
+    costPrice: 5,
+    sellingPrice: 8,
+    status: 'open',
+    createdAt: '2026-01-01T00:00:00.000Z',
+  };
+
   it('Any team member can read, create, and update; only Owner can delete', async () => {
     const staffDb = ctxFor(STAFF_UID).firestore();
-    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1'), { id: 'b1', quantity: 10 }));
+    await assertSucceeds(setDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1'), validBatch));
     await assertSucceeds(updateDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1'), { quantity: 5 }));
     await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'batches', 'b1')));
     const ownerDb = ctxFor(OWNER_UID).firestore();
@@ -531,13 +548,81 @@ describe('batches', () => {
 
   it('A user from another business cannot read, create, update, or delete this business\'s batches', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
-      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'batches', 'b2'), { id: 'b2', quantity: 20 });
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'batches', 'b2'), { ...validBatch, id: 'b2' });
     });
     const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
     await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b2')));
-    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b3'), { id: 'b3', quantity: 1 }));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b3'), { ...validBatch, id: 'b3' }));
     await assertFails(updateDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b2'), { quantity: 999 }));
     await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'batches', 'b2')));
+  });
+
+  // [Data integrity audit — Owner-requested] New field validation on
+  // create, matching exactly what addStockBatch/addMultipleStockBatches
+  // always send. Each case below changes exactly one field away from
+  // validBatch so a failure is unambiguous. Deliberately does NOT test
+  // update — the rule change is create-only by design, and the
+  // existing 'Any team member can... update' test above already
+  // proves a plain quantity-only update (the real close-out/edit
+  // shape) still succeeds unchanged.
+  describe('field validation on create (Data integrity audit)', () => {
+    const staffDbFor = () => ctxFor(STAFF_UID).firestore();
+
+    it('accepts a complete, valid batch (baseline — proves the checks below fail for the RIGHT reason, not by accident)', async () => {
+      await assertSucceeds(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'valid1'), { ...validBatch, id: 'valid1' }));
+    });
+
+    it('rejects a negative quantity', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'neg-qty'), { ...validBatch, id: 'neg-qty', quantity: -5 }));
+    });
+
+    it('rejects a zero quantity (a batch represents stock actually received — zero is meaningless, not a valid "no stock" state the way it is for a Contagem count)', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'zero-qty'), { ...validBatch, id: 'zero-qty', quantity: 0 }));
+    });
+
+    it('rejects a non-numeric quantity', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'str-qty'), { ...validBatch, id: 'str-qty', quantity: '10' }));
+    });
+
+    it('rejects a negative costPrice', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'neg-cost'), { ...validBatch, id: 'neg-cost', costPrice: -1 }));
+    });
+
+    it('accepts a zero costPrice (a genuinely free/promotional item is a real, valid case — see AddStockView\'s own "ou 0, se for mesmo gratuito" messaging)', async () => {
+      await assertSucceeds(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'zero-cost'), { ...validBatch, id: 'zero-cost', costPrice: 0 }));
+    });
+
+    it('rejects a negative sellingPrice', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'neg-sell'), { ...validBatch, id: 'neg-sell', sellingPrice: -1 }));
+    });
+
+    it('rejects a missing productId', async () => {
+      const { productId, ...rest } = validBatch;
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'no-product'), { ...rest, id: 'no-product' }));
+    });
+
+    it('rejects an empty-string productId', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'empty-product'), { ...validBatch, id: 'empty-product', productId: '' }));
+    });
+
+    it('rejects a status other than "open" at create (a batch is always created open — it only ever becomes closed via a later update, never at creation)', async () => {
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'bad-status'), { ...validBatch, id: 'bad-status', status: 'closed' }));
+    });
+
+    it('rejects a missing dateEntered', async () => {
+      const { dateEntered, ...rest } = validBatch;
+      await assertFails(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'no-date'), { ...rest, id: 'no-date' }));
+    });
+
+    it('an update that changes only quantity (the real close-out/edit shape — see the existing "Any team member can... update" test above) is completely unaffected by the new create-only validation, even to a value that would fail as a fresh create', async () => {
+      await assertSucceeds(setDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'update-ok'), { ...validBatch, id: 'update-ok' }));
+      // Deliberately mirrors real usage: addStockBatch/
+      // addMultipleStockBatches only ever update `status` when closing
+      // out a batch — never quantity — but this proves the update path
+      // genuinely enforces nothing new, not merely that it happens to
+      // still pass for the one field the app actually touches.
+      await assertSucceeds(updateDoc(doc(staffDbFor(), 'businesses', BIZ, 'batches', 'update-ok'), { quantity: -999 }));
+    });
   });
 });
 
@@ -1959,10 +2044,31 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     });
   };
 
+  // [Data integrity audit — Owner-requested] A complete, valid batch
+  // shape — same reasoning as the dedicated 'batches' describe block's
+  // own identical helper, above: batches now has real field validation
+  // on create, so every batches create exercised below (whether
+  // expected to succeed or fail) must use a shape that would pass that
+  // validation on its own, or a subscription-gating assertFails could
+  // no longer be trusted to mean what it claims — it could just as
+  // easily be failing on a missing field instead, silently no longer
+  // proving the actual thing this describe block exists to test.
+  const validBatchFor = (id: string) => ({
+    id,
+    productId: 'prod1',
+    dateEntered: '2026-06-01',
+    unit: 'un',
+    quantity: 1,
+    costPrice: 5,
+    sellingPrice: 8,
+    status: 'open',
+    createdAt: '2026-06-01T00:00:00.000Z',
+  });
+
   it('While trial_active, every restricted collection still accepts new records', async () => {
     await seedSubscriptionStatus('trial_active');
     const ownerDb = ctxFor(OWNER_UID).firestore();
-    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ta-b1'), { id: 'ta-b1', quantity: 1 }));
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ta-b1'), validBatchFor('ta-b1')));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'ta-pb1'), { id: 'ta-pb1', archived: false }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'ta-q1'), { id: 'ta-q1', quantity: 1 }));
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ta-e1'), { id: 'ta-e1', date: '2026-06-01', amount: 10 }));
@@ -1976,7 +2082,7 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
   it('Once trial_completed, every restricted collection rejects new records', async () => {
     await seedSubscriptionStatus('trial_completed');
     const ownerDb = ctxFor(OWNER_UID).firestore();
-    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'tc-b1'), { id: 'tc-b1', quantity: 1 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'tc-b1'), validBatchFor('tc-b1')));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'purchaseBatches', 'tc-pb1'), { id: 'tc-pb1', archived: false }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'quebras', 'tc-q1'), { id: 'tc-q1', quantity: 1 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'tc-e1'), { id: 'tc-e1', date: '2026-06-01', amount: 10 }));
@@ -1988,7 +2094,7 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
   it('Once expired, every restricted collection rejects new records (same as trial_completed)', async () => {
     await seedSubscriptionStatus('expired');
     const ownerDb = ctxFor(OWNER_UID).firestore();
-    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ex-b1'), { id: 'ex-b1', quantity: 1 }));
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ex-b1'), validBatchFor('ex-b1')));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ex-e1'), { id: 'ex-e1', date: '2026-06-01', amount: 10 }));
   });
 
