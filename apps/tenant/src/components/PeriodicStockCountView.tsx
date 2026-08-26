@@ -609,6 +609,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // already typed into an existing one.
   const [catalogRows, setCatalogRows] = useState<CatalogRowState>({});
   const [manualRows, setManualRows] = useState<StockCountWorkingRow[]>([]);
+  // [Feature — per-row Save + confirm, Owner-requested: validate each
+  // product as it's entered instead of only discovering a mistake in
+  // the final review, and be able to leave/return mid-count with
+  // clear confirmation of what's already been verified] A row is
+  // "confirmed" once its own Save action passed validation — distinct
+  // from merely having a quantity typed in (a blank row is legitimately
+  // "not yet counted," not an error). The underlying draft autosave
+  // (scheduleDraftSave, below) is completely unaffected by any of
+  // this — it keeps saving raw in-progress field values regardless of
+  // confirmation state, exactly as it already did; confirmation is a
+  // purely additional, explicit safety/visibility layer on top, never
+  // a gate on the existing autosave safety net.
+  const [confirmedCatalogProductIds, setConfirmedCatalogProductIds] = useState<Set<string>>(new Set());
+  const [confirmedManualRowIndices, setConfirmedManualRowIndices] = useState<Set<number>>(new Set());
+  // Inline validation messages from a failed Save click — shown right
+  // on that row, not buried in a final review, so a mistake is visible
+  // and fixable the moment it's made.
+  const [catalogRowSaveError, setCatalogRowSaveError] = useState<Record<string, string>>({});
+  const [manualRowSaveError, setManualRowSaveError] = useState<Record<number, string>>({});
   const [productSearch, setProductSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
@@ -820,6 +839,65 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...fields } };
     setCatalogRows(nextCatalogRows);
     scheduleDraftSave(nextCatalogRows, manualRows, type, label, date, newProductInfo);
+  };
+
+  // [Feature — per-row Save + confirm] One row's worth of the exact
+  // same checks handleRequestConfirmation already runs across every
+  // counted item at the very end (negative quantity/price rejected;
+  // zero is explicitly valid — BDR-0009 Part 4's "Counted vs Not
+  // Counted" rule, a zero physical count is a legitimate, deliberate
+  // result, e.g. genuinely out of stock, never an error). A still-
+  // blank row is never itself rejected here — it simply isn't "ready
+  // to confirm" yet, distinct from "confirmed as wrong."
+  const validateWorkingRowForSave = (row: StockCountWorkingRow): string | null => {
+    if (row.quantity.trim() === '') {
+      return 'Introduza a quantidade contada (ou 0, se não há stock deste produto).';
+    }
+    const qty = parseFloat(row.quantity);
+    if (!Number.isFinite(qty) || qty < 0) {
+      return 'Introduza uma quantidade válida (0 ou mais).';
+    }
+    if (row.costPrice.trim() !== '') {
+      const cost = parseFloat(row.costPrice);
+      if (!Number.isFinite(cost) || cost < 0) return 'Introduza um preço de custo válido.';
+    }
+    if (row.sellingPrice.trim() !== '') {
+      const selling = parseFloat(row.sellingPrice);
+      if (!Number.isFinite(selling) || selling < 0) return 'Introduza um preço de venda válido.';
+    }
+    return null;
+  };
+
+  const handleSaveCatalogRow = (productId: string) => {
+    const row = catalogRows[productId];
+    if (!row) return;
+    const message = validateWorkingRowForSave(row);
+    if (message) {
+      setCatalogRowSaveError((prev) => ({ ...prev, [productId]: message }));
+      return;
+    }
+    setCatalogRowSaveError((prev) => {
+      if (!(productId in prev)) return prev;
+      const next = { ...prev };
+      delete next[productId];
+      return next;
+    });
+    setConfirmedCatalogProductIds((prev) => new Set(prev).add(productId));
+  };
+
+  // Re-opening an already-saved row is deliberately gated behind an
+  // explicit confirmation — Owner-requested ("queres editar?") — so
+  // working through a long list never risks nudging an already-
+  // verified product's fields by accident while reaching for the next
+  // row's Save button.
+  const handleEditCatalogRow = (productId: string) => {
+    if (!window.confirm('Este produto já foi guardado. Queres editá-lo?')) return;
+    setConfirmedCatalogProductIds((prev) => {
+      if (!prev.has(productId)) return prev;
+      const next = new Set(prev);
+      next.delete(productId);
+      return next;
+    });
   };
 
   // [Manual data-entry error investigation, Finding 3 — Owner-requested]
@@ -1233,6 +1311,61 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const nextManualRows = manualRows.filter((_, i) => i !== index);
     setManualRows(nextManualRows);
     scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
+    // [Feature — per-row Save + confirm] confirmedManualRowIndices/
+    // manualRowSaveError are keyed by array index, same as every other
+    // manual-row identity in this file (updateManualRow, this function
+    // itself) — removing a row shifts every LATER index down by one,
+    // so both maps are re-indexed here or a later row's confirmed/
+    // error status would silently attach to the wrong row after this
+    // deletion.
+    setConfirmedManualRowIndices((prev) => {
+      const next = new Set<number>();
+      prev.forEach((i) => {
+        if (i < index) next.add(i);
+        else if (i > index) next.add(i - 1);
+      });
+      return next;
+    });
+    setManualRowSaveError((prev) => {
+      const next: Record<number, string> = {};
+      Object.entries(prev).forEach(([key, value]) => {
+        const i = Number(key);
+        if (i < index) next[i] = value;
+        else if (i > index) next[i - 1] = value;
+      });
+      return next;
+    });
+  };
+
+  // [Feature — per-row Save + confirm] Manual-row counterpart to
+  // validateWorkingRowForSave/handleSaveCatalogRow/handleEditCatalogRow
+  // above — identical rules and identical "queres editar?" gate,
+  // applied to a manually-added (not-yet-catalog) product instead.
+  const handleSaveManualRow = (index: number) => {
+    const row = manualRows[index];
+    if (!row) return;
+    const message = validateWorkingRowForSave(row);
+    if (message) {
+      setManualRowSaveError((prev) => ({ ...prev, [index]: message }));
+      return;
+    }
+    setManualRowSaveError((prev) => {
+      if (!(index in prev)) return prev;
+      const next = { ...prev };
+      delete next[index];
+      return next;
+    });
+    setConfirmedManualRowIndices((prev) => new Set(prev).add(index));
+  };
+
+  const handleEditManualRow = (index: number) => {
+    if (!window.confirm('Este produto já foi guardado. Queres editá-lo?')) return;
+    setConfirmedManualRowIndices((prev) => {
+      if (!prev.has(index)) return prev;
+      const next = new Set(prev);
+      next.delete(index);
+      return next;
+    });
   };
 
   // [Business Worth Evolution — Decision 37, B.3: Multiple
@@ -2555,6 +2688,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // group identically — the control renders once per
                     // product either way, never once per portion.
                     const isFirstPortionOfMultiPortionGroup = portionLabel.portionIndex === 1;
+                    // [Feature — per-row Save + confirm] Green = this
+                    // row's own Save action passed validation. Red =
+                    // not yet saved — whether still blank (never
+                    // examined) or filled in but not yet confirmed.
+                    // Never gated on quantity > 0: an explicitly-typed
+                    // 0 (genuinely out of stock) is just as validly
+                    // green as any other quantity, per
+                    // validateWorkingRowForSave above.
+                    const isConfirmed = confirmedCatalogProductIds.has(productId);
+                    const saveError = catalogRowSaveError[productId];
                     return (
                       <div
                         key={productId}
@@ -2562,11 +2705,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       >
                         <div className="col-span-2 sm:col-span-1 flex items-center gap-1">
                           <span
-                            className={`w-2 h-2 rounded-full shrink-0 ${isBlank ? 'bg-gray-300' : 'bg-emerald-400'}`}
+                            className={`w-2 h-2 rounded-full shrink-0 ${isConfirmed ? 'bg-emerald-400' : 'bg-rose-300'}`}
                             aria-hidden="true"
+                            title={isConfirmed ? 'Guardado' : 'Ainda não guardado'}
                           />
                           <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
                           {/* [Business Worth Evolution — Decision 37,
+
                               B.3 completion] Reuses
                               handleAddPortionToManualGroup UNCHANGED —
                               the exact same handler the manual-row
@@ -2714,7 +2859,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             placeholder="Ainda não contado"
                             value={row.quantity}
                             onChange={(e) => updateCatalogRow(productId, { quantity: e.target.value })}
-                            className={`${fieldClass} font-mono tabular-nums ${isBlank ? 'placeholder:text-amber-500/70' : ''}`}
+                            disabled={isConfirmed}
+                            className={`${fieldClass} font-mono tabular-nums ${isBlank ? 'placeholder:text-amber-500/70' : ''} ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
                         </div>
 
@@ -2725,7 +2871,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             placeholder="un"
                             value={row.unit}
                             onChange={(e) => updateCatalogRow(productId, { unit: e.target.value })}
-                            className={`${fieldClass} font-mono text-center`}
+                            disabled={isConfirmed}
+                            className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
                         </div>
 
@@ -2760,7 +2907,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               step="0.01"
                               value={row.costPrice}
                               onChange={(e) => updateCatalogRow(productId, { costPrice: e.target.value })}
-                              className={`${fieldClass} font-mono tabular-nums`}
+                              disabled={isConfirmed}
+                              className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                             />
                             {/* [Bug fix — "Venda/Un"/"Compra/Un" ambiguity]
                                 Each field's own label already names it
@@ -2808,7 +2956,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             step="0.01"
                             value={row.sellingPrice}
                             onChange={(e) => updateCatalogRow(productId, { sellingPrice: e.target.value })}
-                            className={`${fieldClass} font-mono tabular-nums`}
+                            disabled={isConfirmed}
+                            className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
                           {/* See the Compra/Un caption's own comment,
                               immediately above — identical reasoning,
@@ -2858,15 +3007,52 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 Custo: {formatCurrency(rowValue, currencySymbol)}
                               </p>
                             )}
+                            {/* [Feature — per-row Save + confirm] Shown
+                                right on the row the moment Save fails
+                                its own validation — never only
+                                discovered later, buried in the final
+                                review. */}
+                            {saveError && (
+                              <p className="text-[11px] text-rose-600 font-semibold mt-1 leading-snug">{saveError}</p>
+                            )}
                           </div>
-                          <button
-                            type="button"
-                            onClick={() => handleRemoveCatalogRow(productId)}
-                            aria-label={`Remover ${row.productName}`}
-                            className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
-                          >
-                            <Trash2 className="w-3.5 h-3.5" />
-                          </button>
+                          <div className="flex flex-col items-center gap-1 shrink-0">
+                            {/* [Feature — per-row Save + confirm,
+                                Owner-requested] Save validates and
+                                locks this one row immediately, turning
+                                its status dot green — independent of
+                                the final "Confirmar Contagem" review,
+                                which still runs across everything as a
+                                last safety net. Re-opening an already-
+                                saved row requires the explicit "queres
+                                editar?" confirmation in
+                                handleEditCatalogRow, above. */}
+                            {isConfirmed ? (
+                              <button
+                                type="button"
+                                onClick={() => handleEditCatalogRow(productId)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors duration-150 whitespace-nowrap"
+                              >
+                                Editar
+                              </button>
+                            ) : (
+                              <button
+                                type="button"
+                                onClick={() => handleSaveCatalogRow(productId)}
+                                className="px-2 py-1 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 transition-colors duration-150 whitespace-nowrap"
+                              >
+                                Guardar
+                              </button>
+                            )}
+                            <button
+                              type="button"
+                              onClick={() => handleRemoveCatalogRow(productId)}
+                              aria-label={`Remover ${row.productName}`}
+                              className="shrink-0 p-1.5 rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                            >
+                              <Trash2 className="w-3.5 h-3.5" />
+                            </button>
+                          </div>
                         </div>
                       </div>
                     );
@@ -3086,9 +3272,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         {group.rows.map(({ idx }) => {
                           const row = manualRows[idx];
                           const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
+                          // [Feature — per-row Save + confirm] Manual-
+                          // row counterpart to the catalog row's own
+                          // identical isConfirmed/saveError, above.
+                          const isConfirmed = confirmedManualRowIndices.has(idx);
+                          const saveError = manualRowSaveError[idx];
                           return (
                             <div key={idx} className={`group ${rowGridClass} rounded-xl px-2 py-2 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
-                              <div className="col-span-2 sm:col-span-1 flex items-center">
+                              <div className="col-span-2 sm:col-span-1 flex items-center gap-1">
+                                <span
+                                  className={`w-2 h-2 rounded-full shrink-0 ${isConfirmed ? 'bg-emerald-400' : 'bg-rose-300'}`}
+                                  aria-hidden="true"
+                                  title={isConfirmed ? 'Guardado' : 'Ainda não guardado'}
+                                />
                                 {/* [Increment B, Checkpoint B6 —
                                     Consolidated Specification §17] Same
                                     informational-only label as before
@@ -3112,7 +3308,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   placeholder="Ainda não contado"
                                   value={row.quantity}
                                   onChange={(e) => updateManualRow(idx, { quantity: e.target.value })}
-                                  className={`${fieldClass} font-mono tabular-nums`}
+                                  disabled={isConfirmed}
+                                  className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
                               </div>
 
@@ -3122,7 +3319,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   type="text"
                                   value={row.unit}
                                   onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
-                                  className={`${fieldClass} font-mono text-center`}
+                                  disabled={isConfirmed}
+                                  className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
                               </div>
 
@@ -3145,7 +3343,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                     step="0.01"
                                     value={row.costPrice}
                                     onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
-                                    className={`${fieldClass} font-mono tabular-nums`}
+                                    disabled={isConfirmed}
+                                    className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                   />
                                   {/* [Bug fix — "Venda/Un"/"Compra/Un"
                                       ambiguity] See the catalog-row block's
@@ -3189,7 +3388,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   step="0.01"
                                   value={row.sellingPrice}
                                   onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
-                                  className={`${fieldClass} font-mono tabular-nums`}
+                                  disabled={isConfirmed}
+                                  className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
                                 <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                                   {currencySymbol} por {row.unit.trim() || 'un'}
@@ -3242,15 +3442,44 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       )}
                                     </p>
                                   )}
+                                  {/* [Feature — per-row Save + confirm]
+                                      Same as the catalog row's own
+                                      identical error display, above. */}
+                                  {saveError && (
+                                    <p className="text-[11px] text-rose-600 font-semibold mt-1 leading-snug">{saveError}</p>
+                                  )}
                                 </div>
-                                <button
-                                  type="button"
-                                  onClick={() => handleRemoveManualRow(idx)}
-                                  aria-label={`Remover porção`}
-                                  className="shrink-0 p-1.5 mb-[1px] rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
-                                >
-                                  <Trash2 className="w-3.5 h-3.5" />
-                                </button>
+                                <div className="flex flex-col items-center gap-1 shrink-0">
+                                  {/* [Feature — per-row Save + confirm]
+                                      Manual-row counterpart to the
+                                      catalog row's own identical
+                                      Guardar/Editar pair, above. */}
+                                  {isConfirmed ? (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleEditManualRow(idx)}
+                                      className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors duration-150 whitespace-nowrap"
+                                    >
+                                      Editar
+                                    </button>
+                                  ) : (
+                                    <button
+                                      type="button"
+                                      onClick={() => handleSaveManualRow(idx)}
+                                      className="px-2 py-1 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 transition-colors duration-150 whitespace-nowrap"
+                                    >
+                                      Guardar
+                                    </button>
+                                  )}
+                                  <button
+                                    type="button"
+                                    onClick={() => handleRemoveManualRow(idx)}
+                                    aria-label={`Remover porção`}
+                                    className="shrink-0 p-1.5 rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                                  >
+                                    <Trash2 className="w-3.5 h-3.5" />
+                                  </button>
+                                </div>
                               </div>
                             </div>
                           );
