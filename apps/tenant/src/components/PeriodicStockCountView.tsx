@@ -18,6 +18,7 @@ import { resolveUnitAwarePrice } from '../lib/productMemoryPriceResolution';
 // own header comment, below).
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
+import { detectShopSwitch } from '../lib/shopSwitchGuard';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
 // independently-tested function calculations.ts already exports for
 // exactly this purpose — never a second, separately-invented
@@ -552,6 +553,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // fetched copy.
     payables,
     receivables,
+    activeBusinessId,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -709,6 +711,58 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // out and materially editing regenerates it on the next confirmation
   // attempt, per §7's "last-second edit wins" principle.
   const submissionIdRef = useRef<string | null>(null);
+
+  // [Fix #9 extended — Contagem was the one product-referencing view
+  // missing this protection] Same mechanism as AddQuebraView's own
+  // guard (src/lib/shopSwitchGuard.ts): a direct Owner switch
+  // (ShopSwitcher -> switchShop()) does not remount this component,
+  // and `products` here can keep showing the PREVIOUS business's data
+  // for a brief window before the new business's Firestore listener
+  // delivers its first snapshot. Investigation finding: catalogRows
+  // was populated straight from `products` with no such guard at all
+  // — a count started (or merely auto-populated, without the Owner
+  // typing anything) right after a switch could end up referencing
+  // Business A's product IDs while being saved under Business B.
+  //
+  // Fixed by fully resetting every piece of in-progress-count state on
+  // a detected switch (a count fundamentally belongs to one business —
+  // there is no sensible way to "carry over" a half-filled count
+  // across a switch, mirrors AddStockView's own identical full-reset
+  // effect for the same reason) and clearing catalogRows/manualRows in
+  // particular. No separate "wait for fresh data" gate is needed
+  // beyond that: the catalog-populate effect just below is keyed only
+  // on `[products]`, so once catalogRows is cleared here it stays
+  // empty until `products` itself receives a genuinely new snapshot —
+  // it can never be silently repopulated from the still-stale
+  // reference in between.
+  const [loadedForBusinessId, setLoadedForBusinessId] = useState<string | null>(activeBusinessId ?? null);
+  useEffect(() => {
+    const result = detectShopSwitch(activeBusinessId ?? null, loadedForBusinessId);
+    if (!result.shouldResetSelection) return;
+    setLoadedForBusinessId(result.loadedForBusinessId);
+
+    setType('monthly');
+    setLabel('');
+    setDate(getTodayDateString());
+    setCatalogRows({});
+    setManualRows([]);
+    setConfirmedCatalogProductIds(new Set());
+    setConfirmedManualRowIndices(new Set());
+    setCatalogRowSaveError({});
+    setManualRowSaveError({});
+    setProductSearch('');
+    setError(null);
+    setPendingTally(null);
+    setDraftSaveState('editing');
+    setDraftBannerDismissed(false);
+    setNewProductInfo({});
+    submissionIdRef.current = null;
+    if (draftDebounceTimerRef.current) {
+      clearTimeout(draftDebounceTimerRef.current);
+      draftDebounceTimerRef.current = null;
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeBusinessId]);
 
   // Auto-populate: every Product currently in the catalog gets a
   // working row (BDR-0009 Part 3 — "active" = exists in `products`).
