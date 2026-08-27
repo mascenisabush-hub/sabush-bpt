@@ -66,6 +66,98 @@ export function tokenize(normalized: string): string[] {
 }
 
 /**
+ * [POL-0012; similarity-confirmation-threshold-specification.md,
+ * signal 3; Implementation Authorization B §2 "Signal insertion
+ * (Finding B3)"] Small, fixed, enumerable spelling-to-canonical-unit
+ * table ONLY — deliberately not a general-purpose or unrestricted
+ * transformation, per the Authorization's own explicit constraint.
+ * This is this capability's OWN, separate copy — NOT imported from or
+ * shared with `supplierWordingMatching.ts`'s equivalent table
+ * (Authorization B §2 "Equivalence table," Rule 8 Assessment B Finding
+ * B5): the two capabilities must never share comparison logic, even if
+ * the underlying data happens to be identical today. Canonical forms
+ * match this app's own existing unit vocabulary
+ * (getSuggestedUnitsForCategory, businessCategories.ts).
+ */
+const UNIT_SPELLING_EQUIVALENCE_TABLE: Record<string, string> = {
+  l: 'l',
+  lt: 'l',
+  ltr: 'l',
+  liter: 'l',
+  liters: 'l',
+  litro: 'l',
+  litros: 'l',
+  kg: 'kg',
+  kgs: 'kg',
+  kilo: 'kg',
+  kilos: 'kg',
+  quilo: 'kg',
+  quilos: 'kg',
+  ml: 'ml',
+  mls: 'ml',
+  mililitro: 'ml',
+  mililitros: 'ml',
+  g: 'g',
+  gr: 'g',
+  grama: 'g',
+  gramas: 'g',
+  un: 'un',
+  und: 'un',
+  unid: 'un',
+  unidade: 'un',
+  unidades: 'un',
+};
+
+/**
+ * [Implementation Authorization B §2 — binding mechanism, mirroring
+ * Implementation Authorization A's identical Finding A2] A
+ * token-canonicalization step COMPOSED WITH the existing `tokenize`
+ * function (called on its output, below, inside
+ * `computeNameSimilarity`) — `tokenize` itself is completely
+ * unmodified. Operates on the already-split token ARRAY: an attached
+ * quantity+unit token (e.g. `"2l"`, `"500ml"`) has only its trailing
+ * unit-spelling portion canonicalized, quantity digits copied through
+ * unchanged; a bare numeric token immediately followed by a bare,
+ * recognized unit-spelling token (e.g. `"2"`, `"lt"`) is merged into
+ * one combined canonical token (`"2l"`) so both spellings of the same
+ * quantity+unit produce an identical token for the Jaccard set
+ * comparison below — without ever equating two DIFFERENT quantity
+ * values (`"1"` and `"2"` are never merged with each other, only each
+ * with its own immediately-following unit spelling). A token not
+ * matching either shape, or whose alphabetic portion is not in the
+ * table above, is returned completely unchanged.
+ */
+function canonicalizeTokensForUnitSpelling(tokens: string[]): string[] {
+  const out: string[] = [];
+  for (let i = 0; i < tokens.length; i++) {
+    const token = tokens[i];
+    // Attached: a leading numeric run directly followed by a trailing
+    // alphabetic run, e.g. "2l", "500ml", "25kg".
+    const attached = token.match(/^(\d+)([a-z]+)$/);
+    if (attached) {
+      const [, qty, unitSpelling] = attached;
+      const canonicalUnit = UNIT_SPELLING_EQUIVALENCE_TABLE[unitSpelling];
+      out.push(canonicalUnit ? `${qty}${canonicalUnit}` : token);
+      continue;
+    }
+    // Two separate tokens: this token is purely numeric, and the very
+    // next token is purely alphabetic and a recognized unit spelling.
+    const isNumericOnly = /^\d+$/.test(token);
+    const nextToken = tokens[i + 1];
+    if (isNumericOnly && nextToken) {
+      const canonicalUnit = /^[a-z]+$/.test(nextToken) ? UNIT_SPELLING_EQUIVALENCE_TABLE[nextToken] : undefined;
+      if (canonicalUnit) {
+        out.push(`${token}${canonicalUnit}`);
+        i++; // consume the unit-spelling token too — already emitted above.
+        continue;
+      }
+    }
+    out.push(token);
+  }
+  return out;
+}
+
+/**
  * Jaccard similarity (intersection / union) between two names' token
  * sets, computed after normalizeForSimilarity — 0 (nothing in common)
  * to 1 (identical token sets). Chosen over a raw edit-distance metric
@@ -77,8 +169,8 @@ export function tokenize(normalized: string): string[] {
  * when the rest of the name matches perfectly.
  */
 export function computeNameSimilarity(a: string, b: string): number {
-  const tokensA = new Set(tokenize(normalizeForSimilarity(a)));
-  const tokensB = new Set(tokenize(normalizeForSimilarity(b)));
+  const tokensA = new Set(canonicalizeTokensForUnitSpelling(tokenize(normalizeForSimilarity(a))));
+  const tokensB = new Set(canonicalizeTokensForUnitSpelling(tokenize(normalizeForSimilarity(b))));
   if (tokensA.size === 0 || tokensB.size === 0) return 0;
   let intersectionSize = 0;
   for (const t of tokensA) {
