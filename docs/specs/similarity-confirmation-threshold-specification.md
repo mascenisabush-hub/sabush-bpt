@@ -2,9 +2,8 @@ Business Domain Specification
 
 # Similarity-Confirmation Threshold & Experience — Specification
 
-**Status:** Drafted. Awaiting separate, explicit Product Architect
-acceptance — see "Product Architect Acceptance," below. Not yet
-Accepted.
+**Status:** ✅ Accepted (2026-08-27). See "Product Architect Acceptance,"
+below.
 **Type:** Business Domain Specification, per the category established
 in [`19-governance-bdr-policy-framework.md`](./19-governance-bdr-policy-framework.md)
 §2. Formalizes, at the technical-architecture level, the capability
@@ -346,14 +345,41 @@ collection at a time.
 
 ## Product Architect Acceptance
 
-**Status:** ⏳ Pending. Not yet accepted.
+**Status:** ✅ Accepted (2026-08-27).
 
-This Specification is drafted and ready for review, per `ADR-0007`
-Addendum 2, Ruling 3's requirement that this document receive its own,
-independently-dated acceptance, separate from the sibling `POL-0011`
-Specification Amendment's acceptance — one is never to be read as
-acceptance of the other. No acceptance statement is recorded here yet.
-Until an explicit Product Architect acceptance is added to this
-section, this Specification remains Drafted only, and authorizes no
-Rule 8 Assessment, Implementation Authorization, or implementation of
-any kind.
+> This Specification is accepted exactly as drafted — the first-ever
+> foundational Specification for the catalog-wide Similarity Suggestion
+> capability, covering `POL-0003`'s original two signals together with
+> `POL-0012`'s new unit-spelling-equivalence signal, and every
+> constraint listed in §9 above. No substantive content was altered by
+> this acceptance.
+>
+> **The confirmation-experience conformance question (§6) remains
+> exactly as governed: OPEN — OUT OF SCOPE — routed for its own future,
+> separate governance/remediation.** This acceptance does not declare
+> the current UI compliant; does not require any UI change; does not
+> reinterpret `POL-0003`'s own wording; and does not resolve Option A,
+> B, or C from the Decision Brief that first framed those options.
+> Nothing about accepting this Specification touches that question in
+> any direction — it is accepted as still open, precisely as §6 and
+> Governance Notes above already state.
+>
+> This acceptance is independent of, and does not constitute, accept,
+> or in any way affect, the acceptance of
+> `product-identity-alternative-name-specification-unit-spelling-amendment.md`
+> ("Specification A") — the two remain separate acceptance gates, per
+> `ADR-0007` Addendum 2, Ruling 3, and this acceptance covers this
+> document alone. This acceptance does not authorize Rule 8 Assessment,
+> Rule 8 drafting, technical implementation, code changes, schema
+> implementation, algorithm implementation, UI implementation, database
+> migration, historical-data backfill, or Implementation Authorization
+> — all remain separate, required gates. Two separate Rule 8
+> Assessments are required next, one for this Specification and one,
+> independently, for Specification A.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI.
+> **Date:** 2026-08-27.
+
+This Specification is now Accepted. Rule 8 Assessment and
+Implementation Authorization remain separate, required, not-yet-begun
+gates.

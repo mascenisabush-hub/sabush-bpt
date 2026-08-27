@@ -2,9 +2,8 @@ Business Domain Specification — Amendment
 
 # Supplier-Wording Recognition, Confirmation & Conflict — Specification Amendment: Unit-Spelling Equivalence Candidate Ground
 
-**Status:** Drafted. Awaiting separate, explicit Product Architect
-acceptance — see "Product Architect Acceptance," below. Not yet
-Accepted.
+**Status:** ✅ Accepted (2026-08-27). See "Product Architect Acceptance,"
+below.
 **Type:** Specification amendment, filed as its own document per this
 repository's established "amend additively, never rewrite" pattern
 (confirmed across every existing amendment in `docs/specs/`, including
@@ -180,14 +179,28 @@ as, a finding that current code already conforms to it.
 
 ## Product Architect Acceptance
 
-**Status:** ⏳ Pending. Not yet accepted.
+**Status:** ✅ Accepted (2026-08-27).
 
-This amendment is drafted and ready for review, per `ADR-0007`
-Addendum 2, Ruling 3's requirement that this document receive its own,
-independently-dated acceptance, separate from
-`product-identity-alternative-name-specification.md`'s own 2026-08-19
-acceptance and separate from the sibling `POL-0012` Specification's
-acceptance. No acceptance statement is recorded here yet. Until an
-explicit Product Architect acceptance is added to this section, this
-amendment remains Drafted only, and authorizes no Rule 8 Assessment,
-Implementation Authorization, or implementation of any kind.
+> This Specification amendment is accepted exactly as drafted — the
+> single addition of ground (c), unit-spelling equivalence per
+> `POL-0011`, to §3 step 2 of `product-identity-alternative-name-specification.md`,
+> with every other section of that Specification, and every constraint
+> listed in §4 above, unchanged. No substantive content was altered by
+> this acceptance. This acceptance is independent of, and does not
+> constitute, accept, or in any way affect, the acceptance of
+> `similarity-confirmation-threshold-specification.md` ("Specification
+> B") — the two remain separate acceptance gates, per `ADR-0007`
+> Addendum 2, Ruling 3, and this acceptance covers this document alone.
+> This acceptance does not authorize Rule 8 Assessment, Rule 8 drafting,
+> technical implementation, code changes, schema implementation,
+> algorithm implementation, UI implementation, database migration,
+> historical-data backfill, or Implementation Authorization — all
+> remain separate, required gates. Two separate Rule 8 Assessments are
+> required next, one for this Specification amendment and one,
+> independently, for Specification B.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI.
+> **Date:** 2026-08-27.
+
+This amendment is now Accepted. Rule 8 Assessment and Implementation
+Authorization remain separate, required, not-yet-begun gates.
