@@ -1,5 +1,20 @@
 Decision Record
 
+> **Extended — see
+> [POL-0012](./POL-0012-similarity-confirmation-threshold-unit-normalization-amendment.md).**
+> A third Candidate Signal has been added: unit-spelling equivalence
+> (e.g. "2L" and "2 Lt" may be treated as referring to the same unit),
+> applied to the unit token only — quantity is never normalized away,
+> so "1L" and "2L" remain distinct. The existing similarity threshold
+> and the two Candidate Signals below are otherwise unchanged and
+> remain fully in force, as is everything else in this document,
+> including its "Confirmation Experience — Minimum Shape" section — a
+> separately identified, pre-existing question about whether the
+> current UI conforms to that section is tracked independently, not
+> resolved by POL-0012. This document's own text below is preserved as
+> the original historical record and is **not** edited to reflect the
+> amendment; read POL-0012 for the current rule.
+
 # POL-0003 — Similarity-Confirmation Threshold & Experience
 
 **Status:** Approved.

@@ -1,5 +1,16 @@
 Business Domain Specification
 
+> **Amendment drafted (not yet accepted) — see
+> [product-identity-alternative-name-specification-unit-spelling-amendment.md](./product-identity-alternative-name-specification-unit-spelling-amendment.md).**
+> §3 step 2 below would gain a third candidate ground — unit-spelling
+> equivalence (e.g. "2L" ≡ "2 Lt"), unit token only, quantity never
+> normalized away — per POL-0011. Grounds (a) and (b) below are
+> otherwise unchanged and remain fully in force, as is everything else
+> in this document. This document's own text below is preserved as the
+> original historical record and is **not** edited to reflect the
+> amendment unless and until that amendment is itself separately
+> accepted; read the amendment document for its current status.
+
 # Supplier-Wording Recognition, Confirmation & Conflict — Specification
 
 **Status:** ✅ Accepted (2026-08-19). See "Product Architect Acceptance," below.

@@ -1,5 +1,16 @@
 Decision Record
 
+> **Extended — see
+> [POL-0011](./POL-0011-supplier-wording-recognition-unit-normalization-amendment.md).**
+> A third Candidate Ground has been added: unit-spelling equivalence
+> (e.g. "2L" and "2 Lt" may be treated as referring to the same unit),
+> applied to the unit token only — quantity is never normalized away,
+> so "1L" and "2L" remain distinct. The two Candidate Grounds below are
+> otherwise unchanged and remain fully in force, as is everything else
+> in this document. This document's own text below is preserved as the
+> original historical record and is **not** edited to reflect the
+> amendment; read POL-0011 for the current rule.
+
 # POL-0007 — Supplier-Wording Recognition, Confirmation & Conflict Policy
 
 **Status:** Approved.
