@@ -264,3 +264,57 @@ describe('§44 — Selling Price input, Mode A, Mode B, multiple portions unaffe
     assert.match(periodicSrc, /import \{ getConversionFactor \} from '\.\.\/lib\/purchaseToSellingConversion';/);
   });
 });
+
+// Issue 2 — Periodic Contagem Live Selling-Price Readability (this is the
+// UI/implementation correction, not a §44 continuation — no new BDR,
+// Policy, Specification amendment, Rule 8 Assessment, Implementation
+// Plan, or Implementation Authorization applies; see the read-only
+// investigation's own classification). Proves: (1) the live Valor box no
+// longer permits mid-number wrapping; (2) rowGridClass's declared grid
+// columns match the row's actual post-§44 cell count (no leftover
+// Cost-Price-sized track); (3) the Selling Price deviation warning is
+// still present and untouched; (4) the Selling Value calculation itself
+// is unchanged.
+describe('Issue 2 — Periodic Contagem live Selling-Price readability', () => {
+  it('the live Valor/Selling Value display no longer uses break-words', () => {
+    assert.doesNotMatch(periodicSrc, /break-words/);
+  });
+
+  it('the live Valor/Selling Value display uses whitespace-nowrap so a currency value cannot split mid-number', () => {
+    const occurrences = periodicSrc.match(/tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis/g) ?? [];
+    // One for the catalog-row Valor box, one for the manual-row Valor box.
+    assert.equal(occurrences.length, 2);
+  });
+
+  it('rowGridClass no longer declares the obsolete seven-track (pre-§44, Cost-Price-inclusive) template', () => {
+    assert.doesNotMatch(periodicSrc, /sm:grid-cols-\[minmax\(0,2fr\)_84px_76px_112px_112px_120px_28px\]/);
+  });
+
+  it('rowGridClass declares exactly five tracks, matching the row\'s five actual top-level cells (Nome, Qtd, Unid, Venda\\/Un, Valor+ações)', () => {
+    const match = periodicSrc.match(/const rowGridClass = 'grid grid-cols-2 sm:grid-cols-\[([^\]]+)\]/);
+    assert.ok(match, 'Could not locate rowGridClass declaration.');
+    const tracks = match![1].split('_');
+    assert.equal(tracks.length, 5, `Expected 5 grid tracks, found ${tracks.length}: ${match![1]}`);
+  });
+
+  it('every full-row span (ModeAValuationControl, NewProductInfoPanel, ExistingProductSummary, multi-portion label) now spans col-span-5, not the stale col-span-7', () => {
+    assert.doesNotMatch(periodicSrc, /col-span-2 sm:col-span-7/);
+    const fullRowSpans = periodicSrc.match(/col-span-2 sm:col-span-5/g) ?? [];
+    assert.equal(fullRowSpans.length, 4, `Expected 4 full-row col-span-5 spans, found ${fullRowSpans.length}.`);
+  });
+
+  it('the Selling Price deviation warning (checkPriceDeviation against the remembered selling price) is still present, unaffected by the layout fix', () => {
+    assert.match(periodicSrc, /checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/);
+  });
+
+  it('the catalog-row Selling Value figure is still rendered via formatCurrency(rowSellingValue, currencySymbol) — calculation untouched', () => {
+    assert.match(periodicSrc, /\{isBlank \? 'Não contado' : formatCurrency\(rowSellingValue, currencySymbol\)\}/);
+  });
+
+  it('the manual-row Selling Value figure is still quantity × sellingPrice — calculation untouched', () => {
+    assert.match(
+      periodicSrc,
+      /formatCurrency\(\s*\(Number\(row\.quantity\) \|\| 0\) \* \(Number\(row\.sellingPrice\) \|\| 0\),\s*currencySymbol\s*\)/
+    );
+  });
+});

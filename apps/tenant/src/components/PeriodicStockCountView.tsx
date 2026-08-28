@@ -276,7 +276,11 @@ const ModeAValuationControl: React.FC<{
   onChange: (fields: Partial<{ referenceUnit: string; referencePrice: string }>) => void;
 }> = ({ referenceUnitOptions, active, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onToggle, onChange }) => {
   return (
-    <div className="col-span-2 sm:col-span-7 -mt-1 mb-1">
+    // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
+    // col-span-5, matching rowGridClass's corrected five-track
+    // template (was 7, for the pre-§44 row) — see rowGridClass's own
+    // comment for why.
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1">
       <label className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-600 select-none">
         <input type="checkbox" checked={active} onChange={(e) => onToggle(e.target.checked)} className="rounded" />
         Usar um único preço de venda para todas as porções deste produto (convertido automaticamente)
@@ -376,7 +380,9 @@ const NewProductInfoPanel: React.FC<{
   onRelationshipStepsChange,
 }) => {
   return (
-    <div className="col-span-2 sm:col-span-7 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
+    // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
+    // col-span-5 — see ModeAValuationControl's identical comment above.
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
       <div className="flex items-center gap-1.5">
         <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#B8952F]">Produto novo</span>
         <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
@@ -460,7 +466,9 @@ const ExistingProductSummary: React.FC<{
   const hasCostBasis = !!costBasis && Number.isFinite(costBasis.purchaseCost) && costBasis.purchaseCost >= 0 && !!costBasis.purchaseUnit;
   if (!hasRelationship && !hasCostBasis) return null;
   return (
-    <div className="col-span-2 sm:col-span-7 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-1.5">
+    // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
+    // col-span-5 — see ModeAValuationControl's identical comment above.
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-1.5">
       <div className="flex items-center gap-1.5">
         <span className="text-[10.5px] font-bold uppercase tracking-wide text-gray-500">Memória do produto</span>
         <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
@@ -2454,7 +2462,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     'w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
     'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20';
   const fieldLabelClass = 'block type-label mb-1';
-  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_112px_120px_28px] gap-x-2.5 gap-y-2.5 sm:items-end';
+  // [Issue 2 — Periodic Contagem Live Selling-Price Readability] Five
+  // tracks, matching the row's actual five top-level grid children
+  // (Nome, Qtd, Unid, Venda/Un, Valor+ações) — not seven. Pre-§44 this
+  // declared seven tracks for a row that still had a sixth
+  // (Compra/Un) field; §44 removed that field without shrinking the
+  // template, so the five real cells were auto-placed into the first
+  // five of seven tracks, leaving two tracks unused and squeezing the
+  // combined Valor+Guardar/Editar/remover cell into a track sized for
+  // a single input (112px) instead of a value-plus-actions cell. The
+  // last track is widened (190px, versus the old Valor-only 120px) to
+  // hold the currency value beside its action buttons without
+  // wrapping. Any full-row element spanning every column (see
+  // ModeAValuationControl, NewProductInfoPanel, ExistingProductSummary,
+  // and the multi-portion label below) must use col-span-5 to match.
+  const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-2.5 sm:items-end';
 
   // [Implementation Task, Section 5] A draft only counts as "worth
   // resuming" if it actually holds operator-entered content — an empty
@@ -2842,7 +2864,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             never an accidental duplicate. Purely
                             informational; see portionLabels above. */}
                         {portionLabel.isMultiPortion && (
-                          <div className="col-span-2 sm:col-span-7 -mt-1 mb-0.5">
+                          // [Issue 2] col-span-5, see rowGridClass above.
+                          <div className="col-span-2 sm:col-span-5 -mt-1 mb-0.5">
                             <p className="text-[12px] text-[#B8952F] font-medium leading-snug">
                               Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
                             </p>
@@ -2902,18 +2925,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             );
                           })()}
 
-                        {/* [Business Worth Evolution — Decision 37, B.1
-                            completion] Read-only counterpart to
-                            NewProductInfoPanel — every catalog row is,
-                            by construction, never "genuinely new"
-                            (isGenuinelyNewProductName, unchanged), so
-                            no additional gate beyond
-                            isFirstPortionOfMultiPortionGroup is needed
-                            here, mirroring Mode A's own identical gate
-                            immediately above. Renders nothing when the
-                            product has no remembered cost basis or
-                            relationship yet (ExistingProductSummary's
-                            own null-return). */}
+                        {/* [Decision 37, B.1 completion] Read-only
+                            counterpart to NewProductInfoPanel — a
+                            catalog row is never "genuinely new", so no
+                            additional gate is needed here beyond
+                            isFirstPortionOfMultiPortionGroup, mirroring
+                            Mode A's own gate above. Renders nothing
+                            without a remembered cost basis/relationship
+                            (ExistingProductSummary's own null-return). */}
                         {isFirstPortionOfMultiPortionGroup && (
                           <ExistingProductSummary
                             productName={row.productName}
@@ -3030,8 +3049,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 the sole per-row figure — no replacement
                                 cost UI or anomaly indicator introduced. */}
                             <label className={fieldLabelClass}>Valor</label>
+                            {/* [Issue 2 — Periodic Contagem Live
+                                Selling-Price Readability] The previous
+                                word-breaking utility class previously let
+                                a currency value split mid-number (e.g.
+                                "2,345 MZN") once rowGridClass's stale
+                                seven-track template squeezed this cell
+                                after §44 removed Compra/Un — see
+                                rowGridClass's own comment above.
+                                whitespace-nowrap keeps the figure on one
+                                line; overflow-hidden + text-ellipsis is
+                                the same safety net already used for "Não
+                                contado" and other single-line fields
+                                elsewhere in this file, so an
+                                unexpectedly long value truncates
+                                visually instead of breaking the row's
+                                height or splitting digits.
+                                Calculation/formatting (formatCurrency,
+                                rowSellingValue) is untouched. */}
                             <div
-                              className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
+                              className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis ${
                                 isBlank ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
                               }`}
                             >
@@ -3410,8 +3447,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       block, above. Selling Value remains
                                       the sole per-row figure. */}
                                   <label className={fieldLabelClass}>Valor</label>
+                                  {/* [Issue 2 — Periodic Contagem Live
+                                      Selling-Price Readability] Same
+                                      correction as the catalog-row Valor
+                                      box, above — see that comment for
+                                      why the previous word-breaking
+                                      utility class is replaced here
+                                      too. */}
                                   <div
-                                    className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
+                                    className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis ${
                                       row.quantity.trim() === '' ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
                                     }`}
                                   >
