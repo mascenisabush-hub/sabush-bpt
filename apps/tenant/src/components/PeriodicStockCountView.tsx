@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, type StockCountReconciliationSignal } from '../context/AppContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
-import { StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
+import { StockCount, StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
@@ -66,6 +66,8 @@ import {
   AlertTriangle,
   RotateCw,
   Undo2,
+  X,
+  Package,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -551,6 +553,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // review/confirm flow every ordinary Contagem already uses.
     pendingBusinessWorthCorrection,
     clearBusinessWorthCorrection,
+    // [Feature — Owner-requested: correction mode must pre-fill the
+    // original count's actual data, not start blank] The authoritative
+    // link to the exact StockCount being corrected is
+    // BusinessWorthSnapshot.sourceStockCountId — never a "most recent
+    // by date" guess, which could pick the wrong record (e.g. if an
+    // 'initial' count happened more recently, or two counts share a
+    // date). Only ever the CURRENT active snapshot in practice —
+    // DashboardView only ever renders "Corrigir" for index===0/status
+    // 'active' — but read directly here rather than assumed, so this
+    // component never silently relies on that invariant holding
+    // elsewhere.
+    latestActiveBusinessWorthSnapshot,
     // [Feature — reconciliation signal reaching the Owner] Needed by
     // getPossibleReconciliationCauses (calculations.ts) — the SAME
     // live payables/receivables arrays already used everywhere else in
@@ -796,6 +810,79 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     });
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [products]);
+
+  // [Feature — Owner-requested: "view counted products, quantities and
+  // totals" after a count is done] Which past count, if any, is
+  // currently being viewed in the new read-only detail overlay
+  // (rendered near the bottom of this component, alongside the history
+  // list). Available for ANY past count, permanently — never gated by
+  // the 3-hour correction window, per the Owner's own explicit
+  // instruction that already-counted businesses must still be able to
+  // view what they counted.
+  const [viewingCount, setViewingCount] = useState<StockCount | null>(null);
+
+  // [Bug fix — Owner-reported, real client complaint] Correction mode
+  // previously opened a BLANK Contagem screen (every row auto-populated
+  // from the current catalog with an empty quantity, via the effect
+  // just above) — the Owner had no way to see what they originally
+  // counted, so "correcting" one mistake meant blindly re-counting
+  // everything from scratch. Confirmed by direct inspection: nothing in
+  // this file previously read `mostRecentCount` (declared, below, but
+  // otherwise unused) to seed the working rows.
+  //
+  // Fixed by pre-filling `catalogRows` from the EXACT StockCount this
+  // correction targets — found via
+  // `latestActiveBusinessWorthSnapshot.sourceStockCountId`, the
+  // authoritative link (never a "most recent by date" guess, which
+  // could resolve to the wrong record). Runs once per correction
+  // session (`correctionPrefillAppliedForRef` below) — critical: this
+  // must NOT re-apply on every later render, or it would silently
+  // overwrite whatever the Owner has already started correcting the
+  // next time `products` happens to change for an unrelated reason.
+  //
+  // A product that was part of the original count but no longer exists
+  // in the current catalog (deleted since) cannot be pre-filled into a
+  // catalog row — there is no row for it. This is a disclosed, narrow
+  // limitation (surfaced to the Owner via `missingFromCatalogCount`,
+  // rendered in the correction banner below), not a silent data loss:
+  // nothing about the original StockCount document itself is touched or
+  // discarded by this effect, only this session's working-row seeding.
+  const correctionPrefillAppliedForRef = useRef<string | null>(null);
+  const [correctionPrefillMissingCount, setCorrectionPrefillMissingCount] = useState(0);
+  useEffect(() => {
+    if (!pendingBusinessWorthCorrection) {
+      correctionPrefillAppliedForRef.current = null;
+      return;
+    }
+    if (correctionPrefillAppliedForRef.current === pendingBusinessWorthCorrection.snapshotId) return;
+    const sourceStockCountId = latestActiveBusinessWorthSnapshot?.sourceStockCountId;
+    if (!sourceStockCountId) return; // no link yet (still loading) — try again next render
+    const sourceCount = stockCounts.find((sc) => sc.id === sourceStockCountId);
+    if (!sourceCount) return; // source not loaded yet — try again next render
+
+    correctionPrefillAppliedForRef.current = pendingBusinessWorthCorrection.snapshotId;
+    let missingCount = 0;
+    setCatalogRows((prev) => {
+      const next = { ...prev };
+      for (const item of sourceCount.items) {
+        const existing = next[item.productId];
+        if (!existing) {
+          missingCount += 1;
+          continue;
+        }
+        next[item.productId] = {
+          ...existing,
+          quantity: String(item.quantity),
+          unit: item.unit || existing.unit,
+          costPrice: String(item.costPrice),
+          sellingPrice: item.sellingPrice != null ? String(item.sellingPrice) : existing.sellingPrice,
+        };
+      }
+      return next;
+    });
+    setCorrectionPrefillMissingCount(missingCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pendingBusinessWorthCorrection, latestActiveBusinessWorthSnapshot, stockCounts, products]);
 
   // Past counts, most recent first, excluding the 'initial' one (shown separately as baseline)
   const pastCounts = [...stockCounts]
@@ -2570,6 +2657,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               Esta contagem substitui o registo de Valor do Negócio atual — o registo anterior fica preservado no
               histórico, nunca é editado ou apagado.
             </p>
+            {/* [Bug fix — Owner-reported] Confirms the original quantities
+                were actually loaded, rather than leaving the Owner to
+                wonder whether they're looking at a blank form or the real
+                data they're meant to be correcting. */}
+            <p className="text-[13px] text-amber-700 mt-1.5 font-semibold">
+              Os produtos e quantidades da contagem original foram pré-preenchidos abaixo — reveja e corrija o que for
+              necessário.
+            </p>
+            {correctionPrefillMissingCount > 0 && (
+              <p className="text-[12px] text-amber-700 mt-1.5">
+                {correctionPrefillMissingCount === 1
+                  ? '1 produto da contagem original já não existe no catálogo e não pôde ser pré-preenchido — os dados originais permanecem guardados no histórico, apenas não aparecem aqui para edição.'
+                  : `${correctionPrefillMissingCount} produtos da contagem original já não existem no catálogo e não puderam ser pré-preenchidos — os dados originais permanecem guardados no histórico, apenas não aparecem aqui para edição.`}
+              </p>
+            )}
             <button
               type="button"
               onClick={() => clearBusinessWorthCorrection()}
@@ -3596,9 +3698,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           {showHistory && (
             <div className="mt-4 space-y-1">
               {pastCounts.map((count) => (
-                <div
+                <button
+                  type="button"
                   key={count.id}
-                  className="flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC]"
+                  onClick={() => setViewingCount(count)}
+                  className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC] text-left"
                 >
                   <div>
                     <p className="text-[13px] font-bold text-[#111827]">
@@ -3619,10 +3723,90 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       </span>
                     )}
                   </div>
-                </div>
+                </button>
               ))}
             </div>
           )}
+        </div>
+      )}
+
+      {/* [Feature — Owner-requested: "view counted products, quantities
+          and totals" after a count is done, real client complaint] A
+          read-only detail view for any past count — never gated by the
+          3-hour correction window (that gate applies only to EDITING,
+          via the separate "Corrigir" entry point on the Dashboard).
+          Every field rendered here (productName, quantity, unit,
+          sellingPrice) was already stored on StockCountItem before this
+          feature — nothing new is written or computed; this only makes
+          already-correct data visible. Selling Value is the headline
+          figure per §9b of the accepted §44 amendment
+          (business-worth-evolution-periodic-contagem-cost-price-removal-amendment.md)
+          — cost is not shown here, consistent with that amendment's
+          "friction disproportionate to value" finding for Periodic
+          Contagem cost figures generally. */}
+      {viewingCount && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setViewingCount(null)}
+        >
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-lg max-h-[85vh] flex flex-col shadow-[0_24px_64px_-16px_rgba(11,31,58,0.35)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-start justify-between gap-3 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-[#F0EEE4]">
+              <div className="min-w-0">
+                <h3 className="type-title text-[#111827] truncate">
+                  {viewingCount.label || TYPE_LABELS[viewingCount.type]}
+                </h3>
+                <p className="text-[13px] text-gray-500 mt-0.5">
+                  {formatDate(viewingCount.date)} · {viewingCount.items.length} produtos
+                </p>
+              </div>
+              <button
+                type="button"
+                onClick={() => setViewingCount(null)}
+                aria-label="Fechar"
+                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+              >
+                <X className="w-5 h-5" strokeWidth={2} />
+              </button>
+            </div>
+
+            <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3 space-y-1">
+              {viewingCount.items.length === 0 ? (
+                <p className="text-[13px] text-gray-500 py-6 text-center">Nenhum produto registado nesta contagem.</p>
+              ) : (
+                viewingCount.items.map((item, idx) => (
+                  <div
+                    key={`${item.productId}-${idx}`}
+                    className="flex items-center justify-between gap-3 py-2.5 border-b border-[#F6F5F0] last:border-b-0"
+                  >
+                    <div className="min-w-0 flex items-center gap-2">
+                      <Package className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2} />
+                      <p className="text-[13px] font-semibold text-[#111827] truncate">{item.productName}</p>
+                    </div>
+                    <div className="text-right shrink-0">
+                      <span className="type-number text-[13px] text-[#111827] tabular-nums block">
+                        {item.quantity} {item.unit || 'un'}
+                      </span>
+                      {typeof item.sellingPrice === 'number' && (
+                        <span className="text-[12px] text-gray-500 tabular-nums block">
+                          {formatCurrency(item.quantity * item.sellingPrice, currencySymbol)}
+                        </span>
+                      )}
+                    </div>
+                  </div>
+                ))
+              )}
+            </div>
+
+            <div className="px-5 sm:px-6 py-4 border-t border-[#F0EEE4] flex items-center justify-between">
+              <span className="text-[13px] font-semibold text-gray-500">Valor de Venda Total</span>
+              <span className="type-number text-base font-bold text-[#111827] tabular-nums">
+                {formatCurrency(viewingCount.totalSellingValue ?? 0, currencySymbol)}
+              </span>
+            </div>
+          </div>
         </div>
       )}
     </div>
