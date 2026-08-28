@@ -3802,9 +3802,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
             <div className="px-5 sm:px-6 py-4 border-t border-[#F0EEE4] flex items-center justify-between">
               <span className="text-[13px] font-semibold text-gray-500">Valor de Venda Total</span>
-              <span className="type-number text-base font-bold text-[#111827] tabular-nums">
-                {formatCurrency(viewingCount.totalSellingValue ?? 0, currencySymbol)}
-              </span>
+              {/* [Bug fix — genuinely absent, never a fabricated zero,
+                  matching this codebase's own established FR-69
+                  discipline] A count recorded before the Selling Price
+                  on Stock Counts feature existed has no
+                  totalSellingValue at all — `?? 0` would render an
+                  indistinguishable-from-real "€0", which could be
+                  mistaken for a genuine zero-value count rather than a
+                  figure this historical record was never asked to
+                  track. */}
+              {typeof viewingCount.totalSellingValue === 'number' ? (
+                <span className="type-number text-base font-bold text-[#111827] tabular-nums">
+                  {formatCurrency(viewingCount.totalSellingValue, currencySymbol)}
+                </span>
+              ) : (
+                <span className="text-[12px] text-gray-400 italic">
+                  Não disponível para esta contagem (registada antes desta funcionalidade existir)
+                </span>
+              )}
             </div>
           </div>
         </div>

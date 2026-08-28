@@ -58,12 +58,19 @@ describe('PeriodicStockCountView.tsx — view past count details (any count, no 
 
   it('shows Selling Value as the headline total, per the accepted §44 amendment\'s convention — not cost', () => {
     const idx = src.indexOf('{viewingCount && (');
-    const nearby = src.slice(idx, idx + 3500);
+    const nearby = src.slice(idx, idx + 4200);
     assert.match(nearby, /viewingCount\.totalSellingValue/);
     // Explicitly does not surface totalValue (the cost-basis figure) in
     // this new view — matches §9's "friction disproportionate to
     // value" finding for Contagem cost figures.
     assert.doesNotMatch(nearby, /viewingCount\.totalValue\b/);
+  });
+
+  it('never shows a fabricated €0 for a count recorded before totalSellingValue existed — genuinely absent, not a zero (FR-69 discipline, already established elsewhere in this codebase)', () => {
+    const idx = src.indexOf('{viewingCount && (');
+    const nearby = src.slice(idx, idx + 4200);
+    assert.match(nearby, /typeof viewingCount\.totalSellingValue === 'number' \? \(/);
+    assert.doesNotMatch(nearby, /totalSellingValue \?\? 0/);
   });
 
   it('closing the overlay (X button, or clicking the backdrop) clears viewingCount', () => {
