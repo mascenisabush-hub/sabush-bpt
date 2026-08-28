@@ -122,14 +122,14 @@ describe('§7 item 8 — flushPeriodicDraftNow cancels the pending debounce befo
     assert.notEqual(saveIndex, -1, 'Expected flushPeriodicDraftNow to call savePeriodicStockDraft.');
   });
 
-  it('clearTimeout(draftDebounceTimerRef.current) runs before the flush write is issued', () => {
-    const clearIndex = flushBody.indexOf('clearTimeout(draftDebounceTimerRef.current)');
+  it('every pending per-row timer is cancelled before the flush write is issued', () => {
+    const clearIndex = flushBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
     const saveIndex = flushBody.indexOf('savePeriodicStockDraft(');
-    assert.notEqual(clearIndex, -1, 'Expected flushPeriodicDraftNow to clearTimeout(draftDebounceTimerRef.current).');
+    assert.notEqual(clearIndex, -1, 'Expected flushPeriodicDraftNow to iterate and clearTimeout every entry in rowDebounceTimersRef.');
     assert.notEqual(saveIndex, -1);
     assert.ok(
       clearIndex < saveIndex,
-      'clearTimeout(draftDebounceTimerRef.current) must run before the flush issues its own write — otherwise the pending ordinary autosave could still fire afterward as a redundant, stale write.'
+      'Every pending per-row timer must be cancelled before the flush issues its own write — otherwise any still-pending row timer could still fire afterward as a redundant, stale write racing this one.'
     );
   });
 
@@ -172,62 +172,74 @@ describe('§7 item 9 — handleConfirmSave awaits flushInFlightSaveRef.current b
     );
   });
 
-  it('this fourth step runs after the existing §4a/§4b steps (cancel debounce, await in-flight autosave, await identity write), preserving their own order unchanged', () => {
-    const clearIndex = handleConfirmSaveBody.indexOf('clearTimeout(draftDebounceTimerRef.current)');
+  it('this fourth step runs after the existing §4a/§4b steps (cancel every per-row timer, await in-flight autosave, await identity write), preserving their own order unchanged', () => {
+    const clearIndex = handleConfirmSaveBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
     const draftAwaitIndex = handleConfirmSaveBody.indexOf('await draftInFlightSaveRef.current');
     const identityAwaitIndex = handleConfirmSaveBody.indexOf('await identityWriteRef.current');
     const flushAwaitIndex = handleConfirmSaveBody.indexOf('await flushInFlightSaveRef.current');
     assert.ok(clearIndex !== -1 && draftAwaitIndex !== -1 && identityAwaitIndex !== -1 && flushAwaitIndex !== -1);
     assert.ok(
       clearIndex < draftAwaitIndex && draftAwaitIndex < identityAwaitIndex && identityAwaitIndex < flushAwaitIndex && flushAwaitIndex < recordStockCountCallIndex,
-      'Expected the exact order: cancel debounce (§4a) -> await in-flight autosave (§4a) -> await identity write (§4b) -> await flush (§4c) -> recordStockCount. The existing §4a/§4b steps must remain in their original relative order, with the new §4c step appended after them, not interleaved or reordered.'
+      'Expected the exact order: cancel every pending per-row timer (§4a, Decision 39a) -> await in-flight autosave (§4a) -> await identity write (§4b) -> await flush (§4c) -> recordStockCount. The existing §4a/§4b steps must remain in their original relative order, with the new §4c step appended after them, not interleaved or reordered.'
     );
   });
 });
 
-describe('§7 item 10 — scheduleDraftSave awaits draftInFlightSaveRef.current before issuing its own next write (stale/out-of-order autosave-write serialization)', () => {
-  const scheduleDraftSaveBody = extractFunctionBody(source, 'const scheduleDraftSave = (');
+describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSaveRef.current before issuing its own next write (stale/out-of-order autosave-write serialization)', () => {
+  const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
 
-  it('scheduleDraftSave exists and calls savePeriodicStockDraft', () => {
-    assert.match(scheduleDraftSaveBody, /savePeriodicStockDraft\(/, 'Expected scheduleDraftSave to call savePeriodicStockDraft.');
+  it('scheduleRowDraftSave exists and calls savePeriodicStockDraft', () => {
+    assert.match(scheduleRowDraftSaveBody, /savePeriodicStockDraft\(/, 'Expected scheduleRowDraftSave to call savePeriodicStockDraft.');
   });
 
   it('awaits draftInFlightSaveRef.current, inside the debounce timer callback, before issuing its own write', () => {
-    const awaitIndex = scheduleDraftSaveBody.indexOf('await draftInFlightSaveRef.current');
-    const saveCallIndex = scheduleDraftSaveBody.indexOf('savePeriodicStockDraft(');
-    assert.notEqual(awaitIndex, -1, 'Expected scheduleDraftSave\'s timer callback to await draftInFlightSaveRef.current.');
+    const awaitIndex = scheduleRowDraftSaveBody.indexOf('await draftInFlightSaveRef.current');
+    const saveCallIndex = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraft(');
+    assert.notEqual(awaitIndex, -1, 'Expected scheduleRowDraftSave\'s timer callback to await draftInFlightSaveRef.current.');
     assert.notEqual(saveCallIndex, -1);
     assert.ok(
       awaitIndex < saveCallIndex,
-      'await draftInFlightSaveRef.current must run before scheduleDraftSave issues its own next write — otherwise two overlapping ordinary autosave writes could complete out of order, letting an older one silently overwrite newer state within the same active session (Rule 8 Assessment Finding D1).'
+      'await draftInFlightSaveRef.current must run before scheduleRowDraftSave issues its own next write — otherwise two overlapping ordinary autosave writes (from any two row timers) could complete out of order, letting an older one silently overwrite newer state within the same active session (Rule 8 Assessment Finding D1).'
     );
   });
 
-  it('the timer callback is declared async, so the await above is syntactically valid', () => {
+  it('the timer callback reads live current state via latestFlushArgs.current, never a schedule-time-captured argument (Decision 39a FR-N2)', () => {
     assert.match(
-      scheduleDraftSaveBody,
-      /draftDebounceTimerRef\.current\s*=\s*setTimeout\(async \(\)\s*=>/,
-      'Expected the debounce timer callback to be declared as an async function.'
+      scheduleRowDraftSaveBody,
+      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
+      'Expected the per-row timer callback to read live state from latestFlushArgs.current at fire-time, not from schedule-time function arguments — this is the exact property that makes the T0/T100 race across two different rows structurally impossible.'
+    );
+  });
+
+  it('is keyed per-row in rowDebounceTimersRef — a Map, not a single ref, so editing one row never clears another row\'s own timer', () => {
+    assert.match(
+      source,
+      /const rowDebounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>\(new Map\(\)\);/,
+      'Expected a per-row Map-based timer structure, replacing the prior single shared draftDebounceTimerRef.'
     );
   });
 
   it('writes remain full-document overwrites — no version/sequence field is introduced anywhere in this function', () => {
     assert.doesNotMatch(
-      stripLineComments(scheduleDraftSaveBody),
+      stripLineComments(scheduleRowDraftSaveBody),
       /\bversion\b|sequenceNumber|writeSeq/i,
-      'No version/sequence field should be introduced — serialization by issue-order is sufficient because writes are already whole-document overwrites (Implementation Task §5c).'
+      'No version/sequence field should be introduced — serialization by issue-order is sufficient because writes are already whole-document overwrites (Implementation Task §5c; Decision 39a FR-N3).'
     );
   });
 });
 
 describe('§5b — newProductInfo reaches every full-document-overwrite write path for the periodic draft', () => {
-  it('scheduleDraftSave accepts and forwards nextNewProductInfo to savePeriodicStockDraft', () => {
-    const scheduleDraftSaveBody = extractFunctionBody(source, 'const scheduleDraftSave = (');
-    assert.match(scheduleDraftSaveBody, /nextNewProductInfo\b/, 'Expected scheduleDraftSave to accept a nextNewProductInfo parameter.');
+  it('scheduleRowDraftSave sources newProductInfo live from latestFlushArgs.current and forwards it to savePeriodicStockDraft', () => {
+    const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
     assert.match(
-      scheduleDraftSaveBody,
-      /savePeriodicStockDraft\(\s*allRows,\s*nextType,\s*nextLabel\.trim\(\)\s*\|\|\s*undefined,\s*nextDate,\s*submissionIdRef\.current\s*\|\|\s*undefined,\s*nextNewProductInfo\s*\)/,
-      'Expected scheduleDraftSave\'s savePeriodicStockDraft call to pass nextNewProductInfo as the sixth argument.'
+      scheduleRowDraftSaveBody,
+      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
+      'Expected scheduleRowDraftSave\'s timer callback to destructure newProductInfo (as npi) from latestFlushArgs.current — under per-row scheduling, newProductInfo is sourced live at fire-time, the same as every other field, never passed as a schedule-time function argument.'
+    );
+    assert.match(
+      scheduleRowDraftSaveBody,
+      /savePeriodicStockDraft\(\s*allRows,\s*t,\s*l\.trim\(\)\s*\|\|\s*undefined,\s*d,\s*submissionIdRef\.current\s*\|\|\s*undefined,\s*npi\s*\)/,
+      'Expected scheduleRowDraftSave\'s savePeriodicStockDraft call to pass the live-sourced npi as the sixth argument.'
     );
   });
 

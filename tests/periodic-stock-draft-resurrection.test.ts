@@ -57,12 +57,12 @@ describe('§4a — ordinary row-content autosave is never allowed to resurrect t
     assert.notEqual(recordStockCountCallIndex, -1, 'Expected handleConfirmSave to call recordStockCount.');
   });
 
-  it('cancels any not-yet-fired debounce timer before calling recordStockCount', () => {
-    const clearIndex = handleConfirmSaveBody.indexOf('clearTimeout(draftDebounceTimerRef.current)');
-    assert.notEqual(clearIndex, -1, 'Expected handleConfirmSave to clearTimeout(draftDebounceTimerRef.current).');
+  it('cancels every not-yet-fired per-row timer before calling recordStockCount', () => {
+    const clearIndex = handleConfirmSaveBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
+    assert.notEqual(clearIndex, -1, 'Expected handleConfirmSave to iterate and clearTimeout every entry in rowDebounceTimersRef (Decision 39a — replaces the prior single draftDebounceTimerRef).');
     assert.ok(
       clearIndex < recordStockCountCallIndex,
-      'clearTimeout(draftDebounceTimerRef.current) must run before recordStockCount is called — otherwise a pending autosave could still fire after finalization begins, the exact shape of the pre-existing Initial Count resurrection bug this task exists to not repeat.'
+      'Every pending per-row timer must be cancelled before recordStockCount is called — otherwise any still-pending row timer could still fire after finalization begins, the exact shape of the pre-existing Initial Count resurrection bug this task exists to not repeat.'
     );
   });
 
@@ -120,12 +120,12 @@ describe('§4b — the submission identity write is never discarded, always dura
     );
   });
 
-  it('scheduleDraftSave (the debounced §4a path) never itself assigns to identityWriteRef — only handleRequestConfirmation does', () => {
-    const scheduleDraftSaveBody = extractFunctionBody(source, 'const scheduleDraftSave = (');
+  it('scheduleRowDraftSave (the debounced §4a path) never itself assigns to identityWriteRef — only handleRequestConfirmation does', () => {
+    const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
     assert.doesNotMatch(
-      scheduleDraftSaveBody,
+      scheduleRowDraftSaveBody,
       /identityWriteRef/,
-      'scheduleDraftSave must never reference identityWriteRef — folding the identity write into the debounced/cancellable path would reintroduce exactly the failure mode §4b exists to close.'
+      'scheduleRowDraftSave must never reference identityWriteRef — folding the identity write into the debounced/cancellable per-row path would reintroduce exactly the failure mode §4b exists to close.'
     );
   });
 });

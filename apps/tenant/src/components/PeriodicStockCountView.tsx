@@ -713,11 +713,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // second clearPeriodicStockDraft() call.
   const [discardConfirmState, setDiscardConfirmState] = useState<'idle' | 'confirming' | 'discarding'>('idle');
 
-  // §4a — ordinary row-content autosave: a not-yet-fired timer handle,
-  // and the in-flight write's own promise once it has fired. Safe to
-  // discard on confirm (finalization reads live component state, never
-  // this draft) — see handleConfirmSave.
-  const draftDebounceTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  // §4a — ordinary row-content autosave. [Decision 39a — Per-Row
+  // Autosave Scheduling, Implementation Authorization §1 item 1]
+  // Replaces the prior single, shared `draftDebounceTimerRef` with an
+  // independent 800ms timer per row (keyed by that row's own stable
+  // identity — 'catalog:<productId>', 'manual:<index>',
+  // 'newProductInfo:<key>', or the '__meta__' sentinel for count-level
+  // fields with no single row of their own: type/label/date, a bulk
+  // manual-group rename, or a manual-row add/remove's own structural
+  // change). Editing one row's fields clears/reschedules ONLY that
+  // row's own entry — never another row's, and never the whole map.
+  // Rapid edits to the SAME row continue to collapse into one timer,
+  // by construction (the same clear-then-reschedule step, now scoped
+  // to one map entry instead of one ref).
+  const rowDebounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
   const draftInFlightSaveRef = useRef<Promise<void> | null>(null);
   // §4b — the one write that must NEVER be discarded: the immediate,
   // non-debounced write that establishes the submission identity
@@ -791,10 +800,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setDiscardConfirmState('idle');
     setNewProductInfo({});
     submissionIdRef.current = null;
-    if (draftDebounceTimerRef.current) {
-      clearTimeout(draftDebounceTimerRef.current);
-      draftDebounceTimerRef.current = null;
-    }
+    // [Decision 39a] Clear every pending per-row timer, not a single
+    // ref — a count fundamentally belongs to one business, so no
+    // per-row timer scheduled against the previous business's rows may
+    // survive to fire against the new one.
+    rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
+    rowDebounceTimersRef.current.clear();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -919,59 +930,56 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // so the "blank never becomes zero" property can be proven with a
   // real, runnable unit test rather than only an emulator test.
 
-  // [Implementation Task, Section 4a] Ordinary row-content autosave —
-  // called directly from row/type/date/label-change handlers below,
-  // never from a useEffect keyed on component state, so cancellation at
-  // confirmation time (handleConfirmSave) never depends on an effect's
-  // dependency array staying complete — the exact shape of the existing
-  // Initial Count bug this task exists to not repeat. Every argument is
-  // passed explicitly by the caller (the just-computed next value, not
-  // read from this closure's own state) so a call made synchronously
-  // right after a setState call always schedules the CURRENT edit, not
-  // a stale pre-update snapshot.
-  const scheduleDraftSave = (
-    nextCatalogRows: CatalogRowState,
-    nextManualRows: StockCountWorkingRow[],
-    nextType: StockCountType,
-    nextLabel: string,
-    nextDate: string,
-    // [Decision 38 Amendment, Implementation Task §5b/§6b;
-    // Implementation Authorization §2 item 5] The just-computed next
-    // newProductInfo value, same "explicit argument, not read from a
-    // stale closure" discipline as every other parameter above. Call
-    // sites that don't themselves change newProductInfo pass the
-    // current state through unchanged; the one call site that does
-    // change it (the NewProductInfoPanel's own onChange handler, further
-    // below) computes and passes its own next value, exactly as
-    // updateCatalogRow already does for nextCatalogRows.
-    nextNewProductInfo: Record<
-      string,
-      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
-    >
-  ) => {
-    if (draftDebounceTimerRef.current) clearTimeout(draftDebounceTimerRef.current);
+  // [Decision 39a — Per-Row Autosave Scheduling; Rule 8 Assessment §D;
+  // Implementation Plan §1a/§3; Implementation Authorization §1 items
+  // 1-3] Replaces the prior scheduleDraftSave. Two changes from the
+  // superseded design, both required by the signed authorization:
+  //
+  // (1) Scheduling is now per-row: `rowKey` identifies WHICH row's
+  //     800ms debounce period this call resets — never which version
+  //     of the whole draft eventually gets written. Only that row's
+  //     own map entry is cleared/rescheduled; every other row's
+  //     already-pending timer is untouched, closing the "editing Row B
+  //     resets Row A's timer" defect the prior shared-timer design had.
+  //
+  // (2) The write payload is now read LIVE, at fire-time, from
+  //     `latestFlushArgs.current` (declared further below — safe to
+  //     reference here despite the later declaration, since this
+  //     closure only ever runs ~800ms later, as a macrotask, well
+  //     after that declaration has already executed on the same
+  //     render) — never from arguments captured at the moment this
+  //     function was called. This is the exact property that makes the
+  //     T0/T100 race (Row A schedules at T0, Row B edits at T100, Row
+  //     A's timer fires afterward) safe: every timer, however early it
+  //     was scheduled, always writes whatever is truly current at the
+  //     moment it fires — never a stale snapshot that could revert a
+  //     newer edit made to a different row after this one was
+  //     scheduled. Reuses the exact pattern flushPeriodicDraftNow
+  //     already proved correct, applied to every autosave trigger, not
+  //     only the interruption flush.
+  //
+  // draftInFlightSaveRef remains the single, global, unmodified ref it
+  // already was — every row's timer, on firing, still awaits it before
+  // issuing its own write, exactly as the prior design's stale/
+  // out-of-order protection already required. There is still exactly
+  // one Firestore document; per-row-ness belongs to scheduling only.
+  const scheduleRowDraftSave = (rowKey: string) => {
+    const existing = rowDebounceTimersRef.current.get(rowKey);
+    if (existing) clearTimeout(existing);
     // `editing`: local changes exist, not yet acknowledged by Firestore
     // (frozen spec §4) — set immediately, before the delay, distinct
     // from `saving` which is reserved for once the write is actually
-    // in flight.
+    // in flight. Remains a single, shared UI signal (Rule 8 §C item
+    // 12) — Decision 39 does not require this become per-row.
     setDraftSaveState('editing');
-    draftDebounceTimerRef.current = setTimeout(async () => {
-      draftDebounceTimerRef.current = null;
+    const timer = setTimeout(async () => {
+      rowDebounceTimersRef.current.delete(rowKey);
       // [Decision 38 Amendment, Implementation Task §5c;
-      // Implementation Authorization §2 item 4] Stale/out-of-order
-      // autosave-write serialization: await any prior in-flight
-      // periodic-draft write before issuing this one. Writes remain
-      // full-document overwrites (unchanged); no version/sequence
-      // field is introduced — because writes are already
-      // whole-document overwrites and are now strictly issue-ordered,
-      // the later write's content is, by construction, the more
-      // current state. This protects two ORDINARY autosave writes
-      // racing against EACH OTHER within the same still-unfinalized
-      // session — a distinct property from §4a/§4b/§4c's
-      // finalization-vs-draft resurrection protection below, and it
-      // says nothing about, and provides no protection against, two
-      // different tabs/devices/users writing to the same draft
-      // concurrently (that remains excluded, §8).
+      // Implementation Authorization §2 item 4; Decision 39a's own
+      // FR-N3] Stale/out-of-order autosave-write serialization: await
+      // any prior in-flight periodic-draft write before issuing this
+      // one — unchanged in kind from the prior design, now reachable
+      // from N possible row timers instead of one shared timer.
       if (draftInFlightSaveRef.current) {
         try {
           await draftInFlightSaveRef.current;
@@ -983,14 +991,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         }
       }
       setDraftSaveState('saving');
-      const allRows = [...Object.values(nextCatalogRows), ...nextManualRows].map(workingRowToDraftItem);
+      // [Decision 39a FR-N2 — the required correctness property] Read
+      // live, current state HERE, at fire-time — never captured as a
+      // function argument at schedule-time.
+      const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
+      const allRows = [...Object.values(cr), ...mr].map(workingRowToDraftItem);
       const savePromise = savePeriodicStockDraft(
         allRows,
-        nextType,
-        nextLabel.trim() || undefined,
-        nextDate,
+        t,
+        l.trim() || undefined,
+        d,
         submissionIdRef.current || undefined,
-        nextNewProductInfo
+        npi
       )
         .then(() => setDraftSaveState('saved'))
         .catch(() => setDraftSaveState('save-failed'))
@@ -999,6 +1011,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         });
       draftInFlightSaveRef.current = savePromise;
     }, 800);
+    rowDebounceTimersRef.current.set(rowKey, timer);
   };
 
   const updateCatalogRow = (productId: string, fields: Partial<StockCountWorkingRow>) => {
@@ -1009,7 +1022,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...fields } };
     setCatalogRows(nextCatalogRows);
-    scheduleDraftSave(nextCatalogRows, manualRows, type, label, date, newProductInfo);
+    // [Decision 39a] Keyed by this row's own stable productId — never
+    // resets another catalog row's, or any manual row's, own timer.
+    scheduleRowDraftSave(`catalog:${productId}`);
   };
 
   // [Feature — per-row Save + confirm] One row's worth of the exact
@@ -1213,10 +1228,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // sole purpose is reducing the interruption-loss window, never
   // participating in the finalization data path.
   const flushPeriodicDraftNow = () => {
-    if (draftDebounceTimerRef.current) {
-      clearTimeout(draftDebounceTimerRef.current);
-      draftDebounceTimerRef.current = null;
-    }
+    // [Decision 39a; Implementation Authorization §1 item 4] Cancel
+    // EVERY pending per-row timer, not a single ref — this write is
+    // about to supersede all of them at once with the current full
+    // state; letting any of them also fire afterward would just be a
+    // redundant, stale write racing this one.
+    rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
+    rowDebounceTimersRef.current.clear();
     const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
     const allRows = [...Object.values(cr), ...mr].map(workingRowToDraftItem);
     setDraftSaveState('saving');
@@ -1251,6 +1269,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
       window.removeEventListener('pagehide', flushPeriodicDraftNow);
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // [Decision 39b — SPA/In-App Navigation Durability; Rule 8 Assessment
+  // §E; Implementation Plan §1c; Implementation Authorization §1 item
+  // 6] `visibilitychange`/`pagehide`, above, cover a real browser-level
+  // tab close/reload/switch — but this app has no router:
+  // PeriodicStockCountView is rendered behind a plain
+  // `activeTab === 'stock-count'` conditional in App.tsx, so switching
+  // to another section is a genuine React unmount with NEITHER browser
+  // event firing (the document never becomes hidden, no page unload
+  // occurs). This third, independent trigger closes that gap by
+  // calling the SAME flushPeriodicDraftNow function, completely
+  // unmodified — no new write-construction logic here at all. Safe
+  // against stale closures for the identical reason the two browser-
+  // level triggers already are: flushPeriodicDraftNow reads
+  // latestFlushArgs.current (updated unconditionally on every render)
+  // and already cancels every pending per-row timer (Decision 39a)
+  // before issuing its own authoritative write of the true current
+  // state — an unmount-triggered call is functionally indistinguishable
+  // from a pagehide-triggered one from that function's own point of
+  // view. This is a plain function-cleanup effect, never a router or
+  // navigation-guard mechanism — App.tsx's own `activeTab` handling is
+  // untouched.
+  useEffect(() => {
+    return () => {
+      flushPeriodicDraftNow();
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -1462,14 +1508,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...fields } : row));
     setManualRows(nextManualRows);
-    scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
+    // [Decision 39a] Keyed by this row's own array index — matching
+    // confirmedManualRowIndices/manualRowSaveError's own existing
+    // identity scheme (§2 of the Implementation Plan). Never resets
+    // another manual row's, or any catalog row's, own timer.
+    scheduleRowDraftSave(`manual:${index}`);
   };
 
   const handleAddManualRow = () => {
     submissionIdRef.current = null;
     const nextManualRows = [...manualRows, createManualRow()];
     setManualRows(nextManualRows);
-    scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
+    // [Decision 39a] A structural add, not one existing row's own
+    // content edit — scheduled under the shared '__meta__' key, same
+    // as type/label/date changes below.
+    scheduleRowDraftSave('__meta__');
   };
 
   // [Bug fix — same class as AddStockView's/InitialStockCountView's own
@@ -1490,7 +1543,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     const nextManualRows = manualRows.filter((_, i) => i !== index);
     setManualRows(nextManualRows);
-    scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
+    // [Decision 39a; Implementation Authorization §1 item 5] Re-index
+    // the manual-row timer map FIRST — mirroring
+    // confirmedManualRowIndices/manualRowSaveError's own existing
+    // pattern immediately below, exactly (same i < index / i > index
+    // shift) — so a pending timer scheduled against a later row never
+    // ends up firing under a now-reused, different row's index. The
+    // removed row's own timer (if any) is cancelled outright; every
+    // later row's timer is re-keyed, never cancelled, so its own
+    // pending edit is not lost, only correctly re-addressed.
+    const removedKey = `manual:${index}`;
+    const removedTimer = rowDebounceTimersRef.current.get(removedKey);
+    if (removedTimer) clearTimeout(removedTimer);
+    rowDebounceTimersRef.current.delete(removedKey);
+    const shifted = new Map<string, ReturnType<typeof setTimeout>>();
+    rowDebounceTimersRef.current.forEach((timer, key) => {
+      const match = /^manual:(\d+)$/.exec(key);
+      if (!match) {
+        shifted.set(key, timer);
+        return;
+      }
+      const i = Number(match[1]);
+      if (i < index) shifted.set(key, timer);
+      else if (i > index) shifted.set(`manual:${i - 1}`, timer);
+      // i === index already handled (cancelled) above.
+    });
+    rowDebounceTimersRef.current = shifted;
+    scheduleRowDraftSave('__meta__');
     // [Feature — per-row Save + confirm] confirmedManualRowIndices/
     // manualRowSaveError are keyed by array index, same as every other
     // manual-row identity in this file (updateManualRow, this function
@@ -1573,7 +1652,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     const nextManualRows = [...manualRows, { ...createManualRow(), productName: groupDisplayName }];
     setManualRows(nextManualRows);
-    scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
+    // [Decision 39a] Structural add — '__meta__', matching handleAddManualRow.
+    scheduleRowDraftSave('__meta__');
   };
 
   // [Business Worth Evolution — Decision 37, B.3] Renames every manual
@@ -1598,25 +1678,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     const nextManualRows = manualRows.map((row) => (productKeyFor(row.productName) === groupKey ? { ...row, productName: newName } : row));
     setManualRows(nextManualRows);
-    scheduleDraftSave(catalogRows, nextManualRows, type, label, date, newProductInfo);
+    // [Decision 39a] A bulk rename spans potentially several manual
+    // rows at once, not one row's own edit — scheduled under '__meta__'.
+    scheduleRowDraftSave('__meta__');
   };
 
   const handleTypeChange = (nextType: StockCountType) => {
     submissionIdRef.current = null;
     setType(nextType);
-    scheduleDraftSave(catalogRows, manualRows, nextType, label, date, newProductInfo);
+    // [Decision 39a] Count-level metadata, not a row — '__meta__'.
+    scheduleRowDraftSave('__meta__');
   };
 
   const handleLabelChange = (nextLabel: string) => {
     submissionIdRef.current = null;
     setLabel(nextLabel);
-    scheduleDraftSave(catalogRows, manualRows, type, nextLabel, date, newProductInfo);
+    scheduleRowDraftSave('__meta__');
   };
 
   const handleDateChange = (nextDate: string) => {
     submissionIdRef.current = null;
     setDate(nextDate);
-    scheduleDraftSave(catalogRows, manualRows, type, label, nextDate, newProductInfo);
+    scheduleRowDraftSave('__meta__');
   };
 
   // [Implementation Task, Section 5] Stale-draft resume banner actions.
@@ -1920,10 +2003,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // §4a: any not-yet-fired ordinary autosave is about to be
     // superseded by the immediate write below regardless — clear it so
     // it can't fire a second, now-redundant write moments later.
-    if (draftDebounceTimerRef.current) {
-      clearTimeout(draftDebounceTimerRef.current);
-      draftDebounceTimerRef.current = null;
-    }
+    // [Decision 39a] Every pending per-row timer, not a single ref.
+    rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
+    rowDebounceTimersRef.current.clear();
 
     // [Race guard] Sequence this identity-establishing write strictly
     // after any write already in flight — an ordinary §4a autosave that
@@ -1985,10 +2067,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setIsSaving(true);
     setError(null);
     try {
-      if (draftDebounceTimerRef.current) {
-        clearTimeout(draftDebounceTimerRef.current);
-        draftDebounceTimerRef.current = null;
-      }
+      // [Decision 39a] Every pending per-row timer, not a single ref.
+      rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
+      rowDebounceTimersRef.current.clear();
       if (draftInFlightSaveRef.current) {
         await draftInFlightSaveRef.current;
       }
@@ -3472,25 +3553,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
                           ) => {
                             // [Decision 38 Amendment, Implementation Task
-                            // §5b; Implementation Authorization §2 item 5]
-                            // Computed here (not via a functional
-                            // setState updater) so the just-computed next
-                            // value can also be passed to
-                            // scheduleDraftSave synchronously — same
-                            // "explicit next value, never a stale
-                            // closure read" discipline updateCatalogRow
-                            // above already uses for nextCatalogRows.
-                            // Before this amendment, entering a new
-                            // product's purchase unit/cost/relationship
-                            // here was never persisted at all — it lived
-                            // only in this transient useState and was
-                            // lost on any interruption.
+                            // §5b; Implementation Authorization §2 item 5;
+                            // Decision 39a] Before this amendment, entering
+                            // a new product's purchase unit/cost/
+                            // relationship here was never persisted at
+                            // all — it lived only in this transient
+                            // useState and was lost on any interruption.
+                            // [Decision 39a] Keyed by this new product's
+                            // own key — independent of every catalog/
+                            // manual row's own timer, and of every OTHER
+                            // new product's own entry.
                             const nextInfo = {
                               ...newProductInfo,
                               [key]: { ...(newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] }), ...fields },
                             };
                             setNewProductInfo(nextInfo);
-                            scheduleDraftSave(catalogRows, manualRows, type, label, date, nextInfo);
+                            scheduleRowDraftSave(`newProductInfo:${key}`);
                           };
                           return (
                             <NewProductInfoPanel
