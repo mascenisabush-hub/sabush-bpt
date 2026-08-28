@@ -701,6 +701,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // banner this mount (Retomar or Começar de novo) — gates the main
   // form per §5/§6 ("never silently auto-loaded").
   const [draftBannerDismissed, setDraftBannerDismissed] = useState(false);
+  // [Discard-Confirmation Safety Fix — Rule 8 Finding 1, Implementation
+  // Authorization §1 item 1] A single click on "Começar de Novo" must
+  // never itself discard the draft — it must open a genuine second
+  // confirmation step first. 'idle': the original two-button banner.
+  // 'confirming': "Começar de Novo" was clicked once; the draft is
+  // still fully intact — only "Começar Nova Contagem" from THIS state
+  // can proceed to discard. 'discarding': the confirmed delete is in
+  // flight (Finding 2's brief loading window) — the confirming action
+  // is disabled for this window so a rapid double-click cannot issue a
+  // second clearPeriodicStockDraft() call.
+  const [discardConfirmState, setDiscardConfirmState] = useState<'idle' | 'confirming' | 'discarding'>('idle');
 
   // §4a — ordinary row-content autosave: a not-yet-fired timer handle,
   // and the in-flight write's own promise once it has fired. Safe to
@@ -774,6 +785,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setPendingTally(null);
     setDraftSaveState('editing');
     setDraftBannerDismissed(false);
+    // [Discard-Confirmation Safety Fix] A business switch mid-
+    // confirmation must not leave a stale 'confirming'/'discarding'
+    // state pointed at the previous business's draft.
+    setDiscardConfirmState('idle');
     setNewProductInfo({});
     submissionIdRef.current = null;
     if (draftDebounceTimerRef.current) {
@@ -1648,15 +1663,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // Começar de novo — explicit "start over" path (Implementation Task,
   // Section 5), distinct from finalization's own automatic cleanup
   // inside recordStockCount.
+  //
+  // [Discard-Confirmation Safety Fix — Rule 8 Finding 2, Implementation
+  // Authorization §1 item 2] Reordered: `clearPeriodicStockDraft()` is
+  // now fully awaited BEFORE `setDraftBannerDismissed(true)` runs, not
+  // after. Previously, the blank form (and every input capable of
+  // scheduling a fresh autosave via scheduleDraftSave) became reachable
+  // the instant this function was called, while the delete was still in
+  // flight — an untracked fourth async write path racing
+  // draftInFlightSaveRef-protected autosave writes for the same
+  // document, with no serialization between them. Awaiting the delete
+  // first closes this by construction: the blank form cannot render,
+  // and therefore no new autosave can be scheduled, until the singleton
+  // document is confirmed gone (or the attempt has failed and settled —
+  // either way, no live operation remains to race). This function is
+  // now only ever invoked from the confirmation step's own "Começar
+  // Nova Contagem" action (see discardConfirmState, above) — never
+  // directly from the first-level "Começar de Novo" click.
   const handleDiscardDraft = async () => {
-    setDraftBannerDismissed(true);
     submissionIdRef.current = null;
+    setDiscardConfirmState('discarding');
     try {
       await clearPeriodicStockDraft();
     } catch {
       // Best-effort — if this fails, the stale draft is simply
       // overwritten by the next autosave, or the banner reappears next
       // mount; not a blocking error for the operator's current session.
+    } finally {
+      setDraftBannerDismissed(true);
     }
   };
 
@@ -2596,6 +2630,62 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   }
 
   if (draftDecisionPending && periodicStockDraft) {
+    // [Discard-Confirmation Safety Fix — Rule 8 Finding 1, Implementation
+    // Authorization §1 item 1] The 'confirming'/'discarding' states
+    // render a second card in place of the original banner — never
+    // both at once, and "Começar de Novo" (idle) never itself calls
+    // handleDiscardDraft. Retomar Contagem remains directly reachable
+    // from every state, per the signed Implementation Plan.
+    if (discardConfirmState !== 'idle') {
+      return (
+        <div className="max-w-2xl mx-auto py-16 space-y-5">
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-5">
+            <div className="flex items-center gap-3">
+              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
+                <AlertTriangle className="w-5 h-5" strokeWidth={2} />
+              </div>
+              <div>
+                <h2 className="type-title">Descartar Contagem por Terminar?</h2>
+                <p className="text-[13px] text-gray-500 mt-0.5">
+                  A contagem {TYPE_LABELS[periodicStockDraft.type]} de {formatDate(periodicStockDraft.date)} ainda
+                  não terminou.
+                </p>
+              </div>
+            </div>
+            <p className="text-[13px] text-gray-600 leading-relaxed">
+              Se continuar, todos os dados desta contagem por terminar serão descartados permanentemente. Esta
+              ação não pode ser desfeita.
+            </p>
+            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
+              <button
+                type="button"
+                onClick={() => setDiscardConfirmState('idle')}
+                disabled={discardConfirmState === 'discarding'}
+                className="btn-secondary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span>Cancelar</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleResumeDraft}
+                disabled={discardConfirmState === 'discarding'}
+                className="btn-secondary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+              >
+                <span>Retomar Contagem</span>
+              </button>
+              <button
+                type="button"
+                onClick={handleDiscardDraft}
+                disabled={discardConfirmState === 'discarding'}
+                className="flex-1 py-3 px-4 text-sm rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
+              >
+                <span>{discardConfirmState === 'discarding' ? 'A descartar...' : 'Começar Nova Contagem'}</span>
+              </button>
+            </div>
+          </div>
+        </div>
+      );
+    }
     return (
       <div className="max-w-2xl mx-auto py-16 space-y-5">
         <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-5">
@@ -2612,13 +2702,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
           </div>
           <p className="text-[13px] text-gray-600 leading-relaxed">
-            Pode retomar de onde parou, ou começar uma contagem nova a partir do zero — os dados desta contagem
-            por terminar serão descartados permanentemente.
+            Pode retomar de onde parou, ou começar uma contagem nova a partir do zero.
           </p>
           <div className="flex items-center gap-3">
+            {/* [Discard-Confirmation Safety Fix — Rule 8 Finding 1]
+                No longer calls handleDiscardDraft directly — a single
+                click here can never discard anything. It only opens
+                the confirmation step above, which is the sole path to
+                handleDiscardDraft. */}
             <button
               type="button"
-              onClick={handleDiscardDraft}
+              onClick={() => setDiscardConfirmState('confirming')}
               className="btn-secondary flex-1 py-3 px-4 text-sm"
             >
               <span>Começar de Novo</span>
