@@ -6,6 +6,14 @@
 // Add Stock (AddStockView.tsx — both desktop and mobile layouts, both
 // price fields).
 //
+// [§44 — Periodic Contagem Cost-Price Removal, FR-77] Contagem's own
+// Cost Price invocation is retired as of this amendment — Owner-typed
+// Cost Price no longer exists in Periodic Contagem, so there is nothing
+// left to check for a typo. Only the Selling Price invocation remains
+// for Contagem (2 call sites, not 4). Add Stock's own wiring (both cost
+// and selling, all four inputs) is completely unaffected — §44 scopes
+// to Periodic Contagem only.
+//
 // SCOPE: this repository has no DOM/React render harness — established
 // precedent (see tests/periodic-stock-review-screen-price.test.ts's own
 // header). Source-structure checks only.
@@ -54,24 +62,34 @@ describe('PeriodicStockCountView.tsx — getRememberedPriceForRow', () => {
     assert.match(body, /resolveUnitAwarePrice\(rememberedRaw, latestBatch\.unit \|\| row\.unit, row\.unit, product\.unitRelationship\)/);
   });
 
-  it('is called from both the catalog-row and manual-row price fields — 4 call sites total (cost + selling, each in both row types)', () => {
+  it('is called from both the catalog-row and manual-row price fields — 2 call sites total (§44: cost removed, selling only, one per row type)', () => {
     const callCount = (periodicSrc.match(/getRememberedPriceForRow\(row, '(cost|selling)'\)/g) || []).length;
-    assert.equal(callCount, 4);
+    assert.equal(callCount, 2);
+    // Every remaining call must be 'selling' — none 'cost' (FR-77: the
+    // Cost Price invocation is retired; Selling Price is unaffected).
+    const costCallCount = (periodicSrc.match(/getRememberedPriceForRow\(row, 'cost'\)/g) || []).length;
+    assert.equal(costCallCount, 0);
   });
 });
 
 describe('PeriodicStockCountView.tsx — the warning is actually rendered next to each price field', () => {
-  it('the catalog-row Compra/Un and Venda/Un fields both check for a deviation warning', () => {
-    const start = periodicSrc.indexOf('<label className={fieldLabelClass}>Compra/Un ({currencySymbol})</label>');
-    const end = periodicSrc.indexOf('Adicionar Porção', start); // next major landmark after the catalog-row price block
-    const block = periodicSrc.slice(start, end);
-    const warningCount = (block.match(/checkPriceDeviation\(parseFloat\(row\.(costPrice|sellingPrice)\), getRememberedPriceForRow\(row, '(cost|selling)'\)\)/g) || []).length;
-    assert.equal(warningCount, 2);
+  it('§44: no Cost Price deviation warning remains anywhere in Periodic Contagem — the cost-side checkPriceDeviation call is fully retired', () => {
+    const costWarningCount = (periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.costPrice\)/g) || []).length;
+    assert.equal(costWarningCount, 0);
   });
 
-  it('warnings only render when check.showWarning is true — never an empty/always-visible note', () => {
+  it('the catalog-row and manual-row Venda/Un fields each still check for a Selling Price deviation warning — 2 call sites total, unaffected by §44', () => {
+    const sellingWarningCount = (periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) || []).length;
+    assert.equal(sellingWarningCount, 2);
+  });
+
+  it('warnings only render when check.showWarning is true — never an empty/always-visible note (§44: 2 remaining, both Selling Price)', () => {
     const occurrences = periodicSrc.match(/const check = checkPriceDeviation\([\s\S]{0,80}?\);\n\s+if \(!check\.showWarning\) return null;/g) || [];
-    assert.equal(occurrences.length, 4);
+    assert.equal(occurrences.length, 2);
+    for (const occurrence of occurrences) {
+      assert.match(occurrence, /row\.sellingPrice/);
+      assert.doesNotMatch(occurrence, /row\.costPrice/);
+    }
   });
 });
 

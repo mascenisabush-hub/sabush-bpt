@@ -4162,6 +4162,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // FR-20] Pass-through only — see this field's own comment on
         // StockCountItem (types.ts).
         ...(norm.valuationMode ? { valuationMode: norm.valuationMode } : {}),
+        // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8
+        // Finding 3] Pass-through only — normalizeStockCountItems
+        // already computed this from deriveCostContribution's own
+        // `derived` value (always a defined boolean in practice; the
+        // `typeof` guard here matches this codebase's existing
+        // Firestore-safe-optional-field discipline — never a literal
+        // `undefined` write — same pattern as valuationMode, above).
+        // See this field's own comment on StockCountItem (types.ts).
+        ...(typeof norm.costBasisEstablished === 'boolean' ? { costBasisEstablished: norm.costBasisEstablished } : {}),
       });
     }
 

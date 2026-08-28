@@ -40,7 +40,7 @@ import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuanti
 // what guarantees the live preview total below and the persisted
 // Contagem can never disagree. See that module's own header comment
 // for the full authoritative-cost-basis and fallback rules.
-import { buildProductCostBasisMap, deriveCostContribution, type ProductCostBasis } from '../lib/fr67CostBasisConversion';
+import { buildProductCostBasisMap, type ProductCostBasis } from '../lib/fr67CostBasisConversion';
 // [Feature — optional local download of a confirmed Contagem]
 // Reuses the SAME PDF/Excel export engine every Relatórios report
 // already uses (reports/shared/reportExport.ts) — jsPDF/xlsx are
@@ -59,9 +59,6 @@ import {
   ArrowLeft,
   Info,
   CheckCircle2,
-  TrendingUp,
-  TrendingDown,
-  Minus,
   History,
   ChevronDown,
   ChevronUp,
@@ -798,13 +795,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     .sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
 
   const mostRecentCount = pastCounts[0] || null;
-  // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 4]
-  // Comparison baseline is now Expected Current Stock Value,
-  // unconditionally — this supersedes the prior "most recent count,
-  // falling back to Initial Capital" rule. `mostRecentCount` is kept
-  // (used for the history list and the "since your last count" label
-  // context below), but no longer feeds `comparisonBaseline`.
-  const comparisonBaseline = expectedCurrentStockValue;
+  // [§44 — Periodic Contagem Cost-Price Removal, FR-74; Rule 8 Finding 4]
+  // The local `comparisonBaseline` (Expected Current Stock Value) that
+  // used to feed the live entry screen's cost-basis "vs. Valor Esperado"
+  // trend indicator is removed along with that indicator — it fed
+  // nothing else. `expectedCurrentStockValue` itself (the context value)
+  // is unaffected and continues to be passed to recordStockCount's own
+  // `expectedValueAtCount` parameter below, preserving the history-list
+  // diagnostic (FR-76) exactly as before.
 
   // [Implementation Task, Section 2/6] Firestore-safe conversion —
   // extracted to utils/stockCount.ts as a pure function (workingRowToDraftItem)
@@ -1642,33 +1640,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return map;
   }, [costBasisByProductName, newProductInfo]);
 
-  // [Bug fix — per-row "Valor" preview disagreeing with the actual
-  // total] Both per-row "Valor" boxes below (catalog rows, manual
-  // rows) used to compute a raw `quantity * costPrice` — completely
-  // bypassing deriveCostContribution, the same FR-67 cost-basis helper
-  // liveTally/tallyStockCountRows already use for the real total. For
-  // any multi-unit product with a confirmed cost basis, a portion
-  // counted in a non-purchase unit has its cost input SUPPRESSED
-  // (isCostFieldSuppressed, "Definido na compra") and row.costPrice
-  // left blank/0 by design — so the raw calculation always showed
-  // R$0.00 there, even though that portion's real, correctly-derived
-  // value WAS included in the actual saved total. This helper routes
-  // every per-row preview through the exact same derivation, so what
-  // an operator sees next to each row always matches what's actually
-  // being counted — never a second, independently-invented
-  // calculation. Uses effectiveCostBasisByProductName (immediately
-  // above), not the catalog-only costBasisByProductName, so this now
-  // also resolves correctly for a genuinely new product.
-  // Still the single source powering both the "Custo: X" caption under
-  // each row's Valor box AND the actual Total Cost Value — a suppressed
-  // portion's cost is fully visible there, which is exactly why its own
-  // per-portion Compra/Un field can be removed entirely (see
-  // isCostFieldSuppressed's call sites below) rather than shown a second
-  // time, read-only, right next to it.
-  const rowCostValue = (productName: string, unit: string, quantity: number, costPrice: number): number => {
-    const basis = effectiveCostBasisByProductName.get(productName.trim().toLowerCase());
-    return deriveCostContribution(quantity, unit, costPrice, basis).value;
-  };
+  // [§44 — Periodic Contagem Cost-Price Removal — Implementation
+  // Clarification] rowCostValue existed solely to power the per-row
+  // "Custo: X" caption removed from both the catalog-row and manual-row
+  // Valor blocks, above. With no remaining caller, it is removed here
+  // too rather than left as dead code. deriveCostContribution itself
+  // (imported below) is unaffected and remains fully in use by
+  // liveTally/tallyStockCountRows for the real, governed totals.
 
   const liveTally = useMemo(
     () => tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName),
@@ -1754,8 +1732,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return manualRowGroups.filter((group) => group.displayName.toLowerCase().includes(search));
   }, [manualRowGroups, productSearch]);
 
-  const diff = liveTally.totalPurchaseValue - comparisonBaseline;
-  const diffPct = comparisonBaseline > 0 ? (diff / comparisonBaseline) * 100 : 0;
+  // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
+  // (the live cost-basis trend indicator's own computation) are removed
+  // along with the JSX that consumed them and `comparisonBaseline`,
+  // above — nothing else read them.
 
   // Step 1 of 2: validate + compute the tally and hand off to the
   // mandatory Counted/Not Counted confirmation screen (Amendment Part
@@ -2112,12 +2092,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const tables = [
       {
         title: 'Produtos Contados',
-        columns: ['Produto', 'Qtd', 'Unid', 'Custo/Un', 'Venda/Un', 'Valor (Custo)', 'Valor (Venda)'],
+        // [§44 — Periodic Contagem Cost-Price Removal — Implementation
+        // Clarification] The "Custo/Un" column (item.costPrice, the raw
+        // per-unit value) is removed — the Owner no longer supplies or
+        // observes this figure during Periodic Contagem, so presenting
+        // it in the receipt would misrepresent it as an Owner-provided
+        // fact. "Valor (Custo)" (item.purchaseValue) is preserved: it
+        // remains a real, governed, derived total (FR-72, unaffected)
+        // whenever a valid cost basis exists — it does not become
+        // meaningless merely because the input was removed, so it is
+        // not removed alongside it.
+        columns: ['Produto', 'Qtd', 'Unid', 'Venda/Un', 'Valor (Custo)', 'Valor (Venda)'],
         rows: savedTally.countedItems.map((item) => [
           item.productName,
           item.quantity,
           item.unit,
-          formatCurrency(item.costPrice, currencySymbol),
           formatCurrency(item.sellingPrice, currencySymbol),
           formatCurrency(item.purchaseValue, currencySymbol),
           formatCurrency(item.sellingValue, currencySymbol),
@@ -2168,10 +2157,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           <CheckCircle2 className="w-7 h-7 text-emerald-600" strokeWidth={2.25} />
         </div>
         <h2 className="type-title">{savedMessage}</h2>
+        {/* [§44 — Periodic Contagem Cost-Price Removal, FR-75;
+            Implementation Authorization §2 item 5] The headline
+            valuation is now the counted Selling Value, aligning this
+            screen with the live entry screen's own primary figure and
+            with Business Worth's selling-price basis. The prior
+            unconditional cost-basis headline ("Valor Físico Total (a
+            custo)") is removed — no secondary cost figure is
+            introduced on this screen either, consistent with removing
+            Cost Price as an Owner-facing concept throughout Periodic
+            Contagem (per the Implementation Clarification applied to
+            the per-row caption and the receipt). savedTotal itself is
+            untouched and remains available to the optional downloadable
+            receipt (buildReceiptContent, above), which is unaffected by
+            this screen's own headline. */}
         <p className="text-sm text-gray-500">
-          Valor Físico Total (a custo):{' '}
+          Valor de Venda Total:{' '}
           <span className="font-display font-semibold text-[#0B1F3A] tabular-nums">
-            {formatCurrency(savedTotal, currencySymbol)}
+            {formatCurrency(savedSellingTotal, currencySymbol)}
           </span>
         </p>
         {savedTally && (
@@ -2716,13 +2719,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   {visibleCatalogEntries.map(([productId, row]) => {
                     const isBlank = row.quantity.trim() === '';
                     const q = isBlank ? 0 : Number(row.quantity) || 0;
-                    const c = Number(row.costPrice) || 0;
-                    // Bug fix — see rowCostValue's own comment above:
-                    // the displayed "Valor" now agrees with what's
-                    // actually counted into the total, instead of the
-                    // raw q * c this row previously showed (always 0
-                    // for a cost-basis-suppressed multi-unit portion).
-                    const rowValue = rowCostValue(row.productName, row.unit, q, c);
                     // [Selling-first per-row display] Selling value is
                     // always the raw quantity * sellingPrice — never
                     // basis-derived like cost, because Mode A already
@@ -2953,77 +2949,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           />
                         </div>
 
-                        {/* [Fix — empty column left a visible gap in the
-                            row] Once suppressed (portion's unit differs
-                            from the product's purchase unit, with a
-                            confirmed cost basis), this field is removed
-                            entirely — not just its input, the whole grid
-                            cell — so the row's remaining fields flow
-                            into the freed space instead of leaving a
-                            blank rectangle where Compra/Un used to be.
-                            The derived cost is never lost: it's already
-                            surfaced right below in this row's own
-                            "Custo: X" caption (see the Valor block
-                            further down, which reads rowCostValue — the
-                            exact same deriveCostContribution
-                            derivation). Nothing for the Owner to look at
-                            twice: only Qtd, Unid and Venda/Un need
-                            filling in for a suppressed portion.
-                            UI-only: row.costPrice itself is left
-                            completely untouched, never cleared or
-                            derived here — the moment this portion's unit
-                            is edited back to the purchase unit, the
-                            normal editable input reappears with
-                            whatever value was already there. */}
-                        {!isCostFieldSuppressed(row.productName, row.unit) && (
-                          <div>
-                            <label className={fieldLabelClass}>Compra/Un ({currencySymbol})</label>
-                            <input
-                              type="number"
-                              min="0"
-                              step="0.01"
-                              value={row.costPrice}
-                              onChange={(e) => updateCatalogRow(productId, { costPrice: e.target.value })}
-                              disabled={isConfirmed}
-                              className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
-                            />
-                            {/* [Bug fix — "Venda/Un"/"Compra/Un" ambiguity]
-                                Each field's own label already names it
-                                precisely ("Compra/Un" above) — but for a
-                                multi-unit product "Un" is ALSO the
-                                literal name of the smallest chain unit
-                                (Cx/Emb/Un), so an Owner easily misreads
-                                it as "price per bottle" even when this
-                                row's own Unid is Cx or Emb. This caption
-                                directly names THIS row's actual selected
-                                unit, so the price's real meaning is
-                                unambiguous regardless of which unit is
-                                selected. */}
-                            <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                              {currencySymbol} por {row.unit.trim() || 'un'}
-                            </p>
-                            {/* [Manual data-entry error investigation,
-                                Finding 3] Live-computed, never stored
-                                state — same "leave it, signal the
-                                mistake" pattern as Mode A's own
-                                unit-mismatch warning, above. Compares
-                                the CURRENTLY TYPED price against the
-                                product's own remembered price
-                                (getRememberedPriceForRow, above),
-                                converted to this row's current unit. */}
-                            {(() => {
-                              const check = checkPriceDeviation(parseFloat(row.costPrice), getRememberedPriceForRow(row, 'cost'));
-                              if (!check.showWarning) return null;
-                              return (
-                                <p className="text-[11px] text-amber-600 font-medium mt-0.5 leading-snug">
-                                  Este preço é {Math.round(check.deviationPercent! * 100)}%{' '}
-                                  {check.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para
-                                  este produto — confirme que não é um erro de digitação.
-                                </p>
-                              );
-                            })()}
-                          </div>
-                        )}
+                        {/* [§44 — Periodic Contagem Cost-Price Removal,
+                            FR-71; Implementation Authorization §2 item 3]
+                            The purchase-unit-portion Cost Price input
+                            (formerly here, "Compra/Un") is removed — the
+                            Owner is no longer asked to enter Cost Price
+                            during Periodic Contagem, for any portion, of
+                            any unit. Every non-purchase-unit portion was
+                            already suppressed by isCostFieldSuppressed
+                            (Decision 37, B.4, unchanged); this closes the
+                            one remaining case. The cost figure, where a
+                            governed basis exists, continues to be derived
+                            exactly as before (FR-72, unchanged
+                            arithmetic) — only the Owner-facing input and
+                            its attached deviation warning are removed
+                            (FR-77's cost-side retirement). No replacement
+                            input, workaround, or new fallback source is
+                            introduced. */}
 
                         <div>
                           <label className={fieldLabelClass}>Venda/Un ({currencySymbol})</label>
@@ -3036,14 +2978,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             disabled={isConfirmed}
                             className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
-                          {/* See the Compra/Un caption's own comment,
-                              immediately above — identical reasoning,
-                              applied to the selling-price field. */}
+                          {/* [Bug fix — "Venda/Un"/"Compra/Un" ambiguity]
+                              For a multi-unit product "Un" is ALSO the
+                              literal name of the smallest chain unit
+                              (Cx/Emb/Un), so an Owner easily misreads
+                              this as "price per bottle" even when this
+                              row's own Unid is Cx or Emb. This caption
+                              directly names THIS row's actual selected
+                              unit, so the price's real meaning is
+                              unambiguous regardless of which unit is
+                              selected. */}
                           <p className="text-[11px] text-gray-500 mt-0.5 truncate">
                             {currencySymbol} por {row.unit.trim() || 'un'}
                           </p>
                           {/* [Manual data-entry error investigation,
-                              Finding 3] Same check as Compra/Un, above. */}
+                              Finding 3] Live-computed, never stored state
+                              — compares the CURRENTLY TYPED selling price
+                              against the product's own remembered price
+                              (getRememberedPriceForRow, above), converted
+                              to this row's current unit. [§44 — Periodic
+                              Contagem Cost-Price Removal, FR-77] The
+                              cost-side counterpart of this check
+                              (formerly here) is retired — there is no
+                              longer an Owner-typed Cost Price to check.
+                              This Selling Price check is unaffected and
+                              continues to operate exactly as before. */}
                           {(() => {
                             const check = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
                             if (!check.showWarning) return null;
@@ -3059,18 +3018,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                         <div className="flex items-end gap-1.5">
                           <div className="flex-1 min-w-0">
-                            {/* [Feature — selling price shown first,
-                                cost as a small secondary figure]
-                                Mirrors the bottom hero card's own
-                                established pattern exactly (Valor de
-                                Venda as the bold primary figure, Valor
-                                Físico/Custo smaller and muted directly
-                                beneath it) — same visual hierarchy, now
-                                also applied per-row so an Owner reading
-                                down the list sees selling value first,
-                                the figure that actually drives Business
-                                Worth, with cost still visible but
-                                de-emphasized rather than hidden. */}
+                            {/* [§44 — Periodic Contagem Cost-Price
+                                Removal — Implementation Clarification]
+                                The per-row "Custo: X" secondary caption
+                                (formerly here) is removed. FR-71 removes
+                                Owner-entered Cost Price from Periodic
+                                Contagem; leaving a per-row Cost
+                                presentation would keep Cost Price as an
+                                Owner-facing concept in the very interface
+                                it was removed from. Selling Value remains
+                                the sole per-row figure — no replacement
+                                cost UI or anomaly indicator introduced. */}
                             <label className={fieldLabelClass}>Valor</label>
                             <div
                               className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
@@ -3079,11 +3037,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             >
                               {isBlank ? 'Não contado' : formatCurrency(rowSellingValue, currencySymbol)}
                             </div>
-                            {!isBlank && (
-                              <p className="text-[11px] text-gray-500 mt-0.5">
-                                Custo: {formatCurrency(rowValue, currencySymbol)}
-                              </p>
-                            )}
                             {/* [Feature — per-row Save + confirm] Shown
                                 right on the row the moment Save fails
                                 its own validation — never only
@@ -3401,61 +3354,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 />
                               </div>
 
-                              {/* [Fix — empty column left a visible gap
-                                  in the row] Same "remove the whole grid
-                                  cell entirely" change as the
-                                  catalog-row cost field, above — the
-                                  derived cost is already surfaced in
-                                  this row's own "Custo: X" caption
-                                  further down (rowCostValue, same
-                                  deriveCostContribution derivation).
-                                  UI-only: row.costPrice itself is left
-                                  completely untouched. */}
-                              {!isCostFieldSuppressed(row.productName, row.unit) && (
-                                <div>
-                                  <label className={fieldLabelClass}>Compra/Un ({currencySymbol})</label>
-                                  <input
-                                    type="number"
-                                    min="0"
-                                    step="0.01"
-                                    value={row.costPrice}
-                                    onChange={(e) => updateManualRow(idx, { costPrice: e.target.value })}
-                                    disabled={isConfirmed}
-                                    className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                  />
-                                  {/* [Bug fix — "Venda/Un"/"Compra/Un"
-                                      ambiguity] See the catalog-row block's
-                                      identical caption/comment above — same
-                                      reasoning, applied here to a
-                                      manually-added product's own portion
-                                      rows. */}
-                                  <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                                    {currencySymbol} por {row.unit.trim() || 'un'}
-                                  </p>
-                                  {/* [Manual data-entry error
-                                      investigation, Finding 3] Same
-                                      check as the catalog-row block's
-                                      own identical field, above —
-                                      getRememberedPriceForRow resolves
-                                      this manual row's product by NAME
-                                      (it carries no productId), so an
-                                      existing product's portion added
-                                      via "+ Adicionar Porção" gets the
-                                      same protection a catalog row
-                                      does. */}
-                                  {(() => {
-                                    const check = checkPriceDeviation(parseFloat(row.costPrice), getRememberedPriceForRow(row, 'cost'));
-                                    if (!check.showWarning) return null;
-                                    return (
-                                      <p className="text-[11px] text-amber-600 font-medium mt-0.5 leading-snug">
-                                        Este preço é {Math.round(check.deviationPercent! * 100)}%{' '}
-                                        {check.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado
-                                        para este produto — confirme que não é um erro de digitação.
-                                      </p>
-                                    );
-                                  })()}
-                                </div>
-                              )}
+                              {/* [§44 — Periodic Contagem Cost-Price
+                                  Removal, FR-71; Implementation
+                                  Authorization §2 item 3] The
+                                  purchase-unit-portion Cost Price input
+                                  (formerly here, "Compra/Un") is removed
+                                  from the manual-row path too — same
+                                  reasoning as the catalog-row block,
+                                  above. Non-purchase-unit suppression
+                                  (isCostFieldSuppressed, Decision 37,
+                                  B.4) is unchanged; this closes the one
+                                  remaining case for a manually-added
+                                  product's own portion rows. */}
 
                               <div>
                                 <label className={fieldLabelClass}>Venda/Un ({currencySymbol})</label>
@@ -3472,8 +3382,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   {currencySymbol} por {row.unit.trim() || 'un'}
                                 </p>
                                 {/* [Manual data-entry error investigation,
-                                    Finding 3] Same check as Compra/Un,
-                                    above. */}
+                                    Finding 3] Selling Price deviation
+                                    check — unaffected by §44. [§44] The
+                                    cost-side counterpart (formerly here)
+                                    is retired, per FR-77 — no Owner-typed
+                                    Cost Price remains to check. */}
                                 {(() => {
                                   const check = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
                                   if (!check.showWarning) return null;
@@ -3489,14 +3402,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                               <div className="flex items-end gap-1.5">
                                 <div className="flex-1 min-w-0">
-                                  {/* [Feature — selling price shown
-                                      first, cost as a small secondary
-                                      figure] Same change, same
-                                      reasoning, as the catalog-row
-                                      block above — mirrors the bottom
-                                      hero card's own established
-                                      selling-primary/cost-secondary
-                                      pattern. */}
+                                  {/* [§44 — Periodic Contagem Cost-Price
+                                      Removal — Implementation
+                                      Clarification] The per-row "Custo: X"
+                                      caption (formerly here) is removed —
+                                      same reasoning as the catalog-row
+                                      block, above. Selling Value remains
+                                      the sole per-row figure. */}
                                   <label className={fieldLabelClass}>Valor</label>
                                   <div
                                     className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight break-words ${
@@ -3510,15 +3422,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                           currencySymbol
                                         )}
                                   </div>
-                                  {row.quantity.trim() !== '' && (
-                                    <p className="text-[11px] text-gray-500 mt-0.5">
-                                      Custo:{' '}
-                                      {formatCurrency(
-                                        rowCostValue(row.productName, row.unit, Number(row.quantity) || 0, Number(row.costPrice) || 0),
-                                        currencySymbol
-                                      )}
-                                    </p>
-                                  )}
                                   {/* [Feature — per-row Save + confirm]
                                       Same as the catalog row's own
                                       identical error display, above. */}
@@ -3595,15 +3498,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <span>Adicionar produto que não está no catálogo</span>
           </button>
 
-          {/* Total + comparison — hero serif figure, comparison line below a
-              thin divider so both fit within the same navy surface.
-              Selling-price total is the PRIMARY/hero figure: this is the
-              exact figure (liveTally.totalSellingValue, same shape as
-              productValuationTotal = normalizedTotalSellingValue in
-              AppContext.tsx's recordStockCount) that becomes the new
+          {/* [§44 — Periodic Contagem Cost-Price Removal, FR-74; Rule 8
+              Finding 4 (confirmed by Product Architect: total + trend
+              indicator removed together, as one unit); Implementation
+              Authorization §2 item 4, §5] The live cost-total secondary
+              line ("Valor Físico (Custo) Contado até Agora") and its
+              cost-basis "vs. Valor Esperado" trend indicator (formerly
+              here, driven by comparisonBaseline/diff/diffPct) are both
+              removed. Selling-price total is the SOLE live total shown
+              during entry: the exact figure (liveTally.totalSellingValue,
+              same shape as productValuationTotal =
+              normalizedTotalSellingValue in AppContext.tsx's
+              recordStockCount) that becomes the new
               BusinessWorthSnapshot.measuredBusinessWorth's own valuation
               input the moment this count is confirmed — Business Worth is
-              driven by selling/market value here, not cost. */}
+              driven by selling/market value here, not cost. No
+              replacement cost-anomaly indicator is introduced. */}
           <div className="card-dark-gradient rounded-2xl px-5 py-4 space-y-3">
             <div className="flex items-center justify-between gap-3">
               <span className="font-semibold text-white/70 text-[13px]">Valor de Venda Contado até Agora</span>
@@ -3611,46 +3521,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 {formatCurrency(liveTally.totalSellingValue, currencySymbol)}
               </span>
             </div>
-
-            {/* Secondary, informational only — the "vs. Valor Esperado"
-                comparison below remains strictly cost-basis
-                (totalPurchaseValue vs. comparisonBaseline), per the
-                approved Expected Current Stock Value formula
-                (10-expected-stock-value-amendment.md Part 2: "Confirmed
-                Initial Capital + cost value of governed StockBatch
-                inventory") — that comparison is unchanged by which total
-                is shown as primary above; it still compares cost against
-                cost. This line is kept directly above it purely so the
-                cost figure the comparison references is still visible. */}
-            <div className="flex items-center justify-between gap-3">
-              <span className="text-white/50 text-xs">Valor Físico (Custo) Contado até Agora</span>
-              <span className="text-white/70 text-[13px] tabular-nums">
-                {formatCurrency(liveTally.totalPurchaseValue, currencySymbol)}
-              </span>
-            </div>
-
-            {/* [Amendment v1.0] Shown whenever there's a meaningful baseline to
-                compare against — i.e. Expected Current Stock Value is nonzero
-                (Initial Capital confirmed, or batches already exist). This
-                remains the one, aggregate, whole-business exception BDR-0009
-                Part 5 explicitly permits — never decomposed per product. */}
-            {comparisonBaseline > 0 && (
-              <div className="flex items-center justify-between gap-2 pt-3 border-t border-white/10 text-xs">
-                <span className="text-white/50">
-                  vs. Valor Esperado ({formatCurrency(comparisonBaseline, currencySymbol)})
-                </span>
-                <span
-                  className={`type-number tabular-nums flex items-center gap-1 ${
-                    diff > 0 ? 'text-emerald-400' : diff < 0 ? 'text-rose-400' : 'text-white/50'
-                  }`}
-                >
-                  {diff > 0 ? <TrendingUp className="w-3.5 h-3.5" /> : diff < 0 ? <TrendingDown className="w-3.5 h-3.5" /> : <Minus className="w-3.5 h-3.5" />}
-                  {diff >= 0 ? '+' : ''}
-                  {formatCurrency(diff, currencySymbol)} ({diffPct >= 0 ? '+' : ''}
-                  {diffPct.toFixed(1)}%)
-                </span>
-              </div>
-            )}
           </div>
 
           <button

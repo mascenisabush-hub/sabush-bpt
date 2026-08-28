@@ -46,6 +46,14 @@ describe('normal confirmation', () => {
       costPrice: 50,
       sellingPrice: 65,
       totalValue: 500,
+      // [§44 — Periodic Contagem Cost-Price Removal, Rule 8 Finding 3]
+      // No costBasisByProductName map is passed in this test, so
+      // deriveCostContribution's hasValidBasis is false for every item
+      // — costBasisEstablished is therefore false, not absent (the
+      // function always returns a defined boolean, never omits the
+      // field). See stockCount.ts's own normalizeStockCountItems
+      // comment.
+      costBasisEstablished: false,
     });
     // totalValue stays cost-based (investment basis) — sellingPrice never
     // participates in it, matching Expected Current Stock Value's

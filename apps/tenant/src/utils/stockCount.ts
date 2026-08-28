@@ -71,6 +71,12 @@ export interface NormalizedStockCountItem {
   sellingPrice: number;
   totalValue: number;
   valuationMode?: 'A' | 'B';
+  // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8 Finding 3]
+  // See StockCountItem.costBasisEstablished's own comment (types.ts) for
+  // the full meaning. Captured here from deriveCostContribution's own
+  // existing, already-computed `derived` return value — no new
+  // calculation. Mirrors StockCountItem's own field 1:1.
+  costBasisEstablished?: boolean;
 }
 
 export interface NormalizeStockCountItemsResult {
@@ -127,7 +133,7 @@ export function normalizeStockCountItems(
     // fallback reproduces `quantity * costPrice` exactly — byte-for-
     // byte identical to this function's pre-correction behavior.
     const basis = costBasisByProductName?.get(trimmedName.toLowerCase());
-    const { value: costContribution } = deriveCostContribution(quantity, unit, costPrice, basis);
+    const { value: costContribution, derived: costBasisEstablished } = deriveCostContribution(quantity, unit, costPrice, basis);
     const itemTotal = Number(costContribution.toFixed(2));
     const itemSellingTotal = Number((quantity * sellingPrice).toFixed(2));
     totalValue += itemTotal;
@@ -145,6 +151,12 @@ export function normalizeStockCountItems(
       // matching this codebase's existing Firestore-safe-optional-field
       // discipline (workingRowToDraftItem, this same file, below).
       ...(raw.valuationMode ? { valuationMode: raw.valuationMode } : {}),
+      // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8
+      // Finding 3] deriveCostContribution's own `derived` value, always
+      // a defined boolean regardless of whether costBasisByProductName
+      // was supplied — see StockCountItem.costBasisEstablished's own
+      // comment (types.ts).
+      costBasisEstablished,
     });
   }
 
@@ -231,6 +243,15 @@ export interface StockCountTallyItem {
   sellingPrice: number;
   purchaseValue: number; // quantity * costPrice
   sellingValue: number; // quantity * sellingPrice
+  // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8 Finding 3]
+  // See StockCountItem.costBasisEstablished's own comment (types.ts) for
+  // the full meaning. Captured here from deriveCostContribution's own
+  // existing, already-computed `derived` return value — no new
+  // calculation. Owner-facing-preview counterpart of
+  // NormalizedStockCountItem.costBasisEstablished; both are always
+  // computed identically from the same shared helper, per this file's
+  // own "preview and persistence can never disagree" guarantee.
+  costBasisEstablished: boolean;
 }
 
 export interface StockCountTallyResult {
@@ -298,7 +319,7 @@ export function tallyStockCountRows(
     // overwritten" rule for the persisted StockCountTallyItem.costPrice
     // field below.
     const basis = costBasisByProductName?.get(trimmedName.toLowerCase());
-    const { value: costContribution } = deriveCostContribution(quantity, unit, costPrice, basis);
+    const { value: costContribution, derived: costBasisEstablished } = deriveCostContribution(quantity, unit, costPrice, basis);
     const purchaseValue = Number(costContribution.toFixed(2));
     const sellingValue = Number((quantity * sellingPrice).toFixed(2));
 
@@ -310,6 +331,9 @@ export function tallyStockCountRows(
       sellingPrice,
       purchaseValue,
       sellingValue,
+      // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8
+      // Finding 3] See StockCountTallyItem's own comment, above.
+      costBasisEstablished,
     });
 
     totalPhysicalUnits += quantity;

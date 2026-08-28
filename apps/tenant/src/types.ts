@@ -561,6 +561,24 @@ export interface StockCountItem {
   // materially affect valuation" requirement), never a second source of
   // truth for the valuation itself.
   valuationMode?: ContagemValuationMode;
+  // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8 Finding 3;
+  // Implementation Authorization §2 item 1] Display/audit-only marker
+  // distinguishing a governed-basis-derived cost from a genuinely
+  // unknown one, sourced from deriveCostContribution's own existing
+  // `derived` return value (fr67CostBasisConversion.ts) — never a new
+  // calculation. `true`: this portion's cost was derived from a valid
+  // governed basis (Product.costPrice + confirmed unitRelationship),
+  // including the purchase-unit portion. `false`: no valid governed
+  // basis existed for this product; costPrice above is `0` and MUST be
+  // read as not established, never as a genuine observed/derived zero.
+  // Absent on every item persisted before this capability shipped,
+  // mirroring sellingPrice's/valuationMode's own established
+  // optionality above — never backfilled. NEVER read by any valuation
+  // calculation (costPrice/totalValue/totalSellingValue are computed
+  // identically regardless of this field's value or absence) — mirrors
+  // valuationMode's own "never a second source of truth" discipline
+  // exactly.
+  costBasisEstablished?: boolean;
 }
 
 // [Business Worth Evolution — Implementation Authorization, Increment 4;
