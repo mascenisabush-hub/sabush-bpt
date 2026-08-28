@@ -4,7 +4,7 @@ import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatt
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCount, StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
-import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
+import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 // [Manual data-entry error investigation, Finding 3] Shared with Add
 // Stock (AddStockView.tsx) — see that utility's own header comment for
@@ -68,6 +68,7 @@ import {
   Undo2,
   X,
   Package,
+  Pencil,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -634,16 +635,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // product as it's entered instead of only discovering a mistake in
   // the final review, and be able to leave/return mid-count with
   // clear confirmation of what's already been verified] A row is
-  // "confirmed" once its own Save action passed validation — distinct
-  // from merely having a quantity typed in (a blank row is legitimately
-  // "not yet counted," not an error). The underlying draft autosave
-  // (scheduleDraftSave, below) is completely unaffected by any of
-  // this — it keeps saving raw in-progress field values regardless of
-  // confirmation state, exactly as it already did; confirmation is a
-  // purely additional, explicit safety/visibility layer on top, never
-  // a gate on the existing autosave safety net.
-  const [confirmedCatalogProductIds, setConfirmedCatalogProductIds] = useState<Set<string>>(new Set());
-  const [confirmedManualRowIndices, setConfirmedManualRowIndices] = useState<Set<number>>(new Set());
+  // "validated" once its own "Validar" action passed validation —
+  // distinct from merely having a quantity typed in (a blank row is
+  // legitimately "not yet counted," not an error).
+  // [Decision 40 — Validar Workflow, FR-N6; Implementation
+  // Authorization §1 item 3] Previously tracked here as two local,
+  // non-persistent `useState<Set>` values. Decision 40 replaces that
+  // local-only mechanism with a persisted `validated?: boolean` field
+  // living directly on each row in `catalogRows`/`manualRows` (see
+  // `StockCountWorkingRow.validated`, utils/stockCount.ts), read via
+  // `row.validated` at every site that used to consult these two
+  // Sets. This is why they no longer exist as separate state here —
+  // carrying both a Set and a row field forward would risk the two
+  // silently disagreeing; the row field is the single source of
+  // truth. The underlying draft autosave (`scheduleRowDraftSave`,
+  // below) is unaffected by any of this in kind — it keeps saving the
+  // row's current full state regardless of validated status, exactly
+  // as it already did for every other field; validating a row is
+  // simply one more field write routed through the exact same
+  // `updateCatalogRow`/`updateManualRow` path every other edit uses,
+  // never a new autosave trigger.
   // Inline validation messages from a failed Save click — shown right
   // on that row, not buried in a final review, so a mistake is visible
   // and fixable the moment it's made.
@@ -785,8 +796,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setDate(getTodayDateString());
     setCatalogRows({});
     setManualRows([]);
-    setConfirmedCatalogProductIds(new Set());
-    setConfirmedManualRowIndices(new Set());
+    // [Decision 40 — Validar Workflow] No separate reset needed for
+    // validated status — it lives on each row in `catalogRows`/
+    // `manualRows`, both already cleared immediately above.
     setCatalogRowSaveError({});
     setManualRowSaveError({});
     setProductSearch('');
@@ -1077,22 +1089,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       delete next[productId];
       return next;
     });
-    setConfirmedCatalogProductIds((prev) => new Set(prev).add(productId));
+    // [Decision 40 — Validar Workflow, FR-N5/FR-N6; Implementation
+    // Authorization §1 items 3/9] "Validar" writes `validated: true`
+    // onto the row itself via the exact same `updateCatalogRow` path
+    // every other field edit already uses — this is what makes the
+    // row's existing per-row autosave timer (`scheduleRowDraftSave`,
+    // keyed `catalog:${productId}`) pick up and persist this change
+    // with no new trigger, and what makes the row leave the active
+    // workspace via `visibleCatalogEntries`'s own filter, below,
+    // without ever removing it from `catalogRows` itself.
+    updateCatalogRow(productId, { validated: true });
   };
 
-  // Re-opening an already-saved row is deliberately gated behind an
-  // explicit confirmation — Owner-requested ("queres editar?") — so
-  // working through a long list never risks nudging an already-
+  // Re-opening an already-validated row is deliberately gated behind
+  // an explicit confirmation — Owner-requested ("queres editar?") —
+  // so working through a long list never risks nudging an already-
   // verified product's fields by accident while reaching for the next
-  // row's Save button.
+  // row's Validar button.
   const handleEditCatalogRow = (productId: string) => {
-    if (!window.confirm('Este produto já foi guardado. Queres editá-lo?')) return;
-    setConfirmedCatalogProductIds((prev) => {
-      if (!prev.has(productId)) return prev;
-      const next = new Set(prev);
-      next.delete(productId);
-      return next;
-    });
+    if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
+    // [Decision 40 — Validar Workflow] Inverse of Validar, above —
+    // same write path, same autosave mechanism, no special-casing.
+    updateCatalogRow(productId, { validated: false });
   };
 
   // [Manual data-entry error investigation, Finding 3 — Owner-requested]
@@ -1509,9 +1527,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...fields } : row));
     setManualRows(nextManualRows);
     // [Decision 39a] Keyed by this row's own array index — matching
-    // confirmedManualRowIndices/manualRowSaveError's own existing
-    // identity scheme (§2 of the Implementation Plan). Never resets
-    // another manual row's, or any catalog row's, own timer.
+    // `manualRowSaveError`'s own existing identity scheme (§2 of the
+    // Implementation Plan). Never resets another manual row's, or any
+    // catalog row's, own timer.
     scheduleRowDraftSave(`manual:${index}`);
   };
 
@@ -1545,9 +1563,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setManualRows(nextManualRows);
     // [Decision 39a; Implementation Authorization §1 item 5] Re-index
     // the manual-row timer map FIRST — mirroring
-    // confirmedManualRowIndices/manualRowSaveError's own existing
-    // pattern immediately below, exactly (same i < index / i > index
-    // shift) — so a pending timer scheduled against a later row never
+    // `manualRowSaveError`'s own existing pattern immediately below,
+    // exactly (same i < index / i > index shift) — so a pending timer
+    // scheduled against a later row never
     // ends up firing under a now-reused, different row's index. The
     // removed row's own timer (if any) is cancelled outright; every
     // later row's timer is re-keyed, never cancelled, so its own
@@ -1570,21 +1588,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     });
     rowDebounceTimersRef.current = shifted;
     scheduleRowDraftSave('__meta__');
-    // [Feature — per-row Save + confirm] confirmedManualRowIndices/
-    // manualRowSaveError are keyed by array index, same as every other
-    // manual-row identity in this file (updateManualRow, this function
-    // itself) — removing a row shifts every LATER index down by one,
-    // so both maps are re-indexed here or a later row's confirmed/
-    // error status would silently attach to the wrong row after this
-    // deletion.
-    setConfirmedManualRowIndices((prev) => {
-      const next = new Set<number>();
-      prev.forEach((i) => {
-        if (i < index) next.add(i);
-        else if (i > index) next.add(i - 1);
-      });
-      return next;
-    });
+    // [Feature — per-row Save + confirm] `manualRowSaveError` is keyed
+    // by array index, same as every other manual-row identity in this
+    // file (updateManualRow, this function itself) — removing a row
+    // shifts every LATER index down by one, so this map is re-indexed
+    // here or a later row's error status would silently attach to the
+    // wrong row after this deletion.
+    // [Decision 40 — Validar Workflow, FR-N9; Implementation
+    // Authorization §1 items 4/8] `validated` status needs NO
+    // equivalent re-indexing block here — it was moved off a
+    // parallel, index-keyed Set (`confirmedManualRowIndices`, removed)
+    // and onto the row object itself (`StockCountWorkingRow.validated`).
+    // `manualRows.filter((_, i) => i !== index)`, above, already
+    // carries each remaining row's own `validated` flag forward with
+    // it automatically, exactly like it already carries `quantity`/
+    // `costPrice`/every other field — this is the concrete
+    // simplification Rule 8 §C/this Plan's §1c named as the reason to
+    // store validated state on the row rather than in a Set.
     setManualRowSaveError((prev) => {
       const next: Record<number, string> = {};
       Object.entries(prev).forEach(([key, value]) => {
@@ -1619,17 +1639,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       delete next[index];
       return next;
     });
-    setConfirmedManualRowIndices((prev) => new Set(prev).add(index));
+    // [Decision 40 — Validar Workflow, FR-N5/FR-N6] Manual-row
+    // counterpart to handleSaveCatalogRow's own identical write, above
+    // — same `updateManualRow` path every other field edit already
+    // uses, same autosave mechanism, no new trigger.
+    updateManualRow(index, { validated: true });
   };
 
   const handleEditManualRow = (index: number) => {
-    if (!window.confirm('Este produto já foi guardado. Queres editá-lo?')) return;
-    setConfirmedManualRowIndices((prev) => {
-      if (!prev.has(index)) return prev;
-      const next = new Set(prev);
-      next.delete(index);
-      return next;
-    });
+    if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
+    // [Decision 40 — Validar Workflow] Inverse of Validar, above.
+    updateManualRow(index, { validated: false });
   };
 
   // [Business Worth Evolution — Decision 37, B.3: Multiple
@@ -1777,10 +1797,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
   };
 
+  // [Decision 40 — Validar Workflow, FR-N8; Implementation
+  // Authorization §1 item 4] A validated row is excluded from the
+  // active workspace by the SAME kind of filter `!row.removed` already
+  // applies, one term added alongside it (`!row.validated`),
+  // falsy-safe so a legacy/absent value is treated as "not validated"
+  // — never removed from `catalogRows` itself. `removed` and
+  // `validated` are orthogonal; a row that is somehow both is treated
+  // as removed for THIS view's purposes (it is not offered back as an
+  // active row to work on), and is surfaced via the existing "Removidos"
+  // list rather than the new accumulated list below.
   const visibleCatalogEntries = useMemo(() => {
     const search = productSearch.trim().toLowerCase();
     return Object.entries(catalogRows)
-      .filter(([, row]) => !row.removed)
+      .filter(([, row]) => !row.removed && !row.validated)
       .filter(([, row]) => !search || row.productName.toLowerCase().includes(search))
       .sort((a, b) => a[1].productName.localeCompare(b[1].productName));
   }, [catalogRows, productSearch]);
@@ -1790,11 +1820,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     [catalogRows]
   );
 
-  // The full working list — every catalog row (visible, removed, or
-  // still-blank alike) plus every manual row — is what actually gets
-  // tallied. Search only ever affects what's displayed, never what's
-  // counted, so a removed/filtered-out product is never silently
-  // dropped from Not Counted.
+  // [Decision 40 — Validar Workflow, FR-N8; Implementation
+  // Authorization §1 item 5] The accumulated/validated area — every
+  // catalog row the Owner has pressed "Validar" on, still fully
+  // present in `catalogRows`, simply rendered here instead of in the
+  // active grid above. Excludes a row also marked `removed` (see
+  // `visibleCatalogEntries`'s own comment, immediately above) so a row
+  // is never listed in both places at once.
+  const validatedCatalogEntries = useMemo(
+    () => Object.entries(catalogRows).filter(([, row]) => row.validated && !row.removed),
+    [catalogRows]
+  );
+
+  // The full working list — every catalog row (visible, removed,
+  // validated, or still-blank alike) plus every manual row — is what
+  // actually gets tallied. Search/validated-status only ever affect
+  // what's displayed, never what's counted, so a removed/validated/
+  // filtered-out product is never silently dropped from Not Counted
+  // or from finalization. [Decision 40 — Validar Workflow;
+  // Implementation Authorization §1 item 4 / Rule 8 §C] Deliberately
+  // NOT filtered by `validated` — this is the load-bearing guarantee
+  // that a validated row remains fully available to autosave, resume,
+  // review, and finalization even though it has left the active-
+  // workspace view above.
   const allWorkingRows: StockCountWorkingRow[] = useMemo(
     () => [...Object.values(catalogRows), ...manualRows],
     [catalogRows, manualRows]
@@ -1944,6 +1992,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return manualRowGroups.filter((group) => group.displayName.toLowerCase().includes(search));
   }, [manualRowGroups, productSearch]);
 
+  // [Decision 40 — Validar Workflow, FR-N8/FR-N9; Implementation
+  // Authorization §1 items 4/5] Flat list of validated manual-row
+  // portions, for the accumulated/validated area below — each entry
+  // still carries its own stable `idx` into `manualRows` (never
+  // spliced or reordered because of validated status, per FR-N9), so
+  // reopening one is a direct `updateManualRow(idx, { validated: false })`
+  // call, identical to the mechanism used everywhere else in this
+  // file. `manualRowGroups`/`visibleManualRowGroups` themselves are
+  // deliberately NOT filtered by validated status (mirroring
+  // `allWorkingRows`'s own "never filtered by validated" principle,
+  // above) — a group's header/summary content is unaffected by which
+  // of its own portions happen to be validated; only the individual
+  // portion rows rendered inside a group's card are filtered, at the
+  // render site itself, below.
+  const validatedManualRowEntries = useMemo(
+    () =>
+      manualRows
+        .map((row, idx) => ({ idx, row }))
+        .filter(({ row }) => row.validated && !row.removed),
+    [manualRows]
+  );
+
   // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
   // (the live cost-basis trend indicator's own computation) are removed
   // along with the JSX that consumed them and `comparisonBaseline`,
@@ -1970,7 +2040,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
 
-    const tally = tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName);
+    // [Decision 40 — Validar Workflow, FR-N11; Implementation
+    // Authorization §1 item 7] A LOCAL array, built only for this
+    // tally call — `allWorkingRows` itself (used immediately below for
+    // the identity write, and everywhere else in this file) is
+    // deliberately NOT modified. Catalog rows already carry their own
+    // stable `productId` (`buildCatalogRow`); manual rows are tagged
+    // here with their current array index so `StockCountTallyItem`
+    // (below) can carry enough identity for the review screen's
+    // "Corrigir" action to resolve which row to reopen. This ephemeral
+    // tagging is never persisted — `manualRowIndex` is excluded by
+    // construction from workingRowToDraftItem's explicit literal (see
+    // that function's own comment, utils/stockCount.ts).
+    const rowsForTally: StockCountWorkingRow[] = [
+      ...Object.values(catalogRows),
+      ...manualRows.map((row, idx) => ({ ...row, manualRowIndex: idx })),
+    ];
+    const tally = tallyStockCountRows(rowsForTally, effectiveCostBasisByProductName);
     if (tally.countedItems.length === 0) {
       setError('Introduza a quantidade física de pelo menos um produto antes de confirmar.');
       return;
@@ -2147,6 +2233,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         label: type === 'custom' ? label.trim() : undefined,
         date,
         items: pendingTally.countedItems.map((item) => ({
+          // [Decision 40 — Validar Workflow; Implementation
+          // Authorization §1 item 8/§9] This is an explicit, named
+          // literal, not a spread of `item` — `StockCountTallyItem`'s
+          // own `productId`/`manualRowIndex`/`validated` fields (added
+          // for the review screen's "Corrigir" affordance only) are
+          // therefore excluded here by construction, exactly like
+          // every other UI-only field this codebase already keeps out
+          // of a finalized StockCount this same way.
           productName: item.productName,
           quantity: item.quantity,
           unit: item.unit,
@@ -2511,6 +2605,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // Mandatory Counted/Not Counted confirmation (Amendment Part 9) —
   // shown after "Confirmar Contagem" and before anything is actually
   // persisted.
+  // [Decision 40 — Validar Workflow, FR-N11; Implementation
+  // Authorization §1 item 7, §3 items 7-9] "Corrigir" — reopens one
+  // validated product directly from the review screen. Resolves
+  // identity from the extended `StockCountTallyItem` (catalog rows by
+  // `productId`, manual rows by `manualRowIndex` — see
+  // `handleRequestConfirmation`'s own `rowsForTally` tagging, above),
+  // clears that ONE row's `validated` flag via the exact same
+  // `updateCatalogRow`/`updateManualRow` write path every other
+  // validate/edit transition in this file already uses, then discards
+  // `pendingTally` — exactly what "Voltar" already does — so the Owner
+  // is never shown a stale review snapshot alongside freshly-editable
+  // live state. Manual-row identity (array index) is safe here
+  // because this entire function is only reachable while `pendingTally`
+  // is non-null, and no code path in this file mutates `manualRows`'
+  // order or length while the review screen's own render branch
+  // (immediately below) is showing in place of the active workspace.
+  const handleCorrigirTallyItem = (item: StockCountTallyItem) => {
+    if (item.productId) {
+      updateCatalogRow(item.productId, { validated: false });
+    } else if (item.manualRowIndex !== undefined) {
+      updateManualRow(item.manualRowIndex, { validated: false });
+    }
+    setPendingTally(null);
+  };
+
   if (pendingTally) {
     return (
       <div className="max-w-2xl mx-auto py-10 space-y-5">
@@ -2568,37 +2687,71 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 on the one screen whose purpose is a reliable last
                 check before the count becomes permanent. Keyed by
                 productName + unit + index — unique per portion, and
-                stable for this array (StockCountTallyItem carries no
-                row id of its own; index is safe here since this list
-                is always freshly rebuilt from scratch by
-                tallyStockCountRows, never reordered/spliced in place). */}
+                stable for this array (index is safe here since this
+                list is always freshly rebuilt from scratch by
+                tallyStockCountRows, never reordered/spliced in place).
+                [Decision 40 — Validar Workflow] StockCountTallyItem now
+                also carries `productId`/`manualRowIndex` (see
+                `handleRequestConfirmation`'s own tagging, above) —
+                used below only to power "Corrigir," never as a
+                rendering key. */}
             {pendingTally.countedItems.map((item, index) => (
               <div key={`${item.productName}-${item.unit}-${index}`} className="flex items-center justify-between gap-2 px-4 py-2 text-[13px]">
-                <span className="text-[#111827] font-medium truncate">{item.productName}</span>
-                <span className="text-right shrink-0">
-                  <span className="block text-gray-500 tabular-nums">
-                    {item.quantity} {item.unit}
+                <span className="text-[#111827] font-medium truncate flex items-center gap-1.5">
+                  {/* [Decision 40 — Validar Workflow, FR-N11] A small,
+                      informational marker distinguishing a product the
+                      Owner had explicitly validated from one merely
+                      counted while still active — this list already
+                      represents the COMPLETE accumulated Contagem
+                      either way (§3 of this task: validated products
+                      never disappear from the tally). */}
+                  {item.validated && (
+                    <CheckCircle2 className="w-3 h-3 text-emerald-500 shrink-0" strokeWidth={2.5} aria-label="Validado" />
+                  )}
+                  <span className="truncate">{item.productName}</span>
+                </span>
+                <span className="text-right shrink-0 flex items-center gap-2">
+                  <span>
+                    <span className="block text-gray-500 tabular-nums">
+                      {item.quantity} {item.unit}
+                    </span>
+                    {/* [Manual data-entry error investigation, Finding 2]
+                        This is the last screen before a Contagem becomes
+                        permanent and directly feeds Business Worth — and
+                        until this fix it showed quantity but never price,
+                        the field a fat-finger typo (an extra/missing
+                        zero) is most likely to hit. Shows each row's own
+                        selling-price line total — the exact figure
+                        (sellingValue = quantity * sellingPrice) that
+                        productValuationTotal sums across every row below
+                        — never a second, independently recomputed value.
+                        Selling, not cost, because that is what actually
+                        drives measuredBusinessWorth (the same "Venda" the
+                        live entry screen's own primary/hero figure
+                        already establishes, above). text-gray-500 (not
+                        -400), matching this file's own established
+                        contrast correction (see the "Custo:" captions'
+                        own history, elsewhere in this file). */}
+                    <span className="block text-[11px] text-gray-500 tabular-nums">
+                      {formatCurrency(item.sellingValue, currencySymbol)}
+                    </span>
                   </span>
-                  {/* [Manual data-entry error investigation, Finding 2]
-                      This is the last screen before a Contagem becomes
-                      permanent and directly feeds Business Worth — and
-                      until this fix it showed quantity but never price,
-                      the field a fat-finger typo (an extra/missing
-                      zero) is most likely to hit. Shows each row's own
-                      selling-price line total — the exact figure
-                      (sellingValue = quantity * sellingPrice) that
-                      productValuationTotal sums across every row below
-                      — never a second, independently recomputed value.
-                      Selling, not cost, because that is what actually
-                      drives measuredBusinessWorth (the same "Venda" the
-                      live entry screen's own primary/hero figure
-                      already establishes, above). text-gray-500 (not
-                      -400), matching this file's own established
-                      contrast correction (see the "Custo:" captions'
-                      own history, elsewhere in this file). */}
-                  <span className="block text-[11px] text-gray-500 tabular-nums">
-                    {formatCurrency(item.sellingValue, currencySymbol)}
-                  </span>
+                  {/* [Decision 40 — Validar Workflow, FR-N11;
+                      Implementation Authorization §1 item 7] Only
+                      offered for a previously-validated product — an
+                      unvalidated one is already directly reachable and
+                      editable via "Voltar" alone, so no separate
+                      affordance is needed for it here. */}
+                  {item.validated && (
+                    <button
+                      type="button"
+                      onClick={() => handleCorrigirTallyItem(item)}
+                      disabled={isSaving}
+                      className="shrink-0 px-2 py-1 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 transition-colors duration-150 disabled:opacity-60 whitespace-nowrap"
+                    >
+                      Corrigir
+                    </button>
+                  )}
                 </span>
               </div>
             ))}
@@ -2671,7 +2824,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // (Compra/Un) field; §44 removed that field without shrinking the
   // template, so the five real cells were auto-placed into the first
   // five of seven tracks, leaving two tracks unused and squeezing the
-  // combined Valor+Guardar/Editar/remover cell into a track sized for
+  // combined Valor+Validar/Editar/remover cell into a track sized for
   // a single input (112px) instead of a value-plus-actions cell. The
   // last track is widened (190px, versus the old Valor-only 120px) to
   // hold the currency value beside its action buttons without
@@ -3060,15 +3213,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // group identically — the control renders once per
                     // product either way, never once per portion.
                     const isFirstPortionOfMultiPortionGroup = portionLabel.portionIndex === 1;
-                    // [Feature — per-row Save + confirm] Green = this
-                    // row's own Save action passed validation. Red =
-                    // not yet saved — whether still blank (never
-                    // examined) or filled in but not yet confirmed.
-                    // Never gated on quantity > 0: an explicitly-typed
-                    // 0 (genuinely out of stock) is just as validly
+                    // [Feature — per-row Save + confirm; Decision 40 —
+                    // Validar Workflow] Green = this row's own Validar
+                    // action passed validation. Red = not yet
+                    // validated — whether still blank (never examined)
+                    // or filled in but not yet validated. Never gated
+                    // on quantity > 0: an explicitly-typed 0
+                    // (genuinely out of stock) is just as validly
                     // green as any other quantity, per
-                    // validateWorkingRowForSave above.
-                    const isConfirmed = confirmedCatalogProductIds.has(productId);
+                    // validateWorkingRowForSave above. Since this loop
+                    // only ever renders `visibleCatalogEntries` (which
+                    // already excludes any row with `validated: true`,
+                    // above), `isConfirmed` is always false for a row
+                    // that reaches this point — kept as an explicit,
+                    // named value (rather than removing the
+                    // conditional entirely) so the Validar/Editar
+                    // branch below stays structurally identical to the
+                    // manual-row rendering's own equivalent, and so a
+                    // row mid-transition (validated this render,
+                    // filtered out on the next) never flashes a
+                    // mismatched dot in between.
+                    const isConfirmed = row.validated === true;
                     const saveError = catalogRowSaveError[productId];
                     return (
                       <div
@@ -3079,7 +3244,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           <span
                             className={`w-2 h-2 rounded-full shrink-0 ${isConfirmed ? 'bg-emerald-400' : 'bg-rose-300'}`}
                             aria-hidden="true"
-                            title={isConfirmed ? 'Guardado' : 'Ainda não guardado'}
+                            title={isConfirmed ? 'Validado' : 'Ainda não validado'}
                           />
                           <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
                           {/* [Business Worth Evolution — Decision 37,
@@ -3362,14 +3527,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           </div>
                           <div className="flex flex-col items-center gap-1 shrink-0">
                             {/* [Feature — per-row Save + confirm,
-                                Owner-requested] Save validates and
-                                locks this one row immediately, turning
-                                its status dot green — independent of
+                                Owner-requested; Decision 40 —
+                                Validar Workflow] Validar validates and
+                                moves this one row out of the active
+                                workspace into the accumulated/
+                                validated area, below — independent of
                                 the final "Confirmar Contagem" review,
                                 which still runs across everything as a
                                 last safety net. Re-opening an already-
-                                saved row requires the explicit "queres
-                                editar?" confirmation in
+                                validated row is possible from either
+                                the accumulated area (below) or the
+                                review screen's "Corrigir" — both route
+                                through the same "queres editar?"-gated
                                 handleEditCatalogRow, above. */}
                             {isConfirmed ? (
                               <button
@@ -3385,7 +3554,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 onClick={() => handleSaveCatalogRow(productId)}
                                 className="px-2 py-1 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 transition-colors duration-150 whitespace-nowrap"
                               >
-                                Guardar
+                                Validar
                               </button>
                             )}
                             <button
@@ -3610,13 +3779,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       )}
 
                       <div className="space-y-1">
-                        {group.rows.map(({ idx }) => {
+                        {/* [Decision 40 — Validar Workflow, FR-N8/FR-N9;
+                            Implementation Authorization §1 item 4]
+                            Filtered here, at the render site, rather
+                            than in `manualRowGroups`/
+                            `visibleManualRowGroups` themselves (which
+                            stay unfiltered — see those memos' own
+                            comments) — a validated portion is excluded
+                            from THIS active-workspace loop only, never
+                            spliced or reordered in `manualRows` itself.
+                            It reappears in the accumulated/validated
+                            list, below, driven by the separate
+                            `validatedManualRowEntries` memo built from
+                            the same, unmutated `manualRows`. */}
+                        {group.rows.filter(({ idx }) => !manualRows[idx]?.validated).map(({ idx }) => {
                           const row = manualRows[idx];
                           const portionLabel = portionLabels.get(`manual-${idx}`) ?? { isMultiPortion: false, portionIndex: 1, portionCount: 1 };
-                          // [Feature — per-row Save + confirm] Manual-
-                          // row counterpart to the catalog row's own
-                          // identical isConfirmed/saveError, above.
-                          const isConfirmed = confirmedManualRowIndices.has(idx);
+                          // [Decision 40 — Validar Workflow] Read
+                          // directly from the persisted row field —
+                          // replaces the prior local-only
+                          // `confirmedManualRowIndices` Set.
+                          const isConfirmed = row.validated === true;
                           const saveError = manualRowSaveError[idx];
                           return (
                             <div key={idx} className={`group ${rowGridClass} rounded-xl px-2 py-2 transition-colors duration-150 hover:bg-[#FAFBFC]`}>
@@ -3624,7 +3807,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 <span
                                   className={`w-2 h-2 rounded-full shrink-0 ${isConfirmed ? 'bg-emerald-400' : 'bg-rose-300'}`}
                                   aria-hidden="true"
-                                  title={isConfirmed ? 'Guardado' : 'Ainda não guardado'}
+                                  title={isConfirmed ? 'Validado' : 'Ainda não validado'}
                                 />
                                 {/* [Increment B, Checkpoint B6 —
                                     Consolidated Specification §17] Same
@@ -3748,10 +3931,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   )}
                                 </div>
                                 <div className="flex flex-col items-center gap-1 shrink-0">
-                                  {/* [Feature — per-row Save + confirm]
+                                  {/* [Feature — per-row Save + confirm;
+                                      Decision 40 — Validar Workflow]
                                       Manual-row counterpart to the
                                       catalog row's own identical
-                                      Guardar/Editar pair, above. */}
+                                      Validar/Editar pair, above. */}
                                   {isConfirmed ? (
                                     <button
                                       type="button"
@@ -3766,7 +3950,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       onClick={() => handleSaveManualRow(idx)}
                                       className="px-2 py-1 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 transition-colors duration-150 whitespace-nowrap"
                                     >
-                                      Guardar
+                                      Validar
                                     </button>
                                   )}
                                   <button
@@ -3815,6 +3999,76 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
             <span>Adicionar produto que não está no catálogo</span>
           </button>
+
+          {/* [Decision 40 — Validar Workflow, FR-N8; Implementation
+              Authorization §1 item 5] The accumulated/validated area —
+              structurally parallel to "Removidos desta contagem",
+              above, but combining BOTH catalog and manual validated
+              entries into one list, since from the Owner's point of
+              view "Validar" moves a product into the same accumulated
+              place regardless of which section it started in. Every
+              entry here remains fully present in `catalogRows`/
+              `manualRows` (never removed, never spliced — see
+              `visibleCatalogEntries`/`validatedManualRowEntries`'s own
+              comments, above); this list only reads the already-
+              computed `validatedCatalogEntries`/
+              `validatedManualRowEntries` derived views. Reopening
+              reuses the EXISTING `handleEditCatalogRow`/
+              `handleEditManualRow` functions unchanged — the same
+              "queres editar?"-gated, `validated: false`-setting write
+              path already used by the in-row "Editar" button, so a
+              row reopened from here behaves identically to one
+              reopened from the active workspace's own Editar control. */}
+          {(validatedCatalogEntries.length > 0 || validatedManualRowEntries.length > 0) && (
+            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3.5 space-y-2">
+              <p className="text-[13px] font-bold text-emerald-800">
+                Produtos Validados
+                <span className="font-normal text-emerald-700/70 ml-1.5">
+                  ({validatedCatalogEntries.length + validatedManualRowEntries.length})
+                </span>
+              </p>
+              <p className="text-[11px] text-emerald-700/70 leading-relaxed">
+                Já verificados e fora do espaço de contagem ativo. Continuam a fazer
+                parte desta Contagem e serão revistos antes de "Confirmar Contagem".
+              </p>
+              <div className="flex flex-wrap items-center gap-1.5">
+                {validatedCatalogEntries.map(([productId, row]) => {
+                  const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
+                  return (
+                    <button
+                      key={`validated-catalog-${productId}`}
+                      type="button"
+                      onClick={() => handleEditCatalogRow(productId)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 bg-white border border-emerald-200 hover:bg-emerald-100 rounded-full pl-2.5 pr-2 py-1 transition-colors duration-150"
+                    >
+                      {row.productName}
+                      <span className="text-emerald-600/70 font-normal tabular-nums">
+                        {q} {row.unit || 'un'}
+                      </span>
+                      <Pencil className="w-2.5 h-2.5" strokeWidth={2.5} />
+                    </button>
+                  );
+                })}
+                {validatedManualRowEntries.map(({ idx, row }) => {
+                  const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
+                  return (
+                    <button
+                      key={`validated-manual-${idx}`}
+                      type="button"
+                      onClick={() => handleEditManualRow(idx)}
+                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 bg-white border border-emerald-200 hover:bg-emerald-100 rounded-full pl-2.5 pr-2 py-1 transition-colors duration-150"
+                    >
+                      {row.productName}
+                      <span className="text-emerald-600/70 font-normal tabular-nums">
+                        {q} {row.unit || 'un'}
+                      </span>
+                      <Pencil className="w-2.5 h-2.5" strokeWidth={2.5} />
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
 
           {/* [§44 — Periodic Contagem Cost-Price Removal, FR-74; Rule 8
               Finding 4 (confirmed by Product Architect: total + trend

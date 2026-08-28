@@ -227,6 +227,12 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
       costPrice: string;
       sellingPrice: string;
       removed?: boolean;
+      // [Decision 40 — Validar Workflow, FR-N6/FR-N7] Additive
+      // optional field, exercised here the exact same way `removed`
+      // already is, immediately above — same SANDBOX DISCLOSURE
+      // (header of this file) applies: typechecked, not run
+      // end-to-end in the authoring environment.
+      validated?: boolean;
     }> = [];
     for (let i = 0; i < 280; i++) {
       // Mix of blank, zero, and positive quantities, and a scattering of
@@ -240,12 +246,27 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
         costPrice: '10.5',
         sellingPrice: '15.75',
         ...(i % 11 === 0 ? { removed: true } : {}),
+        // [Decision 40 — Validar Workflow] A scattering of validated
+        // rows, independent of the `removed` scattering above (i % 7
+        // vs. i % 11 — deliberately different moduli so the two flags
+        // overlap on some rows and not others, exactly like the real
+        // orthogonal relationship between them in the component).
+        ...(i % 7 === 0 ? { validated: true } : {}),
       });
     }
     // 20 manually-added (non-catalog) rows, no productId — matching
     // §14 item 3's explicit "manual rows" requirement.
     for (let i = 0; i < 20; i++) {
-      items.push({ productName: 'Manual ' + i, quantity: String(i + 1), unit: 'un', costPrice: '5', sellingPrice: '8' });
+      items.push({
+        productName: 'Manual ' + i,
+        quantity: String(i + 1),
+        unit: 'un',
+        costPrice: '5',
+        sellingPrice: '8',
+        // [Decision 40 — Validar Workflow] Every third manual row
+        // validated, same orthogonal-scattering approach as above.
+        ...(i % 3 === 0 ? { validated: true } : {}),
+      });
     }
     assert.equal(items.length, 300);
 
@@ -274,16 +295,49 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
       assert.equal(restored.items[i].quantity, items[i].quantity, `row ${i}: quantity mismatch after round-trip`);
       assert.equal(restored.items[i].removed, items[i].removed, `row ${i}: removed flag mismatch after round-trip`);
       assert.equal(restored.items[i].productId, items[i].productId, `row ${i}: productId mismatch after round-trip`);
+      // [Decision 40 — Validar Workflow] validated survives the same
+      // real Firestore write/read round-trip, at scale, alongside
+      // every other field — not merely at the pure-JS level (that
+      // narrower property is proven separately, without an emulator
+      // dependency, in tests/periodic-contagem-validar-decision-40.test.ts).
+      assert.equal(restored.items[i].validated, items[i].validated, `row ${i}: validated flag mismatch after round-trip`);
     }
     // Manual rows (no productId) specifically preserved.
     const restoredManualCount = restored.items.filter((it) => !it.productId).length;
     assert.equal(restoredManualCount, 20);
+    // [Decision 40 — Validar Workflow] At least one validated row of
+    // each kind (catalog and manual) actually survived the round-trip
+    // as `true` — guards against a vacuously-passing loop above if
+    // every scattered `true` happened to collapse to `undefined`.
+    const restoredValidatedCatalogCount = restored.items.filter((it) => it.productId && it.validated === true).length;
+    const restoredValidatedManualCount = restored.items.filter((it) => !it.productId && it.validated === true).length;
+    assert.ok(restoredValidatedCatalogCount > 0, 'Expected at least one validated catalog row to survive the round-trip.');
+    assert.ok(restoredValidatedManualCount > 0, 'Expected at least one validated manual row to survive the round-trip.');
 
     // The submission identity itself is durable and reads back exactly —
     // this is the specific property Implementation Task §4b depends on:
     // a client that reloads after establishSubmissionIdentity's write
     // has landed must see the SAME identity a retry would need to reuse.
     assert.equal(restored.submissionId, 'sub-recovery-test');
+  });
+
+  it('a draft written without a validated field anywhere (a legacy, pre-Decision-40 draft) round-trips with the field entirely absent on every item, never as a fabricated false', async () => {
+    const db = ownerDbFor();
+    const draft = {
+      items: [
+        { productId: 'p1', productName: 'Arroz', quantity: '10', unit: 'kg', costPrice: '50', sellingPrice: '65' },
+        { productName: 'Manual', quantity: '3', unit: 'un', costPrice: '5', sellingPrice: '8' },
+      ],
+      type: 'monthly',
+      date: '2026-08-10',
+      updatedAt: new Date().toISOString(),
+    };
+    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
+    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
+    const restored = snap.data() as { items: Array<Record<string, unknown>> };
+    for (const item of restored.items) {
+      assert.equal('validated' in item, false, 'A legacy item must resume with validated entirely absent, never as a fabricated false.');
+    }
   });
 
   it('a draft written without a submissionId yet (still editing, before first confirmation) round-trips with the field entirely absent, never as an empty string', async () => {

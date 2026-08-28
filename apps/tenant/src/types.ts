@@ -1374,6 +1374,20 @@ export interface PeriodicStockDraftItem {
   costPrice: string;
   sellingPrice: string;
   removed?: boolean;
+  // [Decision 40 — Validar Workflow, FR-N6] Additive, optional,
+  // omitted entirely when absent — same discipline as `removed`,
+  // immediately above. Set once the Owner has pressed "Validar" on
+  // this row; persisted through the exact same per-row autosave
+  // mechanism (Decision 39) every other field on this item already
+  // uses, so it survives refresh, SPA navigation, and browser close
+  // exactly like `removed` already does. Never a timestamp, never an
+  // audit history — a single boolean is the entire authorized
+  // semantic (Decision 40 §4 non-goals). Consulted only by
+  // PeriodicStockCountView.tsx's own active-workspace/accumulated-
+  // area rendering; never read by finalization, which sources its
+  // data from live component state (`pendingTally`), never from this
+  // draft.
+  validated?: boolean;
 }
 
 export interface PeriodicStockDraft {

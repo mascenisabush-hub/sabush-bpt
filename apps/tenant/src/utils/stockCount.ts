@@ -202,6 +202,42 @@ export interface StockCountWorkingRow {
   // both land in Not Counted, never in Counted, never as an implied
   // zero.
   removed?: boolean;
+  // [Decision 40 — Validar Workflow, FR-N6] The Owner has explicitly
+  // pressed "Validar" on this row: "I have finished checking/counting
+  // this product." Persisted (round-tripped through
+  // workingRowToDraftItem/draftItemToWorkingRow below, mirroring
+  // `removed`'s own existing pattern exactly), never a purely local
+  // UI-only concept — this is the field that replaces the prior
+  // React-state-only `confirmedCatalogProductIds`/
+  // `confirmedManualRowIndices` mechanism. Orthogonal to `removed`:
+  // a row can be validated without being removed, or removed without
+  // ever having been validated; neither implies the other. Consulted
+  // only by PeriodicStockCountView.tsx's own active-workspace/
+  // accumulated-area filtering — never by tallyStockCountRows (which
+  // still counts a validated row exactly like any other, per its own
+  // quantity/removed rules, unaffected by this field) and never
+  // forwarded to a finalized StockCount item (see
+  // PeriodicStockCountView.tsx's own explicit-literal `items` mapping
+  // for recordStockCount, which excludes it by construction). No
+  // timestamp, no audit history — a single boolean is the entire
+  // authorized semantic (Decision 40 §4 non-goals).
+  validated?: boolean;
+  // [Decision 40 — Validar Workflow, Rule 8 §D/§E] UI-only, ephemeral
+  // identity for a manually-added row, used solely so
+  // tallyStockCountRows (below) can attach enough identity to
+  // StockCountTallyItem for the review screen's "Corrigir" action to
+  // resolve which row to reopen. Set only on the caller-local rows
+  // array PeriodicStockCountView.tsx builds specifically for a
+  // confirmation-tally call (never on `manualRows` state itself, and
+  // never on the shared `allWorkingRows` memo used for autosave/live
+  // display) — a manual row has no other stable identity today (see
+  // `updateManualRow`'s/`handleRemoveManualRow`'s own existing
+  // array-index convention, reused here rather than inventing a new
+  // one). Deliberately NOT referenced by workingRowToDraftItem/
+  // draftItemToWorkingRow below (same exclusion-by-construction as
+  // this file's other UI-only fields, above) — never persisted, never
+  // part of the draft schema.
+  manualRowIndex?: number;
   // [Product Memory / UOM — Increment A, Checkpoint 2c] UI-only fields,
   // meaningful only for a manually-added row (productId undefined) that
   // does not match any existing catalog product — the Periodic Contagem
@@ -252,6 +288,33 @@ export interface StockCountTallyItem {
   // computed identically from the same shared helper, per this file's
   // own "preview and persistence can never disagree" guarantee.
   costBasisEstablished: boolean;
+  // [Decision 40 — Validar Workflow, FR-N11; Implementation
+  // Authorization §1 item 7] UI-only fields, existing solely to let
+  // the review screen's "Corrigir" action identify which exact row to
+  // reopen, and to let it visually distinguish a validated product
+  // from one still active when this screen is showing. NEITHER field
+  // is ever included in the explicit-literal `items` mapping
+  // PeriodicStockCountView.tsx's handleConfirmSave builds for
+  // recordStockCount — this type is never itself persisted to
+  // Firestore (it only ever backs this in-memory review screen), so
+  // there is nothing to round-trip and no schema this could leak
+  // into. `productId` mirrors the source row's own existing
+  // `StockCountWorkingRow.productId` (present for a catalog row,
+  // absent for a manual one); `manualRowIndex` mirrors the source
+  // row's own ephemeral `StockCountWorkingRow.manualRowIndex` (see
+  // that field's own comment, above) and is absent for a catalog row.
+  // Exactly one of the two is ever present for a given item.
+  productId?: string;
+  manualRowIndex?: number;
+  // [Decision 40 — Validar Workflow, FR-N11] Whether this product had
+  // been validated ("Validar") at the moment this tally was built —
+  // read directly from the same row this function is already
+  // iterating, never a second pass or a separate lookup. Always a
+  // concrete boolean here (never `undefined`), even though the source
+  // row's own `validated` field is optional, since this type exists
+  // solely to drive review-screen rendering, which needs a definite
+  // yes/no per item.
+  validated: boolean;
 }
 
 export interface StockCountTallyResult {
@@ -334,6 +397,13 @@ export function tallyStockCountRows(
       // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8
       // Finding 3] See StockCountTallyItem's own comment, above.
       costBasisEstablished,
+      // [Decision 40 — Validar Workflow, FR-N11] UI-only identity/
+      // status, read directly from this same row — see
+      // StockCountTallyItem's own comment for why neither of these
+      // ever reaches recordStockCount.
+      productId: row.productId,
+      manualRowIndex: row.manualRowIndex,
+      validated: row.validated === true,
     });
 
     totalPhysicalUnits += quantity;
@@ -381,6 +451,7 @@ export function workingRowToDraftItem(row: StockCountWorkingRow): {
   costPrice: string;
   sellingPrice: string;
   removed?: boolean;
+  validated?: boolean;
 } {
   return {
     ...(row.productId ? { productId: row.productId } : {}),
@@ -390,6 +461,14 @@ export function workingRowToDraftItem(row: StockCountWorkingRow): {
     costPrice: row.costPrice,
     sellingPrice: row.sellingPrice,
     ...(row.removed !== undefined ? { removed: row.removed } : {}),
+    // [Decision 40 — Validar Workflow, FR-N7] Round-tripped exactly
+    // like `removed`, immediately above — omitted entirely when
+    // absent, never written as literal `undefined`. This one line is
+    // what makes every existing Decision 39 autosave/flush trigger
+    // (per-row 800ms timer, interruption flush, SPA unmount flush)
+    // include the current validated state automatically, with no
+    // change to any of those mechanisms themselves.
+    ...(row.validated !== undefined ? { validated: row.validated } : {}),
   };
 }
 
@@ -407,6 +486,7 @@ export function draftItemToWorkingRow(item: {
   costPrice: string;
   sellingPrice: string;
   removed?: boolean;
+  validated?: boolean;
 }): StockCountWorkingRow {
   return {
     productId: item.productId,
@@ -416,5 +496,11 @@ export function draftItemToWorkingRow(item: {
     costPrice: item.costPrice,
     sellingPrice: item.sellingPrice,
     removed: item.removed,
+    // [Decision 40 — Validar Workflow, FR-N7] A legacy item written
+    // before this field existed simply lacks it — copied through as
+    // `undefined` here, exactly like `removed` already is above, and
+    // treated as "not validated" by every filter that reads it
+    // (falsy-safe, never requiring an explicit `false`).
+    validated: item.validated,
   };
 }

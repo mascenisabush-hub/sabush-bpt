@@ -7,6 +7,16 @@
 // Implementation Plan -> Implementation Authorization (SIGNED —
 // SABUSHIMIKE MASCENI, 29 August 2026)]
 //
+// [Decision 40 — Validar Workflow, SIGNED 29 August 2026; separate
+// Rule 8 Assessment (READY), Implementation Plan, and Implementation
+// Authorization (SIGNED 29 August 2026)] Describe block G, below, was
+// updated under THAT later, separate authorization — it now tests the
+// Guardar->Validar rename and persisted validated state Decision 40
+// specifically authorizes, which Decision 39's own Implementation
+// Authorization (§2) had deliberately left untouched. Every other
+// describe block in this file (A-F, H) is unaffected by Decision 40
+// and continues to test Decision 39's own scope exactly as before.
+//
 // SCOPE: same documented constraint as
 // tests/periodic-stock-interruption-durability.test.ts —
 // PeriodicStockCountView.tsx has no jsdom/testing-library harness in
@@ -198,31 +208,55 @@ describe('F — SPA unmount triggers a current-state flush (Decision 39b, Rule 8
   });
 });
 
-describe('G — Guardar remains local-only, unaffected by the autosave changes (Implementation Authorization §2)', () => {
-  it('handleSaveCatalogRow and handleSaveManualRow call no Firestore function and no autosave scheduler', () => {
+describe('G — Validar (formerly Guardar) now persists via the exact same per-row autosave mechanism (Decision 40, Implementation Authorization §1 items 3/9)', () => {
+  // [Decision 40 — Validar Workflow] Decision 39's own Implementation
+  // Authorization (§2) deliberately scoped the Guardar/Validar rename
+  // OUT — "handleSaveCatalogRow/handleSaveManualRow are not touched."
+  // Decision 40 is the separate, later, signed authorization that
+  // specifically authorizes changing exactly that. This describe
+  // block replaces its own prior "Guardar remains local-only, tested
+  // here as a Decision 39 scope boundary" assertions with the new,
+  // signed Decision 40 behavior — it does not weaken Decision 39's
+  // own guarantees (per-row scheduling, live-state-at-fire-time,
+  // global serialization — all still separately proven in describe
+  // blocks A-F, above, none of which reference Guardar/Validar at
+  // all).
+  it('handleSaveCatalogRow and handleSaveManualRow now route through updateCatalogRow/updateManualRow (the same write path every other field edit already uses), not a standalone local Set', () => {
     const catalogBody = extractFunctionBody(source, 'const handleSaveCatalogRow = (');
     const manualBody = extractFunctionBody(source, 'const handleSaveManualRow = (');
-    for (const body of [catalogBody, manualBody]) {
-      assert.doesNotMatch(body, /savePeriodicStockDraft/);
-      assert.doesNotMatch(body, /scheduleRowDraftSave/);
-      assert.doesNotMatch(body, /flushPeriodicDraftNow/);
-    }
+    assert.match(catalogBody, /updateCatalogRow\(productId,\s*\{\s*validated:\s*true\s*\}\)/);
+    assert.match(manualBody, /updateManualRow\(index,\s*\{\s*validated:\s*true\s*\}\)/);
   });
 
-  it('handleSaveCatalogRow/handleSaveManualRow still only touch local review-lock state (confirmedCatalogProductIds/confirmedManualRowIndices) and their own save-error maps', () => {
-    const catalogBody = extractFunctionBody(source, 'const handleSaveCatalogRow = (');
-    const manualBody = extractFunctionBody(source, 'const handleSaveManualRow = (');
-    assert.match(catalogBody, /setConfirmedCatalogProductIds\(/);
-    assert.match(manualBody, /setConfirmedManualRowIndices\(/);
+  it('the prior local-only confirmedCatalogProductIds/confirmedManualRowIndices useState declarations no longer exist — comment mentions explaining the historical mechanism (already an established pattern in this file for superseded designs) are not the same as a live state declaration', () => {
+    assert.doesNotMatch(source, /const \[confirmedCatalogProductIds/);
+    assert.doesNotMatch(source, /const \[confirmedManualRowIndices/);
+    assert.doesNotMatch(source, /setConfirmedCatalogProductIds\(/);
+    assert.doesNotMatch(source, /setConfirmedManualRowIndices\(/);
   });
 
-  it('no reference to "Validar" was introduced anywhere in the component', () => {
-    assert.doesNotMatch(source, /Validar/);
+  it('handleEditCatalogRow and handleEditManualRow clear validated via the same updateCatalogRow/updateManualRow path (the inverse transition)', () => {
+    const catalogBody = extractFunctionBody(source, 'const handleEditCatalogRow = (');
+    const manualBody = extractFunctionBody(source, 'const handleEditManualRow = (');
+    assert.match(catalogBody, /updateCatalogRow\(productId,\s*\{\s*validated:\s*false\s*\}\)/);
+    assert.match(manualBody, /updateManualRow\(index,\s*\{\s*validated:\s*false\s*\}\)/);
   });
 
-  it('the "Guardar" button labels remain unchanged', () => {
-    const guardarCount = (source.match(/>\s*Guardar\s*</g) || []).length;
-    assert.equal(guardarCount, 2, 'Expected exactly the two existing "Guardar" labels (catalog row + manual row), unchanged.');
+  it('Validar has been introduced as the visible action name, with no remaining "Guardar" button label', () => {
+    assert.match(source, /Validar/);
+    assert.doesNotMatch(source, />\s*Guardar\s*</);
+  });
+
+  it('the "Validar" button labels appear exactly twice (catalog row + manual row), matching the two prior "Guardar" labels 1:1', () => {
+    const validarButtonCount = (source.match(/>\s*Validar\s*</g) || []).length;
+    assert.equal(validarButtonCount, 2, 'Expected exactly two "Validar" button labels (catalog row + manual row).');
+  });
+
+  it('validateWorkingRowForSave and the zero-quantity confirmation gate are byte-for-byte unchanged by the rename (Decision 40 §2/this task item 1)', () => {
+    const validateBody = extractFunctionBody(source, 'const validateWorkingRowForSave = (');
+    assert.match(validateBody, /Introduza a quantidade contada/);
+    assert.match(validateBody, /qty < 0/);
+    assert.match(source, /Confirmas que "\$\{row\.productName\}" tem mesmo 0 em stock\?/);
   });
 });
 
