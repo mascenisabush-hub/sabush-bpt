@@ -181,19 +181,22 @@ describe('Fix #6 — all five staff endpoints remain routed through the single s
 describe('Fix #6 — ownedBusinessIds derivation matches the existing trusted pattern (addShop, activate-trial)', () => {
   it('the same Array.isArray(...businessIds)... fallback shape already used in addShop is not reinvented differently here', () => {
     const occurrences = SOURCE.match(/Array\.isArray\(requesterProfile\.businessIds\) && requesterProfile\.businessIds\.length > 0/g) || [];
-    // Five sites total: addShop (provisioning/business), activate-trial,
+    // Six sites total: addShop (provisioning/business), activate-trial,
     // verifyStaffManagementAction (Fix #6), the Smart Stock Entry
-    // extraction route's own membership check, and — as of SuperAdmin
-    // V1 Operational Control Plane Phase E (BDR-0010) — the new
-    // /api/business/touch-activity route's membership check, which
-    // deliberately reuses this exact trusted derivation verbatim
-    // rather than inventing a sixth shape. Each re-reads the
-    // requester's own server-fetched Firestore profile and is never
-    // trusted from the client, in all five.
+    // extraction route's own membership check, the
+    // /api/business/touch-activity route's membership check (SuperAdmin
+    // V1 Operational Control Plane Phase E, BDR-0010), and — as of
+    // Product Recognition Intelligence Checkpoint 4
+    // (docs/engineering/product-recognition-intelligence-implementation-
+    // authorization.md) — the new /api/product-recognition/semantic-match
+    // route's own membership check, which deliberately reuses this exact
+    // trusted derivation verbatim rather than inventing a seventh shape.
+    // Each re-reads the requester's own server-fetched Firestore profile
+    // and is never trusted from the client, in all six.
     assert.equal(
       occurrences.length,
-      5,
-      'Expected this exact derivation guard in five places: addShop, activate-trial, verifyStaffManagementAction, the Smart Stock Entry extraction route, and /api/business/touch-activity.'
+      6,
+      'Expected this exact derivation guard in six places: addShop, activate-trial, verifyStaffManagementAction, the Smart Stock Entry extraction route, /api/business/touch-activity, and /api/product-recognition/semantic-match.'
     );
   });
 });

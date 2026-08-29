@@ -739,6 +739,23 @@ interface AppContextType {
   // 10-smart-stock-entry-adr.md Decision 2a for why this boundary is
   // load-bearing, not stylistic.
   scanPurchaseDocument: (imageBase64: string, mimeType: string) => Promise<SmartStockEntryScanResult>;
+  // [Product Recognition Intelligence — Checkpoint 4] Calls the
+  // server's isolated semantic/AI candidate-discovery route for one
+  // supplier/receipt wording. Returns zero or more `{ productId }`
+  // candidates ONLY — never writes anything, never throws (any
+  // network/server-side failure resolves to an empty array here too,
+  // mirroring the server-side function's own "never throws" contract
+  // one layer further out, so resolveSupplierWordingRecognition's own
+  // await never needs its own try/catch either — belt and suspenders,
+  // per the Authorization's Failure boundary). `products` must already
+  // be this business's own, already-fetched product list (id + name
+  // only) — the SAME array every deterministic recognition mechanism
+  // already reads; this function performs no filtering or scoping of
+  // its own beyond passing exactly what it's given.
+  findSemanticSupplierWordingCandidates: (
+    wording: string,
+    products: Array<{ id: string; name: string }>
+  ) => Promise<Array<{ productId: string }>>;
   // [Amendment v1.0, Part 2] Contagem's comparison baseline — Confirmed
   // Initial Capital + StockBatch cost value. NOT a Business Worth input;
   // see spec #2's own non-goals note for the boundary.
@@ -5446,6 +5463,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // [Product Recognition Intelligence — Checkpoint 4] Client-side
+  // wrapper for the isolated semantic/AI candidate-discovery route.
+  // Never throws — every failure (no active business/user, token
+  // failure, network error, non-OK response, unexpected body shape)
+  // resolves to an empty array, exactly like the server-side function
+  // it calls (see server/productRecognitionSemanticMatch.ts's own
+  // header) and exactly like scanPurchaseDocument above's own
+  // network-failure handling immediately above.
+  const findSemanticSupplierWordingCandidates = async (
+    wording: string,
+    products: Array<{ id: string; name: string }>
+  ): Promise<Array<{ productId: string }>> => {
+    if (!activeBusinessId || !currentUser) {
+      return [];
+    }
+
+    let idToken: string;
+    try {
+      idToken = await currentUser.getIdToken();
+    } catch {
+      return [];
+    }
+
+    let response: Response;
+    try {
+      response = await fetch('/api/product-recognition/semantic-match', {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({
+          businessId: activeBusinessId,
+          wording,
+          products,
+        }),
+      });
+    } catch {
+      return [];
+    }
+
+    if (!response.ok) {
+      return [];
+    }
+
+    try {
+      const body = await response.json();
+      if (body?.success === true && Array.isArray(body?.candidates)) {
+        return body.candidates
+          .filter((c: unknown): c is { productId: unknown } => typeof c === 'object' && c !== null && 'productId' in c)
+          .map((c: { productId: unknown }) => ({ productId: String(c.productId) }));
+      }
+      return [];
+    } catch {
+      return [];
+    }
+  };
+
   // A period is "closed" if any existing Closing of the same type shares
   // its exact start/end range. Prevents accidentally closing the same
   // month or year twice.
@@ -6287,6 +6362,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         savePurchaseDraft,
         clearPurchaseDraft,
         scanPurchaseDocument,
+        findSemanticSupplierWordingCandidates,
         expectedCurrentStockValue,
         latestStockCount,
         currentInventoryValue,

@@ -51,6 +51,7 @@ import {
   ProviderNotConfiguredError,
   ProviderCallFailedError,
 } from './smartStockEntry';
+import { findSemanticProductMatches } from './productRecognitionSemanticMatch';
 
 const __dirname = path.dirname(fileURLToPath(import.meta.url));
 
@@ -327,6 +328,123 @@ expressApp.post(
         error: err instanceof Error ? err.message : String(err),
       });
       res.status(500).json({ error: 'internal', message: 'Não foi possível processar o documento. Tente novamente ou continue manualmente.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/product-recognition/semantic-match
+// Body: { businessId: string, wording: string, products: Array<{ id: string, name: string }> }
+//
+// GOVERNANCE: Product Recognition Intelligence — Checkpoint 4.
+// ADR-0008 -> POL-0013 -> docs/engineering/product-recognition-
+// intelligence-rule8-assessment.md (READY) -> docs/engineering/
+// product-recognition-intelligence-implementation-plan.md §3
+// Checkpoint 4 -> docs/engineering/product-recognition-intelligence-
+// implementation-authorization.md §2 Checkpoint 4/§5 (Accepted/
+// Authorized).
+//
+// [Tenant isolation — Authorization §2 Input boundary / §5] Unlike
+// /api/smart-stock-entry/extract above, this route does NOT re-read
+// Products from Firestore itself — it is a thin, authenticated
+// pass-through to the isolated findSemanticProductMatches function,
+// which by its own construction (see server/
+// productRecognitionSemanticMatch.ts's own header) can only ever see
+// exactly the `products` this route hands it, nothing broader. This is
+// a deliberate, governance-specified difference from the Smart Stock
+// Entry route's own re-fetch pattern, not an inconsistency: the
+// Authorization's own Input boundary requires this mechanism's input
+// to be "the current, already business-scoped products array...
+// already held client-side" (the SAME array every deterministic
+// recognition mechanism already reads from AppContext's own live,
+// tenant-scoped product list) — never a second, independent
+// server-side read. The membership check below still applies, exactly
+// like every other tenant route, so only an authenticated member of
+// the named business can invoke this at all; it is simply not the
+// mechanism that enforces which PRODUCTS are visible to the AI call —
+// that's structurally guaranteed by findSemanticProductMatches never
+// querying Firestore in the first place.
+//
+// This route NEVER writes to Firestore, and never returns anything
+// beyond `{ productId }` pairs already present in the caller's own
+// request — never a confidence score, never raw model text.
+// ------------------------------------------------------------------
+const productRecognitionSemanticMatchJsonParser = express.json({ limit: '2mb' });
+
+expressApp.post(
+  '/api/product-recognition/semantic-match',
+  tenantOnly,
+  productRecognitionSemanticMatchJsonParser,
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const uid = req.callerUid!;
+    const businessId = String(req.body?.businessId || '').trim();
+    const wording = typeof req.body?.wording === 'string' ? req.body.wording : '';
+    const rawProducts = Array.isArray(req.body?.products) ? req.body.products : [];
+
+    if (!businessId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+      return;
+    }
+
+    try {
+      // Same membership re-derivation pattern as
+      // /api/smart-stock-entry/extract above — never trust the
+      // client's claim of which business it belongs to, even though
+      // (per this route's own header) that business's PRODUCT DATA
+      // itself is never independently re-read here.
+      const requesterSnap = await db.collection('users').doc(uid).get();
+      const requesterProfile = requesterSnap.data();
+      if (!requesterSnap.exists || !requesterProfile) {
+        res.status(403).json({ error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' });
+        return;
+      }
+      const ownedBusinessIds: string[] =
+        Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+          ? requesterProfile.businessIds
+          : requesterProfile.businessId
+            ? [requesterProfile.businessId]
+            : [];
+      const isMember = requesterProfile.businessId === businessId || ownedBusinessIds.includes(businessId);
+      if (!isMember) {
+        res.status(403).json({ error: 'permission-denied', message: 'Este utilizador não pertence a este negócio.' });
+        return;
+      }
+
+      // Defensive shape validation only — never a Firestore read.
+      // Anything not matching { id: string, name: string } is dropped
+      // rather than rejected outright: a partially malformed client
+      // payload should degrade to "fewer candidate products considered",
+      // never a hard failure of the whole recognition pass (Non-
+      // Negotiable: AI failure/oddity must never block product
+      // creation).
+      const products = rawProducts
+        .filter((p: unknown): p is { id: unknown; name: unknown } => typeof p === 'object' && p !== null)
+        .map((p: { id: unknown; name: unknown }) => ({ id: String(p.id ?? ''), name: String(p.name ?? '') }))
+        .filter((p: { id: string; name: string }) => p.id !== '' && p.name !== '');
+
+      const matches = await findSemanticProductMatches(wording, products);
+      // findSemanticProductMatches never throws (see its own header) —
+      // this route always returns success:true with whatever it found
+      // (possibly empty), never a distinct "provider unavailable"
+      // branch the client would need to special-case; an empty result
+      // here is observably identical to "no plausible semantic
+      // candidate", which is the correct outcome for every failure
+      // mode that function isolates.
+      res.json({ success: true, candidates: matches });
+    } catch (err) {
+      console.error('[product-recognition/semantic-match] unexpected failure', {
+        uid,
+        businessId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      // Even here — an unexpected error OUTSIDE findSemanticProductMatches
+      // itself (e.g. the membership check above) — respond with a
+      // graceful empty result rather than a 500, so a transient server
+      // issue degrades to "no semantic candidates" exactly like every
+      // other failure mode, never blocking the deterministic candidates
+      // already found client-side in the same recognition pass.
+      res.json({ success: true, candidates: [] });
     }
   }
 );

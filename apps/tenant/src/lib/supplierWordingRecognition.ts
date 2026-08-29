@@ -28,6 +28,7 @@
 import {
   detectSupplierWordingCandidates,
   findExistingSupplierWordingMatch,
+  hasSupplierWordingContradiction,
   type SupplierWordingCandidate,
 } from './supplierWordingMatching';
 
@@ -41,8 +42,9 @@ export type SupplierWordingRecognitionOutcome =
   // reused silently, no owner interaction (BDR-0013 item 3).
   | { type: 'reused'; productId: string }
   // One or more plausible candidates found (Rule 8 Finding 4's
-  // normalization-level similarity) — must be presented to the owner,
-  // never auto-attached (Specification §3 steps 2–4).
+  // normalization-level similarity, plus Product Recognition
+  // Intelligence's own Checkpoints 1/2/4 grounds) — must be presented
+  // to the owner, never auto-attached (Specification §3 steps 2–4).
   | { type: 'candidates'; candidates: SupplierWordingCandidate[] }
   // Non-empty, non-exact-match wording with no reuse match and no
   // candidates — ordinary new-product path applies unless the owner
@@ -56,6 +58,59 @@ export interface RecognitionProduct {
 }
 
 /**
+ * [Product Recognition Intelligence — Checkpoint 4] Signature the
+ * caller-supplied semantic/AI mechanism must satisfy — deliberately
+ * matching AppContext.tsx's own `findSemanticSupplierWordingCandidates`
+ * shape exactly, so that function (or an equivalent test double) can
+ * be passed straight through without adapting it. Optional and
+ * defaulted to `undefined` everywhere below: when omitted, this whole
+ * module behaves EXACTLY as it did before Checkpoint 4 existed —
+ * synchronous-equivalent, deterministic-only — satisfying Acceptance
+ * Criterion 20 ("Checkpoints 1-3 remain fully functional with
+ * Checkpoint 4 disabled/reverted").
+ */
+export type SemanticSupplierWordingMatcher = (
+  wording: string,
+  products: Array<{ id: string; name: string }>
+) => Promise<Array<{ productId: string }>>;
+
+/**
+ * Merges two candidate lists by `productId` — a product proposed by
+ * both lists keeps exactly ONE entry, with the union of both lists'
+ * `grounds` (de-duplicated); a product proposed by only one list keeps
+ * its own single entry unchanged. Order: `base`'s own candidates
+ * first (in their original order), then any additional candidates
+ * `additional` proposed that `base` didn't already have (Implementation
+ * Plan §2's aggregation contract — "different candidates... both kept,
+ * unranked"; this function imposes no ranking of its own, only a
+ * stable, deterministic order). Exported for direct testing
+ * (Acceptance Criterion 5).
+ */
+export function unionSupplierWordingCandidates(
+  base: SupplierWordingCandidate[],
+  additional: SupplierWordingCandidate[]
+): SupplierWordingCandidate[] {
+  const byProductId = new Map<string, SupplierWordingCandidate>();
+  const order: string[] = [];
+  for (const c of base) {
+    byProductId.set(c.productId, { productId: c.productId, grounds: [...c.grounds] });
+    order.push(c.productId);
+  }
+  for (const c of additional) {
+    const existing = byProductId.get(c.productId);
+    if (existing) {
+      for (const g of c.grounds) {
+        if (!existing.grounds.includes(g)) existing.grounds.push(g);
+      }
+    } else {
+      byProductId.set(c.productId, { productId: c.productId, grounds: [...c.grounds] });
+      order.push(c.productId);
+    }
+  }
+  return order.map((id) => byProductId.get(id)!);
+}
+
+/**
  * Decides which of the four recognition states applies for a freshly
  * typed/extracted supplier wording. `supplierId` is the CURRENTLY
  * SELECTED SupplierRecord.id for this purchase, if any — reuse can only
@@ -63,6 +118,14 @@ export interface RecognitionProduct {
  * Finding 2); a free-text, not-yet-created supplier name has no prior
  * confirmed relationships to reuse by construction, so `undefined`
  * simply skips straight to candidate detection, exactly as intended.
+ *
+ * DELIBERATELY STAYS SYNCHRONOUS — see `resolveSupplierWordingRecognitionAsync`
+ * below for why. This function's own signature, return shape, and
+ * every existing caller/test of it (tests/supplier-wording-*.test.ts)
+ * are completely unmodified by Product Recognition Intelligence,
+ * satisfying Acceptance Criterion 17 exactly: the pre-existing
+ * deterministic recognition path is untouched code, not merely
+ * untouched behavior.
  */
 export function resolveSupplierWordingRecognition(
   wording: string,
@@ -92,6 +155,109 @@ export function resolveSupplierWordingRecognition(
 
   return { type: 'no-candidates' };
 }
+
+/**
+ * [Product Recognition Intelligence — Checkpoint 4] Async composition
+ * layer ON TOP OF `resolveSupplierWordingRecognition` above — never a
+ * reimplementation of it, always a caller of it, exactly the same
+ * "compose, don't duplicate" discipline `resolveScanRowSupplierWording`
+ * below already established for Checkpoint 3.
+ *
+ * [DESIGN NOTE — why this is a separate function, not
+ * `resolveSupplierWordingRecognition` itself made `async`] The
+ * Implementation Plan §2 describes the single composition point
+ * "becoming async." Literally converting the existing, exported
+ * `resolveSupplierWordingRecognition` into an `async function` — even
+ * with every call site of its own logic unchanged — changes its
+ * RETURN TYPE from `SupplierWordingRecognitionOutcome` to
+ * `Promise<SupplierWordingRecognitionOutcome>` for every existing
+ * caller, including the entire pre-existing, protected regression
+ * suite in tests/supplier-wording-*.test.ts, which asserts directly
+ * on the synchronous return value (e.g.
+ * `assert.deepEqual(resolveSupplierWordingRecognition(...), { type:
+ * 'none' })`). That is irreconcilable with Acceptance Criterion 17
+ * ("every existing test... continues to pass unmodified") — an actual,
+ * signed, numbered acceptance criterion, not a design preference. Per
+ * the Authorization §6 ("choose the smallest implementation consistent
+ * with the Plan and document it" for an ambiguous, in-scope
+ * implementation detail), this function achieves the Plan's own
+ * functional intent — a single async entry point that reaches the
+ * semantic/AI mechanism, composing the SAME deterministic logic,
+ * never duplicating it — via an additive new function instead of a
+ * breaking signature change to an existing, tested one.
+ * AddStockView.tsx (this checkpoint's only real caller) uses this
+ * function exclusively; the original sync function remains exactly
+ * as it was for every pre-existing caller/test.
+ *
+ * `semanticMatch`, when supplied, is invoked ONLY when the
+ * deterministic function above returns 'no-candidates' for this
+ * wording (Implementation Plan §3 Checkpoint 4's own proposed gating
+ * default) — the common case (a candidate already found
+ * deterministically, or an ordinary 'none'/'reused' outcome) never
+ * reaches the AI mechanism at all, stays fully synchronous in
+ * substance, and needs no network round-trip. Any rejection/throw from
+ * `semanticMatch` itself is caught here and treated as an empty AI
+ * contribution (Non-Negotiable: AI failure never blocks or erases
+ * deterministic candidates already found in the same pass) —
+ * belt-and-suspenders alongside `findSemanticSupplierWordingCandidates`'s
+ * own identical "never throws" contract one layer further out.
+ * Omitting `semanticMatch` entirely reduces this function to exactly
+ * the deterministic function's own outcome, wrapped in a resolved
+ * Promise — satisfying Acceptance Criterion 20 ("Checkpoints 1-3
+ * remain fully functional with Checkpoint 4 disabled/reverted").
+ */
+export async function resolveSupplierWordingRecognitionAsync(
+  wording: string,
+  supplierId: string | undefined,
+  existingProducts: RecognitionProduct[],
+  semanticMatch?: SemanticSupplierWordingMatcher
+): Promise<SupplierWordingRecognitionOutcome> {
+  const deterministicOutcome = resolveSupplierWordingRecognition(wording, supplierId, existingProducts);
+
+  if (deterministicOutcome.type !== 'no-candidates' || !semanticMatch) {
+    return deterministicOutcome;
+  }
+
+  const trimmed = wording.trim();
+  let aiMatches: Array<{ productId: string }> = [];
+  try {
+    aiMatches = await semanticMatch(
+      trimmed,
+      existingProducts.map((p) => ({ id: p.id, name: p.name }))
+    );
+  } catch {
+    aiMatches = [];
+  }
+
+  // [Checkpoint 1's Contradiction Check, applied post-union across
+  // EVERY mechanism per the Implementation Plan §2 aggregation
+  // contract — "runs once per candidate... never once per mechanism"]
+  // A semantic/AI candidate whose target product's own canonical name
+  // contradicts the wording on quantity/unit is suppressed here,
+  // exactly like a deterministic candidate already is inside
+  // detectSupplierWordingCandidates itself (Non-Negotiable:
+  // "Contradictions remain blocking... regardless of... any
+  // mechanism, or combination").
+  const aiCandidates: SupplierWordingCandidate[] = aiMatches
+    .filter((m) => {
+      const product = existingProducts.find((p) => p.id === m.productId);
+      if (!product) return false; // defensive — mirrors sanitizeMatches' own id validation server-side
+      return !hasSupplierWordingContradiction(trimmed, product.name);
+    })
+    .map((m) => ({ productId: m.productId, grounds: ['semantic-match'] as SupplierWordingCandidate['grounds'] }));
+
+  // deterministicOutcome.type === 'no-candidates' here (checked above),
+  // so this union is, in the CURRENT gating design, always against an
+  // empty base list — `unionSupplierWordingCandidates` is still used
+  // (rather than simply wrapping `aiCandidates`) so the aggregation
+  // contract stays expressed as one real code path, exercised and
+  // proven directly by this function's own tests, not merely implied
+  // by the gating rule.
+  const unioned = unionSupplierWordingCandidates([], aiCandidates);
+  if (unioned.length > 0) return { type: 'candidates', candidates: unioned };
+  return { type: 'no-candidates' };
+}
+
 
 // ---------------------------------------------------------------------
 // [Checkpoint 4] Smart Stock Entry scan-row integration
@@ -140,10 +306,18 @@ export interface ScanRowSupplierWordingDecision {
 /**
  * Resolves the supplier-wording decision for one scan-extracted line
  * item, given the server's own exact-name match result alongside the
- * same recognition inputs manual entry uses. Pure — no Firestore
- * access, no UI, no row construction; AddStockView.tsx's
- * buildRowFromProposalLineItem calls this and applies the result to the
- * row it's building.
+ * same recognition inputs manual entry uses. No Firestore access, no
+ * UI, no row construction; AddStockView.tsx's buildRowFromProposalLineItem
+ * calls this and applies the result to the row it's building.
+ *
+ * DELIBERATELY STAYS SYNCHRONOUS, composing the SYNC
+ * `resolveSupplierWordingRecognition` above — see that function's own
+ * "DESIGN NOTE" for the full reasoning: an existing, protected
+ * regression test (tests/supplier-wording-smart-stock-entry.test.ts)
+ * calls this exact function synchronously and asserts directly on its
+ * return value; Acceptance Criterion 17 requires it to keep doing so
+ * unmodified. `resolveScanRowSupplierWordingAsync` below is the
+ * Checkpoint-4-aware counterpart AddStockView.tsx actually calls.
  */
 export function resolveScanRowSupplierWording(
   rawProductName: string,
@@ -168,7 +342,21 @@ export function resolveScanRowSupplierWording(
   }
 
   const outcome = resolveSupplierWordingRecognition(trimmed, supplierId, existingProducts);
+  return scanRowDecisionFromOutcome(trimmed, outcome);
+}
 
+/**
+ * Shared outcome->decision mapping, factored out so
+ * `resolveScanRowSupplierWording` (sync) and
+ * `resolveScanRowSupplierWordingAsync` (below) apply IDENTICAL
+ * translation logic from a `SupplierWordingRecognitionOutcome` to a
+ * `ScanRowSupplierWordingDecision` — never two independently-maintained
+ * copies of the same switch statement.
+ */
+function scanRowDecisionFromOutcome(
+  trimmed: string,
+  outcome: SupplierWordingRecognitionOutcome
+): ScanRowSupplierWordingDecision {
   switch (outcome.type) {
     case 'reused':
       return {
@@ -192,4 +380,37 @@ export function resolveScanRowSupplierWording(
     default:
       return { matchedProductId: undefined, pendingSupplierWording: undefined, supplierWordingCandidates: undefined };
   }
+}
+
+/**
+ * [Product Recognition Intelligence — Checkpoint 4] Async counterpart
+ * to `resolveScanRowSupplierWording` above, mirroring
+ * `resolveSupplierWordingRecognitionAsync`'s own "compose the sync
+ * function, add the AI mechanism on top" shape exactly. This is the
+ * function AddStockView.tsx's buildRowFromProposalLineItem actually
+ * calls; the original sync function above remains exactly as it was
+ * for every pre-existing caller/test.
+ */
+export async function resolveScanRowSupplierWordingAsync(
+  rawProductName: string,
+  serverProductMatch: { status: 'confident' | 'uncertain' | 'no_match'; productId: string | null },
+  supplierId: string | undefined,
+  existingProducts: RecognitionProduct[],
+  semanticMatch?: SemanticSupplierWordingMatcher
+): Promise<ScanRowSupplierWordingDecision> {
+  if (serverProductMatch.status === 'confident' && serverProductMatch.productId) {
+    return {
+      matchedProductId: serverProductMatch.productId,
+      pendingSupplierWording: undefined,
+      supplierWordingCandidates: undefined,
+    };
+  }
+
+  const trimmed = rawProductName.trim();
+  if (!trimmed) {
+    return { matchedProductId: undefined, pendingSupplierWording: undefined, supplierWordingCandidates: undefined };
+  }
+
+  const outcome = await resolveSupplierWordingRecognitionAsync(trimmed, supplierId, existingProducts, semanticMatch);
+  return scanRowDecisionFromOutcome(trimmed, outcome);
 }

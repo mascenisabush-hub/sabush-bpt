@@ -180,6 +180,78 @@ export function computeNameSimilarity(a: string, b: string): number {
   return unionSize === 0 ? 0 : intersectionSize / unionSize;
 }
 
+// ---------------------------------------------------------------------
+// [Product Recognition Intelligence — Checkpoint 1] Bounded per-token
+// edit distance. Governing chain: ADR-0008 (Accepted) → POL-0013
+// (Accepted) → product-recognition-intelligence-rule8-assessment.md
+// (READY) → product-recognition-intelligence-implementation-plan.md §3
+// Checkpoint 1 → product-recognition-intelligence-implementation-
+// authorization.md §2 Checkpoint 1 (Accepted/Authorized — SABUSHIMIKE
+// MASCENI, 29 August 2026).
+//
+// A single pure, exported Damerau-Levenshtein distance function, kept
+// HERE (not inside supplierWordingMatching.ts) so it is a plain,
+// independently-testable primitive `supplierWordingMatching.ts` can
+// import and apply per-token — mirroring how that file already keeps
+// its own comparison logic separate from this one (see this file's own
+// header: the two capabilities never share comparison logic). This
+// function itself makes no candidate-detection decision, applies no
+// ceiling, and is not specific to product names in any way — it is
+// pure string-distance math only.
+// ---------------------------------------------------------------------
+
+/**
+ * Damerau-Levenshtein edit distance (insertions, deletions,
+ * substitutions, and adjacent transpositions each cost 1) between two
+ * strings. Standard dynamic-programming implementation, O(|a| * |b|)
+ * time/space — acceptable here since callers apply this per TOKEN
+ * (a handful of characters each), never to whole strings/documents.
+ */
+export function damerauLevenshteinDistance(a: string, b: string): number {
+  const al = a.length;
+  const bl = b.length;
+  if (al === 0) return bl;
+  if (bl === 0) return al;
+
+  const d: number[][] = Array.from({ length: al + 1 }, () => new Array<number>(bl + 1).fill(0));
+  for (let i = 0; i <= al; i++) d[i][0] = i;
+  for (let j = 0; j <= bl; j++) d[0][j] = j;
+
+  for (let i = 1; i <= al; i++) {
+    for (let j = 1; j <= bl; j++) {
+      const cost = a[i - 1] === b[j - 1] ? 0 : 1;
+      let best = Math.min(
+        d[i - 1][j] + 1, // deletion
+        d[i][j - 1] + 1, // insertion
+        d[i - 1][j - 1] + cost // substitution
+      );
+      if (i > 1 && j > 1 && a[i - 1] === b[j - 2] && a[i - 2] === b[j - 1]) {
+        best = Math.min(best, d[i - 2][j - 2] + cost); // transposition
+      }
+      d[i][j] = best;
+    }
+  }
+  return d[al][bl];
+}
+
+/**
+ * [Implementation Plan §3 Checkpoint 1 — Plan-level proposal, open to
+ * Authorization override, not itself a governance re-decision] Fixed,
+ * conservative per-token edit-distance ceiling used by
+ * `supplierWordingMatching.ts`'s `character-spelling-variation` ground:
+ * longer tokens (length >= 4) tolerate a distance of up to 2 (catches
+ * "Pedasco"/"Pedaço"-class variation); short tokens (length 2-3)
+ * tolerate only 1, to bound short-word collision risk the Rule 8
+ * investigation flagged; single-character tokens require an exact
+ * match (ceiling 0) — a distance-1 "match" on a one-character token is
+ * meaningless noise, not a spelling variant.
+ */
+export function characterSpellingVariationCeiling(tokenLength: number): number {
+  if (tokenLength >= 4) return 2;
+  if (tokenLength >= 2) return 1;
+  return 0;
+}
+
 export interface SimilarProductSuggestion {
   id: string;
   name: string;

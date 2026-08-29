@@ -497,6 +497,17 @@ export const fr: TranslationDict = {
       distinguishingInfoPlaceholder: 'Ex. : paquet de 500g au lieu de 400g',
       distinguishingInfoRequiredError: 'Expliquez ce qui rend ce produit différent avant de continuer (ligne {n}).',
       unresolvedCandidatesError: 'Résolvez la correspondance de produit suggérée avant de continuer (ligne {n}).',
+      grounds: {
+        initialStockName: 'Même nom que dans votre catalogue',
+        existingAlternativeWording: 'Déjà associé à ce produit',
+        unitSpellingEquivalence: 'Même quantité, unité orthographiée différemment',
+        characterSpellingVariation: 'Orthographe similaire',
+        abbreviationMatch: 'Forme abrégée connue',
+        synonymMatch: 'Autre nom connu',
+        translationMatch: 'Traduction connue',
+        semanticMatch: 'Suggestion intelligente',
+      },
+      contradictionNotShownNotice: 'Non affiché : les quantités/tailles semblent différentes.',
     },
     sequencing: {
       resolveBeforeReview: 'Résolvez la ligne {n} sur {total} avant de consulter le reçu complet.',

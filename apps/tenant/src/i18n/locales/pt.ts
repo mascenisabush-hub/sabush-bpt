@@ -509,6 +509,26 @@ export interface TranslationDict {
       distinguishingInfoPlaceholder: string;
       distinguishingInfoRequiredError: string;
       unresolvedCandidatesError: string;
+      // [Product Recognition Intelligence — Checkpoint 3] Plain-language
+      // label for every possible candidate `ground` value (Checkpoint
+      // 1/2/4's own new grounds included), reused unchanged by every
+      // checkpoint — no new UI component, no per-checkpoint duplicate
+      // key set.
+      grounds: {
+        initialStockName: string;
+        existingAlternativeWording: string;
+        unitSpellingEquivalence: string;
+        characterSpellingVariation: string;
+        abbreviationMatch: string;
+        synonymMatch: string;
+        translationMatch: string;
+        semanticMatch: string;
+      };
+      // [Checkpoint 1/3 — Contradiction Check] Shown only when a
+      // weak-tier contradiction suppressed an otherwise-plausible
+      // candidate for the CURRENT typed wording — never a new
+      // confirm/decline control, purely explanatory text.
+      contradictionNotShownNotice: string;
     };
     // [Increment B, Checkpoint B1 — Consolidated Specification §8]
     sequencing: {
@@ -1633,6 +1653,17 @@ export const pt: TranslationDict = {
       distinguishingInfoPlaceholder: 'Ex.: embalagem de 500g em vez de 400g',
       distinguishingInfoRequiredError: 'Explique o que torna este produto diferente antes de continuar (linha {n}).',
       unresolvedCandidatesError: 'Resolva a correspondência de produto sugerida antes de continuar (linha {n}).',
+      grounds: {
+        initialStockName: 'Nome igual ao do catálogo',
+        existingAlternativeWording: 'Nome já associado a este produto',
+        unitSpellingEquivalence: 'Mesma quantidade, unidade escrita de forma diferente',
+        characterSpellingVariation: 'Ortografia parecida',
+        abbreviationMatch: 'Forma abreviada conhecida',
+        synonymMatch: 'Nome alternativo conhecido',
+        translationMatch: 'Tradução conhecida',
+        semanticMatch: 'Sugestão do assistente inteligente',
+      },
+      contradictionNotShownNotice: 'Não mostrado: as quantidades/tamanhos parecem diferentes.',
     },
     sequencing: {
       resolveBeforeReview: 'Resolva a linha {n} de {total} antes de rever o recibo completo.',

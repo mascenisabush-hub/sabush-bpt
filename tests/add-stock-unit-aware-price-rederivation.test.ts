@@ -229,7 +229,14 @@ describe('AddStockView.tsx — all five findLatestRememberedProductMemory call s
   });
 
   it('cost price still starts from the receipt\'s own reading, never from memory, in the Smart Stock Entry path — unaffected by this change', () => {
-    const start = addStockSrc.indexOf('const buildRowFromProposalLineItem = (item: SmartStockEntryLineItemProposal): StockRowItem => {');
+    // [Product Recognition Intelligence — Checkpoint 4] buildRowFromProposalLineItem's
+    // own declaration became `async ... => Promise<StockRowItem>` to
+    // accommodate the semantic/AI mechanism (see docs/engineering/
+    // product-recognition-intelligence-implementation-authorization.md
+    // Sec2 Checkpoint 4) — this test's own locator string is updated to
+    // match; the actual behavior this test proves (cost price sourced
+    // from the receipt, never memory) is unchanged and unaffected.
+    const start = addStockSrc.indexOf('const buildRowFromProposalLineItem = async (item: SmartStockEntryLineItemProposal): Promise<StockRowItem> => {');
     const nearby = addStockSrc.slice(start, start + 400);
     assert.match(nearby, /let costPrice = item\.costPrice\.value != null \? String\(item\.costPrice\.value\) : '';/);
   });

@@ -7,8 +7,8 @@ import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { PurchaseDraft, PurchaseDraftLineItem, UnitRelationship } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
-import { type SupplierWordingCandidate } from '../lib/supplierWordingMatching';
-import { resolveSupplierWordingRecognition, resolveScanRowSupplierWording } from '../lib/supplierWordingRecognition';
+import { type SupplierWordingCandidate, detectSupplierWordingContradictions } from '../lib/supplierWordingMatching';
+import { resolveSupplierWordingRecognitionAsync, resolveScanRowSupplierWordingAsync } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
 import { findSimilarProducts } from '../lib/productNameSimilarity';
@@ -366,6 +366,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     attachPurchaseEventId,
     activeBusinessId,
     scanPurchaseDocument,
+    findSemanticSupplierWordingCandidates,
     updateProduct,
   } = useApp();
   const { t } = useLanguage();
@@ -1382,7 +1383,59 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // pure, independently-tested resolveSupplierWordingRecognition
   // (supplierWordingRecognition.ts) — this function only translates that
   // decision into React state.
-  const applySupplierWordingCheck = (rowId: string, newName: string) => {
+  // [Product Recognition Intelligence — Checkpoint 3] Plain-language
+  // label for any candidate `ground` value — every checkpoint's own
+  // new grounds included, one shared mapping, no per-checkpoint UI.
+  // Per the Authorization Sec2 Checkpoint 3: "No new UI component, no
+  // new confirm/decline interaction — the existing panel and its
+  // existing three actions... are reused unchanged, for every
+  // checkpoint." This function only supplies TEXT for that existing
+  // panel, never a new control.
+  const groundLabel = (ground: SupplierWordingCandidate['grounds'][number]): string => {
+    switch (ground) {
+      case 'initial-stock-name':
+        return t('addStock.supplierWording.grounds.initialStockName');
+      case 'existing-alternative-wording':
+        return t('addStock.supplierWording.grounds.existingAlternativeWording');
+      case 'unit-spelling-equivalence':
+        return t('addStock.supplierWording.grounds.unitSpellingEquivalence');
+      case 'character-spelling-variation':
+        return t('addStock.supplierWording.grounds.characterSpellingVariation');
+      case 'abbreviation-match':
+        return t('addStock.supplierWording.grounds.abbreviationMatch');
+      case 'synonym-match':
+        return t('addStock.supplierWording.grounds.synonymMatch');
+      case 'translation-match':
+        return t('addStock.supplierWording.grounds.translationMatch');
+      case 'semantic-match':
+        return t('addStock.supplierWording.grounds.semanticMatch');
+      default:
+        return '';
+    }
+  };
+
+  // [Checkpoint 1/3 — Contradiction Check] Whether the CURRENTLY typed
+  // wording for this row has a weak-tier contradiction suppressing an
+  // otherwise-plausible candidate — purely explanatory, never a new
+  // control; recomputed from the row's own current productName and the
+  // live `products` array (the same inputs every other recognition
+  // call already reads), never persisted onto the row itself.
+  const rowHasSuppressedContradiction = (row: StockRowItem): boolean => {
+    if (row.pendingSupplierWording) return false; // already resolved — nothing left to explain
+    return detectSupplierWordingContradictions(row.productName, products).length > 0;
+  };
+
+  // [Product Recognition Intelligence — Checkpoint 4] Now `async`,
+  // mirroring resolveSupplierWordingRecognition's own shape change —
+  // composes that function unchanged, plus a staleness guard: if the
+  // row's typed text has since changed again by the time this
+  // (possibly network-bound, when the semantic/AI mechanism fires)
+  // await resolves, the stale result is discarded rather than
+  // clobbering whatever the row now shows — the existing pending-state
+  // UI (`isDropdownOpen`, set true below exactly as before) already
+  // covers the latency this introduces; this guard only prevents a
+  // slow, now-outdated response from overwriting a newer one.
+  const applySupplierWordingCheck = async (rowId: string, newName: string) => {
     const trimmed = newName.trim();
     const cleared: Partial<StockRowItem> = {
       productName: newName,
@@ -1394,7 +1447,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       supplierWordingDistinguishingInfo: undefined,
     };
 
-    const outcome = resolveSupplierWordingRecognition(trimmed, supplierId, products);
+    const outcome = await resolveSupplierWordingRecognitionAsync(trimmed, supplierId, products, findSemanticSupplierWordingCandidates);
+
+    // [Staleness guard — see note above] Only applies to the async
+    // (semantic/AI-reached) path in practice, since the deterministic-
+    // only path resolves synchronously fast enough that this can never
+    // actually diverge — kept unconditional anyway, since it's a
+    // correct guard either way and adds no observable behavior change
+    // for the deterministic-only case.
+    const currentRow = rows.find(r => r.id === rowId);
+    if (!currentRow || currentRow.productName !== newName) {
+      return;
+    }
 
     switch (outcome.type) {
       case 'none':
@@ -1553,7 +1617,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // bought this time, which the AI reads verbatim — see that helper's
   // own comment for why reusing the raw remembered number across a
   // genuine unit change would be wrong, not merely imprecise).
-  const buildRowFromProposalLineItem = (item: SmartStockEntryLineItemProposal): StockRowItem => {
+  // [Product Recognition Intelligence — Checkpoint 4] Now `async`,
+  // mirroring resolveScanRowSupplierWording's own shape change — every
+  // other line of this function is unchanged.
+  const buildRowFromProposalLineItem = async (item: SmartStockEntryLineItemProposal): Promise<StockRowItem> => {
     let productName = item.productName.value || '';
     let costPrice = item.costPrice.value != null ? String(item.costPrice.value) : '';
     let unit = item.unit.value || (suggestedUnits[0] || 'un');
@@ -1573,11 +1640,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // outcome, which product (if any) this row should be treated as
     // matching — composing the SAME resolveSupplierWordingRecognition
     // manual entry uses, never a second implementation of it.
-    const decision = resolveScanRowSupplierWording(
+    const decision = await resolveScanRowSupplierWordingAsync(
       item.productName.value || '',
       item.productMatch,
       supplierId,
-      products
+      products,
+      findSemanticSupplierWordingCandidates
     );
     const pendingSupplierWording = decision.pendingSupplierWording;
     const supplierWordingCandidates = decision.supplierWordingCandidates;
@@ -1722,7 +1790,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       return;
     }
 
-    const newRows = result.proposal.lineItems.map(buildRowFromProposalLineItem);
+    // [Product Recognition Intelligence — Checkpoint 4] buildRowFromProposalLineItem
+    // is now async (it awaits recognition, which may itself await the
+    // semantic/AI mechanism) — Promise.all resolves every line item's
+    // own row build in parallel, exactly like a synchronous .map would
+    // have produced the same array shape and order.
+    const newRows = await Promise.all(result.proposal.lineItems.map(buildRowFromProposalLineItem));
     // [Bug fix — scanned receipt data lost if the user leaves the page
     // within the autosave debounce window] Previously this only called
     // setRows(prev => ...) with a functional updater, relying entirely
@@ -3371,8 +3444,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   key={candidate.productId}
                                   className="flex items-center justify-between gap-2 bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5"
                                 >
-                                  <span className="text-[13px] font-semibold text-[#111827] truncate">
-                                    {candidateProduct.name}
+                                  <span className="min-w-0">
+                                    <span className="block text-[13px] font-semibold text-[#111827] truncate">
+                                      {candidateProduct.name}
+                                    </span>
+                                    {/* [Checkpoint 3] Plain-language explanation of
+                                        every ground that fired for this candidate —
+                                        e.g. "Spelling is similar" / "Known
+                                        translation" — never a confidence score or
+                                        raw model output (§2's Output boundary). */}
+                                    <span className="block text-[11px] text-gray-500 truncate">
+                                      {candidate.grounds.map(groundLabel).filter(Boolean).join(' · ')}
+                                    </span>
                                   </span>
                                   <button
                                     type="button"
@@ -3393,6 +3476,19 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             {t('addStock.supplierWording.noneOfTheseButton')}
                           </button>
                         </div>
+                      )}
+
+                      {/* [Product Recognition Intelligence — Checkpoint 1/3,
+                          Contradiction Check] Purely explanatory — never a new
+                          confirm/decline control. Shown whenever the currently
+                          typed wording has a weak-tier contradiction that kept an
+                          otherwise-plausible product out of the panel above (or,
+                          when every candidate for this wording was contradicted,
+                          out of any panel at all). */}
+                      {rowHasSuppressedContradiction(row) && (
+                        <p className="mt-1.5 text-[11px] text-gray-500 italic">
+                          {t('addStock.supplierWording.contradictionNotShownNotice')}
+                        </p>
                       )}
 
                       {row.pendingSupplierWording?.origin === 'reused' && (
