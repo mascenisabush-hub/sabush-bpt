@@ -2,7 +2,7 @@ Reconciliation Addendum
 
 # Decision 37, Item B.2 — Selling-Unit Capture Extension
 
-**Status:** Product Architect decision recorded, this session. **Not yet formally signed** — see "Signature Gate," below. Not an Implementation Authorization; does not by itself authorize any code change.
+**Status:** ✅ **SIGNED (29 August 2026).** See "Signature Gate — Formal Acceptance," §5, below, for the complete signed decision. Not an Implementation Authorization; does not by itself authorize any code change.
 
 **Amends (narrowly, only the one statement §1 identifies):** [`business-worth-evolution-implementation-authorization.md`](./business-worth-evolution-implementation-authorization.md) §38, "Execution Record — Decision 37, Item B.2 (Arbitrary-Length Unit-Relationship Entry)" — specifically its own recorded statement that no `sellingUnit` decision was introduced by that item.
 
@@ -51,11 +51,34 @@ Recorded here as directed, this session, by the Product Architect:
 
 [`periodic-contagem-new-product-selling-unit-implementation-plan.md`](./periodic-contagem-new-product-selling-unit-implementation-plan.md) — specifically its §10 (Governance Classification) — flagged this exact point as "the one point in this Plan worth an explicit sign-off on specifically." This addendum is that sign-off's substance. The Plan's §10 is updated (see accompanying edit) to reference this addendum and record that the flagged concern has been explicitly addressed by Product Architect decision, pending only the formal signature gate below. No other part of the Plan requires change — its approach, scope, UI behavior, persistence, validation, tests, and acceptance criteria (§1–§9, §11–§13) already anticipated and match exactly what this decision now authorizes.
 
-## 5. Signature Gate — Not Fabricated
+## 5. Signature Gate — Formal Acceptance
 
-**No formal signed acceptance is recorded here.** This repository's own established convention for a decision extending a previously *signed* governance record (`business-worth-evolution-implementation-authorization.md` §36/§38 carry an explicit "Formal acceptance" quote block: `Product Architect: <name>, Date: <date>, I APPROVE AND SIGN`) — this session's instruction did not supply that explicit name/date signature block, only a first-person directive ("I, as Product Architect, am now clarifying/extending that decision"). Per the governing instruction's own §7 ("Do not fabricate a signature... stop and report that gate rather than inventing one"), this addendum stops here: the decision content in §2 is recorded as directed, but **remains unsigned** until the Product Architect explicitly provides a signature in the same form this repository already uses elsewhere (name + date + explicit approval statement).
+**Status: ✅ SIGNED (29 August 2026).**
 
-**This addendum does not authorize implementation.** Even once signed, per the Implementation Plan's own §16-equivalent gate (its own "DRAFT — NOT YET ACCEPTED / NOT AUTHORIZED" status, unchanged by this addendum), a further, separate Plan acceptance and a distinct, signed Implementation Authorization remain required before any code is written — matching this document's own governing precedent (§36's "does not itself instruct implementation to begin" language) exactly.
+> PRODUCT ARCHITECT ACCEPTANCE / SIGNATURE
+>
+> I, as Product Architect, formally accept and sign the Decision 37 B.2
+> Selling Unit Capture Extension Addendum, including the complete
+> decision recorded in §2 above: Periodic Contagem's new-product
+> relationship editor may capture `UnitRelationship.sellingUnit`, from
+> among the established functional-unit chain, independent of the
+> buying/acquisition unit, using the existing field, type, and
+> validator only — no new data model, no new conversion mechanism, no
+> Product-level selling-portions configuration. Add Portion, Initial
+> Stock, Add Stock, and Smart Stock Entry all remain exactly as
+> already governed, unaffected by this signature.
+>
+> This signature extends Decision 37, Item B.2's originally-bounded
+> scope (§1, §3 above) — it does not reopen, reverse, or reinterpret
+> the historical record at `business-worth-evolution-implementation-authorization.md`
+> §38, which remains unedited and accurate as a record of what B.2
+> actually implemented on 23 August 2026.
+>
+> Product Architect: SABUSHIMIKE MASCENI
+> Decision: I APPROVE AND SIGN
+> Date: 29 August 2026
+
+**This addendum does not authorize implementation.** Even now signed, per the Implementation Plan's own §16-equivalent gate (its own "DRAFT — NOT YET ACCEPTED / NOT AUTHORIZED" status, unchanged by this signature), a further, separate Plan acceptance and a distinct, signed Implementation Authorization remain required before any code is written — matching this document's own governing precedent (§36's "does not itself instruct implementation to begin" language) exactly. This signature clears the one governance point the Implementation Plan's §10 flagged as outstanding — it does not clear the Plan's own separate acceptance gate, which remains a distinct, subsequent step.
 
 ---
 
@@ -67,4 +90,4 @@ Recorded here as directed, this session, by the Product Architect:
 - No Product-level "selling portions" configuration is introduced or implied anywhere in this document.
 - Initial Stock, Add Stock, and Smart Stock Entry are confirmed out of scope and untouched.
 
-**Lifecycle:** Product Architect decision recorded → **awaiting formal signature** (§5) → (upon signature) available as governing basis for the Implementation Plan's own acceptance gate. Not itself an Implementation Authorization at any point in this lifecycle.
+**Lifecycle:** Product Architect decision recorded → **signed** (§5, 29 August 2026) → available as governing basis for the Implementation Plan's own acceptance gate. Not itself an Implementation Authorization at any point in this lifecycle.
