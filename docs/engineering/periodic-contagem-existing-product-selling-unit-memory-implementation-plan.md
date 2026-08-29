@@ -6,12 +6,13 @@ Implementation Plan
 Assessment into a concrete, file-by-file implementation plan. Does not
 itself authorize implementation and does not modify code.
 
-**Status:** Draft — governance blocker resolved (the Rule 8 Assessment's
-former §12 open item is now closed by the signed reconciliation
-addendum, below); this Plan itself remains pending its own, separate
-Product Architect acceptance, then pending a distinct, subsequent
-Implementation Authorization (not created here, explicitly withheld per
-this session's instruction).
+**Status:** ✅ **ACCEPTED — AUTHORIZED TO PROCEED TO IMPLEMENTATION
+AUTHORIZATION** (29 August 2026). See "Product Architect Acceptance,"
+§11, below, for the complete signed decision. This acceptance closes
+this Plan's own, separate governance gate (formerly Gate 2, §10); a
+distinct, subsequent Implementation Authorization remains a required,
+separate gate, not created by this acceptance and not created by this
+document.
 
 **Implementation basis, as of this revision:**
 
@@ -341,22 +342,44 @@ next Contagem, changes.
    reference-point narrowing of `product-unit-of-measure-specification.md`
    §4; the companion Rule 8 Assessment has been updated from
    CONDITIONALLY READY to **READY** accordingly.
-2. **This Implementation Plan's own acceptance** — a separate, distinct
-   Product Architect acceptance of this Plan document itself (§1–§9,
-   above), mirroring the two-step precedent already established for the
+2. ~~This Implementation Plan's own acceptance~~ — **RESOLVED (29 August
+   2026).** A separate, distinct Product Architect acceptance of this
+   Plan document itself (§1–§9, above) has been recorded — see §11,
+   below — mirroring the two-step precedent already established for the
    new-product `sellingUnit` capture work (its own signed addendum,
-   followed by a separate, later Plan acceptance). **Not performed by
-   this revision** — explicitly withheld per this session's instruction.
+   followed by a separate, later Plan acceptance).
 3. **Implementation Authorization** — a separate, signed document, not
-   created by this Plan, required before any code, test, or
-   `firestore.rules` change is made. Explicitly withheld per this
-   session's instruction.
+   created by this Plan, still required before any code, test, or
+   `firestore.rules` change is made. **Not created by this acceptance or
+   by this document** — remains the one outstanding gate.
 
 Every technical Finding (A–E) in the companion Rule 8 Assessment is
-independently Rule-8-resolvable, and the one governance-boundary
-question that previously sat upstream of both remaining gates is now
-closed. Gates 2 and 3 remain ordinary, sequential governance steps — not
-open technical or business questions.
+independently Rule-8-resolvable, the governance-boundary question that
+previously sat upstream of every remaining gate is closed, and this
+Plan's own acceptance gate (2) is now closed. Gate 3 (Implementation
+Authorization) is the sole remaining, ordinary, sequential governance
+step — not an open technical or business question.
+
+## 11. Product Architect Acceptance
+
+> PRODUCT ARCHITECT ACCEPTANCE / SIGNATURE
+>
+> I, as Product Architect, formally accept this Implementation Plan
+> (§1–§9, above) in its entirety, as scoped: the two-tier
+> `sellingUnit`-preferred / `units[0]`-fallback resolution applied to
+> `buildCatalogRow` and `handleModeAToggle` (and its
+> `ModeAValuationControl` render-site counterpart) in
+> `apps/tenant/src/components/PeriodicStockCountView.tsx`, and no other
+> file, function, schema, or governance document. This acceptance
+> authorizes the project to proceed to the separate, subsequent
+> Implementation Authorization gate. **This acceptance does not itself
+> authorize implementation** — no code, test, `firestore.rules`, or
+> `firestore.indexes.json` change may be made until a distinct, signed
+> Implementation Authorization exists.
+>
+> Product Architect: SABUSHIMIKE MASCENI
+> Decision: ACCEPTED
+> Date: 29 August 2026
 
 ---
 
@@ -382,7 +405,14 @@ open technical or business questions.
 - No existing Specification, BDR, POL, or prior Rule 8 Assessment/
   Implementation Plan/Authorization was modified to produce this Plan.
 - No Implementation Authorization was created.
+- **This revision:** the companion Rule 8 Assessment (READY) and the
+  signed reconciliation addendum re-read in full, confirmed unchanged;
+  this document's own header, §10, and new §11 updated to record the
+  Product Architect's acceptance of this Plan — no other section
+  rewritten. `git status`/`git log -1` re-confirmed clean working tree
+  and unchanged `HEAD` immediately before and after this revision.
 
 **This document does not itself authorize implementation.** Its own
-Product Architect acceptance (§10, Gate 2) remains a separate, later
-step, not performed here.
+Product Architect acceptance is now recorded (§11); a distinct, signed
+Implementation Authorization remains a separate, later, required step,
+not performed here.
