@@ -1,10 +1,10 @@
 # Product Recognition Intelligence — Implementation Authorization
 
-**Status:** 🟡 **DRAFT — NOT SIGNED. NOT AUTHORIZED.** Engineering may
-not begin on the strength of this document alone. This capability is
-only authorized once §5 (Signature) below is completed with an
-explicit, recorded Product Architect acceptance — this draft leaves
-that section pending, by design, per instruction.
+**Status:** ✅ **ACCEPTED AND AUTHORIZED.** Signed by the Product
+Architect, §7. Engineering implementation of the complete
+Implementation Plan (all four checkpoints, as one authorized
+capability) may proceed strictly within the scope, non-negotiables,
+acceptance criteria, and exclusions recorded in this document.
 
 **Governing chain (sole authority for this Authorization):**
 [`ADR-0008`](../adr/ADR-0008-complementary-recognition-mechanisms-scope-decision.md)
@@ -327,19 +327,72 @@ discipline.
 
 ## 7. Product Architect Acceptance / Signature
 
-**Status: SIGNED. ACCEPTED AND AUTHORIZED.**
+**Status: ACCEPTED AND AUTHORIZED.**
 
+> PRODUCT ARCHITECT ACCEPTANCE
 > Product Architect: SABUSHIMIKE MASCENI
 > Decision: ACCEPTED AND AUTHORIZED
 > Date: 29 August 2026
+>
+> I accept and authorize the complete Product Recognition Intelligence
+> implementation defined by the Implementation Plan and covered by the
+> READY Rule 8 Assessment.
+>
+> This authorization covers the complete capability as ONE
+> implementation:
+> 1. Character/typo spelling variation + contradiction check.
+> 2. Abbreviation, curated synonym, and curated translation
+>    recognition.
+> 3. Owner-facing candidate presentation through the existing
+>    recognition confirmation flow.
+> 4. Semantic/AI candidate discovery.
+>
+> The business objective remains duplicate-product prevention.
+>
+> All recognition mechanisms remain complementary candidate-producing
+> grounds under:
+> RECOGNIZE → PRESENT → OWNER DECIDES → REMEMBER
+>
+> No mechanism is authorized to:
+> - automatically select an existing product;
+> - automatically create a product;
+> - automatically merge products;
+> - override a contradiction;
+> - bypass the Owner decision.
+>
+> Semantic/AI recognition is explicitly authorized as part of this
+> same capability and same governance chain. It must remain subject to
+> the mechanism-specific constraints and acceptance criteria already
+> established by Rule 8 and the Implementation Plan. Do not create a
+> separate governance lineage or separate Rule 8 assessment for
+> Semantic/AI.
 
 **Effective upon this signature:** this Authorization is now in
 force. Engineering implementation of the complete Implementation Plan
-— all four checkpoints — may proceed, strictly within the scope
-defined in §2, the non-negotiables in §3, the acceptance criteria in
-§4, and the exclusions in §5. Any discovered need to exceed those
-boundaries during implementation returns to Product Architect review
-before proceeding, per §6.
+— all four checkpoints, as one authorized capability, not four
+separately-gated ones — may proceed, strictly within the scope defined
+in §2, the non-negotiables in §3, the acceptance criteria in §4, and
+the exclusions in §5 (reaffirmed below, unchanged, per this
+acceptance):
+
+- No structured-attribute recognition.
+- No cross-supplier evidence.
+- No automatic-resolution tier beyond the authorized existing
+  behavior (byte-exact, single-supplier reuse).
+- No unauthorized model/provider/prompt selection — Checkpoint 4's
+  §2 contract governs; no specific choice is pre-selected here.
+- No unauthorized confidence/threshold policy — none is surfaced,
+  stored, or used to rank candidates.
+- No changes to Product Memory, UOM/`unitRelationship`, Business
+  Worth, Stock Count, or any finalization/closing mechanism.
+- No new UI component beyond what the Plan already authorizes
+  (extension of the existing candidate-explanation panel only).
+- No unauthorized Firestore schema, rule, or index changes.
+- No `grounds`-on-confirmation field — not included in this
+  Authorization.
+
+Any discovered need to exceed these boundaries during implementation
+returns to Product Architect review before proceeding, per §6.
 
 ---
 
