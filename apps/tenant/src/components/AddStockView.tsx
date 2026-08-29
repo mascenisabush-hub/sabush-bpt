@@ -17,6 +17,7 @@ import { findSimilarProducts } from '../lib/productNameSimilarity';
 // comment for why this is a shared utility, not duplicated per screen.
 import { checkPriceDeviation } from '../lib/priceDeviationCheck';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
+import { preprocessSmartStockEntryImage } from '../utils/smartStockEntryImagePreprocessing';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -1756,6 +1757,31 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     setScanInputMethod(method);
     setScanErrorReason(null);
 
+    // [Smart Stock Entry — Client-Side Image Preprocessing Reliability
+    // Fix] GOVERNANCE: implements
+    // docs/engineering/smart-stock-entry-image-preprocessing-implementation-authorization.md
+    // (ACCEPTED AND AUTHORIZED — SABUSHIMIKE MASCENI, 29 August 2026).
+    // Both camera and upload call this same handleFileSelected, so this
+    // one call protects both paths (Authorization §4 item 1). It MUST
+    // run before FileReader.readAsDataURL below — the original file is
+    // never converted to full-resolution base64 before preprocessing
+    // (Authorization §2, §4 item 2/3). A genuine decode/preprocessing
+    // failure (corrupt input, createImageBitmap unavailable, or the
+    // unavoidable native-decoder memory boundary — Authorization §5)
+    // routes into the existing graceful 'unreadable' state below; this
+    // is never a "file too large" rejection (Authorization §4 item 8).
+    const preprocessResult = await preprocessSmartStockEntryImage(file);
+    if (!preprocessResult.ok) {
+      setScanState('error');
+      setScanInputMethod(null);
+      setScanErrorReason('unreadable');
+      return;
+    }
+    // Already-small images pass through completely unmodified (the
+    // original File); everything else is downscaled/re-encoded to a
+    // bounded JPEG (Authorization §3, §4 item 5).
+    const preparedFile = preprocessResult.file;
+
     let base64: string;
     try {
       base64 = await new Promise<string>((resolve, reject) => {
@@ -1772,7 +1798,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           resolve(commaIndex === -1 ? result : result.slice(commaIndex + 1));
         };
         reader.onerror = () => reject(new Error('unreadable'));
-        reader.readAsDataURL(file);
+        reader.readAsDataURL(preparedFile);
       });
     } catch {
       setScanState('error');
@@ -1781,7 +1807,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       return;
     }
 
-    const result = await scanPurchaseDocument(base64, file.type || 'application/octet-stream');
+    const result = await scanPurchaseDocument(base64, preparedFile.type || 'application/octet-stream');
 
     if (result.success === false) {
       setScanState('error');
