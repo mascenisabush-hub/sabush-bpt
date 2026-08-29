@@ -2,16 +2,20 @@ Decision Record
 
 # Smart Stock Entry — Client-Side Image Preprocessing Reliability Fix — Rule 8 Assessment
 
-**Status:** New governance artifact, produced this session. Read-only
-assessment. **Not an Implementation Plan. Not an Implementation
-Authorization. Does not authorize coding.**
-**Lifecycle state:** Designed → **Assessed** (this document). Per
+**Status:** Read-only assessment, amended once (§15) to record a
+Product Architect parameter-selection decision. **Not an
+Implementation Plan. Not an Implementation Authorization. Does not
+authorize coding.**
+**Lifecycle state:** Designed → **Assessed** (this document; verdict
+updated by §15's amendment — see §13). Per
 `platform-engineering-governance-standard.md` §3, "Assessed" is a
 readiness opinion, not a go-ahead — the transition to Authorized
-requires a separate, explicit Product Architect decision.
-**Baseline verified fresh, this session:** `main`, commit `b5de365`,
-working tree clean (`git status --short` empty), confirmed
-immediately before this assessment began.
+requires a separate, explicit Product Architect decision and a
+distinct Implementation Plan/Authorization document.
+**Baseline verified fresh, this session (amendment):** `main`, commit
+`2aef7d0`, working tree clean (`git status --short` empty), confirmed
+immediately before this amendment began. Original Assessment baseline
+(unchanged): `main`, commit `b5de365`.
 **Governance classification:** Category 2 engineering work (see
 §10). Enters the governance pipeline directly at Rule 8 Assessment,
 per the Addendum to
@@ -368,54 +372,82 @@ Implementation) begins:
 
 ## 12. Open Engineering Decisions (Deferred to a Future Implementation Plan)
 
-Not resolved by this Assessment, and explicitly not blocking a
-**READY AFTER DECISIONS** verdict, per §9C:
+**Updated by §15.** Items 1–3 remain open (numeric values are
+Implementation Plan-level work, not Rule 8-level work, per §9C/§15);
+item 4 is now resolved at the policy level; item 5 remains open and
+out of scope for this fix:
 
-1. The exact target long-edge dimension (pixels).
-2. The exact output format (JPEG vs. WebP — JPEG is the safer default
-   for universal decoder/encoder support across the three target
-   environments named in §1; WebP encoding support via `toBlob` is
-   less uniform on older WebView builds).
-3. The exact JPEG/WebP quality value.
-4. Whether a fallback exists for a browser/WebView where
-   `createImageBitmap` is unavailable entirely (very old WebView
-   builds) — versus treating that case as routing directly into the
-   existing graceful failure path (§8) without ever attempting
-   preprocessing.
+1. **Open.** The exact target long-edge dimension (pixels) — to be
+   chosen within §15 item 2's large/conservative framework.
+2. **Open.** The exact output format (JPEG vs. WebP — JPEG confirmed
+   by §15 item 3 as the likely initial candidate for universal
+   decoder/encoder support across the three target environments named
+   in §1; WebP encoding support via `toBlob` is less uniform on older
+   WebView builds; not frozen as permanent).
+3. **Open.** The exact JPEG/WebP quality value — to be chosen within
+   §15 item 2's framework, prioritizing receipt legibility (§15 item
+   7) over payload size.
+4. **Resolved by §15 item 5.** A browser/WebView where
+   `createImageBitmap` is unavailable, or any other catchable
+   preprocessing/decode failure, routes into the existing graceful
+   Smart Stock Entry/manual-entry failure path (§8) uniformly — no
+   separate per-cause fallback design is required.
 5. Whether any telemetry/logging is added client-side to observe
    real-world preprocessing outcomes (output size, failure rate) —
    not decided here, and would itself need a narrow privacy/data
    review before being added, consistent with this repository's
-   existing discipline for any new client-side data collection.
+   existing discipline for any new client-side data collection. Not a
+   blocker for a future Implementation Plan to proceed without it.
 
-Each of these is a legitimate, narrow decision for the Implementation
-Plan stage — none of them reopens BDR-0008, the ADR, or spec #4.
+Items 1–3 and 5 are legitimate, narrow decisions for the
+Implementation Plan stage — none of them reopens BDR-0008, the ADR,
+or spec #4, and per §13 (as amended by §15) none of them blocks this
+Assessment's own readiness verdict.
 
 ## 13. Implementation-Readiness Verdict
 
-**READY AFTER DECISIONS.**
+**READY.** *(Updated by §15's amendment — originally READY AFTER
+DECISIONS; see superseded reasoning below.)*
 
-Not **READY**, because §12's open engineering decisions (specific
-dimension/format/quality values, and the no-`createImageBitmap`
-fallback behavior) must be explicitly made — with the "INITIAL
-IMPLEMENTATION PARAMETERS — SUBJECT TO REAL-WORLD VALIDATION" label
-required by §9C — before an Implementation Plan can be written against
-concrete values rather than a described mechanism.
+The decision this Assessment was waiting on was the qualitative
+parameter-selection **framework** (large/conservative, receipt-
+legibility-first, JPEG as initial candidate, unchanged server ceilings,
+graceful handling of every decode/support failure) — not the exact
+numeric values themselves. §15 records that framework as the Product
+Architect's binding direction. The exact long-edge dimension and
+quality value (§12 items 1 and 3) are ordinary Implementation Plan-
+stage decisions in this repository's convention (selected, and
+explicitly labeled "INITIAL IMPLEMENTATION PARAMETERS — SUBJECT TO
+REAL-WORLD VALIDATION" per §9C, when the Implementation Plan is
+written) — their being unpicked here does not, by itself, block this
+Assessment's own readiness the way an unresolved *behavioral or
+architectural* question would.
 
-Not **NOT READY**, because the mechanism itself (§9B: `createImageBitmap`
-+ canvas `toBlob` re-encoding, preprocessing strictly before base64)
-is a well-understood, broadly-supported web-platform pattern (§6), the
-governed behavioral boundary is unambiguous and does not require
-further product decisions (§9A, §10), and every genuine open question
-is narrow, engineering-level, and does not touch business rules,
-governed AI boundaries, or server-side security controls.
+No other genuine Rule 8 blocker remains: the mechanism (§9B:
+`createImageBitmap` + canvas `toBlob` re-encoding, preprocessing
+strictly before base64) is a well-understood, broadly-supported
+web-platform pattern (§6); the governed behavioral boundary is
+unambiguous (§9A, §10, reconfirmed by §15); every failure mode,
+including the unavoidable native-decoder boundary, now has a single,
+uniform, already-defined fallback (§8, §15 item 5); and the server-
+side ceilings this fix must respect are explicitly reconfirmed
+unchanged (§15 item 6).
 
-This verdict does not authorize Stage 9 (Incremental Implementation).
-Per `platform-engineering-governance-standard.md` §3, moving from
-Assessed to Authorized requires a separate, explicit Product Architect
-decision — specifically, resolution of §12's open decisions, followed
-by a distinct Implementation Plan and a signed Implementation
-Authorization.
+**Superseded reasoning (original verdict, retained for record):** this
+Assessment originally read READY AFTER DECISIONS, treating §12's then-
+open items (specific dimension/format/quality values, and the
+`createImageBitmap`-unavailable fallback) as blocking. §15 resolves
+the fallback question directly and clarifies that the remaining
+numeric-value items were never a Rule 8-level blocker to begin with —
+they are Implementation Plan inputs.
+
+This verdict still does **not** authorize Stage 9 (Incremental
+Implementation). Per `platform-engineering-governance-standard.md`
+§3, moving from Assessed to Authorized requires a separate,
+explicit Implementation Plan (which will select §12 items 1/3's exact
+values, labeled per §9C) followed by a distinct, signed Implementation
+Authorization — neither of which this document is or creates (§15's
+closing note).
 
 ## 14. Scope Discipline / Change-Control Statement
 
@@ -437,21 +469,123 @@ ADR; the Smart Stock Entry specification amendment (spec #4).
 
 ---
 
+## 15. Product Architect Decision — Parameter-Selection Framework (Addendum, This Session)
+
+**Type:** Non-normative governance amendment to this Rule 8 Assessment
+only. Does not reopen, reverse, or reinterpret §1–§14 above except
+where §13's verdict is explicitly updated below. Does not amend
+`BDR-0008`, the Smart Stock Entry ADR, or spec amendment #4 — none of
+the three were opened, read for editing, or modified to produce this
+addendum.
+**Recorded, not signed:** this section records a Product Architect
+direction as **binding guidance for a future Implementation Plan**, in
+the same unsigned form already used in §9 above. It is **not** a
+signed Stage 8 Implementation Authorization — see the note on
+signature form at the end of this section.
+
+This session's direction confirms and sharpens §9's four-category
+framework, without selecting any final numeric value (per §9C, still
+deferred):
+
+1. **Original file size is confirmed, again, as never a normal
+   rejection criterion** (restates §9A — no change in substance,
+   confirmed explicitly this session as the Product Architect's
+   binding decision for the future implementation).
+2. **The initial output target must be large/conservative, not
+   aggressive.** Given that Smart Stock Entry extracts product names,
+   quantities (including decimal quantities), unit prices, totals,
+   dates, and supplier information, the first implementation must
+   deliberately choose a relatively large maximum output dimension and
+   moderate quality — prioritizing preservation of small receipt text
+   over minimizing payload size. An artificially tiny image chosen
+   merely to minimize bandwidth or memory is explicitly rejected as a
+   starting point.
+3. **JPEG is confirmed as the likely initial output format**, evaluated
+   as such because of its broad canvas re-encoding support (§6, §12
+   item 2) — **not** frozen as a permanent governance decision. PNG/
+   WebP remain implementation considerations, to be documented if they
+   matter, not decided here.
+4. **The "already sufficiently small" optimization is permitted** as an
+   engineering optimization (skip re-encoding when the source is
+   already within the selected bounds) — explicitly **not** a business
+   rule — provided it cannot reintroduce the original problem: an
+   oversized image must never reach `FileReader`/base64 before a
+   preprocessing decision (skip-or-resize) has actually been made
+   about it.
+5. **The native-decoder memory boundary (§6, §9's failure-boundary
+   distinction) is reconfirmed, explicitly, as not eliminated by this
+   fix.** A catchable preprocessing/decode failure routes into the
+   existing graceful Smart Stock Entry/manual-entry behavior (§8) and
+   is explicitly restated as **not** an instance of intentional
+   original-size rejection (§9A) — this resolves §12 item 4 (the
+   `createImageBitmap`-unavailable/decode-failure fallback question)
+   at the policy level: every such failure, regardless of specific
+   cause, degrades gracefully via the same existing §8 path. No new
+   per-cause fallback behavior needs separate design.
+6. **The existing server-side `MAX_IMAGE_BYTES` (8MB decoded) and the
+   12MB request-body parser are reconfirmed as unchanged and must not
+   be raised to accommodate a larger client-side target** — the
+   client-side initial target must be selected with those existing
+   ceilings in mind, not the reverse.
+7. **Receipt-information preservation is reconfirmed as the controlling
+   quality constraint** for a future Implementation Plan (restates §7
+   — no change in substance): settings that unnecessarily destroy
+   small decimal numbers, thin digits, product names, price columns,
+   quantities, dates, supplier names, or totals are out of bounds
+   regardless of payload-size benefit.
+
+**What remains explicitly unresolved by this addendum, unchanged from
+§12:** the exact target long-edge dimension (§12 item 1) and the exact
+JPEG/WebP quality value (§12 item 3). This addendum records the
+*framework* those numbers must be chosen within (large/conservative,
+receipt-legibility-first, JPEG as the likely initial format) — it does
+not itself pick a number, and this document does not claim any
+number as empirically proven, because no representative Sabush
+receipt benchmark corpus exists (§6, §7, unchanged).
+
+**On signature form:** the originating instruction for this session
+asked for a marked "Product Architect Decision / Acceptance" section
+with a name/decision/date signature block, but only if this
+repository's existing governance workflow permits recording a signed
+acceptance directly inside a Rule 8 Assessment. Investigation, this
+session, of every existing document in `docs/engineering/` carrying a
+`Product Architect: <name>` / signed-acceptance block found that
+pattern used **only** in dedicated `*-implementation-authorization.md`
+files and in the one precedent for an after-the-fact acceptance,
+`18-superadmin-business-directory-retrospective-acceptance.md` — never
+inline within a `*-rule8-assessment.md` file. No precedent exists in
+this repository for a signed Product Architect acceptance recorded
+directly inside a Rule 8 Assessment. Per the originating instruction's
+own fallback ("if the workflow requires a separate acceptance
+artifact, stop and report that rather than inventing one"), **no
+signature block is added here.** This section records the parameter-
+selection framework as binding direction, in the same unsigned form
+§9 already uses, and a formal, signed Stage 8 Implementation
+Authorization — a separate document — remains the correct place for
+a dated Product Architect signature once an Implementation Plan
+exists to authorize.
+
 ## Governance Notes
 
 - This document does not implement code, modify runtime behavior, or
   edit any `src/`, `apps/`, `server/`, or `firestore.rules` file. None
-  were touched to produce it — confirmed by `git status` in the
-  accompanying report.
+  were touched to produce it or this amendment — confirmed by `git
+  status` in the accompanying report.
 - This document does not modify `BDR-0008`, the Smart Stock Entry ADR,
   spec amendment #4, or the Governance Review Summary — confirmed
-  unchanged, this session.
+  unchanged, both when this Assessment was first written and again for
+  this amendment.
 - This document does not create, and should not be treated as, an
-  Implementation Plan or an Implementation Authorization.
+  Implementation Plan or an Implementation Authorization. §15's
+  addendum does not change that.
 - This document does not select final numeric preprocessing parameters
-  (§12) and does not claim any extraction-accuracy evidence that does
-  not exist (§6, §7).
+  (§12, still open after §15) and does not claim any extraction-
+  accuracy or benchmark evidence that does not exist (§6, §7).
+- §15 records a Product Architect decision as unsigned binding
+  guidance, consistent with §9's existing form — it does not
+  fabricate a signed acceptance block; see §15's closing note for why.
 
-**Lifecycle:** Designed → **Assessed** (this document). Not
-Authorized, Implemented, Verified, or Closed — no engineering work is
-authorized by this record.
+**Lifecycle:** Designed → **Assessed** (this document; §13's verdict
+updated to **READY** by §15's amendment). Not Authorized, Implemented,
+Verified, or Closed — no engineering work is authorized by this
+record.
