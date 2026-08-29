@@ -356,10 +356,14 @@ const ModeAValuationControl: React.FC<{
 // editable name field here would create two sources of truth for the
 // same value), original purchase/cost basis (purchaseUnit/
 // purchaseCost), and the unit relationship (relationshipSteps, edited
-// via UnitRelationshipChainEditor). Purely presentational + the
-// newProductInfo field bindings; introduces no new calculation, no
-// change to submission/normalization beyond correctly sourcing the
-// relationship steps this panel already collected, and no change to
+// via UnitRelationshipChainEditor) — plus, since the Decision 37 B.2
+// Selling Unit Capture Extension, the owner's selling/valuation unit
+// (sellingUnit, sellingUnitOptions), rendered directly below the
+// chain editor once at least one complete level exists. Purely
+// presentational + the newProductInfo field bindings; introduces no
+// new calculation, no change to submission/normalization beyond
+// correctly sourcing the relationship steps and selling unit this
+// panel already collected, and no change to
 // StockCountWorkingRow.unit/quantity/costPrice/sellingPrice. Does NOT
 // derive or display any per-level cost (e.g. "312.50 MZN/Emb") — that
 // remains explicitly out of scope, deferred to B.4/FR-67.
@@ -372,6 +376,19 @@ const NewProductInfoPanel: React.FC<{
   onPurchaseCostChange: (value: string) => void;
   relationshipSteps: { unit: string; factor: string }[];
   onRelationshipStepsChange: (steps: { unit: string; factor: string }[]) => void;
+  // [Decision 37 B.2 Selling Unit Capture Extension — Implementation
+  // Authorization §2 items 2/4] `sellingUnitOptions` is the caller's
+  // own [purchaseUnit, ...completeSteps.map(s => s.unit)] construction
+  // (mirroring ModeAValuationControl's own referenceUnitOptions
+  // pattern) — empty until the chain has at least one complete step,
+  // which is exactly when this selector should render at all.
+  // `sellingUnit` is the caller's already-reset-if-stale effective
+  // value, never validated again here — this component is purely
+  // presentational, same discipline as every other field on this
+  // panel.
+  sellingUnitOptions: string[];
+  sellingUnit: string;
+  onSellingUnitChange: (value: string) => void;
 }> = ({
   productName,
   currencySymbol,
@@ -381,6 +398,9 @@ const NewProductInfoPanel: React.FC<{
   onPurchaseCostChange,
   relationshipSteps,
   onRelationshipStepsChange,
+  sellingUnitOptions,
+  sellingUnit,
+  onSellingUnitChange,
 }) => {
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
@@ -423,6 +443,35 @@ const NewProductInfoPanel: React.FC<{
       </div>
 
       <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
+
+      {/* [Decision 37 B.2 Selling Unit Capture Extension —
+          Implementation Authorization §2 items 2/5] Renders only once
+          the chain has at least one complete step (2+ total units) —
+          sellingUnitOptions is empty otherwise, exactly the same gate
+          a single-functional-unit product already satisfies naturally
+          (§3.A: no selector, no relationship, the one unit is simply
+          the selling unit). Never forces sellingUnit === purchaseUnit —
+          the owner picks any member of the established chain. */}
+      {sellingUnitOptions.length > 0 && (
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de venda/avaliação</label>
+          <select
+            value={sellingUnit}
+            onChange={(e) => onSellingUnitChange(e.target.value)}
+            className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          >
+            <option value="">Selecionar...</option>
+            {sellingUnitOptions.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
+          <p className="mt-1 text-[13px] text-gray-500 leading-relaxed">
+            A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra.
+          </p>
+        </div>
+      )}
     </div>
   );
 };
@@ -1217,8 +1266,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // mapping). Deliberately transient component state, never written to
   // PeriodicStockDraft/Firestore — same discipline modeAGroups itself
   // already documents above.
+  // [Decision 37 B.2 Selling Unit Capture Extension — Implementation
+  // Authorization §2 item 1] `sellingUnit` extends this same per-product
+  // state shape with one additional field: the owner's chosen
+  // selling/valuation unit from among the established functional-unit
+  // chain, independent of `purchaseUnit`. Defaults to '' (unset) —
+  // never defaulted to `purchaseUnit` or `relationshipSteps[0].unit`,
+  // since B.2's own single-unit rule and the addendum's independence
+  // requirement both forbid inferring a selling unit rather than
+  // letting the owner choose it. Reset to '' whenever the current
+  // value is no longer among the live chain's units (see the call
+  // site's own reset-on-edit effect, further below) — never left
+  // silently stale.
   const [newProductInfo, setNewProductInfo] = useState<
-    Record<string, { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
+    Record<
+      string,
+      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit?: string }
+    >
   >({});
 
   // [Decision 38 Amendment — Interruption-durability combined
@@ -1365,11 +1429,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (completeSteps.length === 0) return undefined;
 
     const purchaseUnit = info.purchaseUnit.trim() || 'un';
+    // [Decision 37 B.2 Selling Unit Capture Extension — Implementation
+    // Authorization §2 item 3] Only ever included when it's still a
+    // live member of THIS candidate's own chain — never passed through
+    // stale. Passing a stale/no-longer-member value straight to
+    // isValidUnitRelationship would reject the WHOLE candidate (its own
+    // §73-86 membership check), not just the selling unit — exactly the
+    // silent-breakage this guard exists to prevent.
+    const candidateUnits = [purchaseUnit, ...completeSteps.map((s) => s.unit.trim())];
+    const effectiveSellingUnit = info.sellingUnit && candidateUnits.includes(info.sellingUnit) ? info.sellingUnit : undefined;
     const candidate: UnitRelationship = {
       units: [
         { unit: purchaseUnit, factorFromPrevious: 0 },
         ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
       ],
+      ...(effectiveSellingUnit ? { sellingUnit: effectiveSellingUnit } : {}),
       confirmedAt: new Date().toISOString(),
     };
     return isValidUnitRelationship(candidate) ? candidate : undefined;
@@ -1758,6 +1832,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // empty object, the same discipline already applied elsewhere in
     // this codebase for every other optional draft field, never as an
     // error and never requiring migration/backfill.
+    //
+    // [Decision 37 B.2 Selling Unit Capture Extension] `sellingUnit`
+    // is declared optional on this same state shape (above) precisely
+    // so this exact, pre-existing restore call needs no change: a
+    // draft written before `sellingUnit` existed simply lacks that
+    // property on each entry, which an optional field already treats
+    // as "unset", not as an error — the same "absence is not an
+    // error" discipline as the `?? {}` above, requiring no per-entry
+    // mapping.
     setNewProductInfo(periodicStockDraft.newProductInfo ?? {});
     setDraftSaveState('saved');
     setDraftBannerDismissed(true);
@@ -2199,14 +2282,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // since UnitRelationshipChainEditor's own "+ Adicionar nível"
       // gating already prevents a genuinely INTERIOR gap from ever
       // being constructed in the first place; only the very last step
-      // can ever be incomplete. `sellingUnit` is deliberately left
-      // unset — B.2's own scope is the relationship chain only, never
-      // a selling-price/reference-unit decision (that remains Mode
-      // A/B's own, separately-authorized, unmodified mechanism, which
-      // already lets the Owner pick any unit from the full chain as
-      // its reference unit — Product.unitRelationship.sellingUnit is
-      // optional per isValidUnitRelationship's own contract, unchanged
-      // here).
+      // can ever be incomplete.
+      //
+      // [Decision 37 B.2 Selling Unit Capture Extension — signed
+      // addendum + Implementation Authorization] `sellingUnit` is now
+      // included below, from the SAME newProductInfo.sellingUnit the
+      // owner chose in NewProductInfoPanel's own selector, once it's
+      // confirmed to still be a live member of this candidate's own
+      // chain (see the guard immediately below) — never fabricated,
+      // never inferred, never forced to equal the purchase unit.
+      // Product.unitRelationship.sellingUnit remains the existing,
+      // optional field per isValidUnitRelationship's own unmodified
+      // contract; Mode A/B's own separately-authorized reference-unit
+      // mechanism is unaffected by this and remains free to let the
+      // Owner pick any chain unit for a temporary Mode A preview,
+      // independent of this persisted selling unit.
       const unitRelationshipByProductName = new Map<string, UnitRelationship>();
       for (const [key, info] of Object.entries(newProductInfo)) {
         if (!key) continue;
@@ -2216,11 +2306,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         if (completeSteps.length === 0) continue;
         const fallbackRow = allWorkingRows.find((r) => productKeyFor(r.productName) === key);
         const purchaseUnit = info.purchaseUnit.trim() || fallbackRow?.unit || 'un';
+        // [Decision 37 B.2 Selling Unit Capture Extension —
+        // Implementation Authorization §2 item 3] Same live-membership
+        // guard as getEffectiveUnitRelationshipForProductName's own
+        // identical comment, above — the two candidate-construction
+        // sites must never disagree on what counts as a valid selling
+        // unit for the same product.
+        const candidateUnits = [purchaseUnit, ...completeSteps.map((s) => s.unit.trim())];
+        const effectiveSellingUnit = info.sellingUnit && candidateUnits.includes(info.sellingUnit) ? info.sellingUnit : undefined;
         const candidate: UnitRelationship = {
           units: [
             { unit: purchaseUnit, factorFromPrevious: 0 },
             ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
           ],
+          ...(effectiveSellingUnit ? { sellingUnit: effectiveSellingUnit } : {}),
           confirmedAt: new Date().toISOString(),
         };
         if (isValidUnitRelationship(candidate)) {
@@ -3702,24 +3801,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           );
                         })()}
 
-                      {/* [Business Worth Evolution — Decision 37, B.1;
-                          extended by B.2] Shown ONLY for a genuinely-new
-                          product — never re-asked for an already-known
-                          one (isGenuinelyNewProductName, unchanged) —
-                          and now rendered once per CARD (the card
-                          itself already is "once per group", so no
-                          separate portionIndex === 1 check is needed
-                          here the way the pre-B.3 flat rendering
-                          needed). The data lives in newProductInfo,
-                          keyed by the product's own name — completely
-                          unaffected by how many portions this card has,
-                          or which one is visually first. */}
+                      {/* [B.1; extended by B.2] Shown ONLY for a
+                          genuinely-new product, rendered once per CARD.
+                          Data lives in newProductInfo, keyed by name. */}
                       {isNewProduct &&
                         (() => {
                           const key = productKeyFor(group.displayName);
-                          const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] };
+                          const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [], sellingUnit: '' };
                           const setInfo = (
-                            fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }>
+                            fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit: string }>
                           ) => {
                             // [Decision 38 Amendment, Implementation Task
                             // §5b; Implementation Authorization §2 item 5;
@@ -3734,11 +3824,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             // new product's own entry.
                             const nextInfo = {
                               ...newProductInfo,
-                              [key]: { ...(newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [] }), ...fields },
+                              [key]: {
+                                ...(newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [], sellingUnit: '' }),
+                                ...fields,
+                              },
                             };
                             setNewProductInfo(nextInfo);
                             scheduleRowDraftSave(`newProductInfo:${key}`);
                           };
+                          // [B.2 Selling Unit Capture Extension] same
+                          // "complete step" filter both construction
+                          // sites already use.
+                          const completeSteps = (info.relationshipSteps || []).filter(
+                            (s) => s.unit.trim() && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
+                          );
+                          const sellingUnitOptions =
+                            completeSteps.length > 0 ? [info.purchaseUnit.trim() || 'un', ...completeSteps.map((s) => s.unit.trim())] : [];
+                          // Derived reset, mirrors effectiveReferenceUnit.
+                          const effectiveSellingUnit =
+                            info.sellingUnit && sellingUnitOptions.includes(info.sellingUnit) ? info.sellingUnit : '';
                           return (
                             <NewProductInfoPanel
                               productName={group.displayName}
@@ -3749,6 +3853,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               onPurchaseCostChange={(value) => setInfo({ purchaseCost: value })}
                               relationshipSteps={info.relationshipSteps || []}
                               onRelationshipStepsChange={(steps) => setInfo({ relationshipSteps: steps })}
+                              sellingUnitOptions={sellingUnitOptions}
+                              sellingUnit={effectiveSellingUnit}
+                              onSellingUnitChange={(value) => setInfo({ sellingUnit: value })}
                             />
                           );
                         })()}

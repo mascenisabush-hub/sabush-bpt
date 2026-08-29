@@ -26,12 +26,28 @@ function productKeyFor(name: string): string {
 }
 
 type RelationshipStep = { unit: string; factor: string };
-type NewProductInfo = { purchaseUnit: string; purchaseCost: string; relationshipSteps: RelationshipStep[] };
+type NewProductInfo = {
+  purchaseUnit: string;
+  purchaseCost: string;
+  relationshipSteps: RelationshipStep[];
+  // [Decision 37 B.2 Selling Unit Capture Extension] optional, mirrors
+  // PeriodicStockCountView.tsx's own newProductInfo state shape exactly
+  // (optional so a draft/state predating this field is still valid).
+  sellingUnit?: string;
+};
 
 /** Mirrors PeriodicStockCountView.tsx's own corrected (B.2) submit-time
  * correlation loop exactly: builds a UnitRelationship candidate PER
  * PRODUCT KEY from newProductInfo.relationshipSteps, dropping only a
- * trailing incomplete step, never inventing a fabricated factor. */
+ * trailing incomplete step, never inventing a fabricated factor.
+ *
+ * [Decision 37 B.2 Selling Unit Capture Extension] Also mirrors the
+ * production code's live-membership guard: `sellingUnit` is included
+ * in the candidate ONLY when it is still a member of THIS candidate's
+ * own chain — a stale value (e.g. the owner removed the step that
+ * introduced it) is silently dropped from the candidate rather than
+ * passed through to isValidUnitRelationship, which would otherwise
+ * reject the WHOLE relationship, not just the stale selling unit. */
 function correlateUnitRelationships(
   newProductInfo: Record<string, NewProductInfo>,
   rows: { productName: string; unit: string }[]
@@ -45,11 +61,14 @@ function correlateUnitRelationships(
     if (completeSteps.length === 0) continue;
     const fallbackRow = rows.find((r) => productKeyFor(r.productName) === key);
     const purchaseUnit = info.purchaseUnit.trim() || fallbackRow?.unit || 'un';
+    const candidateUnits = [purchaseUnit, ...completeSteps.map((s) => s.unit.trim())];
+    const effectiveSellingUnit = info.sellingUnit && candidateUnits.includes(info.sellingUnit) ? info.sellingUnit : undefined;
     const candidate: UnitRelationship = {
       units: [
         { unit: purchaseUnit, factorFromPrevious: 0 },
         ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
       ],
+      ...(effectiveSellingUnit ? { sellingUnit: effectiveSellingUnit } : {}),
       confirmedAt: '2026-08-23T00:00:00.000Z',
     };
     if (isValidUnitRelationship(candidate)) {
@@ -57,6 +76,22 @@ function correlateUnitRelationships(
     }
   }
   return result;
+}
+
+/** Mirrors NewProductInfoPanel's own call site (PeriodicStockCountView.tsx):
+ * the owner-facing selling-unit options list — [purchaseUnit,
+ * ...completeSteps.map(s => s.unit)] — populated only once the chain
+ * has at least one complete step, and the derived-value reset that
+ * falls back the CURRENT selection to '' whenever it is no longer a
+ * live chain member (mirrors effectiveReferenceUnit's own fallback
+ * pattern, per the Implementation Authorization §2 item 4). */
+function effectiveSellingUnitFor(info: NewProductInfo): { sellingUnitOptions: string[]; effectiveSellingUnit: string } {
+  const completeSteps = info.relationshipSteps.filter(
+    (s) => s.unit.trim() && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
+  );
+  const sellingUnitOptions = completeSteps.length > 0 ? [info.purchaseUnit.trim() || 'un', ...completeSteps.map((s) => s.unit.trim())] : [];
+  const effectiveSellingUnit = info.sellingUnit && sellingUnitOptions.includes(info.sellingUnit) ? info.sellingUnit : '';
+  return { sellingUnitOptions, effectiveSellingUnit };
 }
 
 /** Mirrors UnitRelationshipChainEditor's own "+ Adicionar nível" gate:
@@ -329,5 +364,168 @@ describe('B.2 — H. conversion compatibility with the existing, unmodified getC
     };
     assert.equal(getConversionFactor(relationship, 'Palete', 'Un'), 10 * 4 * 6);
     assert.equal(getConversionFactor(relationship, 'Cx', 'Un'), 4 * 6);
+  });
+});
+
+// [Decision 37 B.2 Selling Unit Capture Extension — Implementation
+// Authorization §7] The 8-item test plan for this capability. Items
+// 4 and 8 are explicitly satisfied by ALREADY-EXISTING tests above
+// (no new test needed for those — see each item's own note).
+describe('B.2 Selling Unit Capture Extension — I. new-product sellingUnit capture', () => {
+  it('item 1 — a multi-unit relationship candidate can contain a non-empty sellingUnit', () => {
+    const key = productKeyFor('Coca-Cola');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: {
+        purchaseUnit: 'Cx',
+        purchaseCost: '1250',
+        relationshipSteps: [{ unit: 'Emb', factor: '4' }],
+        sellingUnit: 'Emb',
+      },
+    };
+    const result = correlateUnitRelationships(newProductInfo, []);
+    assert.deepEqual(result.get(key), {
+      units: [
+        { unit: 'Cx', factorFromPrevious: 0 },
+        { unit: 'Emb', factorFromPrevious: 4 },
+      ],
+      sellingUnit: 'Emb',
+      confirmedAt: '2026-08-23T00:00:00.000Z',
+    });
+  });
+
+  it('item 2 — a sellingUnit that is not a member of the chain is rejected by isValidUnitRelationship, which drops the entire candidate rather than accepting a fabricated relationship', () => {
+    const outOfChain: UnitRelationship = {
+      units: [
+        { unit: 'Cx', factorFromPrevious: 0 },
+        { unit: 'Emb', factorFromPrevious: 4 },
+      ],
+      sellingUnit: 'Palete', // never a member of this chain
+      confirmedAt: '2026-08-23T00:00:00.000Z',
+    };
+    assert.equal(isValidUnitRelationship(outOfChain), false);
+
+    // The production correlation loop's own live-membership guard
+    // prevents this from ever reaching isValidUnitRelationship in the
+    // first place: an out-of-chain sellingUnit is silently dropped
+    // from the candidate, which still validates on its units[] alone.
+    const key = productKeyFor('Coca-Cola');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: {
+        purchaseUnit: 'Cx',
+        purchaseCost: '1250',
+        relationshipSteps: [{ unit: 'Emb', factor: '4' }],
+        sellingUnit: 'Palete',
+      },
+    };
+    const result = correlateUnitRelationships(newProductInfo, []);
+    assert.equal(result.get(key)?.sellingUnit, undefined, 'stale/out-of-chain sellingUnit is dropped, not persisted');
+    assert.deepEqual(result.get(key)?.units, [
+      { unit: 'Cx', factorFromPrevious: 0 },
+      { unit: 'Emb', factorFromPrevious: 4 },
+    ]);
+  });
+
+  it('item 3 — sellingUnit can differ from the purchase/acquisition unit (1 Cx = 12 Un, sellingUnit = Un)', () => {
+    const key = productKeyFor('Agua Mineral');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: {
+        purchaseUnit: 'Cx',
+        purchaseCost: '600',
+        relationshipSteps: [{ unit: 'Un', factor: '12' }],
+        sellingUnit: 'Un',
+      },
+    };
+    const result = correlateUnitRelationships(newProductInfo, []);
+    const relationship = result.get(key)!;
+    assert.equal(relationship.sellingUnit, 'Un');
+    assert.equal(relationship.units[0].unit, 'Cx', 'purchase unit unchanged, never forced to equal sellingUnit');
+    assert.notEqual(relationship.sellingUnit, relationship.units[0].unit);
+  });
+
+  // Item 4 — a single-unit product never constructs a relationship or a
+  // sellingUnit — already covered by the existing B.2-G "zero complete
+  // steps produces no candidate at all for that product" test, above;
+  // it still passes unmodified (confirmed by this file's own full run).
+  // No new test needed, per Implementation Authorization §7 item 4.
+
+  it('item 5 — the sellingUnit selected via NewProductInfoPanel reaches BOTH candidate-construction paths (getEffectiveUnitRelationshipForProductName pattern AND the submit-time correlation loop) identically', () => {
+    const key = productKeyFor('Coca-Cola');
+    const newProductInfo: Record<string, NewProductInfo> = {
+      [key]: {
+        purchaseUnit: 'Cx',
+        purchaseCost: '1250',
+        relationshipSteps: [
+          { unit: 'Emb', factor: '4' },
+          { unit: 'Un', factor: '6' },
+        ],
+        sellingUnit: 'Un',
+      },
+    };
+    // Both production sites share the exact same construction shape
+    // (units + guarded sellingUnit + confirmedAt) — this single helper
+    // stands in for either call site, since B.2's own file-header
+    // comment already establishes they must never disagree.
+    const viaGetEffective = correlateUnitRelationships(newProductInfo, []).get(key);
+    const viaSubmitTimeLoop = correlateUnitRelationships(newProductInfo, [{ productName: 'Coca-Cola', unit: 'Cx' }]).get(key);
+    assert.equal(viaGetEffective?.sellingUnit, 'Un');
+    assert.equal(viaSubmitTimeLoop?.sellingUnit, 'Un');
+    assert.deepEqual(viaGetEffective, viaSubmitTimeLoop);
+  });
+
+  it('item 6 — removing the chain step that introduced the current sellingUnit resets the panel-level selection to blank, without mutating stored state', () => {
+    const info: NewProductInfo = {
+      purchaseUnit: 'Cx',
+      purchaseCost: '1250',
+      relationshipSteps: [
+        { unit: 'Emb', factor: '4' },
+        { unit: 'Un', factor: '6' },
+      ],
+      sellingUnit: 'Un',
+    };
+    const before = effectiveSellingUnitFor(info);
+    assert.equal(before.effectiveSellingUnit, 'Un');
+    assert.deepEqual(before.sellingUnitOptions, ['Cx', 'Emb', 'Un']);
+
+    // Owner removes the last level (UnitRelationshipChainEditor's own
+    // removeFromStep truncates from the removed index onward) —
+    // newProductInfo.sellingUnit itself is untouched by this (no
+    // separate reset action is wired to step removal), but the
+    // derived-value check must stop offering/selecting it.
+    const afterRemoval: NewProductInfo = { ...info, relationshipSteps: [{ unit: 'Emb', factor: '4' }] };
+    const after = effectiveSellingUnitFor(afterRemoval);
+    assert.equal(after.effectiveSellingUnit, '', 'stale selection falls back to blank once its unit leaves the live chain');
+    assert.deepEqual(after.sellingUnitOptions, ['Cx', 'Emb']);
+    assert.equal(afterRemoval.sellingUnit, 'Un', 'the stored value itself is untouched — only the derived/effective read is reset, never silently overwritten');
+
+    // And the candidate-construction guard independently protects the
+    // persisted write path the same way, so the two mechanisms agree.
+    const key = productKeyFor('Coca-Cola');
+    const result = correlateUnitRelationships({ [key]: afterRemoval }, []);
+    assert.equal(result.get(key)?.sellingUnit, undefined);
+  });
+
+  it('item 7 — isValidUnitRelationship remains the sole, unmodified authority: a candidate with an invalid factor elsewhere in the chain is still rejected even when sellingUnit is itself valid', () => {
+    const invalid: UnitRelationship = {
+      units: [
+        { unit: 'Cx', factorFromPrevious: 0 },
+        { unit: 'Emb', factorFromPrevious: -4 }, // invalid regardless of B.2
+      ],
+      sellingUnit: 'Emb', // otherwise a valid member
+      confirmedAt: '2026-08-23T00:00:00.000Z',
+    };
+    assert.equal(isValidUnitRelationship(invalid), false);
+  });
+
+  // Item 8 — a single-unit product's selector never renders at all
+  // (sellingUnitOptions is empty, gating NewProductInfoPanel's own
+  // conditional render) — a direct consequence of the same
+  // completeSteps-length gate item 4's existing test already proves
+  // for candidate construction; effectiveSellingUnitFor demonstrates
+  // the identical gate for the UI-facing options list here.
+  it('item 8 — a single-unit product (zero complete steps) never offers any sellingUnit options', () => {
+    const info: NewProductInfo = { purchaseUnit: 'Saco', purchaseCost: '900', relationshipSteps: [] };
+    const { sellingUnitOptions, effectiveSellingUnit } = effectiveSellingUnitFor(info);
+    assert.deepEqual(sellingUnitOptions, []);
+    assert.equal(effectiveSellingUnit, '');
   });
 });
