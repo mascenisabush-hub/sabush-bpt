@@ -4,7 +4,15 @@ Implementation Plan
 
 **Type:** Governance bridge document. Per the originating instruction ("We need ONLY an Implementation Plan"), this document folds Current-State-Assessment and Gap-Analysis content inline (§1, §7, §10) rather than as a separate Rule 8 Assessment document — an already-established, permitted pattern in this repository for small-scope work (`platform-engineering-governance-standard.md` §2, Stage 7: "or inline in the phase's own Implementation Plan section for small modules (Module #19 Phase 1 precedent)"). Does not itself authorize implementation and does not modify code.
 
-**Status:** **DRAFT — NOT YET ACCEPTED / NOT AUTHORIZED.** No Product Architect signature appears anywhere in this document. No code may be written on the strength of this Plan alone.
+**Status:** **ACCEPTED — AUTHORIZED TO PROCEED TO IMPLEMENTATION
+AUTHORIZATION (29 August 2026).** See "Product Architect Acceptance,"
+at the end of this document, for the complete signed decision. This
+acceptance authorizes the Plan itself as the correct translation of
+the confirmed scope into engineering design — it does **not**
+authorize implementation. A separate, distinct, signed **Implementation
+Authorization** remains required before any application code, test, or
+configuration file is written. Not created here; not authorized by
+this acceptance alone.
 
 **Governing chain:** `BDR-0012` (Product Unit-of-Measure & Product Memory, Approved) → POL-0001–0006 → the UOM Specification → Business Worth Evolution's Decision 37 (Increment 4/B.1/B.2, Approved, already implemented) → the read-only UX/Data-Entry Door Audit (identifying the confirmed gap) → [`decision-37-b2-selling-unit-capture-extension-addendum.md`](./decision-37-b2-selling-unit-capture-extension-addendum.md) (✅ **SIGNED**, SABUSHIMIKE MASCENI, 29 August 2026) → **this Implementation Plan**.
 
@@ -153,11 +161,68 @@ No code changed, no test changed, no governance file changed, no commit, no push
 
 ---
 
+## Product Architect Acceptance
+
+**Status:** ✅ **ACCEPTED (29 August 2026).**
+
+> PRODUCT ARCHITECT ACCEPTANCE / SIGNATURE
+>
+> I accept the Implementation Plan for Periodic Contagem's New-Product
+> `sellingUnit` Capture, including its full scope as defined in the
+> Plan and as restated here for the record:
+>
+> 1. Single-functional-unit products require no `UnitRelationship` —
+>    no meaningless `1:1` relationship is ever created.
+> 2. Multi-functional-unit products: the owner establishes the
+>    functional-unit relationship, then chooses the selling/valuation
+>    unit from that established chain, persisted through the existing
+>    `UnitRelationship.sellingUnit` field, independent of the buying/
+>    acquisition unit.
+> 3. Physical quantity entry remains free-form by functional unit
+>    (e.g. 3 Cx, 1 Emb, 5 Un); the consolidated equivalent is
+>    calculated silently by the existing conversion engine and is not
+>    displayed merely for its own sake.
+> 4. After the relevant units are established, the owner selects the
+>    selling unit and enters its price; the system silently performs
+>    whatever conversion valuation requires.
+> 5. Add Portion remains optional, Contagem-only, never Product
+>    Memory, never persisted as a reusable Product-level selling-
+>    portion configuration, and the system imposes no business
+>    interpretation on what a portion represents.
+> 6. Add Stock (existing and new product) and Smart Stock Entry
+>    inherit the same remembered relationship/selling-unit/price
+>    behavior, unchanged from their already-verified state.
+> 7. Initial Stock remains explicitly out of scope.
+> 8. No redesign of the Business Worth formula, `UnitRelationship`'s
+>    schema, `getConversionFactor`, Smart Stock Entry's extraction
+>    contract, Add Portion's persistence semantics, or any Product-
+>    level multiple-selling-price configuration.
+>
+> This acceptance is given on the governing basis of the signed
+> Decision 37 B.2 Selling Unit Capture Extension Addendum
+> (`decision-37-b2-selling-unit-capture-extension-addendum.md`, ✅
+> SIGNED, SABUSHIMIKE MASCENI, 29 August 2026), which remains
+> unchanged and unreopened by this acceptance. This acceptance does
+> not amend `BDR-0012`, the UOM Specification, or any unrelated
+> governance artifact, and creates no new BDR, Policy, or Rule 8
+> Assessment.
+>
+> Product Architect: SABUSHIMIKE MASCENI
+> Decision: ACCEPTED
+> Date: 29 August 2026
+
+This acceptance takes effect immediately on the Plan document itself: the current state, desired state, scope, implementation approach, UI behavior, persistence, validation, test plan, regression boundaries, governance classification, acceptance criteria, and manual QA scenarios recorded in §§1–12 above are now the authoritative Plan.
+
+**This acceptance does not authorize implementation.** It authorizes progression to the separate Implementation Authorization gate — it is not itself that Authorization, and no application code, test, dependency, or configuration file may be changed on the strength of this acceptance alone.
+
+---
+
 ## Governance Notes
 
-- This document does not implement code, modify runtime behavior, or edit any `src/`, `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, `package.json`, or test file. None were touched to produce it.
+- This document does not implement code, modify runtime behavior, or edit any `src/`, `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, `package.json`, or test file. None were touched to produce it or this acceptance.
 - This document does not modify `BDR-0012`, any POL document, the UOM Specification, or any Business Worth Evolution governance artifact — confirmed unchanged, this session.
-- This document does not create, and should not be treated as, an Implementation Authorization.
-- §10 flags, rather than silently resolves, the one point (extending Decision 37 B.2's explicit scope exclusion) that deserves explicit Product Architect attention rather than being assumed uncontroversial.
+- This document does not modify the signed Decision 37 B.2 Selling Unit Capture Extension Addendum — confirmed unchanged, this session.
+- This document does not create, and should not be treated as, an Implementation Authorization, even after Product Architect acceptance (see "Product Architect Acceptance," above).
+- §10's flagged governance point (extending Decision 37 B.2's explicit scope exclusion) was resolved by the signed addendum before this acceptance; this acceptance does not reopen it.
 
-**Lifecycle:** **Plan drafted** (this document). Not Accepted, not Authorized, not Implemented, not Verified, not Closed — no engineering work is authorized by this record.
+**Lifecycle:** Plan drafted → **Plan Accepted** (this document, 29 August 2026). Not Authorized (for implementation), not Implemented, not Verified, not Closed — no engineering work is authorized by this record.
