@@ -1736,7 +1736,20 @@ export type TimelineActivityType =
   | 'business-worth-correction'
   | 'business-worth-recovery-consumed'
   | 'receivable-payment-recorded'
-  | 'payable-payment-recorded';
+  | 'payable-payment-recorded'
+  // [Owner-Controlled Correction of a Remembered Supplier-Wording
+  // Relationship — Implementation Authorization, signed SABUSHIMIKE
+  // MASCENI, 29 August 2026] One additive event type covering BOTH an
+  // Owner-initiated removal and an Owner-initiated redirect of a
+  // previously remembered `SupplierWordingRelationship` — distinguished
+  // via `details.action` ('removed' | 'redirected'), mirroring how
+  // 'business-worth-correction' above already represents a single
+  // "Owner corrects a previously recorded state" concept without a
+  // separate type per correction kind. See
+  // buildSupplierWordingCorrectionTimelineEventContent
+  // (supplierWordingConfirmation.ts) for the pure builder of this
+  // event's description/details.
+  | 'supplier-wording-relationship-corrected';
 
 export interface TimelineFinancialImpact {
   label: string; // e.g. "Investimento", "Despesa", "Retirada", "Perda"

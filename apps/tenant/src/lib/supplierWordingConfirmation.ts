@@ -46,6 +46,8 @@
 // pattern openBatchSupersession.ts already established for the
 // structurally similar open-batch lock transaction.
 
+import type { SupplierWordingRelationship } from '../types';
+
 /** The minimal shape of a transactionally-fetched Product snapshot needed
  * to decide whether a supplier-wording relationship write is safe. */
 export interface CheckedProductWordingSnapshot {
@@ -126,6 +128,180 @@ export class SupplierWordingConflictError extends Error {
 }
 
 // ---------------------------------------------------------------------
+// Owner-Controlled Correction of a Remembered Supplier-Wording
+// Relationship (Implementation Authorization at
+// docs/engineering/product-identity-alternative-name-relationship-correction-implementation-authorization.md,
+// signed SABUSHIMIKE MASCENI, 29 August 2026). Governing chain:
+// BDR-0013, the accepted Amendment, the READY Rule 8 Assessment, and
+// the accepted Implementation Plan.
+//
+// SCOPE: two pure decision functions, `planSupplierWordingRemoval` and
+// `planSupplierWordingRedirect`, mirroring `planSupplierWordingConfirmation`'s
+// own existing discipline exactly — no Firestore read/write, no
+// mutation of any input, unit-testable against plain objects. Neither
+// function is wired to any transaction or UI here; that is
+// `AppContext.tsx`'s job (`removeSupplierWordingRelationship`,
+// `redirectSupplierWordingRelationship`).
+//
+// IMPORTANT DIFFERENCE FROM `planSupplierWordingConfirmation`'s OWN
+// SNAPSHOT SHAPE: that function's `CheckedProductWordingSnapshot`
+// deliberately carries only `{ supplierRecordId, wording }` per entry —
+// sufficient for its own conflict-detection purpose, but NOT sufficient
+// here. The Implementation Authorization requires removal/redirect to
+// "preserve every other supplierWordings entry unchanged" — including
+// each entry's own `confirmedAt`/`provenance`/`confirmedByName` — so
+// these two new functions operate on, and return, the FULL
+// `SupplierWordingRelationship[]` shape for the product(s) they modify,
+// never the reduced shape. A `FullProductWordingSnapshot` is
+// structurally assignable wherever a `CheckedProductWordingSnapshot` is
+// expected (its `supplierWordings` entries are a superset of the
+// reduced shape), so `planSupplierWordingRedirect` below passes its own
+// snapshots directly to the existing, unmodified
+// `planSupplierWordingConfirmation` with no separate mapping step.
+
+/** Like `CheckedProductWordingSnapshot`, but carries each relationship's
+ * FULL stored shape (not just the `(supplierRecordId, wording)` pair) —
+ * required so removal/redirect can preserve every untouched entry's own
+ * `confirmedAt`/`provenance`/`confirmedByName` exactly, never stripping
+ * them. Structurally assignable to `CheckedProductWordingSnapshot`
+ * wherever that narrower shape is expected. */
+export interface FullProductWordingSnapshot {
+  productId: string;
+  exists: boolean;
+  supplierWordings: SupplierWordingRelationship[];
+}
+
+export interface SupplierWordingRemovalPlan {
+  /** True when the target's CURRENT (fresh) `supplierWordings` array
+   * contains this exact `(supplierRecordId, wording)` pair. False means
+   * the relationship is already absent — a successful, idempotent
+   * no-op per the Implementation Authorization §2.A, never an error. */
+  found: boolean;
+  /** The target's `supplierWordings` array with that one entry removed
+   * — every other entry preserved, in order, byte-for-byte, including
+   * its own `confirmedAt`/`provenance`/`confirmedByName`. When `found`
+   * is false, an unchanged copy of the input array (never the same
+   * array reference — this function never mutates its input). */
+  updatedWordings: SupplierWordingRelationship[];
+}
+
+/**
+ * Decides what a supplier-wording REMOVAL transaction should do, given
+ * the FRESH (transactionally-read) full `supplierWordings` array of the
+ * target product. Never mutates its input; never itself performs any
+ * Firestore read/write. Identity is exactly `(supplierRecordId,
+ * wording.trim())`, matching `planSupplierWordingConfirmation`'s own
+ * identity key exactly (Implementation Authorization §3 item 2).
+ */
+export function planSupplierWordingRemoval(
+  supplierRecordId: string,
+  wording: string,
+  target: { supplierWordings: SupplierWordingRelationship[] }
+): SupplierWordingRemovalPlan {
+  const trimmedWording = wording.trim();
+  const relationshipMatches = (r: { supplierRecordId: string; wording: string }) =>
+    r.supplierRecordId === supplierRecordId && r.wording.trim() === trimmedWording;
+
+  const found = target.supplierWordings.some(relationshipMatches);
+  const updatedWordings = found
+    ? target.supplierWordings.filter((r) => !relationshipMatches(r))
+    : [...target.supplierWordings];
+
+  return { found, updatedWordings };
+}
+
+export interface SupplierWordingRedirectPlan {
+  /** Whether the SOURCE product's fresh snapshot actually held the
+   * relationship being moved. False means "already gone" — a distinct,
+   * explicit non-success result (Implementation Authorization §2.D),
+   * never silently reported as a successful redirect, and never
+   * conflated with `planSupplierWordingRemoval`'s own `found: false`
+   * idempotent-success semantics for direct removal. */
+  sourceFound: boolean;
+  /** Set when a THIRD product — neither source nor destination —
+   * already independently holds this exact pair. Reuses
+   * `planSupplierWordingConfirmation`'s own existing conflict
+   * semantics exactly, scoped (by this function's own contract, see
+   * below) to exclude the source product, since the source
+   * legitimately already holds the relationship being moved and must
+   * never be flagged as a rival claimant (Implementation Authorization
+   * §2.C). A genuine conflict blocks the entire redirect: no source
+   * write, no destination write, relationship remains exactly as it
+   * was (Implementation Authorization §2.B "conflict" scenario). */
+  conflict: { productId: string } | null;
+  /** True when the DESTINATION already independently holds this exact
+   * pair at the moment of the fresh read — the authorized "destination
+   * already holds the relationship" outcome (Implementation
+   * Authorization §2.C / §6): idempotent, no destination write, no
+   * duplicate, existing destination entry (and its own `confirmedAt`/
+   * `provenance`/`confirmedByName`) left completely untouched; source
+   * removal still proceeds. */
+  destinationAlreadyHasIt: boolean;
+  /** Source's `supplierWordings` with the entry removed — every other
+   * source entry preserved, in order, unchanged (unchanged copy of the
+   * input if `!sourceFound`). */
+  updatedSourceWordings: SupplierWordingRelationship[];
+  /** True only when a new entry must be appended to the destination —
+   * false both when the destination already has it (idempotent) and
+   * when nothing should be written at all (conflict, or source
+   * already gone). */
+  shouldWriteDestination: boolean;
+}
+
+/**
+ * Decides what a supplier-wording REDIRECT transaction should do, given
+ * the FRESH (transactionally-read) full snapshots of the source
+ * product and of the destination-plus-any-additional-conflict-check
+ * products. Never mutates any input; never itself performs any
+ * Firestore read/write.
+ *
+ * CONTRACT — CALLER MUST NOT INCLUDE THE SOURCE PRODUCT IN
+ * `destinationAndOtherSnapshots`: this function composes
+ * `planSupplierWordingRemoval` (for the source half) with the existing,
+ * unmodified `planSupplierWordingConfirmation` (for the destination
+ * half, called with `destinationAndOtherSnapshots` only). Including the
+ * source product in that second argument would incorrectly cause
+ * `planSupplierWordingConfirmation`'s own conflict check to flag it as
+ * a rival claimant — it is not one, it is the relationship's own
+ * legitimate current holder, mid-transfer (Implementation Authorization
+ * §2.C, §3 item 5). This is reuse of the existing conflict decision,
+ * not a new conflict mechanism (Implementation Authorization §3 item 7
+ * / §5's "no new conflict mechanism" boundary).
+ */
+export function planSupplierWordingRedirect(
+  sourceProductId: string,
+  destinationProductId: string,
+  supplierRecordId: string,
+  wording: string,
+  sourceSnapshot: FullProductWordingSnapshot,
+  destinationAndOtherSnapshots: FullProductWordingSnapshot[]
+): SupplierWordingRedirectPlan {
+  const removalPlan = planSupplierWordingRemoval(supplierRecordId, wording, sourceSnapshot);
+
+  const confirmationPlan = planSupplierWordingConfirmation(
+    destinationProductId,
+    supplierRecordId,
+    wording,
+    destinationAndOtherSnapshots
+  );
+
+  return {
+    sourceFound: removalPlan.found,
+    conflict: confirmationPlan.conflict,
+    destinationAlreadyHasIt: confirmationPlan.alreadyConfirmed,
+    updatedSourceWordings: removalPlan.updatedWordings,
+    // Nothing is ever written to the destination when the source
+    // relationship is already gone (nothing to redirect) or when a
+    // genuine third-party conflict exists — only
+    // `planSupplierWordingConfirmation`'s own `shouldWrite` (already
+    // false for both the conflict and the destination-already-has-it
+    // cases) governs whether a new destination entry is required, and
+    // only once the source is confirmed to still hold the relationship.
+    shouldWriteDestination: removalPlan.found && confirmationPlan.shouldWrite,
+  };
+}
+
+// ---------------------------------------------------------------------
 // [Checkpoint 5] Distinguishing-information capture (POL-0007
 // "Conflicting Supplier Wording — Distinguishing Information: ACCEPT,
 // Mandatory"; Rule 8 Finding 9)
@@ -175,6 +351,102 @@ export function buildProductCreatedTimelineEventContent(
     details: {
       productName,
       ...(trimmedInfo ? { distinguishingInfo: trimmedInfo } : {}),
+    },
+  };
+}
+
+// ---------------------------------------------------------------------
+// Owner-Controlled Correction — redirect "already gone" error, and the
+// correction TimelineEvent content builder (Implementation Authorization
+// §2.D, §2.E).
+// ---------------------------------------------------------------------
+
+/**
+ * Thrown by AppContext's `redirectSupplierWordingRelationship` when the
+ * transaction's fresh read finds the DESTINATION product no longer
+ * exists (deleted concurrently). A redirect is an atomic, two-document
+ * operation (Implementation Authorization §2.B/§3 item 4: "commit
+ * together or neither commits") — unlike ordinary single-product
+ * confirmation, where a missing target simply means "nothing to write"
+ * with no other side effect, a redirect whose destination has vanished
+ * must abort the ENTIRE operation, including the source-side removal,
+ * rather than silently remove the source relationship with nowhere
+ * for it to go. No write is made to source or destination.
+ */
+export class SupplierWordingRedirectDestinationNotFoundError extends Error {
+  constructor() {
+    super('The redirect destination product no longer exists — the redirect cannot proceed.');
+    this.name = 'SupplierWordingRedirectDestinationNotFoundError';
+  }
+}
+
+/**
+ * Thrown by AppContext's `redirectSupplierWordingRelationship` when the
+ * transaction's fresh read finds the source product no longer holds
+ * the `(supplierRecordId, wording)` relationship the Owner asked to
+ * redirect (`planSupplierWordingRedirect`'s own `sourceFound: false`).
+ * A distinct, explicit non-success result — never silently reported as
+ * a successful redirect, and never conflated with
+ * `planSupplierWordingRemoval`'s own idempotent-success semantics for
+ * direct removal (Implementation Authorization §2.D / §3 item 8).
+ */
+export class SupplierWordingRelationshipNotFoundError extends Error {
+  constructor() {
+    super('The supplier wording relationship no longer exists on the source product — nothing to redirect.');
+    this.name = 'SupplierWordingRelationshipNotFoundError';
+  }
+}
+
+export interface SupplierWordingCorrectionTimelineEventContent {
+  description: string;
+  details: {
+    action: 'removed' | 'redirected';
+    supplierRecordId: string;
+    wording: string;
+    oldProductName: string;
+    newProductName?: string;
+    // String, not boolean — TimelineEvent.details (types.ts) is typed
+    // Record<string, string | number | undefined>, existing, shared
+    // infrastructure this capability reuses unmodified (Implementation
+    // Authorization §2.E/§5 — no new audit collection or mechanism).
+    destinationAlreadyHasIt?: 'true';
+  };
+}
+
+/**
+ * Builds the description/details for a supplier-wording CORRECTION
+ * TimelineEvent (removal or redirect) — mirroring
+ * `buildProductCreatedTimelineEventContent`'s existing shape exactly
+ * (Implementation Authorization §2.E). Pure, independently testable.
+ * `destinationAlreadyHasIt` is included in `details` only on the
+ * idempotent redirect branch (never for an ordinary redirect or a
+ * removal), keeping the field additive and non-breaking for any
+ * existing reader of `details` (Implementation Plan §4.4).
+ */
+export function buildSupplierWordingCorrectionTimelineEventContent(
+  action: 'removed' | 'redirected',
+  supplierRecordId: string,
+  wording: string,
+  oldProductName: string,
+  newProductName?: string,
+  destinationAlreadyHasIt?: boolean
+): SupplierWordingCorrectionTimelineEventContent {
+  const description =
+    action === 'removed'
+      ? `Relação de fornecedor removida: "${wording}" deixou de estar associado a "${oldProductName}".`
+      : destinationAlreadyHasIt
+        ? `Relação de fornecedor redirecionada: "${wording}" removido de "${oldProductName}" — "${newProductName}" já possuía esta relação.`
+        : `Relação de fornecedor redirecionada: "${wording}" movido de "${oldProductName}" para "${newProductName}".`;
+
+  return {
+    description,
+    details: {
+      action,
+      supplierRecordId,
+      wording,
+      oldProductName,
+      ...(newProductName ? { newProductName } : {}),
+      ...(destinationAlreadyHasIt ? { destinationAlreadyHasIt: 'true' as const } : {}),
     },
   };
 }

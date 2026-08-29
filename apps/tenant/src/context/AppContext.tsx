@@ -29,7 +29,13 @@ import {
   planSupplierWordingConfirmation,
   SupplierWordingConflictError,
   buildProductCreatedTimelineEventContent,
+  planSupplierWordingRemoval,
+  planSupplierWordingRedirect,
+  buildSupplierWordingCorrectionTimelineEventContent,
+  SupplierWordingRelationshipNotFoundError,
+  SupplierWordingRedirectDestinationNotFoundError,
   type CheckedProductWordingSnapshot,
+  type FullProductWordingSnapshot,
 } from '../lib/supplierWordingConfirmation';
 import { isValidUnitRelationship, confirmUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
 import { buildDerivedSellingValuationSnapshot } from '../lib/purchaseToSellingConversion';
@@ -806,6 +812,25 @@ interface AppContextType {
   // provider body for the full contract. Throws if `candidate` fails
   // POL-0005 validation; never silently discards an invalid value.
   confirmProductUnitRelationship: (productId: string, candidate: UnitRelationshipProposal) => Promise<void>;
+  // [Owner-Controlled Correction of a Remembered Supplier-Wording
+  // Relationship — Implementation Authorization, 29 August 2026] Two
+  // narrowly-scoped operations, sole authorized caller
+  // ProductDetailModal.tsx. Never exposes confirmSupplierWordingRelationship
+  // itself. removeSupplierWordingRelationship is idempotent (no-op,
+  // resolves normally) when the relationship is already absent.
+  // redirectSupplierWordingRelationship is one atomic transaction;
+  // throws SupplierWordingConflictError on a genuine third-party
+  // conflict, or SupplierWordingRelationshipNotFoundError when the
+  // source relationship is already gone — see both functions' own
+  // comments in the provider body for the full contract.
+  removeSupplierWordingRelationship: (productId: string, supplierRecordId: string, wording: string) => Promise<void>;
+  redirectSupplierWordingRelationship: (
+    sourceProductId: string,
+    destinationProductId: string,
+    supplierRecordId: string,
+    wording: string,
+    additionalConflictCheckProductIds: string[]
+  ) => Promise<void>;
   deleteProduct: (id: string) => Promise<void>;
   addStaffMember: (name: string, email: string, password: string) => Promise<void>;
   deleteStaffMember: (staffUid: string, reason?: string) => Promise<void>;
@@ -2692,6 +2717,260 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     });
   };
+
+  // ---------------------------------------------------------------------
+  // Owner-Controlled Correction of a Remembered Supplier-Wording
+  // Relationship (Implementation Authorization at
+  // docs/engineering/product-identity-alternative-name-relationship-correction-implementation-authorization.md,
+  // signed SABUSHIMIKE MASCENI, 29 August 2026). Governing chain:
+  // BDR-0013, the accepted Amendment, the READY Rule 8 Assessment, and
+  // the accepted Implementation Plan.
+  //
+  // Two new, narrowly-scoped, PUBLIC (context-exposed) operations —
+  // deliberately NOT exposing confirmSupplierWordingRelationship
+  // itself, and NOT generalizing its signature, per Authorization §5's
+  // explicit exclusion. Sole authorized caller: ProductDetailModal.tsx
+  // (Product Catalog/detail context, per Authorization §2.D).
+  //
+  // AUDIT DESIGN NOTE (Category 2, resolved here): logTimelineEvent
+  // itself is an internal AppContext.tsx function, never exposed on
+  // the context value — every existing Timeline-logged action
+  // (addMultipleStockBatches, recordClosing, etc.) calls it from
+  // WITHIN AppContext.tsx, after its own write succeeds, never from a
+  // UI component. Consistent with that existing, unmodified
+  // architecture (and per Authorization §9's "do not redesign the
+  // architecture" instruction), these two functions call
+  // logTimelineEvent internally themselves, exactly once, strictly
+  // after their own transaction commits — never delegating that call
+  // to ProductDetailModal.tsx, which has no way to reach
+  // logTimelineEvent directly.
+  //
+  // No TimelineEvent is logged for an idempotent no-op (nothing
+  // actually changed): removal's own "already absent" branch performs
+  // no write, so nothing is logged either — mirroring
+  // confirmSupplierWordingRelationship's own idempotent branch, which
+  // likewise logs nothing when its write is skipped. Every other
+  // outcome follows Authorization §3 item 9 exactly: exactly one event
+  // for a successful correction (removal, or redirect including its
+  // destination-already-has-it branch, which DOES change the source);
+  // none for cancellation, a genuine conflict, or a redirect whose
+  // source is already gone.
+
+  // [Owner-Controlled Correction — Removal] Removes exactly one
+  // (supplierRecordId, wording) relationship from `productId`'s
+  // supplierWordings array. Reads the product FRESH, inside a
+  // transaction (never a plain updateDoc of a client-computed array —
+  // Authorization §3 item 3/§5 "Requirements"). Preserves every other
+  // relationship unchanged, in order, including each one's own
+  // confirmedAt/provenance/confirmedByName. Idempotent: if the
+  // relationship is already absent, or the product no longer exists,
+  // this makes no write and resolves successfully (Authorization §2.A).
+  const removeSupplierWordingRelationship = async (
+    productId: string,
+    supplierRecordId: string,
+    wording: string
+  ): Promise<void> => {
+    if (!activeBusinessId) return;
+    const businessId = activeBusinessId;
+    const trimmedWording = wording.trim();
+    if (!trimmedWording) return;
+
+    const ref = doc(db, 'businesses', businessId, 'products', productId);
+    let didWrite = false;
+    let productName = '';
+
+    await runTransaction(db, async (tx) => {
+      // ---- READ (fresh, inside the transaction) ----
+      const snap = await tx.get(ref);
+      if (!snap.exists()) {
+        // Product deleted concurrently — nothing left to correct.
+        return;
+      }
+      const data = snap.data() as Product;
+      productName = data.name;
+
+      const plan = planSupplierWordingRemoval(supplierRecordId, trimmedWording, {
+        supplierWordings: data.supplierWordings ?? [],
+      });
+      if (!plan.found) {
+        // Already absent — idempotent success, no write.
+        return;
+      }
+
+      // ---- WRITE (only after the read above has completed) ----
+      tx.update(ref, { supplierWordings: plan.updatedWordings });
+      didWrite = true;
+    });
+
+    if (didWrite) {
+      const { description, details } = buildSupplierWordingCorrectionTimelineEventContent(
+        'removed',
+        supplierRecordId,
+        trimmedWording,
+        productName
+      );
+      await logTimelineEvent({
+        type: 'supplier-wording-relationship-corrected',
+        date: getTodayDateString(),
+        title: 'Correção de Relação de Fornecedor',
+        description,
+        productName,
+        details,
+      });
+    }
+  };
+
+  // [Owner-Controlled Correction — Redirect] Redirects exactly one
+  // (supplierRecordId, wording) relationship from `sourceProductId` to
+  // `destinationProductId`, an explicitly Owner-selected EXISTING
+  // product — as ONE atomic Firestore transaction: source removal and
+  // destination establishment commit together or neither commits
+  // (Authorization §2.B/§3 item 4). Reuses the existing, unmodified
+  // planSupplierWordingConfirmation/SupplierWordingConflictError for
+  // the destination's own conflict check, via planSupplierWordingRedirect
+  // (Authorization §2.C/§3 item 7) — the source product is never
+  // included in its own conflict-check set (Authorization §3 item 5).
+  //
+  // `additionalConflictCheckProductIds`: any product OTHER than source
+  // or destination that the caller's already-loaded client-side state
+  // suggests might independently hold this exact pair — a defensive,
+  // bounded, already-loaded-data check (Implementation Plan §4.3), not
+  // a new collection scan. May be empty.
+  //
+  // Throws SupplierWordingConflictError (unmodified, reused) when a
+  // genuine third-party product independently holds the pair — no
+  // write to source or destination in that case.
+  // Throws SupplierWordingRelationshipNotFoundError when the source no
+  // longer holds the relationship at the moment of the fresh read — a
+  // distinct, explicit non-success result (Authorization §2.D), never
+  // silently reported as success, never conflated with removal's own
+  // idempotent-success semantics.
+  const redirectSupplierWordingRelationship = async (
+    sourceProductId: string,
+    destinationProductId: string,
+    supplierRecordId: string,
+    wording: string,
+    additionalConflictCheckProductIds: string[]
+  ): Promise<void> => {
+    if (!activeBusinessId) return;
+    const businessId = activeBusinessId;
+    const trimmedWording = wording.trim();
+    if (!trimmedWording) return;
+
+    const otherIds = Array.from(
+      new Set(additionalConflictCheckProductIds.filter((id) => id !== sourceProductId && id !== destinationProductId))
+    );
+    const destinationAndOtherIds = [destinationProductId, ...otherIds];
+
+    let sourceProductName = '';
+    let destinationProductName = '';
+    let didWrite = false;
+    let destinationAlreadyHasItResult = false;
+
+    await runTransaction(db, async (tx) => {
+      // ---- READS (all before any write — required by Firestore) ----
+      const sourceRef = doc(db, 'businesses', businessId, 'products', sourceProductId);
+      const sourceSnap = await tx.get(sourceRef);
+      const sourceData = sourceSnap.exists() ? (sourceSnap.data() as Product) : undefined;
+      sourceProductName = sourceData?.name ?? '';
+      const sourceSnapshot: FullProductWordingSnapshot = {
+        productId: sourceProductId,
+        exists: sourceSnap.exists(),
+        supplierWordings: sourceData?.supplierWordings ?? [],
+      };
+
+      const otherRefsById = new Map<string, ReturnType<typeof doc>>();
+      const otherSnapshots: FullProductWordingSnapshot[] = [];
+      for (const id of destinationAndOtherIds) {
+        const ref = doc(db, 'businesses', businessId, 'products', id);
+        otherRefsById.set(id, ref);
+        const snap = await tx.get(ref);
+        const data = snap.exists() ? (snap.data() as Product) : undefined;
+        if (id === destinationProductId) {
+          destinationProductName = data?.name ?? '';
+        }
+        otherSnapshots.push({
+          productId: id,
+          exists: snap.exists(),
+          supplierWordings: data?.supplierWordings ?? [],
+        });
+      }
+
+      const plan = planSupplierWordingRedirect(
+        sourceProductId,
+        destinationProductId,
+        supplierRecordId,
+        trimmedWording,
+        sourceSnapshot,
+        otherSnapshots
+      );
+
+      if (!plan.sourceFound) {
+        // Nothing left to redirect — distinct non-success outcome, no
+        // write of any kind.
+        throw new SupplierWordingRelationshipNotFoundError();
+      }
+      // Destination existence is checked explicitly, BEFORE any write,
+      // and aborts the WHOLE transaction (source included) — unlike
+      // ordinary single-product confirmation's own silent "target
+      // gone, nothing to write" skip, a redirect is atomic across two
+      // documents (Authorization §2.B/§3 item 4): a vanished
+      // destination must never result in the source-side removal
+      // proceeding alone, which would silently and irrecoverably lose
+      // the relationship with nowhere for it to go.
+      const destinationSnapshotForExistenceCheck = otherSnapshots.find((s) => s.productId === destinationProductId);
+      if (!destinationSnapshotForExistenceCheck?.exists) {
+        throw new SupplierWordingRedirectDestinationNotFoundError();
+      }
+      if (plan.conflict) {
+        // A THIRD product independently holds this exact pair — block
+        // the entire redirect. No write to source or destination.
+        throw new SupplierWordingConflictError(plan.conflict.productId);
+      }
+
+      // ---- WRITES (only after every read above has completed) ----
+      tx.update(sourceRef, { supplierWordings: plan.updatedSourceWordings });
+      if (plan.shouldWriteDestination) {
+        const destinationSnapshot = otherSnapshots.find((s) => s.productId === destinationProductId)!;
+        const newRelationship: SupplierWordingRelationship = {
+          supplierRecordId,
+          wording: trimmedWording,
+          confirmedAt: new Date().toISOString(),
+          provenance: 'owner-initiated',
+          ...(userProfile?.name ? { confirmedByName: userProfile.name } : {}),
+        };
+        tx.update(otherRefsById.get(destinationProductId)!, {
+          supplierWordings: [...destinationSnapshot.supplierWordings, newRelationship],
+        });
+      }
+      // When plan.destinationAlreadyHasIt is true, the destination's
+      // existing entry (and its own confirmedAt/provenance/
+      // confirmedByName) is left completely untouched — no write path
+      // to it exists here at all (Authorization §6).
+      didWrite = true;
+      destinationAlreadyHasItResult = plan.destinationAlreadyHasIt;
+    });
+
+    if (didWrite) {
+      const { description, details } = buildSupplierWordingCorrectionTimelineEventContent(
+        'redirected',
+        supplierRecordId,
+        trimmedWording,
+        sourceProductName,
+        destinationProductName,
+        destinationAlreadyHasItResult ? true : undefined
+      );
+      await logTimelineEvent({
+        type: 'supplier-wording-relationship-corrected',
+        date: getTodayDateString(),
+        title: 'Correção de Relação de Fornecedor',
+        description,
+        productName: destinationProductName,
+        details,
+      });
+    }
+  };
+
 
   const addMultipleStockBatches = async (
     items: AddStockParams[],
@@ -6387,6 +6666,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteExpense,
         updateProduct,
         confirmProductUnitRelationship,
+        removeSupplierWordingRelationship,
+        redirectSupplierWordingRelationship,
         deleteProduct,
         addStaffMember,
         deleteStaffMember,

@@ -297,3 +297,157 @@ describe('findExistingSupplierWordingMatch', () => {
     });
   });
 });
+
+// ---------------------------------------------------------------------
+// Owner-Controlled Correction of a Remembered Supplier-Wording
+// Relationship — REMEMBER lifecycle + Product Recognition Intelligence
+// regression proof (Implementation Authorization §2.E/§5;
+// Implementation Plan §15 items 13-15).
+//
+// SCOPE: these tests prove, directly against the REAL, UNMODIFIED
+// findExistingSupplierWordingMatch/detectSupplierWordingCandidates —
+// never a reimplementation or a mock — that:
+//   1. after a relationship is removed from a product's
+//      supplierWordings array, the next occurrence of that wording no
+//      longer silently reuses that product (falls through to
+//      candidate detection instead);
+//   2. once a relationship is present on a DIFFERENT (destination)
+//      product, the next occurrence silently reuses that product
+//      instead;
+//   3. detectSupplierWordingCandidates/findExistingSupplierWordingMatch
+//      behave identically before and after a simulated correction —
+//      no new parameter, no new call site, no special-casing for
+//      "corrected" state anywhere in either function.
+// Neither function is modified anywhere in this capability — these
+// tests exercise them exactly as any other caller would, against
+// plain before/after product-array snapshots simulating what a
+// removal/redirect would have changed.
+// ---------------------------------------------------------------------
+describe('Owner-Controlled Correction — REMEMBER lifecycle regression (post-removal)', () => {
+  it('[Scenario A] BEFORE removal: reuse silently resolves to the remembered product', () => {
+    const beforeProducts = [
+      { id: 'product-A', name: 'Coca-Cola 330ml', supplierWordings: [{ supplierRecordId: 'supplier-X', wording: 'Coka Cola 2L' }] },
+    ];
+    const relationships = beforeProducts.flatMap((p) =>
+      (p.supplierWordings ?? []).map((r) => ({ ...r, productId: p.id }))
+    );
+    assert.deepEqual(findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-X', relationships), {
+      productId: 'product-A',
+    });
+  });
+
+  it('[Scenario A] AFTER removal: the SAME wording from the SAME supplier no longer silently reuses product-A — falls through to the same candidate-detection behavior as a wording that was NEVER remembered at all', () => {
+    // Simulates exactly what planSupplierWordingRemoval's own output
+    // would look like once applied: product-A's supplierWordings no
+    // longer contains the (supplierRecordId, wording) pair.
+    const afterRemovalProducts = [
+      { id: 'product-A', name: 'Coca-Cola 2L Garrafa', supplierWordings: [] as Array<{ supplierRecordId: string; wording: string }> },
+    ];
+    const relationships = afterRemovalProducts.flatMap((p) =>
+      (p.supplierWordings ?? []).map((r) => ({ ...r, productId: p.id }))
+    );
+    // Reuse (findExistingSupplierWordingMatch) no longer fires.
+    assert.equal(findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-X', relationships), null);
+
+    // Falls through to the normal candidate-detection flow, exactly as
+    // it would for a product that had NEVER remembered this wording at
+    // all — proven by comparing against that exact control case,
+    // rather than asserting any specific ground fires (which grounds
+    // fire is PRI's own concern, unrelated to and unaffected by this
+    // capability; a genuine quantity/name mismatch here would
+    // correctly be suppressed by PRI's own Contradiction Check either
+    // way — the point is that post-removal behaves IDENTICALLY to
+    // never-remembered, not that a candidate necessarily exists).
+    const neverRememberedProducts = [
+      { id: 'product-A', name: 'Coca-Cola 2L Garrafa' }, // no supplierWordings field at all
+    ];
+    const candidatesAfterRemoval = detectSupplierWordingCandidates('Coka Cola 2L', afterRemovalProducts);
+    const candidatesNeverRemembered = detectSupplierWordingCandidates('Coka Cola 2L', neverRememberedProducts);
+    assert.deepEqual(candidatesAfterRemoval, candidatesNeverRemembered);
+  });
+});
+
+describe('Owner-Controlled Correction — REMEMBER lifecycle regression (post-redirect)', () => {
+  it('[Scenario B] AFTER redirect: the SAME wording from the SAME supplier now silently reuses the DESTINATION product', () => {
+    // Simulates exactly what planSupplierWordingRedirect's own output
+    // would look like once applied: the entry has moved from
+    // product-A's array to product-B's array.
+    const afterProducts = [
+      { id: 'product-A', name: 'Coca-Cola 330ml', supplierWordings: [] as Array<{ supplierRecordId: string; wording: string }> },
+      { id: 'product-B', name: 'Coca-Cola 2L Garrafa', supplierWordings: [{ supplierRecordId: 'supplier-X', wording: 'Coka Cola 2L' }] },
+    ];
+    const relationships = afterProducts.flatMap((p) =>
+      (p.supplierWordings ?? []).map((r) => ({ ...r, productId: p.id }))
+    );
+    assert.deepEqual(findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-X', relationships), {
+      productId: 'product-B',
+    });
+  });
+});
+
+describe('Owner-Controlled Correction — [Scenario C] different-supplier independence is unaffected by any correction', () => {
+  it('a correction to Supplier X\'s relationship leaves an identical-text wording from Supplier Y completely untouched and independent', () => {
+    const products = [
+      {
+        id: 'product-A',
+        name: 'Coca-Cola 330ml',
+        supplierWordings: [{ supplierRecordId: 'supplier-Y', wording: 'Coka Cola 2L' }],
+        // Supplier X's own entry already removed/redirected — only
+        // Supplier Y's independent relationship remains here.
+      },
+    ];
+    const relationships = products.flatMap((p) => (p.supplierWordings ?? []).map((r) => ({ ...r, productId: p.id })));
+    // Supplier X's identical wording text finds nothing (its own
+    // relationship was corrected away) — Supplier Y's is untouched and
+    // still resolves correctly.
+    assert.equal(findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-X', relationships), null);
+    assert.deepEqual(findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-Y', relationships), {
+      productId: 'product-A',
+    });
+  });
+});
+
+describe('Owner-Controlled Correction — Product Recognition Intelligence (PRI) regression proof', () => {
+  it('detectSupplierWordingCandidates/findExistingSupplierWordingMatch behave IDENTICALLY given the same existingProducts shape, whether or not a correction has ever occurred — no new parameter, no hidden state, no special-casing', () => {
+    // The exact same products array, used identically by both
+    // functions, with no additional argument, no flag, and no
+    // correction-aware branch anywhere in either function's own
+    // signature (confirmed directly: neither function accepts more
+    // than the parameters already exercised throughout this file).
+    // This is the direct evidence, not an inference, that Product
+    // Recognition Intelligence's candidate-generation logic requires
+    // zero changes to correctly reflect post-correction state — it
+    // already reads whatever `supplierWordings` currently contains,
+    // exactly as designed before this capability existed.
+    const products = [
+      { id: 'product-A', name: 'Coca-Cola 330ml', supplierWordings: [{ supplierRecordId: 'supplier-X', wording: 'Coka Cola 2L' }] },
+    ];
+    const candidatesBefore = detectSupplierWordingCandidates('Fanta Laranja', products);
+    const relationshipsBefore = products.flatMap((p) => (p.supplierWordings ?? []).map((r) => ({ ...r, productId: p.id })));
+    const reuseBefore = findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-X', relationshipsBefore);
+
+    // Simulate a correction having happened elsewhere (removal), then
+    // call the EXACT SAME two functions again, with no different
+    // arguments shape — proving the call contract itself never changed.
+    const productsAfterCorrection = [
+      { id: 'product-A', name: 'Coca-Cola 330ml', supplierWordings: [] as Array<{ supplierRecordId: string; wording: string }> },
+    ];
+    const candidatesAfter = detectSupplierWordingCandidates('Fanta Laranja', productsAfterCorrection);
+    const relationshipsAfter = productsAfterCorrection.flatMap((p) =>
+      (p.supplierWordings ?? []).map((r) => ({ ...r, productId: p.id }))
+    );
+    const reuseAfter = findExistingSupplierWordingMatch('Coka Cola 2L', 'supplier-X', relationshipsAfter);
+
+    // Unrelated-wording candidate detection is identical either way —
+    // proving the correction changed only the specific corrected
+    // relationship's own data, nothing about how either function is
+    // called or behaves structurally.
+    assert.deepEqual(candidatesBefore, candidatesAfter);
+    // The corrected relationship itself correctly stops reusing —
+    // already proven above; restated here for direct before/after
+    // contrast in one place.
+    assert.deepEqual(reuseBefore, { productId: 'product-A' });
+    assert.equal(reuseAfter, null);
+  });
+});
+

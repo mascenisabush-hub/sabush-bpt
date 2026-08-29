@@ -4,6 +4,7 @@ import { useApp } from '../context/AppContext';
 import { calculateBatch } from '../utils/calculations';
 import { formatCurrency, formatDate } from '../utils/formatters';
 import { X, AlertTriangle, Trash2, EyeOff, Package, Layers, ClipboardList } from 'lucide-react';
+import { SupplierWordingCorrectionSection } from './SupplierWordingCorrectionSection';
 
 // [Bug fix — a product whose only history is a Contagem count looked
 // "waiting for setup"] Owner-reported: clicking a product on the
@@ -204,6 +205,14 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
               </button>
             </div>
           </div>
+
+          {/* [Owner-Controlled Correction of a Remembered Supplier-
+              Wording Relationship — Implementation Authorization,
+              29 August 2026] Sole authorized surface (Product Catalog/
+              detail context). Renders nothing when the product has no
+              remembered relationships — see the subcomponent's own
+              early-return. */}
+          <SupplierWordingCorrectionSection product={product} />
 
           {/* Batches List */}
           <div>
