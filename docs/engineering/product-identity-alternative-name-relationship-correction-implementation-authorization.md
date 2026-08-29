@@ -1,8 +1,8 @@
 # Owner-Controlled Correction of a Remembered Supplier-Wording Relationship — Implementation Authorization
 
-**Status:** 🟡 **PENDING — NOT YET SIGNED.** This document does not
-itself authorize implementation. See "Product Architect Acceptance /
-Signature," §7, below.
+**Status:** ✅ **ACCEPTED AND AUTHORIZED (29 August 2026).** See
+"Product Architect Acceptance / Signature," §7, below, for the
+complete signed decision.
 
 **Governing chain (sole authority for this Authorization):**
 [`BDR-0013`](../specs/BDR-0013-product-identity-alternative-name-memory.md)
@@ -447,12 +447,12 @@ Owner's own explicit selection before this branch is ever reached.
 
 ## 7. Product Architect Acceptance / Signature
 
-**Status: 🟡 PENDING — NOT YET SIGNED.**
+**Status: ✅ ACCEPTED AND AUTHORIZED (29 August 2026).**
 
 > PRODUCT ARCHITECT ACCEPTANCE
-> Product Architect: _____________________________
-> Decision: ☐ ACCEPTED AND AUTHORIZED ☐ NOT AUTHORIZED
-> Date: _____________________________
+> Product Architect: SABUSHIMIKE MASCENI
+> Decision: ACCEPTED AND AUTHORIZED
+> Date: 29 August 2026
 >
 > I accept and authorize the complete implementation defined by
 > §§1–6 of this document, covering the full, unified capability:
@@ -471,10 +471,31 @@ Owner's own explicit selection before this branch is ever reached.
 > Nothing in §5 ("What Is Not Authorized") is granted by this
 > signature.
 
-**THIS AUTHORIZATION DOES NOT AUTHORIZE ANY IMPLEMENTATION UNTIL IT IS
-FORMALLY ACCEPTED AND SIGNED BY THE PRODUCT ARCHITECT.** Until §7 is
-completed and signed, no application code, test, or schema may be
-written for this capability.
+**Effective upon this signature:** engineering implementation of the
+complete capability defined in §2, subject to every non-negotiable in
+§3, every acceptance criterion in §4, the redirect edge case in §6,
+and the exclusions in §5, may now proceed. This includes, unchanged
+from §§2–6 above:
+
+- Owner-controlled removal and Owner-controlled redirect, as one
+  authorized capability, not two separately-gated ones.
+- Redirect as one atomic Firestore transaction — source removal and
+  destination establishment commit together or neither changes at
+  all (§3 item 4, §4 item 4).
+- The destination-already-holds-it redirect outcome: idempotent
+  success, no duplicate write, source removal still proceeds, audit
+  record may note `destinationAlreadyHasIt: true` (§3 item 6, §6).
+- The explicit, non-conflatable distinction between direct removal of
+  an already-absent relationship (a successful, idempotent no-op) and
+  a redirect whose source relationship is already gone (a distinct,
+  explicit non-success result) — both no-write (§3 item 8, §4 item 5).
+- All 13 non-negotiables in §3, all 12 acceptance criteria in §4, and
+  every exclusion in §5, exactly as written, unchanged by this
+  signature.
+
+Any discovered need to exceed these boundaries during implementation
+returns to Product Architect review before proceeding — not resolved
+silently.
 
 ---
 
@@ -483,8 +504,14 @@ written for this capability.
 - This document does not modify `BDR-0013`, the Amendment, the Rule 8
   Assessment, or the Implementation Plan — all remain byte-for-byte
   unchanged.
-- This document does not itself constitute authorization — §7 governs,
-  and §7 is currently unsigned.
+- §7 is now signed: **ACCEPTED AND AUTHORIZED**, Product Architect
+  SABUSHIMIKE MASCENI, 29 August 2026. This document, together with
+  its signed §7, is now the authoritative Implementation Authorization
+  for this capability.
 - Populated strictly from the already-accepted Implementation Plan; no
   new technical detail, scope, or business decision beyond what the
-  Plan already specifies is introduced here.
+  Plan already specifies is introduced here or by this signature.
+- This signature authorizes engineering implementation strictly within
+  §§2–6 of this document — it is not itself the implementation, and no
+  application code, test, or schema is created by this signature; that
+  work remains a separate, subsequent step.
