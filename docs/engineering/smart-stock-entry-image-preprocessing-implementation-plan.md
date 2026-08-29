@@ -8,9 +8,15 @@ engineering execution plan, ready for a future, separate
 Implementation Authorization to review. Does not itself authorize
 implementation and does not modify code.
 
-**Status:** **DRAFT — NOT YET ACCEPTED / NOT AUTHORIZED.** No
-Product Architect signature appears anywhere in this document. No
-code may be written on the strength of this Plan alone.
+**Status:** **ACCEPTED — AUTHORIZED TO PROCEED TO IMPLEMENTATION
+AUTHORIZATION (29 August 2026).** See "Product Architect Acceptance,"
+at the end of this document, for the complete signed decision. This
+acceptance authorizes the Plan itself as the correct translation of
+the READY Rule 8 Assessment into engineering scope — it does **not**
+authorize implementation. A separate, distinct, signed **Implementation
+Authorization** remains required before any application code, test, or
+configuration file is written. Not created here; not authorized by
+this acceptance alone.
 
 **Governing chain:**
 [BDR-0008](../specs/BDR-0008-smart-stock-entry-ai-advisory-boundary.md)
@@ -368,13 +374,23 @@ practical shape of this bypass is therefore: decode once via
 `createImageBitmap(file, { imageOrientation: 'from-image' })` (no
 resize options yet), inspect the resulting bitmap's dimensions and the
 original `File.size`, and only proceed to the canvas re-encode step if
-either the dimension or the byte-size threshold is exceeded — the
-already-small case returns the *original* file, re-oriented if needed,
-without a second encode pass. **This means every path still calls
-`createImageBitmap` before any base64 conversion — an oversized image
-by either measure is never able to reach `FileReader`/base64
-unprocessed, satisfying the Rule 8 Acceptance Condition this
-optimization must not violate (Rule 8 Assessment §11, item 2).**
+either the dimension or the byte-size threshold is exceeded. **The
+already-small case discards that dimension-check bitmap and returns
+the original `File` object completely unmodified** — not
+"re-oriented," since no canvas draw occurs for this path and the
+original file's bytes (EXIF tag included, exactly as captured) are
+what is actually sent onward. This is identical to today's current,
+already-shipped behavior for every image (§3): no orientation problem
+has been reported for it, so the bypass path introduces no regression
+by leaving it untouched. Orientation *correction* (§6's
+`imageOrientation: 'from-image'` actually being applied to what is
+sent) only happens on the re-encode path, for images that don't
+qualify for this bypass. **Every path still calls `createImageBitmap`
+once, for the dimension check, before any base64 conversion** — an
+oversized image by either measure is never able to reach
+`FileReader`/base64 unprocessed, satisfying the Rule 8 Acceptance
+Condition this optimization must not violate (Rule 8 Assessment §11,
+item 2).
 
 ## 10. Camera + Upload — Shared Path
 
@@ -394,7 +410,7 @@ anywhere in this table:
 | # | Scenario | Behavior |
 |---|---|---|
 | 1 | Successful preprocessing | Preprocessed Blob proceeds into the existing `FileReader.readAsDataURL` → base64 → `scanPurchaseDocument` path, unchanged from that point forward. |
-| 2 | Already-small image | Original file (re-oriented if needed, per §9) proceeds into the same existing path — no re-encode performed. |
+| 2 | Already-small image | Original file, completely unmodified (per §9's correction — not re-oriented, since no canvas draw occurs on this path), proceeds into the same existing path — no re-encode performed. |
 | 3 | `createImageBitmap` unavailable (API does not exist) | Routes to existing graceful fallback — client-side, treated identically to scenario 4 below (both surface as `unreadable`, matching the "we couldn't read this document reliably" existing string, `en.ts:485`). |
 | 4 | `createImageBitmap` throws/rejects (decode failure) | Same as scenario 3 — `unreadable`. |
 | 5 | Native decode failure (device memory boundary) | Same as scenario 3/4 — indistinguishable from the application's point of view from any other decode failure; still `unreadable`, never reported as an intentional size rejection (§8). |
@@ -562,15 +578,80 @@ Acceptance Conditions (Assessment §11):
 
 ## 16. Governance / Authorization Boundary
 
-**DRAFTED — NOT ACCEPTED — NOT AUTHORIZED FOR IMPLEMENTATION.**
+**ACCEPTED — AUTHORIZED TO PROCEED TO IMPLEMENTATION AUTHORIZATION.**
+*(Updated from DRAFTED — NOT ACCEPTED — NOT AUTHORIZED FOR
+IMPLEMENTATION by the Product Architect Acceptance recorded below.)*
 
-The Product Architect must review and explicitly accept this
-Implementation Plan before an Implementation Authorization is drafted.
-After acceptance, a separate, distinct, signed Implementation
-Authorization must exist before any code in §12's file list may be
-written. **No code may be written merely because this Plan exists.**
-No authorization signature appears anywhere in this document, and none
-should be inferred from its existence.
+This Plan has been reviewed and explicitly accepted by the Product
+Architect. A separate, distinct, signed Implementation Authorization
+must still exist before any code in §12's file list may be written.
+**No code may be written merely because this Plan is accepted.** No
+implementation-authorization signature appears anywhere in this
+document — only Plan-level acceptance, per the "Product Architect
+Acceptance" section below.
+
+---
+
+## Product Architect Acceptance
+
+**Status:** ✅ **ACCEPTED (29 August 2026).**
+
+> PRODUCT ARCHITECT ACCEPTANCE / SIGNATURE
+>
+> I accept the Implementation Plan for the Smart Stock Entry
+> Client-Side Image Preprocessing Reliability Fix, including its full
+> scope as defined in the Plan: the required preprocess-before-base64
+> pipeline order (§3); the carried-forward governing direction (§4);
+> the Initial Implementation Parameters (§5) — 2000px maximum long
+> edge, JPEG output, quality 0.85, an already-small bypass requiring
+> BOTH long edge ≤2000px AND original file ≤2MB, and an approximately
+> 4MB soft output target that is explicitly not a hard client-side
+> rejection limit; the technical mechanism (§6); the Parameter Tuning
+> Boundary (§7); the explicit prohibition on original-file-size
+> rejection (§8); the already-small image handling as corrected during
+> final review (§9 — the bypass sends the original file completely
+> unmodified, not "re-oriented"); the shared camera/upload path (§10);
+> the failure-handling table (§11); the file scope and exclusions
+> (§12); the test plan (§13); the deferred real-world validation
+> procedure (§14); and the acceptance criteria (§15).
+>
+> The existing server-side `MAX_IMAGE_BYTES = 8MB` decoded limit and
+> the 12MB request parser remain unchanged and authoritative, per §4D
+> and §5's own note distinguishing the client-side soft target from
+> the server's decoded-byte ceiling. Receipt legibility remains the
+> controlling quality constraint, per §5 and §11 (Test R). The four
+> numeric parameters in §5 remain tunable engineering parameters, not
+> business rules, per §7's seven-condition boundary — future tuning
+> does not require reopening BDR-0008, the Smart Stock Entry ADR, or
+> spec amendment #4, provided those seven conditions continue to hold.
+>
+> This acceptance confirms no upstream governance artifact (BDR-0008,
+> the ADR, spec amendment #4, the Governance Review Summary, or the
+> READY Rule 8 Assessment) requires amendment as a result of this Plan.
+>
+> Product Architect: SABUSHIMIKE MASCENI
+> Decision: ACCEPTED
+> Date: 29 August 2026
+
+This acceptance takes effect immediately on the Plan document itself:
+the engineering design, initial parameter selections, technical
+mechanism, failure-handling table, file scope, test plan, and
+acceptance criteria recorded in §§1–15 above are now the authoritative
+Plan.
+
+**This acceptance does not authorize implementation.** It accepts the
+Plan as the correct translation of the READY Rule 8 Assessment into
+engineering scope — it is not itself the separate, signed
+**Implementation Authorization** §16 still requires, and no
+application code, test, dependency, or configuration file may be
+changed on the strength of this acceptance alone.
+
+---
+
+**Implementation Plan drafted → ACCEPTED.**
+**Implementation Authorization still required, and not yet drafted.**
+**No application code, test, or configuration file may be changed
+until a separate, signed Implementation Authorization exists.**
 
 ---
 
@@ -584,12 +665,14 @@ should be inferred from its existence.
   spec amendment #4, the Governance Review Summary, or the Rule 8
   Assessment — confirmed unchanged, this session (§1).
 - This document does not create, and should not be treated as, an
-  Implementation Authorization.
+  Implementation Authorization, even after Product Architect
+  acceptance (see "Product Architect Acceptance" section above).
 - This document selects initial numeric parameters (§5) exactly as
   instructed, explicitly labeled as unproven initial values, not
   empirically optimal ones — no benchmark result is fabricated
   anywhere in this document (§5, §14).
 
-**Lifecycle:** Assessed (Rule 8) → **Plan drafted** (this document).
-Not Accepted, not Authorized, not Implemented, not Verified, not
-Closed — no engineering work is authorized by this record.
+**Lifecycle:** Assessed (Rule 8) → Plan drafted → **Plan Accepted**
+(this document, 29 August 2026). Not Authorized (for implementation),
+not Implemented, not Verified, not Closed — no engineering work is
+authorized by this record.
