@@ -655,12 +655,55 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // StockBatch (Amendment Part 11), falling back to the Product's own
   // reference cost/selling price, and left blank (never invented) when
   // neither exists. Quantity always starts blank ("not yet counted" —
-  // BDR-0009 Part 4), never 0.
-  const buildCatalogRow = (product: { id: string; name: string; costPrice?: number; sellingPrice?: number }): StockCountWorkingRow => {
+  // BDR-0009 Part 4), never 0. [Implementation Authorization — Existing-
+  // Product Selling-Unit / Price-Memory Correction] When a confirmed
+  // `unitRelationship.sellingUnit` exists, the unit/sellingPrice default
+  // instead prefers that confirmed selling unit — see the two-tier
+  // resolution inline below.
+  const buildCatalogRow = (product: {
+    id: string;
+    name: string;
+    costPrice?: number;
+    sellingPrice?: number;
+    unitRelationship?: UnitRelationship;
+  }): StockCountWorkingRow => {
     const latestBatch = findMostRecentBatchForProduct(batches, product.id);
     const costPrice = latestBatch ? String(latestBatch.costPrice) : product.costPrice != null ? String(product.costPrice) : '';
-    const sellingPrice = latestBatch ? String(latestBatch.sellingPrice) : product.sellingPrice != null ? String(product.sellingPrice) : '';
-    const unit = latestBatch?.unit ? latestBatch.unit : '';
+
+    // [Implementation Authorization — Periodic Contagem, Existing-Product
+    // Selling-Unit / Price-Memory Correction, §2 item 1] Two-tier
+    // resolution: when this product carries a confirmed, valid
+    // `unitRelationship.sellingUnit` AND a latest batch exists, default
+    // this row's unit to that `sellingUnit` and re-denominate the latest
+    // batch's own `(sellingPrice, unit)` into `sellingUnit` terms via the
+    // already-existing, already-tested `resolveUnitAwarePrice` — the same
+    // function this file already uses for the deviation check
+    // (`getRememberedPriceForRow`, above). No new conversion engine. When
+    // no confirmed `sellingUnit` exists, when there is no latest batch to
+    // convert from, or when `resolveUnitAwarePrice` returns `''` (no
+    // valid bridge — should not occur for a confirmed, valid chain, but
+    // its own contract guarantees no fabricated number regardless), this
+    // falls back to exactly today's behavior: the latest batch's own
+    // unit/price, unconverted, or the Product's own reference price with
+    // no unit (blank unit) when no batch exists at all. `costPrice`
+    // above, and FR-67's own separate `units[0]` cost-basis convention
+    // (buildProductCostBasisMap), are entirely untouched by this
+    // resolution.
+    let unit = latestBatch?.unit ? latestBatch.unit : '';
+    let sellingPrice = latestBatch ? String(latestBatch.sellingPrice) : product.sellingPrice != null ? String(product.sellingPrice) : '';
+
+    const relationship = product.unitRelationship;
+    const confirmedSellingUnit = isValidUnitRelationship(relationship) ? relationship!.sellingUnit : undefined;
+    if (confirmedSellingUnit && latestBatch) {
+      const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', confirmedSellingUnit, relationship);
+      if (resolved !== '') {
+        unit = confirmedSellingUnit;
+        sellingPrice = resolved;
+      }
+      // else: no valid bridge — retain the fallback already computed
+      // above (latest batch's own unit/price, unconverted).
+    }
+
     return {
       productId: product.id,
       productName: product.name,
@@ -1582,8 +1625,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // empty on first toggle-on instead of correctly defaulting to the
     // chain's own purchase unit.
     const relationship = getEffectiveUnitRelationshipForProductName(productKey);
-    const defaultReferenceUnit = relationship?.units?.[0]?.unit || '';
-    setModeAGroups((prev) => ({ ...prev, [productKey]: { referenceUnit: defaultReferenceUnit, referencePrice: '' } }));
+    // [Implementation Authorization — Existing-Product Selling-Unit /
+    // Price-Memory Correction, §2 items 2-3] Two-tier default: prefer
+    // the confirmed `sellingUnit` (when present and a chain member —
+    // already guaranteed by isValidUnitRelationship for a confirmed
+    // relationship) over `units[0]`, falling back to the latter exactly
+    // as today when no `sellingUnit` is confirmed. Identical preference
+    // order to buildCatalogRow's own resolution, above, and to both
+    // ModeAValuationControl render sites' own effectiveReferenceUnit
+    // computation, below — the toggle-time and render-time defaults can
+    // never disagree.
+    const defaultReferenceUnit = relationship?.sellingUnit || relationship?.units?.[0]?.unit || '';
+    // Seed the reference price from the SAME resolution buildCatalogRow
+    // performs for this exact product/unit pair — not a second,
+    // independently-computed value. Only for an already-catalogued
+    // product with a latest batch to convert from; a genuinely new
+    // product (no Product record yet) has no batch, so this remains ''
+    // exactly as before this correction — new-product behavior is
+    // unaffected (§3.A).
+    let defaultReferencePrice = '';
+    const product = products.find((p) => productKeyFor(p.name) === productKey);
+    if (product && defaultReferenceUnit) {
+      const latestBatch = findMostRecentBatchForProduct(batches, product.id);
+      if (latestBatch) {
+        const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', defaultReferenceUnit, relationship);
+        if (resolved !== '') defaultReferencePrice = resolved;
+      }
+    }
+    setModeAGroups((prev) => ({ ...prev, [productKey]: { referenceUnit: defaultReferenceUnit, referencePrice: defaultReferencePrice } }));
   };
 
   const handleModeAFieldChange = (productKey: string, fields: Partial<{ referenceUnit: string; referencePrice: string }>) => {
@@ -3442,7 +3511,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             if (!relationship || !isValidUnitRelationship(relationship)) return null;
                             const config = modeAGroups[key];
                             const referenceUnitOptions = relationship.units.map((u) => u.unit);
-                            const effectiveReferenceUnit = config?.referenceUnit || referenceUnitOptions[0] || '';
+                            // [Implementation Authorization — Existing-
+                            // Product Selling-Unit / Price-Memory
+                            // Correction, §2 item 2] Same two-tier
+                            // preference as handleModeAToggle, above —
+                            // sellingUnit when confirmed, else units[0] —
+                            // so the toggle-time and render-time defaults
+                            // can never disagree.
+                            const defaultReferenceUnit = relationship.sellingUnit || referenceUnitOptions[0] || '';
+                            const effectiveReferenceUnit = config?.referenceUnit || defaultReferenceUnit;
                             // A portion's unit falling outside the chain
                             // (e.g. Owner typed a non-member unit after
                             // enabling Mode A) does not hide this control —
@@ -3786,7 +3863,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           if (!relationship || !isValidUnitRelationship(relationship)) return null;
                           const config = modeAGroups[key];
                           const referenceUnitOptions = relationship.units.map((u) => u.unit);
-                          const effectiveReferenceUnit = config?.referenceUnit || referenceUnitOptions[0] || '';
+                          // [Implementation Authorization — Existing-
+                          // Product Selling-Unit / Price-Memory
+                          // Correction, §2 item 2] Same two-tier
+                          // preference as the catalog-row loop's
+                          // identical site above and handleModeAToggle —
+                          // sellingUnit when confirmed, else units[0].
+                          const defaultReferenceUnit = relationship.sellingUnit || referenceUnitOptions[0] || '';
+                          const effectiveReferenceUnit = config?.referenceUnit || defaultReferenceUnit;
                           return (
                             <ModeAValuationControl
                               referenceUnitOptions={referenceUnitOptions}

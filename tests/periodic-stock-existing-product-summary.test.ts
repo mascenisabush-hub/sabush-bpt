@@ -125,7 +125,13 @@ describe('PeriodicStockCountView.tsx — ExistingProductSummary is actually wire
   it('the manual-row loop renders it only when !isNewProduct, so it and NewProductInfoPanel are mutually exclusive per card — never both for the same product', () => {
     const start = periodicSrc.indexOf('const cardIsFirstPortionOfMultiPortionGroup = firstRowLabel.portionIndex === 1;');
     assert.notEqual(start, -1);
-    const block = periodicSrc.slice(start, start + 9500);
+    // [Implementation Authorization — Existing-Product Selling-Unit /
+    // Price-Memory Correction] Window widened 9500 -> 10000: that
+    // correction's own added comment lines in this render site's
+    // sibling Mode A block (relationship.sellingUnit two-tier default)
+    // pushed ExistingProductSummary's render call slightly further from
+    // this anchor. No assertion content below changed.
+    const block = periodicSrc.slice(start, start + 10000);
     assert.match(block, /\{isNewProduct &&/);
     assert.match(block, /\{!isNewProduct && cardIsFirstPortionOfMultiPortionGroup && \(\s*<ExistingProductSummary/);
     assert.match(block, /costBasis=\{costBasisByProductName\.get\(productKeyFor\(group\.displayName\)\)\}/);
