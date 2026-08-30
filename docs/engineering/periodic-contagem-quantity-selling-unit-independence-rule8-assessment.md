@@ -1022,3 +1022,142 @@ the full, verbatim decision text. This §15 addendum's own analysis,
 findings, and mechanism decision (above) are unaltered by this
 acceptance record; nothing above this line is rewritten.
 
+## 16. Addendum — Contagem UI Selling-Price Denomination Caption
+
+**Status: DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§15 above, including §15's own signature block, are
+unaltered by this addendum.
+
+**Governance basis for this addendum.** §15 immediately above,
+recording the Option C decision, states explicitly: *"the Contagem UI's
+own caption fix (separately identified, not part of this addendum's
+own scope, not authorized by it)."* Implementation Authorization §10
+restates the same exclusion by exact file/line reference. This §16
+addendum is the narrow governance record that exclusion itself
+anticipated — it does not reopen, revise, or reinterpret §15; it
+addresses the one item §15 deliberately left outside its own scope.
+
+**Fresh audit finding.** A post-Option-C audit of
+`PeriodicStockCountView.tsx`, re-reading the code fresh (not assuming
+any prior audit's line numbers remained correct), confirmed the working
+row model and persisted-record model are both already correct — the
+divergence exists solely in two Owner-facing display expressions.
+
+**Exact affected locations (current source, re-verified against
+`HEAD` `7cfee3a4`):**
+1. Catalog-row selling-price caption, `PeriodicStockCountView.tsx:3857`.
+2. Manual-row selling-price caption, `PeriodicStockCountView.tsx:4293`.
+
+Both currently render:
+
+```tsx
+{currencySymbol} por {row.unit.trim() || 'un'}
+```
+
+**Why this is misleading.** `row.unit` is the row's physical/counting
+unit (FR-90's own invariant, unchanged). `row.sellingPriceBasisUnit` is
+the unit the row's own `sellingPrice` is actually denominated in —
+these two can legitimately diverge the moment a deliberate row's
+physical unit is later edited (Rule 2,
+`applySellingConfigurationEditRules`,
+`PeriodicStockCountView.tsx:1212-1265` — the same "dangerous sequence"
+already named in §15's own Finding above and covered by
+`tests/stockcount-selling-price-basis-unit.test.ts` TEST 3). When they
+diverge, the caption today names the wrong unit: an Owner who
+deliberately entered `50 MZN/Un` and later relabels the physical count
+to `Cx` is shown "50 MZN por Cx" — a price that was never entered and
+does not match what the arithmetic actually uses.
+
+**Why the correction is display-only.** Both affected lines are inert
+JSX text nodes inside a `<p>` element — no `onChange`, no state write,
+not referenced by `updateCatalogRow`/`updateManualRow`, not read by any
+calculation. The proposed change only alters which of two already-
+computed, already-correct string values is read for rendering; it
+writes to nothing.
+
+**Why it does not affect arithmetic, persistence, Product memory, Add
+Stock, Initial Stock, Mode A/B, or FR-67:**
+- Arithmetic: `sellingValue`/`totalSellingValue`
+  (`quantity × sellingPrice`) never reads either caption; both are
+  computed and totaled entirely independently of this display text.
+- Persistence: `StockCountItem.sellingPriceBasisUnit` is already
+  written correctly by Option C (§15 above); this addendum reads that
+  same already-persisted-correctly value for display, writing nothing
+  new to any record.
+- Product memory: `findLatestRememberedProductMemory`'s own basis-unit
+  resolution (§15 above) is untouched — it does not consume this
+  caption.
+- Add Stock / Initial Stock: neither file contains these two lines;
+  neither is touched.
+- Mode A/B: Mode A's own reference-unit caption
+  (`PeriodicStockCountView.tsx:308`, `{referenceUnit || 'unidade'}`) is
+  a distinct mechanism — an explicit, Owner-chosen reference unit kept
+  in sync by its own dedicated state, not `row.unit`. It is explicitly
+  excluded from this addendum and MUST NOT be changed. Mode B is the
+  only mode these two captions belong to, and its own valuation path is
+  unaffected for the reasons above.
+- FR-67: `fr67CostBasisConversion.ts` has no selling-price-denomination
+  concept; this addendum does not reference or touch it.
+
+**Exact intended expression, both locations:**
+
+```tsx
+{currencySymbol} por {(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'}
+```
+
+i.e. `sellingPriceBasisUnit ?? unit` — the identical fallback
+expression already authorized and shipped for
+`ProductDetailModal.tsx`'s own selling-price line and for
+`workingRowDeliberateEntries` (`PeriodicStockCountView.tsx:2615`) under
+Option C. No new field, no new mechanism — the same already-tested
+pattern, applied to the two lines Option C's own authorization named
+and deliberately left out.
+
+**Blast radius.** Exactly two JSX display expressions, in one file,
+each a single-line change. No other line in `PeriodicStockCountView.tsx`
+containing `row.unit`, `item.unit`, `.unit` in any other context (44
+other unrelated occurrences confirmed by direct source search) is
+touched.
+
+**Backward compatibility.** `sellingPriceBasisUnit` is optional; for
+any row where it is `undefined` (new row before a price is set, or a
+row predating the field), the expression falls back to `row.unit` —
+byte-for-byte identical to today's rendered output for every
+non-diverged and legacy case. Only the genuinely diverged case (a
+deliberate price whose basis unit differs from the current physical
+unit) changes what is displayed, and only to the already-correct value.
+
+**Test requirements (minimum, structural — mirroring the existing
+technique this same suite already uses for `ProductDetailModal.tsx`,
+since this repository has no DOM/React render harness):**
+1. Same-unit: `unit=Cx, sellingPriceBasisUnit=Cx` → caption source
+   resolves to `Cx` (unchanged from today).
+2. Divergent: `unit=Cx, sellingPriceBasisUnit=Un` → caption source
+   resolves to `Un`, not `Cx`.
+3. Reverse divergent: `unit=Un, sellingPriceBasisUnit=Cx` → caption
+   source resolves to `Cx`, not `Un`.
+4. Legacy fallback: `sellingPriceBasisUnit` absent → caption source
+   resolves to `unit`, unchanged from today.
+5. Mode A unaffected: the reference-unit caption
+   (`PeriodicStockCountView.tsx:308`) still reads `referenceUnit`,
+   confirming no cross-contamination between the two mechanisms.
+6. Catalog/manual parity: both the catalog-row (`:3857`) and manual-row
+   (`:4293`) captions are asserted against the same expression
+   independently, since they are two textually separate code paths that
+   could otherwise drift.
+
+**What does NOT change:** `StockCountItem`/`StockCountWorkingRow`
+schemas (both already final per §15); `Product` schema; Add Stock;
+Initial Stock; Mode A/B mechanism or eligibility; FR-67 cost-basis
+logic; any valuation total; any persisted field; the Specification.
+
+**Verdict: READY AFTER IMPLEMENTATION PLAN AMENDMENT.**
+
+This addendum is not itself an authorization to implement — it records
+the Rule 8 analysis only. Coding may not begin until the corresponding
+Implementation Plan and Implementation Authorization addenda (below)
+are separately drafted and the Authorization addendum is signed by the
+Product Architect.
+

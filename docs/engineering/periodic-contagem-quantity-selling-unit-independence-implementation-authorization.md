@@ -646,3 +646,117 @@ change already made.
 **Not committed, not pushed** — awaiting separate authorization, per
 the Product Architect's own explicit instruction.
 
+## 12. Addendum — Authorization to Correct the Contagem UI Selling-Price
+## Denomination Caption
+
+**Status: DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE. NOT SIGNED. NOT
+ACCEPTED. NOT IN EFFECT.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§11 above, including every existing signature and
+Post-Implementation Record, are unaltered by this addendum. No prior
+signed content is revised, reinterpreted, or superseded.
+
+**Why this addendum exists.** §10 above, and its corresponding Rule 8
+Assessment §15 / Implementation Plan §20 addenda, explicitly excluded
+"the Contagem UI caption (`PeriodicStockCountView.tsx:3851, 4287`)" by
+name, describing it as "a separate, already-identified,
+not-yet-authorized correction, not part of this addendum's own scope."
+This §12 addendum is that separate authorization. It is not
+pre-authorized by §10, and is not implied by any prior signature in
+this document.
+
+**Statement of purpose.** This authorization exists only to make the
+Owner-facing selling-price denomination match the already-correct
+internal `sellingPriceBasisUnit` value. It authorizes no other change
+of any kind.
+
+**This addendum authorizes ONLY the following three items, once
+signed:**
+
+1. Change the catalog-row selling-price caption in
+   `PeriodicStockCountView.tsx` (currently line 3857) from:
+   ```tsx
+   {currencySymbol} por {row.unit.trim() || 'un'}
+   ```
+   to:
+   ```tsx
+   {currencySymbol} por {(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'}
+   ```
+
+2. Change the manual-row selling-price caption in
+   `PeriodicStockCountView.tsx` (currently line 4293) from the same
+   current expression to the same corrected expression.
+
+3. Add or update the narrowly required tests specified in Rule 8
+   Assessment §16 addendum and Implementation Plan §21 addendum
+   (same-unit, divergent, reverse-divergent, legacy fallback, Mode A
+   unchanged, catalog/manual parity) — test-file changes only, scoped
+   exclusively to verifying these two display expressions.
+
+**This addendum explicitly prohibits, and does not authorize:**
+- Any change to the `StockCount` data model or any of its persisted
+  fields.
+- Any change to `Product`'s schema.
+- Any change to Add Stock (`AddStockView.tsx`).
+- Any change to Initial Stock (`InitialStockCountView.tsx`).
+- Any change to Smart Stock Entry, or any other product-recognition
+  flow.
+- Any change to Mode A/B logic, eligibility, or Mode A's own
+  reference-unit caption (line 308).
+- Any change to conversion mathematics or unit-relationship resolution.
+- Any change to Product memory
+  (`findLatestRememberedProductMemory`/`productMemoryPriceResolution.ts`).
+- Any change to persistence (`recordStockCount`, `AppContext.tsx`'s own
+  write sequence).
+- Any change to Business Worth / valuation totals
+  (`totalValue`/`totalSellingValue`/`sellingValue`).
+- Any change to FR-67 cost-basis logic
+  (`fr67CostBasisConversion.ts`).
+- Any other Contagem UI redesign, restructuring, or copy change beyond
+  the two named caption expressions.
+- Any new feature.
+- Any refactoring outside the two named caption lines and their
+  directly corresponding tests.
+
+**Test / Acceptance scope for this addendum (restated from Rule 8
+Assessment §16 and Implementation Plan §21, in full — the complete,
+sole test scope this addendum covers once signed):**
+1. `quantity=7, unit=Cx, sellingPrice=50, sellingPriceBasisUnit=Un` →
+   caption resolves to "50 MZN por Un".
+2. `quantity=7, unit=Cx, sellingPrice=480, sellingPriceBasisUnit=Cx` →
+   caption resolves to "480 MZN por Cx".
+3. `quantity=7, unit=Un, sellingPrice=480, sellingPriceBasisUnit=Cx` →
+   caption resolves to "480 MZN por Cx" (reverse-divergent case).
+4. `sellingPriceBasisUnit` absent → caption falls back to the physical
+   `unit`, exactly as rendered today.
+5. Mode A's own reference-unit caption (line 308) is verified
+   unchanged, still sourced from `referenceUnit`.
+6. Catalog-row and manual-row captions are verified to behave
+   identically, independently of each other.
+
+All six items verify display-source semantics only — none alter or
+depend on any business-logic behavior, and none are satisfied by a
+change to arithmetic, persistence, or any field other than the two
+named caption expressions.
+
+**Risk:** minimal. Blast radius is exactly two single-line JSX
+expressions in one file, both already covered by an existing,
+already-tested fallback pattern (`sellingPriceBasisUnit ?? unit`)
+shipped elsewhere in this same codebase under §10 above.
+
+**Rollback:** trivial — reverting either or both lines to `row.unit`
+restores today's exact behavior; no data migration is involved in
+either direction, since no persisted field or schema is touched.
+
+**Governance state:** Rule 8 Assessment §16 addendum — drafted, status
+"READY AFTER IMPLEMENTATION PLAN AMENDMENT." Implementation Plan §21
+addendum — drafted, status "READY AFTER IMPLEMENTATION AUTHORIZATION
+AMENDMENT." This §12 addendum — drafted, **UNSIGNED**, status "AWAITING
+PRODUCT ARCHITECT ACCEPTANCE." No implementation may begin until this
+addendum carries an explicit Product Architect acceptance and signature,
+recorded below this line in a future, separate edit.
+
+**This addendum is not accepted. This addendum is not signed. No
+implementation is authorized by this addendum as it currently stands.**
+

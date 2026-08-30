@@ -942,3 +942,94 @@ the full, verbatim decision text. This §20 addendum's own schema
 specification, function list, and test requirements (above) are
 unaltered by this acceptance record; nothing above this line is
 rewritten.
+
+## 21. Addendum — Contagem UI Selling-Price Denomination Caption
+
+**Status: DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§20 above, including §20's own signature block, are
+unaltered by this addendum.
+
+**Basis.** This addendum plans, at the Implementation Plan level,
+exactly the correction Rule 8 Assessment §16 addendum (this same
+governance chain) analyzed and recommended, and which §20 immediately
+above explicitly named as out of its own scope. It authorizes planning
+for exactly two display expressions — nothing else.
+
+**Scope — exactly two locations, both in
+`apps/tenant/src/components/PeriodicStockCountView.tsx`:**
+1. Catalog-row selling-price caption (line 3857).
+2. Manual-row selling-price caption (line 4293).
+
+**Required implementation behavior, identical at both locations:**
+
+Current:
+```tsx
+{currencySymbol} por {row.unit.trim() || 'un'}
+```
+
+Change to:
+```tsx
+{currencySymbol} por {(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'}
+```
+
+**Explicitly, this addendum authorizes planning for display-only
+text-source changes, and nothing else:**
+- No state mutation — neither line writes to any state; both remain
+  pure render expressions.
+- No business-logic changes — `applySellingConfigurationEditRules` and
+  every other function in this file's Rules 1–4 (§6 above) are
+  untouched.
+- No schema changes — `StockCountWorkingRow`/`StockCountItem`/`Product`
+  are all already final (§5, §20 above); this addendum adds no field to
+  any of them.
+- No persistence changes — `recordStockCount`'s own write sequence
+  (§10 above) is untouched; nothing about what is saved changes.
+- No Product changes — `Product.sellingPrice`/`unitRelationship` are
+  not read or written by either affected line.
+- No Add Stock changes — `AddStockView.tsx` does not contain either
+  affected line and is not touched.
+- No Initial Stock changes — `InitialStockCountView.tsx` does not
+  contain either affected line and is not touched.
+- No Mode A/B changes — Mode A's own reference-unit caption (line 308,
+  `{referenceUnit || 'unidade'}`) is a distinct, already-correct
+  mechanism and is explicitly excluded; Mode B's own valuation path
+  (§9 above) is unaffected since neither affected line feeds any
+  calculation.
+- No FR-67 changes — `fr67CostBasisConversion.ts` is not touched.
+- No other UI redesign — no other caption, label, layout, or component
+  in this file is modified.
+- No new fields — `sellingPriceBasisUnit` already exists
+  (`StockCountWorkingRow`, §5/§20 above); this addendum introduces no
+  new field anywhere.
+- No terminology changes — "por", the currency symbol placement, and
+  the surrounding label text ("Venda/Un") are unchanged; only which
+  unit string is read for the denomination changes.
+
+**Test Plan (minimum, structural — extending
+`tests/stockcount-selling-price-basis-unit.test.ts` or an equivalent
+new file, using this repository's own established source-text-assertion
+technique for files with no DOM render harness):**
+
+A. Same-unit: `unit=Cx, sellingPriceBasisUnit=Cx` → resolved
+   denomination is `Cx`.
+B. Divergent unit: `unit=Cx, sellingPriceBasisUnit=Un` → resolved
+   denomination is `Un`.
+C. Reverse divergent unit: `unit=Un, sellingPriceBasisUnit=Cx` →
+   resolved denomination is `Cx`.
+D. Legacy fallback: `sellingPriceBasisUnit` absent → resolved
+   denomination is `unit`, unchanged from today.
+E. Mode A unchanged: structural assertion that line 308's own caption
+   still reads `referenceUnit`, not `row.unit`/`row.sellingPriceBasisUnit`.
+F. Catalog/manual parity: both the catalog-row and manual-row caption
+   expressions are independently asserted to use
+   `sellingPriceBasisUnit ?? unit`, since they are two separate
+   textual occurrences.
+
+**Verdict: READY AFTER IMPLEMENTATION AUTHORIZATION AMENDMENT.**
+
+This addendum plans the change; it does not itself authorize coding.
+The corresponding Implementation Authorization addendum (below) is the
+gate that must be signed by the Product Architect before any source or
+test file is modified.
