@@ -373,3 +373,69 @@ scope in §1–§4, above. No code, test, `firestore.rules`, or
 `firestore.indexes.json` change has been made in the course of producing
 or signing this Authorization. A separate implementation execution step
 is required to actually begin work.**
+
+---
+
+## 9. Post-Implementation Record — Selling-Memory Selection Extraction
+## (Accepted)
+
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 30
+August 2026.**
+
+Appended per this repository's own established pattern for recording a
+Product Architect decision against an already-signed Implementation
+Authorization without rewriting its original, signed content — one
+umbrella Authorization, extended, not replaced (see, for precedent,
+`business-worth-evolution-implementation-authorization.md`'s own §16,
+§24–§25, and §41, which append dated Post-Implementation Correction and
+Execution Record sections in exactly this way). §1–§8, above, remain
+byte-for-byte as originally signed; nothing in them is altered by this
+section.
+
+**Background.** During implementation of the scope authorized in §1–§4,
+above, the "last deliberately entered wins" selling-memory tie-break
+(§1 item 7; §2 item 5) was extracted from `AppContext.tsx`'s
+`recordStockCount()` into a new, separate, pure function,
+`selectSellingMemoryByProductName`, in a new file,
+`apps/tenant/src/lib/sellingMemorySelection.ts` — rather than remaining
+inline in `AppContext.tsx` as §2 item 5's own literal text describes.
+This was disclosed to the Product Architect at the time, in full, before
+any request to accept it.
+
+**Product Architect decision, recorded verbatim:**
+
+> Product Architect accepts the extraction of the selling-memory
+> selection/tie-break logic from AppContext.tsx into
+> sellingMemorySelection.ts as an internal, behavior-preserving
+> refactoring within the authorized FR-89–FR-94 implementation scope.
+> The extraction introduces no new business behavior, persistence
+> behavior, data-model change, Firestore read/write, tenant-isolation
+> boundary, or product-scope expansion. Its purpose is to make the
+> authorized "last deliberately entered configuration wins" behavior
+> directly testable as a pure function. The existing repository pattern
+> of extracting critical pure logic into independently testable modules
+> supports this approach.
+
+**Explicitly also recorded, per the Product Architect's own instruction:**
+
+- This extraction does **NOT** reopen or amend the signed Specification
+  (`docs/specs/periodic-contagem-quantity-selling-unit-independence-amendment.md`).
+- It does **NOT** reopen or amend the signed Rule 8 Assessment
+  (`docs/engineering/periodic-contagem-quantity-selling-unit-independence-rule8-assessment.md`).
+- It does **NOT** change the authorized business behavior.
+- It does **NOT** constitute a product redesign.
+- It does **NOT** authorize any additional functionality outside
+  FR-89–FR-94.
+- The pre-existing failing test identified during implementation
+  (`tests/periodic-stock-multi-portion-valuation.test.ts` — confirmed,
+  via `git stash` against the untouched pre-implementation baseline, to
+  already fail identically before any FR-89–FR-94 work began) remains
+  **outside this implementation's scope** and **must NOT** be changed
+  merely to make the suite appear fully green.
+
+**Governance boundary, restated:** the signed Specification amendment,
+the signed Rule 8 Assessment, and §1–§8 of this Implementation
+Authorization (above) are unmodified by this section — confirmed by
+checksum immediately before and after this section was added. This §9
+is the sole content added by this acceptance.
+
