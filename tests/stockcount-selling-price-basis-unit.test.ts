@@ -265,3 +265,82 @@ describe('Governance boundary — exact authorized scope, nothing beyond it', ()
     assert.equal(fr67Src.includes('sellingPriceBasisUnit'), false, 'FR-67 cost-basis logic must remain completely untouched');
   });
 });
+
+// ==================================================================
+// TEST 7 — Contagem UI Selling-Price Denomination Caption
+// [Rule 8 Assessment §16 / Implementation Plan §21 / Implementation
+// Authorization §12 — ACCEPTED AND SIGNED, Product Architect
+// SABUSHIMIKE MASCENI, 30 August 2026]
+//
+// SCOPE: this repository has no DOM/React render harness (established
+// precedent, restated in this file's own header). This suite exercises
+// two established techniques together:
+//   (a) a local helper, `captionDenomination`, that mirrors — not
+//       replaces — the exact authorized JSX expression
+//       (`row.sellingPriceBasisUnit ?? row.unit`), so the display
+//       semantics for each scenario can be asserted directly; and
+//   (b) structural source-text assertions confirming
+//       PeriodicStockCountView.tsx's own two caption lines, and the
+//       separate Mode A caption, are wired exactly as §12 authorizes —
+//       the same technique TEST 4 (above) already uses for
+//       ProductDetailModal.tsx.
+// ==================================================================
+describe('TEST 7 — Contagem UI selling-price denomination caption (Implementation Authorization §12)', () => {
+  // Mirrors the exact authorized expression at both caption sites:
+  // {currencySymbol} por {(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'}
+  function captionDenomination(row: { unit: string; sellingPriceBasisUnit?: string }): string {
+    return (row.sellingPriceBasisUnit ?? row.unit).trim() || 'un';
+  }
+
+  it('A. same-unit: unit=Cx, sellingPriceBasisUnit=Cx → displays Cx', () => {
+    assert.equal(captionDenomination({ unit: 'Cx', sellingPriceBasisUnit: 'Cx' }), 'Cx');
+  });
+
+  it('B. divergent: unit=Cx, sellingPriceBasisUnit=Un → displays Un, not Cx (proves source is sellingPriceBasisUnit)', () => {
+    const row = { unit: 'Cx', sellingPriceBasisUnit: 'Un' };
+    assert.equal(captionDenomination(row), 'Un');
+    assert.notEqual(captionDenomination(row), row.unit);
+  });
+
+  it('C. reverse-divergent: unit=Un, sellingPriceBasisUnit=Cx → displays Cx, not Un', () => {
+    const row = { unit: 'Un', sellingPriceBasisUnit: 'Cx' };
+    assert.equal(captionDenomination(row), 'Cx');
+    assert.notEqual(captionDenomination(row), row.unit);
+  });
+
+  it('D. legacy/fallback: sellingPriceBasisUnit absent → falls back to row.unit, unchanged from today', () => {
+    assert.equal(captionDenomination({ unit: 'Cx' }), 'Cx');
+    assert.equal(captionDenomination({ unit: 'Emb' }), 'Emb');
+  });
+
+  it('structural: the catalog-row caption reads (row.sellingPriceBasisUnit ?? row.unit), never row.unit alone', () => {
+    assert.match(
+      periodicSrc,
+      /\{currencySymbol\} por \{\(row\.sellingPriceBasisUnit \?\? row\.unit\)\.trim\(\) \|\| 'un'\}/
+    );
+  });
+
+  it('F. catalog/manual parity: both caption occurrences use the exact same expression', () => {
+    const matches = periodicSrc.match(
+      /\{currencySymbol\} por \{\(row\.sellingPriceBasisUnit \?\? row\.unit\)\.trim\(\) \|\| 'un'\}/g
+    );
+    assert.ok(matches, 'expected the corrected caption expression to be present');
+    assert.equal(matches!.length, 2, 'expected exactly two occurrences — catalog-row and manual-row captions');
+  });
+
+  it('E. Mode A isolation: the reference-unit caption still reads referenceUnit, never sellingPriceBasisUnit', () => {
+    assert.match(periodicSrc, /Preço de venda \(\{currencySymbol\}\) por \{referenceUnit \|\| 'unidade'\}/);
+    // Exactly one occurrence of the old, uncorrected pattern is expected —
+    // and it must be this Mode A caption, not a leftover catalog/manual
+    // caption (both of which were already migrated to the new
+    // expression, confirmed by the parity check above returning exactly 2).
+    const staleMatches = periodicSrc.match(/\{currencySymbol\} por \{row\.unit\.trim\(\) \|\| 'un'\}/g);
+    assert.equal(staleMatches, null, 'no caption should still read row.unit alone');
+  });
+
+  it('does not alter row.unit itself, quantity display, or any other .unit occurrence in this file', () => {
+    // Quantity displays remain keyed off .unit alone, unaffected by this change.
+    assert.match(periodicSrc, /\{item\.quantity\} \{item\.unit\}/);
+    assert.match(periodicSrc, /\{q\} \{row\.unit \|\| 'un'\}/);
+  });
+});

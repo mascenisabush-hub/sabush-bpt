@@ -3854,7 +3854,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               unambiguous regardless of which unit is
                               selected. */}
                           <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                            {currencySymbol} por {row.unit.trim() || 'un'}
+                            {currencySymbol} por {(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'}
                           </p>
                           {/* [Manual data-entry error investigation,
                               Finding 3] Live-computed, never stored state
@@ -4290,7 +4290,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
                                 <p className="text-[11px] text-gray-500 mt-0.5 truncate">
-                                  {currencySymbol} por {row.unit.trim() || 'un'}
+                                  {currencySymbol} por {(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'}
                                 </p>
                                 {/* [Manual data-entry error investigation,
                                     Finding 3] Selling Price deviation

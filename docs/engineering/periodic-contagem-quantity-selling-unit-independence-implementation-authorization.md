@@ -791,3 +791,80 @@ scope in this §12 addendum. No code, test, `firestore.rules`, or
 or signing this addendum. A separate implementation execution step is
 required to actually begin work.**
 
+## 13. Post-Implementation Record — §12 Implemented
+
+**Status: implementation complete, not yet committed/pushed at the time
+of this record.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§12 above, including §12's own signature block, are
+unaltered by this record.
+
+**What was implemented, exactly per §12's own authorized scope, nothing
+more:**
+1. `PeriodicStockCountView.tsx`, catalog-row selling-price caption
+   (line 3857): `row.unit.trim() || 'un'` →
+   `(row.sellingPriceBasisUnit ?? row.unit).trim() || 'un'`.
+2. `PeriodicStockCountView.tsx`, manual-row selling-price caption
+   (line 4293): identical change.
+3. `tests/stockcount-selling-price-basis-unit.test.ts` — extended
+   additively with a new "TEST 7" describe block (8 new tests): the
+   four behavioral cases (same-unit, divergent, reverse-divergent,
+   legacy fallback) verified against a local helper mirroring the exact
+   authorized JSX expression, plus four structural source-assertions
+   confirming both caption sites use the corrected expression, Mode A's
+   own `referenceUnit` caption is untouched, no stale `row.unit`-alone
+   caption remains, and quantity-display lines elsewhere in the file
+   are unaffected.
+
+**Files changed:** `apps/tenant/src/components/PeriodicStockCountView.tsx`
+(2 lines), `tests/stockcount-selling-price-basis-unit.test.ts` (79
+lines added, 0 removed).
+
+**No other file touched** — confirmed by `git status --porcelain`:
+no `Product` schema, no `AddStockView.tsx`, no
+`InitialStockCountView.tsx`, no `AppContext.tsx`, no
+`fr67CostBasisConversion.ts`, no `contagemMultiUnitValuation.ts`, no
+`productMemoryPriceResolution.ts`, no Specification file appears in the
+diff.
+
+**Tests run:**
+- `tests/stockcount-selling-price-basis-unit.test.ts`: 28/28 pass (20
+  pre-existing + 8 new).
+- Full Contagem/StockCount regression sweep (29 files, 542 tests): 536
+  pass, 6 "not ok" lines / 5 distinct failing tests — all 5
+  independently re-confirmed, via `git stash` against this
+  implementation's own immediate pre-change state, to fail identically
+  with or without this change (`periodic-stock-existing-product-summary.test.ts`,
+  `tests/stock-count-portion-grouping.test.ts`,
+  `tests/periodic-stock-shop-switch-guard.test.ts`,
+  `tests/stock-count-label-undefined-fix.test.ts`,
+  `tests/stock-count-row-grouping.test.ts` — none reference
+  `sellingPriceBasisUnit`, `row.unit`'s caption usage, or either
+  affected line). Pre-existing, not a regression introduced by this
+  implementation.
+- `tsc --noEmit`: 710 error-lines before and after this change,
+  byte-identical count — all pre-existing `@types/node`/environment
+  configuration noise across many unrelated test files (none reference
+  `PeriodicStockCountView.tsx`'s own source). Zero new type errors
+  introduced by this implementation.
+
+**Confirmations:**
+- `row.unit` itself is never mutated or reinterpreted anywhere —
+  confirmed by direct diff inspection: both changes are read-only JSX
+  text-expression edits.
+- The Mode A reference-unit caption (`PeriodicStockCountView.tsx:308`)
+  is confirmed untouched and still reads `referenceUnit`.
+- No quantity display, no valuation total, no persisted field, no
+  Product/AddStock/InitialStock/FR-67/Mode-A-B logic appears anywhere
+  in the diff.
+- Legacy rows (no `sellingPriceBasisUnit`) render identically to before
+  this change — confirmed by TEST 7's own fallback case.
+- Diverged rows (deliberate price basis differing from the current
+  physical unit) now display the true price denomination instead of
+  the physical unit — confirmed by TEST 7's own divergent and
+  reverse-divergent cases.
+
+**Not committed, not pushed** — awaiting separate authorization, per
+the Product Architect's own explicit instruction.
+
