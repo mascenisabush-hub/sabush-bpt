@@ -415,20 +415,35 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           if (match.costPrice != null) initialCost = String(match.costPrice);
           if (match.sellingPrice != null) initialSell = String(match.sellingPrice);
         }
-        // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical
+        // [Bug fix — Finding C regression, fresh audit] Canonical
         // Product selling memory (Product.sellingPrice +
         // Product.unitRelationship.sellingUnit, correctly kept paired by
-        // recordStockCount's own Finding B fix) overrides the SELLING
-        // half above whenever it exists — never bypassed by the
-        // historical re-derivation's own older, confirmed-unit/first-
-        // match tie-break. Cost is deliberately left exactly as set
-        // above, from the same historical `memory`/`match.costPrice`
-        // fallback — cost has its own, entirely separate governance
-        // (FR-67/FR-85) this correction does not touch.
+        // recordStockCount's own Finding B fix) supplies the selling
+        // price whenever it exists — but is CONVERTED into initialUnit
+        // (already established above, from the batch or the generic
+        // suggested default), exactly like every other selling-memory
+        // call site's own proven-safe pattern (handleConfirmSupplierWordingCandidate,
+        // buildRowFromProposalLineItem) — NEVER overrides initialUnit
+        // itself. The prior version of this fix wrote
+        // `initialUnit = canonicalSellingMemory.unit` directly, which
+        // silently reinterpreted a receipt/batch-denominated cost (e.g.
+        // 1,000 MZN/Cx) as if it were denominated in the selling unit
+        // (e.g. 1,000 MZN/Un) the moment the two genuinely differed —
+        // exactly the class of cost/selling conflation FR-91/FR-23
+        // exist to prevent, just on the cost side instead of the
+        // selling side. Cost (initialCost/initialUnit's own physical/
+        // purchase meaning) remains completely untouched by this block.
         const canonicalSellingMemory = resolveCanonicalProductSellingMemory(match);
         if (canonicalSellingMemory) {
-          initialSell = String(canonicalSellingMemory.sellingPrice);
-          initialUnit = canonicalSellingMemory.unit;
+          const resolvedSell = resolveUnitAwarePrice(canonicalSellingMemory.sellingPrice, canonicalSellingMemory.unit, initialUnit, match.unitRelationship);
+          if (resolvedSell !== '') {
+            initialSell = resolvedSell;
+          }
+          // resolvedSell === '' (initialUnit outside the confirmed
+          // chain, or no relationship at all): initialSell is left
+          // exactly as already set above (memory/match fallback, or
+          // blank) — never fabricated, never forced into a mismatched
+          // unit.
         }
       }
     }
@@ -1172,14 +1187,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       if (product.costPrice != null) newCost = String(product.costPrice);
       if (product.sellingPrice != null) newSell = String(product.sellingPrice);
     }
-    // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical Product
-    // selling memory overrides newSell/newUnit above whenever it exists
-    // — see createEmptyRow's own identical fix and comment, above, for
-    // the full rationale. newCost deliberately left untouched.
+    // [Bug fix — Finding C regression, fresh audit] Canonical Product
+    // selling memory supplies newSell whenever it exists, CONVERTED into
+    // newUnit (already established above) — never overrides newUnit
+    // itself. See createEmptyRow's own identical fix and comment, above,
+    // for the full rationale (this exact pattern previously silently
+    // reinterpreted a batch-denominated cost into the selling unit's
+    // own terms whenever the two genuinely differed). newCost stays
+    // completely untouched.
     const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
     if (canonicalSellingMemory) {
-      newSell = String(canonicalSellingMemory.sellingPrice);
-      newUnit = canonicalSellingMemory.unit;
+      const resolvedSell = resolveUnitAwarePrice(canonicalSellingMemory.sellingPrice, canonicalSellingMemory.unit, newUnit, product.unitRelationship);
+      if (resolvedSell !== '') {
+        newSell = resolvedSell;
+      }
     }
     return {
       costPrice: newCost || undefined,
