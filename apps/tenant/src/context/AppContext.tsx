@@ -717,7 +717,7 @@ interface AppContextType {
     submissionId?: string,
     newProductInfo?: Record<
       string,
-      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
+      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
     >
   ) => Promise<void>;
   clearPeriodicStockDraft: () => Promise<void>;
@@ -2481,9 +2481,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         name: trimmedName,
         createdAt: new Date().toISOString(),
         ...(unitRelationship && isValidUnitRelationship(unitRelationship) ? { unitRelationship } : {}),
+        // [§45 Amendment FR-86; Implementation Authorization §2 item 7]
+        // Purchase cost/cost-unit memory, established from this first
+        // purchase batch. Cost Unit is represented by the batch's own
+        // `unit` (below), not a new Product field. Never touches
+        // sellingPrice/unitRelationship.sellingUnit — those remain
+        // exclusively Periodic Contagem's own write path (§7.1/§7.2),
+        // structurally separate from this one (FR-85).
+        ...(Number.isFinite(costPrice) && costPrice >= 0 ? { costPrice: Number(costPrice) } : {}),
       };
       await setDoc(doc(db, 'businesses', businessId, 'products', productId), newProd);
       isNewProduct = true;
+    } else if (Number.isFinite(costPrice) && costPrice >= 0 && product.costPrice !== Number(costPrice)) {
+      // [§45 Amendment FR-86; Implementation Authorization §2 item 7]
+      // Purchase cost/cost-unit memory update for an existing product
+      // — only when this batch's own cost actually differs from what
+      // is currently remembered (Product.costPrice), mirroring the
+      // Contagem-side "no write when unchanged" discipline (§7.2). Cost
+      // Unit is represented by this batch's own `unit` (StockBatch,
+      // unaffected). Never touches sellingPrice or unitRelationship —
+      // those remain exclusively Periodic Contagem's own write path
+      // (FR-85, two independent authorities).
+      await updateDoc(doc(db, 'businesses', businessId, 'products', product.id), {
+        costPrice: Number(costPrice),
+        updatedAt: new Date().toISOString(),
+      });
     }
 
     // [Fix #10 — transactional open-batch supersession] Enforces the
@@ -3123,6 +3145,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           name: trimmedName,
           createdAt: new Date().toISOString(),
           ...(item.unitRelationship && isValidUnitRelationship(item.unitRelationship) ? { unitRelationship: item.unitRelationship } : {}),
+          // [§45 Amendment FR-86; Implementation Authorization §2 item
+          // 7] Same purchase cost/cost-unit memory seeding as
+          // addStockBatch's own single-item path — never touches
+          // sellingPrice/unitRelationship.sellingUnit (FR-85).
+          ...(Number.isFinite(item.costPrice) && item.costPrice >= 0 ? { costPrice: Number(item.costPrice) } : {}),
         };
         const prodRef = doc(db, 'businesses', businessId, 'products', productId);
         fsBatch.set(prodRef, newProd);
@@ -3150,6 +3177,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           provenance: item.pendingSupplierWording.provenance,
           conflictCheckProductIds: item.pendingSupplierWording.conflictCheckProductIds,
         });
+      }
+
+      // [§45 Amendment FR-86; Implementation Authorization §2 item 7]
+      // Existing-product purchase cost/cost-unit memory update — only
+      // when this line item's own cost actually differs from what is
+      // currently remembered (Product.costPrice). Independent of the
+      // supplier-wording branch above (either, both, or neither may
+      // apply to the same item) — never folded into it. Mutates the
+      // in-memory `product` (a live reference into tempProducts) so a
+      // later item in this same multi-item submission naming the same
+      // product sees the up-to-date value and never queues a second,
+      // redundant write for it. Never touches sellingPrice or
+      // unitRelationship — those remain exclusively Periodic
+      // Contagem's own write path (FR-85).
+      if (product && Number.isFinite(item.costPrice) && item.costPrice >= 0 && product.costPrice !== Number(item.costPrice)) {
+        fsBatch.update(doc(db, 'businesses', businessId, 'products', product.id), {
+          costPrice: Number(item.costPrice),
+          updatedAt: new Date().toISOString(),
+        });
+        product.costPrice = Number(item.costPrice);
       }
 
       // [Restock Observation Amendment v1.0] Resolve the "previous
@@ -4324,6 +4371,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    // [§45 Amendment FR-81/FR-82/FR-83; Implementation Authorization §2
+    // items 2-3] Selects, once per product (never once per portion —
+    // this Map is consulted, not re-derived, by the per-item loop
+    // below), the canonical selling price/unit to remember as durable
+    // Product Memory. Mirrors unitRelationshipByProductName's own
+    // per-product grouping immediately above, and
+    // findLatestRememberedProductMemory's own established
+    // preferredSellingUnit tie-break precedent
+    // (productMemoryPriceResolution.ts): prefer whichever submitted
+    // portion's unit matches the product's confirmed selling unit —
+    // this Contagem's own new candidate (unitRelationshipByProductName,
+    // for a genuinely new product establishing it for the first time)
+    // or the existing Product's already-confirmed one — falling back to
+    // the first submitted portion for that product when no confirmed
+    // selling unit is known either way. Every portion's own
+    // sellingPrice already reflects its own unit correctly by the time
+    // it reaches this function — Mode A's conversion is already applied
+    // client-side before submission (PeriodicStockCountView.tsx's own
+    // applyModeAToGroup) — so no further unit conversion is performed
+    // here; this only picks which already-correct portion is the
+    // product-level canonical one. type === 'initial' is handled at the
+    // two write sites below (product-creation branch and the
+    // post-loop existing-product update), never here — this Map itself
+    // is built identically for both count types, harmlessly unused for
+    // 'initial' since neither write site reads it in that case (§45 §12,
+    // Initial Stock boundary).
+    const sellingMemoryByProductName = new Map<string, { sellingPrice: number; sellingUnit?: string }>();
+    for (const raw of items) {
+      const key = raw.productName.trim().toLowerCase();
+      if (!key || typeof raw.sellingPrice !== 'number' || !Number.isFinite(raw.sellingPrice) || raw.sellingPrice < 0) continue;
+      const rawUnit = (raw.unit ?? '').trim();
+      const existingProduct = tempProducts.find((p) => p.name.trim().toLowerCase() === key);
+      const confirmedSellingUnit =
+        unitRelationshipByProductName.get(key)?.sellingUnit ||
+        (isValidUnitRelationship(existingProduct?.unitRelationship) ? existingProduct?.unitRelationship?.sellingUnit : undefined);
+      const current = sellingMemoryByProductName.get(key);
+      const isPreferredUnit = !!confirmedSellingUnit && rawUnit.toLowerCase() === confirmedSellingUnit.trim().toLowerCase();
+      if (!current || isPreferredUnit) {
+        sellingMemoryByProductName.set(key, { sellingPrice: raw.sellingPrice, sellingUnit: rawUnit || confirmedSellingUnit });
+      }
+    }
+
     // [Business Worth Evolution — Increment 10 Item 5 / Post-
     // Implementation Correction §25, Specification §15/FR-67; Product
     // Architect resolution, 24 August 2026] Resolved BEFORE
@@ -4439,6 +4528,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           ...(unitRelationshipByProductName.has(norm.productName.toLowerCase())
             ? { unitRelationship: unitRelationshipByProductName.get(norm.productName.toLowerCase())! }
             : {}),
+          // [§45 Amendment FR-81; Implementation Authorization §2 item
+          // 2] Durable selling-price memory established from this
+          // product's first Contagem. Never fires for Initial Stock
+          // (type === 'initial') — recordStockCount's shared
+          // new-product-creation branch would otherwise silently
+          // extend this memory-establishment behavior to Initial
+          // Stock, which §45's own §6/§12 explicitly excludes.
+          ...(type !== 'initial' && sellingMemoryByProductName.has(norm.productName.toLowerCase())
+            ? { sellingPrice: sellingMemoryByProductName.get(norm.productName.toLowerCase())!.sellingPrice }
+            : {}),
         };
         fsBatch.set(doc(db, 'businesses', businessId, 'products', productId), newProd);
         tempProducts.push(newProd);
@@ -4468,6 +4567,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // See this field's own comment on StockCountItem (types.ts).
         ...(typeof norm.costBasisEstablished === 'boolean' ? { costBasisEstablished: norm.costBasisEstablished } : {}),
       });
+    }
+
+    // [§45 Amendment FR-83; Implementation Authorization §2 item 3]
+    // Existing-product selling-price memory update — run once per
+    // product (iterating sellingMemoryByProductName's own already-
+    // deduplicated-per-product entries, never the per-portion loop
+    // above), after every portion has been processed so tempProducts
+    // reflects any product just created above. A product created this
+    // same confirmation already has its sellingPrice set to this exact
+    // canonical value (the new-product branch above reads from the
+    // same Map) — the equality check below naturally makes this a
+    // no-op for it, without a separate "just created" branch. Any
+    // product whose canonical submitted price matches what is already
+    // remembered is likewise skipped — no write is queued, so an
+    // ordinary Contagem that leaves the price unchanged never bumps
+    // Product.updatedAt or generates a no-op write. Gated
+    // type !== 'initial', identically to the new-product write above —
+    // the verified real guard (§45 §12; Authorization §6), since
+    // recordStockCount is shared with Initial Stock.
+    if (type !== 'initial') {
+      for (const [key, memory] of sellingMemoryByProductName) {
+        const product = tempProducts.find((p) => p.name.trim().toLowerCase() === key);
+        if (!product) continue; // defensive only — every submitted portion's product already exists in tempProducts by this point
+        if (product.sellingPrice === memory.sellingPrice) continue; // unchanged (or just set to this value above) — no write
+        fsBatch.update(doc(db, 'businesses', businessId, 'products', product.id), {
+          sellingPrice: memory.sellingPrice,
+          updatedAt: new Date().toISOString(),
+        });
+      }
     }
 
     if (!countItems.length) throw new Error('Adicione pelo menos um produto válido à contagem.');
@@ -5551,7 +5679,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     submissionId?: string,
     newProductInfo?: Record<
       string,
-      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
+      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
     >
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');

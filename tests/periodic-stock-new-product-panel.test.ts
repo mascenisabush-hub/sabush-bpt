@@ -75,7 +75,7 @@ function shouldShowNewProductPanel(
   return label.portionIndex === 1 && isGenuinelyNewProductName(products, row.productName);
 }
 
-type NewProductInfo = { purchaseUnit: string; purchaseCost: string; sellingUnit?: string; sellingUnitFactor?: string };
+type NewProductInfo = { purchaseUnit: string; sellingUnit?: string; sellingUnitFactor?: string };
 
 /** Mirrors PeriodicStockCountView.tsx's own corrected submit-time
  * correlation loop exactly: builds a UnitRelationship candidate PER
@@ -149,7 +149,7 @@ describe('B.1 correction — product-level data is keyed by product, not owned b
     //   The product-level information MUST remain intact.
     const key = productKeyFor('Coca-Cola');
     const newProductInfo: Record<string, NewProductInfo> = {
-      [key]: { purchaseUnit: 'Cx', purchaseCost: '1250', sellingUnit: 'Un', sellingUnitFactor: '24' },
+      [key]: { purchaseUnit: 'Cx', sellingUnit: 'Un', sellingUnitFactor: '24' },
     };
     const rowsBefore = [
       { productName: 'Coca-Cola', unit: 'Cx' }, // Portion 1
@@ -192,7 +192,7 @@ describe('B.1 correction — product-level data is keyed by product, not owned b
   it('reordering portions (first portion becomes last) never destroys product-level information', () => {
     const key = productKeyFor('Coca-Cola');
     const newProductInfo: Record<string, NewProductInfo> = {
-      [key]: { purchaseUnit: 'Cx', purchaseCost: '1250', sellingUnit: 'Un', sellingUnitFactor: '24' },
+      [key]: { purchaseUnit: 'Cx', sellingUnit: 'Un', sellingUnitFactor: '24' },
     };
     const rowsOriginalOrder = [
       { productName: 'Coca-Cola', unit: 'Cx' },
@@ -208,8 +208,8 @@ describe('B.1 correction — product-level data is keyed by product, not owned b
 
   it('product-level information remains associated with the correct product across two simultaneously-in-progress new products', () => {
     const newProductInfo: Record<string, NewProductInfo> = {
-      [productKeyFor('Coca-Cola')]: { purchaseUnit: 'Cx', purchaseCost: '1250', sellingUnit: 'Un', sellingUnitFactor: '24' },
-      [productKeyFor('Fanta Laranja')]: { purchaseUnit: 'Cx', purchaseCost: '900', sellingUnit: 'Un', sellingUnitFactor: '12' },
+      [productKeyFor('Coca-Cola')]: { purchaseUnit: 'Cx', sellingUnit: 'Un', sellingUnitFactor: '24' },
+      [productKeyFor('Fanta Laranja')]: { purchaseUnit: 'Cx', sellingUnit: 'Un', sellingUnitFactor: '12' },
     };
     const rows = [
       { productName: 'Coca-Cola', unit: 'Cx' },
@@ -226,30 +226,32 @@ describe('B.1 correction — product-level data is keyed by product, not owned b
     const fantaKey = productKeyFor('Fanta Laranja');
     let newProductInfo: Record<string, NewProductInfo> = {};
 
-    // Simulate the panel's own setInfo updater for Coca-Cola only.
-    newProductInfo = { ...newProductInfo, [cocaKey]: { ...(newProductInfo[cocaKey] ?? { purchaseUnit: '', purchaseCost: '' }), purchaseUnit: 'Cx' } };
-    newProductInfo = { ...newProductInfo, [cocaKey]: { ...newProductInfo[cocaKey], purchaseCost: '1250' } };
+    // Simulate the panel's own setInfo updater for Coca-Cola: first the
+    // purchase unit, then the selling unit — two sequential edits to
+    // the same product entry.
+    newProductInfo = { ...newProductInfo, [cocaKey]: { ...(newProductInfo[cocaKey] ?? { purchaseUnit: '' }), purchaseUnit: 'Cx' } };
+    newProductInfo = { ...newProductInfo, [cocaKey]: { ...newProductInfo[cocaKey], sellingUnit: 'Un' } };
 
     // Fanta's entry must not exist yet and must not have picked up any
     // of Coca-Cola's values.
     assert.equal(newProductInfo[fantaKey], undefined);
-    assert.deepEqual(newProductInfo[cocaKey], { purchaseUnit: 'Cx', purchaseCost: '1250' });
+    assert.deepEqual(newProductInfo[cocaKey], { purchaseUnit: 'Cx', sellingUnit: 'Un' });
 
     // Now populate Fanta independently.
     newProductInfo = {
       ...newProductInfo,
-      [fantaKey]: { ...(newProductInfo[fantaKey] ?? { purchaseUnit: '', purchaseCost: '' }), purchaseUnit: 'Un', purchaseCost: '60' },
+      [fantaKey]: { ...(newProductInfo[fantaKey] ?? { purchaseUnit: '' }), purchaseUnit: 'Un' },
     };
 
     // Coca-Cola's entry must be completely unaffected by Fanta's write.
-    assert.deepEqual(newProductInfo[cocaKey], { purchaseUnit: 'Cx', purchaseCost: '1250' });
-    assert.deepEqual(newProductInfo[fantaKey], { purchaseUnit: 'Un', purchaseCost: '60' });
+    assert.deepEqual(newProductInfo[cocaKey], { purchaseUnit: 'Cx', sellingUnit: 'Un' });
+    assert.deepEqual(newProductInfo[fantaKey], { purchaseUnit: 'Un' });
   });
 
   it('a product with an unfilled relationship (sellingUnit/factor blank) yields no candidate — never a fabricated one', () => {
     const key = productKeyFor('Coca-Cola');
     const newProductInfo: Record<string, NewProductInfo> = {
-      [key]: { purchaseUnit: 'Cx', purchaseCost: '1250' }, // no sellingUnit/sellingUnitFactor entered yet
+      [key]: { purchaseUnit: 'Cx' }, // no sellingUnit/sellingUnitFactor entered yet
     };
     const rows = [{ productName: 'Coca-Cola', unit: 'Cx' }];
 

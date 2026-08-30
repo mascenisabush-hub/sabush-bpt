@@ -1418,7 +1418,7 @@ export interface PeriodicStockDraft {
   // owned by, or lost with, any single physical portion row.
   newProductInfo?: Record<
     string,
-    { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[] }
+    { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
   >;
   updatedAt: string; // ISO string
 }

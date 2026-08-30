@@ -25,6 +25,9 @@ import { Product } from '../types';
 import { EditProductModal } from './EditProductModal';
 import { InitialStockPriceChangeModal } from './InitialStockPriceChangeModal';
 import { useLanguage } from '../context/LanguageContext';
+import { findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
+import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 
 interface DashboardViewProps {
   onNavigateToAddStock: (productName?: string) => void;
@@ -143,7 +146,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   onSelectProductDetail,
 }) => {
   const {
-    products, batches, quebras, currencySymbol,
+    products, batches, stockCounts, quebras, currencySymbol,
     hasInitialStockCount, initialCapitalValue,
     currentInventoryValue, latestStockCount,
     totalInvestmentValueAllTime, totalMarketValueAllTime, totalEmbeddedProfitAllTime,
@@ -969,8 +972,40 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               });
 
               const displayBatch = activeBatch || latestBatch;
-              const costPriceText = displayBatch ? formatCurrency(displayBatch.costPrice, currencySymbol) : '-';
-              const sellingPriceText = displayBatch ? formatCurrency(displayBatch.sellingPrice, currencySymbol) : '-';
+              // [§45 Amendment FR-87/FR-88/FR-13; Implementation
+              // Authorization §2 item 8] Selling Price/Unit are
+              // Contagem-owned memory (§45 §11) — prefer
+              // Product.sellingPrice/unitRelationship.sellingUnit,
+              // already correctly denominated together (the write side,
+              // recordStockCount, always stores them as a matched
+              // pair — see AppContext.tsx's sellingMemoryByProductName).
+              // Falls back to findLatestRememberedProductMemory (already
+              // existing, reused verbatim, unmodified) for a product
+              // predating this feature, then to the latest batch's own
+              // selling price as today's final fallback — never
+              // fabricated. Cost remains purchase-workflow-sourced
+              // (§45 §11): Product.costPrice once Add Stock populates it
+              // (FR-86), else the latest batch's own cost. Cost Unit has
+              // no dedicated Product field (the Plan's own
+              // smallest-change decision, §45 Implementation Plan §7
+              // item 7) — it remains the latest batch's own unit
+              // regardless of which source supplies the Cost value.
+              const confirmedSellingUnit = isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship?.sellingUnit : undefined;
+              let sellingPriceValue = product.sellingPrice;
+              let sellingUnitLabel = confirmedSellingUnit;
+              if (sellingPriceValue == null) {
+                const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, confirmedSellingUnit);
+                if (memory) {
+                  sellingPriceValue = memory.sellingPrice;
+                  sellingUnitLabel = sellingUnitLabel || memory.unit;
+                }
+              }
+              const costPriceValue = product.costPrice;
+              const costPriceText =
+                costPriceValue != null ? formatCurrency(costPriceValue, currencySymbol) : displayBatch ? formatCurrency(displayBatch.costPrice, currencySymbol) : '-';
+              const sellingPriceText =
+                sellingPriceValue != null ? formatCurrency(sellingPriceValue, currencySymbol) : displayBatch ? formatCurrency(displayBatch.sellingPrice, currencySymbol) : '-';
+              const sellingUnitText = sellingUnitLabel || displayBatch?.unit;
 
               const displayProfit = activeBatch && activeCalc 
                 ? activeCalc.embeddedProfit 
@@ -1012,6 +1047,19 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                           .join(' · ')}
                       </span>
                     )}
+                    {isValidUnitRelationship(product.unitRelationship) && product.unitRelationship!.units.length > 1 && (
+                      <span className="text-[10px] text-gray-500 block truncate font-mono">
+                        1 {product.unitRelationship!.units[0].unit}
+                        {product.unitRelationship!.units.slice(1).map((u, i) => {
+                          const factor = getConversionFactor(product.unitRelationship!, product.unitRelationship!.units[0].unit, u.unit);
+                          return (
+                            <span key={i}>
+                              {' '}= {factor ?? '?'} {u.unit}
+                            </span>
+                          );
+                        })}
+                      </span>
+                    )}
                   </div>
 
                   {/* COMPRA */}
@@ -1029,8 +1077,8 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                     <span className="text-xs font-bold text-gray-700 font-mono block">
                       {sellingPriceText}
                     </span>
-                    {displayBatch?.unit && (
-                      <span className="text-[9px] text-gray-500 block font-sans">/{displayBatch.unit}</span>
+                    {sellingUnitText && (
+                      <span className="text-[9px] text-gray-500 block font-sans">/{sellingUnitText}</span>
                     )}
                   </div>
 

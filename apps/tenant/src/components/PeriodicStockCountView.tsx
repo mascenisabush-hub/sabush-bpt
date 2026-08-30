@@ -10,7 +10,7 @@ import { isValidUnitRelationship } from '../lib/unitRelationship';
 // Stock (AddStockView.tsx) — see that utility's own header comment for
 // why this is a shared utility, not duplicated per screen.
 import { checkPriceDeviation } from '../lib/priceDeviationCheck';
-import { resolveUnitAwarePrice } from '../lib/productMemoryPriceResolution';
+import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
 // [Business Worth Evolution — Decision 37, B.1 completion] Same import
 // InitialStockCountView.tsx already uses for its own read-only
 // relationship-chain display — reused as a pattern, not shared code,
@@ -354,9 +354,13 @@ const ModeAValuationControl: React.FC<{
 // this group's own name — the single per-row name input remains the
 // one editable place that name is typed; a second, independently-
 // editable name field here would create two sources of truth for the
-// same value), original purchase/cost basis (purchaseUnit/
-// purchaseCost), and the unit relationship (relationshipSteps, edited
-// via UnitRelationshipChainEditor) — plus, since the Decision 37 B.2
+// same value), the unit relationship's own root/base unit and its
+// chain (purchaseUnit, relationshipSteps, edited via
+// UnitRelationshipChainEditor — purchaseUnit is no longer paired with
+// a cost value here, per §45 Amendment FR-78/FR-80: the historical/
+// original purchase-cost input this panel once also collected is
+// removed, since a product new to the SABUSH catalog is not
+// necessarily newly purchased), and, since the Decision 37 B.2
 // Selling Unit Capture Extension, the owner's selling/valuation unit
 // (sellingUnit, sellingUnitOptions), rendered directly below the
 // chain editor once at least one complete level exists. Purely
@@ -371,9 +375,7 @@ const NewProductInfoPanel: React.FC<{
   productName: string;
   currencySymbol: string;
   purchaseUnit: string;
-  purchaseCost: string;
   onPurchaseUnitChange: (value: string) => void;
-  onPurchaseCostChange: (value: string) => void;
   relationshipSteps: { unit: string; factor: string }[];
   onRelationshipStepsChange: (steps: { unit: string; factor: string }[]) => void;
   // [Decision 37 B.2 Selling Unit Capture Extension — Implementation
@@ -391,11 +393,8 @@ const NewProductInfoPanel: React.FC<{
   onSellingUnitChange: (value: string) => void;
 }> = ({
   productName,
-  currencySymbol,
   purchaseUnit,
-  purchaseCost,
   onPurchaseUnitChange,
-  onPurchaseCostChange,
   relationshipSteps,
   onRelationshipStepsChange,
   sellingUnitOptions,
@@ -411,35 +410,28 @@ const NewProductInfoPanel: React.FC<{
         <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
       </div>
 
+      {/* [§45 Amendment FR-78/FR-80; Implementation Authorization §2
+          item 1] The "Custo de Compra Original" cost-value input
+          (purchase unit + purchase cost, grouped together) is removed:
+          "new to the SABUSH catalog" is not "newly purchased" (§45 §4
+          item 2), and Periodic Contagem never asks for historical/
+          original purchase cost, for any product, first-time or
+          otherwise (§45 §7/FR-78, restated). purchaseUnit's own input
+          is retained standalone, unrelated to cost — it remains the
+          relationship chain's root/base unit, read by
+          UnitRelationshipChainEditor's own display below,
+          sellingUnitOptions' construction, and the submit-time
+          unitRelationship candidate (handleConfirmSave, further below)
+          — none of which depend on a cost value. */}
       <div>
-        <p className="text-[11px] font-bold text-gray-500 mb-1">Custo de Compra Original</p>
-        <div className="flex flex-wrap items-end gap-2.5 text-[13px]">
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de compra</label>
-            <input
-              type="text"
-              value={purchaseUnit}
-              onChange={(e) => onPurchaseUnitChange(e.target.value)}
-              placeholder="Ex: Cx"
-              className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            />
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Custo ({currencySymbol}) por unidade de compra</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={purchaseCost}
-              onChange={(e) => onPurchaseCostChange(e.target.value)}
-              placeholder="Ex: 1250"
-              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            />
-          </div>
-        </div>
-        <p className="mt-1 text-[13px] text-gray-500 leading-relaxed">
-          Introduza o custo original uma única vez, na unidade de compra do produto — nunca por porção.
-        </p>
+        <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de compra</label>
+        <input
+          type="text"
+          value={purchaseUnit}
+          onChange={(e) => onPurchaseUnitChange(e.target.value)}
+          placeholder="Ex: Cx"
+          className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+        />
       </div>
 
       <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
@@ -702,6 +694,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
       // else: no valid bridge — retain the fallback already computed
       // above (latest batch's own unit/price, unconverted).
+    } else if (confirmedSellingUnit && !latestBatch) {
+      // [§45 Amendment FR-82; Implementation Authorization §2 item 4]
+      // No StockBatch exists for this product at all — the central
+      // real-world case this amendment exists to support: a product
+      // established purely through a prior confirmed Contagem, never
+      // purchased through Add Stock. findLatestRememberedProductMemory
+      // (already existing, already tested, reused verbatim — not a new
+      // conversion engine) searches confirmed StockCount history (in
+      // addition to StockBatch, which is empty here) for this
+      // product's own most recent remembered (unit, sellingPrice)
+      // pair, preferring a portion already denominated in the
+      // confirmed sellingUnit. Converted into sellingUnit terms via the
+      // same resolveUnitAwarePrice the batch-present branch above
+      // already uses — no second conversion mechanism. Never fabricates
+      // a value: findLatestRememberedProductMemory returns null when no
+      // memory exists anywhere, in which case unit/sellingPrice retain
+      // today's exact final fallback (product.sellingPrice raw, blank
+      // unit), computed above.
+      const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, confirmedSellingUnit);
+      if (memory) {
+        const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, confirmedSellingUnit, relationship);
+        if (resolved !== '') {
+          unit = confirmedSellingUnit;
+          sellingPrice = resolved;
+        }
+      }
     }
 
     return {
@@ -1324,7 +1342,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [newProductInfo, setNewProductInfo] = useState<
     Record<
       string,
-      { purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit?: string }
+      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit?: string }
     >
   >({});
 
@@ -1517,23 +1535,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   //    uses (see its own comment, further below) — this is a read-only,
   //    presentation-time check, never a second candidate-construction path.
   const getCostBasisForSuppression = (productName: string): { purchaseUnit: string } | null => {
-    const key = productKeyFor(productName);
-    if (!key) return null;
-
     const existingRelationship = getUnitRelationshipForProductName(productName);
     if (existingRelationship && isValidUnitRelationship(existingRelationship)) {
       const purchaseUnit = existingRelationship.units[0]?.unit?.trim();
       if (purchaseUnit) return { purchaseUnit };
-    }
-
-    const info = newProductInfo[key];
-    if (info) {
-      const purchaseUnit = info.purchaseUnit.trim();
-      const hasCostBasis = purchaseUnit !== '' && info.purchaseCost.trim() !== '' && Number.isFinite(parseFloat(info.purchaseCost));
-      const hasCompleteStep = info.relationshipSteps.some(
-        (s) => s.unit.trim() !== '' && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
-      );
-      if (hasCostBasis && hasCompleteStep) return { purchaseUnit };
     }
 
     return null;
@@ -1650,6 +1655,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       if (latestBatch) {
         const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', defaultReferenceUnit, relationship);
         if (resolved !== '') defaultReferencePrice = resolved;
+      } else {
+        // [§45 Amendment FR-82; Implementation Authorization §2 item 5]
+        // No StockBatch exists for this product — same no-batch case
+        // buildCatalogRow's own new tier handles, above. Reuses the
+        // identical findLatestRememberedProductMemory resolution (not a
+        // second, independently-computed value) so the toggle-time
+        // default here and buildCatalogRow's own render-time default
+        // can never disagree, matching this function's own established
+        // "seeded from the SAME resolution" discipline for the
+        // batch-present case.
+        const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, defaultReferenceUnit);
+        if (memory) {
+          const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, defaultReferenceUnit, relationship);
+          if (resolved !== '') defaultReferencePrice = resolved;
+        }
       }
     }
     setModeAGroups((prev) => ({ ...prev, [productKey]: { referenceUnit: defaultReferenceUnit, referencePrice: defaultReferencePrice } }));
@@ -2005,52 +2025,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // AppContext.tsx's own identical call.
   const costBasisByProductName = useMemo(() => buildProductCostBasisMap(products), [products]);
 
-  // [Bug fix — cost total silently stayed 0,00 for a genuinely new
-  // multi-unit product's non-purchase-unit portions] costBasisByProductName
-  // above only ever reflects the SAVED catalog — so for a brand-new
-  // product still being entered in this same Contagem (its relationship
-  // lives only in newProductInfo's in-progress panel state, no Product
-  // document exists yet), it always has no entry, and every non-
-  // purchase-unit portion — deliberately cost-field-SUPPRESSED the
-  // moment Decision 37 B.4's own basis check (getCostBasisForSuppression,
-  // which DOES already read newProductInfo) finds a valid basis — falls
-  // through to deriveCostContribution's raw quantity*costPrice fallback
-  // with costPrice permanently blank/0, since the Owner is never even
-  // shown that field to fill in. Net effect: the UI confidently hides
-  // the cost input (implying "this is handled"), while the total
-  // silently computes 0,00 MT for that portion — both here, live, and
-  // (this same defect, fixed identically) in AppContext.tsx's
-  // recordStockCount at actual save time.
-  //
-  // Fixed the same way as getEffectiveUnitRelationshipForProductName,
-  // above: merge in a synthesized ProductCostBasis for every
-  // newProductInfo entry with a complete purchaseUnit + purchaseCost +
-  // at least one relationship step, reusing the identical candidate-
-  // relationship construction — never overriding an EXISTING catalog
-  // product's own already-authoritative basis.
-  const effectiveCostBasisByProductName = useMemo(() => {
-    const map = new Map<string, ProductCostBasis>(costBasisByProductName);
-    for (const [key, info] of Object.entries(newProductInfo)) {
-      if (!key || map.has(key)) continue;
-      const purchaseUnit = info.purchaseUnit.trim();
-      const purchaseCost = Number(info.purchaseCost);
-      if (!purchaseUnit || !Number.isFinite(purchaseCost) || purchaseCost < 0) continue;
-      const completeSteps = info.relationshipSteps.filter(
-        (s) => s.unit.trim() && Number.isFinite(parseFloat(s.factor)) && parseFloat(s.factor) > 0
-      );
-      if (completeSteps.length === 0) continue;
-      const candidate: UnitRelationship = {
-        units: [
-          { unit: purchaseUnit, factorFromPrevious: 0 },
-          ...completeSteps.map((s) => ({ unit: s.unit.trim(), factorFromPrevious: parseFloat(s.factor) })),
-        ],
-        confirmedAt: new Date().toISOString(),
-      };
-      if (!isValidUnitRelationship(candidate)) continue;
-      map.set(key, { purchaseUnit, purchaseCost, relationship: candidate });
-    }
-    return map;
-  }, [costBasisByProductName, newProductInfo]);
+  // [§45 Amendment FR-78/FR-80; Implementation Authorization §2 item 1]
+  // The newProductInfo-derived cost-basis synthesis formerly here is
+  // removed along with the "Custo de Compra Original" input it read
+  // from (purchaseUnit+purchaseCost) — there is no owner-entered
+  // purchase cost left, for any product, to synthesize a basis from.
+  // costBasisByProductName (the saved-catalog basis, computed above,
+  // entirely unaffected) is used directly wherever this alias was
+  // previously read — a genuinely new product simply has no cost
+  // basis, which deriveCostContribution/FR-67 already handles safely
+  // (a non-fabricated 0/derived:false, never a synthetic figure).
+  const effectiveCostBasisByProductName = costBasisByProductName;
 
   // [§44 — Periodic Contagem Cost-Price Removal — Implementation
   // Clarification] rowCostValue existed solely to power the per-row
@@ -3891,9 +3876,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       {isNewProduct &&
                         (() => {
                           const key = productKeyFor(group.displayName);
-                          const info = newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [], sellingUnit: '' };
+                          const info = newProductInfo[key] ?? { purchaseUnit: '', relationshipSteps: [], sellingUnit: '' };
                           const setInfo = (
-                            fields: Partial<{ purchaseUnit: string; purchaseCost: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit: string }>
+                            fields: Partial<{ purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit: string }>
                           ) => {
                             // [Decision 38 Amendment, Implementation Task
                             // §5b; Implementation Authorization §2 item 5;
@@ -3909,7 +3894,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             const nextInfo = {
                               ...newProductInfo,
                               [key]: {
-                                ...(newProductInfo[key] ?? { purchaseUnit: '', purchaseCost: '', relationshipSteps: [], sellingUnit: '' }),
+                                ...(newProductInfo[key] ?? { purchaseUnit: '', relationshipSteps: [], sellingUnit: '' }),
                                 ...fields,
                               },
                             };
@@ -3932,9 +3917,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               productName={group.displayName}
                               currencySymbol={currencySymbol}
                               purchaseUnit={info.purchaseUnit || ''}
-                              purchaseCost={info.purchaseCost || ''}
                               onPurchaseUnitChange={(value) => setInfo({ purchaseUnit: value })}
-                              onPurchaseCostChange={(value) => setInfo({ purchaseCost: value })}
                               relationshipSteps={info.relationshipSteps || []}
                               onRelationshipStepsChange={(steps) => setInfo({ relationshipSteps: steps })}
                               sellingUnitOptions={sellingUnitOptions}

@@ -454,10 +454,20 @@ service cloud.firestore {
         // validation on create: every product-creation call site
         // (addStockBatch, addMultipleStockBatches, recordStockCount —
         // all in AppContext.tsx) always sends `name` as the trimmed
-        // product name, and never sends costPrice/sellingPrice/active/
-        // category/etc. at creation (those are only ever set later via
-        // updateProduct, an UPDATE — deliberately left untouched here,
-        // same create-only scope as the batches validation above).
+        // product name. [§45 Amendment FR-81/FR-86 — Implementation
+        // Authorization §2 items 2/7, 30 August 2026] Some creation
+        // call sites now also conditionally send `costPrice` (Add
+        // Stock/Smart Stock Entry's own purchase cost/cost-unit memory)
+        // or `sellingPrice` (Periodic Contagem's own durable
+        // selling-price memory, established from a product's first
+        // Contagem) at creation — this rule's own validation (`name`
+        // only, below) already permitted additional fields without
+        // modification, exactly as it already did for
+        // `unitRelationship` before this amendment. `active`/`category`/
+        // etc. remain set only later via `updateProduct`, an UPDATE —
+        // unaffected by this amendment, still deliberately left
+        // untouched here, same create-only scope as the batches
+        // validation above.
         allow create: if isMemberOf(businessId) &&
           request.resource.data.get('name', null) is string &&
           request.resource.data.get('name', '') != '';
