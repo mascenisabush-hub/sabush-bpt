@@ -4585,6 +4585,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         unit: norm.unit,
         costPrice: norm.costPrice,
         sellingPrice: norm.sellingPrice,
+        // [FR-89–FR-94, Implementation Authorization §10, Option C]
+        // Pass-through only — normalizeStockCountItems already resolved
+        // this to a defined string (falls back to norm.unit itself when
+        // the caller didn't supply it) — see this field's own comment
+        // on StockCountItem (types.ts). Never read by any valuation
+        // calculation below or elsewhere.
+        sellingPriceBasisUnit: norm.sellingPriceBasisUnit,
         totalValue: norm.totalValue,
         // [Business Worth Evolution — Increment 4, Specification §15,
         // FR-20] Pass-through only — see this field's own comment on

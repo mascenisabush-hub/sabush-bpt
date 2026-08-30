@@ -45,6 +45,17 @@ describe('normal confirmation', () => {
       unit: 'kg',
       costPrice: 50,
       sellingPrice: 65,
+      // [FR-89–FR-94, Implementation Authorization §10, Option C]
+      // normalizeStockCountItems is genuinely shared infrastructure
+      // between Initial Stock and Periodic Contagem (this describe
+      // block's own header comment, below), so this field — added for
+      // Periodic Contagem's own historical-denomination requirement —
+      // naturally, harmlessly appears on Initial Stock's own persisted
+      // items too, exactly as valuationMode/costBasisEstablished
+      // already do. No caller here supplies sellingPriceBasisUnit, so
+      // it falls back to `unit` itself, per that fallback's own
+      // documented contract.
+      sellingPriceBasisUnit: 'kg',
       totalValue: 500,
       // [§44 — Periodic Contagem Cost-Price Removal, Rule 8 Finding 3]
       // No costBasisByProductName map is passed in this test, so

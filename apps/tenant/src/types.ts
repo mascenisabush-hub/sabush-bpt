@@ -543,6 +543,27 @@ export interface StockCountItem {
   // Investment Value calculation, which remain cost-based (see
   // BATCH CALCULATIONS note below and the amendment doc's Part 5).
   sellingPrice?: number; // selling price per unit at the time of the count
+  // [FR-89–FR-94, Implementation Authorization §10, Option C —
+  // Persisted Selling-Price Basis Unit] The unit `sellingPrice`,
+  // immediately above, is ACTUALLY denominated in at the time of this
+  // count's confirmation — distinct from `unit` (above), which remains
+  // exclusively the physical/counting unit and is never repointed to
+  // this value. Populated from the working row's own
+  // `sellingPriceBasisUnit ?? unit` at confirmation time
+  // (normalizeStockCountItems/tallyStockCountRows, stockCount.ts).
+  // Display/audit-only, mirroring `valuationMode`'s own established
+  // pattern immediately below: optional, never backfilled onto any
+  // record persisted before this field existed, and NEVER read by any
+  // valuation calculation — `sellingValue`/`totalSellingValue` are
+  // computed identically (`quantity * sellingPrice`) regardless of this
+  // field's presence or value. Consumers needing to know a historical
+  // item's true selling-price denomination (ProductDetailModal.tsx,
+  // findLatestRememberedProductMemory) read
+  // `sellingPriceBasisUnit ?? unit` — a legacy record with no such field
+  // falls back to `unit` exactly as it always has, unmodified. See Rule
+  // 8 Assessment §15 addendum and Implementation Plan §20 addendum
+  // (both signed) for the full governance rationale.
+  sellingPriceBasisUnit?: string;
   totalValue: number; // quantity * costPrice
   // [Business Worth Evolution — Implementation Authorization, Increment 4;
   // Specification §15, FR-20] Display-only transparency marker: which

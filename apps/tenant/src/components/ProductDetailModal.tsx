@@ -397,7 +397,17 @@ export const ProductDetailModal: React.FC<ProductDetailModalProps> = ({
                       {typeof item.sellingPrice === 'number' && (
                         <div className="bg-[var(--muted)] p-2.5 rounded-lg border border-[#E5E7EB]">
                           <span className="text-gray-500 block text-[9.5px] font-semibold uppercase tracking-wide">Preço de Venda</span>
-                          <span className="font-bold text-[#111827] font-mono tabular-nums">{formatCurrency(item.sellingPrice, currencySymbol)}/{item.unit || 'un'}</span>
+                          {/* [FR-89–FR-94, Implementation Authorization
+                              §10, Option C] Deliberately a DIFFERENT
+                              denominator than the quantity/cost lines
+                              above (item.unit, both unchanged) — this
+                              price's own true denomination can
+                              legitimately differ from the physical
+                              count unit (a deliberate, independently-
+                              priced portion). Falls back to item.unit
+                              for any historical record persisted before
+                              this field existed. */}
+                          <span className="font-bold text-[#111827] font-mono tabular-nums">{formatCurrency(item.sellingPrice, currencySymbol)}/{item.sellingPriceBasisUnit || item.unit || 'un'}</span>
                         </div>
                       )}
                     </div>

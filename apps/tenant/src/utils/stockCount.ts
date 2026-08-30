@@ -54,6 +54,14 @@ export interface StockCountInputItem {
   // compiling and behaving the same way — missing/invalid input
   // coerces to 0, matching costPrice's own `Number(x) || 0` rule.
   sellingPrice?: number | string;
+  // [FR-89–FR-94, Implementation Authorization §10, Option C] Optional
+  // pass-through — see StockCountItem.sellingPriceBasisUnit's own
+  // comment (types.ts) for the full rationale. This function never
+  // reads this field for any arithmetic; it exists solely so the
+  // caller's own already-resolved value (StockCountTallyItem, above,
+  // via the confirm handler) survives into the persisted
+  // StockCountItem shape unchanged.
+  sellingPriceBasisUnit?: string;
   // [Business Worth Evolution — Implementation Authorization, Increment 4;
   // Specification §15, FR-20] Optional display-only pass-through — see
   // StockCountItem.valuationMode's own comment (types.ts). This function
@@ -69,6 +77,10 @@ export interface NormalizedStockCountItem {
   unit: string;
   costPrice: number;
   sellingPrice: number;
+  // [FR-89–FR-94, Implementation Authorization §10, Option C] Mirrors
+  // StockCountItem's own field 1:1 (types.ts) — see that field's own
+  // comment for the full rationale. Display/audit-only.
+  sellingPriceBasisUnit?: string;
   totalValue: number;
   valuationMode?: 'A' | 'B';
   // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8 Finding 3]
@@ -145,6 +157,15 @@ export function normalizeStockCountItems(
       unit,
       costPrice,
       sellingPrice,
+      // [FR-89–FR-94, Implementation Authorization §10, Option C]
+      // raw.sellingPriceBasisUnit is the caller's own already-resolved
+      // value (StockCountTallyItem, stockCount.ts, above, via the
+      // confirm handler) — falls back to `unit` (the same, already-
+      // computed local above) whenever absent, e.g. a legacy caller not
+      // yet passing this field. Always resolves to a defined string —
+      // never conditionally omitted, matching `unit` itself immediately
+      // above.
+      sellingPriceBasisUnit: raw.sellingPriceBasisUnit ?? unit,
       totalValue: itemTotal,
       // Display-only pass-through (see StockCountInputItem.valuationMode
       // above) — omitted entirely, never written as literal `undefined`,
@@ -317,6 +338,17 @@ export interface StockCountTallyItem {
   unit: string;
   costPrice: number;
   sellingPrice: number;
+  // [FR-89–FR-94, Implementation Authorization §10, Option C] The unit
+  // `sellingPrice`, immediately above, is actually denominated in —
+  // distinct from `unit`, which remains the physical/counting unit.
+  // Populated from `row.sellingPriceBasisUnit ?? row.unit` in
+  // tallyStockCountRows, below — same source expression Finding A's own
+  // fix already established for the un-persisted memory-write layer,
+  // now also feeding this Owner-facing preview and, from there, the
+  // persisted StockCountItem shape (via the confirm handler,
+  // PeriodicStockCountView.tsx, and normalizeStockCountItems, below).
+  // Display-only — never read by sellingValue's own calculation.
+  sellingPriceBasisUnit?: string;
   purchaseValue: number; // quantity * costPrice
   sellingValue: number; // quantity * sellingPrice
   // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8 Finding 3]
@@ -432,6 +464,14 @@ export function tallyStockCountRows(
       unit,
       costPrice,
       sellingPrice,
+      // [FR-89–FR-94, Implementation Authorization §10, Option C]
+      // row.sellingPriceBasisUnit is only ever set on a row whose price
+      // came from a deliberate entry or an FR-89 auto-resolution — both
+      // already denominate it correctly; a row with neither (e.g. a
+      // blank/never-priced row) falls back to `unit` here, matching
+      // every other consumer's own identical fallback. Always resolves
+      // to a defined string — never conditionally omitted.
+      sellingPriceBasisUnit: row.sellingPriceBasisUnit ?? unit,
       purchaseValue,
       sellingValue,
       // [§44 — Periodic Contagem Cost-Price Removal, FR-73; Rule 8

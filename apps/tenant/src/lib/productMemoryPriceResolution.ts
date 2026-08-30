@@ -123,7 +123,21 @@ export interface RememberedBatchSource {
  * function does not distinguish between the two, by design (§ above). */
 export interface RememberedStockCountSource {
   date: string; // YYYY-MM-DD
-  items: Array<{ productId: string; productName: string; unit?: string; costPrice: number; sellingPrice?: number }>;
+  items: Array<{
+    productId: string;
+    productName: string;
+    unit?: string;
+    costPrice: number;
+    sellingPrice?: number;
+    // [FR-89–FR-94, Implementation Authorization §10, Option C] The
+    // unit `sellingPrice`, on this same item, is actually denominated
+    // in — distinct from `unit`, immediately above, which remains the
+    // physical/counting unit. Optional so a legacy StockCount item
+    // (persisted before this field existed) still matches this narrow
+    // shape unchanged — see StockCountItem.sellingPriceBasisUnit's own
+    // comment (types.ts) for the full rationale.
+    sellingPriceBasisUnit?: string;
+  }>;
 }
 
 /**
@@ -179,14 +193,36 @@ export function findLatestRememberedProductMemory(
         !!i.unit
     );
     if (matches.length === 0) continue;
+    // [FR-89–FR-94, Implementation Authorization §10, Option C] The
+    // tie-break itself must compare against each candidate's own TRUE
+    // selling-price denomination (sellingPriceBasisUnit), not the
+    // physical `unit` — a deliberately-priced portion's price can
+    // legitimately be denominated in a different unit than it was
+    // physically counted in, and the confirmed-selling-unit preference
+    // below exists specifically to find the portion that matches the
+    // Owner's own designated selling unit for THIS purpose. Falls back
+    // to `unit` for any legacy item with no `sellingPriceBasisUnit` —
+    // byte-for-byte the previous behavior for every record persisted
+    // before this field existed.
     const preferredMatch = trimmedPreferredUnit
-      ? matches.find((m) => m.unit!.trim().toLowerCase() === trimmedPreferredUnit)
+      ? matches.find((m) => (m.sellingPriceBasisUnit ?? m.unit)!.trim().toLowerCase() === trimmedPreferredUnit)
       : undefined;
     // Falls back to the first match — byte-for-byte the previous
     // behavior — whenever no preferred unit was supplied, or none of
     // this count's matching portions happen to use it.
     const item = preferredMatch || matches[0];
-    countCandidate = { unit: item.unit as string, costPrice: item.costPrice, sellingPrice: item.sellingPrice as number, asOfDate: count.date };
+    // [FR-89–FR-94, Implementation Authorization §10, Option C] The
+    // returned candidate's own `unit` must be the item's TRUE selling-
+    // price denomination — `sellingPriceBasisUnit` when present, `unit`
+    // otherwise (a legacy item, or one whose price was never deliberate
+    // and always matched its own physical unit). This is the exact
+    // fallback the signed Authorization specifies.
+    countCandidate = {
+      unit: (item.sellingPriceBasisUnit ?? item.unit) as string,
+      costPrice: item.costPrice,
+      sellingPrice: item.sellingPrice as number,
+      asOfDate: count.date,
+    };
     break; // stockCounts is newest-first — the first (qualifying) count is the most recent
   }
 

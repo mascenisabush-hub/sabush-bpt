@@ -2636,6 +2636,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           unit: item.unit,
           costPrice: item.costPrice,
           sellingPrice: item.sellingPrice,
+          // [FR-89–FR-94, Implementation Authorization §10, Option C]
+          // Pass-through — item.sellingPriceBasisUnit is already
+          // resolved to a defined string by tallyStockCountRows
+          // (stockCount.ts) — see StockCountItem.sellingPriceBasisUnit's
+          // own comment (types.ts) for the full rationale.
+          sellingPriceBasisUnit: item.sellingPriceBasisUnit,
           // [Product Memory / UOM — Increment A, Checkpoint 2c]
           ...(unitRelationshipByProductName.has(item.productName.trim().toLowerCase())
             ? { unitRelationship: unitRelationshipByProductName.get(item.productName.trim().toLowerCase())! }

@@ -556,3 +556,93 @@ all unmodified by this section — confirmed by checksum immediately
 before and after this signature was recorded. This signature block is
 the sole content added to §10 by this acceptance.
 
+---
+
+## 11. Post-Implementation Record — Option C Implemented
+
+**Status: implementation complete, not yet committed/pushed at the time
+of this record.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§10 above are unaltered by this record.
+
+**What was implemented, exactly per §10's own authorized scope:**
+1. `StockCountItem.sellingPriceBasisUnit?: string` added (`types.ts`).
+2. `normalizeStockCountItems`/`tallyStockCountRows` (`stockCount.ts`)
+   populate it from `row.sellingPriceBasisUnit ?? row.unit` (working-row
+   layer) and `raw.sellingPriceBasisUnit ?? unit` (input-item layer) —
+   threaded through the full chain: `StockCountTallyItem` →
+   `StockCountInputItem` → `NormalizedStockCountItem`, and the confirm
+   handler (`PeriodicStockCountView.tsx`) and the final Firestore write
+   (`AppContext.tsx`) both pass it through unmodified.
+3. `ProductDetailModal.tsx`'s selling-price display line reads
+   `item.sellingPriceBasisUnit || item.unit || 'un'`; its quantity and
+   cost-price display lines are untouched, still `item.unit` only.
+4. `findLatestRememberedProductMemory`
+   (`productMemoryPriceResolution.ts`) — both the within-count tie-break
+   and the final candidate's own `unit` now prefer
+   `item.sellingPriceBasisUnit`, falling back to `item.unit`.
+
+**Files changed:** `apps/tenant/src/types.ts`,
+`apps/tenant/src/utils/stockCount.ts`,
+`apps/tenant/src/components/PeriodicStockCountView.tsx`,
+`apps/tenant/src/context/AppContext.tsx`,
+`apps/tenant/src/components/ProductDetailModal.tsx`,
+`apps/tenant/src/lib/productMemoryPriceResolution.ts`,
+`tests/initial-stock-confirmation.test.ts` (regression fix — see
+below), `tests/stockcount-selling-price-basis-unit.test.ts` (new).
+
+**One genuine regression found and fixed, disclosed precisely:**
+`tests/initial-stock-confirmation.test.ts` failed after implementation
+— confirmed via `git stash` against the untouched baseline (11/11 pass
+there) that this was newly introduced, not pre-existing. Root cause: a
+hardcoded expected-literal assertion against `normalizeStockCountItems`'
+own output shape, which that same test file's own pre-existing comment
+already documents as "the single choke point `recordStockCount()` uses
+to build BOTH Initial Stock and Periodic Contagem items." Extending
+that genuinely shared function's output exactly as §10 item B
+authorizes necessarily, mechanically added the new field to Initial
+Stock's own persisted items too — harmlessly, since it is optional,
+display-only, and never read by any valuation calculation, exactly like
+`valuationMode`/`costBasisEstablished` already do for Initial Stock
+today. The test's own literal was updated to include
+`sellingPriceBasisUnit: 'kg'`, matching what the authorized code change
+correctly, unavoidably produces. This was judged the direct, in-scope
+consequence of implementing exactly what §10 authorized — not a
+separate discovered issue requiring a stop-and-report, since it
+introduces no new behavior, only correctly reflects the authorized
+change already made.
+
+**Tests run:**
+- New suite (`tests/stockcount-selling-price-basis-unit.test.ts`):
+  20/20 pass, covering TEST 1–7, the full unit-communication-chain
+  trace, and a governance-boundary structural check.
+- `tests/initial-stock-confirmation.test.ts`: 11/11 pass (after the fix
+  above).
+- Full regression sweep across 82 test files referencing every touched
+  module: 1,304 pass, 5 fail — all 5 independently re-confirmed via
+  direct source inspection as the exact same pre-existing failures
+  already documented in prior sessions of this governance chain, in
+  files this implementation never touches.
+- `tsc --noEmit`: clean.
+
+**Confirmations:**
+- `StockCountItem.unit` remains, unambiguously, the physical/counting
+  unit — confirmed unmodified in every consumer.
+- `sellingPriceBasisUnit` correctly preserves the selling-price's own
+  true denomination, including through the "dangerous sequence" (TEST
+  3) and historical memory reconstruction (TEST 6).
+- Legacy records (no `sellingPriceBasisUnit` field at all) fall back to
+  `item.unit` exactly as authorized (TEST 5) — no migration, no
+  backfill, none performed or required.
+- Valuation calculations (`totalValue`, `totalSellingValue`,
+  `sellingValue`, `purchaseValue`) are byte-for-byte unaffected (TEST 7)
+  — confirmed by direct comparison against an identical call omitting
+  the new field entirely.
+- `Product` schema, Add Stock, Initial Stock's own dedicated file, and
+  FR-67 cost-basis logic are all confirmed untouched — none appear in
+  this implementation's diff.
+
+**Not committed, not pushed** — awaiting separate authorization, per
+the Product Architect's own explicit instruction.
+
