@@ -945,7 +945,8 @@ rewritten.
 
 ## 21. Addendum — Contagem UI Selling-Price Denomination Caption
 
-**Status: DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 30
+August 2026.**
 
 Appended per this repository's own established "append, don't rewrite"
 pattern. §1–§20 above, including §20's own signature block, are
@@ -1033,3 +1034,13 @@ This addendum plans the change; it does not itself authorize coding.
 The corresponding Implementation Authorization addendum (below) is the
 gate that must be signed by the Product Architect before any source or
 test file is modified.
+
+**Product Architect acceptance, recorded 30 August 2026.** The Product
+Architect has accepted this §21 addendum, in the same act as accepting
+Implementation Authorization §12 (the corresponding, final governance
+gate for this correction) — see that document's own §12 signature block
+for the full, verbatim decision text. This §21 addendum's own scope,
+required behavior, and Test Plan (above) are unaltered by this
+acceptance record; nothing above this line is rewritten. Acceptance of
+this plan does not itself authorize implementation — see Implementation
+Authorization §12 for the governance instrument that does.

@@ -649,8 +649,7 @@ the Product Architect's own explicit instruction.
 ## 12. Addendum — Authorization to Correct the Contagem UI Selling-Price
 ## Denomination Caption
 
-**Status: DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE. NOT SIGNED. NOT
-ACCEPTED. NOT IN EFFECT.**
+**Status: ✅ AUTHORIZED. ACCEPTED AND SIGNED BY THE PRODUCT ARCHITECT.**
 
 Appended per this repository's own established "append, don't rewrite"
 pattern. §1–§11 above, including every existing signature and
@@ -749,14 +748,46 @@ shipped elsewhere in this same codebase under §10 above.
 restores today's exact behavior; no data migration is involved in
 either direction, since no persisted field or schema is touched.
 
-**Governance state:** Rule 8 Assessment §16 addendum — drafted, status
-"READY AFTER IMPLEMENTATION PLAN AMENDMENT." Implementation Plan §21
-addendum — drafted, status "READY AFTER IMPLEMENTATION AUTHORIZATION
-AMENDMENT." This §12 addendum — drafted, **UNSIGNED**, status "AWAITING
-PRODUCT ARCHITECT ACCEPTANCE." No implementation may begin until this
-addendum carries an explicit Product Architect acceptance and signature,
-recorded below this line in a future, separate edit.
+**Governance state:** Rule 8 Assessment §16 addendum — ✅ accepted by the
+Product Architect, 30 August 2026. Implementation Plan §21 addendum —
+✅ accepted by the Product Architect, 30 August 2026. This §12 addendum
+— ✅ accepted and signed by the Product Architect, below.
 
-**This addendum is not accepted. This addendum is not signed. No
-implementation is authorized by this addendum as it currently stands.**
+---
+
+**Product Architect Acceptance**
+
+> I have reviewed this §12 addendum and confirm it authorizes exactly
+> the scope recorded above: the catalog-row selling-price caption and
+> the manual-row selling-price caption in `PeriodicStockCountView.tsx`,
+> each changed from `row.unit` to `row.sellingPriceBasisUnit ??
+> row.unit`, plus the six narrowly corresponding tests (same-unit,
+> divergent, reverse-divergent, legacy fallback, Mode A unchanged,
+> catalog/manual parity) — nothing else. I confirm this authorization
+> does not extend to the StockCount data model, Product schema, Add
+> Stock, Initial Stock, Smart Stock Entry, Mode A/B logic, conversion
+> mathematics, Product memory, persistence, Business Worth, FR-67, any
+> other Contagem UI redesign, any new feature, or any refactoring
+> outside the two named caption lines and their tests, exactly as this
+> addendum's own exclusion list states. I authorize implementation of
+> exactly this scope.
+
+**Decision:** I APPROVE AND SIGN IMPLEMENTATION AUTHORIZATION §12
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Date:** 30 August 2026
+
+This signature authorizes implementation to begin, strictly bounded to
+the scope recorded above in this §12 addendum. It does not itself
+constitute the start of implementation work — that remains a separate,
+subsequent execution step.
+
+---
+
+**This document, as signed, authorizes implementation strictly per the
+scope in this §12 addendum. No code, test, `firestore.rules`, or
+`firestore.indexes.json` change has been made in the course of producing
+or signing this addendum. A separate implementation execution step is
+required to actually begin work.**
 

@@ -1024,7 +1024,8 @@ acceptance record; nothing above this line is rewritten.
 
 ## 16. Addendum — Contagem UI Selling-Price Denomination Caption
 
-**Status: DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 30
+August 2026.**
 
 Appended per this repository's own established "append, don't rewrite"
 pattern. §1–§15 above, including §15's own signature block, are
@@ -1160,4 +1161,15 @@ the Rule 8 analysis only. Coding may not begin until the corresponding
 Implementation Plan and Implementation Authorization addenda (below)
 are separately drafted and the Authorization addendum is signed by the
 Product Architect.
+
+**Product Architect acceptance, recorded 30 August 2026.** The Product
+Architect has accepted this §16 addendum, in the same act as accepting
+Implementation Authorization §12 (the corresponding, final governance
+gate for this correction) — see that document's own §12 signature block
+for the full, verbatim decision text. This §16 addendum's own analysis,
+findings, and recommended expression (above) are unaltered by this
+acceptance record; nothing above this line is rewritten. Acceptance of
+this Rule 8 finding does not itself authorize implementation — see
+Implementation Authorization §12 for the governance instrument that
+does.
 
