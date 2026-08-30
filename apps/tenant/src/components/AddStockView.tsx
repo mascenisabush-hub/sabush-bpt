@@ -1113,6 +1113,63 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     );
   };
 
+  // [Bug fix — urgent, Owner-reported: typing/renaming a product name
+  // felt impossible, and cost price stopped auto-filling] Mirrors the
+  // live `rows` state into a ref, read only inside the DEBOUNCED
+  // recognition callback below (never inside a render) — the exact same
+  // "ref mirrors state for use inside a later async callback" pattern
+  // PeriodicStockCountView.tsx's own `latestFlushArgs` already
+  // establishes, so the debounced callback always reads the row's
+  // truly-current state rather than a stale closure from the render
+  // that scheduled it.
+  const rowsRef = useRef(rows);
+  rowsRef.current = rows;
+
+  // [Bug fix — urgent] Per-row debounce timers for the (possibly
+  // network-bound, semantic/AI-reaching) supplier-wording recognition
+  // check — same Map-of-timers-keyed-by-row-id shape as
+  // PeriodicStockCountView.tsx's own `rowDebounceTimersRef`.
+  const supplierWordingDebounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+
+  // [Bug fix — urgent] The SAME memory-based cost/selling-price/unit
+  // autofill handleSelectProductForTool already applies when the Owner
+  // clicks a product from the dropdown — extracted here so the exact-
+  // match branch of applySupplierWordingCheck (below) can apply it too,
+  // for the equally common case of the Owner typing the full, already-
+  // correct product name rather than clicking it. One fill logic, two
+  // callers — never duplicated.
+  const buildProductMemoryAutofill = (product: (typeof products)[number]): Partial<StockRowItem> => {
+    const memory = findLatestRememberedProductMemory(
+      product.id,
+      product.name,
+      batches,
+      stockCounts,
+      isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship?.sellingUnit : undefined
+    );
+    let newCost = '';
+    let newSell = '';
+    let newUnit = suggestedUnits[0] || 'un';
+    if (memory) {
+      newCost = String(memory.costPrice);
+      newSell = String(memory.sellingPrice);
+      newUnit = memory.unit;
+    } else if (product.costPrice != null || product.sellingPrice != null) {
+      if (product.costPrice != null) newCost = String(product.costPrice);
+      if (product.sellingPrice != null) newSell = String(product.sellingPrice);
+    }
+    return {
+      costPrice: newCost || undefined,
+      sellingPrice: newSell || undefined,
+      unit: newUnit || undefined,
+      costPriceAutoFilled: !!newCost,
+      sellingPriceAutoFilled: !!newSell,
+      costPriceBasisUnit: newCost ? newUnit : undefined,
+      sellingPriceBasisUnit: newSell ? newUnit : undefined,
+      previousRemainingQuantity: '',
+      previousCycleQuantity: resolvePreviousCycleQuantity(product.name),
+    };
+  };
+
   // [Feature — unit-aware price re-derivation on manual unit change,
   // Owner-requested: "I still want it editable — if I fill in Emb,
   // knowing the relationship, still give me the right results."]
@@ -1287,39 +1344,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
   const handleSelectProductForTool = (rowId: string, name: string) => {
     const match = products.find(p => p.name.toLowerCase() === name.toLowerCase());
-    let newCost = '';
-    let newSell = '';
-    let newUnit = suggestedUnits[0] || 'un';
 
-    if (match) {
-      // [Owner-requested — see createEmptyRow's identical comment above]
-      // Same widened memory source (StockBatch purchases AND confirmed
-      // StockCounts, unit/cost/sell always from the SAME winning
-      // record), applied identically here for re-selecting a different
-      // existing product mid-form. Same selling-unit preference too —
-      // see findLatestRememberedProductMemory's own header comment on
-      // this parameter.
-      const memory = findLatestRememberedProductMemory(
-        match.id,
-        match.name,
-        batches,
-        stockCounts,
-        isValidUnitRelationship(match.unitRelationship) ? match.unitRelationship?.sellingUnit : undefined
-      );
-      if (memory) {
-        newCost = String(memory.costPrice);
-        newSell = String(memory.sellingPrice);
-        newUnit = memory.unit;
-      } else if (match.costPrice != null || match.sellingPrice != null) {
-        if (match.costPrice != null) newCost = String(match.costPrice);
-        if (match.sellingPrice != null) newSell = String(match.sellingPrice);
-      }
-    }
-
-    // [Restock Observation Amendment v1.0] See createEmptyRow's own
-    // comment — resolved identically here so re-selecting a different
-    // existing product mid-form updates the field's availability too.
-    const previousCycleQuantity = resolvePreviousCycleQuantity(name);
+    // [Bug fix — urgent, refactor] Reuses the SAME memory-based
+    // cost/selling-price/unit autofill applySupplierWordingCheck's own
+    // exact-match/reused branches now use — one source of truth for
+    // this fill logic, never duplicated across the two callers.
+    const autofill: Partial<StockRowItem> = match
+      ? buildProductMemoryAutofill(match)
+      : { unit: suggestedUnits[0] || 'un' };
 
     // [Supplier-Wording Recognition — Checkpoint 3, Owner-Initiated
     // Declaration, POL-0007 Business Requirement 3] If the owner had
@@ -1340,24 +1372,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
     updateRow(rowId, {
       productName: name,
-      costPrice: newCost || undefined,
-      sellingPrice: newSell || undefined,
-      unit: newUnit || undefined,
-      // [Feature — unit-aware price re-derivation] Same convention as
-      // createEmptyRow's own identical fields — marks the price
-      // auto-filled only when a real memory record actually supplied
-      // it, so a later manual unit change knows it's still safe to
-      // re-derive.
-      costPriceAutoFilled: !!newCost,
-      sellingPriceAutoFilled: !!newSell,
-      costPriceBasisUnit: newCost ? newUnit : undefined,
-      sellingPriceBasisUnit: newSell ? newUnit : undefined,
+      ...autofill,
       isDropdownOpen: false,
-      // Switching products resets any previously-entered observation —
-      // it was physically describing the OLD product's prior cycle and
-      // must never carry over as if it described the new one.
-      previousRemainingQuantity: '',
-      previousCycleQuantity,
       pendingSupplierWording:
         typedWording && !typedWordingAlreadyExactMatch && match
           ? {
@@ -1426,18 +1442,35 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     return detectSupplierWordingContradictions(row.productName, products).length > 0;
   };
 
-  // [Product Recognition Intelligence — Checkpoint 4] Now `async`,
-  // mirroring resolveSupplierWordingRecognition's own shape change —
-  // composes that function unchanged, plus a staleness guard: if the
-  // row's typed text has since changed again by the time this
-  // (possibly network-bound, when the semantic/AI mechanism fires)
-  // await resolves, the stale result is discarded rather than
-  // clobbering whatever the row now shows — the existing pending-state
-  // UI (`isDropdownOpen`, set true below exactly as before) already
-  // covers the latency this introduces; this guard only prevents a
-  // slow, now-outdated response from overwriting a newer one.
-  const applySupplierWordingCheck = async (rowId: string, newName: string) => {
+  // [Bug fix — urgent, Owner-reported: typing/renaming a product name
+  // felt impossible, and cost price stopped auto-filling on typing the
+  // exact name] Root cause: this function used to be entirely `await`-
+  // gated — the controlled <input>'s own `value={row.productName}`
+  // never updated until the (possibly network-bound, when the
+  // semantic/AI mechanism at Checkpoint 4 fires) recognition check
+  // finished, on EVERY keystroke, with no debounce at all. And the
+  // exact-match case ('none') never applied the memory-based cost/
+  // selling-price/unit autofill at all — only clicking a product from
+  // the dropdown (handleSelectProductForTool) did.
+  //
+  // Fixed shape, in order:
+  //   1. The visible productName ALWAYS updates immediately,
+  //      synchronously — never gated behind any async work.
+  //   2. An EXACT match against an existing product is a simple
+  //      synchronous array lookup — resolved immediately too, applying
+  //      the SAME buildProductMemoryAutofill (above) clicking the
+  //      dropdown already applies, so typing the full correct name now
+  //      behaves identically to clicking it.
+  //   3. Only the (possibly slow) supplier-wording candidate/reuse
+  //      detection — genuinely needs the async/semantic path — is
+  //      deferred, and now DEBOUNCED (800ms, matching this codebase's
+  //      own established autosave debounce interval) rather than firing
+  //      on every keystroke. Recognition results simply arrive a moment
+  //      after the Owner pauses typing; they never again block or lag
+  //      the input itself.
+  const applySupplierWordingCheck = (rowId: string, newName: string) => {
     const trimmed = newName.trim();
+
     const cleared: Partial<StockRowItem> = {
       productName: newName,
       isDropdownOpen: true,
@@ -1448,50 +1481,68 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       supplierWordingDistinguishingInfo: undefined,
     };
 
-    const outcome = await resolveSupplierWordingRecognitionAsync(trimmed, supplierId, products, findSemanticSupplierWordingCandidates);
+    // Step 1/2 — immediate, synchronous. An exact match also gets the
+    // full memory-based autofill right away; anything else just gets
+    // its typed text reflected immediately.
+    const exactMatch = trimmed ? products.find(p => p.name.toLowerCase() === trimmed.toLowerCase()) : undefined;
+    updateRow(rowId, exactMatch ? { ...cleared, ...buildProductMemoryAutofill(exactMatch) } : cleared);
 
-    // [Staleness guard — see note above] Only applies to the async
-    // (semantic/AI-reached) path in practice, since the deterministic-
-    // only path resolves synchronously fast enough that this can never
-    // actually diverge — kept unconditional anyway, since it's a
-    // correct guard either way and adds no observable behavior change
-    // for the deterministic-only case.
-    const currentRow = rows.find(r => r.id === rowId);
-    if (!currentRow || currentRow.productName !== newName) {
+    // Step 3 — debounced candidate/reuse detection. Cancels any prior
+    // pending check for this row first (Decision-39-style per-row timer
+    // map), so only the LAST keystroke in a burst ever actually reaches
+    // the network/semantic mechanism.
+    const existingTimer = supplierWordingDebounceTimersRef.current.get(rowId);
+    if (existingTimer) clearTimeout(existingTimer);
+    if (!trimmed || exactMatch) {
+      // Nothing left to recognize — either blank, or already an exact
+      // match handled synchronously above.
+      supplierWordingDebounceTimersRef.current.delete(rowId);
       return;
     }
+    const timer = setTimeout(async () => {
+      supplierWordingDebounceTimersRef.current.delete(rowId);
+      const outcome = await resolveSupplierWordingRecognitionAsync(trimmed, supplierId, products, findSemanticSupplierWordingCandidates);
 
-    switch (outcome.type) {
-      case 'none':
-      case 'no-candidates':
-        updateRow(rowId, cleared);
-        return;
-      case 'reused': {
-        const matchedProduct = products.find(p => p.id === outcome.productId);
-        if (!matchedProduct) {
-          // Defensive only — resolveSupplierWordingRecognition derived
-          // this id from the SAME `products` array, so this can't
-          // actually diverge; falls back to ordinary behavior if it ever did.
-          updateRow(rowId, cleared);
-          return;
-        }
-        updateRow(rowId, {
-          ...cleared,
-          productName: matchedProduct.name,
-          previousCycleQuantity: resolvePreviousCycleQuantity(matchedProduct.name),
-          pendingSupplierWording: {
-            wording: trimmed,
-            productId: matchedProduct.id,
-            origin: 'reused',
-            conflictCheckProductIds: [],
-          },
-        });
+      // [Staleness guard] Reads the LIVE ref (rowsRef, above), not a
+      // stale render closure — the Owner may have typed further, or
+      // even navigated away from this row, while this awaited.
+      const currentRow = rowsRef.current.find(r => r.id === rowId);
+      if (!currentRow || currentRow.productName !== newName) {
         return;
       }
-      case 'candidates':
-        updateRow(rowId, { ...cleared, supplierWordingCandidates: outcome.candidates });
-        return;
-    }
+
+      switch (outcome.type) {
+        case 'none':
+        case 'no-candidates':
+          // Nothing new to layer on top of step 1/2's already-applied
+          // immediate update.
+          return;
+        case 'reused': {
+          const matchedProduct = products.find(p => p.id === outcome.productId);
+          if (!matchedProduct) {
+            // Defensive only — resolveSupplierWordingRecognition derived
+            // this id from the SAME `products` array, so this can't
+            // actually diverge.
+            return;
+          }
+          updateRow(rowId, {
+            ...buildProductMemoryAutofill(matchedProduct),
+            productName: matchedProduct.name,
+            pendingSupplierWording: {
+              wording: trimmed,
+              productId: matchedProduct.id,
+              origin: 'reused',
+              conflictCheckProductIds: [],
+            },
+          });
+          return;
+        }
+        case 'candidates':
+          updateRow(rowId, { supplierWordingCandidates: outcome.candidates });
+          return;
+      }
+    }, 800);
+    supplierWordingDebounceTimersRef.current.set(rowId, timer);
   };
 
   const handleConfirmSupplierWordingCandidate = (rowId: string, productId: string) => {
