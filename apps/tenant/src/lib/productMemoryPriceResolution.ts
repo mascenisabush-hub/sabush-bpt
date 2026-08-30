@@ -199,3 +199,49 @@ export function findLatestRememberedProductMemory(
 
   return winner ? { unit: winner.unit, costPrice: winner.costPrice, sellingPrice: winner.sellingPrice } : null;
 }
+
+// [Bug fix — Finding C, fresh end-to-end audit, FR-89–FR-94] The
+// function above (findLatestRememberedProductMemory) re-derives a
+// remembered selling price/unit purely from raw historical
+// StockBatch/StockCount records. It has no way to know which of several
+// portions in the SAME historical StockCount was the Owner's own "last
+// deliberately entered" one — that information is deliberately never
+// persisted onto a StockCountItem (Implementation Plan §5.3;
+// Implementation Authorization §9, Product-Architect-confirmed) — so
+// its own within-count tie-break necessarily falls back to an older
+// heuristic (prefer the confirmed-unit match, else the first stored
+// item). This can disagree with Product.sellingPrice/
+// Product.unitRelationship.sellingUnit, which — as of this same
+// correction's own Finding B fix (AppContext.tsx, recordStockCount) —
+// IS now correctly kept as the canonical, paired "last deliberately
+// entered" selling configuration.
+//
+// This function makes that canonical Product memory authoritative,
+// checked BEFORE any historical re-derivation, wherever a caller
+// resolves a product's default selling price/unit: Periodic Contagem's
+// own buildCatalogRow/handleModeAToggle, and Add Stock's equivalent
+// prefill sites. Returns null when canonical memory is genuinely
+// unavailable (no confirmed sellingUnit, or no remembered sellingPrice
+// yet) — callers fall back to findLatestRememberedProductMemory in that
+// case, unchanged from before this fix; this never removes or replaces
+// that function, only takes priority over it when it has something
+// authoritative to say.
+//
+// Deliberately selling-price/unit ONLY — says nothing about cost, which
+// remains each caller's own, entirely separate, already-existing
+// resolution (FR-85's own independent-write-authorities principle;
+// Product.costPrice/FR-67's cost-basis mechanism is untouched by this
+// function and by every caller of it).
+export interface CanonicalProductSellingMemory {
+  unit: string;
+  sellingPrice: number;
+}
+
+export function resolveCanonicalProductSellingMemory(product: {
+  sellingPrice?: number;
+  unitRelationship?: UnitRelationship;
+}): CanonicalProductSellingMemory | null {
+  const confirmedSellingUnit = isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship!.sellingUnit : undefined;
+  if (!confirmedSellingUnit || product.sellingPrice == null) return null;
+  return { unit: confirmedSellingUnit, sellingPrice: product.sellingPrice };
+}

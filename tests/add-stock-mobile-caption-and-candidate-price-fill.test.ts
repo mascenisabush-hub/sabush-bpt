@@ -69,7 +69,15 @@ describe('Bug fix 2 — confirming a supplier-wording candidate now fills price 
     const start = addStockSrc.indexOf('const handleConfirmSupplierWordingCandidate = (rowId: string, productId: string) => {');
     const end = addStockSrc.indexOf('\n  };', start);
     const body = addStockSrc.slice(start, end);
-    assert.match(body, /resolveUnitAwarePrice\(memory\.sellingPrice, memory\.unit, row\.unit, matchedProduct\.unitRelationship\)/);
+    // [Bug fix — Finding C, fresh audit] The conversion SOURCE is now
+    // canonical Product selling memory when available, falling back to
+    // the historical `memory` record otherwise (`sellSource`,
+    // constructed just above this call) — the underlying property this
+    // test protects (sellingPrice always fills, unit-aware, from
+    // whichever source is authoritative) still holds; only the variable
+    // name changed to reflect the corrected priority.
+    assert.match(body, /const sellSource = canonicalSellingMemory \?\? \{ sellingPrice: memory\.sellingPrice, unit: memory\.unit \};/);
+    assert.match(body, /resolveUnitAwarePrice\(sellSource\.sellingPrice, sellSource\.unit, row\.unit, matchedProduct\.unitRelationship\)/);
   });
 
   it('costPrice only fills from memory when the row does not already have one — the receipt\'s own reading keeps priority, matching every other fill site in this file', () => {

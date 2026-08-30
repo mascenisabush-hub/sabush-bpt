@@ -35,6 +35,7 @@
 
 import { strict as assert } from 'node:assert';
 import { describe, it } from 'node:test';
+import { readFileSync } from 'node:fs';
 import {
   deriveModeAPortionValuations,
   resolveDefaultSellingConfigurationForRow,
@@ -50,6 +51,8 @@ import {
   draftItemToWorkingRow,
   type StockCountWorkingRow,
 } from '../apps/tenant/src/utils/stockCount';
+import { resolveCanonicalProductSellingMemory } from '../apps/tenant/src/lib/productMemoryPriceResolution';
+import { isValidUnitRelationship } from '../apps/tenant/src/lib/unitRelationship';
 import type { UnitRelationship } from '../apps/tenant/src/types';
 
 // ------------------------------------------------------------------
@@ -599,3 +602,289 @@ describe('tallyStockCountRows — preview path matches persistence path', () => 
     assert.equal(countedItems[0].unit, 'Cx');
   });
 });
+
+// ==================================================================
+// FINDINGS A/B/C — fresh end-to-end audit corrections
+// ==================================================================
+//
+// Scope note: findLatestRememberedProductMemory/resolveCanonicalProductSellingMemory
+// (Finding C) and recordStockCount's Finding B write-site decision live
+// in productMemoryPriceResolution.ts and AppContext.tsx respectively —
+// the former is directly imported and tested against real fixture data
+// below; the latter's actual Firestore write cannot be exercised
+// without a live emulator (established, repo-wide constraint — see
+// this file's own header), so its exact validation/decision logic is
+// both (a) structurally confirmed present in the real source, and (b)
+// independently re-derived as a pure-function mirror below, exercised
+// against fixture data to prove the DECISION LOGIC itself is correct —
+// matching this codebase's established pattern for this exact class of
+// problem (e.g. tests/add-stock-typing-and-autofill-bugfix.test.ts).
+
+function src(relPath: string): string {
+  return readFileSync(new URL(`../${relPath}`, import.meta.url), 'utf-8');
+}
+
+const periodicSrc = src('apps/tenant/src/components/PeriodicStockCountView.tsx');
+const addStockSrc = src('apps/tenant/src/components/AddStockView.tsx');
+const appContextSrc = src('apps/tenant/src/context/AppContext.tsx');
+
+// [Finding A] Component-internal mirror of the FIXED
+// workingRowDeliberateEntries construction — the actual production line
+// (verified structurally below) is `unit: row.sellingPriceBasisUnit ??
+// row.unit`.
+function buildWorkingRowDeliberateEntry(row: StockCountWorkingRow): WorkingRowDeliberateEntry {
+  return {
+    productName: row.productName,
+    sellingPrice: Number(row.sellingPrice),
+    unit: row.sellingPriceBasisUnit ?? row.unit,
+    sellingPriceAutoFilled: row.sellingPriceAutoFilled,
+    sellingPriceEditSequence: row.sellingPriceEditSequence,
+  };
+}
+
+// [Finding B] Pure-function mirror of recordStockCount's own existing-
+// product write-site decision (AppContext.tsx) — validated exactly like
+// confirmProductUnitRelationship's own re-validation discipline: the
+// candidate sellingUnit must be a genuine member of the product's own
+// already-confirmed unitRelationship chain.
+function decideExistingProductWrite(
+  product: { sellingPrice?: number; unitRelationship?: UnitRelationship },
+  memory: { sellingPrice: number; sellingUnit?: string }
+): { sellingPriceChanged: boolean; sellingUnitFieldUpdate: string | undefined } {
+  const sellingPriceChanged = product.sellingPrice !== memory.sellingPrice;
+  let sellingUnitFieldUpdate: string | undefined;
+  if (memory.sellingUnit && isValidUnitRelationship(product.unitRelationship)) {
+    const currentSellingUnit = product.unitRelationship!.sellingUnit;
+    const candidateRelationship: UnitRelationship = { ...product.unitRelationship!, sellingUnit: memory.sellingUnit };
+    const alreadyCurrent = currentSellingUnit?.trim().toLowerCase() === memory.sellingUnit.trim().toLowerCase();
+    if (!alreadyCurrent && isValidUnitRelationship(candidateRelationship)) {
+      sellingUnitFieldUpdate = memory.sellingUnit;
+    }
+  }
+  return { sellingPriceChanged, sellingUnitFieldUpdate };
+}
+
+describe('Finding A — deliberate price basis unit no longer desyncs from physical unit', () => {
+  it('480/Cx deliberate, physical unit later changed to Un -> remembered configuration remains 480/Cx, not 480/Un', () => {
+    // Step 1-3: Owner deliberately enters 480 while unit='Cx' (Rule 1).
+    let row: StockCountWorkingRow = {
+      productName: 'Txilar',
+      quantity: '5',
+      unit: 'Cx',
+      costPrice: '',
+      sellingPrice: '480',
+      sellingPriceAutoFilled: false,
+      sellingPriceBasisUnit: 'Cx',
+      sellingPriceEditSequence: 1,
+    };
+    // Step 4-5: Owner changes ONLY the physical unit (Rule 2 preserves
+    // sellingPrice/sellingPriceBasisUnit untouched — simulated directly,
+    // matching applySellingConfigurationEditRules' own Rule 2 exactly).
+    row = { ...row, unit: 'Un' };
+    assert.equal(row.sellingPrice, '480');
+    assert.equal(row.sellingPriceBasisUnit, 'Cx');
+    assert.equal(row.unit, 'Un');
+
+    // Step 6: workingRowDeliberateEntries construction (FIXED).
+    const entry = buildWorkingRowDeliberateEntry(row);
+    assert.equal(entry.unit, 'Cx', 'must use sellingPriceBasisUnit, not the row\'s own (changed) physical unit');
+
+    // Step 7: remembered configuration.
+    const memory = selectSellingMemoryByProductName([], () => undefined, [entry]);
+    assert.deepEqual(memory.get('txilar'), { sellingPrice: 480, sellingUnit: 'Cx' });
+  });
+
+  it('a non-deliberate row (no sellingPriceBasisUnit) falls back to its own physical unit, unaffected', () => {
+    const row: StockCountWorkingRow = { productName: 'Farinha 1kg', quantity: '5', unit: 'Emb', costPrice: '', sellingPrice: '300', sellingPriceAutoFilled: true };
+    const entry = buildWorkingRowDeliberateEntry(row);
+    assert.equal(entry.unit, 'Emb');
+  });
+
+  it('structural: the real workingRowDeliberateEntries construction uses sellingPriceBasisUnit ?? row.unit', () => {
+    assert.match(periodicSrc, /unit: row\.sellingPriceBasisUnit \?\? row\.unit,/);
+  });
+});
+
+describe('Finding B — existing product durably remembers BOTH price and selling unit', () => {
+  const productUnUn: { sellingPrice?: number; unitRelationship?: UnitRelationship } = {
+    sellingPrice: 50,
+    unitRelationship: {
+      units: [
+        { unit: 'Cx', factorFromPrevious: 0 },
+        { unit: 'Un', factorFromPrevious: 24 },
+      ],
+      sellingUnit: 'Un',
+      confirmedAt: '2026-08-01T00:00:00.000Z',
+    },
+  };
+
+  it('Order A (480/Cx then 50/Un): winner is 50/Un; product already has sellingUnit=Un -> only price changes, unit write is a no-op (already current)', () => {
+    const memory = { sellingPrice: 50, sellingUnit: 'Un' };
+    const decision = decideExistingProductWrite(productUnUn, memory);
+    assert.equal(decision.sellingPriceChanged, false, '50 already matches the fixture\'s starting sellingPrice');
+    assert.equal(decision.sellingUnitFieldUpdate, undefined, 'Un already matches the current confirmed sellingUnit — no write needed');
+  });
+
+  it('Order B (50/Un then 480/Cx): winner is 480/Cx; product previously had sellingUnit=Un -> BOTH price and unit must be written', () => {
+    const memory = { sellingPrice: 480, sellingUnit: 'Cx' };
+    const decision = decideExistingProductWrite(productUnUn, memory);
+    assert.equal(decision.sellingPriceChanged, true);
+    assert.equal(decision.sellingUnitFieldUpdate, 'Cx', 'must write unitRelationship.sellingUnit — this is exactly the case the bug produced a silent 480/Un mislabel for');
+  });
+
+  it('H: existing Product whose previous unit is Un, deliberate winner 480/Cx -> Product memory becomes exactly 480/Cx (both fields)', () => {
+    const decision = decideExistingProductWrite(productUnUn, { sellingPrice: 480, sellingUnit: 'Cx' });
+    assert.equal(decision.sellingPriceChanged, true);
+    assert.equal(decision.sellingUnitFieldUpdate, 'Cx');
+  });
+
+  it('never writes an invalid sellingUnit — must be a genuine member of the product\'s own units[] chain', () => {
+    const decision = decideExistingProductWrite(productUnUn, { sellingPrice: 999, sellingUnit: 'Saco' });
+    assert.equal(decision.sellingUnitFieldUpdate, undefined, 'Saco is not a member of Cx/Un — must never be written');
+  });
+
+  it('no confirmed unitRelationship at all -> unit write never attempted, price still updates', () => {
+    const decision = decideExistingProductWrite({ sellingPrice: 50, unitRelationship: undefined }, { sellingPrice: 480, sellingUnit: 'Cx' });
+    assert.equal(decision.sellingPriceChanged, true);
+    assert.equal(decision.sellingUnitFieldUpdate, undefined);
+  });
+
+  it('structural: recordStockCount writes unitRelationship.sellingUnit via a validated dot-path update, in the same atomic fsBatch write as sellingPrice', () => {
+    assert.match(appContextSrc, /'unitRelationship\.sellingUnit': sellingUnitFieldUpdate/);
+    assert.match(appContextSrc, /isValidUnitRelationship\(candidateRelationship\)/);
+  });
+});
+
+describe('Finding C — canonical Product memory is authoritative before historical re-derivation', () => {
+  it('resolveCanonicalProductSellingMemory returns the canonical pair when both confirmed unit and remembered price exist', () => {
+    const product = {
+      sellingPrice: 480,
+      unitRelationship: {
+        units: [{ unit: 'Cx', factorFromPrevious: 0 }, { unit: 'Un', factorFromPrevious: 24 }],
+        sellingUnit: 'Cx',
+        confirmedAt: '2026-08-01T00:00:00.000Z',
+      },
+    };
+    const result = resolveCanonicalProductSellingMemory(product);
+    assert.deepEqual(result, { unit: 'Cx', sellingPrice: 480 });
+  });
+
+  it('I: next Contagem reads 480/Cx, not 480/Un — canonical memory alone determines the result, no historical re-derivation involved', () => {
+    const product = {
+      sellingPrice: 480,
+      unitRelationship: {
+        units: [{ unit: 'Cx', factorFromPrevious: 0 }, { unit: 'Un', factorFromPrevious: 24 }],
+        sellingUnit: 'Cx',
+        confirmedAt: '2026-08-01T00:00:00.000Z',
+      },
+    };
+    const result = resolveCanonicalProductSellingMemory(product);
+    assert.ok(result);
+    assert.equal(result!.unit, 'Cx');
+    assert.equal(result!.sellingPrice, 480);
+  });
+
+  it('R: returns null (historical fallback path preserved) when no confirmed selling unit exists', () => {
+    const result = resolveCanonicalProductSellingMemory({ sellingPrice: 50, unitRelationship: undefined });
+    assert.equal(result, null);
+  });
+
+  it('R: returns null (historical fallback path preserved) when no selling price has ever been remembered yet', () => {
+    const result = resolveCanonicalProductSellingMemory({
+      sellingPrice: undefined,
+      unitRelationship: { units: [{ unit: 'Cx', factorFromPrevious: 0 }], sellingUnit: 'Cx', confirmedAt: '2026-08-01T00:00:00.000Z' },
+    });
+    assert.equal(result, null);
+  });
+
+  it('structural: buildCatalogRow checks canonical memory before either historical tier', () => {
+    const buildCatalogRowMatch = periodicSrc.match(/const buildCatalogRow = \([\s\S]*?\n  \};/);
+    assert.ok(buildCatalogRowMatch, 'expected to find buildCatalogRow');
+    const body = buildCatalogRowMatch![0];
+    const canonicalIdx = body.indexOf('resolveCanonicalProductSellingMemory(product)');
+    const tier1Idx = body.indexOf("else if (confirmedSellingUnit && latestBatch)");
+    assert.ok(canonicalIdx > -1 && tier1Idx > -1);
+    assert.ok(canonicalIdx < tier1Idx, 'canonical-memory check must come before the historical batch tier');
+  });
+
+  it('structural: handleModeAToggle also checks canonical memory before its own historical tiers (never disagrees with buildCatalogRow)', () => {
+    assert.match(periodicSrc, /resolveCanonicalProductSellingMemory\(product\);\s*\n\s*if \(canonicalSellingMemory && canonicalSellingMemory\.unit === defaultReferenceUnit\)/);
+  });
+
+  it('J: structural — every AddStockView.tsx call site prefers canonical selling memory for the selling half, cost untouched', () => {
+    const occurrences = (addStockSrc.match(/resolveCanonicalProductSellingMemory\(/g) || []).length;
+    assert.equal(occurrences, 5, 'all five AddStockView.tsx call sites must apply the correction');
+  });
+
+  it('findLatestRememberedProductMemory itself is untouched — Finding C reorders priority, never removes the historical fallback', () => {
+    const fn = src('apps/tenant/src/lib/productMemoryPriceResolution.ts');
+    assert.match(fn, /export function findLatestRememberedProductMemory\(/);
+    assert.match(fn, /preferredSellingUnit\?: string/);
+  });
+});
+
+describe('Cross-check — full business scenario, both directions', () => {
+  const LITE_UN: UnitRelationship = {
+    units: [
+      { unit: 'Cx', factorFromPrevious: 0 },
+      { unit: 'Emb', factorFromPrevious: 4 },
+      { unit: 'Un', factorFromPrevious: 6 },
+    ],
+    sellingUnit: 'Un',
+    confirmedAt: '2026-08-01T00:00:00.000Z',
+  };
+
+  it('Row1=480/Cx then Row3=60/Un: current valuation 2,640 MZN; memory=60/Un; no Finding B exposure (unit coincides with prior confirmed Un)', () => {
+    const row1Resolved = resolveDefaultSellingConfigurationForRow; // sanity import check only
+    assert.ok(row1Resolved);
+    // Row1: 3 Cx deliberate @ 480/Cx (unit matches at edit time — no Finding A divergence)
+    // Row2: 3 Emb default, resolves to 300/Emb (3x6x50)
+    // Row3: 5 Un deliberate @ 60/Un (unit already Un — no Finding A divergence)
+    const row2Resolved = resolveDefaultSellingConfigurationForRowExport({ quantity: '3', unit: 'Emb' }, 'Un', 50, LITE_UN);
+    assert.ok(row2Resolved);
+    const { totalSellingValue } = normalizeStockCountItems([
+      { productName: 'Lite', quantity: '3', unit: 'Cx', costPrice: '0', sellingPrice: '480' },
+      { productName: 'Lite', quantity: '3', unit: 'Emb', costPrice: '0', sellingPrice: row2Resolved!.sellingPrice },
+      { productName: 'Lite', quantity: '5', unit: 'Un', costPrice: '0', sellingPrice: '60' },
+    ]);
+    assert.equal(totalSellingValue, 2640);
+
+    const entries: WorkingRowDeliberateEntry[] = [
+      { productName: 'Lite', sellingPrice: 480, unit: 'Cx', sellingPriceAutoFilled: false, sellingPriceEditSequence: 1 },
+      { productName: 'Lite', sellingPrice: 60, unit: 'Un', sellingPriceAutoFilled: false, sellingPriceEditSequence: 2 },
+    ];
+    const memory = selectSellingMemoryByProductName([], () => undefined, entries);
+    assert.deepEqual(memory.get('lite'), { sellingPrice: 60, sellingUnit: 'Un' });
+
+    const decision = decideExistingProductWrite({ sellingPrice: 50, unitRelationship: LITE_UN }, memory.get('lite')!);
+    assert.equal(decision.sellingUnitFieldUpdate, undefined, 'Un already matches the prior confirmed unit — coincidence masks Finding B here');
+  });
+
+  it('reversed order (Row3=60/Un first, Row1=480/Cx second): memory=480/Cx; Finding B now concretely exposed and correctly fixed', () => {
+    const entries: WorkingRowDeliberateEntry[] = [
+      { productName: 'Lite', sellingPrice: 60, unit: 'Un', sellingPriceAutoFilled: false, sellingPriceEditSequence: 1 },
+      { productName: 'Lite', sellingPrice: 480, unit: 'Cx', sellingPriceAutoFilled: false, sellingPriceEditSequence: 2 },
+    ];
+    const memory = selectSellingMemoryByProductName([], () => undefined, entries);
+    assert.deepEqual(memory.get('lite'), { sellingPrice: 480, sellingUnit: 'Cx' });
+
+    const decision = decideExistingProductWrite({ sellingPrice: 50, unitRelationship: LITE_UN }, memory.get('lite')!);
+    assert.equal(decision.sellingPriceChanged, true);
+    assert.equal(decision.sellingUnitFieldUpdate, 'Cx', 'this is the exact case that previously produced a silent 480 MZN/Un mislabel — now correctly writes Cx');
+
+    // Confirm the corrected read-side then reads it back correctly.
+    const correctedProduct = { sellingPrice: 480, unitRelationship: { ...LITE_UN, sellingUnit: 'Cx' } };
+    const canonical = resolveCanonicalProductSellingMemory(correctedProduct);
+    assert.deepEqual(canonical, { unit: 'Cx', sellingPrice: 480 });
+  });
+});
+
+function resolveDefaultSellingConfigurationForRowExport(
+  row: { quantity: string; unit: string },
+  productSellingUnit: string,
+  productSellingPrice: number,
+  relationship: UnitRelationship
+) {
+  return resolveDefaultSellingConfigurationForRow(row, productSellingUnit, productSellingPrice, relationship);
+}
+

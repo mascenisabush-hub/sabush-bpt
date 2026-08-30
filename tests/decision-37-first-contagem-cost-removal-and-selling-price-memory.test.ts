@@ -108,13 +108,20 @@ describe('AC-03/AC-04 — first-Contagem selling-price/unit memory: write side e
 });
 
 describe('AC-07/AC-08/AC-09 — selling price and purchase cost are independently write-gated (FR-85)', () => {
-  it('the existing-product selling-price update writes only Product.sellingPrice, never costPrice, and only on an actual change', () => {
+  it('the existing-product selling-price update writes only Product.sellingPrice (and, per Finding B\'s correction, unitRelationship.sellingUnit — the OTHER half of the same governed selling configuration, FR-84/§11), never costPrice, and only on an actual change', () => {
     const updateBlockMatch = appContextSrc.match(
-      /if \(type !== 'initial'\) \{\s*for \(const \[key, memory\] of sellingMemoryByProductName\)[\s\S]{0,700}?\n    \}/
+      /if \(type !== 'initial'\) \{\s*for \(const \[key, memory\] of sellingMemoryByProductName\)[\s\S]{0,3500}?\n    \}/
     );
     assert.ok(updateBlockMatch, 'the existing-product selling-price update block must be found');
     const block = updateBlockMatch![0];
-    assert.match(block, /product\.sellingPrice === memory\.sellingPrice\) continue;/);
+    // [Bug fix — Finding B, fresh audit] The single equality-check guard
+    // this assertion originally checked for was replaced with an
+    // explicit sellingPriceChanged/sellingUnitFieldUpdate pair, since
+    // the write now covers BOTH halves of the selling configuration
+    // independently — either can trigger the write, and each is
+    // computed by its own dedicated comparison, both still present.
+    assert.match(block, /product\.sellingPrice !== memory\.sellingPrice/);
+    assert.match(block, /if \(!sellingPriceChanged && sellingUnitFieldUpdate === undefined\) continue;/);
     assert.equal(block.includes('costPrice'), false);
   });
 
@@ -245,7 +252,7 @@ describe('AC-19/AC-20 — Business Worth and FR-67 are structurally unreachable 
   it('the existing-product selling-price update block does not reference productValuationTotal, normalizedTotalSellingValue, measuredBusinessWorth, or deriveCostContribution', () => {
     const forbidden = ['productValuationTotal', 'normalizedTotalSellingValue', 'measuredBusinessWorth', 'deriveCostContribution'];
     const updateBlockMatch = appContextSrc.match(
-      /if \(type !== 'initial'\) \{\s*for \(const \[key, memory\] of sellingMemoryByProductName\)[\s\S]{0,700}?\n    \}/
+      /if \(type !== 'initial'\) \{\s*for \(const \[key, memory\] of sellingMemoryByProductName\)[\s\S]{0,3500}?\n    \}/
     );
     assert.ok(updateBlockMatch, 'the existing-product selling-price update block must be found');
     const block = updateBlockMatch![0];

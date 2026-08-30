@@ -10,7 +10,7 @@ import { isValidUnitRelationship } from '../lib/unitRelationship';
 // Stock (AddStockView.tsx) — see that utility's own header comment for
 // why this is a shared utility, not duplicated per screen.
 import { checkPriceDeviation } from '../lib/priceDeviationCheck';
-import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
+import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanonicalProductSellingMemory } from '../lib/productMemoryPriceResolution';
 // [Business Worth Evolution — Decision 37, B.1 completion] Same import
 // InitialStockCountView.tsx already uses for its own read-only
 // relationship-chain display — reused as a pattern, not shared code,
@@ -686,7 +686,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
     const relationship = product.unitRelationship;
     const confirmedSellingUnit = isValidUnitRelationship(relationship) ? relationship!.sellingUnit : undefined;
-    if (confirmedSellingUnit && latestBatch) {
+    // [Bug fix — Finding C, fresh audit] Canonical Product selling
+    // memory (Product.sellingPrice + Product.unitRelationship.sellingUnit
+    // — kept correctly paired by recordStockCount's own Finding B fix)
+    // is checked FIRST, before either historical tier below, so a
+    // successfully remembered "last deliberately entered" configuration
+    // is never silently bypassed by an older, StockBatch-preferring or
+    // confirmed-unit/first-match heuristic. Already denominated in
+    // confirmedSellingUnit by construction — no conversion needed.
+    // Returns null (falls through to the existing tiers, unchanged) only
+    // when no confirmed sellingUnit exists yet, or no selling price has
+    // ever been remembered for this product at all.
+    const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
+    if (canonicalSellingMemory) {
+      unit = canonicalSellingMemory.unit;
+      sellingPrice = String(canonicalSellingMemory.sellingPrice);
+    } else if (confirmedSellingUnit && latestBatch) {
       const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', confirmedSellingUnit, relationship);
       if (resolved !== '') {
         unit = confirmedSellingUnit;
@@ -1772,24 +1787,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     let defaultReferencePrice = '';
     const product = products.find((p) => productKeyFor(p.name) === productKey);
     if (product && defaultReferenceUnit) {
-      const latestBatch = findMostRecentBatchForProduct(batches, product.id);
-      if (latestBatch) {
-        const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', defaultReferenceUnit, relationship);
-        if (resolved !== '') defaultReferencePrice = resolved;
+      // [Bug fix — Finding C, fresh audit] Same canonical-memory-first
+      // priority as buildCatalogRow's own resolution, above — checked
+      // before either historical tier, so this function's own "seeded
+      // from the SAME resolution... can never disagree" guarantee
+      // actually holds after Finding C's correction there.
+      const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
+      if (canonicalSellingMemory && canonicalSellingMemory.unit === defaultReferenceUnit) {
+        defaultReferencePrice = String(canonicalSellingMemory.sellingPrice);
       } else {
-        // [§45 Amendment FR-82; Implementation Authorization §2 item 5]
-        // No StockBatch exists for this product — same no-batch case
-        // buildCatalogRow's own new tier handles, above. Reuses the
-        // identical findLatestRememberedProductMemory resolution (not a
-        // second, independently-computed value) so the toggle-time
-        // default here and buildCatalogRow's own render-time default
-        // can never disagree, matching this function's own established
-        // "seeded from the SAME resolution" discipline for the
-        // batch-present case.
-        const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, defaultReferenceUnit);
-        if (memory) {
-          const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, defaultReferenceUnit, relationship);
+        const latestBatch = findMostRecentBatchForProduct(batches, product.id);
+        if (latestBatch) {
+          const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', defaultReferenceUnit, relationship);
           if (resolved !== '') defaultReferencePrice = resolved;
+        } else {
+          // [§45 Amendment FR-82; Implementation Authorization §2 item 5]
+          // No StockBatch exists for this product — same no-batch case
+          // buildCatalogRow's own new tier handles, above. Reuses the
+          // identical findLatestRememberedProductMemory resolution (not a
+          // second, independently-computed value) so the toggle-time
+          // default here and buildCatalogRow's own render-time default
+          // can never disagree, matching this function's own established
+          // "seeded from the SAME resolution" discipline for the
+          // batch-present case.
+          const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, defaultReferenceUnit);
+          if (memory) {
+            const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, defaultReferenceUnit, relationship);
+            if (resolved !== '') defaultReferencePrice = resolved;
+          }
         }
       }
     }
@@ -2572,7 +2597,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       const workingRowDeliberateEntries = allWorkingRows.map((row) => ({
         productName: row.productName,
         sellingPrice: Number(row.sellingPrice),
-        unit: row.unit,
+        // [Bug fix — Finding A, fresh audit] Must be the unit the
+        // deliberate sellingPrice is ACTUALLY denominated in, not the
+        // row's own (possibly since-changed) physical count unit — Rule
+        // 2 (applySellingConfigurationEditRules, above) deliberately
+        // preserves a deliberate row's own sellingPriceBasisUnit
+        // unchanged when only the physical unit is later edited, so the
+        // two can legitimately diverge. Reading row.unit here would
+        // silently reinterpret, e.g., a deliberate 480 MZN/Cx as 480
+        // MZN/Un the moment the Owner relabels that row's physical
+        // count to Un without touching the price — exactly what
+        // FR-91/FR-23 forbid. sellingPriceBasisUnit is only ever unset
+        // for a still-default row (never a deliberate one — Rule 1
+        // always sets it in the same write that sets
+        // sellingPriceAutoFilled: false), so falling back to row.unit
+        // is safe and correct for every non-deliberate row.
+        unit: row.sellingPriceBasisUnit ?? row.unit,
         sellingPriceAutoFilled: row.sellingPriceAutoFilled,
         sellingPriceEditSequence: row.sellingPriceEditSequence,
       }));

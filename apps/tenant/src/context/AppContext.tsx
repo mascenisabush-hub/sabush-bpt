@@ -4623,9 +4623,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       for (const [key, memory] of sellingMemoryByProductName) {
         const product = tempProducts.find((p) => p.name.trim().toLowerCase() === key);
         if (!product) continue; // defensive only — every submitted portion's product already exists in tempProducts by this point
-        if (product.sellingPrice === memory.sellingPrice) continue; // unchanged (or just set to this value above) — no write
+        const sellingPriceChanged = product.sellingPrice !== memory.sellingPrice;
+        // [Bug fix — Finding B, fresh audit] The remembered selling
+        // CONFIGURATION is price + unit together (FR-84/§11's own text;
+        // Rule 8 Assessment §12 rule 3's own "configuration" — never
+        // price alone). This existing-product write previously updated
+        // only `sellingPrice`, leaving `unitRelationship.sellingUnit`
+        // stale — so a deliberate `480 MZN/Cx` could later be silently
+        // read back as `480 MZN/Un` if the product's prior confirmed
+        // unit happened to be `Un`. Validated exactly like
+        // confirmProductUnitRelationship's own re-validation discipline,
+        // below — never trusts memory.sellingUnit un-checked: the
+        // product must already carry a valid, confirmed unitRelationship
+        // (isValidUnitRelationship), and the candidate sellingUnit must
+        // genuinely be a member of that SAME, already-established
+        // units[] chain (the same check re-run against a copy of the
+        // product's own relationship with only sellingUnit swapped) —
+        // this never restructures units[] or confirmedAt, only
+        // corrects which already-valid chain member is currently
+        // designated as the selling unit. Written via Firestore's own
+        // nested-field dot-path syntax so units[]/confirmedAt are left
+        // completely untouched, in the SAME atomic fsBatch write this
+        // function already uses for sellingPrice — never a second,
+        // separate Firestore operation (which would break this
+        // confirmation's own atomicity guarantee).
+        let sellingUnitFieldUpdate: string | undefined;
+        if (memory.sellingUnit && isValidUnitRelationship(product.unitRelationship)) {
+          const currentSellingUnit = product.unitRelationship!.sellingUnit;
+          const candidateRelationship: UnitRelationship = { ...product.unitRelationship!, sellingUnit: memory.sellingUnit };
+          const alreadyCurrent = currentSellingUnit?.trim().toLowerCase() === memory.sellingUnit.trim().toLowerCase();
+          if (!alreadyCurrent && isValidUnitRelationship(candidateRelationship)) {
+            sellingUnitFieldUpdate = memory.sellingUnit;
+          }
+        }
+        if (!sellingPriceChanged && sellingUnitFieldUpdate === undefined) continue; // neither half changed — no write
         fsBatch.update(doc(db, 'businesses', businessId, 'products', product.id), {
-          sellingPrice: memory.sellingPrice,
+          ...(sellingPriceChanged ? { sellingPrice: memory.sellingPrice } : {}),
+          ...(sellingUnitFieldUpdate !== undefined ? { 'unitRelationship.sellingUnit': sellingUnitFieldUpdate } : {}),
           updatedAt: new Date().toISOString(),
         });
       }
@@ -6309,28 +6343,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateDoc(doc(db, 'businesses', businessId, 'products', id), payload as any);
   };
 
-  // [Product Memory / UOM — Increment A] The single explicit-confirmation
-  // write path for a product's unit relationship — BDR-0012 Decision 14's
-  // "the owner may review or edit any remembered Product Memory
-  // configuration at any time" action, distinct from the automatic
-  // new-product-creation paths in addStockBatch/addMultipleStockBatches/
-  // recordStockCount above (which only ever set unitRelationship at the
-  // moment a brand-new Product is created, never on an existing one).
-  // This function is the ONLY code path in this file that can change an
-  // EXISTING product's unitRelationship — reusing the existing,
-  // unmodified updateProduct above rather than introducing a second
-  // Firestore write mechanism. Always re-validates via
-  // isValidUnitRelationship immediately before writing (never trusts a
-  // caller-supplied value, UI-layer validation notwithstanding) and
-  // throws rather than silently proceeding or silently discarding an
-  // invalid candidate — consistent with confirmUnitRelationship's own
-  // "never persists an invalid configuration" contract in
-  // lib/unitRelationship.ts. Callers are responsible for invoking this
-  // only in response to an explicit, deliberate owner action (e.g. a
-  // catalog "confirm unit relationship" screen) — this function has no
-  // way to distinguish a deliberate reconfiguration from an accidental
-  // call, so that discipline lives entirely in the caller, exactly as
-  // it already does for updateProduct itself.
+  // [Product Memory / UOM — Increment A] The single explicit-
+  // reconfiguration write path for a product's unit relationship —
+  // BDR-0012 Decision 14's "the owner may review or edit any remembered
+  // Product Memory configuration at any time" action, distinct from the
+  // automatic new-product-creation paths in addStockBatch/
+  // addMultipleStockBatches/recordStockCount above (which only ever set
+  // unitRelationship at the moment a brand-new Product is created, never
+  // on an existing one). [Bug fix — Finding B, fresh audit] No longer
+  // the ONLY code path that can touch an existing product's
+  // unitRelationship: recordStockCount's own existing-product
+  // selling-memory write (above) now also updates
+  // unitRelationship.sellingUnit specifically — via a narrow,
+  // re-validated Firestore dot-path field update that can only ever
+  // reassign which already-established units[] chain member is
+  // designated the selling unit, never restructure units[] or
+  // confirmedAt. This function remains the ONLY path that can change
+  // the STRUCTURE of an existing product's unit relationship (the
+  // units[] chain itself, confirmedAt) — the explicit, deliberate,
+  // Owner-initiated full-reconfiguration action BDR-0012 Decision 14
+  // describes. Always re-validates via isValidUnitRelationship
+  // immediately before writing (never trusts a caller-supplied value,
+  // UI-layer validation notwithstanding) and throws rather than
+  // silently proceeding or silently discarding an invalid candidate —
+  // consistent with confirmUnitRelationship's own "never persists an
+  // invalid configuration" contract in lib/unitRelationship.ts. Callers
+  // are responsible for invoking this only in response to an explicit,
+  // deliberate owner action (e.g. a catalog "confirm unit relationship"
+  // screen) — this function has no way to distinguish a deliberate
+  // reconfiguration from an accidental call, so that discipline lives
+  // entirely in the caller, exactly as it already does for
+  // updateProduct itself.
   const confirmProductUnitRelationship = async (productId: string, candidate: UnitRelationshipProposal) => {
     const confirmed = confirmUnitRelationship(candidate);
     if (!confirmed) {

@@ -10,7 +10,7 @@ import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } fr
 import { type SupplierWordingCandidate, detectSupplierWordingContradictions } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognitionAsync, resolveScanRowSupplierWordingAsync } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
-import { resolveUnitAwarePrice, findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
+import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanonicalProductSellingMemory } from '../lib/productMemoryPriceResolution';
 import { findSimilarProducts } from '../lib/productNameSimilarity';
 // [Manual data-entry error investigation, Finding 3] Shared with
 // Contagem (PeriodicStockCountView.tsx) — see that file's own header
@@ -414,6 +414,21 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           // instead of the generic defaults.
           if (match.costPrice != null) initialCost = String(match.costPrice);
           if (match.sellingPrice != null) initialSell = String(match.sellingPrice);
+        }
+        // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical
+        // Product selling memory (Product.sellingPrice +
+        // Product.unitRelationship.sellingUnit, correctly kept paired by
+        // recordStockCount's own Finding B fix) overrides the SELLING
+        // half above whenever it exists — never bypassed by the
+        // historical re-derivation's own older, confirmed-unit/first-
+        // match tie-break. Cost is deliberately left exactly as set
+        // above, from the same historical `memory`/`match.costPrice`
+        // fallback — cost has its own, entirely separate governance
+        // (FR-67/FR-85) this correction does not touch.
+        const canonicalSellingMemory = resolveCanonicalProductSellingMemory(match);
+        if (canonicalSellingMemory) {
+          initialSell = String(canonicalSellingMemory.sellingPrice);
+          initialUnit = canonicalSellingMemory.unit;
         }
       }
     }
@@ -1157,6 +1172,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       if (product.costPrice != null) newCost = String(product.costPrice);
       if (product.sellingPrice != null) newSell = String(product.sellingPrice);
     }
+    // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical Product
+    // selling memory overrides newSell/newUnit above whenever it exists
+    // — see createEmptyRow's own identical fix and comment, above, for
+    // the full rationale. newCost deliberately left untouched.
+    const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
+    if (canonicalSellingMemory) {
+      newSell = String(canonicalSellingMemory.sellingPrice);
+      newUnit = canonicalSellingMemory.unit;
+    }
     return {
       costPrice: newCost || undefined,
       sellingPrice: newSell || undefined,
@@ -1258,6 +1282,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   const getRememberedPriceForRow = (row: StockRowItem, field: 'cost' | 'selling'): number | null => {
     const matched = products.find(p => p.name.trim().toLowerCase() === row.productName.trim().toLowerCase());
     if (!matched) return null;
+    // [Bug fix — Finding C, fresh audit, FR-89–FR-94] For the 'selling'
+    // field specifically, canonical Product selling memory is
+    // authoritative when available — the price-deviation warning must
+    // compare against the SAME configuration the Owner's own last
+    // deliberate Contagem entry established, not a possibly-disagreeing
+    // historical re-derivation. 'cost' is untouched — unaffected by
+    // this correction.
+    if (field === 'selling') {
+      const canonicalSellingMemory = resolveCanonicalProductSellingMemory(matched);
+      if (canonicalSellingMemory) {
+        const resolved = resolveUnitAwarePrice(canonicalSellingMemory.sellingPrice, canonicalSellingMemory.unit, row.unit, matched.unitRelationship);
+        return resolved === '' ? null : parseFloat(resolved);
+      }
+    }
     const memory = findLatestRememberedProductMemory(
       matched.id,
       matched.name,
@@ -1581,7 +1619,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     let costPriceBasisUnit = row.costPriceBasisUnit;
     let sellingPriceBasisUnit = row.sellingPriceBasisUnit;
     if (memory) {
-      const resolvedSell = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, row.unit, matchedProduct.unitRelationship);
+      // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical
+      // Product selling memory is the SOURCE for the selling-price
+      // conversion into row.unit whenever it exists — never the
+      // possibly-disagreeing historical `memory.sellingPrice`/`.unit`.
+      // Cost conversion below is untouched, still sourced from `memory`
+      // — cost has its own, entirely separate governance this
+      // correction does not touch.
+      const canonicalSellingMemory = resolveCanonicalProductSellingMemory(matchedProduct);
+      const sellSource = canonicalSellingMemory ?? { sellingPrice: memory.sellingPrice, unit: memory.unit };
+      const resolvedSell = resolveUnitAwarePrice(sellSource.sellingPrice, sellSource.unit, row.unit, matchedProduct.unitRelationship);
       if (resolvedSell !== '') {
         sellingPrice = resolvedSell;
         sellingPriceAutoFilled = true;
@@ -1743,7 +1790,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           isValidUnitRelationship(matched.unitRelationship) ? matched.unitRelationship?.sellingUnit : undefined
         );
         if (memory) {
-          sellingPrice = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, unit, matched.unitRelationship);
+          // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical
+          // Product selling memory is the SOURCE for the selling-price
+          // conversion whenever it exists — never the possibly-
+          // disagreeing historical `memory.sellingPrice`/`.unit`. Cost
+          // conversion below is untouched, still sourced from `memory`.
+          const canonicalSellingMemory = resolveCanonicalProductSellingMemory(matched);
+          const sellSource = canonicalSellingMemory ?? { sellingPrice: memory.sellingPrice, unit: memory.unit };
+          sellingPrice = resolveUnitAwarePrice(sellSource.sellingPrice, sellSource.unit, unit, matched.unitRelationship);
           if (!costPrice) costPrice = resolveUnitAwarePrice(memory.costPrice, memory.unit, unit, matched.unitRelationship);
         } else {
           if (!costPrice && matched.costPrice != null) costPrice = String(matched.costPrice);
