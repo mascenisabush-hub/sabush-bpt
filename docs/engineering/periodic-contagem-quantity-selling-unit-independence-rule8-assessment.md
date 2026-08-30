@@ -921,3 +921,104 @@ pointing to the section/Finding that supports it in full:
   `periodic-stock-multi-portion-valuation.test.ts`,
   `periodic-stock-add-portion.test.ts`,
   `decision-37-first-contagem-cost-removal-and-selling-price-memory.test.ts`.
+
+---
+
+## 15. Addendum — Persisted Selling-Price Basis Unit (Option C)
+
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 30
+August 2026.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern for a post-signature Product Architect decision against an
+already-signed governance document — matching the exact precedent set
+by this Assessment's own §14/Product Architect Signature block
+remaining untouched above, and by the Implementation Authorization's
+own §9. Nothing above this line is altered by this addendum.
+
+**Background.** Post-implementation audit work (conducted after this
+Assessment's own original signing) discovered that `StockCountItem.unit`
+is already, in two separately-shipped, currently-live consumers, relied
+upon as the selling price's own denominator when reading history —
+`ProductDetailModal.tsx`'s own historical price display
+(`formatCurrency(item.sellingPrice)/{item.unit}`), and
+`findLatestRememberedProductMemory`'s own historical-record reading (its
+own header comment: *"e.g. some Cx, some Un, each independently
+priced"*). Neither consumer was designed with the possibility that a
+deliberate portion's physical unit could later diverge from its own
+price's true basis (Rule 2, `applySellingConfigurationEditRules`) — a
+possibility FR-89–FR-94 itself introduced.
+
+**Finding (revises this Assessment's own original Finding 4/6
+conclusion).** §4/§5 of this Assessment (above) concluded no
+persisted-`StockCount.items`-schema change was necessary, based on the
+working-row/draft layer alone satisfying every requirement then under
+consideration. Fresh audit work has since shown this conclusion does
+not extend to *historical reconstruction* of a diverged portion once
+the working session ends — the persisted `StockCountItem` record itself
+loses the distinction, exactly where the two already-shipped consumers
+named above need it.
+
+**Governance basis for revisiting this conclusion, without reopening
+the Specification.** FR-94 (signed, `periodic-contagem-quantity-selling-unit-independence-amendment.md`)
+states directly: *"Whether the smallest correct implementation
+mechanism is a persistence-layer change, a pure display/valuation-layer
+derivation, or some combination is explicitly a Rule-8 question... this
+FR fixes only that no schema change is presumed necessary, not the
+exact mechanism."* This addendum exercises that same reserved
+authority a second time — the first time having produced the
+working-row schema growth in §4/Finding 4 above; this time, the
+confirmed-record layer.
+
+**Mechanism decision.** A new, optional field is added to
+`StockCountItem`: `sellingPriceBasisUnit?: string` — the unit the
+item's own `sellingPrice` is actually denominated in at confirmation
+time. Mirrors `valuationMode`'s own already-established, already-shipped
+pattern exactly: display/audit-only, never read by any valuation
+calculation (`sellingValue`/`totalSellingValue` remain computed
+identically, `quantity × sellingPrice`, regardless of this field's
+presence or value), never backfilled onto pre-existing records,
+absent-safe for every consumer.
+
+**Backward compatibility, stated precisely per the Product Architect's
+own explicit instruction:** a record written *after* this field exists
+carries `sellingPriceBasisUnit`; a record written *before* it existed
+simply lacks the field and is never modified to add it — every
+consumer's own fallback (`item.sellingPriceBasisUnit ?? item.unit`)
+means an old record continues to be read exactly as it is read today,
+via `item.unit` alone. No migration, no backfill, no reprocessing of
+historical data is required or authorized by this addendum.
+
+**Source.** `normalizeStockCountItems`/`tallyStockCountRows` populate
+it from `row.sellingPriceBasisUnit ?? row.unit` — the exact same source
+expression this Assessment's own Finding 1 (via the Implementation
+Plan's own realization of it) already established for the working-row/
+memory-write layer, now extended to the persisted layer too.
+
+**Consumers to update, non-breaking in every case:**
+- `ProductDetailModal.tsx` — reads `item.sellingPriceBasisUnit ??
+  item.unit` for its own selling-price display line only; its own
+  quantity display line (`{item.quantity} {item.unit}`) is unaffected
+  and untouched.
+- `findLatestRememberedProductMemory` — prefers
+  `item.sellingPriceBasisUnit` when present, falls back to `item.unit`
+  for any record predating this field.
+
+**What does NOT change:** `StockCountItem.unit`'s own meaning
+(physical/counting unit, unambiguous, unchanged); `quantity`/`unit`'s
+own invariant (FR-90); the current-Contagem valuation arithmetic
+(already correct, untouched); `Product.sellingPrice`/
+`unitRelationship.sellingUnit` (this Assessment's own Finding 7,
+unaffected); the Contagem UI's own caption fix (separately identified,
+not part of this addendum's own scope, not authorized by it).
+
+**Verdict: READY AFTER IMPLEMENTATION PLAN AMENDMENT.**
+
+**Product Architect acceptance, recorded 30 August 2026.** The Product
+Architect has accepted this §15 addendum, in the same act as accepting
+Implementation Authorization §10 (the corresponding, final governance
+gate for Option C) — see that document's own §10 signature block for
+the full, verbatim decision text. This §15 addendum's own analysis,
+findings, and mechanism decision (above) are unaltered by this
+acceptance record; nothing above this line is rewritten.
+

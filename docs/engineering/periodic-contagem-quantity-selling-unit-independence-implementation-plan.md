@@ -867,3 +867,78 @@ is signed.
   re-inspected directly against this Plan's own baseline HEAD.
 - No application code, test, or governance file was modified while
   drafting this Plan.
+
+---
+
+## 20. Addendum — Persisted Selling-Price Basis Unit (Option C)
+
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 30
+August 2026.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§19 above, and the Verification section immediately
+preceding this addendum, are unaltered.
+
+**Revises §5.3's own prior conclusion** ("No change" to
+`StockCount.items`' persisted schema) — per Rule 8 Assessment §15
+addendum (this same governance chain), a narrow, additive exception is
+now specified, exercising the exact discretion FR-94's own signed text
+reserves to Rule 8.
+
+**Exact schema change:**
+
+```ts
+export interface StockCountItem {
+  // ...existing fields, unchanged...
+  sellingPriceBasisUnit?: string; // display/audit-only — never read by
+  // any valuation calculation; see Rule 8 Assessment §15 addendum for
+  // the full rationale.
+}
+```
+
+**Exact functions changed:**
+- `normalizeStockCountItems`/`tallyStockCountRows` (`stockCount.ts`) —
+  add `sellingPriceBasisUnit: row.sellingPriceBasisUnit ?? row.unit` to
+  each item's returned shape.
+- `ProductDetailModal.tsx` — the existing selling-price display line
+  reads `item.sellingPriceBasisUnit ?? item.unit` instead of `item.unit`
+  alone. The existing quantity display line is untouched.
+- `findLatestRememberedProductMemory`
+  (`productMemoryPriceResolution.ts`) — the matched historical item's
+  own basis-unit resolution prefers `item.sellingPriceBasisUnit`, falls
+  back to `item.unit`.
+
+**Backward compatibility (restated verbatim per the Product Architect's
+own explicit instruction):** new records get `sellingPriceBasisUnit`;
+old records without it continue using `item.unit`, exactly as they are
+read today. No migration, no backfill.
+
+**Explicitly out of scope for this addendum:** the Contagem UI caption
+fix (`PeriodicStockCountView.tsx:3851, 4287`) is a separate,
+already-identified, not-yet-authorized correction — a distinct decision
+point (display-only, no schema dependency), not authorized by this
+addendum even if bundled into the same implementation pass for
+efficiency.
+
+**Test requirements (minimum):**
+1. `sellingPriceBasisUnit` round-trips correctly through
+   `normalizeStockCountItems`/`tallyStockCountRows` for a diverged row
+   (`480/Cx` deliberately entered, physical unit later changed to `Un`).
+2. A pre-existing `StockCountItem` (no `sellingPriceBasisUnit` field at
+   all) is read correctly by both updated consumers, falling back to
+   `.unit`.
+3. `ProductDetailModal`'s quantity display line is unaffected — still
+   reads `.unit` only.
+4. No existing valuation total changes for any scenario in the existing
+   FR-89–FR-94 test suite (regression).
+
+**Verdict: READY AFTER IMPLEMENTATION AUTHORIZATION AMENDMENT.**
+
+**Product Architect acceptance, recorded 30 August 2026.** The Product
+Architect has accepted this §20 addendum, in the same act as accepting
+Implementation Authorization §10 (the corresponding, final governance
+gate for Option C) — see that document's own §10 signature block for
+the full, verbatim decision text. This §20 addendum's own schema
+specification, function list, and test requirements (above) are
+unaltered by this acceptance record; nothing above this line is
+rewritten.

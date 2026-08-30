@@ -439,3 +439,120 @@ Authorization (above) are unmodified by this section — confirmed by
 checksum immediately before and after this section was added. This §9
 is the sole content added by this acceptance.
 
+---
+
+## 10. Addendum — Authorization to Extend `StockCountItem`'s Persisted
+## Schema (Option C)
+
+**Status: ✅ AUTHORIZED. ACCEPTED AND SIGNED BY THE PRODUCT ARCHITECT,
+SABUSHIMIKE MASCENI, 30 August 2026.**
+
+Appended per this repository's own established pattern for recording a
+Product Architect decision against an already-signed Implementation
+Authorization without rewriting its original, signed content — the same
+pattern §9, above, already established. §1–§9, above, remain
+byte-for-byte as originally signed; nothing in them is altered by this
+section.
+
+**Background.** Rule 8 Assessment §15 addendum and Implementation Plan
+§20 addendum (this same governance chain) together specify a narrow,
+additive extension to `StockCountItem`'s persisted schema — a
+`sellingPriceBasisUnit?: string` field, mirroring `valuationMode`'s own
+already-established, display/audit-only pattern — to correctly preserve
+the historical denomination of a deliberately-priced portion's selling
+price, for two already-shipped consumers (`ProductDetailModal.tsx`,
+`findLatestRememberedProductMemory`) that were never designed for the
+possibility of that denomination diverging from the row's own physical
+unit.
+
+**Extends §2's "Exact Authorized Changes" to additionally authorize:**
+
+7. **`StockCountItem`** (`types.ts`) — add
+   `sellingPriceBasisUnit?: string`, display/audit-only, mirroring
+   `valuationMode`'s own established pattern exactly. **This is the
+   one, narrow exception to §2's own prior statement that no change to
+   `StockCount.items`' persisted schema was authorized** — that
+   statement is superseded only to this exact extent, per Rule 8
+   Assessment §15 addendum and Implementation Plan §20 addendum, both
+   referenced above.
+8. **`normalizeStockCountItems`/`tallyStockCountRows`** (`stockCount.ts`)
+   — populate the new field from `row.sellingPriceBasisUnit ??
+   row.unit`.
+9. **`ProductDetailModal.tsx`** — read `item.sellingPriceBasisUnit ??
+   item.unit` for the selling-price display line only.
+10. **`findLatestRememberedProductMemory`**
+    (`productMemoryPriceResolution.ts`) — prefer
+    `item.sellingPriceBasisUnit`, fall back to `item.unit`.
+
+**Backward compatibility, authorized exactly as specified and no other
+way:** new records carry the new field; old records without it are
+never modified, never backfilled, and continue to be read via
+`item.unit` alone by every consumer's own fallback. No migration is
+authorized or required.
+
+**Explicitly NOT authorized by this addendum — restated with maximum
+precision, per the Product Architect's own explicit instruction:**
+- No change to `Product`'s schema, in any respect.
+- No change to `StockCountWorkingRow` beyond what §2 item 1 already
+  authorized.
+- No change to Add Stock (`AddStockView.tsx`) in any respect.
+- No change to Initial Stock (`InitialStockCountView.tsx`) in any
+  respect.
+- No change to FR-67/cost-basis logic
+  (`fr67CostBasisConversion.ts`) in any respect.
+- No change to the Contagem UI caption
+  (`PeriodicStockCountView.tsx:3851, 4287`) — a separate,
+  already-identified, not-yet-authorized correction, not part of this
+  addendum's own scope.
+- No other Contagem redesign, restructuring, or behavior change of any
+  kind beyond the four items enumerated above.
+
+**This addendum, once signed, authorizes implementation of exactly this
+narrow schema extension and its four named consumer updates — nothing
+else. Implementation may not begin until this addendum is explicitly
+accepted and signed, separately from its drafting here.**
+
+**Product Architect decision, recorded verbatim:**
+
+> Product Architect accepts Implementation Authorization §10 — the
+> narrow extension of `StockCountItem`'s persisted schema to add
+> `sellingPriceBasisUnit?: string`, and the four specifically named
+> consumer updates (`normalizeStockCountItems`/`tallyStockCountRows`,
+> `ProductDetailModal.tsx`, `findLatestRememberedProductMemory`) —
+> exactly as specified above, and exactly as specified in the
+> corresponding Rule 8 Assessment §15 addendum and Implementation Plan
+> §20 addendum. `StockCountItem.unit` remains the physical counting
+> unit, unchanged. The new field records the unit in which
+> `sellingPrice` is actually denominated, for historical/audit purposes
+> only — no valuation calculation may depend on it. Backward
+> compatibility is preserved exactly as specified: new records carry
+> the field; old records without it continue being read via
+> `item.sellingPriceBasisUnit ?? item.unit`, with no migration or
+> backfill. This acceptance authorizes no change to Product's schema,
+> no change to Add Stock, no change to Initial Stock, no change to
+> FR-67, no change to the Contagem UI caption, and no other Contagem
+> redesign or scope expansion beyond the four named consumer updates.
+
+**Decision:** I APPROVE AND SIGN IMPLEMENTATION AUTHORIZATION §10
+(OPTION C — PERSISTED SELLING-PRICE BASIS UNIT)
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Date:** 30 August 2026
+
+This signature authorizes implementation of exactly the narrow scope
+recorded in this §10 addendum — the `sellingPriceBasisUnit?: string`
+field and its four named consumer updates — and nothing beyond it. It
+does not reopen, alter, or reinterpret §1–§9 above, the signed Rule 8
+Assessment, the signed Implementation Plan, or the signed Specification
+amendment, all of which remain byte-for-byte as they were before this
+signature.
+
+**Governance boundary, restated:** the signed Specification amendment,
+the signed Rule 8 Assessment's own §1–§14 and Product Architect
+Signature, the signed Implementation Plan's own §1–§19 and Product
+Architect Signature, and §1–§9 of this Implementation Authorization are
+all unmodified by this section — confirmed by checksum immediately
+before and after this signature was recorded. This signature block is
+the sole content added to §10 by this acceptance.
+
