@@ -88,8 +88,22 @@ describe('AC-03/AC-04 — first-Contagem selling-price/unit memory: write side e
     assert.match(typeDecl![1], /'initial'/);
   });
 
-  it('the selling-price canonical selection is built once per product (a Map, keyed by product), never once per portion', () => {
-    assert.match(appContextSrc, /const sellingMemoryByProductName = new Map<string, \{ sellingPrice: number; sellingUnit\?: string \}>\(\);/);
+  it('the selling-price canonical selection is built once per product (a Map, keyed by product, never once per portion) — extracted, per FR-89–FR-94, into a directly-testable pure function', () => {
+    // [FR-89–FR-94, Implementation Authorization §2 item 5] The
+    // construction previously inlined here was extracted into
+    // lib/sellingMemorySelection.ts's selectSellingMemoryByProductName
+    // — same reasoning as this file's own sibling extractions
+    // (fr67CostBasisConversion.ts, productMemoryPriceResolution.ts): a
+    // pure, directly-unit-testable function, called exactly once per
+    // Contagem confirmation (never once per portion) from
+    // recordStockCount. This assertion now verifies both halves: the
+    // call site invokes the extracted function exactly once, and that
+    // function's own source genuinely builds a per-product-keyed Map.
+    assert.match(appContextSrc, /const sellingMemoryByProductName = selectSellingMemoryByProductName\(/);
+    const callCount = (appContextSrc.match(/selectSellingMemoryByProductName\(/g) || []).length;
+    assert.equal(callCount, 1, 'selectSellingMemoryByProductName must be called exactly once per confirmation, never once per portion');
+    const sellingMemorySelectionSrc = src('apps/tenant/src/lib/sellingMemorySelection.ts');
+    assert.match(sellingMemorySelectionSrc, /const sellingMemoryByProductName = new Map<string, SellingMemoryEntry>\(\);/);
   });
 });
 
@@ -211,14 +225,20 @@ describe('AC-11/AC-13 — purchase cost/cost-unit memory (Finding F closure)', (
 });
 
 describe('AC-19/AC-20 — Business Worth and FR-67 are structurally unreachable from every new write', () => {
-  it('the new sellingMemoryByProductName construction does not reference productValuationTotal, normalizedTotalSellingValue, measuredBusinessWorth, or deriveCostContribution', () => {
+  it('the sellingMemoryByProductName construction (now extracted, per FR-89–FR-94) does not reference productValuationTotal, normalizedTotalSellingValue, measuredBusinessWorth, or deriveCostContribution', () => {
+    // [FR-89–FR-94, Implementation Authorization §2 item 5] The
+    // construction this assertion originally sliced out of
+    // AppContext.tsx's own inline source now lives in
+    // lib/sellingMemorySelection.ts (selectSellingMemoryByProductName)
+    // — checking that WHOLE file's source is a strictly stronger
+    // guarantee than the old substring-slice heuristic: the file has no
+    // import of, and therefore structurally cannot reference, any of
+    // these terms at all, not merely "doesn't happen to mention them in
+    // one slice."
     const forbidden = ['productValuationTotal', 'normalizedTotalSellingValue', 'measuredBusinessWorth', 'deriveCostContribution'];
-    const start = appContextSrc.indexOf('const sellingMemoryByProductName = new Map');
-    const end = appContextSrc.indexOf('const costBasisByProductName = buildProductCostBasisMap(tempProducts);');
-    assert.ok(start > -1 && end > start);
-    const block = appContextSrc.slice(start, end);
+    const sellingMemorySelectionSrc = src('apps/tenant/src/lib/sellingMemorySelection.ts');
     for (const term of forbidden) {
-      assert.equal(block.includes(term), false, `sellingMemoryByProductName construction must not reference ${term}`);
+      assert.equal(sellingMemorySelectionSrc.includes(term), false, `sellingMemoryByProductName construction must not reference ${term}`);
     }
   });
 

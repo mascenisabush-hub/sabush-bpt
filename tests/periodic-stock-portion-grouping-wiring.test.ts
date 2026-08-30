@@ -73,9 +73,18 @@ describe('PeriodicStockCountView.tsx — requirement 5/no duplicate-product dete
     // must never set it as a side effect of a productName edit — that
     // would silently collapse this into duplicate-detection/auto-
     // resolution behavior this checkpoint must not introduce.
+    //
+    // [FR-89–FR-94, Implementation Authorization §2 items 3–4] Narrowed
+    // from a bare `/productId/` substring ban to an assignment-specific
+    // pattern: updateManualRow now legitimately READS currentRow.productId
+    // (to resolve the row's own associated product for the deliberate-
+    // vs-default selling-configuration rules, §6.1) without ever WRITING
+    // it onto the row — this assertion's own original comment already
+    // states the actual property being protected is "never set," not
+    // "never read," so the check is corrected to test that directly.
     const updateManualRowMatch = source.match(/const updateManualRow = \([\s\S]*?\n  \};/);
     assert.ok(updateManualRowMatch, 'expected to find updateManualRow');
-    assert.doesNotMatch(updateManualRowMatch![0], /productId/);
+    assert.doesNotMatch(updateManualRowMatch![0], /productId:\s|\.productId\s*=/, 'updateManualRow must never assign/write productId, though reading it to resolve the row\'s own product is permitted');
   });
 });
 

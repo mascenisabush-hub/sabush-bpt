@@ -236,3 +236,63 @@ export function sumModeAPortionValuations(valuations: ContagemPortionValuation[]
   }
   return Number(total.toFixed(2));
 }
+
+// [FR-89–FR-94 — Periodic Contagem Quantity-Unit / Selling-Unit
+// Independence. Governed by docs/specs/periodic-contagem-quantity-selling-unit-independence-amendment.md
+// (FR-89–FR-94), docs/engineering/periodic-contagem-quantity-selling-unit-independence-rule8-assessment.md
+// (Findings 1–10), and docs/engineering/periodic-contagem-quantity-selling-unit-independence-implementation-plan.md
+// §6.1 (✅ signed Implementation Authorization, 30 August 2026).]
+//
+// Resolves a single physical quantity entry's own sellingPrice/unit from
+// the product's confirmed default selling configuration, for a row that
+// is still following that default (sellingPriceAutoFilled !== false) —
+// the automatic, no-Mode-A-toggle-required resolution FR-89 requires.
+// Callers MUST NOT invoke this for a row the Owner has deliberately
+// priced; the caller's own sellingPriceAutoFilled check is what decides
+// that, exactly as FR-91/FR-92 require (a default resolution must never
+// overwrite a deliberate entry) — this function itself has no opinion
+// on deliberateness, it only computes what the default WOULD be.
+//
+// Reuses deriveModeAPortionValuations (immediately above, unmodified)
+// for the actual arithmetic — this function is a thin single-portion
+// adapter, not a second conversion engine (Implementation Plan §15,
+// Reuse-First Confirmation).
+//
+// [Implementation Authorization §1 item 5 / Plan §6.1, corrected per the
+// Product Architect's own acceptance audit] deriveModeAPortionValuations
+// returns a derivedSellingPrice denominated in the PORTION's own unit —
+// i.e. row.unit here, never referenceUnit/productSellingUnit (see that
+// function's own header comment: "reference 1,250 MZN/Cx, 1 Cx = 24 Un
+// -> 52.083333 MZN/Un" — the derived figure is per-Un, the PORTION'S
+// unit, not per-Cx, the reference unit). sellingPriceBasisUnit below is
+// therefore always row.unit — labelling the returned price with the
+// product's reference selling unit instead would mislabel exactly the
+// kind of number FR-91/FR-23 exist to protect.
+export function resolveDefaultSellingConfigurationForRow(
+  row: { quantity: string; unit: string },
+  productSellingUnit: string,
+  productSellingPrice: number,
+  relationship: UnitRelationship | undefined | null
+): { sellingPrice: string; sellingPriceBasisUnit: string } | null {
+  const quantity = parseFloat(row.quantity) || 0;
+  const [result] = deriveModeAPortionValuations(
+    [{ id: 'default-resolution', unit: row.unit, quantity }],
+    productSellingUnit,
+    productSellingPrice,
+    relationship
+  );
+  // FR-89's own narrow exception (mirrors getConversionFactor's own
+  // existing null contract exactly): no valid, confirmed relationship
+  // bridges productSellingUnit and this row's own unit — the caller
+  // must leave sellingPrice blank for manual Owner entry, never invent
+  // a value. sellingPriceAutoFilled stays true in that case (no
+  // deliberate act occurred, only an unresolvable unit) — decided by
+  // the caller, not here.
+  if (result.derivedSellingPrice === null) return null;
+  return {
+    sellingPrice: String(result.derivedSellingPrice),
+    // The PORTION's own unit — see this function's own header note,
+    // above. Never productSellingUnit.
+    sellingPriceBasisUnit: row.unit,
+  };
+}

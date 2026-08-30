@@ -23,6 +23,7 @@ import {
 import { auth, db, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
 import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
+import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
 import {
@@ -382,6 +383,30 @@ interface RecordStockCountParams {
   // authoritatively re-verifies whichever path is claimed regardless of
   // what the caller asserts here.
   correctionKind?: 'owner-correction' | 'superadmin-authorized-recovery';
+  // [FR-89–FR-94, Implementation Authorization §2 item 5 / Plan §6.3,
+  // §10] Optional, un-persisted — never written to any Firestore
+  // document. A flat snapshot of every working row's own deliberate-vs-
+  // default selling-configuration state at the moment of confirmation,
+  // supplied by the caller (PeriodicStockCountView.tsx's own confirm
+  // handler) so sellingMemoryByProductName (below) can select the
+  // correct "last deliberately entered" winner per product without
+  // reading it off the already-normalized `items` array (which carries
+  // no such marker — normalizeStockCountItems' own explicit-literal
+  // field list never includes it). Threaded exactly like
+  // costBasisByProductName's own existing optional-parameter pattern
+  // (FR-67/§25) — an additional, un-persisted piece of context, not a
+  // second source of truth for anything already in `items`. Absent
+  // (e.g. a call site not yet updated, or Initial Stock, which never
+  // passes this) falls back to today's exact pre-existing tie-break
+  // behavior, unchanged — see sellingMemoryByProductName's own
+  // construction, below.
+  workingRowDeliberateEntries?: Array<{
+    productName: string;
+    sellingPrice: number;
+    unit: string;
+    sellingPriceAutoFilled?: boolean;
+    sellingPriceEditSequence?: number;
+  }>;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -4294,7 +4319,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPendingBusinessWorthCorrection(null);
   };
 
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -4372,46 +4397,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     // [§45 Amendment FR-81/FR-82/FR-83; Implementation Authorization §2
-    // items 2-3] Selects, once per product (never once per portion —
-    // this Map is consulted, not re-derived, by the per-item loop
-    // below), the canonical selling price/unit to remember as durable
-    // Product Memory. Mirrors unitRelationshipByProductName's own
-    // per-product grouping immediately above, and
-    // findLatestRememberedProductMemory's own established
-    // preferredSellingUnit tie-break precedent
-    // (productMemoryPriceResolution.ts): prefer whichever submitted
-    // portion's unit matches the product's confirmed selling unit —
-    // this Contagem's own new candidate (unitRelationshipByProductName,
-    // for a genuinely new product establishing it for the first time)
-    // or the existing Product's already-confirmed one — falling back to
-    // the first submitted portion for that product when no confirmed
-    // selling unit is known either way. Every portion's own
-    // sellingPrice already reflects its own unit correctly by the time
-    // it reaches this function — Mode A's conversion is already applied
-    // client-side before submission (PeriodicStockCountView.tsx's own
-    // applyModeAToGroup) — so no further unit conversion is performed
-    // here; this only picks which already-correct portion is the
-    // product-level canonical one. type === 'initial' is handled at the
-    // two write sites below (product-creation branch and the
-    // post-loop existing-product update), never here — this Map itself
-    // is built identically for both count types, harmlessly unused for
-    // 'initial' since neither write site reads it in that case (§45 §12,
-    // Initial Stock boundary).
-    const sellingMemoryByProductName = new Map<string, { sellingPrice: number; sellingUnit?: string }>();
-    for (const raw of items) {
-      const key = raw.productName.trim().toLowerCase();
-      if (!key || typeof raw.sellingPrice !== 'number' || !Number.isFinite(raw.sellingPrice) || raw.sellingPrice < 0) continue;
-      const rawUnit = (raw.unit ?? '').trim();
-      const existingProduct = tempProducts.find((p) => p.name.trim().toLowerCase() === key);
-      const confirmedSellingUnit =
+    // items 2-3 — REVISED by FR-89–FR-94, Implementation Authorization
+    // §2 item 5 / Plan §6.3, Finding 7, Product-Architect-confirmed]
+    // Selects, once per product (never once per portion — this Map is
+    // consulted, not re-derived, by the per-item loop below), the
+    // canonical selling price/unit to remember as durable Product
+    // Memory.
+    //
+    // [Confirmed Product Architect decision, restated] When
+    // `workingRowDeliberateEntries` is supplied (the ordinary case for
+    // every Periodic Contagem confirmation from PeriodicStockCountView.tsx,
+    // §10), the winner for each product is whichever DELIBERATELY
+    // entered configuration (sellingPriceAutoFilled === false) carries
+    // the HIGHEST sellingPriceEditSequence among that product's own
+    // candidates — "last deliberately entered wins," determined without
+    // reference to array order, row order, Map iteration order, or the
+    // product's own confirmed-selling-unit — that preference is REMOVED
+    // from this path entirely, per the Product Architect's explicit
+    // confirmation that it must never override entry recency. A product
+    // with no deliberately-entered candidate at all (every physical
+    // quantity entry for it was still following the default) has NO
+    // entry in this Map — no write occurs for it at all (the existing
+    // equality-check guard below already makes this a no-op; restates
+    // FR-84/FR-91: an ordinary, all-default count never silently
+    // overwrites the remembered configuration).
+    //
+    // [Backward compatibility] When `workingRowDeliberateEntries` is
+    // absent (a call site not yet updated, or Initial Stock, which
+    // never passes it and never reads this Map at either write site —
+    // §45 §12, Initial Stock boundary, unaffected) this falls back to
+    // exactly the PRE-FR-89–FR-94 behavior, byte-for-byte unchanged:
+    // first submitted portion wins by default, a later one denominated
+    // in the confirmed selling unit overrides it.
+    //
+    // [Extracted to lib/sellingMemorySelection.ts] Same algorithm as
+    // before, now a pure, directly-unit-testable function — mirrors
+    // this file's own existing precedent (buildProductCostBasisMap,
+    // resolveUnitAwarePrice, findLatestRememberedProductMemory), all
+    // separately-testable helpers this large async function calls
+    // rather than inlines, for exactly this reason.
+    const sellingMemoryByProductName = selectSellingMemoryByProductName(
+      items,
+      (key) =>
         unitRelationshipByProductName.get(key)?.sellingUnit ||
-        (isValidUnitRelationship(existingProduct?.unitRelationship) ? existingProduct?.unitRelationship?.sellingUnit : undefined);
-      const current = sellingMemoryByProductName.get(key);
-      const isPreferredUnit = !!confirmedSellingUnit && rawUnit.toLowerCase() === confirmedSellingUnit.trim().toLowerCase();
-      if (!current || isPreferredUnit) {
-        sellingMemoryByProductName.set(key, { sellingPrice: raw.sellingPrice, sellingUnit: rawUnit || confirmedSellingUnit });
-      }
-    }
+        (isValidUnitRelationship(tempProducts.find((p) => p.name.trim().toLowerCase() === key)?.unitRelationship)
+          ? tempProducts.find((p) => p.name.trim().toLowerCase() === key)?.unitRelationship?.sellingUnit
+          : undefined),
+      workingRowDeliberateEntries
+    );
 
     // [Business Worth Evolution — Increment 10 Item 5 / Post-
     // Implementation Correction §25, Specification §15/FR-67; Product

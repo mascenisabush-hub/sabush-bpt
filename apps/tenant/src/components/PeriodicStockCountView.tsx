@@ -32,7 +32,7 @@ import { getPossibleReconciliationCauses, type PossibleReconciliationCause } fro
 // codebase's existing, unconditional, already-shipped per-portion
 // sellingPrice entry (every input below, unchanged) — nothing in this
 // file's own pre-existing code path is touched to support it.
-import { deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuantity } from '../lib/contagemMultiUnitValuation';
+import { deriveModeAPortionValuations, canApplyModeA, resolveDefaultSellingConfigurationForRow, type ContagemPortionQuantity } from '../lib/contagemMultiUnitValuation';
 // [Business Worth Evolution — Increment 10 Item 5 / Post-Implementation
 // Correction §25, Specification §15/FR-67; Product Architect
 // resolution, 24 August 2026] The SAME shared cost-basis resolver
@@ -729,6 +729,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       unit,
       costPrice,
       sellingPrice,
+      // [FR-89–FR-94, Implementation Authorization §2 item 4] A fresh
+      // catalog row always starts by following the product-level
+      // default — never deliberate until the Owner directly edits it
+      // (updateCatalogRow's own deliberate-entry detection, below).
+      // sellingPriceBasisUnit mirrors AddStockView.tsx's own existing
+      // convention: set only when there is an actual sellingPrice value
+      // to label, matching whichever unit that value is denominated in
+      // above (the confirmed sellingUnit when the two-tier resolution
+      // fired, or the latest batch's/product's own raw unit otherwise).
+      sellingPriceAutoFilled: true,
+      ...(sellingPrice !== '' ? { sellingPriceBasisUnit: unit } : {}),
     };
   };
 
@@ -871,6 +882,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // out and materially editing regenerates it on the next confirmation
   // attempt, per §7's "last-second edit wins" principle.
   const submissionIdRef = useRef<string | null>(null);
+
+  // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]
+  // In-session, monotonically increasing counter — the sole source of
+  // "last deliberately entered," never array/row order, never Map
+  // iteration order, never a wall-clock timestamp (a debounced autosave
+  // write, per rowDebounceTimersRef above, can complete out of order
+  // relative to the Owner's own action sequence if captured at write
+  // time rather than at the moment of the edit itself — a synchronous,
+  // in-memory counter incremented inside the same event handler that
+  // marks a row deliberate has no such race). Incremented by
+  // nextSellingPriceEditSequence(), below, exactly once per genuine
+  // deliberate selling-price/unit edit — never by the automatic default
+  // resolution path. Re-seeded on draft resume (the effect that loads a
+  // recovered draft, further below) to one past the highest
+  // sellingPriceEditSequence found among the resumed rows, so a further
+  // deliberate edit in a resumed session continues the correct order
+  // rather than colliding with already-stamped values.
+  const sellingPriceEditSequenceRef = useRef<number>(0);
+  const nextSellingPriceEditSequence = (): number => {
+    sellingPriceEditSequenceRef.current += 1;
+    return sellingPriceEditSequenceRef.current;
+  };
 
   // [Fix #9 extended — Contagem was the one product-referencing view
   // missing this protection] Same mechanism as AddQuebraView's own
@@ -1136,13 +1169,101 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     rowDebounceTimersRef.current.set(rowKey, timer);
   };
 
+  // [FR-89–FR-94, Implementation Authorization §2 items 3–4 / Plan §6.1,
+  // §6.2] The single place "deliberate vs. default" is decided — no
+  // other code path in this file sets sellingPriceAutoFilled. Shared by
+  // updateCatalogRow and updateManualRow, below, so a catalog row and a
+  // manual row of an existing product behave identically.
+  //
+  // Rules, in priority order (Implementation Plan §6.1's own text,
+  // Implementation Authorization §6 restated):
+  //   1. A direct sellingPrice edit is ALWAYS deliberate, regardless of
+  //      whether `fields` also changes `unit` in the same call.
+  //   2. A unit-only change (fields touches `unit`, not `sellingPrice`)
+  //      on a row that is ALREADY deliberate keeps it deliberate and
+  //      leaves sellingPrice/sellingPriceBasisUnit completely untouched
+  //      — a physical-unit edit never reinterprets an Owner's own
+  //      chosen price into a different unit's terms.
+  //   3. A unit-only change on a row still following the default
+  //      re-resolves sellingPrice/sellingPriceBasisUnit against the
+  //      NEW unit via resolveDefaultSellingConfigurationForRow, staying
+  //      non-deliberate. If no valid conversion exists for the new
+  //      unit, sellingPrice clears to blank (never fabricated) and the
+  //      row stays auto-filled, awaiting either a valid unit or a
+  //      direct Owner price entry.
+  //   4. Any other field edit (costPrice, removed, quantity, or the
+  //      Validar/Editar workflow's own status)
+  //      passes through untouched — this function has no opinion on
+  //      those fields.
+  const applySellingConfigurationEditRules = (
+    currentRow: StockCountWorkingRow,
+    fields: Partial<StockCountWorkingRow>,
+    product: { unitRelationship?: UnitRelationship; sellingPrice?: number } | undefined
+  ): Partial<StockCountWorkingRow> => {
+    if (fields.sellingPrice !== undefined) {
+      const newUnit = fields.unit !== undefined ? fields.unit : currentRow.unit;
+      return {
+        ...fields,
+        sellingPriceAutoFilled: false,
+        sellingPriceBasisUnit: newUnit,
+        sellingPriceEditSequence: nextSellingPriceEditSequence(),
+      };
+    }
+
+    if (fields.unit !== undefined && fields.unit !== currentRow.unit) {
+      if (currentRow.sellingPriceAutoFilled === false) {
+        // Rule 2 — already deliberate: physical unit changes, selling
+        // configuration untouched.
+        return { ...fields };
+      }
+      // Rule 3 — still following the default: re-resolve against the
+      // product's confirmed selling configuration and the NEW unit.
+      const relationship = product?.unitRelationship;
+      const confirmedSellingUnit = isValidUnitRelationship(relationship) ? relationship!.sellingUnit : undefined;
+      if (!confirmedSellingUnit || product?.sellingPrice == null) {
+        // No confirmed default exists to resolve against at all — leave
+        // sellingPrice exactly as today's pre-FR-89 behavior would
+        // (unconverted, unchanged by this unit edit).
+        return { ...fields };
+      }
+      const resolved = resolveDefaultSellingConfigurationForRow(
+        { quantity: currentRow.quantity, unit: fields.unit },
+        confirmedSellingUnit,
+        product.sellingPrice,
+        relationship
+      );
+      if (resolved === null) {
+        // FR-89's own narrow exception — the new unit is outside the
+        // confirmed chain. Clear the price, never fabricate one; stay
+        // non-deliberate/auto-filled until the Owner explicitly enters
+        // a price (Implementation Authorization §6).
+        return { ...fields, sellingPrice: '', sellingPriceBasisUnit: undefined, sellingPriceAutoFilled: true };
+      }
+      return {
+        ...fields,
+        sellingPrice: resolved.sellingPrice,
+        sellingPriceBasisUnit: resolved.sellingPriceBasisUnit,
+        sellingPriceAutoFilled: true,
+      };
+    }
+
+    // Rule 4 — neither a sellingPrice edit nor a genuine unit change.
+    return fields;
+  };
+
   const updateCatalogRow = (productId: string, fields: Partial<StockCountWorkingRow>) => {
     if (!catalogRows[productId]) return;
     // [§7] Any edit after at least one confirmation attempt invalidates
     // the identity that attempt used — the next confirmation generates
     // a fresh one. A no-op before the first attempt (already null).
     submissionIdRef.current = null;
-    const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...fields } };
+    // [FR-89–FR-94, Implementation Authorization §2 items 3–4] Resolve
+    // this row's own product (already-known productId, direct lookup —
+    // no name-matching ambiguity for a catalog row) and run the shared
+    // deliberate-vs-default rules before merging.
+    const product = products.find((p) => p.id === productId);
+    const resolvedFields = applySellingConfigurationEditRules(catalogRows[productId], fields, product);
+    const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...resolvedFields } };
     setCatalogRows(nextCatalogRows);
     // [Decision 39a] Keyed by this row's own stable productId — never
     // resets another catalog row's, or any manual row's, own timer.
@@ -1687,7 +1808,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const updateManualRow = (index: number, fields: Partial<StockCountWorkingRow>) => {
     submissionIdRef.current = null;
-    const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...fields } : row));
+    // [FR-89–FR-94, Implementation Authorization §2 items 3–4] A manual
+    // row never carries productId (existing, unmodified convention) —
+    // resolved by case-insensitive name match, the same dual-resolution
+    // getRememberedPriceForRow already uses, so a manual portion of an
+    // existing product gets the identical deliberate-vs-default
+    // treatment a catalog row does.
+    const currentRow = manualRows[index];
+    let resolvedFields = fields;
+    if (currentRow) {
+      const trimmedName = currentRow.productName.trim().toLowerCase();
+      const product = currentRow.productId
+        ? products.find((p) => p.id === currentRow.productId)
+        : products.find((p) => p.name.trim().toLowerCase() === trimmedName);
+      resolvedFields = applySellingConfigurationEditRules(currentRow, fields, product);
+    }
+    const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...resolvedFields } : row));
     setManualRows(nextManualRows);
     // [Decision 39a] Keyed by this row's own array index — matching
     // `manualRowSaveError`'s own existing identity scheme (§2 of the
@@ -1833,7 +1969,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // is touched by this handler at all.
   const handleAddPortionToManualGroup = (groupDisplayName: string) => {
     submissionIdRef.current = null;
-    const nextManualRows = [...manualRows, { ...createManualRow(), productName: groupDisplayName }];
+    // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §7]
+    // A newly-added physical quantity entry for an EXISTING product
+    // must default from that product's own remembered selling
+    // configuration, exactly like buildCatalogRow's own first row
+    // already does — it must never start wholly blank merely because
+    // it arrived via "+ Adicionar Porção" rather than as the
+    // auto-populated catalog row. Reuses buildCatalogRow itself
+    // (unmodified — same two-tier resolution, same
+    // sellingPriceAutoFilled: true default) rather than duplicating its
+    // resolution logic a second time (Implementation Plan §15,
+    // Reuse-First Confirmation). A manual row never carries productId
+    // (existing, unmodified convention — matched by name instead,
+    // exactly like every other manual row of an existing product), so
+    // that field is explicitly cleared even though buildCatalogRow
+    // itself would set it. If no matching product is found (should not
+    // occur in practice — this handler is only ever invoked for an
+    // already-known group/product name), falls back to the existing,
+    // unmodified wholly-blank createManualRow() behavior.
+    const trimmedName = groupDisplayName.trim().toLowerCase();
+    const matchedProduct = products.find((p) => p.name.trim().toLowerCase() === trimmedName);
+    const newRow: StockCountWorkingRow = matchedProduct
+      ? { ...buildCatalogRow(matchedProduct), productId: undefined, productName: groupDisplayName }
+      : { ...createManualRow(), productName: groupDisplayName };
+    const nextManualRows = [...manualRows, newRow];
     setManualRows(nextManualRows);
     // [Decision 39a] Structural add — '__meta__', matching handleAddManualRow.
     scheduleRowDraftSave('__meta__');
@@ -1911,6 +2070,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
     setCatalogRows(nextCatalogRows);
     setManualRows(nextManualRows);
+    // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]
+    // Re-seed the in-session edit-sequence counter to one past the
+    // highest sellingPriceEditSequence found among every resumed row
+    // (catalog and manual alike) — never resets to 0, which would let a
+    // further deliberate edit in this resumed session collide with an
+    // already-stamped value from before the interruption. A draft with
+    // no such rows (written before this capability existed, or with no
+    // deliberate edits yet) simply re-seeds to 0, identical to a fresh
+    // session's own starting state.
+    const allResumedRows = [...Object.values(nextCatalogRows), ...nextManualRows];
+    const highestResumedSequence = allResumedRows.reduce(
+      (max, row) => (row.sellingPriceEditSequence !== undefined && row.sellingPriceEditSequence > max ? row.sellingPriceEditSequence : max),
+      0
+    );
+    sellingPriceEditSequenceRef.current = highestResumedSequence;
     setType(periodicStockDraft.type);
     setLabel(periodicStockDraft.label || '');
     setDate(periodicStockDraft.date);
@@ -2381,10 +2555,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         }
       }
 
+      // [FR-89–FR-94, Implementation Authorization §2 item 5 / Plan
+      // §6.3, §10] Snapshot of every working row's own deliberate-vs-
+      // default selling-configuration state at the moment of
+      // confirmation, built from allWorkingRows (catalog + manual rows
+      // alike, above) — never from pendingTally.countedItems, which
+      // carries no sellingPriceAutoFilled/sellingPriceEditSequence
+      // information at all (StockCountTallyItem's own explicit-literal
+      // shape never includes them). Blank/unparseable sellingPrice rows
+      // are included here too — AppContext.tsx's own construction
+      // already guards on `Number.isFinite`, so an unresolved row is
+      // simply never a candidate, exactly like today. This is the
+      // un-persisted parameter recordStockCount's own
+      // sellingMemoryByProductName construction now consumes (§6.3) —
+      // never written to any Firestore document itself.
+      const workingRowDeliberateEntries = allWorkingRows.map((row) => ({
+        productName: row.productName,
+        sellingPrice: Number(row.sellingPrice),
+        unit: row.unit,
+        sellingPriceAutoFilled: row.sellingPriceAutoFilled,
+        sellingPriceEditSequence: row.sellingPriceEditSequence,
+      }));
+
       const saved = await recordStockCount({
         type,
         label: type === 'custom' ? label.trim() : undefined,
         date,
+        workingRowDeliberateEntries,
         items: pendingTally.countedItems.map((item) => ({
           // [Decision 40 — Validar Workflow; Implementation
           // Authorization §1 item 8/§9] This is an explicit, named

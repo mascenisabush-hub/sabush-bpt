@@ -257,7 +257,11 @@ describe('§44 — receipt: Custo/Un removed, Valor (Custo) retained as governed
 
 describe('§44 — Selling Price input, Mode A, Mode B, multiple portions unaffected', () => {
   it('deriveModeAPortionValuations / Mode A import is unchanged', () => {
-    assert.match(periodicSrc, /import \{ deriveModeAPortionValuations, canApplyModeA, type ContagemPortionQuantity \} from '\.\.\/lib\/contagemMultiUnitValuation';/);
+    // [FR-89–FR-94, Implementation Authorization §2 item 4] Import
+    // updated to include resolveDefaultSellingConfigurationForRow —
+    // deriveModeAPortionValuations/canApplyModeA/ContagemPortionQuantity
+    // remain imported from the same, unmodified module.
+    assert.match(periodicSrc, /import \{ deriveModeAPortionValuations, canApplyModeA, resolveDefaultSellingConfigurationForRow, type ContagemPortionQuantity \} from '\.\.\/lib\/contagemMultiUnitValuation';/);
   });
 
   it('getConversionFactor / unit-relationship import is unchanged', () => {

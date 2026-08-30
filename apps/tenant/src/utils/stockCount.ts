@@ -269,6 +269,46 @@ export interface StockCountWorkingRow {
   // nothing here for workingRowToDraftItem/draftItemToWorkingRow/
   // tallyStockCountRows to exclude or be affected by, since the data
   // never lives on a row in the first place.
+
+  // [FR-89–FR-94, Implementation Authorization §2 item 1] Working-row-
+  // only. `true` while sellingPrice/unit still reflect the product-
+  // level default (either buildCatalogRow's/createManualRow's initial
+  // prefill, or a later automatic re-resolution — see
+  // resolveDefaultSellingConfigurationForRow, contagemMultiUnitValuation.ts);
+  // `false` the moment the Owner directly edits sellingPrice, or edits
+  // unit while the row is already deliberate. Absent on any row that
+  // predates this capability — treated identically to `false` by every
+  // reader (a physical unit alone never implies deliberateness either
+  // way, so "absent" only matters for the auto-re-resolution path,
+  // which simply does not fire for a pre-existing row until it is next
+  // rebuilt), never treated as `true`, so an old, untouched draft is
+  // never silently reinterpreted as still-default when it is genuinely
+  // ambiguous. Persisted only in the draft round-trip
+  // (workingRowToDraftItem/draftItemToWorkingRow, below) — never
+  // reaches the confirmed StockCountItem shape (see
+  // normalizeStockCountItems/tallyStockCountRows, further below, which
+  // do not read this field).
+  sellingPriceAutoFilled?: boolean;
+  // [FR-89–FR-94, Implementation Authorization §2 item 1] Working-row-
+  // only. The unit the CURRENT sellingPrice value is actually
+  // expressed in, independent of this row's own physical `unit` —
+  // mirrors AddStockView.tsx's own existing field of the same name and
+  // purpose exactly. Set whenever sellingPrice is set, whether by
+  // auto-resolution (set to the row's own physical unit — see
+  // resolveDefaultSellingConfigurationForRow's own contract) or by a
+  // deliberate Owner entry (set to the row's current unit at the
+  // moment of that entry).
+  sellingPriceBasisUnit?: string;
+  // [FR-89–FR-94, Implementation Authorization §2 item 1] Working-row-
+  // only. Monotonically increasing, set only the moment
+  // sellingPriceAutoFilled transitions to false (a genuine Owner edit)
+  // — never incremented by the automatic resolution path itself. An
+  // in-session sequence, not a wall-clock timestamp (see
+  // PeriodicStockCountView.tsx's own sellingPriceEditSequenceRef for
+  // why). Used only to determine, among several deliberately-priced
+  // rows for the same product, which was entered last — never read by
+  // any valuation calculation.
+  sellingPriceEditSequence?: number;
 }
 
 export interface StockCountTallyItem {
@@ -452,6 +492,9 @@ export function workingRowToDraftItem(row: StockCountWorkingRow): {
   sellingPrice: string;
   removed?: boolean;
   validated?: boolean;
+  sellingPriceAutoFilled?: boolean;
+  sellingPriceBasisUnit?: string;
+  sellingPriceEditSequence?: number;
 } {
   return {
     ...(row.productId ? { productId: row.productId } : {}),
@@ -469,6 +512,14 @@ export function workingRowToDraftItem(row: StockCountWorkingRow): {
     // include the current validated state automatically, with no
     // change to any of those mechanisms themselves.
     ...(row.validated !== undefined ? { validated: row.validated } : {}),
+    // [FR-89–FR-94, Implementation Authorization §2 item 2] Same
+    // omit-when-absent discipline as `removed`/`validated`, above —
+    // this is what makes the default-vs-deliberate distinction, and
+    // the edit-sequence ordering, survive an interrupted/resumed
+    // Contagem session.
+    ...(row.sellingPriceAutoFilled !== undefined ? { sellingPriceAutoFilled: row.sellingPriceAutoFilled } : {}),
+    ...(row.sellingPriceBasisUnit ? { sellingPriceBasisUnit: row.sellingPriceBasisUnit } : {}),
+    ...(row.sellingPriceEditSequence !== undefined ? { sellingPriceEditSequence: row.sellingPriceEditSequence } : {}),
   };
 }
 
@@ -487,6 +538,9 @@ export function draftItemToWorkingRow(item: {
   sellingPrice: string;
   removed?: boolean;
   validated?: boolean;
+  sellingPriceAutoFilled?: boolean;
+  sellingPriceBasisUnit?: string;
+  sellingPriceEditSequence?: number;
 }): StockCountWorkingRow {
   return {
     productId: item.productId,
@@ -502,5 +556,14 @@ export function draftItemToWorkingRow(item: {
     // treated as "not validated" by every filter that reads it
     // (falsy-safe, never requiring an explicit `false`).
     validated: item.validated,
+    // [FR-89–FR-94, Implementation Authorization §2 item 2] Same
+    // verbatim-copy-through discipline as `validated`, above — a
+    // legacy draft item written before this capability existed simply
+    // lacks these three fields, copied through as `undefined`/absent,
+    // which every reader already treats as "not deliberate" (never as
+    // "deliberate").
+    sellingPriceAutoFilled: item.sellingPriceAutoFilled,
+    sellingPriceBasisUnit: item.sellingPriceBasisUnit,
+    sellingPriceEditSequence: item.sellingPriceEditSequence,
   };
 }
