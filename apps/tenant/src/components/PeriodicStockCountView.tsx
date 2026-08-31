@@ -3632,10 +3632,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
           <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
           <p className="text-[13px] leading-relaxed text-gray-600">
+            {/* [Capital Inicial Retirement — Implementation Authorization
+                Increment 6; Specification §44.1/FR-70] Conditional copy
+                (Implementation Plan §Increment 6, option a) — the exact
+                prior wording is preserved verbatim for a business that
+                HAS a preserved historical Capital Inicial record;
+                generic wording names no retired concept for one that
+                doesn't. The expectedCurrentStockValue arithmetic itself
+                (AppContext.tsx, initialCapitalValue +
+                totalInvestmentValueAllTime) is completely unchanged —
+                this is copy-only. */}
             Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
-            <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> — o Capital Inicial mais o
-            valor (a custo) do stock em lote atualmente registado — para mostrar se o valor do seu inventário
-            corresponde ao que o sistema esperava.
+            <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> —{' '}
+            {hasInitialStockCount
+              ? 'o Capital Inicial mais o valor (a custo) do stock em lote atualmente registado'
+              : 'o valor de compras registadas (a custo)'}
+            {' '}— para mostrar se o valor do seu inventário corresponde ao que o sistema esperava.
           </p>
         </div>
 
