@@ -1053,3 +1053,24 @@ This section does not amend §9's formulas (Case A or Case B arithmetic), §14's
 > **Product Architect:** _______________________________
 > **Date:** _______________________________
 > **Decision:** ☐ ACCEPTED &nbsp;&nbsp; ☐ ACCEPTED WITH MODIFICATIONS (specify) &nbsp;&nbsp; ☐ NOT ACCEPTED
+
+### 44.6 Product Architect Acceptance of §44 in Full — Recorded
+
+**Status: ✅ ACCEPTED AS SPECIFIED — SIGNED (31 August 2026).** Recorded additively below, per this repository's established signature-recording convention. §44.5 immediately above is preserved unedited as the historical record of what was circulated for review — its pending checkboxes and blank signature lines are not filled in, struck, or altered; this section is the actual, dated act of acceptance, covering §44 in its entirety, not merely the narrower §44.3 clarification paragraph that already carries its own separate, earlier-recorded acceptance (preserved intact, unaffected, immediately following §44.3's own text above).
+
+> I now ACCEPT the entire Specification §44 — "Amendment — Capital Inicial Retirement: Specification Clarification."
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 31 August 2026
+> **Decision:** ✅ ACCEPTED AS SPECIFIED
+
+**This acceptance explicitly confirms I accept:**
+- **§44.1 / FR-70** — the Expected Current Stock Value terminology clarification: the explanatory copy must not name "Capital Inicial" for a business without one, while the underlying `expectedCurrentStockValue` formula (`Confirmed Initial Capital + cost value of governed StockBatch inventory`) remains entirely unchanged.
+- **§44.2 / FR-71** — the Product Memory preservation clarification: `productMemoryPriceResolution.ts`'s existing treatment of a historical Capital Inicial confirmation as a valid price-memory source is preserved, unchanged, with no code change required or authorized.
+- **§44.3** — State 1a / Case B as a permanent, closed legacy accommodation, never sunset, force-migrated, or auto-converted, with its arithmetic (§9) entirely unchanged.
+- The clarification, already separately signed within §44.3, that historical Capital Inicial data may be **read** for legitimate legacy purposes but never **establishes** Business Worth — establishment remains exclusively a confirmed Contagem or an Owner-Declared Business Worth event, each producing a `BusinessWorthSnapshot`.
+- That the existing Business Worth arithmetic (Case A, Case B, and every formula in §9) is preserved, entirely unchanged, by this amendment.
+- That historical Capital Inicial data is preserved, entirely, by this amendment — no deletion, no rewriting, no fabrication, no migration.
+- That this amendment creates **no new Business Worth establishment method** — there remain exactly two: confirmed Contagem and Owner-Declared Business Worth.
+
+**Governance boundary — stated explicitly.** This acceptance accepts Specification §44 in full. It does **NOT** authorize: implementation of any kind; the Implementation Authorization; any change to application code, server code, `firestore.rules`, `firestore.indexes.json`, tests, database records, or historical Capital Inicial records; or any change to any other governance document. The next governance step remains preparation of the separate Implementation Authorization, based on the already-accepted Implementation Plan and this now-fully-accepted Specification §44 — not performed, drafted, or implied by this acceptance.
