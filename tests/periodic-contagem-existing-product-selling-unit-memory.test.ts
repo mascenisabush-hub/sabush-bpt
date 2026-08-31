@@ -10,16 +10,19 @@
 // techniques for that constraint:
 //
 //   (1) small local reimplementations of buildCatalogRow's and
-//       handleModeAToggle's own two-tier resolution logic, calling the
-//       SAME real, imported, already-tested engine functions
-//       (resolveUnitAwarePrice, isValidUnitRelationship,
-//       findMostRecentBatchForProduct) the component itself calls — not
-//       a duplicated/competing calculation, exercised against fixture
-//       inputs;
+//       computeDefaultReferenceConfig's own two-tier resolution logic
+//       (the latter renamed/relocated under Implementation
+//       Authorization §14 — Reference Selling Configuration as the
+//       Default Path; same arithmetic, no longer gated behind an
+//       explicit Mode A toggle), calling the SAME real, imported,
+//       already-tested engine functions (resolveUnitAwarePrice,
+//       isValidUnitRelationship, findMostRecentBatchForProduct) the
+//       component itself calls — not a duplicated/competing
+//       calculation, exercised against fixture inputs;
 //   (2) structural source-text assertions confirming the actual
-//       component code (buildCatalogRow, handleModeAToggle, and both
-//       ModeAValuationControl render sites) contains the correct
-//       two-tier preference, so this suite fails if the real
+//       component code (buildCatalogRow, computeDefaultReferenceConfig,
+//       and both ModeAValuationControl render sites) contains the
+//       correct two-tier preference, so this suite fails if the real
 //       implementation ever silently reverts to the old unconditional
 //       units[0]/latest-batch default.
 //
@@ -289,25 +292,25 @@ describe('PeriodicStockCountView.tsx — source-structure checks confirming the 
     assert.match(fn, /resolveUnitAwarePrice\(latestBatch\.sellingPrice, latestBatch\.unit \|\| '', confirmedSellingUnit, relationship\)/);
   });
 
-  it('handleModeAToggle prefers relationship.sellingUnit over relationship.units[0].unit for its default reference unit', () => {
-    const start = periodicSrc.indexOf('const handleModeAToggle = (productKey: string, enable: boolean) => {');
+  it('computeDefaultReferenceConfig prefers relationship.sellingUnit over relationship.units[0].unit for its default reference unit', () => {
+    const start = periodicSrc.indexOf('const computeDefaultReferenceConfig = (productKey: string)');
     assert.notEqual(start, -1);
-    const end = periodicSrc.indexOf('const handleModeAFieldChange', start);
+    const end = periodicSrc.indexOf('const getEffectiveReferenceConfig', start);
     assert.notEqual(end, -1);
     const fn = periodicSrc.slice(start, end);
     assert.match(fn, /const defaultReferenceUnit = relationship\?\.sellingUnit \|\| relationship\?\.units\?\.\[0\]\?\.unit \|\| '';/);
   });
 
-  it('handleModeAToggle seeds defaultReferencePrice via resolveUnitAwarePrice using the SAME function buildCatalogRow uses — not a second independent computation', () => {
-    const start = periodicSrc.indexOf('const handleModeAToggle = (productKey: string, enable: boolean) => {');
-    const end = periodicSrc.indexOf('const handleModeAFieldChange', start);
+  it('computeDefaultReferenceConfig seeds defaultReferencePrice via resolveUnitAwarePrice using the SAME function buildCatalogRow uses — not a second independent computation', () => {
+    const start = periodicSrc.indexOf('const computeDefaultReferenceConfig = (productKey: string)');
+    const end = periodicSrc.indexOf('const getEffectiveReferenceConfig', start);
     const fn = periodicSrc.slice(start, end);
     assert.match(fn, /resolveUnitAwarePrice\(latestBatch\.sellingPrice, latestBatch\.unit \|\| '', defaultReferenceUnit, relationship\)/);
   });
 
-  it('both ModeAValuationControl render sites (catalog-row loop, manual-row card loop) compute the identical two-tier defaultReferenceUnit — toggle-time and render-time can never disagree', () => {
-    const occurrences = periodicSrc.match(/const defaultReferenceUnit = relationship\.sellingUnit \|\| referenceUnitOptions\[0\] \|\| '';/g) || [];
-    assert.equal(occurrences.length, 2, 'expected exactly two render-site occurrences of the two-tier default (catalog-row loop + manual-row card loop)');
+  it('both ModeAValuationControl render sites (catalog-row loop, manual-row card loop) resolve the identical getEffectiveReferenceConfig — no longer two separately-inlined default computations', () => {
+    const occurrences = periodicSrc.match(/const config = getEffectiveReferenceConfig\(key\);/g) || [];
+    assert.equal(occurrences.length, 2, 'expected exactly two render-site occurrences of the now-shared resolver (catalog-row loop + manual-row card loop)');
   });
 
   it('no new conversion engine or second valuation path is introduced — getConversionFactor, resolveUnitAwarePrice, and deriveModeAPortionValuations import counts are unchanged (one import statement each)', () => {
@@ -316,7 +319,7 @@ describe('PeriodicStockCountView.tsx — source-structure checks confirming the 
     assert.equal((periodicSrc.match(/from '\.\.\/lib\/contagemMultiUnitValuation'/g) || []).length, 1);
   });
 
-  it('Add Portion\'s own creation mechanism (handleAddPortionToManualGroup) is not touched by this correction — no reference to sellingUnit/resolveUnitAwarePrice inside it', () => {
+  it('Add Portion\'s own creation mechanism (handleAddPortionToManualGroup) reuses buildCatalogRow\'s own resolution — no second, independent resolveUnitAwarePrice call inside it', () => {
     const start = periodicSrc.indexOf('const handleAddPortionToManualGroup');
     if (start === -1) return; // name may differ across revisions; this check is best-effort, not load-bearing
     const end = periodicSrc.indexOf('\n  const ', start + 10);
@@ -324,11 +327,13 @@ describe('PeriodicStockCountView.tsx — source-structure checks confirming the 
     assert.doesNotMatch(fn, /resolveUnitAwarePrice/);
   });
 
-  it('Initial Stock (InitialStockCountView.tsx) is never referenced by name inside PeriodicStockCountView.tsx\'s own buildCatalogRow/handleModeAToggle functions', () => {
+  it('Initial Stock (InitialStockCountView.tsx) is never referenced by name inside PeriodicStockCountView.tsx\'s own buildCatalogRow/computeDefaultReferenceConfig functions', () => {
     const start1 = periodicSrc.indexOf('const buildCatalogRow = (product:');
     const end1 = periodicSrc.indexOf('\n  const [type, setType] = useState', start1);
-    const start2 = periodicSrc.indexOf('const handleModeAToggle = (productKey: string, enable: boolean) => {');
-    const end2 = periodicSrc.indexOf('const handleModeAFieldChange', start2);
+    const start2 = periodicSrc.indexOf('const computeDefaultReferenceConfig = (productKey: string)');
+    const end2 = periodicSrc.indexOf('const getEffectiveReferenceConfig', start2);
+    assert.notEqual(start1, -1);
+    assert.notEqual(start2, -1);
     assert.doesNotMatch(periodicSrc.slice(start1, end1), /InitialStock/);
     assert.doesNotMatch(periodicSrc.slice(start2, end2), /InitialStock/);
   });

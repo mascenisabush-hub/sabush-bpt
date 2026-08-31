@@ -257,16 +257,19 @@ const UnitRelationshipChainEditor: React.FC<{
 // Specification §15, FR-20] The ONLY new Owner-facing control this
 // Increment adds — rendered exactly once per multi-portion product group
 // (never per-row), right where that group's existing "Porção X de Y"
-// caption already appears. Deliberately a plain toggle + two inputs, no
-// new screen, no new navigation, no Dashboard/design-system change —
-// "the smallest possible UI change" per the governing prompt.
+// [Implementation Authorization §14 item 5 — Reference Selling
+// Configuration as the Default Path] Formerly a checkbox-gated "Mode A"
+// toggle; the reference unit/price fields now render unconditionally
+// whenever a valid confirmed unit relationship exists (the caller's own
+// existing gate, unchanged) — establishing a shared price for a
+// multi-unit product is the ordinary, always-available way to price
+// it, not a separate mode the Owner must discover and switch on.
 //
-// Mode B (the default — unchanged) needs no control here at all: it is
-// simply what happens when this toggle is off, which is every existing
-// portion row's own already-present "Venda/Un" price input, untouched.
+// A portion becomes independently priced only when the Owner directly
+// edits THAT portion's own "Venda/Un" price field — unchanged, Rule 1
+// of applySellingConfigurationEditRules, above.
 const ModeAValuationControl: React.FC<{
   referenceUnitOptions: string[];
-  active: boolean;
   referenceUnit: string;
   referencePrice: string;
   currencySymbol: string;
@@ -275,57 +278,51 @@ const ModeAValuationControl: React.FC<{
    * that at least one portion's price was left untouched, never a
    * fabricated conversion (UOM Specification §4 Item 6). */
   allPortionsConvertible: boolean;
-  onToggle: (enable: boolean) => void;
   onChange: (fields: Partial<{ referenceUnit: string; referencePrice: string }>) => void;
-}> = ({ referenceUnitOptions, active, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onToggle, onChange }) => {
+}> = ({ referenceUnitOptions, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onChange }) => {
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
     // col-span-5, matching rowGridClass's corrected five-track
     // template (was 7, for the pre-§44 row) — see rowGridClass's own
     // comment for why.
     <div className="col-span-2 sm:col-span-5 -mt-1 mb-1">
-      <label className="flex items-center gap-1.5 text-[13px] font-semibold text-gray-600 select-none">
-        <input type="checkbox" checked={active} onChange={(e) => onToggle(e.target.checked)} className="rounded" />
-        Usar um único preço de venda para todas as porções deste produto (convertido automaticamente)
-      </label>
-      {active && (
-        <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de referência</label>
-            <select
-              value={referenceUnit}
-              onChange={(e) => onChange({ referenceUnit: e.target.value })}
-              className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            >
-              {referenceUnitOptions.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={referencePrice}
-              onChange={(e) => onChange({ referencePrice: e.target.value })}
-              placeholder="Ex: 1250"
-              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            />
-          </div>
-          <p className="text-[13px] text-gray-500 leading-relaxed basis-full">
-            O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas.
-          </p>
-          {!allPortionsConvertible && (
-            <p className="text-[13px] text-amber-600 font-medium leading-relaxed basis-full">
-              Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.
-            </p>
-          )}
+      <p className="text-[13px] font-semibold text-gray-600 mb-1.5">Preço de venda de referência</p>
+      <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de referência</label>
+          <select
+            value={referenceUnit}
+            onChange={(e) => onChange({ referenceUnit: e.target.value })}
+            className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          >
+            {referenceUnitOptions.map((u) => (
+              <option key={u} value={u}>
+                {u}
+              </option>
+            ))}
+          </select>
         </div>
-      )}
+        <div>
+          <label className="block text-[11px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
+          <input
+            type="number"
+            min="0"
+            step="0.01"
+            value={referencePrice}
+            onChange={(e) => onChange({ referencePrice: e.target.value })}
+            placeholder="Ex: 1250"
+            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          />
+        </div>
+        <p className="text-[13px] text-gray-500 leading-relaxed basis-full">
+          O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente.
+        </p>
+        {!allPortionsConvertible && (
+          <p className="text-[13px] text-amber-600 font-medium leading-relaxed basis-full">
+            Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.
+          </p>
+        )}
+      </div>
     </div>
   );
 };
@@ -1213,10 +1210,44 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const applySellingConfigurationEditRules = (
     currentRow: StockCountWorkingRow,
     fields: Partial<StockCountWorkingRow>,
-    product: { unitRelationship?: UnitRelationship; sellingPrice?: number } | undefined
+    product: { unitRelationship?: UnitRelationship; sellingPrice?: number } | undefined,
+    // [Implementation Authorization §14 item 1/2/4 — Reference Selling
+    // Configuration as the Default Path] The product group's own
+    // active in-session reference selling configuration, if any — the
+    // always-visible control that replaces the former Mode A toggle.
+    // `relationship` here is the EFFECTIVE relationship
+    // (`getEffectiveUnitRelationshipForProductName`'s own resolution,
+    // covering a genuinely new product's in-progress candidate too),
+    // not merely `product.unitRelationship` — a brand-new product has
+    // no confirmed `product` yet, but can still have an active
+    // in-session reference the Owner has just typed.
+    groupReference?: { relationship: UnitRelationship | undefined; referenceUnit: string; referencePrice: string },
+    // [Implementation Authorization §14 item 4] Set only by the
+    // reference control's own write-back (applyModeAToGroup, below) —
+    // true means "this sellingPrice write reflects the group's shared
+    // reference, not a direct Owner edit to THIS row," so it must never
+    // be treated as Rule 1's own deliberate act.
+    isReferenceDerivedWrite?: boolean
   ): Partial<StockCountWorkingRow> => {
     if (fields.sellingPrice !== undefined) {
       const newUnit = fields.unit !== undefined ? fields.unit : currentRow.unit;
+      if (isReferenceDerivedWrite) {
+        // [Implementation Authorization §14 item 4] A write-back from
+        // the group's own shared reference is still following a
+        // default — the Owner has not directly edited THIS row's own
+        // price — so Rule 1 below (reserved for a genuine direct edit)
+        // must not fire, and no sellingPriceEditSequence is consumed
+        // here (the reference's OWN edit sequence is tracked
+        // separately — see handleReferenceConfigChange, below).
+        return {
+          ...fields,
+          sellingPriceAutoFilled: true,
+          sellingPriceBasisUnit: newUnit,
+        };
+      }
+      // Rule 1 — a genuine direct edit to this row's own price: always
+      // deliberate, regardless of whether `fields` also changes `unit`
+      // in the same call.
       return {
         ...fields,
         sellingPriceAutoFilled: false,
@@ -1231,20 +1262,39 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // configuration untouched.
         return { ...fields };
       }
-      // Rule 3 — still following the default: re-resolve against the
-      // product's confirmed selling configuration and the NEW unit.
-      const relationship = product?.unitRelationship;
-      const confirmedSellingUnit = isValidUnitRelationship(relationship) ? relationship!.sellingUnit : undefined;
-      if (!confirmedSellingUnit || product?.sellingPrice == null) {
-        // No confirmed default exists to resolve against at all — leave
-        // sellingPrice exactly as today's pre-FR-89 behavior would
-        // (unconverted, unchanged by this unit edit).
+      // Rule 3 — still following the default: re-resolve against
+      // whichever selling configuration is currently authoritative for
+      // this product and the NEW unit.
+      //
+      // [Implementation Authorization §14 item 1/2] Prefer the group's
+      // own active in-session reference over the product's static,
+      // already-confirmed memory — the in-session reference is what
+      // the Owner most recently, explicitly declared for THIS exact
+      // Contagem (whether or not it has ever been confirmed before),
+      // and must not be silently shadowed by an older, separately-
+      // confirmed catalog value, nor left unusable merely because this
+      // product has no confirmed value at all yet (closes Gap A, Rule
+      // 8 Assessment §17.1).
+      const referencePriceNum = groupReference ? Number(groupReference.referencePrice) : NaN;
+      const hasActiveReference = !!groupReference?.referenceUnit && Number.isFinite(referencePriceNum) && referencePriceNum >= 0;
+      const relationship = hasActiveReference
+        ? groupReference!.relationship
+        : product?.unitRelationship;
+      const confirmedSellingUnit = hasActiveReference
+        ? groupReference!.referenceUnit
+        : isValidUnitRelationship(relationship) ? relationship!.sellingUnit : undefined;
+      const effectiveSellingPrice = hasActiveReference ? referencePriceNum : product?.sellingPrice;
+      if (!confirmedSellingUnit || effectiveSellingPrice == null) {
+        // No confirmed default AND no active reference exist to
+        // resolve against at all — leave sellingPrice exactly as
+        // today's pre-FR-89 behavior would (unconverted, unchanged by
+        // this unit edit).
         return { ...fields };
       }
       const resolved = resolveDefaultSellingConfigurationForRow(
         { quantity: currentRow.quantity, unit: fields.unit },
         confirmedSellingUnit,
-        product.sellingPrice,
+        effectiveSellingPrice,
         relationship
       );
       if (resolved === null) {
@@ -1266,7 +1316,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return fields;
   };
 
-  const updateCatalogRow = (productId: string, fields: Partial<StockCountWorkingRow>) => {
+  const updateCatalogRow = (
+    productId: string,
+    fields: Partial<StockCountWorkingRow>,
+    // [Implementation Authorization §14 item 4] Set only by
+    // applyModeAToGroup's own reference write-back — see
+    // applySellingConfigurationEditRules' own `isReferenceDerivedWrite`
+    // parameter for the full explanation.
+    options?: { isReferenceDerived?: boolean }
+  ) => {
     if (!catalogRows[productId]) return;
     // [§7] Any edit after at least one confirmation attempt invalidates
     // the identity that attempt used — the next confirmation generates
@@ -1277,7 +1335,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // no name-matching ambiguity for a catalog row) and run the shared
     // deliberate-vs-default rules before merging.
     const product = products.find((p) => p.id === productId);
-    const resolvedFields = applySellingConfigurationEditRules(catalogRows[productId], fields, product);
+    // [Implementation Authorization §14 item 1/2] The group's own
+    // active in-session reference (always available once a valid
+    // relationship exists — no explicit "activate" step) — bundled
+    // with the EFFECTIVE relationship (covering a genuinely new
+    // product's in-progress candidate too, not merely
+    // `product.unitRelationship`).
+    const row = catalogRows[productId];
+    const groupKey = productKeyFor(row.productName);
+    const groupReferenceConfig = getEffectiveReferenceConfig(groupKey);
+    const groupReference = {
+      relationship: getEffectiveUnitRelationshipForProductName(groupKey),
+      referenceUnit: groupReferenceConfig.referenceUnit,
+      referencePrice: groupReferenceConfig.referencePrice,
+    };
+    const resolvedFields = applySellingConfigurationEditRules(row, fields, product, groupReference, options?.isReferenceDerived);
     const nextCatalogRows = { ...catalogRows, [productId]: { ...catalogRows[productId], ...resolvedFields } };
     setCatalogRows(nextCatalogRows);
     // [Decision 39a] Keyed by this row's own stable productId — never
@@ -1439,7 +1511,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // interrupted-and-resumed session). Absence of a key here means Mode B
   // — this codebase's existing default — exactly as everywhere else in
   // this capability (unitRelationship, expectedValueAtCount, etc.).
-  const [modeAGroups, setModeAGroups] = useState<Record<string, { referenceUnit: string; referencePrice: string }>>({});
+  const [modeAGroups, setModeAGroups] = useState<Record<string, { referenceUnit: string; referencePrice: string; editSequence?: number }>>({});
 
   const productKeyFor = (name: string) => name.trim().toLowerCase();
 
@@ -1724,6 +1796,79 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // entirely untouched — never coerced to a fabricated price — so the
   // Owner can still enter it manually, exactly UOM Specification §4 Item
   // 6's existing warn-and-allow discipline.
+  // [Implementation Authorization §14 item 2 — Reference Selling
+  // Configuration as the Default Path] Pure computation of what a
+  // product group's reference selling configuration would default to
+  // if the Owner has never explicitly set one this session — the
+  // IDENTICAL two-tier resolution the former `handleModeAToggle`
+  // performed at explicit toggle-on time (Implementation Authorization
+  // — Existing-Product Selling-Unit / Price-Memory Correction, §2
+  // items 2-3), now computed on demand rather than only upon an
+  // explicit Owner click. No state write here — `getEffectiveReferenceConfig`,
+  // immediately below, is what callers actually use; this function is
+  // the "no Owner override yet" branch of that resolution.
+  const computeDefaultReferenceConfig = (productKey: string): { referenceUnit: string; referencePrice: string } => {
+    const relationship = getEffectiveUnitRelationshipForProductName(productKey);
+    // Two-tier default: prefer the confirmed `sellingUnit` (when present
+    // and a chain member — already guaranteed by isValidUnitRelationship
+    // for a confirmed relationship) over `units[0]`, falling back to the
+    // latter exactly as today when no `sellingUnit` is confirmed.
+    // Identical preference order to buildCatalogRow's own resolution,
+    // and to both ModeAValuationControl render sites' own
+    // effectiveReferenceUnit computation, below — every default
+    // computation in this file can never disagree.
+    const defaultReferenceUnit = relationship?.sellingUnit || relationship?.units?.[0]?.unit || '';
+    // Seed the reference price from the SAME resolution buildCatalogRow
+    // performs for this exact product/unit pair — not a second,
+    // independently-computed value. Only for an already-catalogued
+    // product with a latest batch to convert from; a genuinely new
+    // product (no Product record yet) has no batch, so this remains ''
+    // exactly as before this correction — new-product behavior is
+    // unaffected.
+    let defaultReferencePrice = '';
+    const product = products.find((p) => productKeyFor(p.name) === productKey);
+    if (product && defaultReferenceUnit) {
+      // Same canonical-memory-first priority as buildCatalogRow's own
+      // resolution, above — checked before either historical tier, so
+      // this function's own "seeded from the SAME resolution... can
+      // never disagree" guarantee actually holds.
+      const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
+      if (canonicalSellingMemory && canonicalSellingMemory.unit === defaultReferenceUnit) {
+        defaultReferencePrice = String(canonicalSellingMemory.sellingPrice);
+      } else {
+        const latestBatch = findMostRecentBatchForProduct(batches, product.id);
+        if (latestBatch) {
+          const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', defaultReferenceUnit, relationship);
+          if (resolved !== '') defaultReferencePrice = resolved;
+        } else {
+          // No StockBatch exists for this product — same no-batch case
+          // buildCatalogRow's own new tier handles. Reuses the
+          // identical findLatestRememberedProductMemory resolution (not
+          // a second, independently-computed value) so this default and
+          // buildCatalogRow's own render-time default can never
+          // disagree.
+          const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, defaultReferenceUnit);
+          if (memory) {
+            const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, defaultReferenceUnit, relationship);
+            if (resolved !== '') defaultReferencePrice = resolved;
+          }
+        }
+      }
+    }
+    return { referenceUnit: defaultReferenceUnit, referencePrice: defaultReferencePrice };
+  };
+
+  // [Implementation Authorization §14 item 2] The single source of
+  // truth every call site in this file consults for "what is this
+  // product group's active reference selling configuration right now"
+  // — the Owner's own explicit edit (`modeAGroups[productKey]`) when
+  // one exists, otherwise the computed default, immediately above.
+  // Always available whenever a valid relationship exists (no more
+  // explicit "activate" step) — this is what makes the reference
+  // fields always-visible/always-live rather than toggle-gated.
+  const getEffectiveReferenceConfig = (productKey: string): { referenceUnit: string; referencePrice: string; editSequence?: number } =>
+    modeAGroups[productKey] ?? computeDefaultReferenceConfig(productKey);
+
   const applyModeAToGroup = (productKey: string, referenceUnit: string, referencePriceRaw: string) => {
     const referencePrice = Number(referencePriceRaw);
     if (!referenceUnit || !Number.isFinite(referencePrice)) return;
@@ -1742,96 +1887,53 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const derived = deriveModeAPortionValuations(portions, referenceUnit, referencePrice, relationship);
     for (const d of derived) {
       if (d.derivedSellingPrice === null) continue;
+      // [Implementation Authorization §14 item 4] This write-back
+      // reflects the group's shared reference, not a direct edit to
+      // any one row's own price — `isReferenceDerived: true` keeps the
+      // affected row `sellingPriceAutoFilled: true` (Rule 8 Assessment
+      // §17.4's own justification: a row still following the shared
+      // default must keep re-resolving correctly if its own physical
+      // unit is later edited).
       if (d.id.startsWith('catalog:')) {
-        updateCatalogRow(d.id.slice('catalog:'.length), { sellingPrice: String(d.derivedSellingPrice) });
+        updateCatalogRow(d.id.slice('catalog:'.length), { sellingPrice: String(d.derivedSellingPrice) }, { isReferenceDerived: true });
       } else if (d.id.startsWith('manual:')) {
-        updateManualRow(Number(d.id.slice('manual:'.length)), { sellingPrice: String(d.derivedSellingPrice) });
+        updateManualRow(Number(d.id.slice('manual:'.length)), { sellingPrice: String(d.derivedSellingPrice) }, { isReferenceDerived: true });
       }
     }
   };
 
-  const handleModeAToggle = (productKey: string, enable: boolean) => {
-    if (!enable) {
-      setModeAGroups((prev) => {
-        const next = { ...prev };
-        delete next[productKey];
-        return next;
-      });
-      return;
-    }
-    // [Bug fix — Mode A unavailable for a genuinely new product] Same
-    // fallback as applyModeAToGroup, immediately above — otherwise a
-    // new product's default reference unit would always resolve to
-    // '' (no relationship found), leaving the reference-unit dropdown
-    // empty on first toggle-on instead of correctly defaulting to the
-    // chain's own purchase unit.
-    const relationship = getEffectiveUnitRelationshipForProductName(productKey);
-    // [Implementation Authorization — Existing-Product Selling-Unit /
-    // Price-Memory Correction, §2 items 2-3] Two-tier default: prefer
-    // the confirmed `sellingUnit` (when present and a chain member —
-    // already guaranteed by isValidUnitRelationship for a confirmed
-    // relationship) over `units[0]`, falling back to the latter exactly
-    // as today when no `sellingUnit` is confirmed. Identical preference
-    // order to buildCatalogRow's own resolution, above, and to both
-    // ModeAValuationControl render sites' own effectiveReferenceUnit
-    // computation, below — the toggle-time and render-time defaults can
-    // never disagree.
-    const defaultReferenceUnit = relationship?.sellingUnit || relationship?.units?.[0]?.unit || '';
-    // Seed the reference price from the SAME resolution buildCatalogRow
-    // performs for this exact product/unit pair — not a second,
-    // independently-computed value. Only for an already-catalogued
-    // product with a latest batch to convert from; a genuinely new
-    // product (no Product record yet) has no batch, so this remains ''
-    // exactly as before this correction — new-product behavior is
-    // unaffected (§3.A).
-    let defaultReferencePrice = '';
-    const product = products.find((p) => productKeyFor(p.name) === productKey);
-    if (product && defaultReferenceUnit) {
-      // [Bug fix — Finding C, fresh audit] Same canonical-memory-first
-      // priority as buildCatalogRow's own resolution, above — checked
-      // before either historical tier, so this function's own "seeded
-      // from the SAME resolution... can never disagree" guarantee
-      // actually holds after Finding C's correction there.
-      const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
-      if (canonicalSellingMemory && canonicalSellingMemory.unit === defaultReferenceUnit) {
-        defaultReferencePrice = String(canonicalSellingMemory.sellingPrice);
-      } else {
-        const latestBatch = findMostRecentBatchForProduct(batches, product.id);
-        if (latestBatch) {
-          const resolved = resolveUnitAwarePrice(latestBatch.sellingPrice, latestBatch.unit || '', defaultReferenceUnit, relationship);
-          if (resolved !== '') defaultReferencePrice = resolved;
-        } else {
-          // [§45 Amendment FR-82; Implementation Authorization §2 item 5]
-          // No StockBatch exists for this product — same no-batch case
-          // buildCatalogRow's own new tier handles, above. Reuses the
-          // identical findLatestRememberedProductMemory resolution (not a
-          // second, independently-computed value) so the toggle-time
-          // default here and buildCatalogRow's own render-time default
-          // can never disagree, matching this function's own established
-          // "seeded from the SAME resolution" discipline for the
-          // batch-present case.
-          const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, defaultReferenceUnit);
-          if (memory) {
-            const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, defaultReferenceUnit, relationship);
-            if (resolved !== '') defaultReferencePrice = resolved;
-          }
-        }
-      }
-    }
-    setModeAGroups((prev) => ({ ...prev, [productKey]: { referenceUnit: defaultReferenceUnit, referencePrice: defaultReferencePrice } }));
-  };
-
-  const handleModeAFieldChange = (productKey: string, fields: Partial<{ referenceUnit: string; referencePrice: string }>) => {
+  // [Implementation Authorization §14 item 3/7 — Reference Selling
+  // Configuration as the Default Path] Handles the Owner directly
+  // editing the now-always-visible reference unit/price fields —
+  // replaces `handleModeAFieldChange`'s former name only; behavior is
+  // unchanged for the fields themselves, plus one addition: a genuine
+  // edit to the reference PRICE consumes the same shared
+  // `sellingPriceEditSequence` counter every direct row edit already
+  // uses (Rule 1, `applySellingConfigurationEditRules`, above), so a
+  // reference-price declaration and a later/earlier direct row
+  // override are ordered fairly in the memory tie-break
+  // (`selectSellingMemoryByProductName`, §14 item 7).
+  const handleReferenceConfigChange = (productKey: string, fields: Partial<{ referenceUnit: string; referencePrice: string }>) => {
     setModeAGroups((prev) => {
-      const current = prev[productKey] ?? { referenceUnit: '', referencePrice: '' };
-      const nextConfig = { ...current, ...fields };
+      const current = prev[productKey] ?? computeDefaultReferenceConfig(productKey);
+      const nextConfig = {
+        ...current,
+        ...fields,
+        ...(fields.referencePrice !== undefined ? { editSequence: nextSellingPriceEditSequence() } : {}),
+      };
       const next = { ...prev, [productKey]: nextConfig };
       applyModeAToGroup(productKey, nextConfig.referenceUnit, nextConfig.referencePrice);
       return next;
     });
   };
 
-  const updateManualRow = (index: number, fields: Partial<StockCountWorkingRow>) => {
+  const updateManualRow = (
+    index: number,
+    fields: Partial<StockCountWorkingRow>,
+    // [Implementation Authorization §14 item 4] See updateCatalogRow's
+    // own identical parameter, above.
+    options?: { isReferenceDerived?: boolean }
+  ) => {
     submissionIdRef.current = null;
     // [FR-89–FR-94, Implementation Authorization §2 items 3–4] A manual
     // row never carries productId (existing, unmodified convention) —
@@ -1846,7 +1948,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       const product = currentRow.productId
         ? products.find((p) => p.id === currentRow.productId)
         : products.find((p) => p.name.trim().toLowerCase() === trimmedName);
-      resolvedFields = applySellingConfigurationEditRules(currentRow, fields, product);
+      // [Implementation Authorization §14 item 1/2] See
+      // updateCatalogRow's own identical resolution, above — a manual
+      // portion of an existing (or genuinely new, in-progress) product
+      // gets the identical active-reference treatment a catalog row
+      // does.
+      const groupKey = productKeyFor(currentRow.productName);
+      const groupReferenceConfig = getEffectiveReferenceConfig(groupKey);
+      const groupReference = {
+        relationship: getEffectiveUnitRelationshipForProductName(groupKey),
+        referenceUnit: groupReferenceConfig.referenceUnit,
+        referencePrice: groupReferenceConfig.referencePrice,
+      };
+      resolvedFields = applySellingConfigurationEditRules(currentRow, fields, product, groupReference, options?.isReferenceDerived);
     }
     const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...resolvedFields } : row));
     setManualRows(nextManualRows);
@@ -2014,9 +2128,40 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // unmodified wholly-blank createManualRow() behavior.
     const trimmedName = groupDisplayName.trim().toLowerCase();
     const matchedProduct = products.find((p) => p.name.trim().toLowerCase() === trimmedName);
-    const newRow: StockCountWorkingRow = matchedProduct
+    let newRow: StockCountWorkingRow = matchedProduct
       ? { ...buildCatalogRow(matchedProduct), productId: undefined, productName: groupDisplayName }
       : { ...createManualRow(), productName: groupDisplayName };
+    // [Implementation Authorization §14 item 1 — closes Rule 8
+    // Assessment §17.1 Gap B] If this product's group already has an
+    // active in-session reference selling configuration (the
+    // always-visible control the Owner may have already set for an
+    // earlier portion of this SAME product), derive THIS new portion's
+    // price from it immediately, at creation time — rather than
+    // leaving it at buildCatalogRow's own static-memory-only default
+    // until the Owner happens to nudge the reference field again. Uses
+    // the identical `deriveModeAPortionValuations` engine
+    // `applyModeAToGroup` already calls for every other portion in the
+    // group — no new arithmetic.
+    const groupKey = productKeyFor(groupDisplayName);
+    const referenceConfig = modeAGroups[groupKey];
+    const referencePriceNum = referenceConfig ? Number(referenceConfig.referencePrice) : NaN;
+    if (referenceConfig?.referenceUnit && Number.isFinite(referencePriceNum) && referencePriceNum >= 0) {
+      const relationship = getEffectiveUnitRelationshipForProductName(groupKey);
+      const [derived] = deriveModeAPortionValuations(
+        [{ id: 'new-portion', unit: newRow.unit, quantity: 0 }],
+        referenceConfig.referenceUnit,
+        referencePriceNum,
+        relationship
+      );
+      if (derived.derivedSellingPrice !== null) {
+        newRow = {
+          ...newRow,
+          sellingPrice: String(derived.derivedSellingPrice),
+          sellingPriceBasisUnit: newRow.unit,
+          sellingPriceAutoFilled: true,
+        };
+      }
+    }
     const nextManualRows = [...manualRows, newRow];
     setManualRows(nextManualRows);
     // [Decision 39a] Structural add — '__meta__', matching handleAddManualRow.
@@ -2617,17 +2762,48 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         sellingPriceEditSequence: row.sellingPriceEditSequence,
       }));
 
+      // [Implementation Authorization §14 item 7 — Reference Selling
+      // Configuration as the Default Path] Every product group's own
+      // active in-session reference-price declaration (the
+      // always-visible control that replaces the former Mode A
+      // toggle) — a second, parallel kind of deliberate act, competing
+      // in the exact same "last deliberately entered wins" tie-break
+      // as workingRowDeliberateEntries above
+      // (selectSellingMemorySelection.ts's own header comment). Only a
+      // group with a non-blank, parseable referencePrice AND a
+      // recorded editSequence (i.e. the Owner has actually typed into
+      // the reference-price field this session, not merely seen its
+      // computed default) is included — a group left at its
+      // pre-filled, never-touched default contributes no candidate
+      // here, exactly like an untouched row contributes none to
+      // workingRowDeliberateEntries above.
+      const referencePriceEntries = Object.entries(modeAGroups)
+        .filter(([, config]) => config.editSequence !== undefined && config.referenceUnit && config.referencePrice.trim() !== '')
+        .map(([productKey, config]) => {
+          const matchingRow = allWorkingRows.find((row) => productKeyFor(row.productName) === productKey);
+          return {
+            productName: matchingRow?.productName ?? productKey,
+            sellingPrice: Number(config.referencePrice),
+            unit: config.referenceUnit,
+            editSequence: config.editSequence!,
+          };
+        })
+        .filter((entry) => Number.isFinite(entry.sellingPrice) && entry.sellingPrice >= 0);
+
       const saved = await recordStockCount({
         type,
         label: type === 'custom' ? label.trim() : undefined,
         date,
         workingRowDeliberateEntries,
+        referencePriceEntries,
         items: pendingTally.countedItems.map((item) => ({
           // [Decision 40 — Validar Workflow; Implementation
           // Authorization §1 item 8/§9] This is an explicit, named
           // literal, not a spread of `item` — `StockCountTallyItem`'s
-          // own `productId`/`manualRowIndex`/`validated` fields (added
-          // for the review screen's "Corrigir" affordance only) are
+          // own `productId`/`manualRowIndex`/`validated`/
+          // `sellingPriceAutoFilled` fields (added for the review
+          // screen's "Corrigir" affordance, or for this confirm
+          // handler's own valuationMode tagging immediately below) are
           // therefore excluded here by construction, exactly like
           // every other UI-only field this codebase already keeps out
           // of a finalized StockCount this same way.
@@ -2646,18 +2822,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           ...(unitRelationshipByProductName.has(item.productName.trim().toLowerCase())
             ? { unitRelationship: unitRelationshipByProductName.get(item.productName.trim().toLowerCase())! }
             : {}),
-          // [Business Worth Evolution — Increment 4, Specification §15,
-          // FR-20] Same productName-keyed correlation pattern as
-          // unitRelationship immediately above — modeAGroups holding a
-          // key for this product means the Owner had Mode A active for
-          // it at confirmation time. Display-only (types.ts,
-          // StockCountItem.valuationMode's own comment) — never read by
-          // any calculation; the item's own sellingPrice above (Mode-A-
-          // derived or Mode-B-typed, indistinguishably) is what
-          // determines valuation, exactly as it already did before this
-          // Increment. Omitted entirely for Mode B, matching this
-          // codebase's existing "absence is the default" convention.
-          ...(modeAGroups[item.productName.trim().toLowerCase()] ? { valuationMode: 'A' as const } : {}),
+          // [Implementation Authorization §14 item 6 — Reference
+          // Selling Configuration as the Default Path] Moved from a
+          // per-product-group flag (`modeAGroups` presence — which,
+          // now that the reference control is always visible for every
+          // multi-unit product, would tag EVERY such product 'A'
+          // regardless of whether the Owner actually used the shared
+          // reference or priced every portion independently) to a
+          // per-item flag sourced from THIS item's own
+          // `sellingPriceAutoFilled` — `true` means this specific
+          // portion is still following the shared/default selling
+          // configuration; `false` (or a directly-overridden portion)
+          // is independently priced and is correctly NOT tagged.
+          // Display-only (types.ts, StockCountItem.valuationMode's own
+          // comment) — never read by any calculation; the item's own
+          // sellingPrice above (reference-derived or independently
+          // typed, indistinguishably) is what determines valuation,
+          // exactly as it already did before this correction. Omitted
+          // entirely for an independently-priced portion, matching
+          // this codebase's existing "absence is the default"
+          // convention.
+          ...(item.sellingPriceAutoFilled === true ? { valuationMode: 'A' as const } : {}),
         })),
         expectedValueAtCount: expectedCurrentStockValue,
         submissionId: submissionIdRef.current || undefined,
@@ -3737,36 +3922,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             // submit time.
                             const relationship = getEffectiveUnitRelationshipForProductName(row.productName);
                             if (!relationship || !isValidUnitRelationship(relationship)) return null;
-                            const config = modeAGroups[key];
+                            // [Implementation Authorization §14 item 2]
+                            // Always available once a valid relationship
+                            // exists — no explicit "activate" step.
+                            const config = getEffectiveReferenceConfig(key);
                             const referenceUnitOptions = relationship.units.map((u) => u.unit);
-                            // [Implementation Authorization — Existing-
-                            // Product Selling-Unit / Price-Memory
-                            // Correction, §2 item 2] Same two-tier
-                            // preference as handleModeAToggle, above —
-                            // sellingUnit when confirmed, else units[0] —
-                            // so the toggle-time and render-time defaults
-                            // can never disagree.
-                            const defaultReferenceUnit = relationship.sellingUnit || referenceUnitOptions[0] || '';
-                            const effectiveReferenceUnit = config?.referenceUnit || defaultReferenceUnit;
-                            // A portion's unit falling outside the chain
-                            // (e.g. Owner typed a non-member unit after
-                            // enabling Mode A) does not hide this control —
-                            // Mode A stays visibly active with its own
-                            // inputs so the Owner can see/fix it; that
-                            // specific portion's price is simply left
-                            // untouched by applyModeAToGroup (never
-                            // fabricated), matching UOM Specification §4
-                            // Item 6's existing warn-and-allow discipline.
+                            const effectiveReferenceUnit = config.referenceUnit;
                             return (
                               <ModeAValuationControl
                                 referenceUnitOptions={referenceUnitOptions}
-                                active={!!config}
                                 referenceUnit={effectiveReferenceUnit}
-                                referencePrice={config?.referencePrice || ''}
+                                referencePrice={config.referencePrice}
                                 currencySymbol={currencySymbol}
                                 allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
-                                onToggle={(enable) => handleModeAToggle(key, enable)}
-                                onChange={(fields) => handleModeAFieldChange(key, fields)}
+                                onChange={(fields) => handleReferenceConfigChange(key, fields)}
                               />
                             );
                           })()}
@@ -4089,26 +4258,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           // screenshot's own product to get Mode A.
                           const relationship = getEffectiveUnitRelationshipForProductName(group.displayName);
                           if (!relationship || !isValidUnitRelationship(relationship)) return null;
-                          const config = modeAGroups[key];
+                          // [Implementation Authorization §14 item 2]
+                          // Always available once a valid relationship
+                          // exists — no explicit "activate" step.
+                          const config = getEffectiveReferenceConfig(key);
                           const referenceUnitOptions = relationship.units.map((u) => u.unit);
-                          // [Implementation Authorization — Existing-
-                          // Product Selling-Unit / Price-Memory
-                          // Correction, §2 item 2] Same two-tier
-                          // preference as the catalog-row loop's
-                          // identical site above and handleModeAToggle —
-                          // sellingUnit when confirmed, else units[0].
-                          const defaultReferenceUnit = relationship.sellingUnit || referenceUnitOptions[0] || '';
-                          const effectiveReferenceUnit = config?.referenceUnit || defaultReferenceUnit;
+                          const effectiveReferenceUnit = config.referenceUnit;
                           return (
                             <ModeAValuationControl
                               referenceUnitOptions={referenceUnitOptions}
-                              active={!!config}
                               referenceUnit={effectiveReferenceUnit}
-                              referencePrice={config?.referencePrice || ''}
+                              referencePrice={config.referencePrice}
                               currencySymbol={currencySymbol}
                               allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
-                              onToggle={(enable) => handleModeAToggle(key, enable)}
-                              onChange={(fields) => handleModeAFieldChange(key, fields)}
+                              onChange={(fields) => handleReferenceConfigChange(key, fields)}
                             />
                           );
                         })()}

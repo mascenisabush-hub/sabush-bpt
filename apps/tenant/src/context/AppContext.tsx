@@ -407,6 +407,21 @@ interface RecordStockCountParams {
     sellingPriceAutoFilled?: boolean;
     sellingPriceEditSequence?: number;
   }>;
+  // [Implementation Authorization §14 item 7 — Reference Selling
+  // Configuration as the Default Path] The Owner's own group-level
+  // reference-price declarations at confirmation time (the
+  // always-visible control that replaces the former Mode A toggle) —
+  // a second, parallel kind of deliberate act, competing in the exact
+  // same tie-break as workingRowDeliberateEntries above (see
+  // selectSellingMemoryByProductName's own header comment). Absent for
+  // any call site not yet updated, or when no product in this count
+  // has an active reference — falls back to exactly today's behavior.
+  referencePriceEntries?: Array<{
+    productName: string;
+    sellingPrice: number;
+    unit: string;
+    editSequence: number;
+  }>;
 }
 
 // [Initial Stock Valuation History] Owner-entered input for a new price
@@ -4319,7 +4334,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPendingBusinessWorthCorrection(null);
   };
 
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries, referencePriceEntries }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -4443,7 +4458,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         (isValidUnitRelationship(tempProducts.find((p) => p.name.trim().toLowerCase() === key)?.unitRelationship)
           ? tempProducts.find((p) => p.name.trim().toLowerCase() === key)?.unitRelationship?.sellingUnit
           : undefined),
-      workingRowDeliberateEntries
+      workingRowDeliberateEntries,
+      referencePriceEntries
     );
 
     // [Business Worth Evolution — Increment 10 Item 5 / Post-

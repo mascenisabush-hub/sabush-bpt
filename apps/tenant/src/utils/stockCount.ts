@@ -387,6 +387,21 @@ export interface StockCountTallyItem {
   // solely to drive review-screen rendering, which needs a definite
   // yes/no per item.
   validated: boolean;
+  // [Implementation Authorization §14 item 6 — Reference Selling
+  // Configuration as the Default Path] Mirrors the source row's own
+  // `StockCountWorkingRow.sellingPriceAutoFilled` verbatim — whether
+  // THIS portion is still following a shared/default selling
+  // configuration (`true`) or was independently, deliberately priced
+  // (`false`). Working-preview-only, exactly like `productId`/
+  // `manualRowIndex`/`validated` above: never included in the
+  // explicit-literal `items` mapping PeriodicStockCountView.tsx's
+  // confirm handler builds for `recordStockCount`, never reaching
+  // `NormalizedStockCountItem`/the persisted `StockCountItem` shape,
+  // never read by any valuation calculation. Exists solely so the
+  // confirm handler can tag `StockCountItem.valuationMode` per item
+  // (§14 item 6) instead of per product group, without a second
+  // lookup pass against `allWorkingRows`.
+  sellingPriceAutoFilled?: boolean;
 }
 
 export interface StockCountTallyResult {
@@ -484,6 +499,10 @@ export function tallyStockCountRows(
       productId: row.productId,
       manualRowIndex: row.manualRowIndex,
       validated: row.validated === true,
+      // [Implementation Authorization §14 item 6] See
+      // StockCountTallyItem's own comment, above — mirrors the source
+      // row verbatim, working-preview-only.
+      sellingPriceAutoFilled: row.sellingPriceAutoFilled,
     });
 
     totalPhysicalUnits += quantity;

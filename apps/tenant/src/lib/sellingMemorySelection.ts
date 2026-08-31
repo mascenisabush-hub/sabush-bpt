@@ -57,6 +57,27 @@ export interface WorkingRowDeliberateEntry {
   sellingPriceEditSequence?: number;
 }
 
+// [Implementation Authorization §14 item 7 — Reference Selling
+// Configuration as the Default Path] A second, parallel kind of
+// deliberate act: the Owner explicitly setting a product GROUP's own
+// shared reference price/unit (the always-visible control that
+// replaces the former Mode A toggle), as distinct from a direct edit
+// to one specific row's own price field (WorkingRowDeliberateEntry,
+// above, unchanged). Both compete in the SAME "highest
+// sellingPriceEditSequence wins" tie-break below — a reference-price
+// declaration and a later (or earlier) direct row override are ordered
+// strictly by true entry sequence, never by which kind of entry either
+// one is. `editSequence` is drawn from the identical shared in-session
+// counter every direct row edit already uses
+// (`nextSellingPriceEditSequence`, PeriodicStockCountView.tsx) so the
+// two candidate kinds are genuinely comparable.
+export interface ReferencePriceEntry {
+  productName: string;
+  sellingPrice: number;
+  unit: string;
+  editSequence: number;
+}
+
 export interface SellingMemoryEntry {
   sellingPrice: number;
   sellingUnit?: string;
@@ -76,26 +97,46 @@ export type ConfirmedSellingUnitResolver = (productKey: string) => string | unde
 export function selectSellingMemoryByProductName(
   items: SellingMemorySelectionRawItem[],
   resolveConfirmedSellingUnit: ConfirmedSellingUnitResolver,
-  workingRowDeliberateEntries?: WorkingRowDeliberateEntry[]
+  workingRowDeliberateEntries?: WorkingRowDeliberateEntry[],
+  referencePriceEntries?: ReferencePriceEntry[]
 ): Map<string, SellingMemoryEntry> {
   const sellingMemoryByProductName = new Map<string, SellingMemoryEntry>();
 
   if (workingRowDeliberateEntries) {
     const bestSequenceByProductName = new Map<string, number>();
+
+    const considerCandidate = (productName: string, sellingPrice: number, unit: string, sequence: number) => {
+      const key = productName.trim().toLowerCase();
+      if (!key || !Number.isFinite(sellingPrice) || sellingPrice < 0) return;
+      const bestSoFar = bestSequenceByProductName.get(key);
+      if (bestSoFar === undefined || sequence > bestSoFar) {
+        bestSequenceByProductName.set(key, sequence);
+        sellingMemoryByProductName.set(key, { sellingPrice, sellingUnit: unit.trim() || undefined });
+      }
+    };
+
     for (const wr of workingRowDeliberateEntries) {
       // Only a genuinely deliberate entry participates — an absent or
       // `true` sellingPriceAutoFilled means "still following the
       // default," never a candidate for future memory.
       if (wr.sellingPriceAutoFilled !== false) continue;
-      const key = wr.productName.trim().toLowerCase();
-      if (!key || typeof wr.sellingPrice !== 'number' || !Number.isFinite(wr.sellingPrice) || wr.sellingPrice < 0) continue;
-      const sequence = wr.sellingPriceEditSequence ?? -1;
-      const bestSoFar = bestSequenceByProductName.get(key);
-      if (bestSoFar === undefined || sequence > bestSoFar) {
-        bestSequenceByProductName.set(key, sequence);
-        sellingMemoryByProductName.set(key, { sellingPrice: wr.sellingPrice, sellingUnit: wr.unit.trim() || undefined });
+      if (typeof wr.sellingPrice !== 'number') continue;
+      considerCandidate(wr.productName, wr.sellingPrice, wr.unit, wr.sellingPriceEditSequence ?? -1);
+    }
+
+    // [Implementation Authorization §14 item 7] A reference-price
+    // declaration competes in the exact same pass, by the exact same
+    // rule — the only difference from a WorkingRowDeliberateEntry is
+    // where the candidate came from (a group-level reference field
+    // rather than one row's own direct price edit), never how it is
+    // judged against the others.
+    if (referencePriceEntries) {
+      for (const rp of referencePriceEntries) {
+        if (typeof rp.sellingPrice !== 'number') continue;
+        considerCandidate(rp.productName, rp.sellingPrice, rp.unit, rp.editSequence);
       }
     }
+
     return sellingMemoryByProductName;
   }
 
