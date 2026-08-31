@@ -232,7 +232,7 @@ export const fr: TranslationDict = {
   },
   nav: {
     tabs: {
-      dashboard: { label: 'Produits', shortLabel: 'Produits' },
+      dashboard: { label: 'Dashboard', shortLabel: 'Dashboard' },
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
       addStock: { label: 'Ajouter un Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Comptage de Stock', shortLabel: 'Comptage' },

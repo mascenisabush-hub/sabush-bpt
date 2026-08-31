@@ -1388,7 +1388,7 @@ export const pt: TranslationDict = {
   },
   nav: {
     tabs: {
-      dashboard: { label: 'Produtos', shortLabel: 'Produtos' },
+      dashboard: { label: 'Dashboard', shortLabel: 'Dashboard' },
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
       addStock: { label: 'Adicionar Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Contagem de Stock', shortLabel: 'Contagem' },
