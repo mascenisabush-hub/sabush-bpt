@@ -116,7 +116,15 @@ describe('PeriodicStockCountView.tsx — ExistingProductSummary is actually wire
   it('the catalog-row loop renders it under the same isFirstPortionOfMultiPortionGroup gate Mode A already uses — no additional isGenuinelyNewProductName check needed there (a catalog row is never genuinely new, by construction)', () => {
     const start = periodicSrc.indexOf('const isFirstPortionOfMultiPortionGroup = portionLabel.portionIndex === 1;');
     assert.notEqual(start, -1);
-    const block = periodicSrc.slice(start, start + 11000);
+    // [Concept B — Balanced Compact] Window widened 11000 -> 13000: the
+    // Implementation Authorization's own collapse/warning-override
+    // markup and explanatory comments added to ModeAValuationControl's
+    // catalog-loop call site (between this anchor and
+    // ExistingProductSummary's own call site) pushed the true distance
+    // to ~11.4k chars, past the previous cap — the same class of drift
+    // this window's own prior 9500 -> 10000 widening already
+    // anticipated. No assertion content below changed.
+    const block = periodicSrc.slice(start, start + 13000);
     assert.match(block, /\{isFirstPortionOfMultiPortionGroup && \(\s*<ExistingProductSummary/);
     assert.match(block, /costBasis=\{costBasisByProductName\.get\(productKeyFor\(row\.productName\)\)\}/);
     assert.match(block, /relationship=\{getUnitRelationshipForProductName\(row\.productName\)\}/);

@@ -280,49 +280,122 @@ const ModeAValuationControl: React.FC<{
   allPortionsConvertible: boolean;
   onChange: (fields: Partial<{ referenceUnit: string; referencePrice: string }>) => void;
 }> = ({ referenceUnitOptions, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onChange }) => {
+  // [Concept B — Balanced Compact, Implementation Authorization §4/§4.1]
+  // Defaults collapsed: this control only ever renders once a product's
+  // unit relationship is already confirmed (§4.1's "known/already-
+  // configured information"), and its own reference unit/price already
+  // carry a computed default (computeDefaultReferenceConfig, this
+  // file's own resolution) the moment it first renders — nothing here
+  // is unset or blocking while collapsed, since the underlying config
+  // is live/applied regardless of whether this panel is visually open.
+  // Conceptually mirrors UnitChainSection's own collapse interaction
+  // (InitialStockCountView.tsx), not byte-for-byte: that component
+  // keys its default off whether relationship/chain/rate data exists
+  // at all, whereas this one is keyed off the mandatory warning below
+  // instead, since Mode A itself always has SOME default the instant a
+  // relationship exists.
+  const [expanded, setExpanded] = useState(!allPortionsConvertible);
+
+  // [§4.2 Warning Override — mandatory] A non-convertible-portion
+  // warning must never be hidden merely because this panel is
+  // collapsed. Forces the panel open the instant the warning becomes
+  // true — including after mount (e.g. a new, unconvertible-unit
+  // portion is added to this group while the panel was already
+  // collapsed) — and never auto-closes it again on its own; only the
+  // Owner's own click (the toggle below) does that, matching
+  // UnitChainSection's own discipline for its collapse toggle.
+  useEffect(() => {
+    if (!allPortionsConvertible) setExpanded(true);
+  }, [allPortionsConvertible]);
+
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
     // col-span-5, matching rowGridClass's corrected five-track
     // template (was 7, for the pre-§44 row) — see rowGridClass's own
-    // comment for why.
+    // comment for why. Kept as a single wrapper regardless of collapse
+    // state (rather than one per branch) so this file's own structural
+    // test (tests/periodic-contagem-cost-price-removal.test.ts) keeps
+    // counting exactly one full-row span per component, unaffected by
+    // the new collapse branching below.
     <div className="col-span-2 sm:col-span-5 -mt-1 mb-1">
-      <p className="text-[13px] font-semibold text-gray-600 mb-1.5">Preço de venda de referência</p>
-      <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
-        <div>
-          <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de referência</label>
-          <select
-            value={referenceUnit}
-            onChange={(e) => onChange({ referenceUnit: e.target.value })}
-            className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          >
-            {referenceUnitOptions.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-        </div>
-        <div>
-          <label className="block text-[11px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
-          <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={referencePrice}
-            onChange={(e) => onChange({ referencePrice: e.target.value })}
-            placeholder="Ex: 1250"
-            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          />
-        </div>
-        <p className="text-[13px] text-gray-500 leading-relaxed basis-full">
-          O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente.
-        </p>
-        {!allPortionsConvertible && (
-          <p className="text-[13px] text-amber-600 font-medium leading-relaxed basis-full">
-            Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.
-          </p>
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-1.5 text-[13px] font-semibold text-gray-600 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
+      >
+        {expanded ? <ChevronUp className="w-3 h-3 shrink-0" strokeWidth={2.5} /> : <ChevronDown className="w-3 h-3 shrink-0" strokeWidth={2.5} />}
+        <span>Preço de venda de referência</span>
+        {!expanded && referenceUnit && referencePrice && (
+          <span className="font-normal text-gray-400">— {referenceUnit}, {currencySymbol} {referencePrice}</span>
         )}
-      </div>
+        {/* [§4.2] A compact, always-visible indicator of the active
+            warning — shown regardless of collapse state, on top of the
+            useEffect above that already forces expanded=true. Belt and
+            suspenders: even if a future change altered the effect's
+            timing, the warning would still never be silently absent
+            from the collapsed toggle row itself. */}
+        {!allPortionsConvertible && (
+          <AlertTriangle
+            className="w-3 h-3 text-amber-600 shrink-0 ml-auto"
+            strokeWidth={2.5}
+            aria-label="Aviso: preço de referência não aplicado a todas as porções"
+          />
+        )}
+      </button>
+
+      {expanded && (
+        <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de referência</label>
+            <select
+              value={referenceUnit}
+              onChange={(e) => onChange({ referenceUnit: e.target.value })}
+              className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            >
+              {referenceUnitOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </div>
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
+            <input
+              type="number"
+              min="0"
+              step="0.01"
+              value={referencePrice}
+              onChange={(e) => onChange({ referencePrice: e.target.value })}
+              placeholder="Ex: 1250"
+              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+          {/* [Concept B §3.4] Compacted from a full leading-relaxed
+              sentence to a short visible line + Info icon carrying the
+              full explanation via `title` (native, accessible on focus/
+              hover, no new dependency — the same convention this file
+              already uses for the Validado/Ainda não validado dot,
+              above). The full sentence is preserved verbatim in the
+              title attribute, not deleted. */}
+          <p
+            className="text-[11.5px] text-gray-500 basis-full flex items-center gap-1"
+            title="O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente."
+          >
+            <Info className="w-3 h-3 shrink-0" strokeWidth={2.25} />
+            <span>Aplicado a todas as porções — edite uma individualmente para um preço diferente.</span>
+          </p>
+          {!allPortionsConvertible && (
+            <p
+              className="text-[11.5px] text-amber-600 font-semibold basis-full flex items-center gap-1"
+              title="Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente."
+            >
+              <AlertTriangle className="w-3 h-3 shrink-0" strokeWidth={2.25} />
+              <span>Uma ou mais porções não convertem automaticamente — preço manual necessário.</span>
+            </p>
+          )}
+        </div>
+      )}
     </div>
   );
 };
@@ -398,67 +471,101 @@ const NewProductInfoPanel: React.FC<{
   sellingUnit,
   onSellingUnitChange,
 }) => {
+  // [Concept B — Balanced Compact, Implementation Authorization §4/§4.1]
+  // Always starts expanded: this panel only ever renders for a
+  // genuinely new product (see the call site's own
+  // isGenuinelyNewProductName gate) — by definition there is no
+  // "already configured" state to default to, and §4.1 requires
+  // required/incomplete new-product configuration to stay open by
+  // default so the Owner is never forced to hunt for it. The Owner may
+  // still collapse it manually (e.g. once finished) via the toggle
+  // below; nothing here ever auto-collapses it, deliberately avoiding
+  // any risk of the panel vanishing out from under the Owner
+  // mid-configuration (Implementation Authorization §13).
+  const [expanded, setExpanded] = useState(true);
+
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
     // col-span-5 — see ModeAValuationControl's identical comment above.
-    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#B8952F]">Produto novo</span>
+    // Single wrapper regardless of collapse state, same reasoning as
+    // ModeAValuationControl's own identical structural note.
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5">
+      <button
+        type="button"
+        onClick={() => setExpanded((v) => !v)}
+        className="w-full flex items-center gap-1.5 text-left py-0.5"
+      >
+        {expanded ? <ChevronUp className="w-3 h-3 text-gray-400 shrink-0" strokeWidth={2.5} /> : <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" strokeWidth={2.5} />}
+        <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#B8952F] shrink-0">Produto novo</span>
         <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
-      </div>
+      </button>
 
-      {/* [§45 Amendment FR-78/FR-80; Implementation Authorization §2
-          item 1] The "Custo de Compra Original" cost-value input
-          (purchase unit + purchase cost, grouped together) is removed:
-          "new to the SABUSH catalog" is not "newly purchased" (§45 §4
-          item 2), and Periodic Contagem never asks for historical/
-          original purchase cost, for any product, first-time or
-          otherwise (§45 §7/FR-78, restated). purchaseUnit's own input
-          is retained standalone, unrelated to cost — it remains the
-          relationship chain's root/base unit, read by
-          UnitRelationshipChainEditor's own display below,
-          sellingUnitOptions' construction, and the submit-time
-          unitRelationship candidate (handleConfirmSave, further below)
-          — none of which depend on a cost value. */}
-      <div>
-        <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de compra</label>
-        <input
-          type="text"
-          value={purchaseUnit}
-          onChange={(e) => onPurchaseUnitChange(e.target.value)}
-          placeholder="Ex: Cx"
-          className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-        />
-      </div>
+      {expanded && (
+        <div className="mt-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
+          {/* [§45 Amendment FR-78/FR-80; Implementation Authorization §2
+              item 1] The "Custo de Compra Original" cost-value input
+              (purchase unit + purchase cost, grouped together) is removed:
+              "new to the SABUSH catalog" is not "newly purchased" (§45 §4
+              item 2), and Periodic Contagem never asks for historical/
+              original purchase cost, for any product, first-time or
+              otherwise (§45 §7/FR-78, restated). purchaseUnit's own input
+              is retained standalone, unrelated to cost — it remains the
+              relationship chain's root/base unit, read by
+              UnitRelationshipChainEditor's own display below,
+              sellingUnitOptions' construction, and the submit-time
+              unitRelationship candidate (handleConfirmSave, further below)
+              — none of which depend on a cost value. */}
+          <div>
+            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de compra</label>
+            <input
+              type="text"
+              value={purchaseUnit}
+              onChange={(e) => onPurchaseUnitChange(e.target.value)}
+              placeholder="Ex: Cx"
+              className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
 
-      <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
+          <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
 
-      {/* [Decision 37 B.2 Selling Unit Capture Extension —
-          Implementation Authorization §2 items 2/5] Renders only once
-          the chain has at least one complete step (2+ total units) —
-          sellingUnitOptions is empty otherwise, exactly the same gate
-          a single-functional-unit product already satisfies naturally
-          (§3.A: no selector, no relationship, the one unit is simply
-          the selling unit). Never forces sellingUnit === purchaseUnit —
-          the owner picks any member of the established chain. */}
-      {sellingUnitOptions.length > 0 && (
-        <div>
-          <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de venda/avaliação</label>
-          <select
-            value={sellingUnit}
-            onChange={(e) => onSellingUnitChange(e.target.value)}
-            className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-          >
-            <option value="">Selecionar...</option>
-            {sellingUnitOptions.map((u) => (
-              <option key={u} value={u}>
-                {u}
-              </option>
-            ))}
-          </select>
-          <p className="mt-1 text-[13px] text-gray-500 leading-relaxed">
-            A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra.
-          </p>
+          {/* [Decision 37 B.2 Selling Unit Capture Extension —
+              Implementation Authorization §2 items 2/5] Renders only once
+              the chain has at least one complete step (2+ total units) —
+              sellingUnitOptions is empty otherwise, exactly the same gate
+              a single-functional-unit product already satisfies naturally
+              (§3.A: no selector, no relationship, the one unit is simply
+              the selling unit). Never forces sellingUnit === purchaseUnit —
+              the owner picks any member of the established chain. */}
+          {sellingUnitOptions.length > 0 && (
+            <div>
+              <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de venda/avaliação</label>
+              <select
+                value={sellingUnit}
+                onChange={(e) => onSellingUnitChange(e.target.value)}
+                className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              >
+                <option value="">Selecionar...</option>
+                {sellingUnitOptions.map((u) => (
+                  <option key={u} value={u}>
+                    {u}
+                  </option>
+                ))}
+              </select>
+              {/* [Concept B §3.4] Compacted from a full leading-relaxed
+                  sentence to a short visible line + Info icon carrying
+                  the full explanation via `title` — same convention as
+                  ModeAValuationControl's identical compaction, above.
+                  Full sentence preserved verbatim in the title
+                  attribute, not deleted. */}
+              <p
+                className="mt-1 text-[11px] text-gray-500 flex items-center gap-1"
+                title="A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra."
+              >
+                <Info className="w-3 h-3 shrink-0" strokeWidth={2.25} />
+                <span>Pode diferir da unidade de compra</span>
+              </p>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -506,23 +613,33 @@ const ExistingProductSummary: React.FC<{
   const hasRelationship = !!relationship && isValidUnitRelationship(relationship);
   const hasCostBasis = !!costBasis && Number.isFinite(costBasis.purchaseCost) && costBasis.purchaseCost >= 0 && !!costBasis.purchaseUnit;
   if (!hasRelationship && !hasCostBasis) return null;
+  // [Concept B — Balanced Compact, Implementation Authorization §3.3]
+  // Compacted from a bordered/padded panel to a single inline line —
+  // every governed figure (cost basis, relationship) is unchanged and
+  // still present, only the chrome around them is removed. This
+  // component is purely read-only display (no inputs, nothing to
+  // "expand" into beyond what is already shown) — its compact form IS
+  // its only form, satisfying §4.1's "known information defaults
+  // compact" without a separate collapse toggle, since there is no
+  // richer expanded view to reveal. `productName` is intentionally no
+  // longer repeated here — it is already shown once, immediately
+  // above, on the row's own Nome field/label — dropping that duplicate
+  // is a wording simplification (§3.4), never a removal of business
+  // data. Kept prop-compatible (productName still accepted) so both
+  // call sites below need no change.
   return (
-    // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
-    // col-span-5 — see ModeAValuationControl's identical comment above.
-    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-1.5">
-      <div className="flex items-center gap-1.5">
-        <span className="text-[10.5px] font-bold uppercase tracking-wide text-gray-500">Memória do produto</span>
-        <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
-      </div>
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-gray-500">
+      <span className="shrink-0 font-bold uppercase tracking-wide text-gray-400 text-[10px]">Memória</span>
       {hasCostBasis && (
-        <p className="text-[12.5px] text-gray-600">
-          Custo de compra original:{' '}
+        <span>
+          Custo original:{' '}
           <span className="font-mono font-semibold text-[#111827]">{formatCurrency(costBasis!.purchaseCost, currencySymbol)}</span>
-          {' '}/ {costBasis!.purchaseUnit}
-        </p>
+          /{costBasis!.purchaseUnit}
+        </span>
       )}
+      {hasCostBasis && hasRelationship && <span className="text-gray-300">·</span>}
       {hasRelationship && (
-        <p className="text-[12.5px] text-gray-600 font-mono">
+        <span className="font-mono">
           1 {relationship!.units[0].unit}
           {relationship!.units.slice(1).map((u, i) => {
             const factor = getConversionFactor(relationship!, relationship!.units[0].unit, u.unit);
@@ -532,7 +649,7 @@ const ExistingProductSummary: React.FC<{
               </span>
             );
           })}
-        </p>
+        </span>
       )}
     </div>
   );
@@ -3750,6 +3867,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
             {visibleCatalogEntries.length > 0 && (
               <>
+                {/* [Concept B — Balanced Compact, Implementation
+                    Authorization §3.1] Shared desktop column header,
+                    matching InitialStockCountView.tsx's own established
+                    pattern (its own identical `hidden sm:grid
+                    ${rowGridClass...}` header, above its product list) —
+                    reused here as a pattern, not shared code, per this
+                    file's own established precedent. Exactly five
+                    labels, matching rowGridClass's five actual tracks
+                    (Nome/Qtd/Unid/Venda-Un/Valor+ações) — deliberately
+                    NOT six: Periodic no longer collects Custo/Un at all
+                    (§44), so no such column exists to label. This is
+                    what makes hiding the per-row labels below safe: on
+                    desktop this header alone now describes every field,
+                    for every row, in both the catalog and manual
+                    sections. */}
+                <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 border-b border-[#E5E7EB]`}>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Venda/Un</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor</span>
+                </div>
                 <div className="space-y-2.5 mt-3">
                   {visibleCatalogEntries.map(([productId, row]) => {
                     const isBlank = row.quantity.trim() === '';
@@ -3891,8 +4030,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         {portionLabel.isMultiPortion && (
                           // [Issue 2] col-span-5, see rowGridClass above.
                           <div className="col-span-2 sm:col-span-5 -mt-1 mb-0.5">
-                            <p className="text-[12px] text-[#B8952F] font-medium leading-snug">
-                              Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
+                            {/* [Concept B §5] Lightly shortened — meaning
+                                unchanged, full original sentence kept
+                                verbatim in `title`. Not moved to a pure
+                                tooltip/icon: this is disambiguation the
+                                Owner needs to notice at a glance, not
+                                background explanation, so it stays as
+                                visible text, just shorter. */}
+                            <p
+                              className="text-[12px] text-[#B8952F] font-medium leading-snug"
+                              title={`Porção ${portionLabel.portionIndex} de ${portionLabel.portionCount} — mesmo produto, será somado no total`}
+                            >
+                              Porção {portionLabel.portionIndex}/{portionLabel.portionCount} — mesmo produto, somado no total
                             </p>
                           </div>
                         )}
@@ -3960,7 +4109,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         )}
 
                         <div>
-                          <label className={fieldLabelClass}>Qtd</label>
+                          <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
                           <input
                             type="number"
                             min="0"
@@ -3974,7 +4123,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         </div>
 
                         <div>
-                          <label className={fieldLabelClass}>Unid</label>
+                          <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
                           <input
                             type="text"
                             placeholder="un"
@@ -4004,7 +4153,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             introduced. */}
 
                         <div>
-                          <label className={fieldLabelClass}>Venda/Un ({currencySymbol})</label>
+                          <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
                           <input
                             type="number"
                             min="0"
@@ -4065,7 +4214,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 it was removed from. Selling Value remains
                                 the sole per-row figure — no replacement
                                 cost UI or anomaly indicator introduced. */}
-                            <label className={fieldLabelClass}>Valor</label>
+                            <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
                             {/* [Issue 2 — Periodic Contagem Live
                                 Selling-Price Readability] The previous
                                 word-breaking utility class previously let
@@ -4179,22 +4328,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 Adicionados Manualmente
                 <span className="text-gray-500 font-normal ml-1.5">({visibleManualRowGroups.length})</span>
               </p>
-              {/* [Fix — Owner had to keep scrolling back up to a shared
-                  header to know which field was which] The per-field
-                  labels below (Qtd/Unid/Compra/Venda/Valor) are no
-                  longer `sm:hidden` — every field now carries its own
-                  always-visible label directly above its own input, on
-                  every screen size, so the row itself always says what
-                  it wants filled in, with nothing to scroll up for. This
-                  also removes the need for a shared top header row
-                  (previously here and in the catalog-rows section above)
-                  — which could never correctly label every row anyway,
-                  since Compra/Un is genuinely absent on some rows (a
-                  suppressed, non-purchase-unit portion — see
-                  isCostFieldSuppressed) and present on others; one fixed
-                  header could not describe both. */}
+              {/* [Concept B — Balanced Compact, Implementation
+                  Authorization §3.1/§3.2] The reasoning that previously
+                  justified always-visible per-row labels here (this
+                  comment, prior to this Increment) no longer holds:
+                  Compra/Un — the field this reasoning pointed at as
+                  "genuinely absent on some rows and present on others,
+                  so one fixed header could not describe both" — was
+                  itself removed from Periodic Contagem entirely by §44,
+                  before this Increment. Every manual row (like every
+                  catalog row) now has the exact same four fields
+                  (Qtd/Unid/Venda-Un/Valor) unconditionally, so a single
+                  shared header can once again correctly label every row
+                  — restoring the header this section originally had,
+                  mirroring InitialStockCountView.tsx's own established
+                  pattern exactly like the catalog section's identical
+                  header, above. */}
               {productSearch.trim() && visibleManualRowGroups.length === 0 && (
                 <p className="text-[13px] text-gray-500 italic py-3">Nenhum produto encontrado para "{productSearch.trim()}".</p>
+              )}
+              {visibleManualRowGroups.length > 0 && (
+                <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-2 mb-1 border-b border-[#E5E7EB]`}>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Venda/Un</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor</span>
+                </div>
               )}
               <div className="space-y-3">
                 {visibleManualRowGroups.map((group) => {
@@ -4224,7 +4384,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   return (
                     <div key={`manual-group-${firstIdx}`} className="rounded-2xl bg-white border border-[#F0EEE4] shadow-[0_1px_2px_rgba(11,31,58,0.03),0_6px_16px_-10px_rgba(212,175,55,0.16)] px-3.5 py-3.5 space-y-1.5">
                       <div>
-                        <label className={fieldLabelClass}>Nome</label>
+                        <label className={`${fieldLabelClass} sm:hidden`}>Nome</label>
                         <input
                           type="text"
                           placeholder="Ex: Arroz"
@@ -4399,14 +4559,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                     larger group that also includes a
                                     catalog row. */}
                                 {portionLabel.isMultiPortion && (
-                                  <p className="text-[12px] text-[#B8952F] font-medium leading-snug">
-                                    Porção {portionLabel.portionIndex} de {portionLabel.portionCount} — mesmo produto, será somado no total
+                                  <p
+                                    className="text-[12px] text-[#B8952F] font-medium leading-snug"
+                                    title={`Porção ${portionLabel.portionIndex} de ${portionLabel.portionCount} — mesmo produto, será somado no total`}
+                                  >
+                                    Porção {portionLabel.portionIndex}/{portionLabel.portionCount} — mesmo produto, somado no total
                                   </p>
                                 )}
                               </div>
 
                               <div>
-                                <label className={fieldLabelClass}>Qtd</label>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
                                 <input
                                   type="number"
                                   min="0"
@@ -4420,7 +4583,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               </div>
 
                               <div>
-                                <label className={fieldLabelClass}>Unid</label>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
                                 <input
                                   type="text"
                                   value={row.unit}
@@ -4444,7 +4607,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   product's own portion rows. */}
 
                               <div>
-                                <label className={fieldLabelClass}>Venda/Un ({currencySymbol})</label>
+                                <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
                                 <input
                                   type="number"
                                   min="0"
@@ -4485,7 +4648,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       same reasoning as the catalog-row
                                       block, above. Selling Value remains
                                       the sole per-row figure. */}
-                                  <label className={fieldLabelClass}>Valor</label>
+                                  <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
                                   {/* [Issue 2 — Periodic Contagem Live
                                       Selling-Price Readability] Same
                                       correction as the catalog-row Valor
