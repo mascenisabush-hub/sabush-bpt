@@ -1,6 +1,7 @@
 # Section 5 — Business Lifecycle
 
 **Status:** ✅ Approved
+**Amended:** 31 August 2026 — per the signed [Capital Inicial Retirement Decision Proposal](../engineering/capital-inicial-retirement-decision-proposal.md), BDR Decision 39 (`docs/specs/BDR-pending-business-worth-evolution-measurement-model.md`), and Rule 8 Assessment Finding GOV-2 (`docs/engineering/capital-inicial-retirement-rule8-assessment.md`), all Product-Architect-signed. §5.4 ("Initial Stock Count") is retired as an active, one-time lifecycle stage — it is no longer a step a new business passes through. Per Hard Rule #1 (`CLAUDE.md`: "Never change approved architecture without explicitly explaining why"), the original §5.4 text is preserved below, struck through, not deleted, as the historical record of what this stage was and why it existed; a dated correction follows each struck passage explaining the change and citing its governing decision. Every other section/stage in this document (5.1–5.3, 5.5–5.8) is unaffected and unamended.
 **Depends on:** Section 1 (Product Vision) — approved · Section 2 (Core Product Principles) — approved · Section 3 (Domain Architecture) — approved · Section 4 (System Architecture) — approved
 **Purpose:** Describe the complete lifecycle of a business inside Sabush BPT, stage by stage, in terms of the actual domains (Section 3) and system components (Section 4) involved at each stage — so Section 6 (User Architecture) can attach the right permissions to each stage, and Section 8 (Module Architecture) can design each stage's module against a lifecycle everyone has already agreed on.
 
@@ -18,6 +19,9 @@ Every stage below is described as it **actually happens today** where the audit 
         │                                      │ (gates entry to next stage —
         ▼                                      │  5.7 Business Growth can also
  Initial Stock Count  (immutable once set)      │  loop back here for shop #2+)
+ [RETIRED, 31 August 2026 — see §5.4 below;      │
+  a business now proceeds directly from          │
+  Business Setup to Products/Contagem/Declare]   │
         │                                      │
         ▼                                      │
  Products  ◄─────────────────────┐             │
@@ -38,7 +42,7 @@ Every stage below is described as it **actually happens today** where the audit 
  Historical Analysis  (continuous, from Closing #1 onward)
 ```
 
-Only **Business Registration**, **Business Setup**, and **Initial Stock Count** are true one-time, ordered stages. From **Products** onward, most stages run concurrently and repeat indefinitely (a business adds Products and Stock continuously; Monitoring never stops; Closings repeat monthly/yearly) — the diagram above shows the *first-time* path a new business takes, not a strict state machine every subsequent action must follow. This distinction matters for Section 6 (User Architecture), which must not gate ongoing stages behind one-time-stage completion any more strictly than the product already correctly does.
+~~Only **Business Registration**, **Business Setup**, and **Initial Stock Count** are true one-time, ordered stages.~~ **[CORRECTED, 31 August 2026, per BDR Decision 39 / Rule 8 Finding GOV-2]:** only **Business Registration** and **Business Setup** are true one-time, ordered stages — **Initial Stock Count is retired as a stage** (§5.4, below) and no longer sits in this ordered path. From **Products** onward, most stages run concurrently and repeat indefinitely (a business adds Products and Stock continuously; Monitoring never stops; Closings repeat monthly/yearly) — the diagram above shows the *first-time* path a new business takes, not a strict state machine every subsequent action must follow. This distinction matters for Section 6 (User Architecture), which must not gate ongoing stages behind one-time-stage completion any more strictly than the product already correctly does.
 
 ---
 
@@ -60,21 +64,27 @@ Only **Business Registration**, **Business Setup**, and **Initial Stock Count** 
 
 **System components involved:** Tenant SPA (4.3), Firestore write to the `businesses/{businessId}` document (4.5).
 
-**Why this must complete before Initial Stock Count:** Currency and category are referenced by every Stock Batch and Report from this point forward; allowing Stock Entry before Setup would mean re-deriving those fields retroactively across every batch, which is exactly the kind of avoidable rework Principle 2.5 exists to prevent.
+~~**Why this must complete before Initial Stock Count:**~~ **[CORRECTED, 31 August 2026, per BDR Decision 39 / Rule 8 Finding GOV-2 — Initial Stock Count is retired as the next stage; this rationale is restated against the stages that actually follow Setup today]: Why this must complete before Products/Stock Entry, Contagem, or Owner-Declared Business Worth:** Currency and category are referenced by every Stock Batch and Report from this point forward; allowing Stock Entry before Setup would mean re-deriving those fields retroactively across every batch, which is exactly the kind of avoidable rework Principle 2.5 exists to prevent.
 
 **Worth-First scope test:** Passes — an incomplete or ambiguous business identity would make every downstream Worth calculation (currency-dependent) untrustworthy.
 
 ---
 
-## 5.4 Stage: Initial Stock Count
+## 5.4 Stage: Initial Stock Count [RETIRED, 31 August 2026]
 
-**What happens:** The admin records their starting inventory via the Initial Stock Count flow (`StockCountType: 'initial'`). This single record becomes `initialCapitalValue` — the baseline every future Capital Growth calculation (`capitalGrowth = businessWorth - initialCapitalValue`) is measured against.
+**[CORRECTED, 31 August 2026, per the signed [Capital Inicial Retirement Decision Proposal](../engineering/capital-inicial-retirement-decision-proposal.md), BDR Decision 39, and Rule 8 Assessment Finding GOV-2, all Product-Architect-signed]:** this stage is retired as an active step in the business lifecycle. It is no longer offered as part of the ordered path a new business proceeds through, and no business — new or existing — may create a new Capital Inicial confirmation going forward. The original approved text for this stage is preserved below, struck through, as the historical record of what this stage was and why it existed — it is not deleted.
 
-**Why immutability matters here specifically (Principle 2.10):** Once set, this record must never be edited in place — it is the zero-point of the business's entire Worth history. The existing implementation already treats it this way; Section 5 confirms this is correct and must remain true as the product scales, since any future "just let them fix a typo" exception would silently rewrite every Capital Growth figure ever shown to that admin.
+~~**What happens:** The admin records their starting inventory via the Initial Stock Count flow (`StockCountType: 'initial'`). This single record becomes `initialCapitalValue` — the baseline every future Capital Growth calculation (`capitalGrowth = businessWorth - initialCapitalValue`) is measured against.~~
 
-**An admin may skip this stage** (the existing flow supports `onSkip`) — a business with no Initial Stock Count simply has `hasInitialStockCount: false` and `initialCapitalValue` defaults to 0, meaning Capital Growth is measured from zero rather than blocked entirely. This is the correct behavior for an admin who wants to start using the product immediately and backfill later — consistent with Principle 2.6 (Simplicity Over Completeness): requiring a perfect starting count before any use would raise the product's adoption floor, which Section 1.6 identifies as the actual competitive moat.
+~~**Why immutability matters here specifically (Principle 2.10):** Once set, this record must never be edited in place — it is the zero-point of the business's entire Worth history. The existing implementation already treats it this way; Section 5 confirms this is correct and must remain true as the product scales, since any future "just let them fix a typo" exception would silently rewrite every Capital Growth figure ever shown to that admin.~~
 
-**System components involved:** Tenant SPA, Firestore (`stockCounts` collection, scoped under the business).
+~~**An admin may skip this stage** (the existing flow supports `onSkip`) — a business with no Initial Stock Count simply has `hasInitialStockCount: false` and `initialCapitalValue` defaults to 0, meaning Capital Growth is measured from zero rather than blocked entirely. This is the correct behavior for an admin who wants to start using the product immediately and backfill later — consistent with Principle 2.6 (Simplicity Over Completeness): requiring a perfect starting count before any use would raise the product's adoption floor, which Section 1.6 identifies as the actual competitive moat.~~
+
+~~**System components involved:** Tenant SPA, Firestore (`stockCounts` collection, scoped under the business).~~
+
+**What replaces this stage, per BDR Decision 39:** a new business now proceeds directly from Business Setup (§5.3) into Products/Stock Entry (§5.5), establishing Business Worth whenever the Owner is ready via Contagem or Owner-Declared Business Worth — never via Initial Stock Count. The immutability principle this section illustrated (Principle 2.10 — a frozen, zero-point figure must never be edited in place) is unaffected by this retirement and continues to govern every existing historical Capital Inicial record (preserved permanently, per BDR Decisions 25–26 and 39(b)) and every `BusinessWorthSnapshot` produced by Contagem or Owner-Declared Business Worth going forward — the principle itself is not retired, only this one specific stage that used to illustrate it.
+
+**System components involved (historical, for existing records only):** Tenant SPA, Firestore (`stockCounts` collection, scoped under the business) — read/display/correction paths only; the creation path is retired per (a) above.
 
 ---
 
@@ -124,7 +134,7 @@ Only **Business Registration**, **Business Setup**, and **Initial Stock Count** 
 
 **What happens:** An admin's business grows in one of two ways the current system already supports: adding more Stock/Products within one shop (organic growth, already covered by 5.5–5.6 continuing indefinitely), or **adding an additional shop** via the existing `addShop` flow (multi-shop, capped at 10 per Section 1.4/3.2).
 
-**Adding a shop re-enters this lifecycle at Business Setup (5.3)** for the new shop specifically — it gets its own Business Profile, its own option to record an Initial Stock Count, its own Products and Stock Entry — while remaining under the same admin identity (`ownedBusinessIds`). This is why 5.1's diagram shows Business Growth looping back to Setup: growth is not a new lifecycle, it's the same lifecycle re-entered for a new tenant-scoped Business under an existing admin.
+~~**Adding a shop re-enters this lifecycle at Business Setup (5.3)** for the new shop specifically — it gets its own Business Profile, its own option to record an Initial Stock Count, its own Products and Stock Entry — while remaining under the same admin identity (`ownedBusinessIds`).~~ **[CORRECTED, 31 August 2026, per BDR Decision 39 / Rule 8 Finding GOV-2]:** adding a shop re-enters this lifecycle at Business Setup (5.3) for the new shop specifically — it gets its own Business Profile, its own Products and Stock Entry, and its own path to establishing Business Worth via Contagem or Owner-Declared Business Worth — while remaining under the same admin identity (`ownedBusinessIds`). The new shop is never offered an Initial Stock Count option, per §5.4's retirement above. This is why 5.1's diagram shows Business Growth looping back to Setup: growth is not a new lifecycle, it's the same lifecycle re-entered for a new tenant-scoped Business under an existing admin.
 
 **New from Section 4:** This is the stage where Subscriptions' feature-gating (3.13, 4.12) becomes directly visible to the admin — the 11th-shop attempt is exactly the check Section 3.13 names explicitly ("can this admin add an 11th shop"), read live from the `subscriptions` collection before `addShop` is allowed to proceed. This is a real constraint this document series is introducing at Business Growth, not a hypothetical future one — Section 9 will design the specific plan tiers and limits; Section 5 fixes that the check happens at this exact point in the lifecycle.
 
@@ -146,7 +156,7 @@ Only **Business Registration**, **Business Setup**, and **Initial Stock Count** 
 |---|---|---|---|
 | Business Registration | One-time | Business, Staff/Auth | Subscriptions (trial record created) |
 | Business Setup | One-time (per shop) | Business | — |
-| Initial Stock Count | One-time (per shop), immutable, skippable | Inventory (Stock Counts) | — |
+| Initial Stock Count [**RETIRED, 31 August 2026** — BDR Decision 39; kept in this table for historical reference only, no longer a stage a business passes through] | ~~One-time (per shop), immutable, skippable~~ | Inventory (Stock Counts) — historical records only, creation path retired | — |
 | Products | Ongoing | Products | AI (future repricing signal, Section 10) |
 | Stock Entry | Ongoing | Purchase Batches, Stock Batches, Timeline | AI (anomaly signal), Notifications |
 | Monitoring | Continuous | Reports, Timeline, Dashboard | Notifications, Background Worker |

@@ -1,6 +1,6 @@
 # Section 8 — Module Architecture
 
-**Status:** ✅ Approved (amended — see 8.12/8.14 `businessCode` display)
+**Status:** ✅ Approved (amended — see 8.12/8.14 `businessCode` display; further amended 31 August 2026 — see 8.1/8.6, Initial Stock Count creation-path retirement, per the signed [Capital Inicial Retirement Decision Proposal](../engineering/capital-inicial-retirement-decision-proposal.md), BDR Decision 39, and Rule 8 Assessment Finding GOV-2)
 **Depends on:** Sections 1–7 — all approved (Section 7 approved per go-ahead to begin Section 8)
 **Purpose:** For every module — Purpose, Inputs, Outputs, Dependencies, Business Rules, Future Extensions — grounded in what's actually built (audit-confirmed, and re-confirmed directly against `src/` for this section) rather than a hypothetical redesign. Per the brief: **do not redesign modules already working well.** Section 8's job is to document the working modules precisely enough that Sections 9–13 can build against them without re-deriving their rules, and to resolve the two structural gaps Section 4 named but deferred here: the `AppContext` decomposition (4.3) and the Storage upload flow (4.7).
 
@@ -16,7 +16,7 @@ Modules below map directly onto `src/` as it exists today, grouped by the domain
 | Purchase Batches | `utils/purchaseBatchCalculations.ts`, `components/AddStockView.tsx` | Purchase Batches, Stock Batches |
 | Products | `components/EditProductModal.tsx`, `ProductDetailModal.tsx` | Products |
 | Stock Entry & Quebras | `components/AddStockView.tsx`, `AddQuebraView.tsx` | Stock, Breakages |
-| Stock Counts | `components/InitialStockCountView.tsx`, `PeriodicStockCountView.tsx` | Stock Counts |
+| Stock Counts | `components/InitialStockCountView.tsx` [**RETIRED as a creation path, 31 August 2026** — BDR Decision 39; retained for historical viewing/correction only, see §8.6], `PeriodicStockCountView.tsx` | Stock Counts |
 | Financial (Expenses/Withdrawals) | `components/AddExpenseView.tsx`, `AddWithdrawalView.tsx` | Expenses, Withdrawals |
 | Closing | `components/ClosingView.tsx` | Closing |
 | Reports | `components/reports/*`, `reportInsights.ts`, `reportExport.ts` | Reports |
@@ -104,17 +104,19 @@ Everything below documents these as they exist. Notifications, Subscriptions, Su
 
 ## 8.6 Stock Counts (`InitialStockCountView.tsx`, `PeriodicStockCountView.tsx`)
 
-**Purpose:** Physical inventory verification — an as-counted snapshot compared against as-recorded figures, used to catch discrepancies the Stock Entry/Quebra flow alone wouldn't surface.
+**[CORRECTED, 31 August 2026, per the signed [Capital Inicial Retirement Decision Proposal](../engineering/capital-inicial-retirement-decision-proposal.md), BDR Decision 39, and Rule 8 Assessment Finding GOV-2, all Product-Architect-signed]:** the `initial` count type's **creation path is retired** — no business may create a new `initial`-type `StockCount` going forward. `InitialStockCountView.tsx` is retained solely for viewing and governed correction (Void & Redo, SuperAdmin-Assisted Recovery, both grandfathered per BDR Decision 39(f) for any window already open at cutover) of **existing** `initial` records — it is no longer a data-entry destination for a new confirmation. The original approved module description follows, struck through, as the historical record of this module's full original scope; it is not deleted.
 
-**Inputs:** A count type (`initial | weekly | monthly | quarterly | yearly | custom`), counted quantities per product/batch.
+**Purpose:** Physical inventory verification — an as-counted snapshot compared against as-recorded figures, used to catch discrepancies the Stock Entry/Quebra flow alone wouldn't surface. **This remains fully accurate for the `weekly | monthly | quarterly | yearly | custom` (periodic/Contagem) count types, unaffected by this correction — only the `initial` type's creation path is retired.**
 
-**Outputs:** A `StockCount` document (7.2). The `initial` type is the one permanently immutable record in the entire schema (7.2, 7.6, Principle 2.10) — every later Capital Growth figure is measured against it.
+**Inputs:** A count type (`initial | weekly | monthly | quarterly | yearly | custom`), counted quantities per product/batch. **`initial` remains a valid, existing document type for historical records; it is no longer a creatable value for a new `StockCount` write.**
+
+~~**Outputs:** A `StockCount` document (7.2). The `initial` type is the one permanently immutable record in the entire schema (7.2, 7.6, Principle 2.10) — every later Capital Growth figure is measured against it.~~ **[CORRECTED]:** every *historical* `initial`-type `StockCount` document remains the one permanently immutable record type in the schema (7.2, 7.6, Principle 2.10) — this immutability guarantee is unaffected by retirement, and continues to protect every existing such record. No *new* `initial`-type document may be created, so this immutability rule now applies to a closed, non-growing set of historical records rather than an ongoing creation path.
 
 **Dependencies:** Calculation Engine (8.2) to compute the as-recorded figure the count is compared against.
 
-**Business rules:** The `initial` Stock Count, once written, can never be edited or deleted by any role, including Admin — this is enforced at the Security Rules layer (7.6), not merely by UI omission, since a UI-only restriction would not actually satisfy Principle 2.10.
+**Business rules:** The `initial` Stock Count, once written, can never be edited or deleted by any role, including Admin — this is enforced at the Security Rules layer (7.6), not merely by UI omission, since a UI-only restriction would not actually satisfy Principle 2.10. **As of this correction, the create rule for this type is additionally closed at the same Security Rules layer — the same enforcement discipline this business rule already establishes for update/delete now extends to create.**
 
-**Future extensions:** None identified. This module's shape (compare counted-vs-recorded, snapshot the result) is stable regardless of scale.
+**Future extensions:** None identified for the periodic/Contagem count types, whose shape (compare counted-vs-recorded, snapshot the result) is stable regardless of scale. The `initial` type has no future extension of any kind — its only remaining function is historical preservation and governed correction of existing records.
 
 ---
 
