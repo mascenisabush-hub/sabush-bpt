@@ -280,121 +280,68 @@ const ModeAValuationControl: React.FC<{
   allPortionsConvertible: boolean;
   onChange: (fields: Partial<{ referenceUnit: string; referencePrice: string }>) => void;
 }> = ({ referenceUnitOptions, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onChange }) => {
-  // [Concept B — Balanced Compact, Implementation Authorization §4/§4.1]
-  // Defaults collapsed: this control only ever renders once a product's
-  // unit relationship is already confirmed (§4.1's "known/already-
-  // configured information"), and its own reference unit/price already
-  // carry a computed default (computeDefaultReferenceConfig, this
-  // file's own resolution) the moment it first renders — nothing here
-  // is unset or blocking while collapsed, since the underlying config
-  // is live/applied regardless of whether this panel is visually open.
-  // Conceptually mirrors UnitChainSection's own collapse interaction
-  // (InitialStockCountView.tsx), not byte-for-byte: that component
-  // keys its default off whether relationship/chain/rate data exists
-  // at all, whereas this one is keyed off the mandatory warning below
-  // instead, since Mode A itself always has SOME default the instant a
-  // relationship exists.
-  const [expanded, setExpanded] = useState(!allPortionsConvertible);
-
-  // [§4.2 Warning Override — mandatory] A non-convertible-portion
-  // warning must never be hidden merely because this panel is
-  // collapsed. Forces the panel open the instant the warning becomes
-  // true — including after mount (e.g. a new, unconvertible-unit
-  // portion is added to this group while the panel was already
-  // collapsed) — and never auto-closes it again on its own; only the
-  // Owner's own click (the toggle below) does that, matching
-  // UnitChainSection's own discipline for its collapse toggle.
-  useEffect(() => {
-    if (!allPortionsConvertible) setExpanded(true);
-  }, [allPortionsConvertible]);
-
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
     // col-span-5, matching rowGridClass's corrected five-track
     // template (was 7, for the pre-§44 row) — see rowGridClass's own
-    // comment for why. Kept as a single wrapper regardless of collapse
-    // state (rather than one per branch) so this file's own structural
-    // test (tests/periodic-contagem-cost-price-removal.test.ts) keeps
-    // counting exactly one full-row span per component, unaffected by
-    // the new collapse branching below.
-    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-1.5 text-[13px] font-semibold text-gray-600 hover:text-[#0B1F3A] transition-colors duration-150 py-0.5"
-      >
-        {expanded ? <ChevronUp className="w-3 h-3 shrink-0" strokeWidth={2.5} /> : <ChevronDown className="w-3 h-3 shrink-0" strokeWidth={2.5} />}
-        <span>Preço de venda de referência</span>
-        {!expanded && referenceUnit && referencePrice && (
-          <span className="font-normal text-gray-400">— {referenceUnit}, {currencySymbol} {referencePrice}</span>
-        )}
-        {/* [§4.2] A compact, always-visible indicator of the active
-            warning — shown regardless of collapse state, on top of the
-            useEffect above that already forces expanded=true. Belt and
-            suspenders: even if a future change altered the effect's
-            timing, the warning would still never be silently absent
-            from the collapsed toggle row itself. */}
-        {!allPortionsConvertible && (
-          <AlertTriangle
-            className="w-3 h-3 text-amber-600 shrink-0 ml-auto"
-            strokeWidth={2.5}
-            aria-label="Aviso: preço de referência não aplicado a todas as porções"
-          />
-        )}
-      </button>
-
-      {expanded && (
-        <div className="mt-1.5 flex flex-wrap items-end gap-2.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5">
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de referência</label>
-            <select
-              value={referenceUnit}
-              onChange={(e) => onChange({ referenceUnit: e.target.value })}
-              className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            >
-              {referenceUnitOptions.map((u) => (
-                <option key={u} value={u}>
-                  {u}
-                </option>
-              ))}
-            </select>
-          </div>
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}</label>
-            <input
-              type="number"
-              min="0"
-              step="0.01"
-              value={referencePrice}
-              onChange={(e) => onChange({ referencePrice: e.target.value })}
-              placeholder="Ex: 1250"
-              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            />
-          </div>
-          {/* [Concept B §3.4] Compacted from a full leading-relaxed
-              sentence to a short visible line + Info icon carrying the
-              full explanation via `title` (native, accessible on focus/
-              hover, no new dependency — the same convention this file
-              already uses for the Validado/Ainda não validado dot,
-              above). The full sentence is preserved verbatim in the
-              title attribute, not deleted. */}
-          <p
-            className="text-[11.5px] text-gray-500 basis-full flex items-center gap-1"
-            title="O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente."
-          >
-            <Info className="w-3 h-3 shrink-0" strokeWidth={2.25} />
-            <span>Aplicado a todas as porções — edite uma individualmente para um preço diferente.</span>
-          </p>
-          {!allPortionsConvertible && (
-            <p
-              className="text-[11.5px] text-amber-600 font-semibold basis-full flex items-center gap-1"
-              title="Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente."
-            >
-              <AlertTriangle className="w-3 h-3 shrink-0" strokeWidth={2.25} />
-              <span>Uma ou mais porções não convertem automaticamente — preço manual necessário.</span>
-            </p>
-          )}
-        </div>
+    // comment for why.
+    //
+    // [Information-Preserving Compaction — Alternative A] Concept B's
+    // collapse mechanism (a `useState`/`useEffect` pair defaulting this
+    // control to hidden, plus a tooltip-only rendering of both
+    // explanatory paragraphs) is REMOVED here — reference unit,
+    // reference price, and both explanatory paragraphs are always
+    // rendered, unconditionally, whenever this component renders at
+    // all (the caller's own pre-existing gate on a confirmed unit
+    // relationship, unchanged). Restyled from stacked label-above-field
+    // pairs in a taller panel to a horizontal, wrapping row — pure
+    // layout, no functional change: onChange, referenceUnit,
+    // referencePrice, and allPortionsConvertible all flow exactly as
+    // before into the exact same handlers this file's own
+    // computeDefaultReferenceConfig/handleReferenceConfigChange/
+    // applyModeAToGroup chain already owned.
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1 flex flex-wrap items-center gap-x-2.5 gap-y-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2">
+      <label className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-gray-500 shrink-0">
+        Ref.:
+        <select
+          value={referenceUnit}
+          onChange={(e) => onChange({ referenceUnit: e.target.value })}
+          className="bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+        >
+          {referenceUnitOptions.map((u) => (
+            <option key={u} value={u}>
+              {u}
+            </option>
+          ))}
+        </select>
+      </label>
+      <label className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-gray-500 shrink-0">
+        Preço/{referenceUnit || 'unidade'} ({currencySymbol}):
+        <input
+          type="number"
+          min="0"
+          step="0.01"
+          value={referencePrice}
+          onChange={(e) => onChange({ referencePrice: e.target.value })}
+          placeholder="Ex: 1250"
+          className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+        />
+      </label>
+      {/* [Information-Preserving Compaction] Full original sentence
+          restored, always visible — no longer shortened-plus-title. */}
+      <p className="text-[11.5px] text-gray-500 basis-full flex items-start gap-1">
+        <Info className="w-3 h-3 shrink-0 mt-[3px]" strokeWidth={2.25} />
+        <span>
+          O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente.
+        </span>
+      </p>
+      {!allPortionsConvertible && (
+        <p className="text-[11.5px] text-amber-600 font-semibold basis-full flex items-start gap-1">
+          <AlertTriangle className="w-3 h-3 shrink-0 mt-[3px]" strokeWidth={2.25} />
+          <span>
+            Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.
+          </span>
+        </p>
       )}
     </div>
   );
@@ -471,101 +418,86 @@ const NewProductInfoPanel: React.FC<{
   sellingUnit,
   onSellingUnitChange,
 }) => {
-  // [Concept B — Balanced Compact, Implementation Authorization §4/§4.1]
-  // Always starts expanded: this panel only ever renders for a
-  // genuinely new product (see the call site's own
-  // isGenuinelyNewProductName gate) — by definition there is no
-  // "already configured" state to default to, and §4.1 requires
-  // required/incomplete new-product configuration to stay open by
-  // default so the Owner is never forced to hunt for it. The Owner may
-  // still collapse it manually (e.g. once finished) via the toggle
-  // below; nothing here ever auto-collapses it, deliberately avoiding
-  // any risk of the panel vanishing out from under the Owner
-  // mid-configuration (Implementation Authorization §13).
-  const [expanded, setExpanded] = useState(true);
-
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
     // col-span-5 — see ModeAValuationControl's identical comment above.
-    // Single wrapper regardless of collapse state, same reasoning as
-    // ModeAValuationControl's own identical structural note.
-    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5">
-      <button
-        type="button"
-        onClick={() => setExpanded((v) => !v)}
-        className="w-full flex items-center gap-1.5 text-left py-0.5"
-      >
-        {expanded ? <ChevronUp className="w-3 h-3 text-gray-400 shrink-0" strokeWidth={2.5} /> : <ChevronDown className="w-3 h-3 text-gray-400 shrink-0" strokeWidth={2.5} />}
+    //
+    // [Information-Preserving Compaction — Alternative A] Concept B's
+    // collapse mechanism (a `useState` defaulting this panel open, plus
+    // a manual collapse toggle that could still hide required
+    // new-product configuration) is REMOVED — purchase unit, the
+    // relationship chain editor, selling unit, and its explanatory
+    // sentence are always rendered, unconditionally, whenever this
+    // panel renders at all (the caller's own pre-existing
+    // isGenuinelyNewProductName gate, unchanged). Restyled from
+    // stacked label-above-field pairs to inline `Label: [field]`
+    // pairs where the field is a single control (purchase unit,
+    // selling unit) — the relationship chain itself
+    // (UnitRelationshipChainEditor, below) is left exactly as it was,
+    // since it is inherently a multi-row list of "1 X = N Y" hops, not
+    // a single field that horizontal grouping would help.
+    <div className="col-span-2 sm:col-span-5 -mt-1 mb-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-2.5 space-y-2">
+      <div className="flex items-center gap-1.5">
         <span className="text-[10.5px] font-bold uppercase tracking-wide text-[#B8952F] shrink-0">Produto novo</span>
         <span className="text-[13px] font-semibold text-[#111827] truncate">{productName || '—'}</span>
-      </button>
+      </div>
 
-      {expanded && (
-        <div className="mt-1.5 bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3 py-3 space-y-2.5">
-          {/* [§45 Amendment FR-78/FR-80; Implementation Authorization §2
-              item 1] The "Custo de Compra Original" cost-value input
-              (purchase unit + purchase cost, grouped together) is removed:
-              "new to the SABUSH catalog" is not "newly purchased" (§45 §4
-              item 2), and Periodic Contagem never asks for historical/
-              original purchase cost, for any product, first-time or
-              otherwise (§45 §7/FR-78, restated). purchaseUnit's own input
-              is retained standalone, unrelated to cost — it remains the
-              relationship chain's root/base unit, read by
-              UnitRelationshipChainEditor's own display below,
-              sellingUnitOptions' construction, and the submit-time
-              unitRelationship candidate (handleConfirmSave, further below)
-              — none of which depend on a cost value. */}
-          <div>
-            <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de compra</label>
-            <input
-              type="text"
-              value={purchaseUnit}
-              onChange={(e) => onPurchaseUnitChange(e.target.value)}
-              placeholder="Ex: Cx"
-              className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-            />
-          </div>
+      {/* [§45 Amendment FR-78/FR-80; Implementation Authorization §2
+          item 1] The "Custo de Compra Original" cost-value input
+          (purchase unit + purchase cost, grouped together) is removed:
+          "new to the SABUSH catalog" is not "newly purchased" (§45 §4
+          item 2), and Periodic Contagem never asks for historical/
+          original purchase cost, for any product, first-time or
+          otherwise (§45 §7/FR-78, restated). purchaseUnit's own input
+          is retained standalone, unrelated to cost — it remains the
+          relationship chain's root/base unit, read by
+          UnitRelationshipChainEditor's own display below,
+          sellingUnitOptions' construction, and the submit-time
+          unitRelationship candidate (handleConfirmSave, further below)
+          — none of which depend on a cost value. */}
+      <label className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-gray-500">
+        Unidade de compra:
+        <input
+          type="text"
+          value={purchaseUnit}
+          onChange={(e) => onPurchaseUnitChange(e.target.value)}
+          placeholder="Ex: Cx"
+          className="w-20 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+        />
+      </label>
 
-          <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
+      <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
 
-          {/* [Decision 37 B.2 Selling Unit Capture Extension —
-              Implementation Authorization §2 items 2/5] Renders only once
-              the chain has at least one complete step (2+ total units) —
-              sellingUnitOptions is empty otherwise, exactly the same gate
-              a single-functional-unit product already satisfies naturally
-              (§3.A: no selector, no relationship, the one unit is simply
-              the selling unit). Never forces sellingUnit === purchaseUnit —
-              the owner picks any member of the established chain. */}
-          {sellingUnitOptions.length > 0 && (
-            <div>
-              <label className="block text-[11px] font-bold text-gray-500 mb-1">Unidade de venda/avaliação</label>
-              <select
-                value={sellingUnit}
-                onChange={(e) => onSellingUnitChange(e.target.value)}
-                className="bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
-              >
-                <option value="">Selecionar...</option>
-                {sellingUnitOptions.map((u) => (
-                  <option key={u} value={u}>
-                    {u}
-                  </option>
-                ))}
-              </select>
-              {/* [Concept B §3.4] Compacted from a full leading-relaxed
-                  sentence to a short visible line + Info icon carrying
-                  the full explanation via `title` — same convention as
-                  ModeAValuationControl's identical compaction, above.
-                  Full sentence preserved verbatim in the title
-                  attribute, not deleted. */}
-              <p
-                className="mt-1 text-[11px] text-gray-500 flex items-center gap-1"
-                title="A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra."
-              >
-                <Info className="w-3 h-3 shrink-0" strokeWidth={2.25} />
-                <span>Pode diferir da unidade de compra</span>
-              </p>
-            </div>
-          )}
+      {/* [Decision 37 B.2 Selling Unit Capture Extension —
+          Implementation Authorization §2 items 2/5] Renders only once
+          the chain has at least one complete step (2+ total units) —
+          sellingUnitOptions is empty otherwise, exactly the same gate
+          a single-functional-unit product already satisfies naturally
+          (§3.A: no selector, no relationship, the one unit is simply
+          the selling unit). Never forces sellingUnit === purchaseUnit —
+          the owner picks any member of the established chain. */}
+      {sellingUnitOptions.length > 0 && (
+        <div className="flex flex-wrap items-center gap-2.5">
+          <label className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-gray-500">
+            Unidade de venda/avaliação:
+            <select
+              value={sellingUnit}
+              onChange={(e) => onSellingUnitChange(e.target.value)}
+              className="bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            >
+              <option value="">Selecionar...</option>
+              {sellingUnitOptions.map((u) => (
+                <option key={u} value={u}>
+                  {u}
+                </option>
+              ))}
+            </select>
+          </label>
+          {/* [Information-Preserving Compaction] Full original sentence
+              restored, always visible — no longer shortened-plus-title. */}
+          <span className="text-[11px] text-gray-500 basis-full">
+            A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra.
+          </span>
         </div>
       )}
     </div>

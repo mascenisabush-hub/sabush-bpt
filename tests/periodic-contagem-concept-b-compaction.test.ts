@@ -1,9 +1,19 @@
-// SABUSH BPT — Periodic Contagem UI Compaction, Concept B (Balanced
-// Compact). Authorized by the "SABUSH BPT — PERIODIC CONTAGEM UI
-// COMPACTION — CONCEPT B IMPLEMENTATION" instruction (this repository
-// has no separate governance document recording this increment — it
-// is a UI-only/UI-state change, explicitly out of scope for Firestore,
-// business-logic, or data-model changes per that instruction's §8).
+// SABUSH BPT — Periodic Contagem UI Compaction.
+//
+// This file covers TWO increments:
+//   1. Concept B (Balanced Compact) — the original compaction pass.
+//   2. Information-Preserving Compaction Correction — authorized by the
+//      "SABUSH BPT — CONTAGEM INFORMATION-PRESERVING COMPACTION
+//      IMPLEMENTATION INCREMENT" instruction, which found that Concept
+//      B's collapse/hide and tooltip-only-explanation approach
+//      conflicted with the product requirement that ALL existing
+//      information and controls remain continuously visible. That
+//      correction REMOVED the collapse mechanism from
+//      ModeAValuationControl and NewProductInfoPanel and restored full
+//      explanatory text as always-visible content (never tooltip-only).
+//      Neither increment has a separate governance document — both are
+//      UI-only/UI-state changes, explicitly out of scope for Firestore,
+//      business-logic, or data-model changes.
 //
 // SCOPE: this repository has no DOM/React render harness — established
 // precedent (see tests/periodic-contagem-cost-price-removal.test.ts's
@@ -12,14 +22,16 @@
 // regex/string assertions against the raw PeriodicStockCountView.tsx
 // source, proving structural guarantees rather than rendered output.
 //
-// This suite covers requirements A-L of the governing instruction's
-// §10 "Testing Requirements" list. It intentionally does NOT re-prove
-// facts tests/periodic-contagem-cost-price-removal.test.ts and
-// tests/periodic-stock-existing-product-summary.test.ts already cover
-// (e.g. the five-track rowGridClass, the four full-row col-span-5
-// spans, ExistingProductSummary's read-only guard logic) — see those
-// files for that coverage; this suite adds only what Concept B itself
-// introduces.
+// Suites A-D, I-L below date from the original Concept B increment and
+// remain valid — the correction did not touch shared headers, sm:hidden
+// labels, Custo/Un absence, ExistingProductSummary's compact form,
+// multi-portion semantics, field bindings, Validar/Editar, or any
+// calculation. Suites E-H were REWRITTEN by the correction increment:
+// they used to prove collapse behavior existed; they now prove the
+// opposite — that no collapse mechanism remains and every required
+// piece of information (reference unit, reference price, both
+// explanatory paragraphs, all New Product fields) is unconditionally
+// visible.
 //
 // HOW TO RUN:
 //   npx tsx --test tests/periodic-contagem-concept-b-compaction.test.ts
@@ -163,97 +175,163 @@ describe('D — ExistingProductSummary is compact, not the old bordered panel', 
 });
 
 // ---------------------------------------------------------------------
-// E. Collapse/expand mechanism exists for the three authorized panels
+// N. No collapse mechanism remains on the two authorized panels
 // ---------------------------------------------------------------------
-describe('E — collapse/expand mechanism on the three authorized secondary panels', () => {
-  it('ModeAValuationControl has its own expanded/setExpanded state', () => {
+describe('N — no collapse mechanism remains on ModeAValuationControl / NewProductInfoPanel', () => {
+  it('ModeAValuationControl has no expanded/setExpanded state (Concept B\'s collapse mechanism was removed by this correction)', () => {
     const body = componentBody('ModeAValuationControl');
-    assert.match(body, /const \[expanded, setExpanded\] = useState/);
-    assert.match(body, /onClick=\{\(\) => setExpanded\(\(v\) => !v\)\}/);
-  });
-
-  it('NewProductInfoPanel has its own expanded/setExpanded state', () => {
-    const body = componentBody('NewProductInfoPanel');
-    assert.match(body, /const \[expanded, setExpanded\] = useState/);
-    assert.match(body, /onClick=\{\(\) => setExpanded\(\(v\) => !v\)\}/);
-  });
-
-  it('ExistingProductSummary deliberately has NO collapse state of its own — it is pure read-only text with nothing further to reveal (see suite D); this is a documented design choice, not an oversight', () => {
-    const body = componentBody('ExistingProductSummary');
+    assert.doesNotMatch(body, /useState\(/);
+    assert.doesNotMatch(body, /useEffect\(/);
     assert.doesNotMatch(body, /setExpanded/);
   });
 
-  it('each collapsible component keeps its state local (its own useState), never a single shared/global collapse state controlling every product', () => {
-    // Three independent `const [expanded, setExpanded] = useState`
-    // sites: ModeAValuationControl, NewProductInfoPanel (both added by
-    // Concept B), plus the pre-existing UnitRelationshipChainEditor
-    // (nested inside NewProductInfoPanel, unrelated to this Increment
-    // — its own collapse toggle already existed before Concept B and
-    // is untouched here). Each is a separate component's own local
-    // state, never one shared/module-level variable — confirmed
-    // separately by suite E's first two tests, above.
+  it('NewProductInfoPanel has no expanded/setExpanded state (Concept B\'s collapse mechanism was removed by this correction)', () => {
+    const body = componentBody('NewProductInfoPanel');
+    assert.doesNotMatch(body, /useState\(/);
+    assert.doesNotMatch(body, /setExpanded/);
+  });
+
+  it('neither component renders a collapse-toggle <button> — everything they own is unconditional JSX, not gated behind a click', () => {
+    const modeABody = componentBody('ModeAValuationControl');
+    const newProductBody = componentBody('NewProductInfoPanel');
+    assert.doesNotMatch(modeABody, /<button/);
+    assert.doesNotMatch(newProductBody, /<button/);
+  });
+
+  it('the only remaining expanded/setExpanded state in the whole file belongs to the pre-existing, out-of-scope UnitRelationshipChainEditor (Decision 37 B.2, unrelated to this correction and not touched by it)', () => {
     const occurrences = periodicSrc.match(/const \[expanded, setExpanded\] = useState/g) ?? [];
-    assert.equal(occurrences.length, 3, `Expected 3 local expanded/setExpanded declarations, found ${occurrences.length}.`);
+    assert.equal(occurrences.length, 1, `Expected exactly 1 (UnitRelationshipChainEditor's own, pre-existing), found ${occurrences.length}.`);
+    const start = periodicSrc.indexOf('const UnitRelationshipChainEditor: React.FC<{');
+    const end = periodicSrc.indexOf('const ModeAValuationControl: React.FC<{');
+    assert.notEqual(start, -1);
+    assert.notEqual(end, -1);
+    const chainEditorBody = periodicSrc.slice(start, end);
+    assert.match(chainEditorBody, /const \[expanded, setExpanded\] = useState/);
   });
 });
 
 // ---------------------------------------------------------------------
-// F. Known/configured information defaults toward collapsed
+// A/B/C — Mode A, Reference Unit, and Reference Price remain
+// unconditionally visible
 // ---------------------------------------------------------------------
-describe('F — known information (ModeAValuationControl) defaults collapsed', () => {
-  it('ModeAValuationControl initializes expanded to false when the product is fully convertible (the ordinary, known-good case)', () => {
+describe('A/B/C — Mode A / Reference Unit / Reference Price always visible', () => {
+  const body = componentBody('ModeAValuationControl');
+
+  it('the reference-unit <select> is unconditional JSX — not inside any {expanded && (...)} or similar gate', () => {
+    assert.match(body, /<select\s*\n\s*value=\{referenceUnit\}/);
+    // No conditional wrapper of the collapse-era shape remains.
+    assert.doesNotMatch(body, /\{expanded && \(/);
+  });
+
+  it('the reference-price <input> is unconditional JSX, in the same always-rendered block as the select', () => {
+    assert.match(body, /value=\{referencePrice\}/);
+  });
+
+  it('the price field\'s label states its meaning ("per {referenceUnit}") directly, always, not only in a collapsed-state preview', () => {
+    assert.match(body, /Preço\/\{referenceUnit \|\| 'unidade'\} \(\{currencySymbol\}\):/);
+  });
+});
+
+// ---------------------------------------------------------------------
+// D/E — Automatic-pricing explanation and non-convertible warning
+// remain visible, in full, not tooltip-only
+// ---------------------------------------------------------------------
+describe('D/E — Mode A explanatory text and warning are fully visible, not tooltip-only', () => {
+  const body = componentBody('ModeAValuationControl');
+
+  it('the full original automatic-pricing sentence is rendered as visible text (not merely present in a title attribute)', () => {
+    // The sentence must appear OUTSIDE of any title="..." attribute —
+    // i.e. as real element content.
+    assert.match(
+      body,
+      /<span>\s*O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas\. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente\.\s*<\/span>/
+    );
+  });
+
+  it('the Concept B shortened replacement text no longer exists anywhere in this component', () => {
+    assert.doesNotMatch(body, /Aplicado a todas as porções — edite uma individualmente para um preço diferente\./);
+  });
+
+  it('no title attribute is used as the sole carrier of this explanation (no tooltip-only pattern)', () => {
+    assert.doesNotMatch(body, /title="O preço de cada porção/);
+  });
+
+  it('the full original non-convertible-portion warning sentence is rendered as visible text when the warning is active', () => {
+    assert.match(
+      body,
+      /<span>\s*Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente\.\s*<\/span>/
+    );
+  });
+
+  it('the Concept B shortened warning replacement text no longer exists', () => {
+    assert.doesNotMatch(body, /Uma ou mais porções não convertem automaticamente — preço manual necessário\./);
+  });
+
+  it('the warning is still gated on !allPortionsConvertible (same condition, unchanged) — only its presentation, not its logic, changed', () => {
+    const occurrences = body.match(/\{!allPortionsConvertible && \(/g) ?? [];
+    assert.equal(occurrences.length, 1);
+  });
+});
+
+// ---------------------------------------------------------------------
+// F/G — New Product fields and selling-unit explanation remain
+// unconditionally visible
+// ---------------------------------------------------------------------
+describe('F/G — New Product fields and selling-unit explanation always visible', () => {
+  const body = componentBody('NewProductInfoPanel');
+
+  it('purchase unit, the relationship chain editor, and the selling-unit selector are all unconditional JSX — no {expanded && (...)} gate remains', () => {
+    assert.doesNotMatch(body, /\{expanded && \(/);
+    assert.match(body, /value=\{purchaseUnit\}/);
+    assert.match(body, /<UnitRelationshipChainEditor/);
+  });
+
+  it('the selling-unit selector still renders only once the chain has a complete step (pre-existing, unrelated gate — unchanged, not a collapse mechanism)', () => {
+    assert.match(body, /\{sellingUnitOptions\.length > 0 && \(/);
+  });
+
+  it('the full original selling-unit explanatory sentence is rendered as visible text (not tooltip-only)', () => {
+    assert.match(
+      body,
+      /<span className="text-\[11px\] text-gray-500 basis-full">\s*A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra\.\s*<\/span>/
+    );
+  });
+
+  it('the Concept B shortened selling-unit replacement text no longer exists', () => {
+    assert.doesNotMatch(body, /Pode diferir da unidade de compra/);
+  });
+
+  it('no title attribute is used as the sole carrier of the selling-unit explanation', () => {
+    assert.doesNotMatch(body, /title="A unidade em que o preço de venda/);
+  });
+});
+
+// ---------------------------------------------------------------------
+// M. No tooltip-only replacement remains anywhere in the two panels
+// ---------------------------------------------------------------------
+describe('M — no tooltip-only explanatory text remains', () => {
+  it('ModeAValuationControl contains no title= attribute at all (every explanation is now real, visible content)', () => {
     const body = componentBody('ModeAValuationControl');
-    assert.match(body, /useState\(!allPortionsConvertible\)/);
+    assert.doesNotMatch(body, /title=/);
   });
-});
 
-// ---------------------------------------------------------------------
-// G. Required/incomplete new-product configuration defaults toward expanded
-// ---------------------------------------------------------------------
-describe('G — required new-product configuration (NewProductInfoPanel) defaults expanded', () => {
-  it('NewProductInfoPanel initializes expanded to true unconditionally — it only ever renders for a genuinely new product, so there is no "already configured" default to collapse toward', () => {
+  it('NewProductInfoPanel contains no title= attribute at all', () => {
     const body = componentBody('NewProductInfoPanel');
-    assert.match(body, /const \[expanded, setExpanded\] = useState\(true\);/);
-  });
-
-  it('NewProductInfoPanel never auto-collapses itself — no effect or logic sets expanded to false except the Owner\'s own toggle click', () => {
-    const body = componentBody('NewProductInfoPanel');
-    assert.doesNotMatch(body, /useEffect/);
-    // The only place `setExpanded(false)` (or the toggling form) can
-    // appear is inside the toggle button's own onClick.
-    const setFalseOutsideToggle = body.replace(/onClick=\{\(\) => setExpanded\(\(v\) => !v\)\}/g, '');
-    assert.doesNotMatch(setFalseOutsideToggle, /setExpanded\(false\)/);
+    assert.doesNotMatch(body, /title=/);
   });
 });
 
 // ---------------------------------------------------------------------
-// H. Warnings/errors cannot become invisible solely because a panel is collapsed
+// H. Per-row warnings/errors remain unconditionally visible (these were
+// never inside any collapsible panel, in either increment)
 // ---------------------------------------------------------------------
-describe('H — mandatory warning override (§4.2)', () => {
-  it('ModeAValuationControl forces expanded=true via an effect whenever allPortionsConvertible becomes false, regardless of prior collapse state', () => {
-    const body = componentBody('ModeAValuationControl');
-    assert.match(body, /useEffect\(\(\) => \{\s*if \(!allPortionsConvertible\) setExpanded\(true\);\s*\}, \[allPortionsConvertible\]\);/);
-  });
-
-  it('the non-convertible-portion warning indicator is rendered outside the expanded-only content, so it stays visible even in the collapsed toggle row', () => {
-    const body = componentBody('ModeAValuationControl');
-    // The toggle <button>...</button> block (always rendered,
-    // regardless of `expanded`) must itself contain the
-    // AlertTriangle warning marker — not only the `{expanded && (...)}`
-    // branch.
-    const buttonStart = body.indexOf('<button');
-    const buttonEnd = body.indexOf('</button>', buttonStart);
-    assert.notEqual(buttonStart, -1);
-    const buttonBlock = body.slice(buttonStart, buttonEnd);
-    assert.match(buttonBlock, /!allPortionsConvertible && \(\s*<AlertTriangle/);
-  });
-
-  it('the Selling Price deviation warning (per-row, outside any collapsible panel) is unaffected — still present exactly twice (catalog + manual)', () => {
+describe('H — per-row Selling Price deviation warning and save errors unaffected', () => {
+  it('the Selling Price deviation warning is unaffected — still present exactly twice (catalog + manual)', () => {
     const occurrences = periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) ?? [];
     assert.equal(occurrences.length, 2);
   });
 
-  it('per-row save errors remain rendered unconditionally (not inside any collapsible panel) in both loops', () => {
+  it('per-row save errors remain rendered unconditionally in both loops', () => {
     const occurrences = periodicSrc.match(/\{saveError && \(/g) ?? [];
     assert.equal(occurrences.length, 2);
   });
