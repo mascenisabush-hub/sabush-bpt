@@ -268,3 +268,72 @@ No other file is authorized for Increment 3.
 > **Product Architect:** SABUSHIMIKE MASCENI
 > **Date:** 31 August 2026
 > **Decision:** ACCEPTED WITH MODIFICATION
+
+---
+
+## Amendment 2 — Increment 7 Establishment-State Signal (Narrow, Additive)
+
+**Status: 🔶 PENDING — NOT YET AUTHORIZED.** Drafted below per this document's own established additive-amendment convention (see Amendment 1, above) — everything above this line, including §5's own Increment 7 text and every prior signature block, is preserved completely unedited as the historical record. This section is a separate, later, pending act. **Signing the pending block at the end of this section is the sole act that would authorize it** — drafting it authorizes nothing by itself.
+
+**Context:** during Increment 7 implementation inspection (pre-code — no file other than this one touched), a concrete scope conflict was identified, distinct in kind from Amendment 1's integration gap but requiring the same discipline. §5's Increment 7 text states that `CapitalGrowthReport.tsx` and `BusinessWorthReport.tsx` already have "existing `hasInitialStockCount`-driven display branches" for the Business Worth figure, needing only their labeling corrected, not their computation. Direct inspection of both files' current content contradicts this specific factual premise:
+
+- Neither file references `businessWorthSnapshots`, `currentBusinessWorth`, `estimatedBusinessWorth`, or any equivalent Estimated/Current establishment-state signal — confirmed by direct search, zero matches in either file. Both still compute their headline Business Worth figure exclusively from the legacy, unconditional formula (`AppContext.tsx`: `businessWorth = totalMarketValueAllTime − totalExpensesAllTime − totalWithdrawalsAllTime`), which has no Estimated/Current concept of any kind.
+- The `hasInitialStockCount`-driven branches that DO exist in both files govern a different KPI entirely — the separate "Capital Inicial" value display (showing "not defined" vs. a figure) — not the Business Worth label §5's Increment 7 text is actually about, which is currently unconditional (always the same label) in both files.
+
+This is not a disagreement with §5's underlying requirement (AC-R3-7's substantive wording is not in question and is not reopened by this amendment) — it is a factual correction to the *mechanism* §5 describes for satisfying it. Mechanically implementing §5 exactly as worded — treating `hasInitialStockCount` as the pre/post-establishment proxy for these two files' Business Worth label — would produce an actual, ongoing defect: since Increment 4 (already shipped) retired Capital Inicial as an establishment path, every new business going forward has `hasInitialStockCount === false` permanently, regardless of whether it has fully established Business Worth via Contagem or Owner-Declared Business Worth. Such a business's genuinely current, established figure would be mislabeled "Estimated" forever — not a copy nuance, a standing inaccuracy AC-R3-7 itself would not consider correct ("Current Business Worth post-establishment (either method)").
+
+**No upstream contradiction found.** This amendment is confined to this Implementation Authorization. Direct inspection found no conflict with BDR Decision 39, the Architecture amendments (§5.4/§8.6), Specification §44 or §32, Rule 8, or the Implementation Plan's own governing requirement for Increment 7 — only with the Plan's and this Authorization's shared factual description of a mechanism that does not presently exist in the named files. AC-R3-7's substantive wording (Business Worth (Estimated) pre-establishment, Current Business Worth post-establishment) is restated, not redecided, by this amendment.
+
+**Amendment — the state signal these two files are authorized to read, for label selection only:**
+
+`CapitalGrowthReport.tsx` and `BusinessWorthReport.tsx` are authorized to destructure `businessWorthSnapshots` from `useApp()` (`AppContext.tsx` line 507 — already exported, already read by other components, no new context field, no new query) and derive, locally in each file, the identical one-line boolean `DashboardView.tsx` already computes and already relies on today (`DashboardView.tsx` line 200): `hasActiveBusinessWorthSnapshot = businessWorthSnapshots.some((s) => s.status === 'active')`. This exact derivation — not a new one, not a variant, not `displayedBusinessWorthIsEstimated`'s fuller value-selection logic, which remains DashboardView.tsx-only and is not required here — is the sole state signal these two files are authorized to read, and the sole purpose it may be read for is selecting which of the two label variants (Estimated / Current) to display. Everything else about how each file computes or displays its Business Worth figure is unchanged.
+
+**The boundary is absolute:**
+- ✅ Reading `businessWorthSnapshots` (already-exported context data) to derive `hasActiveBusinessWorthSnapshot`, solely to select a label, is authorized.
+- ❌ Changing the `businessWorth` calculation, or any other figure, in either report is not authorized.
+- ❌ Changing any financial figure anywhere is not authorized.
+- ❌ Changing `BusinessWorthSnapshot` creation or semantics is not authorized.
+- ❌ Changing Case A/B arithmetic is not authorized.
+- ❌ Introducing a new query, a new financial calculation, or a new establishment mechanism is not authorized.
+- ❌ Using `currentBusinessWorth`/`estimatedBusinessWorth` to change which *value* is displayed is not authorized by this amendment — only the *label* on the existing, unchanged `businessWorth` figure may be selected via the new signal. (If a future increment wants the displayed figure itself to switch to `currentBusinessWorth`/`estimatedBusinessWorth`, that requires its own separate authorization — not implied or pre-approved here.)
+
+**Updated Increment 7 authorized file list — unchanged in count, clarified in mechanism:**
+1. `DashboardView.tsx` (the Dashboard Business Worth summary modal only) — as already authorized in §5, no change by this amendment; the existing `displayedBusinessWorthIsEstimated` signal it already uses remains correct and is not touched.
+2. `apps/tenant/src/components/reports/CapitalGrowthReport.tsx` — as already authorized in §5, mechanism clarified: label selection now reads `hasActiveBusinessWorthSnapshot` (derived as specified above), not `hasInitialStockCount`.
+3. `apps/tenant/src/components/reports/BusinessWorthReport.tsx` — as already authorized in §5, mechanism clarified: label selection now reads `hasActiveBusinessWorthSnapshot` (derived as specified above), not `hasInitialStockCount`.
+
+No other file is authorized for Increment 7 by this amendment. This amendment does not split Increment 7 into separate increments — all three surfaces remain one coherent increment, per §5's own framing, corrected only in how two of the three surfaces determine which label to show.
+
+**Updated Increment 7 acceptance criteria — additive to §5's original list:**
+- AC-R3-7 (restated, not redecided): labels match the already-approved wording exactly, on all three surfaces.
+- **AC-R3-7-amend-1:** a business with no historical Capital Inicial record (`hasInitialStockCount === false`) but an active `BusinessWorthSnapshot` (`hasActiveBusinessWorthSnapshot === true`) receives the "Current Business Worth" label on all three surfaces — never the Estimated label. This is the specific defect this amendment exists to prevent, and must be verified by test, not visual inspection alone.
+- **AC-R3-7-amend-2:** the `businessWorth` figure displayed alongside the label is numerically identical before and after this increment, on all three surfaces — verified by unit test, confirming the label-only nature of this correction.
+
+**Updated Increment 7 test requirements — additive to §5's original list:** new tests proving, for both report files, that the label reads "Current Business Worth" when `hasActiveBusinessWorthSnapshot` is true regardless of `hasInitialStockCount`, and "Business Worth (Estimated)" when it is false, mirroring AC-R3-7-amend-1 directly. Existing report tests must continue passing unmodified in their numeric assertions, per §5's original requirement, unchanged by this amendment.
+
+**Not a redecision:** this amendment does not change AC-R3-7's substantive wording, the underlying Product Architect decision behind the three-surface terminology correction, Capital Inicial's retirement status, or any figure, formula, or calculation anywhere in this Authorization or its governing chain. It corrects a factual description of an implementation mechanism, and authorizes the minimum read-only signal necessary to implement §5's own already-approved requirement correctly.
+
+## Product Architect Authorization — Amendment 2 — Pending
+
+> I have reviewed the identified Increment 7 mechanism conflict and the proposed narrow amendment above. I understand that signing below authorizes, exactly and only, `CapitalGrowthReport.tsx` and `BusinessWorthReport.tsx` to read `businessWorthSnapshots` (already-exported context data) to derive `hasActiveBusinessWorthSnapshot`, solely for Business Worth label selection, with every other boundary in this amendment remaining absolute. I understand this does not change AC-R3-7's wording, does not authorize any figure/formula/calculation change, and does not split Increment 7.
+>
+> **Product Architect:** ______________________________
+> **Date:** __________________________________________
+> **Decision:**
+> ☐ AUTHORIZED FOR IMPLEMENTATION
+> ☐ AUTHORIZED WITH MODIFICATIONS (specify)
+> ☐ NOT AUTHORIZED
+
+---
+
+## Product Architect Authorization — Amendment 2 — Recorded
+
+**Status: ✅ ACCEPTED WITH MODIFICATION (31 August 2026).** Recorded additively below, per this document's own established signature-recording convention (see the base "Recorded" section and Amendment 1's own "Recorded" acceptance, above) — the pending block immediately above is preserved unedited, blank lines and unchecked boxes included, as the historical record of what was circulated for review; this section is the actual, dated act of signature.
+
+> I have reviewed the identified Increment 7 mechanism conflict and ACCEPT the narrow amendment above, exactly as drafted. I authorize, exactly and only, `CapitalGrowthReport.tsx` and `BusinessWorthReport.tsx` to read `businessWorthSnapshots` (already-exported context data) to derive `hasActiveBusinessWorthSnapshot`, solely for Business Worth label selection, with every other boundary in this amendment remaining absolute. This does not change AC-R3-7's wording, does not authorize any figure/formula/calculation change, and does not split Increment 7.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 31 August 2026
+> **Decision:** ACCEPTED WITH MODIFICATION
+
+**This signature authorizes implementation of exactly, and only, Amendment 2's defined scope, above — the updated Increment 7 authorized file list (3 files, mechanism clarified for two of them) and the two additive acceptance criteria (AC-R3-7-amend-1, AC-R3-7-amend-2). No other expansion of Increment 7, or any other increment, is authorized by this signature.**
