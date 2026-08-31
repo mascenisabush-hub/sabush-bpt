@@ -1077,11 +1077,24 @@ describe('§14 Item 5 — Mode A checkbox retired; reference fields always rende
     assert.doesNotMatch(periodicSrc, /type="checkbox"/, 'no checkbox remains anywhere for the reference control');
   });
 
-  it('structural: both render call sites source their config from getEffectiveReferenceConfig, always available', () => {
+  it('structural: both ModeAValuationControl render call sites source their config from getEffectiveReferenceConfig, always available', () => {
     const periodicSrc = readFileSync(new URL('../apps/tenant/src/components/PeriodicStockCountView.tsx', import.meta.url), 'utf-8');
     const matches = periodicSrc.match(/const config = getEffectiveReferenceConfig\(key\);/g);
     assert.ok(matches);
-    assert.equal(matches!.length, 2, 'catalog-row and manual-group render sites both use the new always-available resolver');
+    // [Concept C — Validated Product Compaction] Concept C's own
+    // getModeANonConvertibleWarning helper legitimately adds a THIRD
+    // call site (see tests/periodic-contagem-concept-c-validated-
+    // compaction.test.ts, Suite B) — reusing this exact resolver to
+    // surface the same Mode A non-convertible warning for a validated
+    // product's group, since ModeAValuationControl itself no longer
+    // renders once every portion of a group is validated. That is not
+    // a regression of the two original render sites this test
+    // protects; each is independently reconfirmed below by proximity
+    // to its own `<ModeAValuationControl` render, rather than assuming
+    // the total occurrence count in the whole file stays at 2.
+    assert.equal(matches!.length, 3, 'catalog-row render site, manual-group render site, and Concept C\'s validated-row warning helper');
+    const renderSiteOccurrences = (periodicSrc.match(/const config = getEffectiveReferenceConfig\(key\);[\s\S]{0,400}?<ModeAValuationControl/g) ?? []).length;
+    assert.equal(renderSiteOccurrences, 2, 'catalog-row and manual-group render sites must still both feed getEffectiveReferenceConfig directly into ModeAValuationControl');
   });
 });
 

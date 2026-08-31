@@ -326,9 +326,26 @@ describe('M — no tooltip-only explanatory text remains', () => {
 // never inside any collapsible panel, in either increment)
 // ---------------------------------------------------------------------
 describe('H — per-row Selling Price deviation warning and save errors unaffected', () => {
-  it('the Selling Price deviation warning is unaffected — still present exactly twice (catalog + manual)', () => {
+  it('the Selling Price deviation warning mechanism is unaffected in the active editing rows — still present exactly twice there (catalog + manual) — with Concept C legitimately adding two more visible occurrences in the validated section', () => {
     const occurrences = periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) ?? [];
-    assert.equal(occurrences.length, 2);
+    // [Concept C — Validated Product Compaction] Concept C's own
+    // Hard Requirement §2 mandates that the compact validated
+    // representation ALSO visibly indicate an active selling-price
+    // deviation warning, reusing this exact same function/inputs —
+    // never a second, invented check (see
+    // tests/periodic-contagem-concept-c-validated-compaction.test.ts,
+    // Suite B). That legitimately adds two more call sites (one per
+    // validated loop) on top of the two this suite has always
+    // protected in the active editing rows. Total is now 4, not 2 —
+    // but the active-editing-row mechanism itself, isolated below by
+    // excluding the "Produtos Validados" section, must still be
+    // exactly the original 2, unmodified by Concept C.
+    assert.equal(occurrences.length, 4);
+    const validatedSectionStart = periodicSrc.indexOf('Produtos Validados');
+    assert.notEqual(validatedSectionStart, -1);
+    const activeAreaSrc = periodicSrc.slice(0, validatedSectionStart);
+    const activeAreaOccurrences = activeAreaSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) ?? [];
+    assert.equal(activeAreaOccurrences.length, 2, 'the two original active-editing-row occurrences must remain untouched by Concept C');
   });
 
   it('per-row save errors remain rendered unconditionally in both loops', () => {

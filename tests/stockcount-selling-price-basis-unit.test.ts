@@ -338,9 +338,28 @@ describe('TEST 7 — Contagem UI selling-price denomination caption (Implementat
     assert.equal(staleMatches, null, 'no caption should still read row.unit alone');
   });
 
-  it('does not alter row.unit itself, quantity display, or any other .unit occurrence in this file', () => {
-    // Quantity displays remain keyed off .unit alone, unaffected by this change.
+  it('does not alter row.unit itself, quantity display, or any other .unit occurrence in this file — with Concept C legitimately splitting quantity and unit into separate compact cells rather than one adjacent expression', () => {
+    // Quantity displays for the review screen remain keyed off .unit
+    // alone, unaffected by this change.
     assert.match(periodicSrc, /\{item\.quantity\} \{item\.unit\}/);
-    assert.match(periodicSrc, /\{q\} \{row\.unit \|\| 'un'\}/);
+    // [Concept C — Validated Product Compaction, Hard Requirement §11]
+    // The validated area's own quantity and unit are no longer rendered
+    // as one adjacent `{q} {row.unit || 'un'}` expression — Concept C
+    // restructures them into separate desktop grid cells (each with its
+    // own sm:hidden mobile label) so the row aligns with the shared
+    // Nome/Qtd/Unid/Venda-Un/Valor column header, matching the active
+    // workspace's own layout. Both quantity and unit remain
+    // independently visible; verified below within the validated
+    // section itself, rather than assuming they are still one adjacent
+    // expression.
+    const validatedSectionStart = periodicSrc.indexOf('Produtos Validados');
+    assert.notEqual(validatedSectionStart, -1);
+    const validatedSectionEnd = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', validatedSectionStart);
+    assert.notEqual(validatedSectionEnd, -1);
+    const validatedSection = periodicSrc.slice(validatedSectionStart, validatedSectionEnd);
+    const quantityMatches = validatedSection.match(/<span className="text-\[13px\] text-gray-700 tabular-nums">\{q\}<\/span>/g) ?? [];
+    assert.equal(quantityMatches.length, 2, 'expected quantity visible in both the catalog and manual validated rows');
+    const unitMatches = validatedSection.match(/<span className="text-\[13px\] text-gray-700">\{row\.unit \|\| 'un'\}<\/span>/g) ?? [];
+    assert.equal(unitMatches.length, 2, 'expected unit visible in both the catalog and manual validated rows');
   });
 });

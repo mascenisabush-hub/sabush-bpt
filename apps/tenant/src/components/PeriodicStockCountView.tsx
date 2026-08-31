@@ -68,7 +68,6 @@ import {
   Undo2,
   X,
   Package,
-  Pencil,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -1917,6 +1916,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // fields always-visible/always-live rather than toggle-gated.
   const getEffectiveReferenceConfig = (productKey: string): { referenceUnit: string; referencePrice: string; editSequence?: number } =>
     modeAGroups[productKey] ?? computeDefaultReferenceConfig(productKey);
+
+  // [Concept C — Validated Product Compaction, Implementation
+  // Authorization §2] Reuses the EXACT SAME condition
+  // ModeAValuationControl's own `allPortionsConvertible` prop already
+  // evaluates at every active-row render site (lines 4015-4020/
+  // 4362-4367, above) — never a second, independently-invented warning
+  // rule. That control only renders for a row still in the active
+  // workspace (visibleCatalogEntries/manualRows), so once every portion
+  // of a group is validated it stops rendering there entirely and the
+  // warning would otherwise silently disappear; this lets the compact
+  // validated representation surface the same true/false for a
+  // validated product's own group, computed on demand rather than read
+  // off a control that is no longer on screen. No new business logic:
+  // getEffectiveUnitRelationshipForProductName, isValidUnitRelationship,
+  // productKeyFor, getEffectiveReferenceConfig, collectGroupPortions,
+  // and canApplyModeA are the identical functions/values already used
+  // above — this only calls them from a second call site.
+  const getModeANonConvertibleWarning = (productName: string): boolean => {
+    const relationship = getEffectiveUnitRelationshipForProductName(productName);
+    if (!relationship || !isValidUnitRelationship(relationship)) return false;
+    const key = productKeyFor(productName);
+    const config = getEffectiveReferenceConfig(key);
+    return !canApplyModeA(collectGroupPortions(key), config.referenceUnit, relationship);
+  };
 
   const applyModeAToGroup = (productKey: string, referenceUnit: string, referencePriceRaw: string) => {
     const referencePrice = Number(referencePriceRaw);
@@ -4708,39 +4731,150 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 Já verificados e fora do espaço de contagem ativo. Continuam a fazer
                 parte desta Contagem e serão revistos antes de "Confirmar Contagem".
               </p>
-              <div className="flex flex-wrap items-center gap-1.5">
+              {/* [Concept C — Validated Product Compaction, Implementation
+                  Authorization §11] Shared desktop column header, matching
+                  the exact same five-track rowGridClass template and the
+                  same five labels the active-workspace header above
+                  already uses (Concept B §3.1) — so the Owner's eyes stay
+                  aligned between the active and validated areas, as
+                  required. Editar has no dedicated column here either,
+                  mirroring that same header's own precedent (an action,
+                  not a field, folded into the last cell below). */}
+              <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-1.5 border-b border-emerald-100`}>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Nome</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Qtd</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Unid</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Venda/Un</span>
+                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Valor</span>
+              </div>
+              <div className="space-y-1.5">
                 {validatedCatalogEntries.map(([productId, row]) => {
                   const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
+                  const sellingPriceNum = Number(row.sellingPrice) || 0;
+                  const rowValue = q * sellingPriceNum;
+                  // [Concept C §2/§13] Same function, same inputs
+                  // (parseFloat(row.sellingPrice), getRememberedPriceForRow)
+                  // the active-row rendering already calls at line 4124 —
+                  // never a second, independently-computed check.
+                  const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                  const hasPriceWarning = priceCheck.showWarning;
+                  const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
                   return (
-                    <button
+                    <div
                       key={`validated-catalog-${productId}`}
-                      type="button"
-                      onClick={() => handleEditCatalogRow(productId)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 bg-white border border-emerald-200 hover:bg-emerald-100 rounded-full pl-2.5 pr-2 py-1 transition-colors duration-150"
+                      className={`grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-1 sm:items-center bg-white border border-emerald-200/70 rounded-xl px-3 py-2`}
                     >
-                      {row.productName}
-                      <span className="text-emerald-600/70 font-normal tabular-nums">
-                        {q} {row.unit || 'un'}
-                      </span>
-                      <Pencil className="w-2.5 h-2.5" strokeWidth={2.5} />
-                    </button>
+                      <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                        {/* [Concept C §12] Accessible text representation
+                            of validated state — not conveyed by the icon
+                            alone. */}
+                        <span className="sr-only">Validado</span>
+                        <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
+                        {(hasPriceWarning || hasModeAWarning) && (
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                        )}
+                      </div>
+                      <div>
+                        <span className={`${fieldLabelClass} sm:hidden`}>Qtd</span>
+                        <span className="text-[13px] text-gray-700 tabular-nums">{q}</span>
+                      </div>
+                      <div>
+                        <span className={`${fieldLabelClass} sm:hidden`}>Unid</span>
+                        <span className="text-[13px] text-gray-700">{row.unit || 'un'}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
+                        <span className="block text-[13px] text-gray-700 tabular-nums truncate">{formatCurrency(sellingPriceNum, currencySymbol)}</span>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 flex items-center justify-between gap-2">
+                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums">{formatCurrency(rowValue, currencySymbol)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleEditCatalogRow(productId)}
+                          className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors duration-150 whitespace-nowrap shrink-0"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                      {/* [Concept C §2] Warnings stay fully visible text —
+                          never tooltip/hover-only — reusing the exact
+                          check-price wording pattern already established
+                          at the active-row rendering, and the exact
+                          Mode A warning sentence ModeAValuationControl
+                          itself renders (line 342, above), verbatim. */}
+                      {hasPriceWarning && (
+                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
+                          Este preço é {Math.round(priceCheck.deviationPercent! * 100)}%{' '}
+                          {priceCheck.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
+                          produto — confirme que não é um erro de digitação.
+                        </p>
+                      )}
+                      {hasModeAWarning && (
+                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-semibold leading-snug flex items-start gap-1">
+                          <AlertTriangle className="w-3 h-3 shrink-0 mt-[1px]" strokeWidth={2.25} aria-hidden="true" />
+                          <span>Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.</span>
+                        </p>
+                      )}
+                    </div>
                   );
                 })}
                 {validatedManualRowEntries.map(({ idx, row }) => {
                   const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
+                  const sellingPriceNum = Number(row.sellingPrice) || 0;
+                  const rowValue = q * sellingPriceNum;
+                  const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                  const hasPriceWarning = priceCheck.showWarning;
+                  const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
                   return (
-                    <button
+                    <div
                       key={`validated-manual-${idx}`}
-                      type="button"
-                      onClick={() => handleEditManualRow(idx)}
-                      className="inline-flex items-center gap-1.5 text-[11px] font-semibold text-emerald-800 bg-white border border-emerald-200 hover:bg-emerald-100 rounded-full pl-2.5 pr-2 py-1 transition-colors duration-150"
+                      className={`grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-1 sm:items-center bg-white border border-emerald-200/70 rounded-xl px-3 py-2`}
                     >
-                      {row.productName}
-                      <span className="text-emerald-600/70 font-normal tabular-nums">
-                        {q} {row.unit || 'un'}
-                      </span>
-                      <Pencil className="w-2.5 h-2.5" strokeWidth={2.5} />
-                    </button>
+                      <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
+                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                        <span className="sr-only">Validado</span>
+                        <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
+                        {(hasPriceWarning || hasModeAWarning) && (
+                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                        )}
+                      </div>
+                      <div>
+                        <span className={`${fieldLabelClass} sm:hidden`}>Qtd</span>
+                        <span className="text-[13px] text-gray-700 tabular-nums">{q}</span>
+                      </div>
+                      <div>
+                        <span className={`${fieldLabelClass} sm:hidden`}>Unid</span>
+                        <span className="text-[13px] text-gray-700">{row.unit || 'un'}</span>
+                      </div>
+                      <div className="min-w-0">
+                        <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
+                        <span className="block text-[13px] text-gray-700 tabular-nums truncate">{formatCurrency(sellingPriceNum, currencySymbol)}</span>
+                      </div>
+                      <div className="col-span-2 sm:col-span-1 flex items-center justify-between gap-2">
+                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums">{formatCurrency(rowValue, currencySymbol)}</span>
+                        <button
+                          type="button"
+                          onClick={() => handleEditManualRow(idx)}
+                          className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors duration-150 whitespace-nowrap shrink-0"
+                        >
+                          Editar
+                        </button>
+                      </div>
+                      {hasPriceWarning && (
+                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
+                          Este preço é {Math.round(priceCheck.deviationPercent! * 100)}%{' '}
+                          {priceCheck.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
+                          produto — confirme que não é um erro de digitação.
+                        </p>
+                      )}
+                      {hasModeAWarning && (
+                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-semibold leading-snug flex items-start gap-1">
+                          <AlertTriangle className="w-3 h-3 shrink-0 mt-[1px]" strokeWidth={2.25} aria-hidden="true" />
+                          <span>Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.</span>
+                        </p>
+                      )}
+                    </div>
                   );
                 })}
               </div>

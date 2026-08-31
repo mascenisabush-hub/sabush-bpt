@@ -310,7 +310,19 @@ describe('PeriodicStockCountView.tsx — source-structure checks confirming the 
 
   it('both ModeAValuationControl render sites (catalog-row loop, manual-row card loop) resolve the identical getEffectiveReferenceConfig — no longer two separately-inlined default computations', () => {
     const occurrences = periodicSrc.match(/const config = getEffectiveReferenceConfig\(key\);/g) || [];
-    assert.equal(occurrences.length, 2, 'expected exactly two render-site occurrences of the now-shared resolver (catalog-row loop + manual-row card loop)');
+    // [Concept C — Validated Product Compaction] A third, legitimate
+    // call site now exists inside getModeANonConvertibleWarning — the
+    // helper Concept C's validated-row compact representation uses to
+    // surface the same Mode A non-convertible warning once every
+    // portion of a group has been validated and ModeAValuationControl
+    // itself no longer renders (see tests/periodic-contagem-concept-c-
+    // validated-compaction.test.ts, Suite B). The two ORIGINAL
+    // render-site occurrences — each feeding directly into
+    // <ModeAValuationControl — remain independently confirmed below,
+    // unmodified by Concept C.
+    assert.equal(occurrences.length, 3, 'expected the two original render-site occurrences (catalog-row loop + manual-row card loop) plus Concept C\'s own validated-row warning helper');
+    const renderSiteOccurrences = (periodicSrc.match(/const config = getEffectiveReferenceConfig\(key\);[\s\S]{0,400}?<ModeAValuationControl/g) ?? []).length;
+    assert.equal(renderSiteOccurrences, 2, 'the two original render sites must still both feed directly into ModeAValuationControl, unmodified');
   });
 
   it('no new conversion engine or second valuation path is introduced — getConversionFactor, resolveUnitAwarePrice, and deriveModeAPortionValuations import counts are unchanged (one import statement each)', () => {
