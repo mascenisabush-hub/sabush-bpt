@@ -2736,6 +2736,15 @@ expressApp.post(
       res.status(409).json({ error: 'authorization-already-active', message: result.message });
       return;
     }
+    // [Capital Inicial Retirement — Implementation Authorization
+    // Amendment 1] Must return here, before the granted-success
+    // handling below — this outcome has no businessId,
+    // targetStockCountId, or expiresAt, and no audit-log entry may be
+    // written as though a grant occurred.
+    if (result.outcome === 'retirement-cutover-reached') {
+      res.status(409).json({ error: 'retirement-cutover-reached', message: result.message });
+      return;
+    }
 
     // result.outcome === 'granted' from here — audit log is written
     // AFTER the grant succeeds, same two-step, idempotent-by-retry

@@ -89,10 +89,30 @@ export type GrantAuthorizationOutcome =
   | { outcome: 'target-not-initial-type'; message: string }
   | { outcome: 'target-not-current'; message: string }
   | { outcome: 'target-at-ceiling'; message: string }
-  | { outcome: 'authorization-already-active'; message: string };
+  | { outcome: 'authorization-already-active'; message: string }
+  // [Capital Inicial Retirement — Implementation Authorization
+  // Increment 3] Returned when a new grant is attempted after the
+  // retirement cutover (see CAPITAL_INICIAL_RETIREMENT_CUTOVER_MS
+  // below). No businessId/targetStockCountId/expiresAt fields — a
+  // caller must never treat this as a granted result.
+  | { outcome: 'retirement-cutover-reached'; message: string };
 
 /** 48 hours, per explicit, final Product Architect decision (BDR-0016 §9 Decision 1; POL-0009 Rule R). A single named constant — never re-derived or re-typed elsewhere. */
 export const AUTHORIZATION_DURATION_MS = 48 * 60 * 60 * 1000;
+
+/**
+ * [Capital Inicial Retirement — Implementation Authorization
+ * Increment 3] The fixed retirement-cutover instant, defined at
+ * implementation time as the moment Increment 2 shipped — the commit
+ * that closed the stockCounts create path for new Capital Inicial
+ * confirmations (`a7fea6b`, 2026-08-31T13:44:47Z UTC). A hardcoded
+ * constant, never derived from a request-supplied or Owner-editable
+ * value, compared only against this module's own injected
+ * TimestampFactory server clock (never `Date.now()` directly, and
+ * never any client input) — see the Security constraints in the
+ * signed Implementation Authorization, Increment 3.
+ */
+export const CAPITAL_INICIAL_RETIREMENT_CUTOVER_MS = Date.UTC(2026, 7, 31, 13, 44, 47);
 
 /**
  * Grants a new SuperAdmin-Assisted Initial Stock Recovery Authorization
@@ -122,6 +142,17 @@ export const AUTHORIZATION_DURATION_MS = 48 * 60 * 60 * 1000;
  * NEVER writes to StockCount (Implementation Authorization Acceptance
  * Criterion 10) and NEVER fabricates/backfills confirmedAt or
  * chainPosition on the target (Acceptance Criteria 8, 9).
+ *
+ * [Increment 3] Checked FIRST, before every precondition above: once
+ * the server's own trusted clock has reached
+ * CAPITAL_INICIAL_RETIREMENT_CUTOVER_MS, no new grant is issued, for
+ * any business, any target, regardless of justification or
+ * eligibility — Capital Inicial's retirement extends to closing this
+ * recovery path, not merely the ordinary creation path Increment 2
+ * already closed. A grant already issued before cutover remains fully
+ * consumable afterward, within its own already-set expiresAt —
+ * consumption logic (server/initialStockRecoveryConsumption.ts) is
+ * untouched by this increment, by design.
  */
 export async function grantInitialStockRecoveryAuthorization(
   db: InitialStockRecoveryAuthorizationDb,
@@ -129,6 +160,13 @@ export async function grantInitialStockRecoveryAuthorization(
   params: { businessId: string; targetStockCountId: string; justification: string; grantedByUid: string }
 ): Promise<GrantAuthorizationOutcome> {
   const { businessId, targetStockCountId, justification, grantedByUid } = params;
+
+  if (clock.now().toMillis() >= CAPITAL_INICIAL_RETIREMENT_CUTOVER_MS) {
+    return {
+      outcome: 'retirement-cutover-reached',
+      message: 'Capital Inicial foi retirado como conceito de negócio activo — já não é possível conceder novas autorizações de recuperação.',
+    };
+  }
 
   if (!justification || !justification.trim()) {
     return { outcome: 'missing-justification', message: 'É obrigatório indicar uma justificação.' };
