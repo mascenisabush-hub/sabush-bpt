@@ -129,25 +129,22 @@ describe('resolveActiveBusinessWorthBaselineDate — Specification §18, FR-25',
     assert.equal(result, '2026-04-01');
   });
 
-  it('7. Case B — no snapshot yet, State 1a: baseline is the initial StockCount\'s own createdAt (Rule 8 Finding 6-A)', () => {
+  it('7. Case B retired — a historical initial StockCount can no longer become Fecho\'s baseline; no active snapshot still returns null (Capital Inicial Retirement Authorization, Increment 1)', () => {
     const initial = makeInitialStockCount({ createdAt: '2023-05-10T12:00:00.000Z' });
-    const result = resolveActiveBusinessWorthBaselineDate({ snapshots: [], initialStockCount: initial });
-    assert.equal(result, '2023-05-10');
+    void initial; // retained to document that its presence no longer affects the result
+    const result = resolveActiveBusinessWorthBaselineDate({ snapshots: [] });
+    assert.equal(result, null);
   });
 
-  it('8. Case B — createdAt is used even when confirmedAt IS present, never confirmedAt (Rule 8 Finding 6-A, mirroring resolveStartupInvestmentWindow)', () => {
-    const initial = makeInitialStockCount({
-      createdAt: '2023-05-10T12:00:00.000Z',
-      confirmedAt: fakeTimestamp('2023-05-11T09:00:00.000Z') as unknown as StockCount['confirmedAt'],
-    });
-    const result = resolveActiveBusinessWorthBaselineDate({ snapshots: [], initialStockCount: initial });
-    assert.equal(result, '2023-05-10');
-  });
+  // Test 8 retired (Capital Inicial Retirement Authorization, Increment 1):
+  // this test exercised the removed Capital Inicial fallback's own
+  // internal field-choice (createdAt over confirmedAt), which no longer
+  // exists — resolveActiveBusinessWorthBaselineDate no longer reads any
+  // StockCount at all.
 
-  it('9. Case A takes priority over Case B when both a snapshot and an initial StockCount exist', () => {
-    const initial = makeInitialStockCount({ createdAt: '2023-05-10T12:00:00.000Z' });
+  it('9. Case A remains the sole source of a non-null baseline — unaffected by whether a historical initial StockCount exists (Case A priority assertion unchanged; setup updated for the retired parameter)', () => {
     const snap = makeSnapshot({ confirmedAt: fakeTimestamp('2026-05-01T00:00:00.000Z') as unknown as BusinessWorthSnapshot['confirmedAt'] });
-    const result = resolveActiveBusinessWorthBaselineDate({ snapshots: [snap], initialStockCount: initial });
+    const result = resolveActiveBusinessWorthBaselineDate({ snapshots: [snap] });
     assert.equal(result, '2026-05-01');
   });
 

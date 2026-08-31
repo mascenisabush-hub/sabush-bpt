@@ -1368,7 +1368,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // recordFechoClosing itself uses to build startDate).
   const fechoBaselineDate = resolveActiveBusinessWorthBaselineDate({
     snapshots: businessWorthSnapshots,
-    initialStockCount,
   });
 
   // [Business Worth Evolution — Implementation Authorization §18,
@@ -6184,7 +6183,6 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const recordFechoClosing = async (endDate: string, periodLabel?: string): Promise<Closing> => {
     const startDate = resolveActiveBusinessWorthBaselineDate({
       snapshots: businessWorthSnapshots,
-      initialStockCount,
     });
     if (!startDate) {
       throw new Error('Ainda não existe uma base (Contagem ou Capital Inicial) para ancorar o Fecho.');

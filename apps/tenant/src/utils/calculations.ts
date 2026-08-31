@@ -1464,10 +1464,11 @@ export function resolveStartupInvestmentWindow(params: {
 }
 
 /**
- * [Specification §18, FR-25; Rule 8 Finding 8-A, 8-B; Plan §9] Resolves
- * Fecho's own start date — never an independently Owner-chosen date.
- * Per §9's "exactly one baseline, the latest, is ever active" rule, Fecho's
- * start is always the active baseline:
+ * [Specification §18, FR-25; Rule 8 Finding 8-A, 8-B; Plan §9;
+ * Capital Inicial Retirement Implementation Authorization, Increment 1]
+ * Resolves Fecho's own start date — never an independently Owner-chosen
+ * date. Per §9's "exactly one baseline, the latest, is ever active" rule,
+ * Fecho's start is always the active baseline:
  *
  * - **A `BusinessWorthSnapshot` already exists** (Case A, State ≥2): the
  *   latest active snapshot's own `confirmedAt` — the exact same "latest
@@ -1475,22 +1476,17 @@ export function resolveStartupInvestmentWindow(params: {
  *   `getCurrentBusinessWorth` already use, so Fecho's own boundary can
  *   never disagree with either of those functions about which baseline is
  *   active.
- * - **No snapshot yet, State 1a** (Case B): the same historical Capital
- *   Inicial baseline date `resolveStartupInvestmentWindow` already
- *   resolves for the same business (Rule 8 Finding 6-A — the `initial`
- *   StockCount's own `createdAt`, never `confirmedAt`) — reused here
- *   rather than re-derived, so both this function and Startup Investment
- *   anchor to the identical date for a business in this state.
  *
- * Returns `null` when neither a snapshot nor an `initial` StockCount
- * exists — there is no baseline to anchor Fecho to yet (genuinely new
- * business, State 1, UNKNOWN), never a fabricated date.
+ * Returns `null` when no active `BusinessWorthSnapshot` exists — there is
+ * no baseline to anchor Fecho to yet, never a fabricated date. The
+ * historical Capital Inicial fallback (Case B) has been retired by this
+ * Authorization's Increment 1; a historical `initial` StockCount can no
+ * longer become Fecho's baseline.
  */
 export function resolveActiveBusinessWorthBaselineDate(params: {
   snapshots: BusinessWorthSnapshot[] | null | undefined;
-  initialStockCount: StockCount | null | undefined;
 }): string | null {
-  const { snapshots, initialStockCount } = params;
+  const { snapshots } = params;
 
   const active = (snapshots ?? []).filter((s) => s.status === 'active');
   if (active.length > 0) {
@@ -1498,12 +1494,7 @@ export function resolveActiveBusinessWorthBaselineDate(params: {
     return new Date(toMillis(latest.confirmedAt)).toISOString().slice(0, 10);
   }
 
-  if (!initialStockCount) return null;
-
-  // Rule 8 Finding 6-A — createdAt, never confirmedAt (frequently absent
-  // on legacy records); the same resolution resolveStartupInvestmentWindow
-  // already applies for the identical business/state.
-  return initialStockCount.createdAt.slice(0, 10);
+  return null;
 }
 
 /**
