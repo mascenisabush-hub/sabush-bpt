@@ -20,6 +20,8 @@ import {
   Tag,
   Receipt,
   HandCoins,
+  ClipboardList,
+  ArrowRight,
 } from 'lucide-react';
 import { Product } from '../types';
 import { EditProductModal } from './EditProductModal';
@@ -32,7 +34,14 @@ import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 interface DashboardViewProps {
   onNavigateToAddStock: (productName?: string) => void;
   onNavigateToAddQuebra: (productId?: string) => void;
-  onNavigateToInitialStockCount: () => void;
+  // [Capital Inicial Retirement — Implementation Authorization
+  // Increment 4] Repurposed: no longer an unconditional "create
+  // Capital Inicial" trigger. Still used to open InitialStockCountView
+  // for reviewing an EXISTING historical confirmation (destination
+  // defaults to 'initial-stock' for that call site), and now also the
+  // target the new establishment chooser below calls with an explicit
+  // 'stock-count' or 'declare-worth' destination.
+  onNavigateToInitialStockCount: (destination?: 'initial-stock' | 'stock-count' | 'declare-worth') => void;
   // [Business Worth Evolution — Implementation Authorization, Increment
   // 8] Navigates to the existing Periodic Stock Count screen (the same
   // screen an ordinary Contagem already uses) — a correction/recovery
@@ -163,6 +172,13 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showWorthModal, setShowWorthModal] = useState(false);
   const [showWorthHistoryModal, setShowWorthHistoryModal] = useState(false);
   const [showInitialStockValuationModal, setShowInitialStockValuationModal] = useState(false);
+  // [Capital Inicial Retirement — Implementation Authorization
+  // Increment 4] The KPI card's null-state click now opens this
+  // chooser instead of navigating straight to Capital Inicial
+  // creation — a small dialog offering only the two already-built,
+  // already-governed establishment screens (Contagem / Owner-Declared
+  // Business Worth). No new establishment mechanism.
+  const [showEstablishWorthChooser, setShowEstablishWorthChooser] = useState(false);
   const [openActionMenuId, setOpenActionMenuId] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<'name' | 'profit' | 'cost'>('name');
   const [showSortDropdown, setShowSortDropdown] = useState(false);
@@ -286,15 +302,16 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             State 1, Specification §6: no historical Capital Inicial AND
             no BusinessWorthSnapshot yet), this card takes over Capital
             Inicial's own former "action card" nudge treatment
-            (light/gold, is-action pulse, routes to
-            onNavigateToInitialStockCount) verbatim — a brand-new
-            business still gets the identical prompt to get started that
-            used to live here, just under Business Worth's own name
-            instead of Capital Inicial's. The moment a figure exists
-            (Estimated — State 1a, or Current — State 3), it switches to
-            the dark/gold "Highlight Card" treatment and the existing
-            click-through Business Worth modal, exactly as this card
-            already behaved at its old slot. */}
+            (light/gold, is-action pulse). [Capital Inicial Retirement —
+            Implementation Authorization Increment 4] It no longer routes
+            straight to Capital Inicial creation — it opens the
+            establishment chooser (showEstablishWorthChooser) between
+            Contagem and Owner-Declared Business Worth instead. The
+            moment a figure exists (Estimated — State 1a, or Current —
+            State 3), it switches to the dark/gold "Highlight Card"
+            treatment and the existing click-through Business Worth
+            modal, exactly as this card already behaved at its old
+            slot. */}
         <KpiCard
           icon={Gem}
           iconBgClass="bg-[#D4AF37]/10"
@@ -311,7 +328,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               ? t('dashboard.kpi.initialCapital.descUnset')
               : t('dashboard.kpi.businessWorth.desc')
           }
-          onClick={displayedBusinessWorthValue === null ? onNavigateToInitialStockCount : () => setShowWorthModal(true)}
+          onClick={displayedBusinessWorthValue === null ? () => setShowEstablishWorthChooser(true) : () => setShowWorthModal(true)}
           action={displayedBusinessWorthValue === null}
           variant={displayedBusinessWorthValue === null ? 'light' : 'dark'}
           badge={
@@ -672,23 +689,27 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                 </span>
               </div>
 
-              <button
-                type="button"
-                onClick={() => {
-                  setShowWorthModal(false);
-                  if (hasInitialStockCount) {
+              {/* [Capital Inicial Retirement — Implementation
+                  Authorization Increment 4] This row no longer offers
+                  Capital Inicial creation for a business with no
+                  historical record — it simply does not render in that
+                  case. When a historical record DOES exist, it still
+                  opens the existing valuation/history view unchanged. */}
+              {hasInitialStockCount && (
+                <button
+                  type="button"
+                  onClick={() => {
+                    setShowWorthModal(false);
                     setShowInitialStockValuationModal(true);
-                  } else {
-                    onNavigateToInitialStockCount();
-                  }
-                }}
-                className="w-full flex items-center justify-between px-4 py-2.5 rounded-[10px] hover:bg-gray-50 transition text-left"
-              >
-                <span className="text-gray-500 underline decoration-dotted underline-offset-2">{t('dashboard.worthModal.initialCapital')}</span>
-                <span className="type-number text-slate-600">
-                  {formatCurrency(initialCapitalValue, currencySymbol)}
-                </span>
-              </button>
+                  }}
+                  className="w-full flex items-center justify-between px-4 py-2.5 rounded-[10px] hover:bg-gray-50 transition text-left"
+                >
+                  <span className="text-gray-500 underline decoration-dotted underline-offset-2">{t('dashboard.worthModal.initialCapital')}</span>
+                  <span className="type-number text-slate-600">
+                    {formatCurrency(initialCapitalValue, currencySymbol)}
+                  </span>
+                </button>
+              )}
 
               <div
                 className={`flex items-center justify-between p-4 rounded-[10px] border ${
@@ -738,6 +759,72 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             >
               {t('common.close')}
             </button>
+          </div>
+        </div>
+      )}
+
+      {/* [Capital Inicial Retirement — Implementation Authorization
+          Increment 4] The establishment chooser — replaces the old
+          direct route from the null-state KPI card into Capital
+          Inicial creation. Offers only the two already-built,
+          already-governed establishment screens; no new mechanism. */}
+      {showEstablishWorthChooser && (
+        <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+          <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-sm shadow-2xl text-gray-900 overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+              <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+                <Gem className="w-5 h-5 text-[#D4AF37]" />
+                Estabelecer o Valor do Negócio
+              </h2>
+              <button
+                type="button"
+                onClick={() => setShowEstablishWorthChooser(false)}
+                className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-500 hover:text-gray-900 transition"
+              >
+                <X className="w-5 h-5" />
+              </button>
+            </div>
+            <div className="p-5 space-y-3">
+              <p className="text-xs text-gray-500">Escolha como quer estabelecer o Valor do Negócio.</p>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEstablishWorthChooser(false);
+                  onNavigateToInitialStockCount('stock-count');
+                }}
+                className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/5 transition text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-indigo-50 flex items-center justify-center shrink-0">
+                    <ClipboardList className="w-4.5 h-4.5 text-indigo-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Fazer uma Contagem de Stock</p>
+                    <p className="text-[11px] text-gray-500">Conte fisicamente o stock que já possui.</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
+              <button
+                type="button"
+                onClick={() => {
+                  setShowEstablishWorthChooser(false);
+                  onNavigateToInitialStockCount('declare-worth');
+                }}
+                className="w-full flex items-center justify-between gap-3 p-4 rounded-xl border border-gray-200 hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/5 transition text-left"
+              >
+                <div className="flex items-center gap-3">
+                  <div className="w-9 h-9 rounded-lg bg-sky-50 flex items-center justify-center shrink-0">
+                    <Gem className="w-4.5 h-4.5 text-sky-600" />
+                  </div>
+                  <div>
+                    <p className="text-sm font-bold text-gray-900">Declarar o Valor do Negócio</p>
+                    <p className="text-[11px] text-gray-500">Já sabe o valor? Declare-o directamente.</p>
+                  </div>
+                </div>
+                <ArrowRight className="w-4 h-4 text-gray-400 shrink-0" />
+              </button>
+            </div>
           </div>
         </div>
       )}

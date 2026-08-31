@@ -93,8 +93,17 @@ function MainApp() {
     setActiveTab('add-quebra');
   };
 
-  const handleNavigateToInitialStockCount = () => {
-    setActiveTab('initial-stock');
+  // [Capital Inicial Retirement — Implementation Authorization
+  // Increment 4] No longer unconditionally opens Capital Inicial
+  // creation. Still used for the still-authorized purposes of (a)
+  // opening InitialStockCountView to review/correct an EXISTING
+  // historical confirmation (Increment 4 explicitly does not retire
+  // that access path — see InitialStockPriceChangeModal.tsx's own
+  // "Rever ecrã de Capital Inicial" affordance) and (b) as the target
+  // of DashboardView's new establishment chooser, which now picks
+  // between the two authorized establishment screens instead.
+  const handleNavigateToInitialStockCount = (destination: 'initial-stock' | 'stock-count' | 'declare-worth' = 'initial-stock') => {
+    setActiveTab(destination);
   };
 
   return (

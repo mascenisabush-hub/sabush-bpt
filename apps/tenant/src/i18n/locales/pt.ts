@@ -1260,7 +1260,7 @@ export const pt: TranslationDict = {
         label: 'Capital Inicial do Negócio',
         notSet: 'Não definido',
         descSet: 'O valor verificado do stock registado quando começou a usar o Sabush.',
-        descUnset: 'Toque para registar o stock que já possui e definir o ponto de partida.',
+        descUnset: 'Toque para escolher como estabelecer o Valor do Negócio — faça uma Contagem de Stock ou declare-o directamente.',
       },
       stockCost: {
         label: 'Custo do Stock Atual',

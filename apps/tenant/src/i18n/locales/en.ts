@@ -108,7 +108,7 @@ export const en: TranslationDict = {
         label: 'Initial Business Capital',
         notSet: 'Not set',
         descSet: 'The verified stock value recorded when you started using Sabush.',
-        descUnset: 'Tap to register the stock you already have and set your starting point.',
+        descUnset: 'Tap to choose how to establish your Business Worth — take a stock count or declare it directly.',
       },
       stockCost: {
         label: 'Current Stock Cost',
