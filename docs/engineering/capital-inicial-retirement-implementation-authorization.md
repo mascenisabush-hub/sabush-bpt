@@ -238,3 +238,33 @@ The nine increments in §5 must be implemented in the exact order given, one at 
 **This signature authorizes implementation of exactly, and only, this document's defined scope (§3, §5, §13) — one increment at a time, per §12's own execution discipline. No increment may begin ahead of an earlier, unverified one. Anything outside this document's defined scope, including any wording adjustment discussed but not incorporated into this signed text (see the open item below), requires its own separate governance action before it applies.**
 
 **Open item, not resolved by this signature:** during the Rule 8-adjacent review preceding this signature, a narrower internal framing for Increment 3 was discussed (splitting its content into "3a — Owner-side grandfathering, verification only, no code" and "3b — SuperAdmin grant-side cutover enforcement, the one required server change") as a wording clarification, not a scope change. **That wording change was not incorporated into the text being signed here** — this signature authorizes Increment 3 exactly as it reads in §5 above, unmodified. If the Product Architect wants that clarification reflected in the authorized text, it requires its own separate, explicit instruction and its own additive record, mirroring how every other change in this governance chain has been made.
+
+---
+
+## Amendment 1 — Increment 3 File Scope (Narrow, Additive)
+
+**Status: ✅ ACCEPTED WITH MODIFICATION (31 August 2026).** Recorded additively below, per this document's own established signature-recording convention (see the "Recorded" section above) — everything above this line, including §5's own text and the original signature block, is preserved completely unedited as the historical record of what was originally signed. This section is a separate, later, dated act.
+
+**Context:** during Increment 3 implementation inspection (still pre-code, no file other than this one touched), a concrete integration gap was identified. §5's Increment 3 text authorizes exactly one file, `server/initialStockRecoveryAuthorization.ts`, for the new `retirement-cutover-reached` outcome `grantInitialStockRecoveryAuthorization()` is authorized to return after cutover. That outcome is consumed by the existing route in `server/index.ts` (`POST /api/superadmin/initial-stock-recovery/:businessId/authorize`), which currently handles every existing outcome explicitly and otherwise falls through to granted-success handling — accessing `result.businessId`, `result.targetStockCountId`, and `result.expiresAt.toMillis()`. None of these exist on the new outcome. Introducing the new outcome without a corresponding route branch would not fail to compile in this repository's current tsconfig (the route's `result` variable is untyped `let result;`, so this is not caught at build time) — it would instead surface as a real runtime defect: every post-cutover authorization request would hit a thrown exception outside the route's own try/catch, instead of the intended controlled denial.
+
+**Amendment — Increment 3 file scope is widened by exactly one file, for exactly one purpose:**
+
+`server/index.ts` is now additionally authorized, **solely** for adding the one necessary route branch that explicitly handles the `retirement-cutover-reached` outcome and returns an appropriate non-success HTTP response, following the route's own existing pattern for its other non-`granted` outcomes (e.g. the `409` pattern already used for `authorization-already-active`). This is the only authorized change to `server/index.ts` under this amendment.
+
+**Not authorized by this amendment, under any reading:** any other change to `server/index.ts`; redesign of the route; changes to any existing outcome's handling; changes to `requirePlatformOperator` or `requireSuperAdmin`; changes to the 48-hour authorization window, the 12-hour Owner Void & Redo window, or the Confirmation #4 ceiling; changes to the cutover decision itself; any `firestore.rules` change; any change to `server/initialStockRecoveryConsumption.ts`; any UI change; any Business Worth calculation change; any change to historical Capital Inicial records; any new recovery mechanism; any cross-business query; any client-controlled cutover timestamp.
+
+**Updated Increment 3 authorized file list:**
+1. `server/initialStockRecoveryAuthorization.ts` (as already authorized in §5)
+2. `server/index.ts` (newly authorized by this amendment, for the single named purpose above only)
+
+No other file is authorized for Increment 3.
+
+**Updated Increment 3 test requirements — additive to §5's original list:** because `server/index.ts` is now in scope for this one narrow purpose, minimum-necessary integration coverage proving (a) pre-cutover grant behaves exactly as before, (b) post-cutover grant returns the controlled retirement response rather than falling through to success handling, (c) no audit-log entry is written as though a grant occurred on the post-cutover path, and (d) an authorization granted before cutover remains consumable after cutover. No broader new API test coverage is authorized by this amendment.
+
+**Not a redecision:** this amendment does not change the underlying Product Architect decision, the cutover policy itself, the recovery windows, historical-data preservation, or any other part of this Implementation Authorization. It closes an integration gap discovered while implementing already-authorized Increment 3 behavior — nothing more.
+
+> I have reviewed the identified Increment 3 integration conflict and authorize the narrow amendment above. I specifically authorize `server/index.ts` solely to handle the `retirement-cutover-reached` outcome returned by `grantInitialStockRecoveryAuthorization()`. No other expansion of Increment 3 scope is authorized. This amendment does not change the underlying Product Architect decision, cutover policy, recovery windows, historical-data preservation, or any other part of the Implementation Authorization.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 31 August 2026
+> **Decision:** ACCEPTED WITH MODIFICATION
