@@ -385,3 +385,72 @@ No code, test, `firestore.rules`, `firestore.indexes.json`, or governance-scope 
 **AC-12 — recorded as OUTSTANDING, and the reason corrected.** The Plan's own §7 defines AC-12 as: "Zero historical `stockCounts`, `voidRecords`, `initialStockRecoveryAuthorization`, or Timeline document is deleted, rewritten, or its field values altered, verified by a before/after data snapshot comparison in the emulator test suite." A direct search of the full test suite (`tests/*.test.ts`, all files, not only the two named above) found **no test implementing this specific before/after comparison** — the AC-1/AC-2 tests assert only that a new create attempt is denied; neither they nor any other test reads a pre-existing historical document, records its state, performs an operation, and asserts the state is unchanged afterward. **AC-12 was not blocked by this sandbox's network restriction, and is not resolved by running the emulator successfully** — the previous entry's grouping of AC-12 with "run these two scripts" was incorrect and is corrected here, in the open, rather than silently. Closing AC-12 requires either: (a) a new test implementing this exact assertion, which is new test-writing scope requiring its own explicit authorization before being written — not authorized by this record; or (b) the Product Architect's own decision on an alternative acceptable form of verification for this item.
 
 **Recorded conclusion:** AC-1, AC-2, and AC-3 are now genuinely closed, verified against a real Firestore Rules Emulator. **AC-12 remains open**, for the reason stated above, and Increment 9 therefore remains **not fully complete**. This Authorization's overall scope (§14) is still **not** declared complete by this record. No code, test, `firestore.rules`, `firestore.indexes.json`, or governance-scope file is changed by this record.
+
+---
+
+## Amendment 3 — Post-Retirement UI Nudge Correction (Narrow, Additive)
+
+**Status: 🔶 PENDING — NOT YET AUTHORIZED.** Drafted below per this document's own established additive-amendment convention (see Amendment 1 and Amendment 2, above) — everything above this line, including both Increment 9 Verification Records and every prior signature block, is preserved completely unedited as the historical record. This section is a separate, later, pending act. **Signing the pending block at the end of this section is the sole act that would authorize it** — drafting it authorizes nothing by itself.
+
+**Governing basis:** this is a narrow addendum to the signed [Capital Inicial Retirement Decision Proposal](../engineering/capital-inicial-retirement-decision-proposal.md) §11 ("Remove Capital Inicial from Active Navigation/UI"), identifying two active-workflow prompts §11's original table did not name, discovered during post-Increment-9 review of Increments 1–8's shipped surfaces. It relies on, and does not reopen, BDR Decision 39 (all items), Architecture §5.4/§8.6, and Specification §44 — all already signed.
+
+**This is explicitly a UI workflow/copy correction, not a Business Worth redesign.** No formula, ceiling, or calculation changes.
+**No historical Capital Inicial data is deleted or altered.** Both messages are read-only display copy; neither is wired to any write path.
+**Case B / State 1a remains unchanged.** Nothing here touches `getEstimatedBusinessWorth`, its Case B branch, or State 1a's permanent-legacy status (BDR Decision 39(e); Spec §44.3).
+**Contagem and Owner-Declared Business Worth remain the sole establishment mechanisms**, unchanged (BDR Decision 1 as corrected; Decision 36).
+
+**Findings, confirmed by direct code inspection (not assumed):**
+- `dashboard.worthModal.defineInitialCapital` (`DashboardView.tsx:737`; i18n key present in `en.ts:189`, `pt.ts:1345`, `fr.ts:189`) renders only inside the Business Worth summary modal, itself only reachable once Business Worth is already established or estimated (`displayedBusinessWorthValue !== null`), gated by `{!hasInitialStockCount && ...}` with no other condition.
+- The hardcoded Portuguese banner in `PeriodicStockCountView.tsx:3622–3629` ("Ainda não definiu o Capital Inicial...") is a *separate* string on a *separate* screen (the Periodic Contagem entry screen, not the Dashboard) — not an i18n key (this file has no `t()`/`useTranslation` calls at all, a pre-existing structural fact unrelated to this amendment). Gated by `{!hasInitialStockCount && ...}` alone, with no establishment-state check — it renders on every periodic Contagem for the affected population, including the Contagem that itself establishes their Business Worth.
+- Both messages' addressable audience is, by their own gating condition, always exactly "no historical Capital Inicial" — and per BDR Decision 39(a), that population can never create one. Neither message is clickable, navigational, or wired to any creation/write path — confirmed by direct inspection (no `onClick`, no `Link`).
+- Neither message can render for a business with `hasInitialStockCount === true` — both are already unreachable for that population today, unaffected by this amendment either way.
+
+**Amendment — authorized scope, exactly:**
+1. `apps/tenant/src/i18n/locales/en.ts:189`, `pt.ts:1345`, `fr.ts:189` — the `dashboard.worthModal.defineInitialCapital` key — and its rendering clause, `DashboardView.tsx:737` (`{!hasInitialStockCount && t('dashboard.worthModal.defineInitialCapital')}`).
+2. `apps/tenant/src/components/PeriodicStockCountView.tsx:3622–3629` — the hardcoded Capital Inicial banner block (direct JSX edit, not a locale-key change).
+
+**Intended behavior — business without historical Capital Inicial (`hasInitialStockCount === false`):** neither message renders. Message 1: the modal's caption reverts to showing only `basedOnCount`, with no trailing clause. Message 2: the amber info banner is removed entirely from the Contagem screen for this population; the already-correct, Increment-6/FR-70-fixed "Valor Esperado de Stock" comparison copy immediately below it is untouched.
+**Distinguished from businesses with preserved historical Capital Inicial (`hasInitialStockCount === true`): no change.** Both messages are already unreachable for this population today — this amendment does not alter that population's experience in any way.
+
+**The boundary is absolute:**
+- ✅ Removing/gating away both messages, for `hasInitialStockCount === false` only, is authorized.
+- ❌ Any change to `businessWorth`, `capitalGrowth`, `capitalGrowthPct`, or `expectedCurrentStockValue` is not authorized.
+- ❌ Any change to Case A/B arithmetic, State 1a, Product Memory, recovery (Void & Redo / SuperAdmin-Assisted Recovery), historical data, Contagem, Owner-Declared Business Worth, or `BusinessWorthSnapshot` creation/semantics is not authorized.
+- ❌ Any `firestore.rules` or `firestore.indexes.json` change is not authorized.
+- ❌ The separately-discovered `startupInvestment.reportSection.noBaselineYet` finding (`StartupInvestmentView.tsx:135–137`) is explicitly **not** included in this amendment's scope and is not authorized for change by it — it requires its own, later, separate governance treatment if addressed at all.
+
+**Acceptance criteria:**
+- AC-A1: `dashboard.worthModal.defineInitialCapital` is never rendered for any business with `hasInitialStockCount === false`, in all three locales.
+- AC-A2: The Contagem-screen amber banner never renders for any business with `hasInitialStockCount === false`, including on that business's Business-Worth-establishing Contagem.
+- AC-A3: Neither change alters `businessWorth`, `capitalGrowth`, `capitalGrowthPct`, `expectedCurrentStockValue`, or any other calculation output, verified by unit test (before/after numeric equality).
+- AC-A4: A business with `hasInitialStockCount === true` sees byte-identical behavior on both screens before and after, verified by regression test.
+- AC-A5: No `firestore.rules`, `firestore.indexes.json`, write-path, or `BusinessWorthSnapshot`/State-1a/Case-B code is touched — confirmed by diff scope.
+
+**Tests required:** new tests proving AC-A1 and AC-A2 directly (both messages absent for `hasInitialStockCount === false`, present/unaffected for `hasInitialStockCount === true`), plus regression coverage proving AC-A3 and AC-A4 — not yet written, pending acceptance.
+
+**Not a redecision:** this amendment does not change BDR Decision 39, Architecture §5.4/§8.6, Specification §44, Case A/B arithmetic, Capital Inicial's retirement status, or any figure, formula, or calculation anywhere in this Authorization or its governing chain. It authorizes the removal of two obsolete, non-interactive, read-only UI prompts, for exactly the population that can never satisfy the action either one instructs.
+
+## Product Architect Authorization — Amendment 3 — Pending
+
+> I have reviewed the proposed narrow amendment above, covering `dashboard.worthModal.defineInitialCapital` (`DashboardView.tsx`) and the hardcoded Capital Inicial banner in `PeriodicStockCountView.tsx`. I understand that signing below authorizes, exactly and only, removal of these two prompts for businesses with `hasInitialStockCount === false`, with no change for businesses with `hasInitialStockCount === true`, and no change to `businessWorth`, `capitalGrowth`, `capitalGrowthPct`, `expectedCurrentStockValue`, Case B, State 1a, Product Memory, recovery, historical data, Contagem, Owner-Declared Business Worth, `BusinessWorthSnapshot`, `firestore.rules`, or `firestore.indexes.json`. I understand this does not authorize the separately-discovered `startupInvestment.reportSection.noBaselineYet` finding, which remains outside this amendment.
+>
+> **Product Architect:** ______________________________
+> **Date:** __________________________________________
+> **Decision:**
+> ☐ ACCEPTED AS PROPOSED
+> ☐ ACCEPTED WITH MODIFICATIONS (specify)
+> ☐ NOT ACCEPTED
+
+---
+
+## Product Architect Authorization — Amendment 3 — Recorded
+
+**Status: ✅ ACCEPTED AS PROPOSED (31 August 2026).** Recorded additively below, per this document's own established signature-recording convention (see the base "Recorded" section, Amendment 1's, and Amendment 2's own "Recorded" acceptances, above) — the pending block immediately above is preserved unedited, blank lines and unchecked boxes included, as the historical record of what was circulated for review; this section is the actual, dated act of signature.
+
+> I have reviewed and accepted the proposed narrow amendment above, exactly as drafted, covering: (1) `dashboard.worthModal.defineInitialCapital` and its rendering clause in `DashboardView.tsx`; (2) the hardcoded Capital Inicial banner in `PeriodicStockCountView.tsx`; (3) removal of those prompts only for businesses with `hasInitialStockCount === false`; (4) no change for businesses with preserved historical Capital Inicial (`hasInitialStockCount === true`); (5) no change to `businessWorth`, `capitalGrowth`, `capitalGrowthPct`, `expectedCurrentStockValue`, Case B, State 1a, Product Memory, recovery, historical data, Contagem, Owner-Declared Business Worth, or `BusinessWorthSnapshot`; (6) no `firestore.rules` or `firestore.indexes.json` changes.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 31 August 2026
+> **Decision:** ✅ ACCEPTED AS PROPOSED
+
+**This signature authorizes implementation of exactly, and only, Amendment 3's defined scope, above — removal of both named prompts for `hasInitialStockCount === false`, with no other change. It does NOT authorize the separately-discovered `startupInvestment.reportSection.noBaselineYet` finding (`StartupInvestmentView.tsx:135–137`) — that item remains outside this amendment and requires its own, separate governance treatment if it is addressed at all. No other expansion of this or any other increment is authorized by this signature.**
