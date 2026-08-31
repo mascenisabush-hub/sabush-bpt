@@ -660,28 +660,17 @@ service cloud.firestore {
           (request.resource.data.get('type', null) != 'initial' &&
             subscriptionAllowsNewRecords(businessId)) ||
 
-          // The ORIGINAL confirmation, legacy shape — no chainPosition
-          // field at all. Exactly what every 'initial' confirmation
-          // ever written looks like today, and what the
-          // currently-deployed, unmodified app still writes until a
-          // later implementation step updates it. Firestore's own
-          // create-if-absent semantics at the fixed id 'initial'
-          // guarantee this succeeds at most once per business, exactly
-          // as today.
-          (request.resource.data.get('type', null) == 'initial' &&
-            stockCountId == 'initial' &&
-            !('chainPosition' in request.resource.data) &&
-            subscriptionAllowsNewRecords(businessId)) ||
-
-          // The ORIGINAL confirmation, new full shape (chainPosition 1,
-          // server-verified confirmedAt) — forward-compatible with a
-          // future app update (a later, separate implementation step);
-          // requires no second rules deploy when that ships.
-          (request.resource.data.get('type', null) == 'initial' &&
-            stockCountId == 'initial' &&
-            request.resource.data.get('chainPosition', null) == 1 &&
-            request.resource.data.get('confirmedAt', null) == request.time &&
-            subscriptionAllowsNewRecords(businessId)) ||
+          // [Capital Inicial Retirement — Implementation Authorization
+          // Increment 2] The two ORIGINAL-confirmation creation
+          // branches (legacy no-chainPosition shape, and the full
+          // chainPosition==1/confirmedAt==request.time shape) were
+          // removed here. No new Capital Inicial confirmation may be
+          // created, by any business, new or existing (BDR Decision
+          // 39). The REDO branches below (chainPosition 2/3/4) and the
+          // non-'initial' branch above are deliberately unmodified —
+          // they remain the mechanism by which Increment 3's
+          // grandfathering is achieved, automatically, with no further
+          // rules edit.
 
           // A REDO confirmation (chainPosition 2, 3, or 4). [Product
           // Architect Decision — Option A; Rule 8 §14, Finding K1] The

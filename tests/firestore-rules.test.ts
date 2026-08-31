@@ -740,34 +740,60 @@ describe('stockCounts', () => {
     await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { countedAt: new Date().toISOString() }));
     await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic')));
 
-    // [Void & Redo — Rule 8 security review] Doc id changed from the
-    // original 'sc-initial' to 'initial': a type: 'initial' create is
-    // now constrained to one of the fixed chain-slot ids (this test's
-    // own describe block, below, covers that constraint directly) —
-    // 'initial' with no chainPosition field is the legacy/original-
-    // confirmation shape, still unconditionally valid. This test's own
-    // intent (update/delete immutability) is unaffected by that id
-    // change.
-    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
+    // [Capital Inicial Retirement — Implementation Authorization
+    // Increment 2 — RECLASSIFIED: UPDATE. This test's own subject is
+    // update/delete immutability of an 'initial' document, not
+    // create-path availability. Its setup used to reach that state via
+    // a real (legacy-shape) create, which Increment 2 now denies at
+    // the rules layer by design — that denial is covered directly by
+    // the dedicated Increment 2 tests below. Reseeded here via
+    // withSecurityRulesDisabled, the same bypass the Void & Redo suite
+    // already uses, so the update/delete assertions this test actually
+    // exists to make remain exercised unchanged.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() });
+    });
     await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { countedAt: new Date().toISOString() }));
     await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial')));
   });
 
-  // [Fix #3 — Initial Stock Count Singleton] The app-layer fix (a
-  // fixed document id — see AppContext.tsx's recordStockCount) relies
-  // entirely on this rule already refusing any write to an existing
-  // type: 'initial' document. This test proves the race is closed at
-  // the rules layer itself, independent of the client ever checking
-  // `hasInitialStockCount` first — a first write to the fixed path
-  // succeeds (create), and a second write to that SAME path, submitted
-  // as if a retry after a dropped-connection false failure, is denied
-  // (Firestore classifies it as an update against an existing type:
-  // 'initial' document, which the pre-existing rule above already
-  // refuses unconditionally, no exceptions).
-  it('A second write to the fixed Initial Stock Count path is denied — the singleton invariant holds even under a same-path retry', async () => {
+  // [Capital Inicial Retirement — Implementation Authorization
+  // Increment 2 — RECLASSIFIED: RETIRE. This test's entire premise was
+  // a successful first create at the legacy-shape 'initial' path,
+  // followed by a denied same-path retry, proving the singleton
+  // invariant held even under a race. Increment 2 retires that create
+  // path outright — the first write now fails identically to the
+  // second, so there is no longer a create-then-retry race for this
+  // shape to exercise; the scenario this test names no longer exists.
+  // The underlying concern (no client can ever create two 'initial'
+  // documents at the same slot id) remains covered independently by
+  // Firestore's own create-if-absent semantics on every surviving
+  // creation path (legacy: removed by design; redo: exercised by the
+  // Void & Redo suite below) and is not weakened by this retirement.
+
+  // [Capital Inicial Retirement — Implementation Authorization
+  // Increment 2, AC-1/AC-2] The two new required denial tests. Both
+  // exercise the real rules-engine `allow create` evaluation for
+  // 'stockCounts' (no withSecurityRulesDisabled bypass) — proving the
+  // retirement at the layer the Authorization requires, not by source
+  // inspection alone.
+  it('AC-1: a NEW original Capital Inicial confirmation, legacy shape (no chainPosition field), is DENIED', async () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
-    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
-    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), { id: 'initial', type: 'initial', countedAt: new Date().toISOString() }));
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), {
+        id: 'initial', type: 'initial', items: [], totalValue: 0, countedAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('AC-2: a NEW original Capital Inicial confirmation, full shape (chainPosition 1, server confirmedAt), is DENIED', async () => {
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'initial'), {
+        id: 'initial', type: 'initial', chainPosition: 1, confirmedAt: serverTimestamp(),
+        items: [], totalValue: 0, createdAt: new Date().toISOString(),
+      })
+    );
   });
 });
 
