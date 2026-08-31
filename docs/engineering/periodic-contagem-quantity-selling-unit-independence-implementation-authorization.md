@@ -868,3 +868,189 @@ diff.
 **Not committed, not pushed** — awaiting separate authorization, per
 the Product Architect's own explicit instruction.
 
+## 14. Addendum — Authorization to Implement Reference Selling
+## Configuration as the Default Path
+
+**Status: ✅ AUTHORIZED. ACCEPTED AND SIGNED BY THE PRODUCT ARCHITECT.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§13 above, including every existing signature and
+Post-Implementation Record, are unaltered by this addendum.
+
+**Why this addendum exists.** Rule 8 Assessment §17 addendum and
+Implementation Plan §22 addendum (this same governance chain) analyzed
+and planned this correction — the Product Architect has confirmed the
+design in §17 matches intent ("i agree, that is what i want," recorded
+this session). This §14 addendum is the authorization gate both of
+those addenda name as their own precondition for coding
+("READY AFTER IMPLEMENTATION AUTHORIZATION AMENDMENT," §22.4).
+
+**Statement of purpose.** This authorization exists to make the
+reference selling-configuration mechanism (today: Mode A, gated behind
+an explicit toggle) the ordinary, always-available way to price a
+multi-unit product — so that establishing "sells at 80 MZN/Un" once,
+for any physical breakdown of that product, silently derives every
+portion's value through the confirmed unit relationship, with no
+separate mode to discover or activate. A portion becomes independently
+priced only through a direct, deliberate edit to that specific row's
+own price — unchanged from today.
+
+**This addendum authorizes ONLY the following items, once signed,
+exactly as specified in Implementation Plan §22.1:**
+
+1. `handleAddPortionToManualGroup` — consult an active in-session
+   reference (`modeAGroups[key]`) at row-creation time and derive the
+   new portion's price from it immediately, before the row is added to
+   `manualRows`.
+2. A new `ensureReferenceConfigForGroup` function, replacing
+   `handleModeAToggle`'s role — same two-tier default computation,
+   invoked automatically per product group rather than by an explicit
+   Owner click. `handleModeAToggle` is removed; its computation moves
+   into the new function verbatim.
+3. `handleModeAFieldChange` (optionally renamed) — retained, unchanged
+   behavior, still the handler for reference-field edits.
+4. `applyModeAToGroup`'s write-back — modified so the rows it derives
+   remain `sellingPriceAutoFilled: true`, via a narrow, additive
+   `isReferenceDerived`-style parameter threaded through
+   `applySellingConfigurationEditRules`, defaulting to today's existing
+   behavior for every other caller.
+5. `ModeAValuationControl` and its two render call sites — remove the
+   checkbox/`active` gating; the reference unit dropdown and reference
+   price input render unconditionally whenever a valid confirmed
+   `unitRelationship` exists. Copy-text changes are permitted as
+   implementation-time judgment, not a separate governance question.
+6. The `valuationMode` tagging in the confirm handler — moved from a
+   per-product-group flag (`modeAGroups[productName]` presence) to a
+   per-item flag sourced from that item's own `sellingPriceAutoFilled`
+   at confirmation time. No schema change — `valuationMode` remains
+   `'A' | undefined` on `StockCountItem` exactly as today.
+7. `sellingMemorySelection.ts` — `selectSellingMemoryByProductName`
+   gains an optional `referencePriceEntries` input, competing in the
+   same "highest sequence wins" tie-break as `workingRowDeliberateEntries`,
+   fed by a new call to the existing, unmodified
+   `nextSellingPriceEditSequence()` counter whenever the Owner edits the
+   reference-price field.
+8. The narrowly corresponding tests specified in Rule 8 Assessment
+   §17.6 and Implementation Plan §22.3 — including updating any existing
+   test that currently asserts the old per-product-group `valuationMode`
+   tagging behavior (item 6, above), identified by search before being
+   changed, per this repository's own "confirm via evidence before
+   touching a test" discipline.
+
+**This addendum explicitly prohibits, and does not authorize:**
+- Any change to `StockCountItem`/`StockCountWorkingRow`/`Product`
+  schemas — no new field is introduced anywhere in this scope.
+- Any change to `deriveModeAPortionValuations`,
+  `resolveDefaultSellingConfigurationForRow`, `canApplyModeA`, or
+  `getConversionFactor` — all reused verbatim.
+- Any change to Rule 1 of `applySellingConfigurationEditRules` for any
+  ordinary direct-edit call site — remains the sole mechanism marking a
+  portion independently priced.
+- Any change to `buildCatalogRow`'s own two-tier resolution for a row's
+  initial creation.
+- Any change to `normalizeStockCountItems`/`tallyStockCountRows`
+  arithmetic.
+- Any change to Add Stock, Initial Stock, Smart Stock Entry, FR-67
+  cost-basis logic, or Business Worth's downstream reads.
+- Any change to the already-shipped §12/§16 caption fix
+  (`sellingPriceBasisUnit ?? unit`).
+- Any other Contagem UI redesign, restructuring, or copy change beyond
+  what §22.1 items 1–7 name.
+- Any new feature, or any refactoring outside the named functions/files
+  and their directly corresponding tests.
+
+**Test / Acceptance scope for this addendum (restated in full from Rule
+8 Assessment §17.6 and Implementation Plan §22.3 — the complete, sole
+test scope this addendum covers once signed):**
+1. A product with no prior confirmed selling reference: creating
+   multiple physical-unit portions and setting the (now always-visible)
+   reference field correctly derives every sibling portion's price, all
+   remaining `sellingPriceAutoFilled: true`.
+2. A portion added after the reference is already set immediately
+   inherits the derived price at creation — no manual nudge required.
+3. Directly editing one portion's own price field afterward marks only
+   that row independently priced, leaving reference-following siblings
+   untouched.
+4. Memory tie-break, both orders: a reference-price entry alone becomes
+   the new remembered default; a later direct row override supersedes
+   it; a reference-price change after an earlier direct override
+   supersedes that override — strictly ordered by
+   `sellingPriceEditSequence`.
+5. Editing a reference-following row's own unit still re-resolves
+   against the active in-session reference (not stale product-level
+   memory) when one is active for that product this session.
+6. A genuinely new product's first Contagem exercises the identical
+   always-visible reference field via the existing, unmodified
+   `getEffectiveUnitRelationshipForProductName` new-product fallback.
+7. `valuationMode` is now correctly tagged per-item: a reference-
+   following row is `'A'`, a directly-overridden row in the same group
+   is not.
+8. Full regression sweep of every existing Rule 8 Assessment Scenario
+   (§8, A–L) — none reference the reference field directly and must
+   remain passing unmodified.
+
+All eight items verify the mechanism described in §17/§22 — none alter
+or depend on any arithmetic beyond what `deriveModeAPortionValuations`
+already computes today.
+
+**Risk:** moderate — larger blast radius than the two prior addenda in
+this chain (§10, §12), touching several functions in one file plus one
+library module, though every arithmetic primitive is reused verbatim
+and every existing invariant (FR-90, FR-91, FR-21, FR-23) is explicitly
+preserved by design (§17.4, §22.2).
+
+**Rollback:** reverting to the prior toggle-gated Mode A restores
+today's exact behavior; no persisted schema or data shape changes in
+either direction, so rollback requires no data migration.
+
+**Governance state:** Rule 8 Assessment §17 addendum — ✅ accepted by the
+Product Architect, 31 August 2026. Implementation Plan §22 addendum —
+✅ accepted by the Product Architect, 31 August 2026. This §14 addendum
+— ✅ accepted and signed by the Product Architect, below.
+
+---
+
+**Product Architect Acceptance**
+
+> I have reviewed this §14 addendum and confirm it authorizes exactly
+> the scope recorded above: making the reference selling-configuration
+> mechanism the ordinary, always-available way to price a multi-unit
+> product, via the eight items specified in §22.1 of the Implementation
+> Plan — `handleAddPortionToManualGroup`'s new-portion inheritance, the
+> new `ensureReferenceConfigForGroup` auto-initialization,
+> `handleModeAFieldChange`'s continued role, `applyModeAToGroup`'s
+> write-back no longer marking rows deliberate, `ModeAValuationControl`'s
+> checkbox removal, `valuationMode`'s move to per-item tagging,
+> `sellingMemorySelection.ts`'s new reference-price tie-break candidate,
+> and their eight corresponding tests — nothing else. I confirm this
+> authorization does not extend to any schema change, to
+> `deriveModeAPortionValuations`/`resolveDefaultSellingConfigurationForRow`/
+> `canApplyModeA`/`getConversionFactor`, to Rule 1's own direct-edit
+> behavior, to `buildCatalogRow`'s initial-creation resolution, to
+> Add Stock, Initial Stock, Smart Stock Entry, FR-67, Business Worth, or
+> to any other Contagem UI redesign, exactly as this addendum's own
+> exclusion list states. A portion remains independently priced only
+> through a direct, deliberate edit to that specific row's own price —
+> this authorization changes how the shared default is established and
+> propagated, not what makes a portion independent. I authorize
+> implementation of exactly this scope.
+
+**Decision:** I APPROVE AND SIGN IMPLEMENTATION AUTHORIZATION §14
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Date:** 31 August 2026
+
+This signature authorizes implementation to begin, strictly bounded to
+the scope recorded above in this §14 addendum. It does not itself
+constitute the start of implementation work — that remains a separate,
+subsequent execution step.
+
+---
+
+**This document, as signed, authorizes implementation strictly per the
+scope in this §14 addendum. No code, test, `firestore.rules`, or
+`firestore.indexes.json` change has been made in the course of producing
+or signing this addendum. A separate implementation execution step is
+required to actually begin work.**
+

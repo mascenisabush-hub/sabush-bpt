@@ -1044,3 +1044,213 @@ required behavior, and Test Plan (above) are unaltered by this
 acceptance record; nothing above this line is rewritten. Acceptance of
 this plan does not itself authorize implementation — see Implementation
 Authorization §12 for the governance instrument that does.
+
+## 22. Addendum — Reference Selling Configuration as the Default Path
+
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 31
+August 2026.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§21 above are unaltered by this addendum. Plans, at the
+Implementation Plan level, exactly the mechanism Rule 8 Assessment §17
+addendum (this same governance chain) already analyzed and the Product
+Architect has confirmed matches intent — this addendum details the
+exact call-site changes; it does not revisit the design decision itself.
+
+### 22.1 Scope — every file/function touched, and why
+
+All in `apps/tenant/src/components/PeriodicStockCountView.tsx` unless
+noted:
+
+1. **`handleAddPortionToManualGroup` (currently `:1995-2016`).** After
+   building `newRow` via the existing, unmodified
+   `buildCatalogRow`/`createManualRow` fallback, add: if
+   `modeAGroups[productKeyFor(groupDisplayName)]` has a non-blank
+   `referenceUnit` and a parseable `referencePrice`, derive this one
+   new row's `sellingPrice`/`sellingPriceBasisUnit` via
+   `deriveModeAPortionValuations` (single-portion call, mirroring
+   `resolveDefaultSellingConfigurationForRow`'s own existing
+   single-portion adapter pattern in `contagemMultiUnitValuation.ts` —
+   no new arithmetic) **before** the row is pushed into `manualRows`,
+   keeping `sellingPriceAutoFilled: true`. Closes Gap B (§17.1).
+
+2. **New: `ensureReferenceConfigForGroup(productKey)` (new function,
+   same file).** Replaces `handleModeAToggle`'s role as the *only* way
+   `modeAGroups[key]` gets populated. Performs the identical two-tier
+   default computation `handleModeAToggle` already performs
+   (`:1753-1815`, unmodified arithmetic/lookups — confirmed
+   `sellingUnit` preferred over `units[0]`, canonical memory preferred
+   over latest-batch/history) but is called automatically — once per
+   product key, the first time that product's group is about to render
+   with a valid `unitRelationship` — rather than requiring an explicit
+   Owner click. `handleModeAToggle` itself is removed; its body's
+   computation logic moves into this new function verbatim.
+
+3. **`handleModeAFieldChange` (currently `:1824-1832`).** Retained,
+   unchanged in signature and behavior — still the handler for the
+   Owner editing the now-always-visible reference unit/price fields,
+   still calls `applyModeAToGroup` (item 4, below) on every change.
+   Renaming to `handleReferenceConfigChange` is cosmetic and left to
+   implementation-time judgment; behavior is what this Plan governs,
+   not the identifier.
+
+4. **`applyModeAToGroup` (currently `:1727-1751`).** Reused verbatim for
+   its arithmetic (`deriveModeAPortionValuations`, unmodified), but its
+   write-back must **no longer** cause the affected rows to become
+   `sellingPriceAutoFilled: false`. Today it writes back via
+   `updateCatalogRow`/`updateManualRow` with `{ sellingPrice: ... }`,
+   which passes through `applySellingConfigurationEditRules` and
+   triggers Rule 1's deliberate-flagging (`:1216-1222`) as a side
+   effect of reusing the general-purpose updater. This addendum
+   requires a narrow, additive fix: thread an internal
+   `isReferenceDerived` flag through this specific call path (e.g. a
+   new optional parameter on `applySellingConfigurationEditRules`
+   itself, defaulting to today's existing behavior for every other
+   caller) so that when set, the function returns
+   `{ ...fields, sellingPriceAutoFilled: true, sellingPriceBasisUnit:
+   newUnit }` instead of running Rule 1. **No other caller of
+   `applySellingConfigurationEditRules` is affected** — Rule 1 continues
+   firing exactly as today for every direct Owner edit to an
+   individual row's own price field (§17.2 item 5, §17.4's own
+   justification).
+
+5. **`ModeAValuationControl` (currently `:280-330`, the component
+   itself) and both its two render call sites (`:~3726`, `:~4092`, per
+   the Rule 8 Assessment's own line references — re-verify at
+   implementation time, since §16/§17's own edits may have shifted
+   them slightly).** Remove the `active`/checkbox prop and its
+   collapsed/expanded rendering branch entirely — the reference unit
+   dropdown and reference price input render unconditionally whenever
+   `getEffectiveUnitRelationshipForProductName` returns a valid
+   relationship (the existing gate, unchanged), pre-filled by item 2's
+   `ensureReferenceConfigForGroup`. Copy text ("Usar um único preço de
+   venda para todas as porções deste produto") is replaced with
+   non-toggle framing (e.g. a plain label above the two fields, such as
+   "Preço de venda de referência" — exact wording is a UI-copy decision
+   left to implementation time, not a governance question).
+
+6. **`valuationMode` tagging — `normalizeStockCountItems`'s caller in
+   `PeriodicStockCountView.tsx` (currently `:~2658`, the confirm
+   handler building `items` for `recordStockCount`).** Today:
+   `...(modeAGroups[item.productName...] ? { valuationMode: 'A' } : {})`
+   — a **per-product-group** flag. Under this addendum, `modeAGroups`
+   holds an entry for *every* multi-unit product unconditionally (item
+   2, above), so this exact condition would tag `valuationMode: 'A'` on
+   every multi-unit product regardless of whether the Owner actually
+   used the shared reference or priced every portion independently —
+   losing the field's own diagnostic purpose (Specification §13,
+   Business Worth Impact; `StockCountItem.valuationMode`'s own
+   display/audit-only comment, `types.ts`). **Required correction,
+   flowing directly from making the reference field the default path,
+   not a scope expansion:** move this tag to be **per-item**, sourced
+   from that item's own `sellingPriceAutoFilled` at confirmation time
+   (`true` → tag `'A'`; `false` → omit, matching today's existing
+   "absence is the default" convention for an independently-priced
+   portion). This is strictly more accurate than today's per-group
+   flag even for the current shipped behavior (today, a product with
+   Mode A active AND one manually-overridden row incorrectly tags that
+   overridden row `'A'` too) — no schema change (`valuationMode` is
+   already `'A' | undefined` on `StockCountItem`, `types.ts`,
+   unmodified), no new field, purely which existing per-item data
+   decides the value.
+
+7. **`sellingMemorySelection.ts` — `selectSellingMemoryByProductName`
+   and its `WorkingRowDeliberateEntry` input.** Per Rule 8 §17.3's own
+   requirement, this function's tie-break must learn a second candidate
+   kind: a reference-price declaration. New optional input parameter,
+   e.g. `referencePriceEntries?: { productName: string; sellingPrice:
+   number; unit: string; editSequence: number }[]`, populated by the
+   confirm handler (`PeriodicStockCountView.tsx`, wherever
+   `workingRowDeliberateEntries` is already built, currently `:~2597`)
+   from each product-key present in `modeAGroups` with a non-blank,
+   parseable `referencePrice` at confirmation time. Each such entry
+   competes in the SAME `bestSequenceByProductName` comparison the
+   function already performs for `workingRowDeliberateEntries` — one
+   unified "highest sequence wins" pass across both candidate kinds,
+   not two separate tie-breaks. **A new, shared sequence source is
+   required**: `handleReferenceConfigChange`
+   (`handleModeAFieldChange`'s renamed/retained self) must call the
+   same `nextSellingPriceEditSequence()` (`:917-920`, unmodified
+   counter) exactly once per genuine Owner edit to the reference price
+   field — mirroring Rule 1's own existing call to that function
+   exactly, so a reference-price edit and a direct row edit are ordered
+   fairly regardless of which happened first (Rule 8 §17.6 items 4).
+
+### 22.2 What does NOT change
+
+- `deriveModeAPortionValuations`, `resolveDefaultSellingConfigurationForRow`,
+  `canApplyModeA`, `getConversionFactor` — every arithmetic function is
+  reused verbatim, zero changes.
+- `buildCatalogRow`'s own two-tier resolution (`:655-753`) — unchanged;
+  it remains the correct fallback for a row's *initial* creation before
+  any in-session reference exists for that product this session.
+- Rule 1 of `applySellingConfigurationEditRules` for every ordinary
+  direct-edit call site — unchanged, still the sole mechanism that
+  marks a portion independently priced.
+- `StockCountItem`/`StockCountWorkingRow`/`Product` schemas — no new
+  field anywhere in this addendum.
+- `normalizeStockCountItems`/`tallyStockCountRows` arithmetic — both
+  already sum whatever `sellingPrice` each row carries; neither is
+  touched.
+- Add Stock, Initial Stock, FR-67 cost-basis logic, Business Worth's
+  own downstream reads — none reference `modeAGroups` or any function
+  named in §22.1.
+- The already-shipped §16/§12 caption fix (`sellingPriceBasisUnit ??
+  unit`) — fully compatible, unaffected, needs no further edit.
+
+### 22.3 Test Plan (extends Rule 8 §17.6 into concrete suites)
+
+Primarily in a new or extended `tests/periodic-stock-mode-a-integration.test.ts`
+(existing suite already exercises `deriveModeAPortionValuations`
+directly via unit tests, not a simulated UI toggle — largely
+unaffected, since the engine itself does not change) plus a new suite
+for the reference-tie-break addition to `sellingMemorySelection.ts`:
+
+1. §17.6 items 1–3 (bootstrap without prior memory; new-portion
+   inheritance; direct-edit independence) — via
+   `applySellingConfigurationEditRules`/`applyModeAToGroup` called
+   directly against fixture rows, mirroring this file's own existing
+   direct-function-call testing convention (no DOM harness available,
+   restated from every sibling suite's own header).
+2. §17.6 item 4 (tie-break ordering, both directions) — new tests in
+   `sellingMemorySelection.ts`'s own existing test file, extending
+   `WorkingRowDeliberateEntry`-style fixtures with the new
+   `referencePriceEntries` parameter, both orders.
+3. §17.6 item 5 (unit-only edit re-resolves against the active
+   in-session reference, not stale product memory) — direct
+   `applySellingConfigurationEditRules` Rule 3 call with a populated
+   `modeAGroups` fixture.
+4. Item 6 (`valuationMode` now per-item, not per-group) — a fixture
+   with one reference-following row and one directly-overridden row in
+   the SAME product group; assert the former is tagged `'A'` and the
+   latter is not — this is the one behavioral assertion that must
+   **change** from any existing test asserting the old per-group
+   tagging (search `valuationMode` across `tests/` for call sites
+   asserting the pre-existing per-group behavior before this
+   implementation begins, and update only those, per this repository's
+   own "confirm via evidence before touching a test" discipline —
+   restated from every prior item in this governance chain).
+5. Full regression sweep of every existing Rule 8 Scenario (§8, A–L) —
+   none reference the reference field directly, so all must remain
+   passing unmodified; any failure here is a genuine regression, not
+   pre-existing, and must be investigated before this addendum is
+   considered complete.
+
+### 22.4 Verdict
+
+**READY AFTER IMPLEMENTATION AUTHORIZATION AMENDMENT.**
+
+This addendum plans the exact changes; it does not itself authorize
+coding. The corresponding Implementation Authorization addendum is the
+gate that must be drafted next and then signed by the Product Architect
+before any source or test file is modified.
+
+**Product Architect acceptance, recorded 31 August 2026.** The Product
+Architect has accepted this §22 addendum, in the same act as accepting
+Implementation Authorization §14 (the corresponding, final governance
+gate for this correction) — see that document's own §14 signature block
+for the full, verbatim decision text. This §22 addendum's own scope,
+required call-site changes, and Test Plan (above) are unaltered by this
+acceptance record; nothing above this line is rewritten. Acceptance of
+this plan does not itself authorize implementation — see Implementation
+Authorization §14 for the governance instrument that does.

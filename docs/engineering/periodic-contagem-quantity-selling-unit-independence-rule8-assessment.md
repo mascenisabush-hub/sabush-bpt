@@ -1173,3 +1173,269 @@ this Rule 8 finding does not itself authorize implementation — see
 Implementation Authorization §12 for the governance instrument that
 does.
 
+## 17. Addendum — Reference Selling Configuration as the Default Path
+## (Retiring Mode A as a Discoverable Toggle)
+
+**Status: ✅ ACCEPTED BY THE PRODUCT ARCHITECT, SABUSHIMIKE MASCENI, 31
+August 2026.**
+
+Appended per this repository's own established "append, don't rewrite"
+pattern. §1–§16 above, including every existing signature and
+acceptance record, are unaltered by this addendum. This addendum
+reopens Specification §12's own explicitly reserved discretion (*"is
+explicitly left to Rule 8"*) a second time — Finding 10 (§9, above)
+resolved the first half of that discretion (automatic resolution
+requires no Mode A toggle **once a reference is already confirmed**);
+this addendum resolves the half Finding 10 did not reach: **establishing
+that reference for the first time, live, in one session, across
+physical rows that already exist.**
+
+### 17.1 The design gap this addendum closes
+
+Investigated fresh this session, against the current, unmodified code
+(`HEAD 7cfee3a4`, `PeriodicStockCountView.tsx`,
+`contagemMultiUnitValuation.ts`):
+
+- **Gap A — no bootstrap for a first-time reference.**
+  `applySellingConfigurationEditRules` Rule 3 (`:1233-1257`) — the
+  automatic, no-toggle resolution Finding 5/FR-89 already established —
+  reads `product.sellingPrice`/`unitRelationship.sellingUnit` from the
+  **static, already-confirmed** catalog record only. When neither has
+  ever been confirmed (this Contagem is the first time a price is being
+  declared for this product's confirmed unit), Rule 3 explicitly bails
+  out (`:1244-1247`, *"no confirmed default exists to resolve against at
+  all... leave sellingPrice exactly as today's pre-FR-89 behavior"*).
+  The **only** mechanism that can establish a reference live and push it
+  onto sibling rows in the same session is Mode A's own explicit toggle
+  (`handleModeAToggle`/`applyModeAToGroup`, `:1727-1815`) — a control the
+  Owner must discover, understand, and choose to use; nothing in the
+  row-level UI (a hardcoded "Venda/Un" label, no visible
+  auto-vs-deliberate indicator) points toward it.
+- **Gap B — no re-propagation to a portion added afterward.**
+  `applyModeAToGroup` runs only on toggle-on or on an explicit field
+  change (`handleModeAFieldChange`) — never re-triggered by
+  `handleAddPortionToManualGroup` (`:1995-2016`). A portion added after
+  Mode A is already active is silently skipped until the Owner nudges
+  the reference-price field again.
+
+Neither gap is a violation of any signed FR — both are exactly the
+portion of §12's reserved discretion Finding 10 did not resolve.
+
+### 17.2 New Product Architect Decision
+
+**[PROPOSED — NOT YET ACCEPTED]**
+
+The reference selling-configuration mechanism (today: Mode A,
+`deriveModeAPortionValuations` via an explicit checkbox) becomes the
+**ordinary, always-available way to price a multi-unit product** —
+never a separate "mode" the Owner must discover or toggle. Concretely:
+
+1. Whenever a product's confirmed `unitRelationship` is valid (the same
+   gating condition Mode A's control already uses, `:3734`), the
+   reference unit + reference price fields render **unconditionally**
+   on the group's first portion — no checkbox, no "activate" step.
+   Pre-filled from `resolveCanonicalProductSellingMemory`/the existing
+   two-tier resolution when a confirmed price already exists (identical
+   pre-fill `buildCatalogRow` already performs); blank otherwise.
+2. Typing into that reference field (unit and/or price) derives and
+   writes `sellingPrice` onto **every portion currently in the group
+   that is still following the default** (`sellingPriceAutoFilled !==
+   false`) — reusing `deriveModeAPortionValuations` verbatim, exactly
+   as `applyModeAToGroup` already does today. **Unlike today's Mode A
+   write-back, these rows remain `sellingPriceAutoFilled: true`** — they
+   are still following a default, merely one the Owner has now supplied
+   explicitly, not one merely inherited from a prior session. This is
+   the one behavioral change from today's Mode A semantics (§17.4,
+   below, addresses why).
+3. **Gap A closed:** because the reference field is always present and
+   always writable, establishing "80 MZN/Un" for the very first time
+   requires no discovery step — it is filled in like any other field on
+   the row, at the same time the Owner is entering physical quantities.
+4. **Gap B closed:** creating a new portion for a product with an
+   already-set in-session reference (`handleAddPortionToManualGroup`)
+   MUST consult that in-session reference **before** falling back to
+   `buildCatalogRow`'s own static-memory-only resolution — the new
+   row's `sellingPrice` is derived from the active reference
+   immediately, at creation time, exactly like every existing sibling
+   portion.
+5. A portion becomes independently priced — a genuine "portion" in the
+   sense the Product Architect has now named explicitly (a deliberately
+   different price and/or unit for part of the same physical count) —
+   **only** when the Owner directly edits that **specific row's own**
+   price field. This is Rule 1 of `applySellingConfigurationEditRules`
+   (`:1216-1222`), **entirely unchanged** — it already sets
+   `sellingPriceAutoFilled: false` on direct edit, already independent
+   of whatever the shared reference says. No new mechanism is needed
+   for this half of the model; it already exists and already works
+   exactly as described in the Product Architect's own worked example
+   (`3 Cx @ 1,650/Cx`, `3 Emb @ 430/Emb`, `5 Un @ 80/Un` — three direct
+   edits, three independent portions, summed — Scenario D, §8 above,
+   generalized to three rows).
+6. "Mode A" as a distinct, named, toggleable concept is retired. Its
+   underlying arithmetic (`deriveModeAPortionValuations`,
+   `resolveDefaultSellingConfigurationForRow`) is **reused verbatim,
+   unmodified** — only the trigger (always-present field vs.
+   toggle-gated control) and the resulting flag semantics (§17.4)
+   change. "Mode B" likewise stops being a named concept — independent
+   per-portion pricing is simply what a direct row edit already
+   produces, with no separate label required.
+
+### 17.3 Precise mechanism design
+
+- **State shape.** The existing `modeAGroups: Record<string, {
+  referenceUnit: string; referencePrice: string }>` (`:1442`) is
+  retained in shape, but its meaning changes: a product key is present
+  in this map whenever that product has a valid confirmed
+  `unitRelationship` — populated automatically (from confirmed memory
+  or blank) the first time that product's group renders in this
+  session, rather than only upon an explicit toggle-on. No new field,
+  no schema change, no persisted-draft change (this map is not part of
+  `PeriodicStockDraft` today and does not need to become part of it —
+  it is fully re-derivable from `products`/`catalogRows`/`manualRows`
+  on every load, exactly as `handleModeAToggle`'s own defaulting logic
+  already computes it).
+- **Row-creation propagation (Gap B fix).**
+  `handleAddPortionToManualGroup` (`:1995-2016`) gains one additional
+  step: after constructing `newRow` via the existing
+  `buildCatalogRow`/`createManualRow` fallback, if `modeAGroups[key]`
+  has a non-blank `referenceUnit`/`referencePrice`, immediately derive
+  and overwrite that row's `sellingPrice`/`sellingPriceBasisUnit` via
+  the same `deriveModeAPortionValuations` call `applyModeAToGroup`
+  already makes for the rest of the group — a one-portion special case
+  of the exact same function, not a new arithmetic path.
+- **Deliberateness flag (the one semantic change, §17.4).** Today,
+  `applyModeAToGroup` calls `updateCatalogRow`/`updateManualRow` with
+  `{ sellingPrice: ... }`, which — because it passes through
+  `applySellingConfigurationEditRules` — triggers Rule 1 and marks the
+  row `sellingPriceAutoFilled: false`. Under this addendum, the
+  reference-field write-back must **bypass** Rule 1's deliberate-flagging
+  for this specific call path (a new, narrow write helper, or a
+  parameter threaded through the existing updater — an implementation
+  detail for the companion Plan) so the row remains
+  `sellingPriceAutoFilled: true`. Direct edits to an individual row's
+  own price field are completely unaffected — Rule 1 continues to fire
+  for those exactly as it always has.
+- **Memory tie-break (Finding 7) must learn a new candidate kind.**
+  `selectSellingMemoryByProductName` (`sellingMemorySelection.ts`)
+  today only considers `workingRowDeliberateEntries` where
+  `sellingPriceAutoFilled === false` (i.e. a per-row direct edit). Under
+  §17.2 item 2, a reference-field entry is no longer such a row —
+  **but it must still be able to become the new remembered default**
+  (FR-83/FR-92's own principle: an Owner's explicit selling-price
+  statement should update memory). This addendum therefore introduces
+  a second, parallel "deliberate" input to the SAME tie-break: the
+  group's own reference-price entry, timestamped with the identical
+  shared `sellingPriceEditSequenceRef` counter (`:917-920`) every direct
+  row edit already draws from, so a reference-field entry and a later
+  (or earlier) direct row override compete fairly, by true entry order,
+  exactly as Scenarios F/G (§8, above) already require for two direct
+  edits today. Concretely: `selectSellingMemoryByProductName`'s
+  candidate list gains reference-price entries (one per product with an
+  active, non-blank reference) alongside per-row deliberate entries,
+  each carrying its own sequence number — the existing "highest
+  sequence wins" logic (unmodified) then naturally decides between
+  "Owner set the shared reference to 80/Un at sequence 3" and "Owner
+  then directly overrode the Cx row to 1,650/Cx at sequence 5" (the
+  direct override wins, sequence 5 > 3 — correct) or the reverse order
+  (the reference wins — also correct).
+- **Caption/label (§16, above) needs no further change.** The
+  already-shipped `sellingPriceBasisUnit ?? unit` caption fix continues
+  to display the correct denomination for every row regardless of
+  whether that row's price came from the reference or a direct edit.
+
+### 17.4 Why rows fed by the reference stay `sellingPriceAutoFilled: true`
+
+This is a deliberate departure from today's Mode A write-back (which
+sets `sellingPriceAutoFilled: false` on every row it touches, per
+Finding 10, §9 above) and needs its own explicit justification, since it
+changes an existing, already-shipped semantic:
+
+Today, Mode A is an *explicit override* the Owner deliberately reaches
+for — marking its output "deliberate" was correct because activating
+Mode A was itself the deliberate act (Finding 10's own reasoning).
+Under this addendum, the reference field is no longer an override — it
+is the **ordinary way price is established at all**, for every
+multi-unit product, by default. Treating every reference-derived row as
+"deliberate" under this new default-by-default framing would mean *any*
+row that shares the reference and later has its physical unit edited
+(a routine, non-pricing action) would incorrectly be exempted from
+Rule 3's own re-resolution (Rule 2 only re-resolves a row still marked
+`true`) — silently freezing a row's price at a stale reference-derived
+value the moment its unit changes, exactly the kind of staleness FR-89
+exists to prevent. Keeping these rows `true` preserves every existing
+invariant (FR-89, FR-90, FR-91) for the common case, and correctly
+reserves `false`/"deliberate" for its one remaining, narrower, and now
+more precisely named meaning: **a portion the Owner has explicitly
+priced differently from the rest.**
+
+### 17.5 Explicit exclusions (restated and extended from §16's own list)
+
+Unaffected by this addendum, confirmed by the same reasoning already
+applied in §15/§16 above: `StockCountItem`/`StockCountWorkingRow`
+persisted schemas (no new field — `sellingPriceAutoFilled`,
+`sellingPriceBasisUnit`, `sellingPriceEditSequence` all already exist);
+`Product` schema; Add Stock; Initial Stock; FR-67 cost-basis logic;
+`normalizeStockCountItems`/`tallyStockCountRows` arithmetic (both
+already sum whatever `sellingPrice` each row carries, completely
+unaware of how it was derived — Finding 5/§8K's own reasoning, restated
+and confirmed to still hold here); Business Worth
+(`normalizedTotalSellingValue` → `productValuationTotal` →
+`measuredBusinessWorth`, all unaware of this addendum for the same
+reason).
+
+### 17.6 Test requirements (minimum, for the companion Plan to detail)
+
+1. A product with no prior confirmed selling reference: creating three
+   portions (Cx/Emb/Un) and typing a reference price on the first
+   portion's now-always-visible reference field correctly derives and
+   writes each sibling portion's price, all three remaining
+   `sellingPriceAutoFilled: true` (Gap A closed).
+2. Adding a fourth portion *after* the reference is already set
+   immediately inherits the derived price at creation (Gap B closed) —
+   no additional nudge required.
+3. Directly editing one portion's own price field afterward correctly
+   marks only that row `sellingPriceAutoFilled: false`, leaving the
+   other reference-following rows untouched (§17.2 item 5).
+4. Memory tie-break: a reference-price entry alone (no direct row
+   edits) becomes the new remembered default. A reference entry
+   followed by a later direct row override: the direct override wins.
+   A direct row override followed by a later reference-price change:
+   the reference wins. All three ordered strictly by
+   `sellingPriceEditSequence`, mirroring Scenarios F/G (§8, above)
+   exactly, extended to the new candidate kind.
+5. Editing a reference-following row's own **unit** (not its price)
+   still re-resolves via Rule 3 against the group's active reference
+   (not the stale product-level memory) when a reference is active for
+   that product this session — confirming §17.4's own justification
+   holds in practice, not just in theory.
+6. A genuinely new product (first Contagem ever, chain established via
+   `NewProductInfoPanel`) exercises the identical always-visible
+   reference field via `getEffectiveUnitRelationshipForProductName`'s
+   own existing new-product fallback (`:1614-1634`, unmodified) — no
+   separate code path.
+7. Regression: every existing Rule 8 Scenario (§8, A–L, above) re-verified
+   unchanged where none of them touch the reference field at all
+   (Scenarios A, B, E — single-portion or same-unit cases unaffected by
+   definition).
+
+### 17.7 Verdict
+
+**READY AFTER IMPLEMENTATION PLAN AMENDMENT.**
+
+This addendum records the Rule 8 analysis and the proposed mechanism
+only — it is not itself an authorization to implement. Coding may not
+begin until a corresponding Implementation Plan addendum (detailing the
+exact call-site diffs) and a signed Implementation Authorization
+addendum both exist, exactly as every prior item in this governance
+chain has required.
+
+**Product Architect acceptance, recorded 31 August 2026.** The Product
+Architect has accepted this §17 addendum, in the same act as accepting
+Implementation Authorization §14 (the corresponding, final governance
+gate for this correction) — see that document's own §14 signature block
+for the full, verbatim decision text. This §17 addendum's own analysis,
+findings, and mechanism design (above) are unaltered by this acceptance
+record; nothing above this line is rewritten. Acceptance of this Rule 8
+finding does not itself authorize implementation — see Implementation
+Authorization §14 for the governance instrument that does.
+
