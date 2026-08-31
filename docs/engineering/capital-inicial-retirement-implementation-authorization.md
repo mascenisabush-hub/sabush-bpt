@@ -337,3 +337,32 @@ No other file is authorized for Increment 7 by this amendment. This amendment do
 > **Decision:** ACCEPTED WITH MODIFICATION
 
 **This signature authorizes implementation of exactly, and only, Amendment 2's defined scope, above — the updated Increment 7 authorized file list (3 files, mechanism clarified for two of them) and the two additive acceptance criteria (AC-R3-7-amend-1, AC-R3-7-amend-2). No other expansion of Increment 7, or any other increment, is authorized by this signature.**
+
+---
+
+## Increment 9 Verification Record — 31 August 2026
+
+**Status: 🔶 INCREMENT 9 — CONDITIONALLY COMPLETE / EMULATOR VERIFICATION OUTSTANDING.** Recorded additively below, per this document's own established convention (see Amendment 1 and Amendment 2, above) — everything above this line is preserved completely unedited as the historical record. This section records the result of executing §5 Increment 9 and §12 sequencing step 7 ("Record the result") against the Plan's own §2/§7 Increment 9 matrix. It is a verification record, not an amendment — it authorizes no new scope, changes no acceptance criterion, and reopens no prior decision.
+
+**Governing basis re-read directly from this repository before recording, per §12 sequencing step 1:** this document's own §5 Increment 9, §10 (Test Requirements — Consolidated), and the Implementation Plan's own Increment 9 matrix (`capital-inicial-retirement-implementation-plan.md`, "Increment 9 — Test and Regression Matrix").
+
+**Non-emulator matrix — executed:**
+- 899 tests executed across the Plan's own §2 Increment 9 table (every named file, classified and run exactly as that table classifies each), plus Increment 7's own required suite.
+- **895 passed. 4 pre-existing failures** — none introduced by Increment 7, 8, or 9: `tests/stock-count-label-undefined-fix.test.ts`, `tests/stock-count-row-grouping.test.ts`, `tests/periodic-stock-multi-portion-valuation.test.ts`, `tests/periodic-stock-shop-switch-guard.test.ts`. Each was independently reproduced at baseline commit `2dc9b7c` (the commit immediately preceding Increment 7) via a temporary `git worktree`, confirming all 4 predate Increments 7–9 and are unrelated to Capital Inicial Retirement. **Per §5 Increment 9's own "explicitly excluded" clause (no blind deletion or fix to make a suite pass) and this record's own governing instruction, none of these 4 were modified, fixed, or reclassified under this Authorization.** They remain open, named here so they are not silently lost, for separate triage outside this Authorization's scope.
+- `npx tsc --noEmit -p apps/tenant`: clean.
+- Increment 7's own regression suite (`tests/increment-7-report-terminology.test.ts`): 26/26 pass, re-confirmed.
+- Increment 8 remains implemented and pushed (commit `f9470fc`), unaffected.
+- Working tree confirmed clean throughout; no worktree, branch, or file residue remains from this verification pass.
+
+**Emulator-gated matrix — outstanding, not verified:**
+This environment cannot reach the Firestore Rules Emulator — `firebase emulators:exec` fails directly with `Error: download failed, status 403: Host not in allowlist: storage.googleapis.com`, a network egress restriction of this sandbox, not a code or governance defect. Per §5 Increment 9's own acceptance criterion ("verified against a real Firestore Rules Emulator for every rules-touching assertion, **not source inspection alone**") and §10's restatement of the same bar, source-level regression coverage is **not** treated as a substitute here, and none is recorded as satisfying these items:
+- **AC-1** — creation denial for both closed `stockCounts/initial` branches, real-emulator verification outstanding.
+- **AC-2** — non-`'initial'` creation continuing to succeed unchanged, real-emulator verification outstanding.
+- **AC-3** — redo creation (`initial-2`/`initial-3`/`initial-4`) continuing to succeed unchanged, real-emulator verification outstanding.
+- **AC-12** — before/after data-snapshot comparison proving zero historical document is deleted, rewritten, or altered, real-emulator verification outstanding.
+
+`tests/firestore-rules.test.ts` (180 tests) and `tests/periodic-stock-finalization.test.ts` (9 tests) were run and directly confirmed cancelled — 0 pass, 0 fail, cancelled at `initializeTestEnvironment` — not silently skipped or assumed.
+
+**Recorded conclusion:** Increment 9 is **CONDITIONALLY COMPLETE** on everything this environment can verify. It is **not** recorded as fully complete, and this Authorization's overall scope (§14) is **not** declared complete by this record. **Final closure of Increment 9 — and of this Authorization — requires running the emulator-dependent tests named above (at minimum `tests/firestore-rules.test.ts` and `tests/periodic-stock-finalization.test.ts`, covering AC-1, AC-2, AC-3, and AC-12) in a network-unrestricted environment (local development machine or CI) and recording their results in a future dated addition to this section, following this same additive convention.**
+
+No code, test, `firestore.rules`, `firestore.indexes.json`, or governance-scope file was changed by this record.
