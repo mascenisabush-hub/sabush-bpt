@@ -17,7 +17,14 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
     business, currencySymbol, closings,
     hasInitialStockCount, initialCapitalValue, initialStockCount,
     businessWorth, capitalGrowth, capitalGrowthPct,
+    businessWorthSnapshots,
   } = useApp();
+
+  // [Capital Inicial Retirement — Implementation Authorization Increment 7,
+  // Amendment 2] Label-selection signal only — identical one-line derivation
+  // DashboardView.tsx already uses (line 200). Does not affect
+  // `businessWorth` or any other figure/calculation.
+  const hasActiveBusinessWorthSnapshot = businessWorthSnapshots.some((s) => s.status === 'active');
 
   const timeline = useMemo(() => {
     const points: { date: string; label: string; value: number }[] = [];
@@ -87,7 +94,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
       t('reports.capitalGrowth.evolutionSince'),
       [
         { label: t('reports.capitalGrowth.kpiInitialCapital'), value: hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('reports.common.notDefined') },
-        { label: t('reports.capitalGrowth.kpiCurrentCapitalFull'), value: formatCurrency(businessWorth, currencySymbol) },
+        { label: t(hasActiveBusinessWorthSnapshot ? 'reports.capitalGrowth.kpiCurrentCapitalFull' : 'reports.capitalGrowth.kpiCurrentCapitalFullEstimated'), value: formatCurrency(businessWorth, currencySymbol) },
         { label: t('reports.capitalGrowth.kpiIncrease'), value: formatCurrency(capitalGrowth, currencySymbol) },
         { label: t('reports.capitalGrowth.kpiGrowthPct'), value: `${capitalGrowthPct.toFixed(1)}%` },
       ],
@@ -106,7 +113,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
       t('reports.capitalGrowth.title'),
       [
         { label: t('reports.capitalGrowth.kpiInitialCapital'), value: hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : t('reports.common.notDefined') },
-        { label: t('reports.capitalGrowth.kpiCurrentCapital'), value: formatCurrency(businessWorth, currencySymbol) },
+        { label: t(hasActiveBusinessWorthSnapshot ? 'reports.capitalGrowth.kpiCurrentCapital' : 'reports.capitalGrowth.kpiCurrentCapitalEstimated'), value: formatCurrency(businessWorth, currencySymbol) },
         { label: t('reports.capitalGrowth.kpiIncrease'), value: formatCurrency(capitalGrowth, currencySymbol) },
         { label: t('reports.capitalGrowth.kpiGrowthPct'), value: `${capitalGrowthPct.toFixed(1)}%` },
       ],
@@ -141,7 +148,7 @@ export const CapitalGrowthReport: React.FC<Props> = ({ onBack }) => {
 
       <div className="grid grid-cols-2 sm:grid-cols-4 gap-6">
         <ReportKpiCard icon={Landmark} label={t('reports.capitalGrowth.kpiInitialCapital')} value={hasInitialStockCount ? formatCurrency(initialCapitalValue, currencySymbol) : '—'} />
-        <ReportKpiCard icon={Gem} label={t('reports.capitalGrowth.kpiCurrentCapital')} value={formatCurrency(businessWorth, currencySymbol)} tone="accent" />
+        <ReportKpiCard icon={Gem} label={t(hasActiveBusinessWorthSnapshot ? 'reports.capitalGrowth.kpiCurrentCapital' : 'reports.capitalGrowth.kpiCurrentCapitalEstimated')} value={formatCurrency(businessWorth, currencySymbol)} tone="accent" />
         <ReportKpiCard icon={capitalGrowth >= 0 ? TrendingUp : TrendingDown} label={t('reports.capitalGrowth.kpiIncrease')} value={formatCurrency(capitalGrowth, currencySymbol)} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
         <ReportKpiCard icon={History} label={t('reports.capitalGrowth.kpiGrowthPct')} value={`${capitalGrowthPct >= 0 ? '+' : ''}${capitalGrowthPct.toFixed(1)}%`} tone={capitalGrowth >= 0 ? 'positive' : 'negative'} />
       </div>

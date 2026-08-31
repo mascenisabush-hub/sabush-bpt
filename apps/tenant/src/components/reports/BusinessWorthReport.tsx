@@ -23,7 +23,14 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
     totalInvestmentValueAllTime, totalMarketValueAllTime, totalEmbeddedProfitAllTime,
     totalExpensesAllTime, totalWithdrawalsAllTime,
     businessWorth, capitalGrowth, capitalGrowthPct,
+    businessWorthSnapshots,
   } = useApp();
+
+  // [Capital Inicial Retirement — Implementation Authorization Increment 7,
+  // Amendment 2] Label-selection signal only — identical one-line derivation
+  // DashboardView.tsx already uses (line 200). Does not affect
+  // `businessWorth` or any other figure/calculation.
+  const hasActiveBusinessWorthSnapshot = businessWorthSnapshots.some((s) => s.status === 'active');
 
   const [range, { setStartDate, setEndDate, applyPreset }] = useDateRange();
 
@@ -78,7 +85,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
         { label: t('businessWorth.kpiInventoryLossesFull'), value: formatCurrency(totalInventoryLossValue, currencySymbol) },
         { label: t('businessWorth.kpiTotalExpenses'), value: formatCurrency(totalExpensesAllTime, currencySymbol) },
         { label: t('businessWorth.kpiTotalWithdrawalsFull'), value: formatCurrency(totalWithdrawalsAllTime, currencySymbol) },
-        { label: t('businessWorth.kpiBusinessWorth'), value: formatCurrency(businessWorth, currencySymbol) },
+        { label: t(hasActiveBusinessWorthSnapshot ? 'businessWorth.kpiBusinessWorth' : 'businessWorth.kpiBusinessWorthEstimated'), value: formatCurrency(businessWorth, currencySymbol) },
         { label: t('businessWorth.kpiCapitalGrowth'), value: `${formatCurrency(capitalGrowth, currencySymbol)} (${capitalGrowthPct.toFixed(1)}%)` },
       ],
       [
@@ -107,7 +114,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
         { label: t('businessWorth.kpiInventoryLossesExcel'), value: formatCurrency(totalInventoryLossValue, currencySymbol) },
         { label: t('businessWorth.kpiTotalExpenses'), value: formatCurrency(totalExpensesAllTime, currencySymbol) },
         { label: t('businessWorth.kpiTotalWithdrawals'), value: formatCurrency(totalWithdrawalsAllTime, currencySymbol) },
-        { label: t('businessWorth.kpiBusinessWorth'), value: formatCurrency(businessWorth, currencySymbol) },
+        { label: t(hasActiveBusinessWorthSnapshot ? 'businessWorth.kpiBusinessWorth' : 'businessWorth.kpiBusinessWorthEstimated'), value: formatCurrency(businessWorth, currencySymbol) },
         { label: t('businessWorth.kpiCapitalGrowth'), value: `${formatCurrency(capitalGrowth, currencySymbol)} (${capitalGrowthPct.toFixed(1)}%)` },
       ],
       [
@@ -148,7 +155,7 @@ export const BusinessWorthReport: React.FC<Props> = ({ onBack }) => {
       <div className={`border rounded-3xl p-5 sm:p-6 shadow-md ${
         businessWorth >= 0 ? 'bg-gradient-to-br from-[#F6EFD9] to-white border-[#D4AF37]/40' : 'bg-gradient-to-br from-rose-50 to-white border-rose-300'
       }`}>
-        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{t('businessWorth.heroLabel')}</span>
+        <span className="text-xs font-bold uppercase tracking-wider text-gray-500">{t(hasActiveBusinessWorthSnapshot ? 'businessWorth.heroLabel' : 'businessWorth.heroLabelEstimated')}</span>
         <div className="text-3xl sm:text-4xl font-black text-gray-900 mt-1">
           {formatCurrency(businessWorth, currencySymbol)}
         </div>

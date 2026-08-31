@@ -784,8 +784,10 @@ export interface TranslationDict {
       kpiTotalWithdrawalsFull: string;
       kpiTotalWithdrawals: string;
       kpiBusinessWorth: string;
+      kpiBusinessWorthEstimated: string;
       kpiCapitalGrowth: string;
       heroLabel: string;
+      heroLabelEstimated: string;
       heroSinceInitial: string;
       heroNoInitialCount: string;
       compositionTitle: string;
@@ -883,6 +885,8 @@ export interface TranslationDict {
       kpiInitialCapital: string;
       kpiCurrentCapital: string;
       kpiCurrentCapitalFull: string;
+      kpiCurrentCapitalEstimated: string;
+      kpiCurrentCapitalFullEstimated: string;
       kpiIncrease: string;
       kpiGrowthPct: string;
       timelineInitialCapitalLabel: string;
@@ -1939,8 +1943,10 @@ export const pt: TranslationDict = {
     kpiTotalWithdrawalsFull: 'Retiradas Totais do Proprietário',
     kpiTotalWithdrawals: 'Retiradas Totais',
     kpiBusinessWorth: 'Valor do Negócio',
+    kpiBusinessWorthEstimated: 'Valor do Negócio (Estimado)',
     kpiCapitalGrowth: 'Crescimento de Capital',
-    heroLabel: 'Valor do Negócio Hoje',
+    heroLabel: 'Valor Atual do Negócio',
+    heroLabelEstimated: 'Valor do Negócio (Estimado)',
     heroSinceInitial: 'desde o capital inicial',
     heroNoInitialCount: 'Registe uma Contagem Inicial de Stock para medir o crescimento.',
     compositionTitle: 'Como o Valor do Negócio é Composto',
@@ -2036,8 +2042,10 @@ export const pt: TranslationDict = {
       description: 'Como o negócio evoluiu desde o capital inicial.',
       evolutionSince: 'Evolução desde o capital inicial',
       kpiInitialCapital: 'Capital Inicial',
-      kpiCurrentCapital: 'Capital Atual',
-      kpiCurrentCapitalFull: 'Capital Atual (Valor do Negócio)',
+      kpiCurrentCapital: 'Valor Atual do Negócio',
+      kpiCurrentCapitalFull: 'Valor Atual do Negócio',
+      kpiCurrentCapitalEstimated: 'Valor do Negócio (Estimado)',
+      kpiCurrentCapitalFullEstimated: 'Valor do Negócio (Estimado)',
       kpiIncrease: 'Aumento',
       kpiGrowthPct: 'Crescimento %',
       timelineInitialCapitalLabel: 'Capital Inicial',
