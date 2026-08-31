@@ -186,7 +186,6 @@ export const en: TranslationDict = {
       initialCapital: 'Initial Capital (starting point):',
       growth: 'Capital Growth:',
       basedOnCount: 'Current stock based on the count from {{date}}',
-      defineInitialCapital: ' · Set your Initial Capital to measure growth.',
     },
     historyModal: {
       title: 'Business Worth History',

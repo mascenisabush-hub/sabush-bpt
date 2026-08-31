@@ -186,7 +186,6 @@ export const fr: TranslationDict = {
       initialCapital: 'Capital Initial (point de départ) :',
       growth: 'Croissance du Capital :',
       basedOnCount: 'Stock actuel basé sur le comptage du {{date}}',
-      defineInitialCapital: ' · Définissez votre Capital Initial pour mesurer la croissance.',
     },
     historyModal: {
       title: "Historique de la Valeur de l'Entreprise",

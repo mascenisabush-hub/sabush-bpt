@@ -734,7 +734,6 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               {latestStockCount && (
                 <p className="text-[10px] text-gray-400 text-center pt-1">
                   {t('dashboard.worthModal.basedOnCount', { date: latestStockCount.date.split('-').reverse().join('/') })}
-                  {!hasInitialStockCount && t('dashboard.worthModal.defineInitialCapital')}
                 </p>
               )}
             </div>

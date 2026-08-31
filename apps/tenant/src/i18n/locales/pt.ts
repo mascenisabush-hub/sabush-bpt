@@ -161,7 +161,6 @@ export interface TranslationDict {
       initialCapital: string;
       growth: string;
       basedOnCount: string;
-      defineInitialCapital: string;
       // [Business Worth Evolution — Implementation Authorization,
       // Increment 2; Specification §32, FR-59] Shown in place of
       // totalLabel when the modal is displaying Estimated Business Worth
@@ -1342,7 +1341,6 @@ export const pt: TranslationDict = {
       initialCapital: 'Capital Inicial (ponto de partida):',
       growth: 'Crescimento do Capital:',
       basedOnCount: 'Stock atual baseado na contagem de {{date}}',
-      defineInitialCapital: ' · Defina o Capital Inicial para medir o crescimento.',
     },
     historyModal: {
       title: 'Histórico do Valor do Negócio',

@@ -3619,16 +3619,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           )}
         </div>
 
-        {!hasInitialStockCount && (
-          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5 text-xs text-gray-700">
-            <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
-            <p className="leading-relaxed">
-              Ainda não definiu o <strong className="text-[#111827] font-semibold">Capital Inicial</strong>. Esta contagem será guardada, mas recomendamos
-              registar primeiro o Capital Inicial no Painel para poder comparar corretamente o crescimento do negócio.
-            </p>
-          </div>
-        )}
-
         <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
           <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
           <p className="text-[13px] leading-relaxed text-gray-600">
