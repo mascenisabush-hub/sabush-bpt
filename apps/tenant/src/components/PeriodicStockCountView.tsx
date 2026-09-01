@@ -872,6 +872,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the handlers below, never by a runtime assertion.
   const [activeWorkspaceKey, setActiveWorkspaceKey] = useState<string | null>(null);
   const [activeNewManualRowIndex, setActiveNewManualRowIndex] = useState<number | null>(null);
+  // [Sorting — Authorization §8] UI-only, ephemeral, never persisted
+  // (same discipline as activeWorkspaceKey/activeNewManualRowIndex,
+  // above) — a pure display-order preference for the persistent
+  // counted list, not a fact about the count itself. Uses only data
+  // already computed for every validated row (productName,
+  // sellingValue) — no new field, no timestamp, no schema change.
+  // Catalog-originated entry-time sorting is deliberately NOT one of
+  // the four modes: the prior investigation established catalogRows
+  // has no genuine per-row "when was this validated" timestamp to
+  // sort by, and none is invented here.
+  const [validatedSortMode, setValidatedSortMode] = useState<'name-asc' | 'name-desc' | 'value-desc' | 'value-asc'>(
+    'name-asc'
+  );
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -2734,6 +2747,62 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         .map((row, idx) => ({ idx, row }))
         .filter(({ row }) => row.validated && !row.removed),
     [manualRows]
+  );
+
+  // [Sorting — Authorization §8] The four supported modes, applied
+  // independently to the catalog and manual validated lists (each
+  // keeps its own existing render block/JSX completely unchanged —
+  // only the array each `.map()` iterates is now this sorted view
+  // instead of the original, effectively-unsorted one). `sellingValue`
+  // here is computed the exact same way
+  // (`quantity * sellingPrice`) each render block already computes it
+  // independently for display — not a new calculation, not read from
+  // any new field. Name comparison reuses the same
+  // `trim().toLowerCase()` normalization this file's own exact-match
+  // logic (`isGenuinelyNewProductName`, `productKeyFor`) already uses
+  // elsewhere, for consistency, not because sorting needs a new rule.
+  function sortByValidatedMode<T>(
+    items: T[],
+    getName: (item: T) => string,
+    getValue: (item: T) => number,
+    mode: typeof validatedSortMode
+  ): T[] {
+    const sorted = [...items];
+    sorted.sort((a, b) => {
+      switch (mode) {
+        case 'name-asc':
+          return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
+        case 'name-desc':
+          return getName(b).trim().toLowerCase().localeCompare(getName(a).trim().toLowerCase());
+        case 'value-desc':
+          return getValue(b) - getValue(a);
+        case 'value-asc':
+          return getValue(a) - getValue(b);
+      }
+    });
+    return sorted;
+  }
+
+  const sortedValidatedCatalogEntries = useMemo(
+    () =>
+      sortByValidatedMode(
+        validatedCatalogEntries,
+        ([, row]) => row.productName,
+        ([, row]) => (row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0) * (Number(row.sellingPrice) || 0),
+        validatedSortMode
+      ),
+    [validatedCatalogEntries, validatedSortMode]
+  );
+
+  const sortedValidatedManualRowEntries = useMemo(
+    () =>
+      sortByValidatedMode(
+        validatedManualRowEntries,
+        ({ row }) => row.productName,
+        ({ row }) => (row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0) * (Number(row.sellingPrice) || 0),
+        validatedSortMode
+      ),
+    [validatedManualRowEntries, validatedSortMode]
   );
 
   // [Implementation Authorization — Single-Product Workspace] THE
@@ -5191,6 +5260,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 Já verificados e fora do espaço de contagem ativo. Continuam a fazer
                 parte desta Contagem e serão revistos antes de "Confirmar Contagem".
               </p>
+              {/* [Sorting — Authorization §8] Applies to both the
+                  catalog and manual validated lists below, each sorted
+                  independently by the same chosen mode (they render as
+                  two visually separate groups, per Concept C's existing
+                  structure — unchanged by this addition). Ordering only
+                  ever reorders the display; it never writes to
+                  catalogRows/manualRows or any persisted field. */}
+              {showValidated && (validatedCatalogEntries.length > 0 || validatedManualRowEntries.length > 0) && (
+                <div className="flex items-center gap-2">
+                  <label className="text-[11px] font-semibold text-emerald-700/70" htmlFor="validated-sort-mode">
+                    Ordenar por
+                  </label>
+                  <select
+                    id="validated-sort-mode"
+                    value={validatedSortMode}
+                    onChange={(e) => setValidatedSortMode(e.target.value as typeof validatedSortMode)}
+                    className="text-[12px] font-semibold text-emerald-800 bg-white border border-emerald-200 rounded-lg px-2 py-1"
+                  >
+                    <option value="name-asc">Nome (A→Z)</option>
+                    <option value="name-desc">Nome (Z→A)</option>
+                    <option value="value-desc">Maior valor</option>
+                    <option value="value-asc">Menor valor</option>
+                  </select>
+                </div>
+              )}
               {showValidated && (
               <>
               {/* [Concept C — Validated Product Compaction, Implementation
@@ -5210,7 +5304,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Valor</span>
               </div>
               <div className="space-y-1.5">
-                {validatedCatalogEntries.map(([productId, row]) => {
+                {sortedValidatedCatalogEntries.map(([productId, row]) => {
                   const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
                   const sellingPriceNum = Number(row.sellingPrice) || 0;
                   const rowValue = q * sellingPriceNum;
@@ -5281,7 +5375,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     </div>
                   );
                 })}
-                {validatedManualRowEntries.map(({ idx, row }) => {
+                {sortedValidatedManualRowEntries.map(({ idx, row }) => {
                   const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
                   const sellingPriceNum = Number(row.sellingPrice) || 0;
                   const rowValue = q * sellingPriceNum;

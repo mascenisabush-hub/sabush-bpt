@@ -167,14 +167,14 @@ describe('F — Validating the active product\'s entire portion set empties the 
 });
 
 describe('G — The validated product remains represented in the existing persistent counted list, unchanged', () => {
-  it('the "Produtos Validados" section still reads validatedCatalogEntries/validatedManualRowEntries — never the workspace-scoped visibleCatalogEntries/visibleManualRowGroups', () => {
+  it('the "Produtos Validados" section still reads sortedValidatedCatalogEntries/sortedValidatedManualRowEntries (Sorting, Authorization §8) — pure display-order derivations of validatedCatalogEntries/validatedManualRowEntries, never the workspace-scoped visibleCatalogEntries/visibleManualRowGroups', () => {
     const start = periodicSrc.indexOf('Produtos Validados', periodicSrc.indexOf('accumulated/validated area'));
     assert.notEqual(start, -1);
     const end = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', start);
     assert.notEqual(end, -1);
     const section = periodicSrc.slice(start, end);
-    assert.match(section, /validatedCatalogEntries\.map/);
-    assert.match(section, /validatedManualRowEntries\.map/);
+    assert.match(section, /sortedValidatedCatalogEntries\.map/);
+    assert.match(section, /sortedValidatedManualRowEntries\.map/);
   });
 
   it('handleEditCatalogRow/handleEditManualRow (the existing, out-of-scope edit path) are completely unmodified', () => {
@@ -219,8 +219,12 @@ describe('J — Existing valuation, UnitRelationship, and autosave behavior are 
     .split('\n')
     .filter(Boolean);
 
-  it('the only file changed by this Authorization is PeriodicStockCountView.tsx itself', () => {
-    assert.deepEqual(changedFiles, ['apps/tenant/src/components/PeriodicStockCountView.tsx']);
+  it('production files outside PeriodicStockCountView.tsx remain untouched — valuation, UnitRelationship, Mode A/B, and persistence code all excluded from the diff (test files may legitimately change alongside it)', () => {
+    assert.equal(changedFiles.includes('apps/tenant/src/components/PeriodicStockCountView.tsx'), true);
+    const productionFilesOutsideScope = changedFiles.filter(
+      (f) => !f.startsWith('tests/') && f !== 'apps/tenant/src/components/PeriodicStockCountView.tsx'
+    );
+    assert.deepEqual(productionFilesOutsideScope, []);
   });
 
   it('utils/stockCount.ts (tallyStockCountRows, normalizeStockCountItems — the valuation formula) is not in the changed-files list', () => {
@@ -267,5 +271,114 @@ describe('K — Responsive layout (Authorization §10): desktop LEFT/RIGHT, mobi
     assert.ok(gridStart < pickerStart, 'grid wrapper must open before the picker');
     assert.ok(pickerStart < rightColStart, 'picker must precede the right column opening');
     assert.ok(rightColStart < validatedStart, 'right column must open before "Produtos Validados" itself');
+  });
+});
+
+describe('L — Sorting (Authorization §8): four modes, using only existing data', () => {
+  it('validatedSortMode is a plain, UI-only, unpersisted piece of state with exactly the four required modes', () => {
+    const body = extractFunctionBody(periodicSrc, 'const [validatedSortMode, setValidatedSortMode] = useState<');
+    assert.match(body, /'name-asc' \| 'name-desc' \| 'value-desc' \| 'value-asc'/);
+    assert.match(body, /'name-asc'\s*\n?\s*\);/);
+  });
+
+  it('sortByValidatedMode reads only productName and a locally-computed quantity*sellingPrice value — no new field, no new calculation', () => {
+    const body = extractFunctionBody(periodicSrc, 'function sortByValidatedMode<T>(');
+    assert.match(body, /localeCompare/);
+    assert.match(body, /getValue\(b\) - getValue\(a\)/);
+    assert.match(body, /getValue\(a\) - getValue\(b\)/);
+    assert.doesNotMatch(body, /entryTimestamp|validatedAt|createdAt/);
+  });
+
+  it('both sortedValidatedCatalogEntries and sortedValidatedManualRowEntries derive from sortByValidatedMode, fed by the existing validatedCatalogEntries/validatedManualRowEntries and computing value as quantity*sellingPrice — the same formula each render block already used before sorting existed', () => {
+    const catalogBody = extractFunctionBody(periodicSrc, 'const sortedValidatedCatalogEntries = useMemo(');
+    assert.match(catalogBody, /sortByValidatedMode\(/);
+    assert.match(catalogBody, /validatedCatalogEntries/);
+    assert.match(catalogBody, /Number\(row\.quantity\)/);
+    assert.match(catalogBody, /Number\(row\.sellingPrice\)/);
+
+    const manualBody = extractFunctionBody(periodicSrc, 'const sortedValidatedManualRowEntries = useMemo(');
+    assert.match(manualBody, /sortByValidatedMode\(/);
+    assert.match(manualBody, /validatedManualRowEntries/);
+  });
+
+  it('a single <select> control drives validatedSortMode with exactly the four required options', () => {
+    const start = periodicSrc.indexOf('id="validated-sort-mode"');
+    assert.notEqual(start, -1);
+    const selectBlock = periodicSrc.slice(start, periodicSrc.indexOf('</select>', start));
+    assert.match(selectBlock, /onChange=\{\(e\) => setValidatedSortMode\(e\.target\.value as typeof validatedSortMode\)\}/);
+    assert.match(selectBlock, /value="name-asc"/);
+    assert.match(selectBlock, /value="name-desc"/);
+    assert.match(selectBlock, /value="value-desc"/);
+    assert.match(selectBlock, /value="value-asc"/);
+  });
+
+  it('no catalog entry-time sort mode was invented — only the four authorized name/value modes exist anywhere in the sort logic', () => {
+    const body = extractFunctionBody(periodicSrc, 'function sortByValidatedMode<T>(');
+    assert.doesNotMatch(body, /'entry-time'|'oldest'|'newest'/);
+  });
+
+  it('sorting never writes to catalogRows/manualRows or any persisted field — sortByValidatedMode only returns a reordered copy ([...items]), never mutates or calls a setter', () => {
+    const body = extractFunctionBody(periodicSrc, 'function sortByValidatedMode<T>(');
+    assert.match(body, /const sorted = \[\.\.\.items\];/);
+    assert.doesNotMatch(body, /setCatalogRows|setManualRows|scheduleRowDraftSave/);
+  });
+});
+
+describe('M — Existing (pre-Authorization) draft compatibility', () => {
+  it('handleResumeDraft rebuilds catalogRows/manualRows from EVERY persisted draft item via the existing, unmodified draftItemToWorkingRow — validated status included, nothing filtered out by validation state', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    assert.match(body, /for \(const item of periodicStockDraft\.items\) \{/);
+    assert.match(body, /draftItemToWorkingRow\(item\)/);
+    assert.doesNotMatch(body, /\.filter\(.*validated/);
+    assert.match(body, /setCatalogRows\(nextCatalogRows\);/);
+    assert.match(body, /setManualRows\(nextManualRows\);/);
+  });
+
+  it('handleResumeDraft never sets activeWorkspaceKey or activeNewManualRowIndex — the workspace always starts EMPTY after resuming any draft, old or new, per Authorization §10', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    assert.doesNotMatch(body, /setActiveWorkspaceKey|setActiveNewManualRowIndex/);
+  });
+
+  it('the picker (pickerCatalogEntries/pickerManualRowGroupsRaw) is derived from the SAME catalogRows/manualRows handleResumeDraft populates — an old draft with several unvalidated rows surfaces every one of them as a picker candidate, not just one', () => {
+    const catalogBody = extractFunctionBody(periodicSrc, 'const pickerCatalogEntries = useMemo(() => {');
+    assert.match(catalogBody, /Object\.entries\(catalogRows\)/);
+    assert.match(catalogBody, /!row\.validated/);
+    const manualBody = extractFunctionBody(periodicSrc, 'const pickerManualRowGroupsRaw = useMemo(() => {');
+    assert.match(manualBody, /manualRowGroups/);
+  });
+
+  it('pickerManualRowGroups includes a group as long as it has at least one unvalidated row — a multi-portion product only partway validated under the old UI remains selectable, not just its fully-unvalidated ones', () => {
+    const body = extractFunctionBody(periodicSrc, 'const pickerManualRowGroups = useMemo(');
+    assert.match(body, /group\.rows\.some\(\(r\) => \{/);
+    assert.match(body, /!row\.validated && !row\.removed/);
+  });
+
+  it('validatedCatalogEntries/validatedManualRowEntries (the persistent counted list) are computed straight from catalogRows/manualRows with no dependency on activeWorkspaceKey/activeNewManualRowIndex — an old draft\'s already-validated rows appear there immediately on resume, before any product is ever selected into the workspace', () => {
+    const stripComments = (body: string) =>
+      body
+        .split('\n')
+        .filter((line) => !line.trim().startsWith('//'))
+        .join('\n');
+    const catalogBody = stripComments(extractFunctionBody(periodicSrc, 'const validatedCatalogEntries = useMemo('));
+    assert.doesNotMatch(catalogBody, /activeWorkspaceKey|activeNewManualRowIndex/);
+    const manualBody = stripComments(
+      extractFunctionBody(periodicSrc, 'const validatedManualRowEntries = useMemo(\n    () =>\n      manualRows')
+    );
+    assert.doesNotMatch(manualBody, /activeWorkspaceKey|activeNewManualRowIndex/);
+  });
+
+  it('no automatic migration exists anywhere: handleResumeDraft never recalculates a value, never merges rows, never changes a productId/unit/quantity/sellingPrice, never marks anything validated automatically', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    assert.doesNotMatch(body, /validated: true/);
+    assert.doesNotMatch(body, /\.reduce\(.*merge/i);
+    assert.doesNotMatch(body, /recalculate|reconcile/i);
+  });
+
+  it('draft serialization (workingRowToDraftItem) is completely unmodified by this Authorization — confirmed by the diff, not merely by absence of a matching source edit', () => {
+    const changedFiles = execSync('git diff --name-only HEAD -- apps/tenant/src/utils/stockCount.ts', {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf-8',
+    }).trim();
+    assert.equal(changedFiles, '', 'utils/stockCount.ts must be untouched (checked against the last commit, working-tree changes included)');
   });
 });

@@ -246,10 +246,22 @@ describe('Accumulated/validated area (Decision 40 FR-N8; Implementation Authoriz
     assert.match(body, /\{ idx, row \}/);
   });
 
-  it('the "Produtos Validados" section renders both validatedCatalogEntries and validatedManualRowEntries, combined', () => {
+  it('the "Produtos Validados" section renders both validated lists, combined — via the sorted views (Sorting, Authorization §8) that derive directly from validatedCatalogEntries/validatedManualRowEntries, not a separately recomputed source', () => {
     assert.match(source, /Produtos Validados/);
-    assert.match(source, /validatedCatalogEntries\.map\(/);
-    assert.match(source, /validatedManualRowEntries\.map\(/);
+    // [Sorting — Authorization §8] The render sites now iterate
+    // sortedValidatedCatalogEntries/sortedValidatedManualRowEntries —
+    // pure display-order derivations of validatedCatalogEntries/
+    // validatedManualRowEntries themselves (confirmed by the second
+    // pair of assertions below), not a replacement for them. This
+    // test's own guarantee — both lists render, combined — is
+    // unaffected; only the exact identifier at the render site changed
+    // as an intentional consequence of adding sorting.
+    assert.match(source, /sortedValidatedCatalogEntries\.map\(/);
+    assert.match(source, /sortedValidatedManualRowEntries\.map\(/);
+    const sortedCatalogBody = extractFunctionBody(source, 'const sortedValidatedCatalogEntries = useMemo(');
+    assert.match(sortedCatalogBody, /validatedCatalogEntries/);
+    const sortedManualBody = extractFunctionBody(source, 'const sortedValidatedManualRowEntries = useMemo(');
+    assert.match(sortedManualBody, /validatedManualRowEntries/);
   });
 
   it('reopening from the accumulated area reuses the EXISTING handleEditCatalogRow/handleEditManualRow unchanged — no new validated-clearing logic is duplicated here', () => {
