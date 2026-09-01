@@ -842,6 +842,36 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [catalogRowSaveError, setCatalogRowSaveError] = useState<Record<string, string>>({});
   const [manualRowSaveError, setManualRowSaveError] = useState<Record<number, string>>({});
   const [productSearch, setProductSearch] = useState('');
+  // [Implementation Authorization — Single-Product Workspace] UI-only,
+  // ephemeral, never persisted to the draft (autosave already saves
+  // the entire catalogRows/manualRows tree regardless of what's
+  // currently rendered — see savePeriodicStockDraft's own call sites,
+  // none of which reference either of these two pieces of state). Two
+  // separate references rather than one tagged union, kept as plain
+  // primitives for the smallest possible diff:
+  //
+  // `activeWorkspaceKey` — set when the Owner selects an EXISTING
+  // product (a catalog row or an existing manual-row group) from the
+  // picker below. Always a `productKeyFor(...)`-normalized name — the
+  // exact same grouping identity `groupRowsByProductName`/
+  // `portionLabels` already use elsewhere in this file, never a new
+  // identity concept. Matching by name (not a single row reference) is
+  // what lets every existing/new portion of the same product — catalog
+  // row AND manual rows alike — surface together in the workspace.
+  //
+  // `activeNewManualRowIndex` — set only for the "Adicionar produto que
+  // não está no catálogo" case: a brand-new, still-blank manual row has
+  // no name yet, so it cannot be matched by `productKeyFor` until the
+  // Owner types one. Tracked by its stable array index instead, purely
+  // as an anchor — once the Owner types a name, the derived
+  // `activeWorkspaceProductKey` below switches to matching by that name
+  // instead, so a same-name "+ portion" click still joins the same
+  // workspace correctly.
+  //
+  // At most one of the two is ever non-null at a time — enforced by
+  // the handlers below, never by a runtime assertion.
+  const [activeWorkspaceKey, setActiveWorkspaceKey] = useState<string | null>(null);
+  const [activeNewManualRowIndex, setActiveNewManualRowIndex] = useState<number | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
@@ -2469,7 +2499,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // as removed for THIS view's purposes (it is not offered back as an
   // active row to work on), and is surfaced via the existing "Removidos"
   // list rather than the new accumulated list below.
-  const visibleCatalogEntries = useMemo(() => {
+  // [Implementation Authorization — Single-Product Workspace] Renamed
+  // from `visibleCatalogEntries` to `pickerCatalogEntries` — same
+  // unmodified computation (every non-removed, non-validated catalog
+  // row, search-filtered, alphabetical) — now feeding only the picker
+  // (candidate list shown when the workspace is empty). The name
+  // `visibleCatalogEntries` itself is reused, further below, for the
+  // workspace-scoped view every existing render site inside the
+  // active-workspace JSX already reads — see that declaration's own
+  // comment for why this is safe.
+  const pickerCatalogEntries = useMemo(() => {
     const search = productSearch.trim().toLowerCase();
     return Object.entries(catalogRows)
       .filter(([, row]) => !row.removed && !row.validated)
@@ -2493,6 +2532,54 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     () => Object.entries(catalogRows).filter(([, row]) => row.validated && !row.removed),
     [catalogRows]
   );
+
+  // [Implementation Authorization — Single-Product Workspace] Derives
+  // the workspace's effective grouping key from the two pieces of
+  // state declared near `productSearch`, above — a plain expression,
+  // not itself new state. While `activeNewManualRowIndex` points at a
+  // row whose name is still blank, there is no name to key by yet
+  // (matches nothing else); the moment that row has a name, this
+  // switches to `productKeyFor` on it — the exact same identity
+  // `groupRowsByProductName`'s own `key` field already uses — so a
+  // portion added afterward via the row's own "+ portion" button
+  // (which always shares that exact name) is picked up into the same
+  // workspace automatically, with no extra wiring. Declared here,
+  // ahead of `portionLabels` below, specifically because
+  // `portionLabels` needs the workspace-scoped `visibleCatalogEntries`
+  // this feeds into, next.
+  const activeWorkspaceProductKey = useMemo(() => {
+    if (activeNewManualRowIndex !== null) {
+      const name = manualRows[activeNewManualRowIndex]?.productName ?? '';
+      return name.trim() ? productKeyFor(name) : null;
+    }
+    return activeWorkspaceKey;
+  }, [activeNewManualRowIndex, activeWorkspaceKey, manualRows]);
+
+  const isWorkspaceActive = activeWorkspaceKey !== null || activeNewManualRowIndex !== null;
+
+  // [Implementation Authorization — Single-Product Workspace] THE
+  // active-workspace view of catalog rows — deliberately named
+  // `visibleCatalogEntries` (reusing the exact name every existing
+  // render site below already reads, in the still-unmodified JSX that
+  // used to read the search-filtered list of the same name) so that
+  // JSX requires zero edits to become workspace-scoped: every
+  // `.map()`/`.length` call already inside the active-workspace
+  // section automatically now iterates only the active product's own
+  // rows. Computed from the UNFILTERED `catalogRows` — never
+  // `pickerCatalogEntries` (already narrowed by `productSearch`) — so
+  // the active product never disappears from its own workspace merely
+  // because the Owner typed something unrelated into the search box
+  // afterward (search stays scoped to the picker, below). Empty
+  // whenever no product is active, which is exactly what makes the
+  // existing `{visibleCatalogEntries.length > 0 && (...)}` guards
+  // already present in that JSX correctly hide the grid when the
+  // workspace is empty, with no change to those guards themselves.
+  const visibleCatalogEntries = useMemo(() => {
+    if (activeWorkspaceProductKey === null) return [];
+    return Object.entries(catalogRows).filter(
+      ([, row]) => !row.removed && !row.validated && productKeyFor(row.productName) === activeWorkspaceProductKey
+    );
+  }, [catalogRows, activeWorkspaceProductKey]);
 
   // The full working list — every catalog row (visible, removed,
   // validated, or still-blank alike) plus every manual row — is what
@@ -2613,7 +2700,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // could actually be, so finding a specific product among a long list
   // (mid-Contagem, after spotting an error) no longer depends on which
   // of the two sections it happens to live in.
-  const visibleManualRowGroups = useMemo(() => {
+  // [Implementation Authorization — Single-Product Workspace] Renamed
+  // from `visibleManualRowGroups` to `pickerManualRowGroupsRaw` — same
+  // unmodified computation, now feeding only `pickerManualRowGroups`
+  // (below), which additionally excludes any group whose portions are
+  // all already confirmed/done. The name `visibleManualRowGroups`
+  // itself is reused, further below, for the workspace-scoped view
+  // every existing render site inside the active-workspace JSX already
+  // reads.
+  const pickerManualRowGroupsRaw = useMemo(() => {
     const search = productSearch.trim().toLowerCase();
     if (!search) return manualRowGroups;
     return manualRowGroups.filter((group) => group.displayName.toLowerCase().includes(search));
@@ -2640,6 +2735,109 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         .filter(({ row }) => row.validated && !row.removed),
     [manualRows]
   );
+
+  // [Implementation Authorization — Single-Product Workspace] THE
+  // active-workspace view of manual-row groups — same reused-name
+  // rationale as `visibleCatalogEntries`, above, so the existing manual-
+  // row JSX below needs zero edits to become workspace-scoped. Declared
+  // here (after `manualRowGroups`, which it depends on) rather than
+  // alongside `visibleCatalogEntries` above, purely because
+  // `manualRowGroups` itself isn't computed until this point.
+  const visibleManualRowGroups = useMemo(() => {
+    if (activeNewManualRowIndex !== null && activeWorkspaceProductKey === null) {
+      // Still-blank new row: match by its stable index, not by name —
+      // see activeNewManualRowIndex's own declaration comment, above.
+      return manualRowGroups.filter((group) => group.rows.some((r) => r.idx === activeNewManualRowIndex));
+    }
+    if (activeWorkspaceProductKey !== null) {
+      return manualRowGroups.filter((group) => group.key === activeWorkspaceProductKey);
+    }
+    return [];
+  }, [manualRowGroups, activeNewManualRowIndex, activeWorkspaceProductKey]);
+
+  // [Implementation Authorization — Single-Product Workspace] Safety
+  // net for two edge cases, neither of which changes any business
+  // semantics — both only ever clear the two pieces of UI-only state
+  // declared near `productSearch`, never touch
+  // catalogRows/manualRows/validated themselves:
+  //  1. Every row currently in the workspace has been validated (the
+  //     product's entire portion set is done) — the workspace returns
+  //     to empty, per the required interaction model
+  //     (EMPTY → ONE PRODUCT → ... → VALIDAR → EMPTY).
+  //  2. The workspace's own row(s) vanished from under it — e.g. the
+  //     Owner removed the one new blank manual row it was pointing at
+  //     before ever naming it — so the reference is cleared rather
+  //     than left pointing at nothing.
+  useEffect(() => {
+    if (!isWorkspaceActive) return;
+    const rows = [
+      ...visibleCatalogEntries.map(([, row]) => row),
+      ...visibleManualRowGroups.flatMap((group) => group.rows.map((r) => manualRows[r.idx])),
+    ].filter((row): row is StockCountWorkingRow => row !== undefined);
+    if (rows.length === 0 || rows.every((row) => row.validated)) {
+      setActiveWorkspaceKey(null);
+      setActiveNewManualRowIndex(null);
+    }
+  }, [isWorkspaceActive, visibleCatalogEntries, visibleManualRowGroups, manualRows]);
+
+  // [Implementation Authorization — Single-Product Workspace] The
+  // picker's own candidate lists — deliberately the search-filtered-
+  // only `pickerCatalogEntries`/`pickerManualRowGroupsRaw` (never the
+  // workspace-scoped names above), since the picker's job is choosing
+  // which product becomes active next, not showing the currently-active
+  // one. Two filters, both load-bearing:
+  //  1. A group with every one of its own rows already validated
+  //     belongs in the existing accumulated/confirmed-products area,
+  //     not the picker — only a group with at least one still-
+  //     unvalidated row (never yet started, or a multi-portion
+  //     product only partway done) is offered here.
+  //  2. `group.key === ''` (a still-blank, unnamed manual row) is
+  //     excluded entirely — `groupRowsByProductName` gives every
+  //     blank-name row its OWN singleton group (never merges them), but
+  //     ALL such groups share the literal key `''`
+  //     (stockCountPortionGrouping.ts:172-178). Selecting one from the
+  //     picker would set `activeWorkspaceKey` to `''`, and the
+  //     workspace's own `key === activeWorkspaceProductKey` match
+  //     (further above) would then ambiguously match EVERY blank-name
+  //     group at once if more than one ever coexists (e.g. surviving in
+  //     a restored draft) — a real violation of the single-active-
+  //     product guarantee, not merely a theoretical one. A brand-new
+  //     blank row is never reachable through this list anyway — it's
+  //     always activated immediately by `handleAddNewProductToWorkspace`
+  //     (index-based, not key-based) — so nothing legitimate is lost by
+  //     excluding it here; see [KNOWN LIMITATIONS] in this change's own
+  //     report for the one narrow case (a stray blank row surviving a
+  //     draft restore) this leaves unreachable from the picker.
+  const pickerManualRowGroups = useMemo(
+    () =>
+      pickerManualRowGroupsRaw.filter(
+        (group) =>
+          group.key !== '' &&
+          group.rows.some((r) => {
+            const row = manualRows[r.idx];
+            return row && !row.validated && !row.removed;
+          })
+      ),
+    [pickerManualRowGroupsRaw, manualRows]
+  );
+
+  const handleSelectExistingProductForWorkspace = (key: string) => {
+    setActiveWorkspaceKey(key);
+    setActiveNewManualRowIndex(null);
+  };
+
+  // [Implementation Authorization — Single-Product Workspace §3] Thin
+  // wrapper — handleAddManualRow itself is completely unmodified (same
+  // blank-row creation, same scheduleRowDraftSave call); this only
+  // additionally activates the workspace on the new row, by the index
+  // it is guaranteed to land at (manualRows is strictly append-only —
+  // see handleAddManualRow's own existing implementation).
+  const handleAddNewProductToWorkspace = () => {
+    const newIndex = manualRows.length;
+    handleAddManualRow();
+    setActiveWorkspaceKey(null);
+    setActiveNewManualRowIndex(newIndex);
+  };
 
   // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
   // (the live cost-basis trend indicator's own computation) are removed
@@ -3887,28 +4085,139 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             )}
           </div>
 
-          {/* [Fix — product search only filtered the catalog grid] One
-              shared search box, above BOTH product sections, filtering
-              catalog rows (visibleCatalogEntries) AND manually-added
-              products (visibleManualRowGroups) by the same query — see
-              visibleManualRowGroups' own comment above for why this
-              moved here rather than staying inside "Produtos do
-              Catálogo"'s own header. Lets an Owner jump straight to one
-              product out of a long list (after spotting an error
-              mid-Contagem, for example) regardless of which of the two
-              sections it happens to live in. */}
-          <div className="relative">
-            <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
-            <input
-              type="text"
-              placeholder="Procurar um produto para editar..."
-              value={productSearch}
-              onChange={(e) => setProductSearch(e.target.value)}
-              className={`${fieldClass} pl-8`}
-            />
-          </div>
+          {/* [Implementation Authorization — Single-Product Workspace §10]
+              Responsive two-region layout: a single column (naturally
+              TOP=workspace / BOTTOM=counted list, by source order) below
+              the `lg` breakpoint, a two-column grid (LEFT=workspace /
+              RIGHT=persistent counted list) at `lg` and above. The right
+              column additionally gets a sticky, independently-scrollable
+              treatment on desktop only, so the counted list stays
+              visible while the Owner works through the left column —
+              mobile is unaffected (no sticky/max-height there, so the
+              page simply scrolls as a whole, exactly as it already did
+              before this change). Both columns remain the EXACT same
+              JSX/content as before this Authorization — this wrapper
+              only changes layout, not what renders inside either
+              column. */}
+          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+          <div className="space-y-6">
+          {/* [Implementation Authorization — Single-Product Workspace]
+              PICKER — shown only when the workspace is empty. Selecting
+              a candidate here (or adding a new product) is what fills
+              the workspace; while a product is active, this entire
+              section is replaced by that one product's own editable
+              form (the unmodified catalog/manual JSX immediately
+              below, now reading the workspace-scoped
+              `visibleCatalogEntries`/`visibleManualRowGroups`). The
+              search box moved here from its own previous location
+              (immediately above the always-shown grid) since search's
+              job is now exclusively "help pick the next product,"
+              never "filter an already-active workspace" — see
+              `visibleCatalogEntries`'s own declaration comment, above,
+              for why the active workspace deliberately ignores
+              `productSearch` entirely. */}
+          {!isWorkspaceActive && (
+            <>
+              <div className="relative">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
+                <input
+                  type="text"
+                  placeholder="Procurar um produto para contar..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className={`${fieldClass} pl-8`}
+                />
+              </div>
 
-          {/* Catalog-populated product grid — Amendment Part 7/11 */}
+              <div>
+                <p className="text-[13px] font-bold text-[#111827]">
+                  Produtos do Catálogo
+                  <span className="text-gray-500 font-normal ml-1.5">({pickerCatalogEntries.length})</span>
+                </p>
+
+                {products.length === 0 && !productsError && (
+                  <p className="text-[13px] text-gray-500 italic mt-3">
+                    Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
+                  </p>
+                )}
+
+                {products.length > 0 && productSearch.trim() && pickerCatalogEntries.length === 0 && (
+                  <p className="text-[13px] text-gray-500 italic mt-3">
+                    Nenhum produto encontrado para "{productSearch.trim()}".
+                  </p>
+                )}
+
+                {pickerCatalogEntries.length > 0 && (
+                  <div className="space-y-1.5 mt-3">
+                    {pickerCatalogEntries.map(([productId, row]) => {
+                      const hasStarted = row.quantity.trim() !== '';
+                      const q = hasStarted ? Number(row.quantity) || 0 : 0;
+                      const sellingPriceNum = Number(row.sellingPrice) || 0;
+                      return (
+                        <button
+                          key={productId}
+                          type="button"
+                          onClick={() => handleSelectExistingProductForWorkspace(productKeyFor(row.productName))}
+                          className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-white border border-[#F0EEE4] rounded-xl px-3.5 py-2.5 text-left hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] transition-colors duration-150"
+                        >
+                          <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
+                          <span className="text-[12px] text-gray-500 tabular-nums whitespace-nowrap">
+                            {hasStarted
+                              ? `${q} ${row.unit || 'un'} · ${formatCurrency(sellingPriceNum, currencySymbol)}`
+                              : 'Selecionar'}
+                          </span>
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
+              </div>
+
+              {pickerManualRowGroups.length > 0 && (
+                <div>
+                  <p className="text-[13px] font-bold text-[#111827] mb-2">
+                    Adicionados Manualmente
+                    <span className="text-gray-500 font-normal ml-1.5">({pickerManualRowGroups.length})</span>
+                  </p>
+                  <div className="space-y-1.5">
+                    {pickerManualRowGroups.map((group) => (
+                      <button
+                        key={group.key}
+                        type="button"
+                        onClick={() => handleSelectExistingProductForWorkspace(group.key)}
+                        className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-white border border-[#F0EEE4] rounded-xl px-3.5 py-2.5 text-left hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] transition-colors duration-150"
+                      >
+                        <span className="text-[13px] font-semibold text-[#111827] truncate">{group.displayName}</span>
+                        <span className="text-[12px] text-gray-500 whitespace-nowrap">
+                          {group.rows.length > 1 ? `${group.rows.length} porções` : 'Continuar'}
+                        </span>
+                      </button>
+                    ))}
+                  </div>
+                </div>
+              )}
+
+              <button
+                type="button"
+                onClick={handleAddNewProductToWorkspace}
+                className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-2 group"
+              >
+                <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
+                <span>Adicionar produto que não está no catálogo</span>
+              </button>
+            </>
+          )}
+
+          {/* Catalog-populated product grid — Amendment Part 7/11.
+              [Implementation Authorization — Single-Product Workspace]
+              Unmodified below this point except for this outer
+              `isWorkspaceActive` gate (a Fragment, since the catalog
+              grid's own <div> and the manual-rows section further down
+              are siblings, not nested) — every `visibleCatalogEntries`/
+              `visibleManualRowGroups` reference inside is now the
+              workspace-scoped view declared above, automatically. */}
+          {isWorkspaceActive && (
+          <>
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-[13px] font-bold text-[#111827]">
@@ -4386,8 +4695,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               37, B.3). rowGridClass's own layout is preserved for the
               shared field row (Qtd/Unid/Compra/Venda/Valor/remove) —
               only the "Nome" column moves up to the card header, shown
-              once per card instead of once per portion. */}
-          {manualRows.length > 0 && (
+              once per card instead of once per portion.
+              [Implementation Authorization — Single-Product Workspace]
+              Gate changed from raw `manualRows.length > 0` to
+              `visibleManualRowGroups.length > 0` — the workspace-scoped
+              view — so this section (and its "Adicionados Manualmente"
+              header) only appears when the ACTIVE product actually has
+              a manual portion, not merely because manual rows exist
+              somewhere else in the count. */}
+          {visibleManualRowGroups.length > 0 && (
             <div>
               <p className="text-[13px] font-bold text-[#111827] mb-2">
                 Adicionados Manualmente
@@ -4801,15 +5117,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
           )}
 
-          <button
-            type="button"
-            onClick={handleAddManualRow}
-            className="w-full py-2.5 px-3 rounded-xl border border-dashed border-[#E5E7EB] hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] text-gray-500 hover:text-[#0B1F3A] font-bold text-[13px] transition-all duration-150 flex items-center justify-center gap-2 group"
-          >
-            <Plus className="w-3.5 h-3.5 text-[#D4AF37] group-hover:scale-110 transition-transform duration-150" />
-            <span>Adicionar produto que não está no catálogo</span>
-          </button>
-
+          </>
+          )}
+          {/* [Implementation Authorization — Single-Product Workspace]
+              The old, always-visible "Adicionar produto que não está no
+              catálogo" button that lived here — unconditional onClick
+              of the unmodified handleAddManualRow — is now the picker's
+              own version, above (`handleAddNewProductToWorkspace`,
+              which calls handleAddManualRow unchanged and additionally
+              activates the new row). Removed from here, not left
+              duplicated: with the outer `isWorkspaceActive` gate
+              immediately above, this exact position would only ever be
+              reachable while a product is ALREADY active, which is
+              precisely when adding an independent second product must
+              be impossible (§3). */}
+          </div>
+          {/* [Implementation Authorization — Single-Product Workspace
+              §10] RIGHT column (desktop) / BOTTOM (mobile) — the
+              persistent counted-products list. `lg:sticky lg:top-4`
+              keeps it in view alongside the left column as the Owner
+              scrolls, on desktop only; `lg:max-h-[calc(100vh-2rem)]
+              lg:overflow-y-auto` makes it independently scrollable
+              there too, rather than growing the whole page. Neither
+              rule applies below `lg`, where this column simply sits
+              below the workspace in normal page flow, unchanged from
+              before this Authorization. */}
+          <div className="space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
           {/* [Decision 40 — Validar Workflow, FR-N8; Implementation
               Authorization §1 item 5] The accumulated/validated area —
               structurally parallel to "Removidos desta contagem",
@@ -5011,6 +5344,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               )}
             </div>
           )}
+          </div>
+          </div>
 
           {/* [§44 — Periodic Contagem Cost-Price Removal, FR-74; Rule 8
               Finding 4 (confirmed by Product Architect: total + trend
