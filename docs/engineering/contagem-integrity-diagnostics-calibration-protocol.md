@@ -9,10 +9,14 @@ Policy, not a Specification amendment, not a Rule 8 Assessment, not an
 Implementation Authorization. Selects no threshold, multiplier, or
 cutoff of any kind — see §8 for the explicit boundary this document
 holds itself to.
-**Status:** Protocol only. No calibration has been run. No dataset has
-been assembled. No evidence exists yet as a result of this document —
-check a future "Results" section (not present here) before assuming
-this document contains anything beyond a plan.
+**Status:** ✅ Accepted by the Product Architect, 01 September 2026, as
+the governing methodology for this calibration work — see the
+[Product Architect Acceptance record](./contagem-integrity-diagnostics-product-architect-acceptance.md).
+Acceptance of this protocol is not itself calibration evidence: no
+calibration has been run. No dataset has been assembled. No evidence
+exists yet as a result of this document — check a future "Results"
+section (not present here) before assuming this document contains
+anything beyond a plan.
 **Authoritative basis:**
 [`contagem-integrity-diagnostics-specification.md`](../specs/contagem-integrity-diagnostics-specification.md),
 specifically §8 (Open Decision 1), §9 (Open Decision 2), and §19

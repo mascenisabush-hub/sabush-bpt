@@ -2,11 +2,16 @@ Business Domain Specification
 
 # Contagem Integrity Diagnostics Specification
 
-**Status:** Drafted. Not yet reviewed or accepted by the Product
-Architect. This document does not authorize implementation — a Rule 8
-Assessment, an Implementation Plan, and a signed Implementation
-Authorization remain separate, subsequent gates (§21, below), exactly
-as required for every sibling specification in this governance chain.
+**Status:** ✅ **ACCEPTED** by the Product Architect, 01 September
+2026 — see [Product Architect Acceptance record](../engineering/contagem-integrity-diagnostics-product-architect-acceptance.md)
+and §22, below. Acceptance covers this Specification's governing
+placement (§1) and `FR-1`–`FR-31` — it does **not** resolve Open
+Decisions 1 or 2 (§20), both of which remain explicitly open pending
+calibration evidence. This document does not authorize implementation
+— a Rule 8 Assessment, an Implementation Plan, and a signed
+Implementation Authorization remain separate, subsequent gates (§21,
+below), exactly as required for every sibling specification in this
+governance chain.
 **Governance placement:** ✅ **Resolved.** This is a freestanding
 Business Domain Specification, filed unprefixed in `docs/specs/`,
 alongside `business-worth-evolution-specification.md`,
@@ -676,12 +681,14 @@ altering.
 
 ## 22. Product Architect Acceptance
 
-**Status:** Drafted — awaiting review. Not yet accepted or signed.
+**Status:** ✅ **ACCEPTED AND SIGNED.** Full signed record:
+[Product Architect Acceptance — Contagem Integrity Diagnostics Specification & Calibration Data Protocol](../engineering/contagem-integrity-diagnostics-product-architect-acceptance.md)
+(§4, "Decision: I ACCEPT," SABUSHIMIKE MASCENI, 01 September 2026).
 
-This section is intentionally left unsigned. Acceptance of this
-specification's content does not, by itself, resolve Open Decisions 1
-or 2 (§20) — those require the §19 calibration exercise and a separate
-subsequent acceptance of the resulting numeric parameters. Acceptance
-of this specification does not, on its own, authorize any code change
-— an Implementation Plan and a signed Implementation Authorization
-remain required, separate gates after Rule 8 (§21).
+Acceptance of this specification's content does not, by itself,
+resolve Open Decisions 1 or 2 (§20) — those require the §19 calibration
+exercise and a separate subsequent acceptance of the resulting numeric
+parameters. Acceptance of this specification does not, on its own,
+authorize any code change — an Implementation Plan and a signed
+Implementation Authorization remain required, separate gates after
+Rule 8 (§21).
