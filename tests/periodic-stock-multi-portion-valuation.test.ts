@@ -142,8 +142,26 @@ describe('workingRowToDraftItem / draftItemToWorkingRow — §17 draft round-tri
     const restoredCatalog = draftItemToWorkingRow(draftCatalog);
     const restoredManual = draftItemToWorkingRow(draftManual);
 
-    assert.deepEqual(restoredCatalog, { ...catalogRow, removed: undefined });
-    assert.deepEqual(restoredManual, { ...manualRow, removed: undefined });
+    // [Decision 40 — Validar Workflow; FR-89–FR-94, Implementation
+    // Authorization §2 item 2] draftItemToWorkingRow explicitly
+    // copies through validated/sellingPriceAutoFilled/
+    // sellingPriceBasisUnit/sellingPriceEditSequence as `undefined`
+    // for a legacy item that predates those fields — same verbatim
+    // "absent means undefined, not missing" discipline `removed`
+    // already had below. Node's strict deep-equal treats an explicit
+    // `key: undefined` differently from an absent key, so the
+    // expected object must declare all four here, not just `removed`,
+    // even though every reader of these fields treats both forms
+    // identically at runtime.
+    const legacyRoundTripDefaults = {
+      removed: undefined,
+      validated: undefined,
+      sellingPriceAutoFilled: undefined,
+      sellingPriceBasisUnit: undefined,
+      sellingPriceEditSequence: undefined,
+    };
+    assert.deepEqual(restoredCatalog, { ...catalogRow, ...legacyRoundTripDefaults });
+    assert.deepEqual(restoredManual, { ...manualRow, ...legacyRoundTripDefaults });
 
     // Requirement 3: each portion's own unit/price basis survives the round-trip.
     assert.equal(restoredCatalog.unit, 'Cx');

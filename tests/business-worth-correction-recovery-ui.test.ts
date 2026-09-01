@@ -128,7 +128,7 @@ describe('PeriodicStockCountView.tsx — Increment 8 correction/recovery write p
   it('recordStockCount is always called with producesBusinessWorthSnapshot: true (Specification §14 Decision 1: "set true on every Contagem confirmed under this model going forward" — not a correction-only special case); correctionOfSnapshotId/correctionKind remain correction-only, gated inside pendingBusinessWorthCorrection', () => {
     const start = periodicSrc.indexOf('const saved = await recordStockCount({');
     assert.notEqual(start, -1);
-    const callBlock = periodicSrc.slice(start, start + 7200); // [FR-89–FR-94, Implementation Authorization §2 item 5] Window widened from 6500 — the new workingRowDeliberateEntries argument/comment block shifted this call's later content forward by ~100 chars; widened with margin, not narrowed.
+    const callBlock = periodicSrc.slice(start, start + 8200); // [FR-89–FR-94, Implementation Authorization §2 item 5] Window widened from 6500, then 7200 — later, unrelated additions between this call and its own success-path clear call kept pushing the distance forward (confirmed 7676 chars at time of this widening); widened again with margin, not narrowed.
     // [Fix — Business Worth Evolution was never actually switched on]
     // producesBusinessWorthSnapshot: true must appear unconditionally in
     // this call — NOT nested inside the pendingBusinessWorthCorrection
@@ -150,7 +150,7 @@ describe('PeriodicStockCountView.tsx — Increment 8 correction/recovery write p
 
   it('clears pendingBusinessWorthCorrection after a successful save — a later, unrelated Contagem never silently inherits a stale correction target', () => {
     const start = periodicSrc.indexOf('const saved = await recordStockCount({');
-    const successBlock = periodicSrc.slice(start, start + 7200); // [FR-89–FR-94, Implementation Authorization §2 item 5] Same window-widening as the sibling assertion above.
+    const successBlock = periodicSrc.slice(start, start + 8200); // [FR-89–FR-94, Implementation Authorization §2 item 5] Same window-widening as the sibling assertion above.
     assert.match(successBlock, /if \(pendingBusinessWorthCorrection\) clearBusinessWorthCorrection\(\);/);
   });
 

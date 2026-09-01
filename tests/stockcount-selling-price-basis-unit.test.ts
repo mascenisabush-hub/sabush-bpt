@@ -329,7 +329,16 @@ describe('TEST 7 — Contagem UI selling-price denomination caption (Implementat
   });
 
   it('E. Mode A isolation: the reference-unit caption still reads referenceUnit, never sellingPriceBasisUnit', () => {
-    assert.match(periodicSrc, /Preço de venda \(\{currencySymbol\}\) por \{referenceUnit \|\| 'unidade'\}/);
+    // [Concept B — Periodic Contagem balanced compaction] The caption
+    // text this test originally matched
+    // ("Preço de venda ({currencySymbol}) por {referenceUnit || 'unidade'}")
+    // was legitimately shortened as part of Concept B's compaction —
+    // see that increment's own commit message ("Explanatory prose
+    // shortened to short visible text"). The invariant this test
+    // actually protects (the Mode A reference-unit caption reads
+    // referenceUnit, never sellingPriceBasisUnit) is unaffected —
+    // only the wording changed, not which field it displays.
+    assert.match(periodicSrc, /Preço\/\{referenceUnit \|\| 'unidade'\} \(\{currencySymbol\}\):/);
     // Exactly one occurrence of the old, uncorrected pattern is expected —
     // and it must be this Mode A caption, not a leftover catalog/manual
     // caption (both of which were already migrated to the new

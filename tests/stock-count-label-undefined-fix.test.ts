@@ -91,7 +91,24 @@ describe('recordStockCount — logTimelineEvent details.label no longer assigned
 describe('Confirms the bug was universal, not an edge case — evidence from both calling components', () => {
   it('InitialStockCountView.tsx never passes a label to recordStockCount', () => {
     const initialViewSrc = readFileSync(new URL('../apps/tenant/src/components/InitialStockCountView.tsx', import.meta.url), 'utf-8');
-    assert.match(initialViewSrc, /recordStockCount\(\{ type: 'initial', date, items: itemsToSave \}\)/);
+    // [Void & Redo — Implementation Authorization §2 items 5-6] The
+    // original exact single-line call this test matched
+    // (`recordStockCount({ type: 'initial', date, items: itemsToSave })`)
+    // legitimately grew new parameters (initialCapitalBasis, an
+    // optional redoesConfirmationId spread) across multiple lines —
+    // the actual invariant this test protects (no `label` key is ever
+    // passed for an Initial Stock Count) is unaffected and still
+    // true. Rescoped to the call block itself rather than one exact
+    // literal line, so a legitimate future parameter addition here
+    // doesn't require yet another test-text update, while a `label`
+    // key reappearing still fails this test.
+    const start = initialViewSrc.indexOf('await recordStockCount({');
+    assert.notEqual(start, -1, 'Could not locate the recordStockCount call in InitialStockCountView.tsx.');
+    const end = initialViewSrc.indexOf('\n      });', start);
+    assert.notEqual(end, -1, 'Could not find the end of the recordStockCount call.');
+    const callBlock = initialViewSrc.slice(start, end);
+    assert.match(callBlock, /type: 'initial',/);
+    assert.doesNotMatch(callBlock, /label:/);
   });
 
   it('PeriodicStockCountView.tsx explicitly passes undefined for every type except \'custom\'', () => {

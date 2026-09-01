@@ -103,11 +103,21 @@ describe('groupRowsByProductName — blank/empty portion handling', () => {
   it('never groups two blank-name rows together — each is its own singleton group', () => {
     const groups = groupRowsByProductName([row('r1', ''), row('r2', '   '), row('r3', '')]);
     assert.equal(groups.length, 3);
-    for (const g of groups) {
+    // [Bug fix — displayName snapping mid-typing] displayName is
+    // deliberately the row's own raw, UNtrimmed productName (see this
+    // library's own comment on why trimming here would disturb live
+    // typing, e.g. a lone leading space) — only `key` (used for
+    // grouping/matching) is trimmed. Row r2's real, untrimmed
+    // productName is three spaces, not empty, so its group's
+    // displayName must reflect that verbatim, even though its
+    // (trimmed) key is still the same empty-string key every blank
+    // row shares.
+    const expectedDisplayNames = ['', '   ', ''];
+    groups.forEach((g, i) => {
       assert.equal(g.key, '');
-      assert.equal(g.displayName, '');
+      assert.equal(g.displayName, expectedDisplayNames[i]);
       assert.equal(g.rows.length, 1);
-    }
+    });
   });
 
   it('a blank row interleaved with named rows does not disturb the named groups', () => {
