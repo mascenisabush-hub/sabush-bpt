@@ -4157,7 +4157,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         </div>
 
                         <div className="flex items-end gap-1.5">
-                          <div className="flex-1 min-w-0">
+                          <div className="flex-1">
                             {/* [§44 — Periodic Contagem Cost-Price
                                 Removal — Implementation Clarification]
                                 The per-row "Custo: X" secondary caption
@@ -4170,23 +4170,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 the sole per-row figure — no replacement
                                 cost UI or anomaly indicator introduced. */}
                             <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
-                            {/* [Issue 2 — Periodic Contagem Live
-                                Selling-Price Readability] The previous
-                                word-breaking utility class previously let
-                                a currency value split mid-number (e.g.
-                                "2,345 MZN") once rowGridClass's stale
-                                seven-track template squeezed this cell
-                                after §44 removed Compra/Un — see
-                                rowGridClass's own comment above.
-                                whitespace-nowrap keeps the figure on one
-                                line; overflow-hidden + text-ellipsis is
-                                the same safety net already used for "Não
-                                contado" and other single-line fields
-                                elsewhere in this file, so an
-                                unexpectedly long value truncates
-                                visually instead of breaking the row's
-                                height or splitting digits.
-                                Calculation/formatting (formatCurrency,
+                            {/* [Bug fix — Periodic Contagem Live
+                                Selling-Price Truncation] `min-w-0` on
+                                this wrapper opted the box into shrinking
+                                below its own content's width once the
+                                shrink-0 action buttons claimed space on
+                                a narrow phone viewport; combined with
+                                overflow-hidden + text-ellipsis below,
+                                that silently clipped ordinary totals
+                                (e.g. "315" rendering as "31") instead of
+                                only the genuinely-oversized values the
+                                ellipsis was meant to guard against.
+                                Removing min-w-0 restores the flexbox
+                                default (an item never shrinks below its
+                                content size), so the figure is never cut
+                                off in normal use; overflow-hidden +
+                                text-ellipsis stays only as a last-resort
+                                safety net for a truly pathological
+                                value. whitespace-nowrap still keeps the
+                                figure on one line. Calculation/
+                                formatting (formatCurrency,
                                 rowSellingValue) is untouched. */}
                             <div
                               className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis ${
@@ -4595,7 +4598,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               </div>
 
                               <div className="flex items-end gap-1.5">
-                                <div className="flex-1 min-w-0">
+                                <div className="flex-1">
                                   {/* [§44 — Periodic Contagem Cost-Price
                                       Removal — Implementation
                                       Clarification] The per-row "Custo: X"
@@ -4604,13 +4607,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       block, above. Selling Value remains
                                       the sole per-row figure. */}
                                   <label className={`${fieldLabelClass} sm:hidden`}>Valor</label>
-                                  {/* [Issue 2 — Periodic Contagem Live
-                                      Selling-Price Readability] Same
+                                  {/* [Bug fix — Periodic Contagem Live
+                                      Selling-Price Truncation] Same
                                       correction as the catalog-row Valor
-                                      box, above — see that comment for
-                                      why the previous word-breaking
-                                      utility class is replaced here
-                                      too. */}
+                                      box, above — min-w-0 removed from
+                                      the wrapper so the figure is never
+                                      cut off on a narrow phone; see that
+                                      comment for the full explanation. */}
                                   <div
                                     className={`w-full rounded-[10px] px-2.5 py-2 text-[13px] type-number tabular-nums leading-tight whitespace-nowrap overflow-hidden text-ellipsis ${
                                       row.quantity.trim() === '' ? 'bg-amber-50 text-amber-600' : 'bg-[#F6EFD9] text-[#633806]'
