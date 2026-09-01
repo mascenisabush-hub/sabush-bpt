@@ -943,6 +943,52 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // attempt, per §7's "last-second edit wins" principle.
   const submissionIdRef = useRef<string | null>(null);
 
+  // [Cross-Device Live-Update Notice — safe interim fix, requested by
+  // Product Architect] Purely a passive, informational signal — it
+  // NEVER touches catalogRows/manualRows/type/label/date, and never
+  // triggers a save, merge, or reload on its own. Local working state
+  // (the operator's own typing) stays exactly as-is; the operator
+  // decides if/when to act, same as the existing stale-draft resume
+  // banner's own "never silently auto-loaded" discipline (§6, above)
+  // — this just extends that discipline to make a *live* remote
+  // change visible instead of only a change found at next page load.
+  //
+  // lastLocalDraftWriteRef records the exact `updatedAt` this device
+  // itself last wrote (captured from savePeriodicStockDraft's return
+  // value at every one of its three call sites: §4a debounced save,
+  // §4c flush-on-interruption, §4b identity write). When the
+  // Firestore-backed `periodicStockDraft` context value changes to an
+  // `updatedAt` that does NOT match this ref, the change did not
+  // originate from this device/session — i.e. another device wrote it
+  // — and the banner below is shown.
+  const lastLocalDraftWriteRef = useRef<string | null>(null);
+  const [remoteDraftUpdateNotice, setRemoteDraftUpdateNotice] = useState(false);
+
+  // [Cross-Device Live-Update Notice] Fires only once this device is
+  // actually working the count live — never during the initial
+  // stale-draft resume decision itself (that's the existing
+  // draftDecisionPending banner's job, further below, and must not be
+  // double-fired here). "Working it live" covers BOTH: (a) a brand
+  // new count with nothing to resume — draftBannerDismissed never
+  // becomes true in that case, so it's judged instead by there being
+  // no meaningful prior draft at all; and (b) an existing draft the
+  // operator has already resumed or discarded (draftBannerDismissed
+  // true). Deliberately duplicates draftHasMeaningfulContent's own
+  // one-line check (defined further below, out of hook-ordering
+  // reach from here) rather than depend on it, to keep this early,
+  // unconditional hook block self-contained.
+  useEffect(() => {
+    if (!periodicStockDraftLoaded) return;
+    if (!periodicStockDraft) return;
+    const hasMeaningfulContent = periodicStockDraft.items.some(
+      (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
+    );
+    if (hasMeaningfulContent && !draftBannerDismissed) return;
+    if (periodicStockDraft.updatedAt === lastLocalDraftWriteRef.current) return;
+    setRemoteDraftUpdateNotice(true);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodicStockDraft?.updatedAt, periodicStockDraftLoaded, draftBannerDismissed]);
+
   // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]
   // In-session, monotonically increasing counter — the sole source of
   // "last deliberately entered," never array/row order, never Map
@@ -1219,7 +1265,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         submissionIdRef.current || undefined,
         npi
       )
-        .then(() => setDraftSaveState('saved'))
+        .then((updatedAt) => {
+          // [Cross-Device Live-Update Notice] Record our own write so
+          // the incoming Firestore echo of it isn't mistaken for a
+          // remote change, above.
+          lastLocalDraftWriteRef.current = updatedAt;
+          setDraftSaveState('saved');
+        })
         .catch(() => setDraftSaveState('save-failed'))
         .finally(() => {
           draftInFlightSaveRef.current = null;
@@ -1638,7 +1690,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const allRows = [...Object.values(cr), ...mr].map(workingRowToDraftItem);
     setDraftSaveState('saving');
     const flushPromise = savePeriodicStockDraft(allRows, t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi)
-      .then(() => setDraftSaveState('saved'))
+      .then((updatedAt) => {
+        // [Cross-Device Live-Update Notice] Same bookkeeping as §4a's
+        // call site, above.
+        lastLocalDraftWriteRef.current = updatedAt;
+        setDraftSaveState('saved');
+      })
       .catch(() => setDraftSaveState('save-failed'))
       .finally(() => {
         flushInFlightSaveRef.current = null;
@@ -2348,6 +2405,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // mapping.
     setNewProductInfo(periodicStockDraft.newProductInfo ?? {});
     setDraftSaveState('saved');
+    // [Cross-Device Live-Update Notice] The draft being resumed here
+    // IS the current local state as of this instant — seed the ref
+    // with its updatedAt so the notice effect, above, doesn't
+    // immediately fire on the very data the operator just loaded.
+    lastLocalDraftWriteRef.current = periodicStockDraft.updatedAt;
     setDraftBannerDismissed(true);
   };
 
@@ -2685,7 +2747,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       submissionIdRef.current,
       newProductInfo
     )
-      .then(() => setDraftSaveState('saved'))
+      .then((updatedAt) => {
+        // [Cross-Device Live-Update Notice] Same bookkeeping as §4a's
+        // call site, above.
+        lastLocalDraftWriteRef.current = updatedAt;
+        setDraftSaveState('saved');
+      })
       .catch(() => setDraftSaveState('save-failed'));
 
     setPendingTally(tally);
@@ -3620,6 +3687,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-4">
+      {/* [Cross-Device Live-Update Notice — safe interim fix] Purely
+          informational: this device's own rows (catalogRows,
+          manualRows, etc.) are completely untouched by this banner —
+          nothing here reads them, writes them, or reloads the page on
+          its own. It only tells the operator that the shared draft
+          changed elsewhere, and lets THEM decide when to reload and
+          look. Dismissing just hides the notice; it does not affect
+          any data. */}
+      {remoteDraftUpdateNotice && (
+        <div className="bg-blue-50 border border-blue-200 rounded-2xl px-5 py-4 flex items-start gap-3">
+          <Undo2 className="w-5 h-5 text-blue-600 shrink-0 mt-0.5" strokeWidth={2} />
+          <div className="flex-1">
+            <p className="text-[13px] font-bold text-blue-800">Esta contagem foi atualizada noutro dispositivo</p>
+            <p className="text-[13px] text-blue-700 mt-0.5">
+              O que está a escrever aqui continua seguro e não foi alterado. Para ver as alterações feitas no outro
+              dispositivo, recarregue a página quando lhe for conveniente.
+            </p>
+          </div>
+          <button
+            type="button"
+            onClick={() => setRemoteDraftUpdateNotice(false)}
+            aria-label="Dispensar aviso"
+            className="shrink-0 p-1.5 rounded-lg text-blue-400 hover:text-blue-700 hover:bg-blue-100 transition-colors duration-150"
+          >
+            <X className="w-4 h-4" strokeWidth={2} />
+          </button>
+        </div>
+      )}
       {/* [Business Worth Evolution — Implementation Authorization,
           Increment 8; Specification §25, §26] Clearly distinguishes a
           correction/recovery from an ordinary Contagem, per the task's

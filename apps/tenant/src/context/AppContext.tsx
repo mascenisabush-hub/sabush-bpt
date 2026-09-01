@@ -749,6 +749,13 @@ interface AppContextType {
   // autosave path — the caller debounces, this function never does).
   // submissionId is optional so ordinary row-content saves during
   // `editing` (before the identity exists yet) don't require one.
+  // [Cross-Device Live-Update Notice — safe interim fix] Returns the
+  // exact `updatedAt` string this write persisted, so a caller can
+  // later distinguish "the incoming Firestore snapshot is just my own
+  // write echoing back" from "another device genuinely changed this
+  // draft" — read-only bookkeeping, never used to decide what gets
+  // written. Existing callers that ignore the resolved value are
+  // unaffected (Promise<void> callers simply don't use it).
   savePeriodicStockDraft: (
     items: PeriodicStockDraftItem[],
     type: StockCountType,
@@ -759,7 +766,7 @@ interface AppContextType {
       string,
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
     >
-  ) => Promise<void>;
+  ) => Promise<string>;
   clearPeriodicStockDraft: () => Promise<void>;
   // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
   // Purchase Draft — null until the current user starts one for this
@@ -5793,6 +5800,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // forces an actual round-trip and only resolves once the server
     // genuinely has the data.
     await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
+    // [Cross-Device Live-Update Notice] See the interface comment,
+    // above — purely informational, read-only.
+    return draft.updatedAt;
   };
 
   // Discards the periodic draft without finalizing it — the explicit
