@@ -291,8 +291,9 @@ describe('L — "Voltar (deixar sem alterações)" is retained, not removed, and
     assert.match(leaveBody, /setActiveNewManualRowIndex\(null\);/);
   });
 
-  it('for a REOPENED existing product, Voltar restores validated: true on every row sharing that product\'s name — the same write Validar itself performs, applied on exit instead of on an explicit per-row click', () => {
-    assert.match(leaveBody, /productKeyFor\(row\.productName\) === key && !row\.validated/);
+  it('for a REOPENED existing product, Voltar restores validated: true — the same write Validar itself performs, applied on exit instead of on an explicit per-row click — but ONLY to the exact rows captured as already-validated at reopen time, never to every currently-unvalidated row sharing the product\'s name (see the Voltar edge-case fix, suite M, below, for why the blanket-by-name form was a bug)', () => {
+    assert.match(leaveBody, /catalogIdsToRestore\.has\(id\) && !row\.validated/);
+    assert.match(leaveBody, /manualIndicesToRestore\.has\(index\) && !row\.validated/);
     assert.match(leaveBody, /validated:\s*true/);
   });
 

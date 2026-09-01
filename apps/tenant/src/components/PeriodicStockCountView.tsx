@@ -892,6 +892,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // manualRows regardless of how this flag is used; only the
   // validated/counted status itself is what this flag governs.
   const [reopenedExistingProductKey, setReopenedExistingProductKey] = useState<string | null>(null);
+  // [Existing-Product Edit/Confirm Workflow — Voltar edge-case fix]
+  // Companion to `reopenedExistingProductKey`, immediately above:
+  // captures the EXACT identity of only the rows that were already
+  // validated at the moment `reopenExistingProductForEditing` opened
+  // them — catalog rows by their `catalogRows` key (the same id
+  // `updateCatalogRow`/`handleEditCatalogRow` already key by), manual
+  // rows by their own array index (the same index-as-identity
+  // convention `updateManualRow`/`manualRowIndex`, above, already
+  // use — this file has no other stable manual-row identity).
+  // `handleLeaveWorkspaceUnchanged` (Voltar) restores `validated: true`
+  // ONLY to rows named here — never to every currently-unvalidated row
+  // sharing the product's name — so a brand-new portion added AFTER
+  // reopening (which starts unvalidated and was never in this list)
+  // is left exactly as it is: unvalidated, not silently swept into
+  // "counted" by Voltar. Set once, at reopen time, alongside
+  // `reopenedExistingProductKey`; cleared together with it. No field
+  // VALUES are captured here — only which rows counted as validated,
+  // exactly matching `reopenedExistingProductKey`'s own existing
+  // scope/non-goals, immediately above.
+  const [reopenedValidatedCatalogRowIds, setReopenedValidatedCatalogRowIds] = useState<string[] | null>(null);
+  const [reopenedValidatedManualRowIndices, setReopenedValidatedManualRowIndices] = useState<number[] | null>(null);
   // [Sorting — Authorization §8] UI-only, ephemeral, never persisted
   // (same discipline as activeWorkspaceKey/activeNewManualRowIndex,
   // above) — a pure display-order preference for the persistent
@@ -2904,6 +2925,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // Voltar), so there is nothing left for a later Voltar press to
       // restore.
       setReopenedExistingProductKey(null);
+      // [Voltar edge-case fix] Cleared alongside reopenedExistingProductKey
+      // itself, immediately above — same reasoning: nothing left for a
+      // later Voltar to restore, so the captured row identifiers would
+      // otherwise be stale leftovers from this now-finished product.
+      setReopenedValidatedCatalogRowIds(null);
+      setReopenedValidatedManualRowIndices(null);
     }
   }, [isWorkspaceActive, visibleCatalogEntries, visibleManualRowGroups, manualRows]);
 
@@ -2960,6 +2987,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // true at every activation site, not just the ones that currently
     // happen to run first).
     setReopenedExistingProductKey(null);
+    // [Voltar edge-case fix] Same defensive clear as
+    // reopenedExistingProductKey immediately above — an ordinary picker
+    // pick has no captured validated-row snapshot of its own, so any
+    // leftover snapshot from a prior product must not survive to be
+    // consulted by a later Voltar press.
+    setReopenedValidatedCatalogRowIds(null);
+    setReopenedValidatedManualRowIndices(null);
   };
 
   // [Existing-Product Edit/Confirm Workflow — investigation finding]
@@ -2995,6 +3029,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // state. This early return means even a stale/rapid click can
     // never activate a second independent product.
     if (isWorkspaceActive && activeWorkspaceProductKey !== key) return;
+    // [Voltar edge-case fix] Snapshot WHICH rows are validated for this
+    // product right now — BEFORE the un-validation below touches
+    // anything — by their stable identity only (catalog row id / manual
+    // row index), never their field values. This is the exact,
+    // finite list `handleLeaveWorkspaceUnchanged` (Voltar) restores on
+    // exit; a portion added later, while this product is open, is by
+    // construction never in this list, so Voltar cannot mistake it for
+    // one of the rows that were already counted.
+    const validatedCatalogRowIdsAtReopen = Object.entries(catalogRows)
+      .filter(([, row]) => productKeyFor(row.productName) === key && row.validated)
+      .map(([id]) => id);
+    const validatedManualRowIndicesAtReopen = manualRows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => productKeyFor(row.productName) === key && row.validated)
+      .map(({ index }) => index);
+    setReopenedValidatedCatalogRowIds(validatedCatalogRowIdsAtReopen);
+    setReopenedValidatedManualRowIndices(validatedManualRowIndicesAtReopen);
     // Un-validate EVERY row — catalog and manual alike — sharing this
     // product's name, not only the single row the Owner happened to
     // click. A product's portions can legitimately be split across
@@ -3067,12 +3118,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // unvalidated, exactly where it already was.
   const handleLeaveWorkspaceUnchanged = () => {
     if (reopenedExistingProductKey !== null) {
-      const key = reopenedExistingProductKey;
+      // [Voltar edge-case fix] Restore `validated: true` ONLY to the
+      // rows captured by `reopenExistingProductForEditing` at the
+      // moment it opened this product — NOT to "every row of this name
+      // that is currently unvalidated". Without this distinction, a
+      // NEW portion added after reopening (also unvalidated, by
+      // construction — see `createManualRow`) would be swept up by the
+      // old blanket-by-name restore and become falsely "validated"
+      // without ever going through its own Validar. Field values
+      // (quantity/unit/price/name) are still never touched here —
+      // identical scope to before, just a narrower restoration target.
+      const catalogIdsToRestore = new Set(reopenedValidatedCatalogRowIds ?? []);
+      const manualIndicesToRestore = new Set(reopenedValidatedManualRowIndices ?? []);
       setCatalogRows((prev) => {
         let changed = false;
         const next = { ...prev };
         for (const [id, row] of Object.entries(prev)) {
-          if (productKeyFor(row.productName) === key && !row.validated) {
+          if (catalogIdsToRestore.has(id) && !row.validated) {
             next[id] = { ...row, validated: true };
             changed = true;
           }
@@ -3081,8 +3143,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       });
       setManualRows((prev) => {
         let changed = false;
-        const next = prev.map((row) => {
-          if (productKeyFor(row.productName) === key && !row.validated) {
+        const next = prev.map((row, index) => {
+          if (manualIndicesToRestore.has(index) && !row.validated) {
             changed = true;
             return { ...row, validated: true };
           }
@@ -3093,6 +3155,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       scheduleRowDraftSave('__meta__');
     }
     setReopenedExistingProductKey(null);
+    setReopenedValidatedCatalogRowIds(null);
+    setReopenedValidatedManualRowIndices(null);
     setActiveWorkspaceKey(null);
     setActiveNewManualRowIndex(null);
   };
@@ -3191,6 +3255,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // `handleSelectExistingProductForWorkspace`'s own identical clear,
     // above, for the same defensive reasoning.
     setReopenedExistingProductKey(null);
+    // [Voltar edge-case fix] Same defensive clear, same reasoning, as
+    // handleSelectExistingProductForWorkspace's own identical addition,
+    // above.
+    setReopenedValidatedCatalogRowIds(null);
+    setReopenedValidatedManualRowIndices(null);
   };
 
   // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
@@ -5693,8 +5762,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
                         <span className="block text-[13px] text-gray-700 tabular-nums truncate">{formatCurrency(sellingPriceNum, currencySymbol)}</span>
                       </div>
-                      <div className="col-span-2 sm:col-span-1 flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums">{formatCurrency(rowValue, currencySymbol)}</span>
+                      {/* [Total-display layout fix] Was a single-row `flex
+                          items-center justify-between` splitting this
+                          190px column's width between the Total value AND
+                          the Editar button side by side — too narrow for
+                          a full formatted amount (e.g. "425.278,50 MT")
+                          once the button's own space was subtracted,
+                          visually cutting the value off. Stacking value
+                          above button (each gets the FULL column width in
+                          turn, right-aligned) fixes this with no column
+                          width/grid change, no calculation change, and no
+                          change to what information is shown — only the
+                          two elements' relative position within this one
+                          cell. `whitespace-nowrap` on the value guarantees
+                          it renders on a single line rather than wrapping
+                          mid-amount. */}
+                      <div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">
+                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">{formatCurrency(rowValue, currencySymbol)}</span>
                         <button
                           type="button"
                           onClick={() => handleEditCatalogRow(productId)}
@@ -5765,8 +5849,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
                         <span className="block text-[13px] text-gray-700 tabular-nums truncate">{formatCurrency(sellingPriceNum, currencySymbol)}</span>
                       </div>
-                      <div className="col-span-2 sm:col-span-1 flex items-center justify-between gap-2">
-                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums">{formatCurrency(rowValue, currencySymbol)}</span>
+                      {/* [Total-display layout fix] Same corrected layout
+                          as the catalog-validated list's identical cell,
+                          above — see its comment for the full rationale. */}
+                      <div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">
+                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">{formatCurrency(rowValue, currencySymbol)}</span>
                         <button
                           type="button"
                           onClick={() => handleEditManualRow(idx)}
