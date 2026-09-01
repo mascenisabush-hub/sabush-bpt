@@ -879,6 +879,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     };
   }, []);
   const [showHistory, setShowHistory] = useState(false);
+  // [Owner-requested: collapse the validated-products summary behind a
+  // closed, clickable panel] Closed by default every mount/resume — the
+  // working area (remaining products + submit button) stays reachable
+  // without scrolling past every already-validated product first. Same
+  // open/closed accordion pattern as showHistory, above: a UI-only
+  // display toggle, never gating what's in catalogRows/manualRows or
+  // what gets tallied/saved. Does not change Concept C's own rule that a
+  // validated row, once shown, must show everything visibly (no
+  // tooltip/hover-only content) — that governs what a row displays when
+  // the panel is open, not whether the panel itself starts open or
+  // closed.
+  const [showValidated, setShowValidated] = useState(false);
   // Mandatory Counted/Not Counted confirmation step before an actual
   // save (Amendment Part 9) — holds the tally computed from the
   // working list at the moment "Confirmar Contagem" was first pressed.
@@ -4819,16 +4831,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               reopened from the active workspace's own Editar control. */}
           {(validatedCatalogEntries.length > 0 || validatedManualRowEntries.length > 0) && (
             <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3.5 space-y-2">
-              <p className="text-[13px] font-bold text-emerald-800">
-                Produtos Validados
-                <span className="font-normal text-emerald-700/70 ml-1.5">
-                  ({validatedCatalogEntries.length + validatedManualRowEntries.length})
-                </span>
-              </p>
+              {/* [Owner-requested: closed-by-default validated-products
+                  panel] Same open/closed accordion trigger as "Histórico
+                  de Contagens", below — a header button with a chevron,
+                  toggling local UI state only. The count badge stays
+                  visible even collapsed, so the Owner always knows how
+                  many products are waiting inside without opening it. */}
+              <button
+                type="button"
+                onClick={() => setShowValidated((v) => !v)}
+                className="w-full flex items-center justify-between gap-2"
+              >
+                <p className="text-[13px] font-bold text-emerald-800">
+                  Produtos Validados
+                  <span className="font-normal text-emerald-700/70 ml-1.5">
+                    ({validatedCatalogEntries.length + validatedManualRowEntries.length})
+                  </span>
+                </p>
+                {showValidated ? (
+                  <ChevronUp className="w-4 h-4 text-emerald-700/70 shrink-0" />
+                ) : (
+                  <ChevronDown className="w-4 h-4 text-emerald-700/70 shrink-0" />
+                )}
+              </button>
               <p className="text-[11px] text-emerald-700/70 leading-relaxed">
                 Já verificados e fora do espaço de contagem ativo. Continuam a fazer
                 parte desta Contagem e serão revistos antes de "Confirmar Contagem".
               </p>
+              {showValidated && (
+              <>
               {/* [Concept C — Validated Product Compaction, Implementation
                   Authorization §11] Shared desktop column header, matching
                   the exact same five-track rowGridClass template and the
@@ -4976,6 +5007,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   );
                 })}
               </div>
+              </>
+              )}
             </div>
           )}
 

@@ -10,9 +10,19 @@
 // Cost Price invocation is retired as of this amendment — Owner-typed
 // Cost Price no longer exists in Periodic Contagem, so there is nothing
 // left to check for a typo. Only the Selling Price invocation remains
-// for Contagem (2 call sites, not 4). Add Stock's own wiring (both cost
-// and selling, all four inputs) is completely unaffected — §44 scopes
-// to Periodic Contagem only.
+// for Contagem. Add Stock's own wiring (both cost and selling, all four
+// inputs) is completely unaffected — §44 scopes to Periodic Contagem
+// only.
+//
+// [Concept C — Validated Product Compaction] Contagem's own Selling
+// Price call-site count is 4, not 2, as of this later increment — a
+// validated row is now ALSO rendered in a separate compact summary
+// area (alongside the active/editing rows), reusing the exact same
+// checkPriceDeviation/getRememberedPriceForRow calls verbatim rather
+// than inventing a second check, per that increment's own explicit
+// scope. Two logical fields (catalog-row Selling Price, manual-row
+// Selling Price) now each have two render sites (active + validated),
+// giving 4 call sites total — not 4 distinct checks.
 //
 // SCOPE: this repository has no DOM/React render harness — established
 // precedent (see tests/periodic-stock-review-screen-price.test.ts's own
@@ -62,9 +72,9 @@ describe('PeriodicStockCountView.tsx — getRememberedPriceForRow', () => {
     assert.match(body, /resolveUnitAwarePrice\(rememberedRaw, latestBatch\.unit \|\| row\.unit, row\.unit, product\.unitRelationship\)/);
   });
 
-  it('is called from both the catalog-row and manual-row price fields — 2 call sites total (§44: cost removed, selling only, one per row type)', () => {
+  it('is called from both the catalog-row and manual-row price fields, in both the active and Concept C validated-summary areas — 4 call sites total (§44: cost removed, selling only; Concept C: each of the 2 remaining fields also rendered in the compact validated view)', () => {
     const callCount = (periodicSrc.match(/getRememberedPriceForRow\(row, '(cost|selling)'\)/g) || []).length;
-    assert.equal(callCount, 2);
+    assert.equal(callCount, 4);
     // Every remaining call must be 'selling' — none 'cost' (FR-77: the
     // Cost Price invocation is retired; Selling Price is unaffected).
     const costCallCount = (periodicSrc.match(/getRememberedPriceForRow\(row, 'cost'\)/g) || []).length;
@@ -78,9 +88,9 @@ describe('PeriodicStockCountView.tsx — the warning is actually rendered next t
     assert.equal(costWarningCount, 0);
   });
 
-  it('the catalog-row and manual-row Venda/Un fields each still check for a Selling Price deviation warning — 2 call sites total, unaffected by §44', () => {
+  it('the catalog-row and manual-row Venda/Un fields each still check for a Selling Price deviation warning, in both the active and Concept C validated-summary areas — 4 call sites total, unaffected by §44 itself', () => {
     const sellingWarningCount = (periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) || []).length;
-    assert.equal(sellingWarningCount, 2);
+    assert.equal(sellingWarningCount, 4);
   });
 
   it('warnings only render when check.showWarning is true — never an empty/always-visible note (§44: 2 remaining, both Selling Price)', () => {

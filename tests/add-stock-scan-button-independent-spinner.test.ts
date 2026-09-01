@@ -81,12 +81,20 @@ describe('AddStockView.tsx — camera and upload scan buttons animate independen
     assert.equal(disabledOccurrences.length, 2, 'Both the camera and upload buttons must still disable together while any scan is in flight.');
   });
 
-  it('scanInputMethod is reset to null on every exit path from a scan: unreadable-file error, scan-service error, success, and explicit reject', () => {
+  it('scanInputMethod is reset to null on every exit path from a scan: image preprocessing failure, unreadable-file catch, scan-service error, success, and explicit reject', () => {
+    // [Smart Stock Entry Image Preprocessing] A later, legitimate
+    // addition split what was originally a single "unreadable-file"
+    // exit path into two distinct pipeline stages that can each fail
+    // independently — an image-preprocessing failure (before the file
+    // is even handed to the decoder) and the pre-existing
+    // decode/FileReader catch block — both correctly reset
+    // scanInputMethod, bringing the total from 4 to 5 legitimate reset
+    // sites.
     const resetCount = (addStockSrc.match(/setScanInputMethod\(null\);/g) || []).length;
     assert.equal(
       resetCount,
-      4,
-      'Expected exactly 4 reset sites: the unreadable-file catch, the scan-service failure branch, the success path, and handleRejectScan.'
+      5,
+      'Expected exactly 5 reset sites: the image-preprocessing failure, the unreadable-file catch, the scan-service failure branch, the success path, and handleRejectScan.'
     );
   });
 });

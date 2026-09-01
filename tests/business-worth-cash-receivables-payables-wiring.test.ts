@@ -334,8 +334,60 @@ describe('DebtsView.tsx / AddStockView.tsx — minimal UI, no redesign', () => {
 
 describe('Scope discipline — Increment 4-9 boundaries respected', () => {
   it('no Cash Ledger/Receivable/Payable field references Startup Investment, multi-unit valuation, Fecho baseline-anchoring, or reconciliation/notification mechanisms', () => {
-    assert.doesNotMatch(appContextSrc, /StartupInvestmentEntry/);
-    assert.doesNotMatch(rulesSrc, /startupInvestmentEntries/);
+    // [Scope fix] The original assertion here scanned the ENTIRE
+    // appContextSrc/rulesSrc files for these terms — but Startup
+    // Investment is a real, separate, long-standing feature that
+    // legitimately exists elsewhere in both files (StartupInvestmentEntry
+    // in AppContext.tsx; the /startupInvestmentEntries/{entryId} match
+    // block in firestore.rules). A whole-file scan was never a correct
+    // way to express "this INCREMENT's own new surface doesn't
+    // reference that" — it would fail the moment the unrelated feature
+    // existed anywhere in the same file, which it always did. Rescoped
+    // to the specific functions/match blocks this increment actually
+    // added, using the same extractFunctionBody/extractRulesMatchBlock
+    // helpers already established elsewhere in this file (see the
+    // Notification-scoped assertion immediately below, and the
+    // isMemberOf assertions above, for the same technique).
+    const increment3FunctionMarkers = [
+      'const addReceivable = async (',
+      'const addPayable = async (',
+      'const addCashPositionDeclaration = async (',
+      'const recordReceivablePayment = async (',
+      'const recordPayablePayment = async (',
+    ];
+    // [extractFunctionBody edge case] The shared helper (used
+    // elsewhere in this file too — see the Notification-scoped
+    // assertion below) slices up to the NEXT function's own
+    // declaration line, so a trailing comment belonging to that
+    // next function (describing itself, before its own
+    // `const xxx = ` line) gets swept into the current function's
+    // extracted body. Trimmed here — locally, not by changing the
+    // shared helper other assertions in this file already depend on
+    // — by dropping trailing blank/comment-only lines back to the
+    // last real code line, so a reference genuinely inside the
+    // CURRENT function is still caught, but the next function's own
+    // leading comment about itself is not mistaken for it.
+    function trimTrailingComment(body: string): string {
+      const lines = body.split('\n');
+      let end = lines.length;
+      while (end > 0 && /^\s*(\/\/.*)?$/.test(lines[end - 1])) end--;
+      return lines.slice(0, end).join('\n');
+    }
+    for (const marker of increment3FunctionMarkers) {
+      const body = trimTrailingComment(extractFunctionBody(appContextSrc, marker));
+      assert.doesNotMatch(body, /StartupInvestmentEntry/, `${marker} must not reference StartupInvestmentEntry.`);
+    }
+    const increment3RulesMarkers = [
+      'match /cashLedgerEntries/{entryId} {',
+      'match /receivables/{receivableId} {',
+      'match /receivablePayments/{paymentId} {',
+      'match /payables/{payableId} {',
+      'match /payablePayments/{paymentId} {',
+    ];
+    for (const marker of increment3RulesMarkers) {
+      const block = extractRulesMatchBlock(rulesSrc, marker);
+      assert.doesNotMatch(block, /startupInvestmentEntries/, `${marker} must not reference startupInvestmentEntries.`);
+    }
   });
 
   it('no new NotificationCategory or reconciliation-signal producer was introduced by this increment', () => {

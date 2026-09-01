@@ -49,13 +49,28 @@ describe('PeriodicStockCountView.tsx — shop-switch guard is wired in', () => {
     assert.match(body, /setManualRows\(\[\]\);/);
   });
 
-  it('also resets the confirmed-row tracking and inline errors introduced by the per-row Save/confirm feature, so stale green/red status from the old business can never bleed into the new one', () => {
+  it('also resets per-row inline save errors, so stale red status from the old business can never bleed into the new one — and validated status needs no separate reset, since Decision 40 moved it onto each row in catalogRows/manualRows, both already cleared immediately above', () => {
+    // [Decision 40 — Validar Workflow] The per-row confirmed-row
+    // tracking Sets (setConfirmedCatalogProductIds/
+    // setConfirmedManualRowIndices) this test originally checked for
+    // were retired when Decision 40 moved validated status onto each
+    // row's own `validated` field instead of a separate tracking Set
+    // — see the shop-switch reset block's own comment in
+    // PeriodicStockCountView.tsx. Clearing catalogRows/manualRows
+    // (asserted by the sibling test immediately above) now clears
+    // validated status too, by construction, with nothing separate
+    // left to reset. Only the inline save-error state — which never
+    // moved onto the rows themselves — still needs its own explicit
+    // reset here.
     const idx = src.indexOf('detectShopSwitch(activeBusinessId ?? null, loadedForBusinessId)');
     const body = src.slice(idx, idx + 2000);
-    assert.match(body, /setConfirmedCatalogProductIds\(new Set\(\)\);/);
-    assert.match(body, /setConfirmedManualRowIndices\(new Set\(\)\);/);
     assert.match(body, /setCatalogRowSaveError\(\{\}\);/);
     assert.match(body, /setManualRowSaveError\(\{\}\);/);
+    assert.doesNotMatch(
+      body,
+      /setConfirmedCatalogProductIds|setConfirmedManualRowIndices/,
+      'The retired per-row confirmed-tracking Sets should not reappear — validated status lives on the rows themselves now.'
+    );
   });
 
   it('the catalogRows auto-populate effect is keyed only on [products], so a reset stays empty until the new business genuinely delivers fresh data', () => {

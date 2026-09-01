@@ -9,6 +9,16 @@
 // sitting correctly in Firestore still never visibly appeared when
 // returning to a fresh Add Stock screen.
 //
+// [Later note] The load effect's own guard described below
+// (userHasStartedTyping) was itself subsequently superseded by a
+// stronger, cross-device-safe content-snapshot diff
+// (computeDraftContentSnapshot/hasLocalUnsyncedEdits) — see that
+// fix's own comment in AddStockView.tsx. This file's test for that
+// specific guard was updated accordingly, below; every other
+// assertion here (rowHasRealContent itself and its other four call
+// sites) is unaffected and still governs current code exactly as
+// originally written.
+//
 // Root cause, found by tracing this exact discrepancy back through the
 // load effect: createEmptyRow's own default `quantity: '50'` is a
 // non-empty STRING — truthy — so FOUR separate places in this file
@@ -88,9 +98,35 @@ describe('AddStockView.tsx — a single shared rowHasRealContent replaces every 
     );
   });
 
-  it('userHasStartedTyping (the load effect\'s critical "don\'t clobber in-progress typing" guard) now uses rowHasRealContent — this was the actual root cause of a real draft never loading', () => {
-    const idx = addStockSrc.indexOf('const userHasStartedTyping = rows.some(rowHasRealContent);');
-    assert.notEqual(idx, -1, 'userHasStartedTyping must use rowHasRealContent, not a bare truthiness check');
+  it('the load effect\'s "don\'t clobber in-progress typing" guard now uses computeDraftContentSnapshot (full-content diffing), not the older bare userHasStartedTyping truthiness check — this was the actual root cause of a real draft never loading, later superseded by a stronger cross-device-safe fix', () => {
+    // [Bug fix — a tab that already loaded a draft once could never
+    // adopt a LATER update from another device] The original fix for
+    // THIS test's own bug (userHasStartedTyping = rows.some(rowHasRealContent))
+    // was itself later superseded by a stronger mechanism: instead of a
+    // coarse "does the form have any content" boolean, the load effect
+    // now diffs a full content snapshot (computeDraftContentSnapshot,
+    // built from rowToDraftLineItem over every row) against the
+    // snapshot last synced from Firestore. hasLocalUnsyncedEdits is
+    // strictly MORE precise than the original rowHasRealContent-based
+    // guard it replaced — it distinguishes "this form still holds
+    // exactly what was last loaded" from "the Owner has since changed
+    // something," where the original boolean could not — so this
+    // assertion checks for the current, correct mechanism rather than
+    // the intermediate fix that introduced rowHasRealContent.
+    const effectIdx = addStockSrc.indexOf('const currentSnapshot = computeDraftContentSnapshot(');
+    assert.notEqual(effectIdx, -1, 'Expected the load effect to compute a current content snapshot.');
+    const nearby = addStockSrc.slice(effectIdx, effectIdx + 500);
+    assert.match(nearby, /const hasLocalUnsyncedEdits =/);
+    assert.match(nearby, /currentSnapshot !== lastSyncedContentSnapshot\.current/);
+    assert.match(nearby, /if \(!hasLocalUnsyncedEdits\) \{/);
+    // computeDraftContentSnapshot itself must be built from real
+    // per-row content (rowToDraftLineItem), never a bare truthiness
+    // shortcut — the same underlying discipline rowHasRealContent
+    // originally established, carried forward into the stronger fix.
+    const snapshotFnIdx = addStockSrc.indexOf('function computeDraftContentSnapshot(');
+    assert.notEqual(snapshotFnIdx, -1);
+    const snapshotFnBody = addStockSrc.slice(snapshotFnIdx, snapshotFnIdx + 500);
+    assert.match(snapshotFnBody, /rows\.map\(rowToDraftLineItem\)/);
   });
 
   it('the debounced autosave effect\'s hasAnyContent uses rowHasRealContent', () => {
