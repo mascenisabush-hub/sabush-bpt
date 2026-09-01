@@ -872,6 +872,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the handlers below, never by a runtime assertion.
   const [activeWorkspaceKey, setActiveWorkspaceKey] = useState<string | null>(null);
   const [activeNewManualRowIndex, setActiveNewManualRowIndex] = useState<number | null>(null);
+  // [Existing-Product Edit/Confirm Workflow] UI-only, ephemeral, never
+  // persisted — same discipline as activeWorkspaceKey/
+  // activeNewManualRowIndex, immediately above. Set ONLY by
+  // `reopenExistingProductForEditing` (below), when the Owner opens an
+  // ALREADY-VALIDATED product from the counted list to inspect/edit it
+  // — never by `handleSelectExistingProductForWorkspace` (an ordinary
+  // not-yet-validated pick from the picker table) or
+  // `handleAddNewProductToWorkspace` (a genuinely new product). Records
+  // WHICH product's `validated` flag(s) were flipped to `false` purely
+  // as a side effect of making its fields editable again, so
+  // `handleLeaveWorkspaceUnchanged` (the "Voltar" exit) knows whether
+  // it must restore `validated: true` on the way out — the ONE thing
+  // "leave it as it is" cannot mean for a re-opened product without
+  // that restoration, since the product would otherwise silently drop
+  // out of the counted list the moment it was merely inspected. Does
+  // NOT snapshot or restore field values (quantity/unit/price/
+  // portions) — those already persist normally in catalogRows/
+  // manualRows regardless of how this flag is used; only the
+  // validated/counted status itself is what this flag governs.
+  const [reopenedExistingProductKey, setReopenedExistingProductKey] = useState<string | null>(null);
   // [Sorting — Authorization §8] UI-only, ephemeral, never persisted
   // (same discipline as activeWorkspaceKey/activeNewManualRowIndex,
   // above) — a pure display-order preference for the persistent
@@ -883,6 +903,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // has no genuine per-row "when was this validated" timestamp to
   // sort by, and none is invented here.
   const [validatedSortMode, setValidatedSortMode] = useState<'name-asc' | 'name-desc' | 'value-desc' | 'value-asc'>(
+    'name-asc'
+  );
+  // [Picker — table view with sorting] UI-only, ephemeral, never
+  // persisted — same discipline as validatedSortMode immediately
+  // above, applied to the NOT-YET-ACTIVE product picker list instead
+  // of the validated/counted list. Reuses the identical four modes and
+  // the identical `sortByValidatedMode` sorting function (declared
+  // further below, hoisted — a plain function declaration, so it is
+  // callable from this earlier point in the component body) — no
+  // second sorting implementation.
+  const [pickerSortMode, setPickerSortMode] = useState<'name-asc' | 'name-desc' | 'value-desc' | 'value-asc'>(
     'name-asc'
   );
   const [error, setError] = useState<string | null>(null);
@@ -1579,11 +1610,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // so working through a long list never risks nudging an already-
   // verified product's fields by accident while reaching for the next
   // row's Validar button.
+  // [Existing-Product Edit/Confirm Workflow] Previously ended here —
+  // un-validating the row was the ONLY effect, so the product simply
+  // vanished from the counted list and reappeared in the picker table,
+  // requiring a SECOND click (from the picker) to actually open it.
+  // Now also routes through `reopenExistingProductForEditing` (below,
+  // hoisted — a component-scoped const referenced from inside this
+  // closure, safe regardless of textual declaration order since this
+  // function only ever runs later, on click), which un-validates
+  // EVERY row sharing this product's name (catalog AND manual portions
+  // alike, not only this one row) and activates the workspace for it
+  // in the same step — one click, existing data, no second click
+  // needed.
   const handleEditCatalogRow = (productId: string) => {
+    const row = catalogRows[productId];
+    if (!row) return;
     if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
-    // [Decision 40 — Validar Workflow] Inverse of Validar, above —
-    // same write path, same autosave mechanism, no special-casing.
-    updateCatalogRow(productId, { validated: false });
+    reopenExistingProductForEditing(productKeyFor(row.productName));
   };
 
   // [Manual data-entry error investigation, Finding 3 — Owner-requested]
@@ -2268,10 +2311,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     updateManualRow(index, { validated: true });
   };
 
+  // [Existing-Product Edit/Confirm Workflow] Manual-row counterpart to
+  // handleEditCatalogRow's own identical fix, above — same reasoning:
+  // previously ended at un-validating this one row; now also routes
+  // through `reopenExistingProductForEditing`, which un-validates
+  // EVERY row sharing this product's name (so a multi-portion product
+  // like Cebola reopens with ALL its portions together, never just the
+  // one clicked) and activates the workspace for it in the same step.
   const handleEditManualRow = (index: number) => {
+    const row = manualRows[index];
+    if (!row) return;
     if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
-    // [Decision 40 — Validar Workflow] Inverse of Validar, above.
-    updateManualRow(index, { validated: false });
+    reopenExistingProductForEditing(productKeyFor(row.productName));
   };
 
   // [Business Worth Evolution — Decision 37, B.3: Multiple
@@ -2846,6 +2897,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (rows.length === 0 || rows.every((row) => row.validated)) {
       setActiveWorkspaceKey(null);
       setActiveNewManualRowIndex(null);
+      // [Existing-Product Edit/Confirm Workflow] Cleared alongside the
+      // two pre-existing writes above — the product just left the
+      // workspace via ordinary validation (the SAME Validar path this
+      // flag exists to protect against being silently bypassed by
+      // Voltar), so there is nothing left for a later Voltar press to
+      // restore.
+      setReopenedExistingProductKey(null);
     }
   }, [isWorkspaceActive, visibleCatalogEntries, visibleManualRowGroups, manualRows]);
 
@@ -2893,7 +2951,229 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const handleSelectExistingProductForWorkspace = (key: string) => {
     setActiveWorkspaceKey(key);
     setActiveNewManualRowIndex(null);
+    // [Existing-Product Edit/Confirm Workflow] Picking an ordinary,
+    // not-yet-validated product from the picker table is never a
+    // "reopen an already-counted product" action — clears any stale
+    // flag left over from a prior product (defensive; the auto-clear
+    // effect and handleLeaveWorkspaceUnchanged already clear it on
+    // every path that sets it, but this keeps the invariant obviously
+    // true at every activation site, not just the ones that currently
+    // happen to run first).
+    setReopenedExistingProductKey(null);
   };
+
+  // [Existing-Product Edit/Confirm Workflow — investigation finding]
+  // The counted list's own "Editar" buttons (the accumulated/
+  // validated area, below — handleEditCatalogRow/handleEditManualRow,
+  // both far above) only
+  // ever flipped `validated` to `false` — they never activated the
+  // workspace at all. The product would vanish from the counted list,
+  // reappear as an ordinary pickable entry in the picker table (now
+  // showing its preserved quantity/unit/price thanks to the picker-
+  // preview work already done), and the Owner had to click it a SECOND
+  // time, from the picker, to actually open it — a working but
+  // needlessly indirect two-click path, and the literal cause of the
+  // reported "it enters the workspace without its previous
+  // information" complaint (the FIRST click didn't open anything; nothing
+  // was in the workspace to show information from yet).
+  //
+  // This is the single new entry point both handlers now call, right
+  // after un-validating: it points the SAME existing activation
+  // mechanism (`activeWorkspaceKey`) at the EXISTING product's own
+  // name-key — the identical key `productKeyFor(row.productName)`/
+  // `group.key` the picker table's own `activationKey` already uses —
+  // so `visibleCatalogEntries`/`visibleManualRowGroups` (both
+  // completely unmodified) resolve to that product's EXISTING row(s)
+  // by construction. No new row is created; no new activation pathway
+  // is introduced; this is the exact same `handleSelectExistingProductForWorkspace`
+  // mechanism, just reached from a second entry point.
+  const reopenExistingProductForEditing = (key: string) => {
+    // [Single-Active-Product Rule, §9] Defense in depth — the
+    // "Editar" buttons that call this are already `disabled` (below)
+    // whenever a DIFFERENT product is active, exactly like the
+    // picker's own selection buttons are hidden entirely in that
+    // state. This early return means even a stale/rapid click can
+    // never activate a second independent product.
+    if (isWorkspaceActive && activeWorkspaceProductKey !== key) return;
+    // Un-validate EVERY row — catalog and manual alike — sharing this
+    // product's name, not only the single row the Owner happened to
+    // click. A product's portions can legitimately be split across
+    // catalogRows AND manualRows (Cebola: a catalog row for the "4
+    // saco" portion, a manual row for the "3 kg" portion), and
+    // `visibleCatalogEntries`/`visibleManualRowGroups` both only ever
+    // surface a row into the active workspace once its own
+    // `validated` flag is false — un-validating only the clicked row
+    // would strand its sibling portions in the counted list, visibly
+    // splitting one product into two places at once. Same
+    // `productKeyFor` identity `groupRowsByProductName`/the picker
+    // table already use — no new grouping concept.
+    setCatalogRows((prev) => {
+      let changed = false;
+      const next = { ...prev };
+      for (const [id, row] of Object.entries(prev)) {
+        if (productKeyFor(row.productName) === key && row.validated) {
+          next[id] = { ...row, validated: false };
+          changed = true;
+        }
+      }
+      return changed ? next : prev;
+    });
+    setManualRows((prev) => {
+      let changed = false;
+      const next = prev.map((row) => {
+        if (productKeyFor(row.productName) === key && row.validated) {
+          changed = true;
+          return { ...row, validated: false };
+        }
+        return row;
+      });
+      return changed ? next : prev;
+    });
+    // [Decision 39a] Structural, multi-row change — same '__meta__'
+    // convention handleAddManualRow/handleRemoveManualRow already use
+    // for a change that isn't scoped to one single row's own timer.
+    scheduleRowDraftSave('__meta__');
+    setActiveWorkspaceKey(key);
+    setActiveNewManualRowIndex(null);
+    // [Existing-Product Edit/Confirm Workflow] Remembers that THIS
+    // activation un-validated an already-counted product, so
+    // `handleLeaveWorkspaceUnchanged` (Voltar) knows to restore
+    // `validated: true` if the Owner leaves without pressing Validar —
+    // see that handler's own comment for why this is the one thing
+    // "leave it as it is" cannot mean without this restoration.
+    setReopenedExistingProductKey(key);
+  };
+
+  // [Owner-requested — "leave it as it is" exit; revised for the
+  // Existing-Product Edit/Confirm Workflow] Still never touches
+  // quantity/unit/price/portion field VALUES — those already persist
+  // on the row itself regardless of this handler, exactly as before.
+  // The one addition: if the product being left was reopened from an
+  // already-validated state (`reopenedExistingProductKey` set by
+  // `reopenExistingProductForEditing`, above), restore `validated: true`
+  // on every row sharing that name — the SAME write every Validar
+  // button already performs, just applied to the whole product at
+  // once on the way out, so an Owner who opened a counted product
+  // purely to inspect it (changed nothing, or changed something and
+  // still wants to keep it counted) never has it silently drop out of
+  // the counted list merely because they didn't click that specific
+  // row's own Validar button again. Deliberately NOT a field-level
+  // revert/snapshot system — an edit made during this inspection
+  // (e.g. a corrected name) is kept, not discarded; only the counted/
+  // validated status is restored. For a genuinely NEW product
+  // (`reopenedExistingProductKey === null`), behaves exactly as
+  // before: a pure two-state clear, no other side effect — an
+  // incomplete new entry simply returns to the picker, still
+  // unvalidated, exactly where it already was.
+  const handleLeaveWorkspaceUnchanged = () => {
+    if (reopenedExistingProductKey !== null) {
+      const key = reopenedExistingProductKey;
+      setCatalogRows((prev) => {
+        let changed = false;
+        const next = { ...prev };
+        for (const [id, row] of Object.entries(prev)) {
+          if (productKeyFor(row.productName) === key && !row.validated) {
+            next[id] = { ...row, validated: true };
+            changed = true;
+          }
+        }
+        return changed ? next : prev;
+      });
+      setManualRows((prev) => {
+        let changed = false;
+        const next = prev.map((row) => {
+          if (productKeyFor(row.productName) === key && !row.validated) {
+            changed = true;
+            return { ...row, validated: true };
+          }
+          return row;
+        });
+        return changed ? next : prev;
+      });
+      scheduleRowDraftSave('__meta__');
+    }
+    setReopenedExistingProductKey(null);
+    setActiveWorkspaceKey(null);
+    setActiveNewManualRowIndex(null);
+  };
+
+  // [Owner-requested — picker as a sortable, scrollable table with
+  // name/quantity/unit/price/total columns, mirroring the reference
+  // table layout] One flat, combined row per pickable product —
+  // catalog AND manual groups alike — built directly from
+  // `pickerCatalogEntries`/`pickerManualRowGroups` (both already
+  // computed above, already search-filtered by `productSearch`, and
+  // already excluding anything fully validated) — no new data source,
+  // no new filtering rule, purely a reshaping for a table renderer
+  // that wants one row per product instead of two separate lists. A
+  // multi-portion manual group cannot show one single quantity/unit/
+  // price (each portion may differ), so its own row shows the portion
+  // count in the quantity column and the SAME aggregate
+  // quantity*sellingPrice sum this file already computes elsewhere
+  // (e.g. the picker's own preview labels) in the Total column, with
+  // unit/price left as an em dash. `activationKey` is exactly what
+  // `handleSelectExistingProductForWorkspace` already expects
+  // (`productKeyFor(row.productName)` for a catalog row, `group.key`
+  // for a manual group) — unchanged from the two separate lists this
+  // replaces.
+  const pickerRows = useMemo(() => {
+    const catalogItems = pickerCatalogEntries.map(([productId, row]) => {
+      const hasStarted = row.quantity.trim() !== '';
+      const q = hasStarted ? Number(row.quantity) || 0 : 0;
+      const sellingPriceNum = Number(row.sellingPrice) || 0;
+      return {
+        key: `catalog:${productId}`,
+        activationKey: productKeyFor(row.productName),
+        source: 'catalog' as const,
+        displayName: row.productName,
+        quantityLabel: hasStarted ? String(q) : '—',
+        unitLabel: hasStarted ? row.unit || 'un' : '—',
+        priceLabel: hasStarted ? formatCurrency(sellingPriceNum, currencySymbol) : '—',
+        totalValue: hasStarted ? q * sellingPriceNum : 0,
+        hasData: hasStarted,
+      };
+    });
+    const manualItems = pickerManualRowGroups.map((group) => {
+      const groupRows = group.rows.map((r) => manualRows[r.idx]).filter((r): r is StockCountWorkingRow => r !== undefined);
+      const startedRows = groupRows.filter((r) => r.quantity.trim() !== '');
+      const anyStarted = startedRows.length > 0;
+      const totalValue = startedRows.reduce((sum, r) => sum + (Number(r.quantity) || 0) * (Number(r.sellingPrice) || 0), 0);
+      if (groupRows.length === 1) {
+        const soleRow = groupRows[0];
+        const hasStarted = soleRow.quantity.trim() !== '';
+        const q = hasStarted ? Number(soleRow.quantity) || 0 : 0;
+        const sellingPriceNum = Number(soleRow.sellingPrice) || 0;
+        return {
+          key: `manual:${group.key}`,
+          activationKey: group.key,
+          source: 'manual' as const,
+          displayName: group.displayName,
+          quantityLabel: hasStarted ? String(q) : '—',
+          unitLabel: hasStarted ? soleRow.unit || 'un' : '—',
+          priceLabel: hasStarted ? formatCurrency(sellingPriceNum, currencySymbol) : '—',
+          totalValue: hasStarted ? q * sellingPriceNum : 0,
+          hasData: hasStarted,
+        };
+      }
+      return {
+        key: `manual:${group.key}`,
+        activationKey: group.key,
+        source: 'manual' as const,
+        displayName: group.displayName,
+        quantityLabel: `${group.rows.length} porções`,
+        unitLabel: '—',
+        priceLabel: '—',
+        totalValue: totalValue,
+        hasData: anyStarted,
+      };
+    });
+    return [...catalogItems, ...manualItems];
+  }, [pickerCatalogEntries, pickerManualRowGroups, manualRows, currencySymbol]);
+
+  const sortedPickerRows = useMemo(
+    () => sortByValidatedMode(pickerRows, (item) => item.displayName, (item) => item.totalValue, pickerSortMode),
+    [pickerRows, pickerSortMode]
+  );
 
   // [Implementation Authorization — Single-Product Workspace §3] Thin
   // wrapper — handleAddManualRow itself is completely unmodified (same
@@ -2906,6 +3186,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     handleAddManualRow();
     setActiveWorkspaceKey(null);
     setActiveNewManualRowIndex(newIndex);
+    // [Existing-Product Edit/Confirm Workflow] A brand-new manual row
+    // is never a reopened, already-validated product — see
+    // `handleSelectExistingProductForWorkspace`'s own identical clear,
+    // above, for the same defensive reasoning.
+    setReopenedExistingProductKey(null);
   };
 
   // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
@@ -4187,81 +4472,115 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               `productSearch` entirely. */}
           {!isWorkspaceActive && (
             <>
-              <div className="relative">
-                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
-                <input
-                  type="text"
-                  placeholder="Procurar um produto para contar..."
-                  value={productSearch}
-                  onChange={(e) => setProductSearch(e.target.value)}
-                  className={`${fieldClass} pl-8`}
-                />
+              <div className="flex flex-col sm:flex-row gap-2.5">
+                <div className="relative flex-1">
+                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
+                  <input
+                    type="text"
+                    placeholder="Procurar um produto para contar..."
+                    value={productSearch}
+                    onChange={(e) => setProductSearch(e.target.value)}
+                    className={`${fieldClass} pl-8`}
+                  />
+                </div>
+                {/* [Picker — sort-by control] Same select styling/pattern as the
+                    validated-list's own sort control, further below — one shared
+                    control affecting the single combined table beneath it,
+                    rather than two independent lists. */}
+                <select
+                  value={pickerSortMode}
+                  onChange={(e) => setPickerSortMode(e.target.value as typeof pickerSortMode)}
+                  className={`${fieldClass} sm:w-[180px] shrink-0`}
+                >
+                  <option value="name-asc">Nome (A→Z)</option>
+                  <option value="name-desc">Nome (Z→A)</option>
+                  <option value="value-desc">Maior valor</option>
+                  <option value="value-asc">Menor valor</option>
+                </select>
               </div>
 
-              <div>
-                <p className="text-[13px] font-bold text-[#111827]">
-                  Produtos do Catálogo
-                  <span className="text-gray-500 font-normal ml-1.5">({pickerCatalogEntries.length})</span>
+              {products.length === 0 && !productsError && pickerManualRowGroups.length === 0 && (
+                <p className="text-[13px] text-gray-500 italic">
+                  Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
                 </p>
+              )}
 
-                {products.length === 0 && !productsError && (
-                  <p className="text-[13px] text-gray-500 italic mt-3">
-                    Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
-                  </p>
-                )}
+              {productSearch.trim() && sortedPickerRows.length === 0 && (
+                <p className="text-[13px] text-gray-500 italic">
+                  Nenhum produto encontrado para "{productSearch.trim()}".
+                </p>
+              )}
 
-                {products.length > 0 && productSearch.trim() && pickerCatalogEntries.length === 0 && (
-                  <p className="text-[13px] text-gray-500 italic mt-3">
-                    Nenhum produto encontrado para "{productSearch.trim()}".
-                  </p>
-                )}
-
-                {pickerCatalogEntries.length > 0 && (
-                  <div className="space-y-1.5 mt-3">
-                    {pickerCatalogEntries.map(([productId, row]) => {
-                      const hasStarted = row.quantity.trim() !== '';
-                      const q = hasStarted ? Number(row.quantity) || 0 : 0;
-                      const sellingPriceNum = Number(row.sellingPrice) || 0;
-                      return (
-                        <button
-                          key={productId}
-                          type="button"
-                          onClick={() => handleSelectExistingProductForWorkspace(productKeyFor(row.productName))}
-                          className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-white border border-[#F0EEE4] rounded-xl px-3.5 py-2.5 text-left hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] transition-colors duration-150"
-                        >
-                          <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
-                          <span className="text-[12px] text-gray-500 tabular-nums whitespace-nowrap">
-                            {hasStarted
-                              ? `${q} ${row.unit || 'un'} · ${formatCurrency(sellingPriceNum, currencySymbol)}`
-                              : 'Selecionar'}
-                          </span>
-                        </button>
-                      );
-                    })}
-                  </div>
-                )}
-              </div>
-
-              {pickerManualRowGroups.length > 0 && (
-                <div>
-                  <p className="text-[13px] font-bold text-[#111827] mb-2">
-                    Adicionados Manualmente
-                    <span className="text-gray-500 font-normal ml-1.5">({pickerManualRowGroups.length})</span>
-                  </p>
-                  <div className="space-y-1.5">
-                    {pickerManualRowGroups.map((group) => (
-                      <button
-                        key={group.key}
-                        type="button"
-                        onClick={() => handleSelectExistingProductForWorkspace(group.key)}
-                        className="w-full grid grid-cols-[minmax(0,1fr)_auto] items-center gap-2 bg-white border border-[#F0EEE4] rounded-xl px-3.5 py-2.5 text-left hover:border-[#D4AF37]/50 hover:bg-[#D4AF37]/[0.05] transition-colors duration-150"
-                      >
-                        <span className="text-[13px] font-semibold text-[#111827] truncate">{group.displayName}</span>
-                        <span className="text-[12px] text-gray-500 whitespace-nowrap">
-                          {group.rows.length > 1 ? `${group.rows.length} porções` : 'Continuar'}
-                        </span>
-                      </button>
-                    ))}
+              {/* [Owner-requested — table view: name/quantity/unit/price/total
+                  columns, scrollable, matching the reference table layout] One
+                  combined, sorted, searched table for every pickable product
+                  (catalog AND manual groups alike — see `pickerRows`'s own
+                  declaration comment, above, for why they're merged into one
+                  list here). `max-h-[420px] overflow-y-auto` on the body only
+                  (never the header) keeps column labels pinned in view while a
+                  long product list scrolls underneath — necessary the moment a
+                  business has more products than fit on screen at once, which
+                  the prior one-button-per-product list had no answer for
+                  either, it just grew the whole page. Clicking anywhere on a
+                  row activates that product's workspace via the SAME
+                  `handleSelectExistingProductForWorkspace`/
+                  `activationKey` every row already carries — unchanged
+                  selection behavior, only the visual presentation changed. */}
+              {sortedPickerRows.length > 0 && (
+                <div className="border border-[#F0EEE4] rounded-xl overflow-hidden">
+                  {/* Single scroll container, single <table> — a sticky <thead>
+                      split into its own separate <table> (a common pattern for
+                      "fixed" headers) risks the two tables computing different
+                      column widths for the same data and drifting out of
+                      alignment. Instead each <th> below carries its own
+                      `sticky top-0`, the reliably cross-browser way to pin a
+                      table header while its body scrolls underneath it,
+                      guaranteeing header and body columns always line up. */}
+                  <div className="max-h-[420px] overflow-auto">
+                    <table className="w-full text-left border-collapse min-w-[520px]">
+                      <thead>
+                        <tr className="bg-[#FAFAF7]">
+                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-3.5 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4]">
+                            Produto
+                          </th>
+                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-2 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
+                            Qtd
+                          </th>
+                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-2 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
+                            Unid.
+                          </th>
+                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-2 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
+                            Preço/Unid
+                          </th>
+                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-3.5 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
+                            Total
+                          </th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        {sortedPickerRows.map((item) => (
+                          <tr
+                            key={item.key}
+                            onClick={() => handleSelectExistingProductForWorkspace(item.activationKey)}
+                            className="cursor-pointer border-b border-[#F0EEE4] last:border-b-0 hover:bg-[#D4AF37]/[0.05] transition-colors duration-150"
+                          >
+                            <td className="px-3.5 py-2.5 text-[13px] font-semibold text-[#111827] whitespace-nowrap max-w-[220px] truncate">
+                              {item.displayName}
+                            </td>
+                            <td className="px-2 py-2.5 text-[13px] text-gray-600 tabular-nums text-right whitespace-nowrap">
+                              {item.quantityLabel}
+                            </td>
+                            <td className="px-2 py-2.5 text-[13px] text-gray-600 text-right whitespace-nowrap">{item.unitLabel}</td>
+                            <td className="px-2 py-2.5 text-[13px] text-gray-600 tabular-nums text-right whitespace-nowrap">
+                              {item.priceLabel}
+                            </td>
+                            <td className="px-3.5 py-2.5 text-[13px] font-bold text-[#0B1F3A] tabular-nums text-right whitespace-nowrap">
+                              {item.hasData ? formatCurrency(item.totalValue, currencySymbol) : '—'}
+                            </td>
+                          </tr>
+                        ))}
+                      </tbody>
+                    </table>
                   </div>
                 </div>
               )}
@@ -4287,6 +4606,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               workspace-scoped view declared above, automatically. */}
           {isWorkspaceActive && (
           <>
+          {/* [Owner-requested — "leave it as it is" exit; revised for the
+              Existing-Product Edit/Confirm Workflow] Present the whole
+              time a product is active, above every other active-workspace
+              content. Calls ONLY handleLeaveWorkspaceUnchanged (declared
+              above) — never touches field VALUES either way. For a
+              genuinely new/never-validated product: pure two-state clear,
+              unvalidated, back to the picker table, exactly as before. For
+              a product reopened from the counted list (Existing-Product
+              Edit/Confirm Workflow, above): also restores `validated: true`
+              on every one of its rows, so "leave it as it is" is literally
+              true — it returns to the counted list looking exactly as it
+              did before it was opened, whether the Owner changed nothing
+              or made an edit they still want kept. */}
+          <button
+            type="button"
+            onClick={handleLeaveWorkspaceUnchanged}
+            className="flex items-center gap-1.5 text-[13px] font-bold text-gray-500 hover:text-[#0B1F3A] transition-colors duration-150 -mt-1"
+          >
+            <ArrowLeft className="w-3.5 h-3.5" strokeWidth={2.5} />
+            <span>Voltar (deixar sem alterações)</span>
+          </button>
           <div>
             <div className="flex items-center justify-between gap-3 flex-wrap">
               <p className="text-[13px] font-bold text-[#111827]">
@@ -5315,6 +5655,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
                   const hasPriceWarning = priceCheck.showWarning;
                   const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
+                  // [Single-Active-Product Rule, §9] Opening this
+                  // product would activate a SECOND independent
+                  // product if a DIFFERENT one is already active —
+                  // disabled (not hidden, so the Owner can still see
+                  // and locate it) exactly like the picker's own
+                  // selection is unavailable in that same state. Never
+                  // disabled for the currently-active product itself
+                  // (there is none here — a validated row is never the
+                  // active one) or when the workspace is empty.
+                  const editDisabled = isWorkspaceActive && activeWorkspaceProductKey !== productKeyFor(row.productName);
                   return (
                     <div
                       key={`validated-catalog-${productId}`}
@@ -5348,9 +5698,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <button
                           type="button"
                           onClick={() => handleEditCatalogRow(productId)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors duration-150 whitespace-nowrap shrink-0"
+                          disabled={editDisabled}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
+                            editDisabled
+                              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                          }`}
                         >
-                          Editar
+                          {editDisabled ? 'Produto aberto' : 'Editar'}
                         </button>
                       </div>
                       {/* [Concept C §2] Warnings stay fully visible text —
@@ -5382,6 +5737,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
                   const hasPriceWarning = priceCheck.showWarning;
                   const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
+                  // [Single-Active-Product Rule, §9] Same guard as the
+                  // catalog list's own identical addition, above.
+                  const editDisabled = isWorkspaceActive && activeWorkspaceProductKey !== productKeyFor(row.productName);
                   return (
                     <div
                       key={`validated-manual-${idx}`}
@@ -5412,9 +5770,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <button
                           type="button"
                           onClick={() => handleEditManualRow(idx)}
-                          className="px-2 py-1 rounded-lg text-[11px] font-bold text-emerald-700 bg-emerald-50 hover:bg-emerald-100 transition-colors duration-150 whitespace-nowrap shrink-0"
+                          disabled={editDisabled}
+                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
+                            editDisabled
+                              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                          }`}
                         >
-                          Editar
+                          {editDisabled ? 'Produto aberto' : 'Editar'}
                         </button>
                       </div>
                       {hasPriceWarning && (

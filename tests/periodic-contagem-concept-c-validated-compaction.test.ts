@@ -76,9 +76,22 @@ describe('A — validated compact representation shows every required field', ()
     assert.match(section, /<CheckCircle2 className="w-3\.5 h-3\.5 text-emerald-500 shrink-0" strokeWidth=\{2\.5\} aria-hidden="true" \/>/);
   });
 
-  it('shows a clearly labeled "Editar" action', () => {
-    const matches = section.match(/>\s*Editar\s*</g) ?? [];
-    assert.ok(matches.length >= 2, 'Expected an "Editar" label for both the catalog and manual validated rows.');
+  it('shows a clearly labeled "Editar" action (as literal text — either the static label itself, or a ternary that renders it whenever the row is actually editable, never icon-only)', () => {
+    // [Single-Active-Product Rule, §9 — Existing-Product Edit/Confirm
+    // Workflow] The label is now conditional — 'Editar' when opening
+    // this product is currently safe, a distinct visible label
+    // ('Produto aberto') on the rare occasion a DIFFERENT product is
+    // already active, per the single-active-product guard — so a
+    // literal `>Editar<` no longer appears in the static source for
+    // every occurrence. Both forms below still keep the label as
+    // visible TEXT, never an icon-only control, which is this test's
+    // own actual guarantee.
+    const staticMatches = section.match(/>\s*Editar\s*</g) ?? [];
+    const ternaryMatches = section.match(/\{editDisabled \? 'Produto aberto' : 'Editar'\}/g) ?? [];
+    assert.ok(
+      staticMatches.length + ternaryMatches.length >= 2,
+      'Expected an "Editar" label (static or conditional) for both the catalog and manual validated rows.'
+    );
   });
 
   it('none of the required fields are hidden behind title/hover-only attributes', () => {
@@ -216,7 +229,14 @@ describe('F — validation path, persistence, Mode A, and valuation are untouche
 // ---------------------------------------------------------------------
 describe('G — responsive and accessibility structure', () => {
   it('has a labeled Editar control (real <button>, not icon-only)', () => {
-    assert.match(section, /<button[\s\S]*?Editar\s*<\/button>/);
+    // [Existing-Product Edit/Confirm Workflow] The label itself is now
+    // a ternary ('Editar' vs 'Produto aberto', per the single-active-
+    // product guard, tested separately above) rather than always-
+    // static text, so the closing tag no longer follows the word
+    // "Editar" immediately — this still proves the same guarantee: a
+    // real <button> element whose own content includes the literal
+    // word "Editar" as text, never an icon-only control.
+    assert.match(section, /<button[\s\S]*?Editar[\s\S]*?<\/button>/);
   });
 
   it('has an accessible text representation of validated state, not conveyed by icon alone', () => {

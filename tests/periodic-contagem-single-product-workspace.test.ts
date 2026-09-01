@@ -177,10 +177,13 @@ describe('G — The validated product remains represented in the existing persis
     assert.match(section, /sortedValidatedManualRowEntries\.map/);
   });
 
-  it('handleEditCatalogRow/handleEditManualRow (the existing, out-of-scope edit path) are completely unmodified', () => {
-    const body = extractFunctionBody(periodicSrc, 'const handleEditCatalogRow = (productId: string) => {');
-    assert.match(body, /window\.confirm\('Este produto já foi validado\. Queres editá-lo\?'\)/);
-    assert.match(body, /updateCatalogRow\(productId, \{ validated: false \}\);/);
+  it('handleEditCatalogRow/handleEditManualRow — superseded by the later, separate "Existing-Product Edit/Confirm Workflow" authorization: the confirm-before-edit dialog is unchanged, but both now activate the workspace via reopenExistingProductForEditing (rather than stopping at un-validating the row and leaving it for a second, separate picker click), following the same "a later, signed authorization may extend an out-of-scope area" precedent this file\'s own Decision 40/Decision 39 test comments already establish', () => {
+    const catalogBody = extractFunctionBody(periodicSrc, 'const handleEditCatalogRow = (productId: string) => {');
+    const manualBody = extractFunctionBody(periodicSrc, 'const handleEditManualRow = (index: number) => {');
+    assert.match(catalogBody, /window\.confirm\('Este produto já foi validado\. Queres editá-lo\?'\)/);
+    assert.match(manualBody, /window\.confirm\('Este produto já foi validado\. Queres editá-lo\?'\)/);
+    assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
   });
 });
 
@@ -205,12 +208,24 @@ describe('I — Search selects one product into the workspace; it never activate
     assert.doesNotMatch(workspaceCatalogBody, /productSearch/);
   });
 
-  it('each picker candidate row is its own independent button with its own onClick — clicking one never affects any other row\'s own activation', () => {
+  it('each picker row activates via its own per-row activationKey — clicking one never affects any other row\'s own activation (Owner-requested table redesign: one combined, sorted, searched table replacing the two separate catalog/manual button lists — same click-to-activate contract, one row template instead of two)', () => {
     const picker = pickerSection();
-    const catalogButtonMatches = picker.match(/onClick=\{\(\) => handleSelectExistingProductForWorkspace\(productKeyFor\(row\.productName\)\)\}/g) ?? [];
-    const manualButtonMatches = picker.match(/onClick=\{\(\) => handleSelectExistingProductForWorkspace\(group\.key\)\}/g) ?? [];
-    assert.equal(catalogButtonMatches.length, 1);
-    assert.equal(manualButtonMatches.length, 1);
+    // One <tr> template, mapped once per item — never a separate literal
+    // onClick per product (that would not scale to a real catalog size,
+    // and is not how the prior two-list version worked either: it too had
+    // one button template per .map() call, one literal onClick each).
+    const onClickMatches = picker.match(/onClick=\{\(\) => handleSelectExistingProductForWorkspace\(item\.activationKey\)\}/g) ?? [];
+    assert.equal(onClickMatches.length, 1);
+    // The per-row independence itself lives one level up, in how
+    // `item.activationKey` is computed for EACH item independently — a
+    // catalog item's own `productKeyFor(row.productName)` (identical to
+    // the prior version's own catalog onClick argument) and a manual
+    // group's own `group.key` (identical to the prior version's own
+    // manual onClick argument) — never a shared/loop-invariant reference
+    // that could point every row at the same product.
+    const pickerRowsBody = extractFunctionBody(periodicSrc, 'const pickerRows = useMemo(() => {');
+    assert.match(pickerRowsBody, /activationKey: productKeyFor\(row\.productName\)/);
+    assert.match(pickerRowsBody, /activationKey: group\.key/);
   });
 });
 

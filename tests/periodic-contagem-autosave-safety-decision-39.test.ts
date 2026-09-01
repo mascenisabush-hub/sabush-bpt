@@ -235,11 +235,22 @@ describe('G — Validar (formerly Guardar) now persists via the exact same per-r
     assert.doesNotMatch(source, /setConfirmedManualRowIndices\(/);
   });
 
-  it('handleEditCatalogRow and handleEditManualRow clear validated via the same updateCatalogRow/updateManualRow path (the inverse transition)', () => {
+  it('handleEditCatalogRow and handleEditManualRow — superseded by the later, separate "Existing-Product Edit/Confirm Workflow" authorization: both now route the inverse (validated: false) transition through the new reopenExistingProductForEditing helper (which also activates the workspace and covers every sibling portion sharing the product\'s name, not only the clicked row) rather than calling updateCatalogRow/updateManualRow directly for a single row', () => {
     const catalogBody = extractFunctionBody(source, 'const handleEditCatalogRow = (');
     const manualBody = extractFunctionBody(source, 'const handleEditManualRow = (');
-    assert.match(catalogBody, /updateCatalogRow\(productId,\s*\{\s*validated:\s*false\s*\}\)/);
-    assert.match(manualBody, /updateManualRow\(index,\s*\{\s*validated:\s*false\s*\}\)/);
+    assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    // The inverse transition itself (validated: false) still happens,
+    // just inside the shared helper now — proven directly against
+    // that helper's own body, applied across every row (catalog AND
+    // manual) sharing the reopened product's name, via setCatalogRows/
+    // setManualRows (a bulk, multi-row update — updateCatalogRow/
+    // updateManualRow only ever touch one row by id/index, which
+    // cannot express "every row sharing this name" in one write).
+    const reopenBody = extractFunctionBody(source, 'const reopenExistingProductForEditing = (key: string) => {');
+    assert.match(reopenBody, /validated:\s*false/);
+    assert.match(reopenBody, /setCatalogRows\(/);
+    assert.match(reopenBody, /setManualRows\(/);
   });
 
   it('Validar has been introduced as the visible action name, with no remaining "Guardar" button label', () => {
