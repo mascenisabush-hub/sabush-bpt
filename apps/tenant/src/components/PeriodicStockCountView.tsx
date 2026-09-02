@@ -632,6 +632,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     periodicStockDraft,
     cashPositionDeclarations,
     periodicStockDraftLoaded,
+    registerPendingContagemFlush,
     savePeriodicStockDraftItem,
     removePeriodicStockDraftItem,
     savePeriodicStockDraftMeta,
@@ -2029,6 +2030,67 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return () => {
       flushPeriodicDraftNow();
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
+  // [Decision 41A — Business-Switch Protection; Implementation
+  // Authorization, Phase 1] A stricter, awaited variant of
+  // flushPeriodicDraftNow above — that function is deliberately
+  // fire-and-forget (correct for its own pagehide/visibilitychange/
+  // unmount purpose, where nothing can await it). switchShop() needs a
+  // definite success/failure result to gate the business switch on,
+  // which this provides by explicitly awaiting any already-in-flight
+  // save first, then awaiting its own write, rather than firing it and
+  // moving on. Reuses flushPeriodicStockDraftRows/latestFlushArgs
+  // unmodified — no new write-construction logic, no parallel
+  // persistence path.
+  const flushForSwitchIfNeeded = async (): Promise<{ success: boolean }> => {
+    if (rowDebounceTimersRef.current.size === 0 && !draftInFlightSaveRef.current) {
+      return { success: true }; // nothing pending — no unnecessary Firestore call
+    }
+    rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
+    rowDebounceTimersRef.current.clear();
+    try {
+      // Never bypass existing serialization: if an ordinary debounced
+      // save is already in flight, let it finish before this flush's
+      // own write, exactly as scheduleRowDraftSave's own debounce
+      // callback already does for itself.
+      if (draftInFlightSaveRef.current) {
+        await draftInFlightSaveRef.current;
+      }
+      const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
+      const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
+      for (const [productId, row] of Object.entries(cr)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
+      mr.forEach((row, index) => {
+        rowsByKey[`manual:${index}`] = workingRowToDraftItem(row);
+      });
+      const updatedAt = await flushPeriodicStockDraftRows(
+        rowsByKey,
+        t,
+        l.trim() || undefined,
+        d,
+        submissionIdRef.current || undefined,
+        npi
+      );
+      lastLocalDraftWriteRef.current = updatedAt;
+      setDraftSaveState('saved');
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
+  };
+
+  // [Decision 41A] Register this view's own flush as the one
+  // switchShop() will await before it changes activeBusinessId — and
+  // unregister on unmount, so a switch attempted while no Contagem
+  // view is mounted (or after this one has unmounted) never tries to
+  // call a stale function. Only one Contagem view is ever mounted at a
+  // time (App.tsx's mutually-exclusive activeTab gating), so this
+  // single registration is always either this view's own flush or
+  // nothing at all — never a stale registration from a different view.
+  useEffect(() => {
+    registerPendingContagemFlush(flushForSwitchIfNeeded);
+    return () => registerPendingContagemFlush(null);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 

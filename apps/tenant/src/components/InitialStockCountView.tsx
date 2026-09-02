@@ -373,6 +373,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     initialStockDraft,
     initialStockDraftLoaded,
     saveInitialStockDraft,
+    registerPendingContagemFlush,
     activeBusinessId,
     products,
   } = useApp();
@@ -622,6 +623,45 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
         setDraftSaveState('error');
       });
   };
+
+  // [Decision 41A — Business-Switch Protection; Implementation
+  // Authorization, Phase 1] A stricter, awaited variant of
+  // flushDraftNow above — that function is deliberately fire-and-
+  // forget (correct for its own pagehide/visibilitychange purpose,
+  // where nothing can await it). switchShop() needs a definite
+  // success/failure result to gate the business switch on. Reuses the
+  // exact same guard conditions and the existing saveInitialStockDraft
+  // write path unmodified — no new persistence logic, no parallel
+  // architecture. Initial Stock Count has no in-flight-save
+  // serialization ref of its own to await (unlike Periodic Contagem's
+  // draftInFlightSaveRef) — none exists in this view today, so there
+  // is nothing additional to serialize against here.
+  const flushForSwitchIfNeeded = async (): Promise<{ success: boolean }> => {
+    const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
+      latestFlushArgs.current;
+    if (!loaded || confirmed) return { success: true }; // nothing this view could meaningfully flush right now
+    const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
+    if (!hasAnyContent) return { success: true }; // no pending work — no unnecessary Firestore call
+    try {
+      await saveInitialStockDraft(r.map(rowToDraftItem), d, basis);
+      setDraftSaveState('saved');
+      return { success: true };
+    } catch {
+      return { success: false };
+    }
+  };
+
+  // [Decision 41A] Register this view's own flush as the one
+  // switchShop() will await before it changes activeBusinessId — and
+  // unregister on unmount. Only one Contagem view is ever mounted at a
+  // time (App.tsx's mutually-exclusive activeTab gating), so this
+  // single registration is always either this view's own flush or
+  // nothing at all.
+  useEffect(() => {
+    registerPendingContagemFlush(flushForSwitchIfNeeded);
+    return () => registerPendingContagemFlush(null);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   // [Draft-loss fix, part 2] The 800ms debounce above is exactly what
   // let a refresh or tab close interrupt a pending save and discard

@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo, useRef } from 'react';
 import {
   onAuthStateChanged,
   signOut,
@@ -947,6 +947,14 @@ interface AppContextType {
   maxShopsPerOwner: number;
   addShop: (businessName: string, category: string, currencySymbol?: string) => Promise<void>;
   switchShop: (businessId: string) => Promise<void>;
+  // [Decision 41A — Business-Switch Protection] Lets the currently
+  // mounted Contagem view (Periodic or Initial — never both, since
+  // they occupy mutually exclusive App.tsx tabs) register a flush
+  // function switchShop() awaits before it changes activeBusinessId.
+  // Pass null to clear registration (unmount). A single ref is
+  // intentional, not a generalized event bus — see switchShop's own
+  // implementation comment.
+  registerPendingContagemFlush: (fn: (() => Promise<{ success: boolean }>) | null) => void;
   // [Module #17 Owner Portfolio v0.2] Explicit, per-shop refresh only —
   // see the function's own implementation comment for the full
   // governance basis. Never throws; reports outcome via return value.
@@ -2349,14 +2357,59 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
   };
 
+  // [Decision 41A — Business-Switch Protection; Implementation
+  // Authorization, Phase 1] Single ref, not a list/registry: only one
+  // of PeriodicStockCountView/InitialStockCountView is ever mounted at
+  // a time (App.tsx's own mutually-exclusive activeTab gating), so a
+  // single "currently active Contagem view's flush function" slot is
+  // the minimum sufficient coordination surface — deliberately not a
+  // generalized event bus or navigation-guard framework.
+  const pendingContagemFlushRef = useRef<(() => Promise<{ success: boolean }>) | null>(null);
+  const registerPendingContagemFlush = (fn: (() => Promise<{ success: boolean }>) | null) => {
+    pendingContagemFlushRef.current = fn;
+  };
+  // Prevents a second, concurrent switchShop() call from racing the
+  // first — e.g. double-flushing, or committing updateDoc() out of
+  // order relative to an in-flight flush. A rapid second click/call
+  // fails fast rather than silently doing anything unsafe.
+  const switchInFlightRef = useRef(false);
+
   const switchShop = async (businessId: string) => {
     if (!currentUser || !isOwner) return;
     if (!ownedBusinessIds.includes(businessId)) {
       throw new Error('Essa loja não pertence a esta conta.');
     }
-    await updateDoc(doc(db, 'users', currentUser.uid), {
-      activeBusinessId: businessId,
-    });
+    if (switchInFlightRef.current) {
+      throw new Error('Uma mudança de loja já está em curso.');
+    }
+    switchInFlightRef.current = true;
+    try {
+      // [Decision 41A / Decision 42A — coordinated pre-switch flush]
+      // Awaited BEFORE activeBusinessId can change (the updateDoc()
+      // below is what actually changes it, once the profile listener
+      // delivers the update) — this is the entire safety argument:
+      // every write the flush performs resolves its Firestore path
+      // from activeBusinessId read live at call time, and throughout
+      // this await, activeBusinessId is still the OLD business. Never
+      // reorder this after updateDoc(), and never rely on a reactive
+      // effect noticing activeBusinessId changed to flush afterward —
+      // that would resolve the flush's own writes against the NEW
+      // business instead (Rule 8 Assessment, Decision 41 §B).
+      const flush = pendingContagemFlushRef.current;
+      if (flush) {
+        const result = await flush();
+        if (!result.success) {
+          throw new Error(
+            'Não foi possível guardar as alterações da contagem antes de mudar de loja. Tente novamente.'
+          );
+        }
+      }
+      await updateDoc(doc(db, 'users', currentUser.uid), {
+        activeBusinessId: businessId,
+      });
+    } finally {
+      switchInFlightRef.current = false;
+    }
   };
 
   // [Module #17 Owner Portfolio v0.2 addendum, currentWorth refresh
@@ -7099,6 +7152,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         maxShopsPerOwner: MAX_SHOPS_PER_OWNER,
         addShop,
         switchShop,
+        registerPendingContagemFlush,
         refreshShopWorth,
         logout,
         loadSampleData,
