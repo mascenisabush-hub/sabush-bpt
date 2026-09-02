@@ -373,6 +373,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     subscriptionBlocksNewRecords,
     initialStockDraft,
     initialStockDraftLoaded,
+    initialStockDraftListenerState,
     saveInitialStockDraft,
     registerPendingContagemFlush,
     activeBusinessId,
@@ -545,7 +546,18 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   useEffect(() => {
     if (draftLoaded) return;
     if (loadedForBusinessId !== activeBusinessId) return; // still catching up to a business switch — the reset effect above will re-run this once it settles
-    if (!initialStockDraftLoaded) return; // Firestore hasn't answered yet — wait
+    // [Decision 41D — Draft Listener State Hardening] Was
+    // `if (!initialStockDraftLoaded) return;` — that flag is true on
+    // EITHER a successful listener result OR an error (preserved
+    // exactly, for other existing consumers of it), so gating solely
+    // on it here would let an Owner listener error fall straight
+    // through to the `initialStockDraft === null` branch below and be
+    // silently treated as "Firestore confirmed no draft" — exactly the
+    // dangerous collapse Decision 41D exists to close. This view must
+    // never populate the default empty rows and mark itself ready to
+    // autosave over an UNKNOWN draft state.
+    if (initialStockDraftListenerState === 'loading') return; // Firestore hasn't answered yet — wait
+    if (initialStockDraftListenerState === 'load-error') return; // reliability unknown — stay blocked; the error notice below covers this, and this effect re-runs the moment a genuine successful result arrives (onSnapshot keeps retrying on its own)
     if (initialStockDraft === null) {
       // Firestore has now confirmed: no draft exists for this business
       // yet — keep the default two empty rows and today's date.
@@ -575,7 +587,7 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     }
     setDraftLoaded(true);
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialStockDraft, initialStockDraftLoaded, loadedForBusinessId, activeBusinessId]);
+  }, [initialStockDraft, initialStockDraftListenerState, loadedForBusinessId, activeBusinessId]);
 
   // [Decision 41C §5/§6/§8/§9] Single-target retry ownership (see the
   // autosave effect's own comment below for why a Map isn't needed
@@ -1763,6 +1775,35 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // affects visibility only.
   if (subscriptionBlocksNewRecords && !redoingConfirmationId) {
     return <SubscriptionBlockedNotice />;
+  }
+
+  // [Decision 41D — Draft Listener State Hardening §3/§8] The central
+  // requirement: an Owner listener error must never be silently
+  // collapsed into "no draft" — this view must never let the operator
+  // start typing into blank default rows (and have that autosave over
+  // an UNKNOWN, possibly-real draft) while the draft listener's
+  // reliability is unknown. Narrowly scoped to exactly the window this
+  // matters: before the initial load has settled (`!draftLoaded`), and
+  // only on the entry-form path (never during redo, which populates
+  // from confirmation data, not this draft listener). Once a genuine
+  // successful snapshot arrives — onSnapshot keeps retrying on its own,
+  // no action needed here — the load effect above proceeds normally and
+  // this notice disappears on its own.
+  if (!draftLoaded && !redoingConfirmationId && initialStockDraftListenerState === 'load-error') {
+    return (
+      <div className="max-w-5xl mx-auto pb-12">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5">
+            <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+            <p className="text-[13px] leading-relaxed text-amber-800">
+              Não foi possível carregar de forma fiável um eventual rascunho já guardado. Verifique a sua ligação —
+              esta página tentará novamente automaticamente. Por segurança, o formulário não fica disponível até
+              confirmarmos se já existe ou não um rascunho.
+            </p>
+          </div>
+        </div>
+      </div>
+    );
   }
 
   return (

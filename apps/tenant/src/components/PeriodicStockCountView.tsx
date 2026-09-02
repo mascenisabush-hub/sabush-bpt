@@ -633,6 +633,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     periodicStockDraft,
     cashPositionDeclarations,
     periodicStockDraftLoaded,
+    periodicStockDraftListenerState,
     registerPendingContagemFlush,
     savePeriodicStockDraftItem,
     removePeriodicStockDraftItem,
@@ -4937,11 +4938,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return <SubscriptionBlockedNotice />;
   }
 
-  if (!periodicStockDraftLoaded) {
+  if (periodicStockDraftListenerState === 'loading') {
     return (
       <div className="max-w-5xl mx-auto pb-12">
         <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-8 text-center text-sm text-gray-500">
           A verificar contagens por terminar...
+        </div>
+      </div>
+    );
+  }
+
+  // [Decision 41D — Draft Listener State Hardening §3/§8] Was
+  // `if (!periodicStockDraftLoaded)` above only, which was already
+  // true on either a successful listener result or an error (preserved
+  // for periodicStockDraftLoaded's own existing consumers) — without
+  // this extra branch, an Owner listener error would fall straight
+  // through to the normal catalog-population/editing view with
+  // periodicStockDraft still null (never fabricated, never cleared —
+  // see the onSnapshot error callbacks in AppContext.tsx), silently
+  // skipping the resume-or-discard banner entirely and letting the
+  // operator start a brand-new count over a possibly-real, merely
+  // unreadable-right-now draft. This blocks exactly that window; it
+  // clears itself the moment a genuine successful snapshot arrives
+  // (onSnapshot keeps retrying on its own — no action needed here).
+  if (periodicStockDraftListenerState === 'load-error') {
+    return (
+      <div className="max-w-5xl mx-auto pb-12">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8">
+          <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5">
+            <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+            <p className="text-[13px] leading-relaxed text-amber-800">
+              Não foi possível verificar de forma fiável se existe uma contagem por terminar. Verifique a sua
+              ligação — esta página tentará novamente automaticamente. Por segurança, o formulário não fica
+              disponível até confirmarmos se existe ou não uma contagem por terminar.
+            </p>
+          </div>
         </div>
       </div>
     );

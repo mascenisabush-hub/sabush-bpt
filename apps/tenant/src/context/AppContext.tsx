@@ -455,6 +455,17 @@ interface RecordClosingParams {
   businessWorthOverride?: number;
 }
 
+// [Decision 41D — Draft Listener State Hardening; Implementation
+// Authorization] The four governed draft-listener states. 'loading'
+// must never be silently substituted with null/undefined/false/an
+// empty array as an implicit "no draft" signal; 'confirmed-no-draft'
+// may ONLY be reached via a genuinely successful Firestore snapshot
+// that confirms absence; 'load-error' is distinct from both and must
+// never be collapsed into 'confirmed-no-draft' for an Owner listener
+// failure — see initialDraft/periodicDraftMeta/periodicDraftItems'
+// own onSnapshot error callbacks, below, for the exact rule.
+type DraftListenerState = 'loading' | 'confirmed-no-draft' | 'draft-exists' | 'load-error';
+
 interface AppContextType {
   currentUser: FirebaseUser | null;
   userProfile: UserProfile | null;
@@ -740,6 +751,17 @@ interface AppContextType {
   // know yet" from "confirmed: no draft exists." See the fix comment on
   // the underlying state in AppProvider for why this exists.
   initialStockDraftLoaded: boolean;
+  // [Decision 41D — Draft Listener State Hardening] The governed
+  // four-state signal, replacing the old implicit "null draft +
+  // loaded=true means no draft" inference that a listener ERROR used
+  // to also produce — collapsing "we couldn't reliably read this" into
+  // the exact same shape as "we confirmed there's nothing here." See
+  // the initialDraft onSnapshot error callback in AppProvider for the
+  // Owner-vs-Staff distinction this drives. initialStockDraftLoaded,
+  // above, is preserved unmodified for existing consumers (still true
+  // on either a successful OR an errored listener result, exactly as
+  // before) — this new field is additive, not a replacement.
+  initialStockDraftListenerState: DraftListenerState;
   saveInitialStockDraft: (items: InitialStockDraftItem[], date: string, initialCapitalBasis?: InitialCapitalBasis) => Promise<void>;
   clearInitialStockDraft: () => Promise<void>;
   // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
@@ -748,6 +770,12 @@ interface AppContextType {
   periodicStockDraft: PeriodicStockDraft | null;
   // Same "loaded" disambiguation as initialStockDraftLoaded above.
   periodicStockDraftLoaded: boolean;
+  // [Decision 41D] Same governed four-state signal as
+  // initialStockDraftListenerState above, derived from the combined
+  // meta+items sub-listener states (see AppProvider) — an error on
+  // EITHER sub-listener surfaces as 'load-error' here, never silently
+  // masked by the other sub-listener's own success.
+  periodicStockDraftListenerState: DraftListenerState;
   // [Bug fix — per-product independent draft persistence] Replaces the
   // old single full-document-overwrite savePeriodicStockDraft. Each
   // counted row is now its own independent Firestore document (see the
@@ -1072,6 +1100,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // on stale information. This flag disambiguates: false until the
   // listener's first callback (success OR error) has actually fired.
   const [initialStockDraftLoaded, setInitialStockDraftLoaded] = useState(false);
+  // [Decision 41D — Draft Listener State Hardening] The governed
+  // four-state signal. Starts 'loading' — never an implicit
+  // null/false/empty substitute. See the initialDraft onSnapshot
+  // callbacks (below) for exactly how each state is reached.
+  const [initialStockDraftListenerState, setInitialStockDraftListenerState] = useState<DraftListenerState>('loading');
   // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
   // [Bug fix — per-product independent draft persistence] The single
   // `periodicStockDraft` (still the exact same public shape every
@@ -1092,11 +1125,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [periodicStockDraftItemsByKey, setPeriodicStockDraftItemsByKey] = useState<Record<string, PeriodicStockDraftItem>>({});
   const [periodicStockDraftMetaLoaded, setPeriodicStockDraftMetaLoaded] = useState(false);
   const [periodicStockDraftItemsLoaded, setPeriodicStockDraftItemsLoaded] = useState(false);
+  // [Decision 41D] Same governed four-state signal as
+  // initialStockDraftListenerState above, tracked per sub-listener.
+  // The items subcollection listener never asserts draft
+  // existence/absence on its own (meta owns that signal — a draft can
+  // legitimately have a meta document and zero counted rows yet), so
+  // its own state only ever moves between 'loading', 'draft-exists'
+  // (meaning "the items listener has delivered a successful snapshot,"
+  // not literally "a draft exists"), and 'load-error' — see the
+  // combined periodicStockDraftListenerState derivation below for how
+  // the two are reconciled into one governed signal.
+  const [periodicStockDraftMetaListenerState, setPeriodicStockDraftMetaListenerState] = useState<DraftListenerState>('loading');
+  const [periodicStockDraftItemsListenerState, setPeriodicStockDraftItemsListenerState] = useState<DraftListenerState>('loading');
   // Same shape/reasoning as initialStockDraftLoaded above — true only
   // once BOTH the meta document and the items subcollection have each
   // delivered at least one snapshot, so a consumer never sees a
   // meta-only or items-only partial state as if it were "fully loaded."
   const periodicStockDraftLoaded = periodicStockDraftMetaLoaded && periodicStockDraftItemsLoaded;
+  // [Decision 41D] Combines the two sub-listener states into the one
+  // governed signal every consumer reads. An error on EITHER
+  // sub-listener wins over the other's success — a genuinely broken
+  // items subcollection read must not be masked by a successful meta
+  // read, and vice versa. 'loading' likewise wins over any settled
+  // state until BOTH have delivered a definitive result. Only once
+  // both are settled and neither errored does the meta sub-listener's
+  // own draft-existence signal (the only one of the two that actually
+  // means anything about existence — see its own state comment, above)
+  // decide 'confirmed-no-draft' vs 'draft-exists'.
+  const periodicStockDraftListenerState: DraftListenerState =
+    periodicStockDraftMetaListenerState === 'load-error' || periodicStockDraftItemsListenerState === 'load-error'
+      ? 'load-error'
+      : periodicStockDraftMetaListenerState === 'loading' || periodicStockDraftItemsListenerState === 'loading'
+      ? 'loading'
+      : periodicStockDraftMetaListenerState;
   // Reassembles the exact same PeriodicStockDraft shape every existing
   // consumer (PeriodicStockCountView.tsx's handleResumeDraft,
   // draftHasMeaningfulContent, etc.) already reads — no consumer needs
@@ -1572,10 +1633,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setStockCounts([]);
         setInitialStockDraft(null);
         setInitialStockDraftLoaded(false);
+        // [Decision 41D] Reset to 'loading' alongside every other
+        // sign-out reset here — a signed-out session has no listener
+        // result at all, definite or otherwise.
+        setInitialStockDraftListenerState('loading');
         setPeriodicStockDraftMeta(null);
         setPeriodicStockDraftItemsByKey({});
         setPeriodicStockDraftMetaLoaded(false);
         setPeriodicStockDraftItemsLoaded(false);
+        setPeriodicStockDraftMetaListenerState('loading');
+        setPeriodicStockDraftItemsListenerState('loading');
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
@@ -1638,6 +1705,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // this specific fix's scope.
     setInitialStockDraft(null);
     setInitialStockDraftLoaded(false);
+    // [Decision 41D] Reset to 'loading' for the same reason as the
+    // staleness-avoidance reset above — Business B's listener has not
+    // delivered anything yet, so any stale 'load-error'/'draft-exists'/
+    // 'confirmed-no-draft' left over from Business A must never leak
+    // into Business B's screen for the brief window before Business B's
+    // own listener fires.
+    setInitialStockDraftListenerState('loading');
     // [Stock Count Data-Loss Resilience — Implementation Task, Section 6]
     // Same staleness-avoidance reasoning as the two lines above, applied
     // to the sibling periodic draft — otherwise Business A's
@@ -1648,6 +1722,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPeriodicStockDraftItemsByKey({});
     setPeriodicStockDraftMetaLoaded(false);
     setPeriodicStockDraftItemsLoaded(false);
+    setPeriodicStockDraftMetaListenerState('loading');
+    setPeriodicStockDraftItemsListenerState('loading');
     // Phase C — same "reset unconditionally on every switch" reasoning
     // as the two lines above: a direct Business A -> Business B switch
     // must never carry A's suspended state into B's screen for the
@@ -2003,20 +2079,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 5b-2. Persistent Initial Stock draft — single doc, id 'initial'.
     // Owner-only per firestore.rules; a non-Owner (Staff) session simply
     // never receives a snapshot, same as any other Owner-only read here.
+    //
+    // [Decision 41D — Draft Listener State Hardening] `isOwner` is read
+    // via closure, not added to this effect's own dependency array
+    // (still just [activeBusinessId], unchanged) — firestore.rules
+    // grants read access to this document purely by isOwnerOf(businessId)
+    // (never subscription-gated), so for the lifetime of a subscription
+    // to one business, whether the CURRENT session is that business's
+    // owner does not change; it only ever changes together with
+    // activeBusinessId itself (a business switch, which already
+    // re-subscribes everything in this effect from scratch). This
+    // mirrors how `isOwner` is already read via closure by other code
+    // throughout this same component without being redeclared as a
+    // dependency of every effect that touches it.
     const initialDraftRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial');
     const unsubInitialDraft = onSnapshot(
       initialDraftRef,
       (snap) => {
+        // [Decision 41D §6] A successful snapshot is the ONLY thing
+        // that may ever produce 'confirmed-no-draft' or 'draft-exists'
+        // — never an error, never a stale guess.
         setInitialStockDraft(snap.exists() ? (snap.data() as InitialStockDraft) : null);
         setInitialStockDraftLoaded(true);
+        setInitialStockDraftListenerState(snap.exists() ? 'draft-exists' : 'confirmed-no-draft');
       },
-      // Expected for a Staff session (rules deny read) — not an error
-      // worth logging noisily; the draft simply stays null for them.
-      // Still counts as "loaded": a denied read IS Firestore's actual
-      // answer for this session, not an unknown/pending state.
-      () => {
-        setInitialStockDraft(null);
-        setInitialStockDraftLoaded(true);
+      (err) => {
+        if (isOwner) {
+          // [Decision 41D §3 — the central requirement] An Owner
+          // listener error must NEVER be collapsed into "no draft."
+          // Deliberately does NOT call setInitialStockDraft(null) —
+          // whatever this state already held (a real, previously-loaded
+          // draft, or still the untouched initial null if this is the
+          // very first callback) is left exactly as-is; only the
+          // governed state moves to 'load-error'. initialStockDraftLoaded
+          // is still set true, preserving its own pre-41D meaning
+          // exactly ("the listener has produced SOME definitive result,
+          // success or error") for every existing consumer that already
+          // gates on it — 41D adds the new, more precise signal
+          // alongside it rather than changing that flag's behavior.
+          console.error('Error fetching initial stock draft:', err);
+          setInitialStockDraftListenerState('load-error');
+          setInitialStockDraftLoaded(true);
+        } else {
+          // [Decision 41D §4] Staff permission denial — expected,
+          // governance-approved, and preserved EXACTLY as before: the
+          // draft stays null and is reported as 'confirmed-no-draft'
+          // (indistinguishable, to Staff's own UI, from any other
+          // session that genuinely has no draft), never surfaced as a
+          // load-error. This is not a reliability concern for Staff —
+          // it is Firestore correctly enforcing the Owner-only access
+          // boundary this collection has always had, per firestore.rules.
+          setInitialStockDraft(null);
+          setInitialStockDraftLoaded(true);
+          setInitialStockDraftListenerState('confirmed-no-draft');
+        }
       }
     );
 
@@ -2038,10 +2154,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (snap) => {
         setPeriodicStockDraftMeta(snap.exists() ? (snap.data() as Omit<PeriodicStockDraft, 'items'>) : null);
         setPeriodicStockDraftMetaLoaded(true);
+        setPeriodicStockDraftMetaListenerState(snap.exists() ? 'draft-exists' : 'confirmed-no-draft');
       },
-      () => {
-        setPeriodicStockDraftMeta(null);
-        setPeriodicStockDraftMetaLoaded(true);
+      (err) => {
+        // [Decision 41D] Same Owner-vs-Staff distinction as
+        // unsubInitialDraft's own error callback above — see that
+        // callback's comments for the full reasoning. This document
+        // shares the exact same firestore.rules access rule
+        // (isOwnerOf(businessId), never subscription-gated).
+        if (isOwner) {
+          console.error('Error fetching periodic stock draft meta:', err);
+          setPeriodicStockDraftMetaListenerState('load-error');
+          setPeriodicStockDraftMetaLoaded(true);
+        } else {
+          setPeriodicStockDraftMeta(null);
+          setPeriodicStockDraftMetaLoaded(true);
+          setPeriodicStockDraftMetaListenerState('confirmed-no-draft');
+        }
       }
     );
     const periodicDraftItemsRef = collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items');
@@ -2054,10 +2183,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         });
         setPeriodicStockDraftItemsByKey(byKey);
         setPeriodicStockDraftItemsLoaded(true);
+        // [Decision 41D] This sub-listener never asserts draft
+        // existence itself (the meta sub-listener, above, owns that
+        // signal — see periodicStockDraftItemsListenerState's own
+        // declaration comment) — 'draft-exists' here means only "this
+        // sub-listener has delivered a successful snapshot," combined
+        // with the meta state further below.
+        setPeriodicStockDraftItemsListenerState('draft-exists');
       },
-      () => {
-        setPeriodicStockDraftItemsByKey({});
-        setPeriodicStockDraftItemsLoaded(true);
+      (err) => {
+        if (isOwner) {
+          console.error('Error fetching periodic stock draft items:', err);
+          setPeriodicStockDraftItemsListenerState('load-error');
+          setPeriodicStockDraftItemsLoaded(true);
+        } else {
+          setPeriodicStockDraftItemsByKey({});
+          setPeriodicStockDraftItemsLoaded(true);
+          setPeriodicStockDraftItemsListenerState('confirmed-no-draft');
+        }
       }
     );
 
@@ -7127,10 +7270,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         initialStockCurrentValuation,
         initialStockDraft,
         initialStockDraftLoaded,
+        initialStockDraftListenerState,
         saveInitialStockDraft,
         clearInitialStockDraft,
         periodicStockDraft,
         periodicStockDraftLoaded,
+        periodicStockDraftListenerState,
         savePeriodicStockDraftItem,
         removePeriodicStockDraftItem,
         savePeriodicStockDraftMeta,
