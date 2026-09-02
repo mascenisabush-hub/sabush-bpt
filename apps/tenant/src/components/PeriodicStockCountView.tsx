@@ -756,7 +756,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
       // else: no valid bridge — retain the fallback already computed
       // above (latest batch's own unit/price, unconverted).
-    } else if (confirmedSellingUnit && !latestBatch) {
+    } else if (!latestBatch) {
       // [§45 Amendment FR-82; Implementation Authorization §2 item 4]
       // No StockBatch exists for this product at all — the central
       // real-world case this amendment exists to support: a product
@@ -767,21 +767,72 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // addition to StockBatch, which is empty here) for this
       // product's own most recent remembered (unit, sellingPrice)
       // pair, preferring a portion already denominated in the
-      // confirmed sellingUnit. Converted into sellingUnit terms via the
-      // same resolveUnitAwarePrice the batch-present branch above
-      // already uses — no second conversion mechanism. Never fabricates
-      // a value: findLatestRememberedProductMemory returns null when no
-      // memory exists anywhere, in which case unit/sellingPrice retain
+      // confirmed sellingUnit when one exists.
+      //
+      // [Owner-requested — single-unit-product autofill, follow-up
+      // investigation] This branch's own condition was previously
+      // `confirmedSellingUnit && !latestBatch` — gating this entire
+      // lookup behind a designated selling unit that a genuinely
+      // single-unit product structurally never has reason to set
+      // (confirmed by direct inspection of every current
+      // UnitRelationship-creation path across this codebase — each one
+      // requires at least one chain step beyond the base unit before
+      // constructing a relationship object at all — and POL-0005/
+      // isValidUnitRelationship's own contract, plus
+      // tests/unit-relationship.test.ts's own "does NOT require a
+      // selling price" case, explicitly treat a single-unit or
+      // no-designated-sellingUnit relationship as a legitimate,
+      // anticipated state, not an error). findLatestRememberedProductMemory
+      // itself has no dependency on a confirmed sellingUnit — that was
+      // only ever this call site's own gating, not the helper's
+      // contract (its `preferredSellingUnit` parameter is an OPTIONAL
+      // tie-break, used below only when one exists). Ungating this
+      // lookup closes the real autofill gap: a single-unit product
+      // whose only history is a prior Contagem (no batch, no confirmed
+      // sellingUnit) previously never reached this helper at all.
+      //
+      // When `confirmedSellingUnit` IS present, behavior is BYTE-
+      // IDENTICAL to before — same resolveUnitAwarePrice conversion,
+      // same preferredSellingUnit tie-break. When it is absent, there
+      // is no designated unit to convert into, so the remembered
+      // (unit, sellingPrice) pair is used exactly as recorded — no
+      // conversion is meaningful (or possible) without a target unit,
+      // and for a genuinely single-unit product the remembered unit
+      // already IS its own practical unit. Never fabricates a value:
+      // findLatestRememberedProductMemory returns null when no memory
+      // exists anywhere, in which case unit/sellingPrice retain
       // today's exact final fallback (product.sellingPrice raw, blank
       // unit), computed above.
       const memory = findLatestRememberedProductMemory(product.id, product.name, batches, stockCounts, confirmedSellingUnit);
       if (memory) {
-        const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, confirmedSellingUnit, relationship);
-        if (resolved !== '') {
-          unit = confirmedSellingUnit;
-          sellingPrice = resolved;
+        if (confirmedSellingUnit) {
+          const resolved = resolveUnitAwarePrice(memory.sellingPrice, memory.unit, confirmedSellingUnit, relationship);
+          if (resolved !== '') {
+            unit = confirmedSellingUnit;
+            sellingPrice = resolved;
+          }
+        } else {
+          unit = memory.unit;
+          sellingPrice = String(memory.sellingPrice);
         }
       }
+    }
+
+    // [Owner-requested — first-row default selling unit, independent of
+    // price memory] Every branch above only ever sets `unit` alongside a
+    // successfully resolved `sellingPrice` — a product with a confirmed
+    // UnitRelationship but no batch, no historical StockCount memory, and
+    // no Product.sellingPrice ever recorded left `unit` at '' even though
+    // its designated selling unit is already known. This final,
+    // price-independent fallback closes that gap: it NEVER overwrites a
+    // unit any branch above already set (only fires when `unit` is still
+    // blank), and it never invents a price — `sellingPrice` is completely
+    // untouched here. Same two-tier "confirmed sellingUnit, else the
+    // chain's own top-level unit" preference already established by
+    // computeDefaultReferenceConfig (below, this same file) — not a new
+    // default rule, the same one reused.
+    if (!unit) {
+      unit = confirmedSellingUnit || (isValidUnitRelationship(relationship) ? relationship!.units[0]?.unit : undefined) || '';
     }
 
     return {
@@ -1942,6 +1993,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       confirmedAt: new Date().toISOString(),
     };
     return isValidUnitRelationship(candidate) ? candidate : undefined;
+  };
+
+  // [Owner-requested — Unidade selection control] The valid unit options
+  // for ONE row's `Unidade` field, derived strictly from the SAME
+  // `getEffectiveUnitRelationshipForProductName` this file already uses
+  // for Mode A's own `referenceUnitOptions` (line ~5110, identical
+  // `relationship.units.map((u) => u.unit)` derivation) — no new unit
+  // model, no new resolution path. Returns `null` (never a fabricated
+  // list) when this product has no valid confirmed OR in-session
+  // candidate relationship — callers must fall back to the pre-existing
+  // free-text `<input>` in that case (Phase 1 Part C: "do not fabricate
+  // additional units").
+  //
+  // `currentUnit` is appended when it isn't already a member of the
+  // chain — this is what protects the "reopening does not silently
+  // re-derive" invariant (an already-stored unit, however it got there,
+  // must always remain selectable/displayed exactly as-is, never
+  // silently dropped or swapped merely because a `<select>` replaced a
+  // free-text `<input>`).
+  const getUnitOptionsForRow = (productName: string, currentUnit: string): string[] | null => {
+    const relationship = getEffectiveUnitRelationshipForProductName(productName);
+    if (!relationship || !isValidUnitRelationship(relationship)) return null;
+    const options = relationship.units.map((u) => u.unit);
+    const trimmedCurrent = currentUnit.trim();
+    if (trimmedCurrent && !options.some((u) => u.trim().toLowerCase() === trimmedCurrent.toLowerCase())) {
+      return [...options, trimmedCurrent];
+    }
+    return options;
   };
 
   // [Business Worth Evolution — Decision 37, B.4: Cost-Field Suppression
@@ -5154,14 +5233,47 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
-                          <input
-                            type="text"
-                            placeholder="un"
-                            value={row.unit}
-                            onChange={(e) => updateCatalogRow(productId, { unit: e.target.value })}
-                            disabled={isConfirmed}
-                            className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
-                          />
+                          {(() => {
+                            // [Owner-requested — Unidade selection
+                            // control] Same `updateCatalogRow` call, same
+                            // `unit` field, as the free-text input this
+                            // replaces below — a select is just a
+                            // different INPUT WIDGET for the identical
+                            // existing update path, so `applySellingConfigurationEditRules`'
+                            // own unit-change re-resolution rules (Rule
+                            // 2/3, above) fire exactly as they already did.
+                            const unitOptions = getUnitOptionsForRow(row.productName, row.unit);
+                            if (unitOptions) {
+                              return (
+                                <select
+                                  value={row.unit}
+                                  onChange={(e) => updateCatalogRow(productId, { unit: e.target.value })}
+                                  disabled={isConfirmed}
+                                  className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                >
+                                  {unitOptions.map((u) => (
+                                    <option key={u} value={u}>
+                                      {u}
+                                    </option>
+                                  ))}
+                                </select>
+                              );
+                            }
+                            // Phase 1 Part C: no valid UnitRelationship for
+                            // this product — no unit list to safely offer,
+                            // so the existing free-text entry is preserved
+                            // unchanged rather than fabricating options.
+                            return (
+                              <input
+                                type="text"
+                                placeholder="un"
+                                value={row.unit}
+                                onChange={(e) => updateCatalogRow(productId, { unit: e.target.value })}
+                                disabled={isConfirmed}
+                                className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
+                              />
+                            );
+                          })()}
                         </div>
 
                         {/* [§44 — Periodic Contagem Cost-Price Removal,
@@ -5624,13 +5736,47 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
                               <div>
                                 <label className={`${fieldLabelClass} sm:hidden`}>Unid</label>
-                                <input
-                                  type="text"
-                                  value={row.unit}
-                                  onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
-                                  disabled={isConfirmed}
-                                  className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
-                                />
+                                {(() => {
+                                  // [Owner-requested — Unidade selection
+                                  // control] Manual-row counterpart to the
+                                  // catalog-row block above — identical
+                                  // `getUnitOptionsForRow` helper, same
+                                  // `updateManualRow` update path, so a
+                                  // genuinely-new manual product (no
+                                  // relationship yet) keeps its existing
+                                  // free-text entry, while a manual portion
+                                  // of an already-known product/candidate
+                                  // relationship (e.g. mid-configuration in
+                                  // the same session) gets the selector too
+                                  // — same helper, same rule, no special
+                                  // case duplicated here.
+                                  const unitOptions = getUnitOptionsForRow(row.productName, row.unit);
+                                  if (unitOptions) {
+                                    return (
+                                      <select
+                                        value={row.unit}
+                                        onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
+                                        disabled={isConfirmed}
+                                        className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                      >
+                                        {unitOptions.map((u) => (
+                                          <option key={u} value={u}>
+                                            {u}
+                                          </option>
+                                        ))}
+                                      </select>
+                                    );
+                                  }
+                                  return (
+                                    <input
+                                      type="text"
+                                      value={row.unit}
+                                      onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
+                                      disabled={isConfirmed}
+                                      className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
+                                    />
+                                  );
+                                })()}
                               </div>
 
                               {/* [§44 — Periodic Contagem Cost-Price

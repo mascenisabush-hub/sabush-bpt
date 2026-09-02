@@ -153,10 +153,21 @@ describe('AC-07/AC-08/AC-09 — selling price and purchase cost are independentl
 });
 
 describe('AC-05/AC-06 — no-batch fallback (Finding D closure): buildCatalogRow/handleModeAToggle reuse findLatestRememberedProductMemory', () => {
-  it('buildCatalogRow calls findLatestRememberedProductMemory in a new tier reached only when a confirmed sellingUnit exists but no latestBatch does', () => {
+  it('buildCatalogRow calls findLatestRememberedProductMemory in a tier reached whenever no latestBatch exists — no longer additionally gated behind a confirmed sellingUnit', () => {
+    // [Owner-requested — single-unit-product autofill, follow-up
+    // investigation] This condition was `confirmedSellingUnit &&
+    // !latestBatch` — investigation proved a genuinely single-unit
+    // product (or any product whose confirmed UnitRelationship has no
+    // designated sellingUnit — POL-0005/isValidUnitRelationship's own
+    // "may remain optional/deferred" contract, tests/unit-relationship.
+    // test.ts's own "does NOT require a selling price" case) never
+    // reached this lookup at all. The call itself is unchanged —
+    // confirmedSellingUnit is still passed through as the OPTIONAL
+    // preferredSellingUnit tie-break — only the gating condition
+    // widened.
     assert.match(
       periodicSrc,
-      /\} else if \(confirmedSellingUnit && !latestBatch\) \{[\s\S]{0,1400}?findLatestRememberedProductMemory\(product\.id, product\.name, batches, stockCounts, confirmedSellingUnit\)/
+      /\} else if \(!latestBatch\) \{[\s\S]{0,3200}?findLatestRememberedProductMemory\(product\.id, product\.name, batches, stockCounts, confirmedSellingUnit\)/
     );
   });
 

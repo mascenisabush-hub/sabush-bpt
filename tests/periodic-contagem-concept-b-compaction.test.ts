@@ -431,8 +431,17 @@ describe('K — Validar/Editar workflow unchanged', () => {
   });
 
   it('disabled={isConfirmed} still gates the Qtd/Unid/Venda-Un inputs, unchanged', () => {
+    // [Owner-requested — Unidade selection control] Was 6 (3 fields x 2
+    // loops) before the Unidade free-text input was replaced with a
+    // conditional select-or-input (getUnitOptionsForRow — a valid
+    // UnitRelationship renders a <select>, otherwise the original
+    // free-text <input> is preserved unchanged). Both branches gate on
+    // the SAME `disabled={isConfirmed}`, so the count is now 8 (Qtd +
+    // Venda-Un x 2 loops = 4, plus Unid's select-or-input pair x 2 loops
+    // = 4) — still exactly one occurrence per rendered field, never an
+    // ungated one.
     const occurrences = periodicSrc.match(/disabled=\{isConfirmed\}/g) ?? [];
-    assert.equal(occurrences.length, 6, `Expected 6 disabled={isConfirmed} bindings (3 fields x 2 loops), found ${occurrences.length}.`);
+    assert.equal(occurrences.length, 8, `Expected 8 disabled={isConfirmed} bindings (Qtd+Venda-Un x 2 loops, plus Unid's select/input pair x 2 loops), found ${occurrences.length}.`);
   });
 });
 
