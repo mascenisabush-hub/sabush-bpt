@@ -3987,6 +3987,59 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     });
   };
 
+  // [Historical Contagem review/PDF — presentation-only enhancement]
+  // Smallest possible adapter reusing the EXISTING exportReportPdf
+  // helper (reportExport.ts) — same function, same table shape, same
+  // currency formatting as buildReceiptContent/
+  // buildPreConfirmExportContent immediately above/below this one
+  // (post-confirmation receipt and pre-confirmation live-list export,
+  // respectively). Reads `viewingCount.items` directly — the
+  // already-persisted, already-frozen StockCountItem[] — never
+  // re-joined against the live `products` collection and never
+  // re-derived from current Product Memory. Each persisted item
+  // (one per portion, catalog and manual alike) becomes its own
+  // table row, exactly as `normalizeStockCountItems` originally wrote
+  // it — no grouping/merging by product name is introduced here. The
+  // per-row Total uses `item.quantity * item.sellingPrice` — the same
+  // established expression the live-list detail view and both
+  // sibling PDF adapters already use — never a second, independently
+  // frozen line-value field (StockCountItem itself has no such field;
+  // this is consistent with the existing receipt/pre-confirmation
+  // adapters, which compute the same way from quantity × sellingPrice
+  // rather than assuming a persisted total per line). No `validated`
+  // field is read — a historical StockCountItem represents a
+  // finalized, already-confirmed Contagem, not an in-progress one.
+  const buildHistoricalExportContent = (count: StockCount) => {
+    const reportTitle = `Contagem — ${count.label || TYPE_LABELS[count.type]}`;
+    const periodLabel = formatDate(count.date);
+    const kpis = [
+      ...(typeof count.totalSellingValue === 'number'
+        ? [{ label: 'Valor de Venda Total', value: formatCurrency(count.totalSellingValue, currencySymbol) }]
+        : []),
+      { label: 'Produtos', value: String(count.items.length) },
+    ];
+    const tables = [
+      {
+        title: 'Produtos',
+        columns: ['Produto', 'Qtd', 'Unid', 'Venda/Un', 'Total'],
+        rows: count.items.map((item) => [
+          item.productName,
+          item.quantity,
+          item.unit || 'un',
+          typeof item.sellingPrice === 'number' ? formatCurrency(item.sellingPrice, currencySymbol) : '—',
+          typeof item.sellingPrice === 'number' ? formatCurrency(item.quantity * item.sellingPrice, currencySymbol) : '—',
+        ]),
+      },
+    ];
+    return { reportTitle, periodLabel, kpis, tables };
+  };
+
+  const handleDownloadHistoricalPdf = () => {
+    if (!viewingCount) return;
+    const content = buildHistoricalExportContent(viewingCount);
+    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables);
+  };
+
   if (savedMessage) {
     return (
       <div className="max-w-2xl mx-auto py-16 flex flex-col items-center text-center space-y-4">
@@ -6041,7 +6094,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           (business-worth-evolution-periodic-contagem-cost-price-removal-amendment.md)
           — cost is not shown here, consistent with that amendment's
           "friction disproportionate to value" finding for Periodic
-          Contagem cost figures generally. */}
+          Contagem cost figures generally.
+          [Historical Contagem review/PDF — presentation-only
+          enhancement] Reads `viewingCount.items` directly, exactly as
+          before — never re-joined against the live `products`
+          collection, never re-derived from current Product Memory.
+          Each persisted StockCountItem (one per portion, catalog and
+          manual alike — normalizeStockCountItems never groups by
+          name) remains its OWN independent row here; a multi-portion
+          product like Cebola ("4 saco" + "3 kg") still renders as two
+          separate lines, each with its own historical quantity/unit/
+          price, never merged or treated as a duplicate. The one
+          addition is the per-unit selling price line (`Preço de Venda
+          / Unidade`) — reads `item.sellingPrice` and
+          `item.sellingPriceBasisUnit ?? item.unit`, the exact same
+          fallback expression this file's own active-row caption
+          already uses (line ~5116/5570) — no new field, no new
+          derivation. No `validated` field is read or inferred here:
+          every item that reached `items[]` at confirmation time was,
+          by construction, already counted/finished — there is no
+          "still in progress" state left to represent historically. */}
       {viewingCount && (
         <div
           className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
@@ -6060,14 +6132,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   {formatDate(viewingCount.date)} · {viewingCount.items.length} produtos
                 </p>
               </div>
-              <button
-                type="button"
-                onClick={() => setViewingCount(null)}
-                aria-label="Fechar"
-                className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-150"
-              >
-                <X className="w-5 h-5" strokeWidth={2} />
-              </button>
+              <div className="flex items-center gap-1.5 shrink-0">
+                {/* [Historical Contagem PDF export] Reuses the SAME
+                    exportReportPdf helper (reportExport.ts) the live
+                    pre-confirmation export and the post-confirmation
+                    receipt already call — via
+                    buildHistoricalExportContent/
+                    handleDownloadHistoricalPdf, below, the smallest
+                    adapter reading viewingCount.items directly. */}
+                <button
+                  type="button"
+                  onClick={handleDownloadHistoricalPdf}
+                  aria-label="Exportar PDF desta contagem"
+                  className="flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold text-[#0B1F3A] bg-[#D4AF37]/[0.12] hover:bg-[#D4AF37]/[0.22] transition-colors duration-150 whitespace-nowrap"
+                >
+                  <FileDown className="w-3.5 h-3.5" strokeWidth={2.5} />
+                  <span className="hidden sm:inline">Exportar PDF</span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => setViewingCount(null)}
+                  aria-label="Fechar"
+                  className="shrink-0 p-1.5 rounded-lg text-gray-400 hover:text-gray-700 hover:bg-gray-100 transition-colors duration-150"
+                >
+                  <X className="w-5 h-5" strokeWidth={2} />
+                </button>
+              </div>
             </div>
 
             <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3 space-y-1">
@@ -6075,20 +6165,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <p className="text-[13px] text-gray-500 py-6 text-center">Nenhum produto registado nesta contagem.</p>
               ) : (
                 viewingCount.items.map((item, idx) => (
-                  <div
-                    key={`${item.productId}-${idx}`}
-                    className="flex items-center justify-between gap-3 py-2.5 border-b border-[#F6F5F0] last:border-b-0"
-                  >
-                    <div className="min-w-0 flex items-center gap-2">
+                  <div key={`${item.productId}-${idx}`} className="py-2.5 border-b border-[#F6F5F0] last:border-b-0">
+                    <div className="flex items-center gap-2 min-w-0">
                       <Package className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2} />
                       <p className="text-[13px] font-semibold text-[#111827] truncate">{item.productName}</p>
                     </div>
-                    <div className="text-right shrink-0">
-                      <span className="type-number text-[13px] text-[#111827] tabular-nums block">
+                    <div className="mt-1 pl-5 flex items-center justify-between gap-3">
+                      <span className="text-[12px] text-gray-500 tabular-nums">
                         {item.quantity} {item.unit || 'un'}
                       </span>
                       {typeof item.sellingPrice === 'number' && (
-                        <span className="text-[12px] text-gray-500 tabular-nums block">
+                        <span className="text-[12px] text-gray-500 tabular-nums text-right">
+                          {formatCurrency(item.sellingPrice, currencySymbol)} /{(item.sellingPriceBasisUnit ?? item.unit ?? 'un').trim() || 'un'}
+                        </span>
+                      )}
+                      {typeof item.sellingPrice === 'number' && (
+                        <span className="type-number text-[13px] font-semibold text-[#111827] tabular-nums text-right shrink-0">
                           {formatCurrency(item.quantity * item.sellingPrice, currencySymbol)}
                         </span>
                       )}

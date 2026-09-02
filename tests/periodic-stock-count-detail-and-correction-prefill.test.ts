@@ -48,8 +48,12 @@ describe('PeriodicStockCountView.tsx — view past count details (any count, no 
   });
 
   it('renders every item\'s productName, quantity, and unit from the real StockCountItem — never a recomputed/derived name', () => {
+    // [Historical Contagem review/PDF enhancement] Window widened
+    // (3000 -> 4500) purely because the modal grew (an export button +
+    // per-unit price line were added before this content) — the actual
+    // assertions/guarantee below are unchanged.
     const idx = src.indexOf('{viewingCount && (');
-    const nearby = src.slice(idx, idx + 3000);
+    const nearby = src.slice(idx, idx + 4500);
     assert.match(nearby, /viewingCount\.items\.map/);
     assert.match(nearby, /item\.productName/);
     assert.match(nearby, /item\.quantity/);
@@ -57,8 +61,10 @@ describe('PeriodicStockCountView.tsx — view past count details (any count, no 
   });
 
   it('shows Selling Value as the headline total, per the accepted §44 amendment\'s convention — not cost', () => {
+    // [Historical Contagem review/PDF enhancement] Window widened
+    // (4200 -> 6000) for the same reason as the test above.
     const idx = src.indexOf('{viewingCount && (');
-    const nearby = src.slice(idx, idx + 4200);
+    const nearby = src.slice(idx, idx + 6000);
     assert.match(nearby, /viewingCount\.totalSellingValue/);
     // Explicitly does not surface totalValue (the cost-basis figure) in
     // this new view — matches §9's "friction disproportionate to
@@ -67,8 +73,10 @@ describe('PeriodicStockCountView.tsx — view past count details (any count, no 
   });
 
   it('never shows a fabricated €0 for a count recorded before totalSellingValue existed — genuinely absent, not a zero (FR-69 discipline, already established elsewhere in this codebase)', () => {
+    // [Historical Contagem review/PDF enhancement] Window widened
+    // (4200 -> 6000) for the same reason as the two tests above.
     const idx = src.indexOf('{viewingCount && (');
-    const nearby = src.slice(idx, idx + 4200);
+    const nearby = src.slice(idx, idx + 6000);
     assert.match(nearby, /typeof viewingCount\.totalSellingValue === 'number' \? \(/);
     assert.doesNotMatch(nearby, /totalSellingValue \?\? 0/);
   });
