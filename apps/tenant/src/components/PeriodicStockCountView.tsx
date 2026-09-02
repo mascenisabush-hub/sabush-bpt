@@ -1,5 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, type StockCountReconciliationSignal } from '../context/AppContext';
+import { isFirestorePersistenceActive } from '../lib/firebase';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { StockCount, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
@@ -4849,6 +4850,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           `max-w-5xl` is appropriate there since neither uses a
           side-by-side split; only Contagem's own two-panel layout
           benefits from the extra room. */}
+      {/* [Bug fix — Contagem data-loss incident, root-cause investigation]
+          The entire autosave/interruption-flush safety net (Decision
+          38-40) is built on Firestore's persistent local cache actually
+          being active (lib/firebase.ts). On a device/browser where that
+          cache silently failed to initialize (Private/Incognito
+          browsing, a storage-restricted in-app browser, IndexedDB
+          quota/corruption), every write this session is memory-only —
+          a refresh or tab close CAN genuinely lose whatever hasn't
+          finished reaching the server yet, with none of the usual
+          guarantees. Previously this failure was swallowed silently
+          with no signal to the operator at all — this banner is that
+          signal, shown only when persistence is confirmed inactive. */}
+      {!isFirestorePersistenceActive && (
+        <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-start gap-3">
+          <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
+          <div className="flex-1">
+            <p className="text-[13px] font-bold text-amber-800">A gravação automática pode não estar totalmente protegida neste dispositivo</p>
+            <p className="text-[13px] text-amber-700 mt-0.5">
+              Este navegador (ex.: modo privado/anónimo) está a impedir a gravação local de segurança. Evite recarregar
+              a página ou fechar o separador antes de ver "Guardado" — se possível, use uma janela normal (não
+              privada) para contar o stock.
+            </p>
+          </div>
+        </div>
+      )}
+
       {/* [Cross-Device Live-Update Notice — safe interim fix] Purely
           informational: this device's own rows (catalogRows,
           manualRows, etc.) are completely untouched by this banner —

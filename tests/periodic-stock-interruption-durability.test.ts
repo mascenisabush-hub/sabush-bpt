@@ -328,7 +328,34 @@ describe('§7 item 13 (source half) — Firestore persistent local cache is conf
   });
 
   it('falls back to getFirestore if initializeFirestore throws (e.g. re-evaluation under HMR), rather than crashing', () => {
-    assert.match(firebaseSource, /catch\s*\{/, 'Expected a catch block guarding the initializeFirestore call.');
+    // [Bug fix — Contagem data-loss incident] The catch now binds the
+    // error (`catch (err)`) rather than discarding it (`catch {}`), so a
+    // genuine persistence failure — as opposed to the expected HMR
+    // re-init — can be distinguished and logged instead of silently
+    // swallowed. Still guards the initializeFirestore call and still
+    // falls back correctly either way.
+    assert.match(firebaseSource, /catch\s*\(err\)\s*\{/, 'Expected a catch block guarding the initializeFirestore call.');
     assert.match(firebaseSource, /getFirestore\(app,\s*firestoreDatabaseId\)/, 'Expected the catch fallback to still respect the databaseId conditional.');
+  });
+
+  it('does NOT silently swallow a genuine persistence-init failure — only the expected re-init case is treated as harmless', () => {
+    assert.match(
+      firebaseSource,
+      /isExpectedReinit/,
+      'Expected the catch block to distinguish the harmless HMR re-init error from a genuine persistence failure.'
+    );
+    assert.match(
+      firebaseSource,
+      /console\.error\(\s*\n?\s*['"]\[Firebase Init\]/,
+      'Expected a genuine persistence failure to be logged loudly, not swallowed.'
+    );
+  });
+
+  it('exports isFirestorePersistenceActive so views depending on the autosave safety net can warn the operator when it is off', () => {
+    assert.match(
+      firebaseSource,
+      /export let isFirestorePersistenceActive/,
+      'Expected an exported flag reporting whether the persistent local cache actually activated.'
+    );
   });
 });
