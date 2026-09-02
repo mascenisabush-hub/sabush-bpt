@@ -1,33 +1,47 @@
-Rule 8 Assessment — DRAFT, READ-ONLY
+Rule 8 Assessment — FINAL
 
 # Rule 8 Assessment — Data Protection Hardening (Decision 41)
 
-**STATUS:** 🟡 **DRAFT — RULE 8 ASSESSMENT.** NOT SIGNED. NOT AN
-IMPLEMENTATION AUTHORIZATION. This document does not authorize
-implementation and is not committed or pushed.
+**STATUS:** ✅ **FINAL — RULE 8 ASSESSMENT COMPLETE.** Verdicts
+confirmed following Decision 42's resolution of the two items
+originally marked READY AFTER DECISION. This document does not
+authorize implementation; a separate Implementation Plan and a signed
+Implementation Authorization remain required, subsequent gates.
 
 **Governing chain:** [`stock-count-data-loss-resilience-specification.md`](../specs/stock-count-data-loss-resilience-specification.md)
 (Frozen, Decision 38) → [Decision 39 amendment](../specs/stock-count-data-loss-resilience-decision-39-amendment.md)
 (✅ Accepted and Authorized, implemented) → [Decision 40 amendment](../specs/stock-count-data-loss-resilience-decision-40-amendment.md)
 (✅ Accepted and Authorized, implemented) → [Decision 41 amendment](../specs/stock-count-data-loss-resilience-decision-41-amendment.md)
-(✅ **ACCEPTED AND AUTHORIZED — GOVERNANCE DECISION STAGE ONLY** —
-SABUSHIMIKE MASCENI, Product Architect, 2 September 2026) → **this
-assessment**.
+(✅ Accepted and Authorized — governance decision stage only —
+SABUSHIMIKE MASCENI, Product Architect, 2 September 2026) → this
+assessment (originally drafted with 41A/41C marked READY AFTER
+DECISION) → [Decision 42 amendment](../specs/stock-count-data-loss-resilience-decision-42-amendment.md)
+(✅ Accepted and Authorized — governance decision stage only —
+SABUSHIMIKE MASCENI, Product Architect, 2 September 2026 — resolved
+both open items) → **this finalization**.
 
-**Repository baseline:** `main = origin/main = 80ecd2d98b3bda4ca1287697a4809b06091bb30c`,
-working tree clean at the start of this assessment except for the
-untracked, uncommitted Decision 41 amendment document itself
-(`docs/specs/stock-count-data-loss-resilience-decision-41-amendment.md`).
-No application code implementing any part of Decision 41 exists yet
-at this baseline — Decision 41 exists as governance text only.
+**Repository baseline:** `main = origin/main = b242d34` (Decision 41,
+this assessment's original draft, and Decision 42 all merged to
+`main` in that single commit). No application code implementing any
+part of Decision 41 or Decision 42 exists yet at this baseline —
+both remain governance text only.
 
 **Scope of this assessment:** exactly Decisions 41A–41E, as accepted.
 41F (browser teardown verification) and 41G (same-row concurrent
-editing) are explicitly out of scope — both remain recorded,
-non-blocking concerns per Decision 41's own text and are not assessed
-for implementation-readiness here. This assessment does not reopen
-Decisions 38, 39, or 40; their existing mechanisms are the fixed
-baseline every finding below is measured against.
+editing) remain explicitly out of scope — both remain recorded,
+non-blocking concerns per Decision 41's own text, unchanged and not
+converted to implementation scope by Decision 42 or by this
+finalization. This assessment does not reopen Decisions 38, 39, or
+40; their existing mechanisms are the fixed baseline every finding
+below is measured against.
+
+**What changed in this finalization, precisely:** §B (41A) and §D
+(41C) below are updated to reflect Decision 42's resolution of the
+exact questions this assessment's own original §R raised. §C (41B),
+§E (41D), and §F (41E) are unchanged from the original draft — none
+of their findings, evidence, or verdicts are reopened or redesigned
+here. §Q (verdict table) and §R are updated accordingly. No other
+section's factual content is altered.
 
 ---
 
@@ -75,17 +89,29 @@ This effect's dependency array is `[activeBusinessId]` — it runs **after** `ac
 - **Approach 1 — pre-switch flush via coordination.** Introduce a mechanism (e.g., a ref/callback the active Contagem view registers, that `ShopSwitcher`'s `handleSwitch` consults and awaits before calling `switchShop()`). Avoids the contamination risk entirely by flushing while `activeBusinessId` is still correct. Requires new coordination surface between two currently-unrelated components.
 - **Approach 2 — reactive in-effect flush with an explicit businessId.** Keep the flush inside each view's own reactive effect, but capture the *old* business id (already available as `loadedForBusinessId` at the top of the effect, before it's overwritten) and pass it explicitly to a save-path variant that writes to that captured id rather than reading `activeBusinessId` live. Requires the save functions (or a dedicated variant) to accept an explicit `businessId` parameter — a signature change `savePeriodicStockDraftItem`/`flushPeriodicStockDraftRows` do not currently have.
 
-Both are legitimate, evidence-supported options. This assessment does not recommend one — Decision 41A's own text ("flush using the existing persistence mechanism") is compatible with either, but is not itself precise enough to determine which, and the naive literal reading (flush unmodified, in place, inside the existing effect) is the one option proven above to be unsafe.
+Both were, at the time of the original draft, legitimate, evidence-supported options between which this assessment did not recommend one.
 
 **Item 13 — race conditions in `detectShopSwitch` itself.** `detectShopSwitch` (`shopSwitchGuard.ts`) is a pure function performing simple value equality (`activeBusinessId === loadedForBusinessId`); no race condition was found in the function itself. The risk identified above is not in this function but in what the *consuming* effect does once a switch is detected.
 
-**Item 7 — concurrent business-switch behavior.** Not established from code: what happens if an operator triggers a second switch before a first switch's flush (once implemented) has completed. This is a genuine open question for the Implementation Plan, not resolved by this assessment.
+**Item 7 — concurrent business-switch behavior.** Not established from code: what happens if an operator triggers a second switch before a first switch's flush (once implemented) has completed. This remains a genuine open question for the Implementation Plan — Decision 42 did not resolve it and did not need to; it is recorded here as an implementation-planning question, not a Rule 8 blocker (per Decision 42A's own text: "the future Implementation Plan must determine the exact coordination mechanism and its lifecycle behavior").
 
-**Item 14/15 — test coverage.** `tests/periodic-stock-shop-switch-guard.test.ts` exists but (confirmed in the prior forensic audit and re-confirmed here) contains no assertion about flush-before-reset — it tests the pure `detectShopSwitch`/`isBusinessDataReady` functions, not the reactive effect's write behavior. No equivalent test file exists for Initial Stock Count's shop-switch behavior at all. New tests required at minimum: (a) a flush issued before a switch writes to the *old* business's path, never the new one, regardless of which approach is chosen; (b) a failed flush surfaces the required operator-facing state rather than silently proceeding; (c) existing write serialization (`draftInFlightSaveRef`-equivalent) is respected by whatever new flush call is added.
+**Item 14/15 — test coverage.** `tests/periodic-stock-shop-switch-guard.test.ts` exists but (confirmed in the prior forensic audit and re-confirmed here) contains no assertion about flush-before-reset — it tests the pure `detectShopSwitch`/`isBusinessDataReady` functions, not the reactive effect's write behavior. No equivalent test file exists for Initial Stock Count's shop-switch behavior at all. New tests required at minimum: (a) a flush issued before a switch writes to the *old* business's path, never the new one; (b) a failed flush surfaces the required operator-facing state rather than silently proceeding; (c) existing write serialization (`draftInFlightSaveRef`-equivalent) is respected by whatever new flush call is added; (d) coverage for both Periodic and Initial Stock Count. None of these tests are created by this finalization.
 
-**Item 16/17 — performance/regression.** Negligible added latency in the successful case (one network round-trip, already an accepted cost for the identical unmount-flush mechanism under Decision 39). Regression risk is concentrated entirely in the cross-tenant-write question above — low risk if either Approach 1 or 2 is implemented deliberately with the explicit-businessId or coordination fix; **high risk (data-corruption-adjacent) if implemented as a literal, unmodified reuse of the existing flush function inside the existing effect**, which this assessment explicitly flags as unsafe.
+**Item 16/17 — performance/regression.** Negligible added latency in the successful case (one network round-trip, already an accepted cost for the identical unmount-flush mechanism under Decision 39). Regression risk, under the now-accepted direction, is low: Decision 42A commits to the coordinated pre-switch flush (Approach 1) specifically because it structurally avoids the cross-tenant-write scenario, rather than requiring a save-function signature change to avoid it defensively (Approach 2).
 
-**Decision 41A verdict: READY AFTER DECISION.** The technical facts are now well understood, not uncertain — what remains is a specific choice between Approach 1 and Approach 2 (or an equivalent third option), which this assessment surfaces precisely without selecting, per the governing instruction not to design the implementation.
+**Decision 42A resolution, applied.** Decision 42 (§2, "42A — Business-Switch Protection: Architectural Direction") accepted **pre-switch flush via coordination** as the architectural direction, and explicitly foreclosed the unsafe pattern this assessment identified. Restated exactly as Decision 42 requires:
+
+- The flush occurs **before** the business switch is committed — specifically, before `switchShop()`'s own `updateDoc` call, per this assessment's own tracing of that function (item 10, above) — not from inside the reactive `[activeBusinessId]` effect after the value has already changed.
+- The old business id remains the active business id at the moment the flush's persistence operation resolves its Firestore target path — the exact invariant this assessment's item 11/12 finding required.
+- The existing Decisions 38–40 persistence/serialization mechanisms (per-row draft documents, `draftInFlightSaveRef`/`flushInFlightSaveRef` write serialization) remain the foundation this coordination is built on, not around.
+- This applies identically to Periodic Stock Count and Initial Stock Count.
+- If no pending work exists at the moment of a switch, no unnecessary flush is performed; if pending work exists, persistence is attempted before the switch proceeds.
+- A failed flush must not silently discard pending work or silently allow the switch to proceed as though the work were saved — Decision 41A's original hybrid failure behavior (operator informed, given an explicit, understandable choice) is preserved unchanged by Decision 42B.
+- The exact coordination mechanism (the "minimum necessary communication surface between `ShopSwitcher` and the active Contagem view") is deliberately left to the Implementation Plan — Decision 42 resolves the architectural direction, not the mechanism's exact shape. This is consistent with, not a gap in, Decision 42's own stated intent.
+
+The concurrent/second-switch question (item 7, above) remains open exactly as Decision 42 itself anticipated, and is carried forward as an Implementation Plan question, not converted into a blocker.
+
+**Decision 41A verdict: READY.** The architectural ambiguity that previously blocked readiness — which of two structurally different approaches to take — has been resolved by Decision 42A's selection of the coordinated pre-switch flush, which this assessment's own tracing had already identified as the approach that structurally avoids the cross-tenant-write risk. No remaining Rule 8-level uncertainty exists; the exact coordination mechanism and second-switch handling are Implementation Plan questions, not Rule 8 concerns.
 
 ---
 
@@ -137,9 +163,17 @@ Direct precedent already exists and is already shipped: `AppContext.tsx`'s `busi
 
 **Items 10/11 — `getDocFromServer` failure vs. `setDoc` failure.** Confirmed, per the prior forensic audit and re-confirmed here: the current `.catch()` treats a `setDoc` failure and a post-`setDoc` `getDocFromServer` readback failure identically — both produce `save-failed`, and the function cannot currently distinguish "the write did not happen" from "the write may have happened but acknowledgement could not be confirmed." **This is a genuine open question requiring a specification-level answer, not something this assessment resolves**: should a readback failure be treated the same as a write failure (safe but potentially redundant — a retry might re-send data that already arrived), or should it be classified as its own third state? Decision 41C's own text already anticipates something like this ("unknown/requires user attention" as a third category) — this finding is evidence that this third category is not merely theoretical but maps onto a real, already-identified code path.
 
-**Item 12 — how should this affect the specification?** The specification produced under Decision 41C must explicitly decide the readback-failure question above; this assessment flags it as a required specification detail, not a blocker to proceeding to that specification-drafting stage.
+**Item 12 — how should this affect the specification?** At the time of the original draft, the specification produced under Decision 41C was flagged as needing to decide the readback-failure question above.
 
-**Decision 41C verdict: READY AFTER DECISION.** The central risk the Decision itself worried about (retrying a legitimately-denied write indefinitely) is substantially de-risked by evidence already in the codebase for the specific case named (subscription blocking is proactively, reliably knowable client-side, without needing to interpret an error code after the fact). What remains for the Product Architect / specification stage is narrower than originally scoped: (a) confirm that the subscription-block pre-check is the accepted mechanism for that specific legitimate-rejection case, (b) decide the readback-failure classification question above, and (c) decide the specific bounded retry count/backoff parameters — none of which are blocking uncertainties, all of which are concrete, answerable decisions.
+**Decision 42C–42F resolution, applied.** Decision 42 resolved all three items this assessment's original §R raised for 41C:
+
+- **Subscription-blocked draft write (Decision 42C):** confirmed **LEGITIMATE / NON-RETRYABLE**. The proactive `subscriptionBlocksNewRecords` pre-check identified in item 3/§156 above is the accepted classification mechanism for this specific case — exactly the mechanism this assessment found already de-risked the central concern. Decision 42C is explicit, and this assessment restates it without qualification: this client-side signal does not replace Firestore's own enforcement, `firestore.rules` remains authoritative regardless of client behavior, and no security decision is ever delegated to it — it governs retry/recovery UX only.
+- **`getDocFromServer` readback failure (Decision 42D):** confirmed as its own distinct **UNKNOWN / REQUIRES ATTENTION** category — not treated as a confirmed write failure, and not treated as confirmed persistence either, exactly resolving the open question item 10/11 above raised. Decision 42D's own stated reason is adopted here unchanged: a successful `setDoc()` followed by a failed readback does not prove the write failed, so representing it as a definite failure would misrepresent an uncertain outcome as certain.
+- **Bounded transient retry (Decision 42E):** a maximum of 3 automatic retries after the initial attempt (4 total), with increasing backoff, is now the accepted policy — resolving the "specific bounded retry count/backoff parameters" item this assessment's original §R left open. Exact delay values remain, by Decision 42E's own deliberate choice, a later implementation-specification detail — this assessment does not invent them, consistent with Decision 42's own instruction not to.
+
+The four-state model this assessment's item 10/11 finding anticipated is now confirmed as governance-accepted, not merely this assessment's own speculation: **write confirmed success / transient write failure / legitimate non-retryable rejection / unknown requires-attention** (Decision 42D). Decision 42F further confirms the non-retryable category list (subscription-blocked; authorization/ownership rejection; other legitimate rule rejection; invalid request/data errors; unknown/requires-attention outcomes) and explicitly defers the full Firestore-error-code-to-category mapping table to the specification stage, using only error codes already verified in this codebase (per the `permission-denied`/`unavailable` precedent this assessment traced in item 1/2 above) — this assessment does not invent that table, and neither does Decision 42.
+
+**Decision 41C verdict: READY.** Every item this assessment's original §R identified as remaining for 41C has been explicitly resolved by Decision 42C–42F. No Rule 8-level uncertainty remains; the exact backoff delay values and the full error-code classification table are confirmed, by Decision 42 itself, as deliberately deferred implementation-specification details, not open Rule 8 questions.
 
 ---
 
@@ -289,52 +323,59 @@ Negligible across all five decisions. 41A/41B add at most one additional network
 
 ---
 
-## Q. Rule 8 Verdict
+## Q. Rule 8 Verdict — FINAL
 
-| Decision | Verdict | Basis |
+| Decision | Final Rule 8 Verdict | Basis |
 |---|---|---|
-| **41A — Business-switch protection** | **READY AFTER DECISION** | A genuine, confirmed cross-tenant-write risk exists in the naive implementation; two well-defined candidate approaches (pre-switch coordination vs. explicit-businessId reactive flush) are identified; a Product Architect / specification-stage choice between them is required before an Implementation Plan can safely proceed. |
-| **41B — Initial Stock unmount protection** | **READY** | Existing `latestFlushArgs` already provides live-state correctness; no cross-tenant risk applies to this transition; the required change is a direct, low-risk port of Periodic Contagem's own already-proven, already-tested mechanism. |
-| **41C — Failed autosave recovery** | **READY AFTER DECISION** | The central risk (retrying a legitimate denial) is substantially de-risked by the existing, proactive `subscriptionBlocksNewRecords` signal; remaining open items (readback-failure classification, exact retry parameters) are concrete and answerable, not blocking uncertainties. |
-| **41D — Listener error distinction** | **READY** | No rules change required; confirmed no destructive side effect in the current error path; fix is a client-side state-representation change consistent with the Decision as written. |
-| **41E — Subscription-blocked accessibility** | **READY** | Directly traced and confirmed: no incidental write exists in the view/resume path; `firestore.rules` already cleanly separates read from create/update with zero rules change required. One UX-completeness detail (read-only rendering vs. editable-but-safely-rejected) flagged for the specification stage, not blocking. |
+| **41A — Business-switch protection** | **READY** | The cross-tenant-write risk this assessment identified is resolved by Decision 42A's acceptance of the coordinated pre-switch flush — the approach this assessment's own tracing had already shown structurally avoids that risk. Exact coordination mechanism and second-switch handling are confirmed Implementation Plan questions, not Rule 8 concerns. |
+| **41B — Initial Stock unmount protection** | **READY** | Unchanged from the original draft. Existing `latestFlushArgs` already provides live-state correctness; no cross-tenant risk applies to this transition; the required change is a direct, low-risk port of Periodic Contagem's own already-proven, already-tested mechanism. |
+| **41C — Failed autosave recovery** | **READY** | Every item this assessment's original §R raised is resolved by Decision 42C–42F: subscription-block classified legitimate/non-retryable via the proactive `subscriptionBlocksNewRecords` signal; readback failure classified as its own unknown/requires-attention state; bounded retry policy (3 retries, 4 total attempts, increasing backoff) set. Exact delay values and the full error-code table remain deliberately deferred to specification, per Decision 42's own instruction, not open Rule 8 questions. |
+| **41D — Listener error distinction** | **READY** | Unchanged from the original draft. No rules change required; confirmed no destructive side effect in the current error path; fix is a client-side state-representation change consistent with the Decision as written. |
+| **41E — Subscription-blocked accessibility** | **READY** | Unchanged from the original draft. Directly traced and confirmed: no incidental write exists in the view/resume path; `firestore.rules` already cleanly separates read from create/update with zero rules change required. One UX-completeness detail (read-only rendering vs. editable-but-safely-rejected) remains recorded as a specification-stage question, not a Rule 8 blocker. |
 
-**No decision is assessed as CONCERN or BLOCKED.** Two (41A, 41C) require a specific, well-defined Product Architect or specification-stage decision before proceeding to READY; three (41B, 41D, 41E) have no remaining open question found by this assessment.
+**No Decision 41A–41E item remains CONCERN, BLOCKED, or READY AFTER DECISION.**
+
+Confirmed, globally, across all five: tenant isolation remains preserved (41A's risk was a client-side path-construction concern, resolved architecturally by Decision 42A, never an authorization gap); Owner/staff authorization is unchanged (41D explicitly preserves staff-denial); subscription enforcement is unchanged (41C/41E both explicitly preserve `firestore.rules` as authoritative, per Decision 42C/42G); no Firestore rules change is required by any of the five; no schema migration is required; no new persistent storage architecture is required (41C's retry state is ephemeral client-side state only, per Decision 42's own non-goals); the existing Decisions 38–40 mechanisms remain the fixed baseline throughout; and no non-goal recorded in Decision 41 or Decision 42 has been converted into implementation scope by this finalization.
 
 ---
 
 ## R. Required Product Architect Decisions
 
-Restating precisely, per the instruction not to invent these but to state them exactly:
+**None remaining.** Both items this assessment's original §R raised — the 41A approach choice, and 41C's three sub-items (subscription pre-check confirmation, readback-failure classification, retry parameters) — have been resolved by Decision 42 (§2–§7 of that document). No further Product Architect input is required before proceeding to the Implementation Plan for 41A–41E.
 
-1. **For 41A:** which candidate approach — pre-switch flush via a new coordination mechanism between `ShopSwitcher` and the active Contagem view, or a reactive in-effect flush using an explicitly-parameterized `businessId` (requiring a save-function signature change) — is accepted. A third, equivalent option may also be proposed at specification stage if neither is preferred.
-2. **For 41C:** (a) confirm the proactive `subscriptionBlocksNewRecords` pre-check is the accepted mechanism for classifying the subscription-block case as legitimate/non-retryable; (b) decide whether a `getDocFromServer` readback failure (write may have succeeded, acknowledgement unconfirmed) should be treated identically to an outright `setDoc` failure, or as its own distinct "unknown" category; (c) set the bounded retry count/backoff parameters.
+The following remain as **Implementation Plan questions**, carried forward without conversion into Rule 8 concerns or Product Architect decisions, per Decision 42's own deliberate deferrals:
 
-No other decision in this assessment requires further Product Architect input before proceeding to specification/Implementation Plan drafting for 41B, 41D, and 41E.
+- 41A: the exact coordination mechanism between `ShopSwitcher` and the active Contagem view, and behavior under a second switch attempted before a first switch's flush resolves.
+- 41C: exact backoff delay values, and the full Firestore-error-code-to-category classification table (to be built from error codes already verified in this codebase, per Decision 42F).
+- 41E: whether "view/resume while blocked" renders as genuinely read-only (inputs disabled) or as the existing editable resume flow with writes safely rejected at the rules layer.
 
 ---
 
 ## S. Exact Next Governance Gate
 
-Per the standing sequence and per Decision 41's own §6:
+Per the standing sequence, Decision 41's own §6, and Decision 42's own §13:
 
 ```
-Decision 41 (accepted) → this Rule 8 Assessment (complete, draft/unsigned)
-  → Required Product Architect Decisions (§R, for 41A and 41C only)
-  → Implementation Plan (covering 41A-41E)
+Decision 41 (accepted) → this Rule 8 Assessment (originally draft, 41A/41C
+  READY AFTER DECISION) → Decision 42 (accepted, resolved both open items)
+  → this Rule 8 Assessment, FINALIZED (41A-41E all READY)
+  → IMPLEMENTATION PLAN (covering 41A-41E)
   → Product Architect Acceptance
   → Stage 8 Implementation Authorization
   → Implementation
   → Verification
 ```
 
-This assessment does not itself constitute Product Architect sign-off, an Implementation Plan, or an Implementation Authorization. No gate beyond this Rule 8 Assessment has been entered.
+**NEXT GATE: IMPLEMENTATION PLAN — covering Decision 41A–41E against this finalized Rule 8 Assessment.**
+
+This finalized assessment does not itself constitute Product Architect sign-off on an Implementation Plan, an Implementation Plan, or an Implementation Authorization. A FINAL/READY Rule 8 Assessment does not authorize implementation — no gate beyond this Rule 8 Assessment has been entered.
 
 ---
 
 ## FINAL STATUS
 
-**RULE 8 ASSESSMENT COMPLETE — DRAFT, UNSIGNED**
+**RULE 8 ASSESSMENT — FINAL, ALL VERDICTS READY (41A–41E)**
+**41F AND 41G REMAIN NON-BLOCKING RECORDED CONCERNS, OUT OF SCOPE, NOT IMPLEMENTATION-AUTHORIZED**
 **IMPLEMENTATION NOT AUTHORIZED**
 **NO CODE MODIFIED**
 **NO TESTS MODIFIED**
@@ -342,4 +383,6 @@ This assessment does not itself constitute Product Architect sign-off, an Implem
 **NO IMPLEMENTATION PLAN CREATED**
 **NO IMPLEMENTATION AUTHORIZATION CREATED**
 **DECISION 41 NOT MODIFIED**
+**DECISION 42 NOT MODIFIED**
+**DECISIONS 38–40 NOT MODIFIED**
 **NO COMMIT/PUSH**
