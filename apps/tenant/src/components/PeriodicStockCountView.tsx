@@ -4657,7 +4657,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   }
 
   return (
-    <div className="max-w-5xl mx-auto pb-12 space-y-4">
+    <div className="max-w-7xl mx-auto pb-12 space-y-4">
+      {/* [Layout — wider working area] Was `max-w-5xl` (1024px), a
+          SECOND, tighter cap stacked directly on top of App.tsx's own
+          `<main className="max-w-7xl ...">` wrapper — the two nested
+          caps combined to leave large empty margins on a wide desktop
+          viewport while the two-column grid below (LEFT workspace /
+          RIGHT product list) squeezed a 5-column data table into
+          roughly half of the already-halved 1024px. `max-w-7xl` here
+          matches App.tsx's own outer cap exactly, so this is no longer
+          a second, redundant restriction — this screen now uses the
+          same working width every other screen already gets from
+          App.tsx, no more, no less. AddStockView.tsx/
+          InitialStockCountView.tsx are untouched — their own
+          `max-w-5xl` is appropriate there since neither uses a
+          side-by-side split; only Contagem's own two-panel layout
+          benefits from the extra room. */}
       {/* [Cross-Device Live-Update Notice — safe interim fix] Purely
           informational: this device's own rows (catalogRows,
           manualRows, etc.) are completely untouched by this banner —
@@ -4897,8 +4912,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               before this change). Both columns remain the EXACT same
               JSX/content as before this Authorization — this wrapper
               only changes layout, not what renders inside either
-              column. */}
-          <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
+              column.
+              [Layout — idle-state single column] The `lg:grid-cols-2`
+              split is now conditional on `isWorkspaceActive`. While
+              idle, the LEFT column holds only the "add manual product"
+              placeholder (near-empty) while the RIGHT column carries the
+              full product table (Nome/Qtd/Unid/Venda-Un/Valor for every
+              product) — forcing an even 50/50 split in that state
+              squeezed the table into roughly half the available width
+              for no benefit, since the left side had nothing to fill its
+              own half with. Idle now renders as a single column at every
+              breakpoint (`grid-cols-1` only) — both `<div>`s still
+              render in the exact same source order as before (LEFT
+              placeholder, THEN RIGHT list), so this is a pure stacking
+              change, identical in spirit to how mobile already behaves
+              below `lg` — the list simply gets the FULL width instead of
+              half. The moment a product is opened (`isWorkspaceActive`
+              becomes true) and the left column has real form content to
+              show, the two-column split re-appears exactly as before,
+              unchanged. */}
+          <div className={`grid grid-cols-1 ${isWorkspaceActive ? 'lg:grid-cols-2' : ''} gap-6 items-start`}>
           <div className="space-y-6">
           {/* [Owner-requested — single unified product list] The
               separate compact picker table that used to live here is
@@ -5946,8 +5979,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               there too, rather than growing the whole page. Neither
               rule applies below `lg`, where this column simply sits
               below the workspace in normal page flow, unchanged from
-              before this Authorization. */}
-          <div className="space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
+              before this Authorization.
+              [Layout — idle-state single column] Sticky/independent-
+              scroll only make sense when there's a second column beside
+              this one to stay pinned against — with no active
+              workspace, this list IS the page (single column, per the
+              grid change above), so forcing it into its own short,
+              internally-scrolling box here would hide most of the list
+              behind a tiny scrollbar for no reason. These three classes
+              are now also gated on `isWorkspaceActive`; idle, the list
+              flows normally in the page and scrolls with everything
+              else, exactly like it already does on mobile. */}
+          <div className={`space-y-6 ${isWorkspaceActive ? 'lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto' : ''}`}>
           {/* [Owner-requested — single unified product list] Replaces
               the old two-list split (compact unvalidated picker table +
               collapsible validated-only card list) with ONE always-

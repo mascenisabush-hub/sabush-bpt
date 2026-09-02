@@ -291,26 +291,39 @@ describe('J — Existing valuation, UnitRelationship, and autosave behavior are 
   });
 });
 
-describe('K — Responsive layout (Authorization §10): desktop LEFT/RIGHT, mobile TOP/BOTTOM', () => {
-  it('a single grid wrapper switches from one column (mobile) to two columns at the lg breakpoint', () => {
-    assert.match(periodicSrc, /className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start"/);
+describe('K — Responsive layout (Authorization §10, extended for idle-state single column): desktop LEFT/RIGHT, mobile TOP/BOTTOM', () => {
+  it('the grid wrapper conditionally switches to a two-column split at the lg breakpoint only while a product is active — a single column at every breakpoint while idle', () => {
+    // [Layout — idle-state single column] `lg:grid-cols-2` is now
+    // conditional on `isWorkspaceActive` (template literal), rather
+    // than an unconditional literal class string — see this file's own
+    // comment at the grid wrapper for the full rationale (an idle left
+    // column with only the "add manual product" placeholder does not
+    // justify halving the product-list column's width).
+    assert.match(periodicSrc, /className=\{`grid grid-cols-1 \$\{isWorkspaceActive \? 'lg:grid-cols-2' : ''\} gap-6 items-start`\}/);
   });
 
-  it('the right column (persistent counted list) is sticky and independently scrollable on desktop only — no such rule applies below lg', () => {
+  it('the right column (persistent counted list) is sticky and independently scrollable on desktop only while a product is active — normal page flow while idle', () => {
     assert.match(
       periodicSrc,
-      /className="space-y-6 lg:sticky lg:top-4 lg:max-h-\[calc\(100vh-2rem\)\] lg:overflow-y-auto"/
+      /className=\{`space-y-6 \$\{isWorkspaceActive \? 'lg:sticky lg:top-4 lg:max-h-\[calc\(100vh-2rem\)\] lg:overflow-y-auto' : ''\}`\}/
     );
   });
 
   it('the grid wrapper opens before the idle-state left column and its matching right-column div opens immediately before the unified product list', () => {
-    const gridStart = periodicSrc.indexOf('className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start"');
+    const gridStart = periodicSrc.indexOf("className={`grid grid-cols-1 ${isWorkspaceActive ? 'lg:grid-cols-2' : ''} gap-6 items-start`}");
     const idleStart = periodicSrc.indexOf('Owner-requested — single unified product list] The\n              separate compact picker table');
-    const rightColStart = periodicSrc.indexOf('className="space-y-6 lg:sticky lg:top-4');
+    const rightColStart = periodicSrc.indexOf("className={`space-y-6 ${isWorkspaceActive ? 'lg:sticky lg:top-4");
     const unifiedListStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
     assert.ok(gridStart < idleStart, 'grid wrapper must open before the idle-state left column');
     assert.ok(idleStart < rightColStart, 'left column must precede the right column opening');
     assert.ok(rightColStart < unifiedListStart, 'right column must open before the unified product list itself');
+  });
+
+  it('this screen no longer double-caps its working width against App.tsx\'s own max-w-7xl wrapper', () => {
+    // [Layout — wider working area] Was `max-w-5xl` (1024px), a second,
+    // tighter cap stacked on top of App.tsx's own `max-w-7xl` <main>.
+    assert.match(periodicSrc, /className="max-w-7xl mx-auto pb-12 space-y-4"/);
+    assert.doesNotMatch(periodicSrc, /className="max-w-5xl mx-auto pb-12 space-y-4"/);
   });
 });
 
