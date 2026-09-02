@@ -46,14 +46,27 @@ function extractFunctionBody(source: string, signatureMarker: string): string {
   return nextConstMatch === -1 ? rest : rest.slice(0, signatureMarker.length + nextConstMatch);
 }
 
-// The picker section: from its own opening comment marker through to
-// the "Catalog-populated product grid" comment that starts the
-// workspace-scoped rendering immediately after it.
-function pickerSection(): string {
-  const start = periodicSrc.indexOf('PICKER — shown only when the workspace is empty');
-  assert.notEqual(start, -1, 'Could not locate the picker section.');
+// [Owner-requested — single unified product list] The old compact
+// picker table (search + sort + candidate table, shown only while the
+// workspace was empty) is removed; product selection now happens from
+// the ONE unified list in the right column, which covers every
+// product regardless of validated state. `idleSection()` bounds what
+// remains on the left while the workspace is empty (just the "add
+// manual product" affordance); `unifiedListSection()` bounds the new
+// list itself, in the right column.
+function idleSection(): string {
+  const start = periodicSrc.indexOf('Owner-requested — single unified product list] The\n              separate compact picker table');
+  assert.notEqual(start, -1, 'Could not locate the idle-state left column section.');
   const end = periodicSrc.indexOf('Catalog-populated product grid', start);
-  assert.notEqual(end, -1, 'Could not bound the end of the picker section.');
+  assert.notEqual(end, -1, 'Could not bound the end of the idle-state section.');
+  return periodicSrc.slice(start, end);
+}
+
+function unifiedListSection(): string {
+  const start = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+  assert.notEqual(start, -1, 'Could not locate the unified product list section.');
+  const end = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', start);
+  assert.notEqual(end, -1, 'Could not bound the end of the unified product list section.');
   return periodicSrc.slice(start, end);
 }
 
@@ -89,14 +102,24 @@ describe('B — One product can become active, by selection or by adding a new o
 });
 
 describe('C — A second independent product cannot be activated while one is already active', () => {
-  const picker = pickerSection();
+  const idle = idleSection();
+  const unifiedList = unifiedListSection();
 
-  it('the entire picker (search box, candidate lists, and the "add new product" action) is gated on !isWorkspaceActive', () => {
+  it('the idle-state "add new product" action is gated on !isWorkspaceActive', () => {
     assert.match(periodicSrc, /\{!isWorkspaceActive && \(/);
-    // The picker itself contains both activation entry points — proof
-    // they live inside, not beside, that gate.
-    assert.match(picker, /handleSelectExistingProductForWorkspace/);
-    assert.match(picker, /handleAddNewProductToWorkspace/);
+    assert.match(idle, /handleAddNewProductToWorkspace/);
+  });
+
+  it('the unified list itself is NOT gated on !isWorkspaceActive (it stays visible either way) — instead, every entry belonging to a DIFFERENT product than the active one is individually disabled, and the active product\'s own entries are excluded entirely', () => {
+    assert.match(unifiedList, /visibleUnifiedListEntries\.map/);
+    assert.match(unifiedList, /const disabled = isWorkspaceActive;/);
+    const visibleEntriesBody = extractFunctionBody(periodicSrc, 'const visibleUnifiedListEntries = useMemo(');
+    assert.match(visibleEntriesBody, /!isWorkspaceActive \|\| entry\.activationKey !== activeWorkspaceProductKey/);
+  });
+
+  it('a disabled entry cannot be clicked — handleUnifiedEntryClick is only invoked when !disabled, both from the card and from its own button', () => {
+    assert.match(unifiedList, /onClick=\{\(\) => !disabled && handleUnifiedEntryClick\(entry\)\}/);
+    assert.match(unifiedList, /if \(!disabled\) handleUnifiedEntryClick\(entry\);/);
   });
 
   it('activeWorkspaceKey/activeNewManualRowIndex are plain nullable scalars, never an array or Set — structurally impossible to hold two products at once', () => {
@@ -107,16 +130,16 @@ describe('C — A second independent product cannot be activated while one is al
 });
 
 describe('D — "Adicionar produto que não está no catálogo" is unavailable while a product is active', () => {
-  it('exactly one LIVE <span> button label exists — a second mention in an explanatory comment (describing what the old, now-removed button used to do) is expected and does not count', () => {
+  it('exactly one LIVE <span> button label exists — a second mention in an explanatory comment is expected and does not count', () => {
     const spanMatches = periodicSrc.match(/<span>Adicionar produto que não está no catálogo<\/span>/g) ?? [];
     assert.equal(spanMatches.length, 1, 'Expected exactly one live button label in the source.');
     const totalMentions = (periodicSrc.match(/Adicionar produto que não está no catálogo/g) ?? []).length;
     assert.equal(totalMentions, 2, 'Expected exactly two mentions total: one live button, one explanatory comment.');
   });
 
-  it('that one occurrence lives inside the picker section (gated on !isWorkspaceActive), not the workspace section', () => {
-    const picker = pickerSection();
-    assert.match(picker, /<span>Adicionar produto que não está no catálogo<\/span>/);
+  it('that one occurrence lives inside the idle-state section (gated on !isWorkspaceActive), not the workspace section', () => {
+    const idle = idleSection();
+    assert.match(idle, /<span>Adicionar produto que não está no catálogo<\/span>/);
   });
 
   it('its onClick is handleAddNewProductToWorkspace, not the raw handleAddManualRow directly', () => {
@@ -166,15 +189,14 @@ describe('F — Validating the active product\'s entire portion set empties the 
   });
 });
 
-describe('G — The validated product remains represented in the existing persistent counted list, unchanged', () => {
-  it('the "Produtos Validados" section still reads sortedValidatedCatalogEntries/sortedValidatedManualRowEntries (Sorting, Authorization §8) — pure display-order derivations of validatedCatalogEntries/validatedManualRowEntries, never the workspace-scoped visibleCatalogEntries/visibleManualRowGroups', () => {
-    const start = periodicSrc.indexOf('Produtos Validados', periodicSrc.indexOf('accumulated/validated area'));
-    assert.notEqual(start, -1);
-    const end = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', start);
-    assert.notEqual(end, -1);
-    const section = periodicSrc.slice(start, end);
-    assert.match(section, /sortedValidatedCatalogEntries\.map/);
-    assert.match(section, /sortedValidatedManualRowEntries\.map/);
+describe('G — The validated product remains represented in the existing persistent list — now the one unified list, unchanged in its underlying identity', () => {
+  it('the unified list section reads visibleUnifiedListEntries (itself sorted via sortByValidatedMode, per Authorization §8), which includes every validated entry — never a separate validated-only derivation', () => {
+    const section = unifiedListSection();
+    assert.match(section, /visibleUnifiedListEntries\.map/);
+    const entriesBody = extractFunctionBody(periodicSrc, 'const unifiedListEntries = useMemo(');
+    // Confirms validated rows are NOT filtered out of the source data —
+    // both validated and unvalidated rows flow into the same list.
+    assert.doesNotMatch(entriesBody, /\.filter\(\(\[, row\]\) => !row\.validated\)/);
   });
 
   it('handleEditCatalogRow/handleEditManualRow — superseded by the later, separate "Existing-Product Edit/Confirm Workflow" authorization: the confirm-before-edit dialog is unchanged, but both now activate the workspace via reopenExistingProductForEditing (rather than stopping at un-validating the row and leaving it for a second, separate picker click), following the same "a later, signed authorization may extend an out-of-scope area" precedent this file\'s own Decision 40/Decision 39 test comments already establish', () => {
@@ -184,6 +206,13 @@ describe('G — The validated product remains represented in the existing persis
     assert.match(manualBody, /window\.confirm\('Este produto já foi validado\. Queres editá-lo\?'\)/);
     assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
     assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+  });
+
+  it('handleEditCatalogRow/handleEditManualRow are now reached from the unified list via handleUnifiedEntryClick, for a validated entry specifically', () => {
+    const clickBody = extractFunctionBody(periodicSrc, 'const handleUnifiedEntryClick = (entry: (typeof unifiedListEntries)[number]) => {');
+    assert.match(clickBody, /if \(entry\.validated\) \{/);
+    assert.match(clickBody, /handleEditCatalogRow\(entry\.catalogProductId\)/);
+    assert.match(clickBody, /handleEditManualRow\(entry\.manualRowIndex\)/);
   });
 });
 
@@ -201,31 +230,27 @@ describe('I — Search selects one product into the workspace; it never activate
     assert.match(periodicSrc, /const handleSelectExistingProductForWorkspace = \(key: string\) => \{/);
   });
 
-  it('productSearch only narrows the picker-scoped pickerCatalogEntries/pickerManualRowGroupsRaw, never the workspace-scoped visibleCatalogEntries/visibleManualRowGroups', () => {
-    const pickerCatalogBody = extractFunctionBody(periodicSrc, 'const pickerCatalogEntries = useMemo(() => {');
-    assert.match(pickerCatalogBody, /productSearch/);
+  it('productSearch now filters the unified list (filteredUnifiedListEntries), never the workspace-scoped visibleCatalogEntries/visibleManualRowGroups', () => {
+    const filteredBody = extractFunctionBody(periodicSrc, 'const filteredUnifiedListEntries = useMemo(() => {');
+    assert.match(filteredBody, /productSearch/);
     const workspaceCatalogBody = extractFunctionBody(periodicSrc, 'const visibleCatalogEntries = useMemo(() => {');
     assert.doesNotMatch(workspaceCatalogBody, /productSearch/);
   });
 
-  it('each picker row activates via its own per-row activationKey — clicking one never affects any other row\'s own activation (Owner-requested table redesign: one combined, sorted, searched table replacing the two separate catalog/manual button lists — same click-to-activate contract, one row template instead of two)', () => {
-    const picker = pickerSection();
-    // One <tr> template, mapped once per item — never a separate literal
-    // onClick per product (that would not scale to a real catalog size,
-    // and is not how the prior two-list version worked either: it too had
-    // one button template per .map() call, one literal onClick each).
-    const onClickMatches = picker.match(/onClick=\{\(\) => handleSelectExistingProductForWorkspace\(item\.activationKey\)\}/g) ?? [];
+  it('each unified-list row activates via its own per-entry activationKey — clicking one never affects any other row\'s own activation (one shared row template, mapped once per entry, not a separate literal onClick per product)', () => {
+    const unifiedList = unifiedListSection();
+    const onClickMatches = unifiedList.match(/onClick=\{\(\) => !disabled && handleUnifiedEntryClick\(entry\)\}/g) ?? [];
     assert.equal(onClickMatches.length, 1);
-    // The per-row independence itself lives one level up, in how
-    // `item.activationKey` is computed for EACH item independently — a
-    // catalog item's own `productKeyFor(row.productName)` (identical to
-    // the prior version's own catalog onClick argument) and a manual
-    // group's own `group.key` (identical to the prior version's own
-    // manual onClick argument) — never a shared/loop-invariant reference
+    // The per-row independence lives one level up, in how
+    // `entry.activationKey` is computed for EACH entry independently —
+    // both catalog and manual entries key off the same
+    // `productKeyFor(row.productName)`, matching the identity
+    // `handleSelectExistingProductForWorkspace`/`groupRowsByProductName`
+    // already use elsewhere — never a shared/loop-invariant reference
     // that could point every row at the same product.
-    const pickerRowsBody = extractFunctionBody(periodicSrc, 'const pickerRows = useMemo(() => {');
-    assert.match(pickerRowsBody, /activationKey: productKeyFor\(row\.productName\)/);
-    assert.match(pickerRowsBody, /activationKey: group\.key/);
+    const entriesBody = extractFunctionBody(periodicSrc, 'const unifiedListEntries = useMemo(() => {');
+    const activationKeyMatches = entriesBody.match(/activationKey: productKeyFor\(row\.productName\)/g) ?? [];
+    assert.equal(activationKeyMatches.length, 2, 'Expected activationKey computed independently for both the catalog and manual entry builders.');
   });
 });
 
@@ -278,14 +303,14 @@ describe('K — Responsive layout (Authorization §10): desktop LEFT/RIGHT, mobi
     );
   });
 
-  it('the grid wrapper opens before the picker section and its matching right-column div opens immediately before "Produtos Validados"', () => {
+  it('the grid wrapper opens before the idle-state left column and its matching right-column div opens immediately before the unified product list', () => {
     const gridStart = periodicSrc.indexOf('className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start"');
-    const pickerStart = periodicSrc.indexOf('PICKER — shown only when the workspace is empty');
+    const idleStart = periodicSrc.indexOf('Owner-requested — single unified product list] The\n              separate compact picker table');
     const rightColStart = periodicSrc.indexOf('className="space-y-6 lg:sticky lg:top-4');
-    const validatedStart = periodicSrc.indexOf('Produtos Validados', periodicSrc.indexOf('accumulated/validated area'));
-    assert.ok(gridStart < pickerStart, 'grid wrapper must open before the picker');
-    assert.ok(pickerStart < rightColStart, 'picker must precede the right column opening');
-    assert.ok(rightColStart < validatedStart, 'right column must open before "Produtos Validados" itself');
+    const unifiedListStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+    assert.ok(gridStart < idleStart, 'grid wrapper must open before the idle-state left column');
+    assert.ok(idleStart < rightColStart, 'left column must precede the right column opening');
+    assert.ok(rightColStart < unifiedListStart, 'right column must open before the unified product list itself');
   });
 });
 
@@ -304,20 +329,16 @@ describe('L — Sorting (Authorization §8): four modes, using only existing dat
     assert.doesNotMatch(body, /entryTimestamp|validatedAt|createdAt/);
   });
 
-  it('both sortedValidatedCatalogEntries and sortedValidatedManualRowEntries derive from sortByValidatedMode, fed by the existing validatedCatalogEntries/validatedManualRowEntries and computing value as quantity*sellingPrice — the same formula each render block already used before sorting existed', () => {
-    const catalogBody = extractFunctionBody(periodicSrc, 'const sortedValidatedCatalogEntries = useMemo(');
-    assert.match(catalogBody, /sortByValidatedMode\(/);
-    assert.match(catalogBody, /validatedCatalogEntries/);
-    assert.match(catalogBody, /Number\(row\.quantity\)/);
-    assert.match(catalogBody, /Number\(row\.sellingPrice\)/);
-
-    const manualBody = extractFunctionBody(periodicSrc, 'const sortedValidatedManualRowEntries = useMemo(');
-    assert.match(manualBody, /sortByValidatedMode\(/);
-    assert.match(manualBody, /validatedManualRowEntries/);
+  it('sortedUnifiedListEntries derives from sortByValidatedMode, fed by unifiedListEntries (covering both catalog and manual, validated and not) and computing value as quantity*sellingPrice — the same formula each render block already used before sorting existed', () => {
+    const sortedBody = extractFunctionBody(periodicSrc, 'const sortedUnifiedListEntries = useMemo(');
+    assert.match(sortedBody, /sortByValidatedMode\(/);
+    assert.match(sortedBody, /filteredUnifiedListEntries/);
+    assert.match(sortedBody, /Number\(entry\.quantity\)/);
+    assert.match(sortedBody, /Number\(entry\.sellingPrice\)/);
   });
 
-  it('a single <select> control drives validatedSortMode with exactly the four required options', () => {
-    const start = periodicSrc.indexOf('id="validated-sort-mode"');
+  it('a single <select> control drives validatedSortMode with exactly the four required options — one shared control for the one shared list, rather than the old validated-only control', () => {
+    const start = periodicSrc.indexOf('id="unified-list-sort-mode"');
     assert.notEqual(start, -1);
     const selectBlock = periodicSrc.slice(start, periodicSrc.indexOf('</select>', start));
     assert.match(selectBlock, /onChange=\{\(e\) => setValidatedSortMode\(e\.target\.value as typeof validatedSortMode\)\}/);

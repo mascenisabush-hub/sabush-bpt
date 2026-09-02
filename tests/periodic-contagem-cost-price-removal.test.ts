@@ -301,25 +301,28 @@ describe('Issue 2 — Periodic Contagem live Selling-Price readability', () => {
     assert.equal(tracks.length, 5, `Expected 5 grid tracks, found ${tracks.length}: ${match![1]}`);
   });
 
-  it('every full-row span (ModeAValuationControl, NewProductInfoPanel, ExistingProductSummary, multi-portion label) still spans col-span-5, not the stale col-span-7 — with Concept C legitimately adding its own full-row warning spans inside the validated section', () => {
+  it('every full-row span (ModeAValuationControl, NewProductInfoPanel, ExistingProductSummary, multi-portion label) still spans col-span-5, not the stale col-span-7 — with the unified list legitimately adding its own full-row warning spans', () => {
     assert.doesNotMatch(periodicSrc, /col-span-2 sm:col-span-7/);
-    // [Concept C — Validated Product Compaction] The compact validated
-    // representation's own price-deviation and Mode A warning
-    // paragraphs (Hard Requirement §2) reuse this exact same full-row
-    // spanning pattern so a warning can wrap onto its own line within
-    // the same five-track grid — four more instances (price + Mode A
-    // warning, in each of the catalog and manual validated loops), on
-    // top of the four this suite has always protected outside the
-    // validated section. The four ORIGINAL spans (ModeAValuationControl,
-    // NewProductInfoPanel, ExistingProductSummary, multi-portion label)
-    // are reconfirmed below by isolating everything before the
-    // "Produtos Validados" section, unmodified by Concept C.
+    // [Concept C — Validated Product Compaction; superseded by the
+    // Owner-requested single unified product list] The unified list's
+    // own price-deviation and Mode A warning paragraphs (Hard
+    // Requirement §2, carried over unchanged) reuse this exact same
+    // full-row spanning pattern so a warning can wrap onto its own line
+    // within the same five-track grid — TWO more instances (price +
+    // Mode A warning), since catalog and manual entries are now
+    // rendered by the SAME single loop (not the old two separate
+    // catalog/manual loops, which produced four), on top of the four
+    // this suite has always protected outside that list. The four
+    // ORIGINAL spans (ModeAValuationControl, NewProductInfoPanel,
+    // ExistingProductSummary, multi-portion label) are reconfirmed
+    // below by isolating everything before the unified list's own
+    // section, unmodified by this change.
     const fullRowSpans = periodicSrc.match(/col-span-2 sm:col-span-5/g) ?? [];
-    assert.equal(fullRowSpans.length, 8, `Expected 8 full-row col-span-5 spans (4 original + 4 from Concept C's validated-row warnings), found ${fullRowSpans.length}.`);
-    const validatedSectionStart = periodicSrc.indexOf('Produtos Validados');
-    assert.notEqual(validatedSectionStart, -1);
-    const activeAreaSpans = periodicSrc.slice(0, validatedSectionStart).match(/col-span-2 sm:col-span-5/g) ?? [];
-    assert.equal(activeAreaSpans.length, 4, 'the four original full-row spans outside the validated section must remain untouched by Concept C');
+    assert.equal(fullRowSpans.length, 6, `Expected 6 full-row col-span-5 spans (4 original + 2 from the unified list's own warnings), found ${fullRowSpans.length}.`);
+    const unifiedSectionStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+    assert.notEqual(unifiedSectionStart, -1);
+    const activeAreaSpans = periodicSrc.slice(0, unifiedSectionStart).match(/col-span-2 sm:col-span-5/g) ?? [];
+    assert.equal(activeAreaSpans.length, 4, 'the four original full-row spans outside the unified list must remain untouched');
   });
 
   it('the Selling Price deviation warning (checkPriceDeviation against the remembered selling price) is still present, unaffected by the layout fix', () => {

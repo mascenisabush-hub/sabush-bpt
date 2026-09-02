@@ -37,10 +37,18 @@ const periodicSrc = src('apps/tenant/src/components/PeriodicStockCountView.tsx')
 // own componentBody() bounding technique: find two stable textual
 // anchors already known to bracket the section, slice between them.
 function validatedSection(): string {
-  const start = periodicSrc.indexOf('Produtos Validados');
-  assert.notEqual(start, -1, 'Could not locate the "Produtos Validados" section.');
+  // [Owner-requested — single unified product list] The old
+  // catalog-only + manual-only "Produtos Validados" split is replaced
+  // by one unified list covering every product, validated or not.
+  // This still bounds the same physical section of source — only the
+  // anchor text changed, since the accordion heading itself was
+  // replaced (see this file's own updated header comment, below, for
+  // why every test in this suite now reads from the unified list
+  // instead of a validated-only subset).
+  const start = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+  assert.notEqual(start, -1, 'Could not locate the unified product list section.');
   const end = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', start);
-  assert.notEqual(end, -1, 'Could not bound the end of the "Produtos Validados" section.');
+  assert.notEqual(end, -1, 'Could not bound the end of the unified product list section.');
   return periodicSrc.slice(start, end);
 }
 
@@ -55,7 +63,7 @@ describe('A — validated compact representation shows every required field', ()
   });
 
   it('shows quantity', () => {
-    assert.match(section, /\{q\}/);
+    assert.match(section, /row\.quantity\.trim\(\) === '' \? '—' : q/);
   });
 
   it('shows unit', () => {
@@ -76,22 +84,17 @@ describe('A — validated compact representation shows every required field', ()
     assert.match(section, /<CheckCircle2 className="w-3\.5 h-3\.5 text-emerald-500 shrink-0" strokeWidth=\{2\.5\} aria-hidden="true" \/>/);
   });
 
-  it('shows a clearly labeled "Editar" action (as literal text — either the static label itself, or a ternary that renders it whenever the row is actually editable, never icon-only)', () => {
+  it('shows a clearly labeled "Editar"/"Abrir" action (a real, visible-text ternary, never icon-only)', () => {
     // [Single-Active-Product Rule, §9 — Existing-Product Edit/Confirm
-    // Workflow] The label is now conditional — 'Editar' when opening
-    // this product is currently safe, a distinct visible label
-    // ('Produto aberto') on the rare occasion a DIFFERENT product is
-    // already active, per the single-active-product guard — so a
-    // literal `>Editar<` no longer appears in the static source for
-    // every occurrence. Both forms below still keep the label as
-    // visible TEXT, never an icon-only control, which is this test's
-    // own actual guarantee.
-    const staticMatches = section.match(/>\s*Editar\s*</g) ?? [];
-    const ternaryMatches = section.match(/\{editDisabled \? 'Produto aberto' : 'Editar'\}/g) ?? [];
-    assert.ok(
-      staticMatches.length + ternaryMatches.length >= 2,
-      'Expected an "Editar" label (static or conditional) for both the catalog and manual validated rows.'
-    );
+    // Workflow; extended by the Owner-requested single unified product
+    // list] Catalog and manual entries now share ONE loop/button, so
+    // the label is a three-way ternary: 'Produto aberto' when a
+    // DIFFERENT product is active (single-active-product guard),
+    // 'Editar' for an already-validated entry, 'Abrir' for one that
+    // isn't yet — all three keep the label as visible TEXT, never an
+    // icon-only control, which is this test's own actual guarantee.
+    const ternaryMatches = section.match(/\{disabled \? 'Produto aberto' : entry\.validated \? 'Editar' : 'Abrir'\}/g) ?? [];
+    assert.equal(ternaryMatches.length, 1, 'Expected the shared Editar/Abrir/Produto-aberto ternary exactly once.');
   });
 
   it('none of the required fields are hidden behind title/hover-only attributes', () => {
@@ -108,7 +111,7 @@ describe('A — validated compact representation shows every required field', ()
 describe('B — warnings are visibly represented when active', () => {
   it('reuses checkPriceDeviation (the exact same function/inputs the active row already calls) — never a second, invented check', () => {
     const matches = section.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) ?? [];
-    assert.equal(matches.length, 2, 'Expected checkPriceDeviation called once for the catalog loop and once for the manual loop.');
+    assert.equal(matches.length, 1, 'Expected checkPriceDeviation called once, in the one shared unified-list loop.');
   });
 
   it('renders the price-deviation warning as visible text, not tooltip-only, when showWarning is true', () => {
@@ -118,7 +121,7 @@ describe('B — warnings are visibly represented when active', () => {
 
   it('reuses the same Mode A non-convertible condition ModeAValuationControl itself evaluates (via getModeANonConvertibleWarning), never a simplified rule', () => {
     const matches = section.match(/getModeANonConvertibleWarning\(row\.productName\)/g) ?? [];
-    assert.equal(matches.length, 2, 'Expected getModeANonConvertibleWarning called once for the catalog loop and once for the manual loop.');
+    assert.equal(matches.length, 1, 'Expected getModeANonConvertibleWarning called once, in the one shared unified-list loop.');
   });
 
   it('the helper itself defers entirely to canApplyModeA/getEffectiveUnitRelationshipForProductName/isValidUnitRelationship — no invented logic', () => {
@@ -135,9 +138,9 @@ describe('B — warnings are visibly represented when active', () => {
     const modeAControlWarning = periodicSrc.match(
       /Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente\./g
     ) ?? [];
-    // Once inside ModeAValuationControl itself, twice inside the
-    // validated section (catalog + manual loops) = 3 total in the file.
-    assert.equal(modeAControlWarning.length, 3, 'Expected the exact same Mode A warning sentence in ModeAValuationControl and both validated loops.');
+    // Once inside ModeAValuationControl itself, once inside the
+    // unified list's one shared loop = 2 total in the file.
+    assert.equal(modeAControlWarning.length, 2, 'Expected the exact same Mode A warning sentence in ModeAValuationControl and the unified list.');
     assert.match(section, /\{hasModeAWarning && \(/);
   });
 
@@ -152,15 +155,38 @@ describe('B — warnings are visibly represented when active', () => {
 // C. Editar behavior
 // ---------------------------------------------------------------------
 describe('C — Editar reuses the existing edit handlers, no alternative mechanism', () => {
-  it('the catalog validated row\'s Editar calls the existing handleEditCatalogRow(productId)', () => {
-    assert.match(section, /onClick=\{\(\) => handleEditCatalogRow\(productId\)\}/);
+  it('the unified list\'s click routes through handleUnifiedEntryClick, both card and button alike', () => {
+    const cardMatches = section.match(/onClick=\{\(\) => !disabled && handleUnifiedEntryClick\(entry\)\}/g) ?? [];
+    const buttonMatches = section.match(/if \(!disabled\) handleUnifiedEntryClick\(entry\);/g) ?? [];
+    assert.equal(cardMatches.length, 1, 'Expected the card-level click handler exactly once.');
+    assert.equal(buttonMatches.length, 1, 'Expected the button-level click handler exactly once.');
   });
 
-  it('the manual validated row\'s Editar calls the existing handleEditManualRow(idx)', () => {
-    assert.match(section, /onClick=\{\(\) => handleEditManualRow\(idx\)\}/);
+  it('handleUnifiedEntryClick itself calls the existing handleEditCatalogRow(entry.catalogProductId) for a validated catalog entry', () => {
+    const start = periodicSrc.indexOf('const handleUnifiedEntryClick = ');
+    assert.notEqual(start, -1);
+    const end = periodicSrc.indexOf('\n  };', start) + 6;
+    const body = periodicSrc.slice(start, end);
+    assert.match(body, /handleEditCatalogRow\(entry\.catalogProductId\)/);
   });
 
-  it('no second/alternative edit handler is defined for the validated area (e.g. a Concept-C-only handler)', () => {
+  it('handleUnifiedEntryClick itself calls the existing handleEditManualRow(entry.manualRowIndex) for a validated manual entry', () => {
+    const start = periodicSrc.indexOf('const handleUnifiedEntryClick = ');
+    assert.notEqual(start, -1);
+    const end = periodicSrc.indexOf('\n  };', start) + 6;
+    const body = periodicSrc.slice(start, end);
+    assert.match(body, /handleEditManualRow\(entry\.manualRowIndex\)/);
+  });
+
+  it('handleUnifiedEntryClick calls handleSelectExistingProductForWorkspace directly for an UNVALIDATED entry — no confirmation gate for those', () => {
+    const start = periodicSrc.indexOf('const handleUnifiedEntryClick = ');
+    assert.notEqual(start, -1);
+    const end = periodicSrc.indexOf('\n  };', start) + 6;
+    const body = periodicSrc.slice(start, end);
+    assert.match(body, /handleSelectExistingProductForWorkspace\(entry\.activationKey\)/);
+  });
+
+  it('no second/alternative edit handler is defined for the unified list (e.g. a Concept-C-only handler)', () => {
     assert.doesNotMatch(section, /handleEditValidated|handleConceptCEdit|handleCompactEdit/);
   });
 
@@ -174,11 +200,11 @@ describe('C — Editar reuses the existing edit handlers, no alternative mechani
 // D. Unvalidated state — untouched
 // ---------------------------------------------------------------------
 describe('D — unvalidated products remain in the full editing representation', () => {
-  it('visibleCatalogEntries / active manual rows are still rendered by their own pre-existing full-field grid, outside the validated section', () => {
+  it('visibleCatalogEntries / active manual rows are still rendered by their own pre-existing full-field grid, outside the unified list', () => {
     const activeAreaStart = periodicSrc.indexOf('visibleCatalogEntries.length > 0 && (');
     assert.notEqual(activeAreaStart, -1);
-    const validatedStart = periodicSrc.indexOf('Produtos Validados');
-    assert.ok(activeAreaStart < validatedStart, 'Active catalog rendering should precede the validated section, structurally separate from it.');
+    const unifiedStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+    assert.ok(activeAreaStart < unifiedStart, 'Active catalog rendering should precede the unified list, structurally separate from it.');
   });
 
   it('the active-row Validar/Editar/Remover control block is unchanged by this increment', () => {
@@ -214,9 +240,9 @@ describe('F — validation path, persistence, Mode A, and valuation are untouche
     assert.doesNotMatch(section, /Firestore|firestore|updateDoc|setDoc|addDoc/);
   });
 
-  it('the validated section computes rowValue as quantity * sellingPrice — the same shape as the active row\'s own rowSellingValue — never a second valuation formula', () => {
+  it('the unified list computes rowValue as quantity * sellingPrice — the same shape as the active row\'s own rowSellingValue — never a second valuation formula', () => {
     const matches = section.match(/const rowValue = q \* sellingPriceNum;/g) ?? [];
-    assert.equal(matches.length, 2);
+    assert.equal(matches.length, 1);
   });
 
   it('deriveModeAPortionValuations and applyModeAToGroup (Mode A\'s write-back path) are not referenced in the validated section', () => {
@@ -240,8 +266,12 @@ describe('G — responsive and accessibility structure', () => {
   });
 
   it('has an accessible text representation of validated state, not conveyed by icon alone', () => {
-    const matches = section.match(/<span className="sr-only">Validado<\/span>/g) ?? [];
-    assert.equal(matches.length, 2, 'Expected an sr-only "Validado" label for both the catalog and manual validated rows.');
+    // [Owner-requested — single unified product list] One shared span
+    // now covers both states via a ternary — 'Validado' when
+    // entry.validated, a distinct 'Não validado' otherwise — rather
+    // than a static 'Validado' string repeated per loop.
+    const matches = section.match(/<span className="sr-only">\{entry\.validated \? 'Validado' : 'Não validado'\}<\/span>/g) ?? [];
+    assert.equal(matches.length, 1, 'Expected the shared sr-only validated-state label exactly once.');
   });
 
   it('mobile-safe structure: per-field sm:hidden labels exist for Qtd/Unid/Venda-Un, matching the file\'s own established responsive convention', () => {

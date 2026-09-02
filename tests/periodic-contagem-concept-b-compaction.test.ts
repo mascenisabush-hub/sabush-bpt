@@ -326,26 +326,27 @@ describe('M — no tooltip-only explanatory text remains', () => {
 // never inside any collapsible panel, in either increment)
 // ---------------------------------------------------------------------
 describe('H — per-row Selling Price deviation warning and save errors unaffected', () => {
-  it('the Selling Price deviation warning mechanism is unaffected in the active editing rows — still present exactly twice there (catalog + manual) — with Concept C legitimately adding two more visible occurrences in the validated section', () => {
+  it('the Selling Price deviation warning mechanism is unaffected in the active editing rows — still present exactly twice there (catalog + manual) — with the unified list legitimately adding one more shared occurrence', () => {
     const occurrences = periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) ?? [];
-    // [Concept C — Validated Product Compaction] Concept C's own
-    // Hard Requirement §2 mandates that the compact validated
-    // representation ALSO visibly indicate an active selling-price
-    // deviation warning, reusing this exact same function/inputs —
-    // never a second, invented check (see
-    // tests/periodic-contagem-concept-c-validated-compaction.test.ts,
-    // Suite B). That legitimately adds two more call sites (one per
-    // validated loop) on top of the two this suite has always
-    // protected in the active editing rows. Total is now 4, not 2 —
-    // but the active-editing-row mechanism itself, isolated below by
-    // excluding the "Produtos Validados" section, must still be
-    // exactly the original 2, unmodified by Concept C.
-    assert.equal(occurrences.length, 4);
-    const validatedSectionStart = periodicSrc.indexOf('Produtos Validados');
-    assert.notEqual(validatedSectionStart, -1);
-    const activeAreaSrc = periodicSrc.slice(0, validatedSectionStart);
+    // [Concept C — Validated Product Compaction; superseded by the
+    // Owner-requested single unified product list] The unified list's
+    // own Hard Requirement §2 (carried over unchanged) mandates that
+    // it ALSO visibly indicate an active selling-price deviation
+    // warning, reusing this exact same function/inputs — never a
+    // second, invented check. Catalog and manual entries are now
+    // rendered by the SAME single loop (not the old two separate
+    // catalog/manual loops), so this legitimately adds only ONE more
+    // call site on top of the two this suite has always protected in
+    // the active editing rows. Total is now 3, not 2 — but the
+    // active-editing-row mechanism itself, isolated below by excluding
+    // the unified list's own section, must still be exactly the
+    // original 2, unmodified by this change.
+    assert.equal(occurrences.length, 3);
+    const unifiedSectionStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+    assert.notEqual(unifiedSectionStart, -1);
+    const activeAreaSrc = periodicSrc.slice(0, unifiedSectionStart);
     const activeAreaOccurrences = activeAreaSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) ?? [];
-    assert.equal(activeAreaOccurrences.length, 2, 'the two original active-editing-row occurrences must remain untouched by Concept C');
+    assert.equal(activeAreaOccurrences.length, 2, 'the two original active-editing-row occurrences must remain untouched');
   });
 
   it('per-row save errors remain rendered unconditionally in both loops', () => {

@@ -246,32 +246,38 @@ describe('Accumulated/validated area (Decision 40 FR-N8; Implementation Authoriz
     assert.match(body, /\{ idx, row \}/);
   });
 
-  it('the "Produtos Validados" section renders both validated lists, combined — via the sorted views (Sorting, Authorization §8) that derive directly from validatedCatalogEntries/validatedManualRowEntries, not a separately recomputed source', () => {
-    assert.match(source, /Produtos Validados/);
-    // [Sorting — Authorization §8] The render sites now iterate
-    // sortedValidatedCatalogEntries/sortedValidatedManualRowEntries —
-    // pure display-order derivations of validatedCatalogEntries/
-    // validatedManualRowEntries themselves (confirmed by the second
-    // pair of assertions below), not a replacement for them. This
-    // test's own guarantee — both lists render, combined — is
-    // unaffected; only the exact identifier at the render site changed
-    // as an intentional consequence of adding sorting.
-    assert.match(source, /sortedValidatedCatalogEntries\.map\(/);
-    assert.match(source, /sortedValidatedManualRowEntries\.map\(/);
-    const sortedCatalogBody = extractFunctionBody(source, 'const sortedValidatedCatalogEntries = useMemo(');
-    assert.match(sortedCatalogBody, /validatedCatalogEntries/);
-    const sortedManualBody = extractFunctionBody(source, 'const sortedValidatedManualRowEntries = useMemo(');
-    assert.match(sortedManualBody, /validatedManualRowEntries/);
+  it('the unified product list section renders both validated and unvalidated entries, combined — via the sorted view (Sorting, Authorization §8) that derives directly from unifiedListEntries (itself built from catalogRows/manualRows unfiltered by validated status), not a separately recomputed source', () => {
+    assert.match(source, /Owner-requested — single unified product list\] Replaces/);
+    // [Owner-requested — single unified product list] The render site
+    // now iterates visibleUnifiedListEntries, itself sorted from
+    // filteredUnifiedListEntries/unifiedListEntries — a superset of the
+    // old validatedCatalogEntries/validatedManualRowEntries (which
+    // remain declared, unaffected, and are still exercised by the
+    // earlier assertions in this suite), not a replacement for the
+    // underlying `validated` flag itself. This test's own guarantee —
+    // every validated row still renders, alongside every unvalidated
+    // one, combined in one place — is unaffected by the rendering
+    // change; only which derived array the render site reads changed
+    // as an intentional consequence of unifying the two lists.
+    assert.match(source, /visibleUnifiedListEntries\.map\(/);
+    const entriesBody = extractFunctionBody(source, 'const unifiedListEntries = useMemo(() => {');
+    assert.match(entriesBody, /Object\.entries\(catalogRows\)/);
+    assert.match(entriesBody, /manualRows/);
+    assert.doesNotMatch(entriesBody, /!row\.validated/, 'unifiedListEntries must not filter out validated rows — it is the superset, not the validated-only subset');
   });
 
-  it('reopening from the accumulated area reuses the EXISTING handleEditCatalogRow/handleEditManualRow unchanged — no new validated-clearing logic is duplicated here', () => {
+  it('reopening from the unified list reuses the EXISTING handleEditCatalogRow/handleEditManualRow unchanged — no new validated-clearing logic is duplicated here', () => {
     // Both call sites exist: one in the active-workspace row's own
-    // "Editar" button, one in the accumulated-area entry — both must
-    // reference the same two functions, never a third, parallel one.
+    // "Editar" button, one inside handleUnifiedEntryClick's own routing
+    // for an already-validated entry — both must reference the same
+    // two functions, never a third, parallel one.
     const editCatalogCallSites = (source.match(/handleEditCatalogRow\(productId\)/g) || []).length;
     const editManualCallSites = (source.match(/handleEditManualRow\(idx\)/g) || []).length;
-    assert.equal(editCatalogCallSites, 2, 'Expected exactly two call sites: active-workspace Editar + accumulated-area reopen.');
-    assert.equal(editManualCallSites, 2, 'Expected exactly two call sites: active-workspace Editar + accumulated-area reopen.');
+    assert.equal(editCatalogCallSites, 1, 'Expected exactly one literal call site left: the active-workspace Editar button.');
+    assert.equal(editManualCallSites, 1, 'Expected exactly one literal call site left: the active-workspace Editar button.');
+    const clickBody = extractFunctionBody(source, 'const handleUnifiedEntryClick = (entry: (typeof unifiedListEntries)[number]) => {');
+    assert.match(clickBody, /handleEditCatalogRow\(entry\.catalogProductId\)/);
+    assert.match(clickBody, /handleEditManualRow\(entry\.manualRowIndex\)/);
   });
 });
 

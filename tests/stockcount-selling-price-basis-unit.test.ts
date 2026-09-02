@@ -347,28 +347,28 @@ describe('TEST 7 — Contagem UI selling-price denomination caption (Implementat
     assert.equal(staleMatches, null, 'no caption should still read row.unit alone');
   });
 
-  it('does not alter row.unit itself, quantity display, or any other .unit occurrence in this file — with Concept C legitimately splitting quantity and unit into separate compact cells rather than one adjacent expression', () => {
+  it('does not alter row.unit itself, quantity display, or any other .unit occurrence in this file — with the unified list legitimately splitting quantity and unit into separate compact cells rather than one adjacent expression', () => {
     // Quantity displays for the review screen remain keyed off .unit
     // alone, unaffected by this change.
     assert.match(periodicSrc, /\{item\.quantity\} \{item\.unit\}/);
-    // [Concept C — Validated Product Compaction, Hard Requirement §11]
-    // The validated area's own quantity and unit are no longer rendered
-    // as one adjacent `{q} {row.unit || 'un'}` expression — Concept C
-    // restructures them into separate desktop grid cells (each with its
-    // own sm:hidden mobile label) so the row aligns with the shared
-    // Nome/Qtd/Unid/Venda-Un/Valor column header, matching the active
-    // workspace's own layout. Both quantity and unit remain
-    // independently visible; verified below within the validated
-    // section itself, rather than assuming they are still one adjacent
-    // expression.
-    const validatedSectionStart = periodicSrc.indexOf('Produtos Validados');
-    assert.notEqual(validatedSectionStart, -1);
-    const validatedSectionEnd = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', validatedSectionStart);
-    assert.notEqual(validatedSectionEnd, -1);
-    const validatedSection = periodicSrc.slice(validatedSectionStart, validatedSectionEnd);
-    const quantityMatches = validatedSection.match(/<span className="text-\[13px\] text-gray-700 tabular-nums">\{q\}<\/span>/g) ?? [];
-    assert.equal(quantityMatches.length, 2, 'expected quantity visible in both the catalog and manual validated rows');
-    const unitMatches = validatedSection.match(/<span className="text-\[13px\] text-gray-700">\{row\.unit \|\| 'un'\}<\/span>/g) ?? [];
-    assert.equal(unitMatches.length, 2, 'expected unit visible in both the catalog and manual validated rows');
+    // [Concept C — Validated Product Compaction, Hard Requirement §11;
+    // superseded by the Owner-requested single unified product list]
+    // Quantity and unit are rendered in separate desktop grid cells
+    // (each with its own sm:hidden mobile label) so the row aligns
+    // with the shared Nome/Qtd/Unid/Venda-Un/Valor column header,
+    // matching the active workspace's own layout. Catalog and manual
+    // entries are now rendered by the SAME single \`.map()\` call (one
+    // shared template, not two separate catalog/manual loops), so
+    // exactly ONE occurrence of each pattern is expected in source,
+    // covering both kinds of row at runtime.
+    const unifiedSectionStart = periodicSrc.indexOf('Owner-requested — single unified product list] Replaces');
+    assert.notEqual(unifiedSectionStart, -1);
+    const unifiedSectionEnd = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', unifiedSectionStart);
+    assert.notEqual(unifiedSectionEnd, -1);
+    const unifiedSection = periodicSrc.slice(unifiedSectionStart, unifiedSectionEnd);
+    const quantityMatches = unifiedSection.match(/<span className="text-\[13px\] text-gray-700 tabular-nums">\{row\.quantity\.trim\(\) === '' \? '—' : q\}<\/span>/g) ?? [];
+    assert.equal(quantityMatches.length, 1, 'expected one shared quantity expression covering both catalog and manual entries');
+    const unitMatches = unifiedSection.match(/<span className="text-\[13px\] text-gray-700">\{row\.quantity\.trim\(\) === '' \? '—' : row\.unit \|\| 'un'\}<\/span>/g) ?? [];
+    assert.equal(unitMatches.length, 1, 'expected one shared unit expression covering both catalog and manual entries');
   });
 });

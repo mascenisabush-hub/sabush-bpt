@@ -68,6 +68,8 @@ import {
   Undo2,
   X,
   Package,
+  Circle,
+  FileDown,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -2996,6 +2998,123 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setReopenedValidatedManualRowIndices(null);
   };
 
+  // [Owner-requested — single unified product list] One flat list
+  // combining EVERY catalog row and EVERY manual row (excluding only
+  // `removed` rows and still-blank/unnamed manual rows, which have no
+  // stable identity to select), always in the "Produtos Validados"
+  // full-detail visual style (name/qty/unit/price/total, never
+  // abbreviated), REGARDLESS of `validated` state. This replaces the
+  // separate compact picker table and the validated-only accumulated
+  // list with one persistent list that always reflects the true state
+  // of every product — the Owner's own request: "one list only that
+  // is well visible... editable, click, it comes solo to the editing
+  // zone... Validar and it changes in the original list." Each entry
+  // keeps its own stable identity (`catalogProductId` or
+  // `manualRowIndex`) purely so the click handler, below, can route to
+  // the correct EXISTING function — no new activation, reopen, or
+  // validation logic is introduced anywhere by this list; it only
+  // reads `catalogRows`/`manualRows` and re-renders when either
+  // changes, exactly like `validatedCatalogEntries`/
+  // `pickerCatalogEntries` already did individually.
+  const unifiedListEntries = useMemo(() => {
+    const catalogEntries = Object.entries(catalogRows)
+      .filter(([, row]) => !row.removed)
+      .map(([productId, row]) => ({
+        rowKey: `catalog-${productId}`,
+        kind: 'catalog' as const,
+        catalogProductId: productId as string | null,
+        manualRowIndex: null as number | null,
+        productName: row.productName,
+        quantity: row.quantity,
+        unit: row.unit,
+        sellingPrice: row.sellingPrice,
+        validated: row.validated === true,
+        activationKey: productKeyFor(row.productName),
+      }));
+    const manualEntries = manualRows
+      .map((row, idx) => ({ row, idx }))
+      .filter(({ row }) => !row.removed && row.productName.trim() !== '')
+      .map(({ row, idx }) => ({
+        rowKey: `manual-${idx}`,
+        kind: 'manual' as const,
+        catalogProductId: null as string | null,
+        manualRowIndex: idx as number | null,
+        productName: row.productName,
+        quantity: row.quantity,
+        unit: row.unit,
+        sellingPrice: row.sellingPrice,
+        validated: row.validated === true,
+        activationKey: productKeyFor(row.productName),
+      }));
+    return [...catalogEntries, ...manualEntries];
+  }, [catalogRows, manualRows]);
+
+  // Search — reuses the exact same `productSearch` state the old picker
+  // already read, applied the same way (trim + lowercase substring
+  // match against productName), now filtering the one unified list
+  // instead of the picker table alone.
+  const filteredUnifiedListEntries = useMemo(() => {
+    const search = productSearch.trim().toLowerCase();
+    if (!search) return unifiedListEntries;
+    return unifiedListEntries.filter((entry) => entry.productName.toLowerCase().includes(search));
+  }, [unifiedListEntries, productSearch]);
+
+  // Sorting reuses `sortByValidatedMode`/`validatedSortMode` (declared
+  // below, hoisting-safe since this is only read inside a later
+  // render), the SAME function/state the validated list already used —
+  // one shared sort control for the one shared list, rather than two
+  // independent ones.
+  const sortedUnifiedListEntries = useMemo(
+    () =>
+      sortByValidatedMode(
+        filteredUnifiedListEntries,
+        (entry) => entry.productName,
+        (entry) => (entry.quantity.trim() === '' ? 0 : Number(entry.quantity) || 0) * (Number(entry.sellingPrice) || 0),
+        validatedSortMode
+      ),
+    [filteredUnifiedListEntries, validatedSortMode]
+  );
+
+  // [Single-Active-Product Rule, §9 — extended to the unified list]
+  // While a product is open in the active workspace, its OWN entries
+  // are hidden from this list entirely — "it comes solo to the editing
+  // zone" — rather than merely shown-and-disabled, since the workspace
+  // above already displays that exact product in full. Every OTHER
+  // entry remains visible but is rendered disabled (see
+  // `isUnifiedEntryDisabled`, at the render site) so a second,
+  // independent product can never be opened at the same time — the
+  // same guarantee `editDisabled` already enforced for the old
+  // validated-only list, now covering every entry instead of only the
+  // validated ones.
+  const visibleUnifiedListEntries = useMemo(
+    () =>
+      sortedUnifiedListEntries.filter(
+        (entry) => !isWorkspaceActive || entry.activationKey !== activeWorkspaceProductKey
+      ),
+    [sortedUnifiedListEntries, isWorkspaceActive, activeWorkspaceProductKey]
+  );
+
+  // Single click handler for the unified list: routes to whichever
+  // EXISTING function already implements the correct behavior for this
+  // entry's current state — never a new activation/reopen mechanism.
+  // An unvalidated entry opens immediately, exactly like the old
+  // picker's row click. An already-validated entry goes through the
+  // same "queres editar?" confirmation the old "Editar" button used,
+  // via `handleEditCatalogRow`/`handleEditManualRow` (both declared
+  // above, unmodified).
+  const handleUnifiedEntryClick = (entry: (typeof unifiedListEntries)[number]) => {
+    if (isWorkspaceActive && entry.activationKey !== activeWorkspaceProductKey) return;
+    if (entry.validated) {
+      if (entry.kind === 'catalog' && entry.catalogProductId) {
+        handleEditCatalogRow(entry.catalogProductId);
+      } else if (entry.kind === 'manual' && entry.manualRowIndex !== null) {
+        handleEditManualRow(entry.manualRowIndex);
+      }
+      return;
+    }
+    handleSelectExistingProductForWorkspace(entry.activationKey);
+  };
+
   // [Existing-Product Edit/Confirm Workflow — investigation finding]
   // The counted list's own "Editar" buttons (the accumulated/
   // validated area, below — handleEditCatalogRow/handleEditManualRow,
@@ -3782,6 +3901,57 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return { reportTitle, periodLabel, kpis, tables };
   };
 
+  // [Owner-requested — PDF export of the working list BEFORE
+  // confirmation] Same `exportReportPdf` helper, same table shape as
+  // the post-confirmation receipt above, but built from `liveTally`
+  // (the live, in-progress tally over `allWorkingRows`) instead of
+  // `savedTally` — this is the only difference, since nothing has been
+  // persisted yet at the point this button is available. Only rows
+  // with actual data (`liveTally.countedItems`, exactly the same
+  // "non-blank, non-removed quantity" rule described in
+  // `tallyStockCountRows`'s own header comment) are included — an
+  // untouched catalog placeholder contributes nothing to export,
+  // mirroring what the unified list itself would show as still-blank.
+  const buildPreConfirmExportContent = () => {
+    const reportTitle = `Lista de Contagem (antes de confirmar) — ${TYPE_LABELS[type]}`;
+    const periodLabel = `${formatDate(date)}${label.trim() ? ` — ${label.trim()}` : ''}`;
+    const kpis = [
+      { label: 'Valor de Venda Contado até Agora', value: formatCurrency(liveTally.totalSellingValue, currencySymbol) },
+      { label: 'Produtos Contados', value: String(liveTally.countedItems.length) },
+      ...(liveTally.notCountedProductNames.length > 0
+        ? [{ label: 'Produtos Não Contados', value: String(liveTally.notCountedProductNames.length) }]
+        : []),
+    ];
+    const tables = [
+      {
+        title: 'Produtos Contados',
+        columns: ['Produto', 'Qtd', 'Unid', 'Venda/Un', 'Total'],
+        rows: liveTally.countedItems.map((item) => [
+          item.productName,
+          item.quantity,
+          item.unit,
+          formatCurrency(item.sellingPrice, currencySymbol),
+          formatCurrency(item.sellingValue, currencySymbol),
+        ]),
+      },
+      ...(liveTally.notCountedProductNames.length > 0
+        ? [
+            {
+              title: 'Produtos Não Contados',
+              columns: ['Produto'],
+              rows: liveTally.notCountedProductNames.map((name) => [name]),
+            },
+          ]
+        : []),
+    ];
+    return { reportTitle, periodLabel, kpis, tables };
+  };
+
+  const handleDownloadPreConfirmPdf = () => {
+    const content = buildPreConfirmExportContent();
+    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables);
+  };
+
   const handleDownloadReceiptPdf = () => {
     if (autoAdvanceTimerRef.current) {
       clearTimeout(autoAdvanceTimerRef.current);
@@ -4524,136 +4694,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               column. */}
           <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 items-start">
           <div className="space-y-6">
-          {/* [Implementation Authorization — Single-Product Workspace]
-              PICKER — shown only when the workspace is empty. Selecting
-              a candidate here (or adding a new product) is what fills
-              the workspace; while a product is active, this entire
-              section is replaced by that one product's own editable
-              form (the unmodified catalog/manual JSX immediately
-              below, now reading the workspace-scoped
-              `visibleCatalogEntries`/`visibleManualRowGroups`). The
-              search box moved here from its own previous location
-              (immediately above the always-shown grid) since search's
-              job is now exclusively "help pick the next product,"
-              never "filter an already-active workspace" — see
-              `visibleCatalogEntries`'s own declaration comment, above,
-              for why the active workspace deliberately ignores
-              `productSearch` entirely. */}
+          {/* [Owner-requested — single unified product list] The
+              separate compact picker table that used to live here is
+              removed — selecting an existing product (validated or
+              not) now happens from the one unified list in the right
+              column, below. This idle-state placeholder (plus the
+              "add manual product" action) is all that remains on the
+              left while no product is active; the moment a product is
+              selected there, it is replaced by that product's own
+              editable form immediately below (unchanged). */}
           {!isWorkspaceActive && (
             <>
-              <div className="flex flex-col sm:flex-row gap-2.5">
-                <div className="relative flex-1">
-                  <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
-                  <input
-                    type="text"
-                    placeholder="Procurar um produto para contar..."
-                    value={productSearch}
-                    onChange={(e) => setProductSearch(e.target.value)}
-                    className={`${fieldClass} pl-8`}
-                  />
-                </div>
-                {/* [Picker — sort-by control] Same select styling/pattern as the
-                    validated-list's own sort control, further below — one shared
-                    control affecting the single combined table beneath it,
-                    rather than two independent lists. */}
-                <select
-                  value={pickerSortMode}
-                  onChange={(e) => setPickerSortMode(e.target.value as typeof pickerSortMode)}
-                  className={`${fieldClass} sm:w-[180px] shrink-0`}
-                >
-                  <option value="name-asc">Nome (A→Z)</option>
-                  <option value="name-desc">Nome (Z→A)</option>
-                  <option value="value-desc">Maior valor</option>
-                  <option value="value-asc">Menor valor</option>
-                </select>
-              </div>
-
-              {products.length === 0 && !productsError && pickerManualRowGroups.length === 0 && (
-                <p className="text-[13px] text-gray-500 italic">
-                  Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
-                </p>
-              )}
-
-              {productSearch.trim() && sortedPickerRows.length === 0 && (
-                <p className="text-[13px] text-gray-500 italic">
-                  Nenhum produto encontrado para "{productSearch.trim()}".
-                </p>
-              )}
-
-              {/* [Owner-requested — table view: name/quantity/unit/price/total
-                  columns, scrollable, matching the reference table layout] One
-                  combined, sorted, searched table for every pickable product
-                  (catalog AND manual groups alike — see `pickerRows`'s own
-                  declaration comment, above, for why they're merged into one
-                  list here). `max-h-[420px] overflow-y-auto` on the body only
-                  (never the header) keeps column labels pinned in view while a
-                  long product list scrolls underneath — necessary the moment a
-                  business has more products than fit on screen at once, which
-                  the prior one-button-per-product list had no answer for
-                  either, it just grew the whole page. Clicking anywhere on a
-                  row activates that product's workspace via the SAME
-                  `handleSelectExistingProductForWorkspace`/
-                  `activationKey` every row already carries — unchanged
-                  selection behavior, only the visual presentation changed. */}
-              {sortedPickerRows.length > 0 && (
-                <div className="border border-[#F0EEE4] rounded-xl overflow-hidden">
-                  {/* Single scroll container, single <table> — a sticky <thead>
-                      split into its own separate <table> (a common pattern for
-                      "fixed" headers) risks the two tables computing different
-                      column widths for the same data and drifting out of
-                      alignment. Instead each <th> below carries its own
-                      `sticky top-0`, the reliably cross-browser way to pin a
-                      table header while its body scrolls underneath it,
-                      guaranteeing header and body columns always line up. */}
-                  <div className="max-h-[420px] overflow-auto">
-                    <table className="w-full text-left border-collapse min-w-[520px]">
-                      <thead>
-                        <tr className="bg-[#FAFAF7]">
-                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-3.5 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4]">
-                            Produto
-                          </th>
-                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-2 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
-                            Qtd
-                          </th>
-                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-2 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
-                            Unid.
-                          </th>
-                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-2 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
-                            Preço/Unid
-                          </th>
-                          <th className="sticky top-0 z-10 bg-[#FAFAF7] px-3.5 py-2 text-[11px] font-bold text-gray-500 uppercase tracking-wide border-b border-[#F0EEE4] text-right">
-                            Total
-                          </th>
-                        </tr>
-                      </thead>
-                      <tbody>
-                        {sortedPickerRows.map((item) => (
-                          <tr
-                            key={item.key}
-                            onClick={() => handleSelectExistingProductForWorkspace(item.activationKey)}
-                            className="cursor-pointer border-b border-[#F0EEE4] last:border-b-0 hover:bg-[#D4AF37]/[0.05] transition-colors duration-150"
-                          >
-                            <td className="px-3.5 py-2.5 text-[13px] font-semibold text-[#111827] whitespace-nowrap max-w-[220px] truncate">
-                              {item.displayName}
-                            </td>
-                            <td className="px-2 py-2.5 text-[13px] text-gray-600 tabular-nums text-right whitespace-nowrap">
-                              {item.quantityLabel}
-                            </td>
-                            <td className="px-2 py-2.5 text-[13px] text-gray-600 text-right whitespace-nowrap">{item.unitLabel}</td>
-                            <td className="px-2 py-2.5 text-[13px] text-gray-600 tabular-nums text-right whitespace-nowrap">
-                              {item.priceLabel}
-                            </td>
-                            <td className="px-3.5 py-2.5 text-[13px] font-bold text-[#0B1F3A] tabular-nums text-right whitespace-nowrap">
-                              {item.hasData ? formatCurrency(item.totalValue, currencySymbol) : '—'}
-                            </td>
-                          </tr>
-                        ))}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
-              )}
-
+              <p className="text-[13px] text-gray-500 italic">
+                Escolha um produto na lista à direita para começar a contar, ou adicione um novo abaixo.
+              </p>
               <button
                 type="button"
                 onClick={handleAddNewProductToWorkspace}
@@ -5621,273 +5675,218 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               below the workspace in normal page flow, unchanged from
               before this Authorization. */}
           <div className="space-y-6 lg:sticky lg:top-4 lg:max-h-[calc(100vh-2rem)] lg:overflow-y-auto">
-          {/* [Decision 40 — Validar Workflow, FR-N8; Implementation
-              Authorization §1 item 5] The accumulated/validated area —
-              structurally parallel to "Removidos desta contagem",
-              above, but combining BOTH catalog and manual validated
-              entries into one list, since from the Owner's point of
-              view "Validar" moves a product into the same accumulated
-              place regardless of which section it started in. Every
-              entry here remains fully present in `catalogRows`/
-              `manualRows` (never removed, never spliced — see
-              `visibleCatalogEntries`/`validatedManualRowEntries`'s own
-              comments, above); this list only reads the already-
-              computed `validatedCatalogEntries`/
-              `validatedManualRowEntries` derived views. Reopening
-              reuses the EXISTING `handleEditCatalogRow`/
-              `handleEditManualRow` functions unchanged — the same
-              "queres editar?"-gated, `validated: false`-setting write
-              path already used by the in-row "Editar" button, so a
-              row reopened from here behaves identically to one
-              reopened from the active workspace's own Editar control. */}
-          {(validatedCatalogEntries.length > 0 || validatedManualRowEntries.length > 0) && (
-            <div className="rounded-2xl border border-emerald-100 bg-emerald-50/40 px-4 py-3.5 space-y-2">
-              {/* [Owner-requested: closed-by-default validated-products
-                  panel] Same open/closed accordion trigger as "Histórico
-                  de Contagens", below — a header button with a chevron,
-                  toggling local UI state only. The count badge stays
-                  visible even collapsed, so the Owner always knows how
-                  many products are waiting inside without opening it. */}
+          {/* [Owner-requested — single unified product list] Replaces
+              the old two-list split (compact unvalidated picker table +
+              collapsible validated-only card list) with ONE always-
+              visible, always-expanded list, in the validated list's own
+              full-detail card style, covering every product regardless
+              of its `validated` state. Reads `unifiedListEntries` (and
+              its derived `sortedUnifiedListEntries`/
+              `visibleUnifiedListEntries`, all declared far above,
+              alongside `handleSelectExistingProductForWorkspace`) —
+              search and sort now apply to this one list instead of
+              being split (search used to belong only to the picker,
+              sort only to the validated list). Clicking a row routes
+              through `handleUnifiedEntryClick`, which itself only calls
+              the EXISTING `handleSelectExistingProductForWorkspace`/
+              `handleEditCatalogRow`/`handleEditManualRow` functions —
+              no new selection, validation, or reopening logic
+              anywhere. The product currently open in the active
+              workspace is excluded from this list entirely (it "comes
+              solo to the editing zone"); every other product remains
+              visible, disabled while a different product is active. */}
+          <div className="rounded-2xl border border-[#F0EEE4] bg-white px-4 py-3.5 space-y-2.5">
+            <div className="flex items-center justify-between gap-2">
+              <p className="text-[13px] font-bold text-[#111827]">
+                Produtos
+                <span className="text-gray-500 font-normal ml-1.5">({visibleUnifiedListEntries.length})</span>
+              </p>
+              {/* [Owner-requested — PDF export before confirmation] */}
               <button
                 type="button"
-                onClick={() => setShowValidated((v) => !v)}
-                className="w-full flex items-center justify-between gap-2"
+                onClick={handleDownloadPreConfirmPdf}
+                disabled={liveTally.countedItems.length === 0}
+                className={`flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
+                  liveTally.countedItems.length === 0
+                    ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                    : 'text-[#0B1F3A] bg-[#D4AF37]/[0.12] hover:bg-[#D4AF37]/[0.22]'
+                }`}
               >
-                <p className="text-[13px] font-bold text-emerald-800">
-                  Produtos Validados
-                  <span className="font-normal text-emerald-700/70 ml-1.5">
-                    ({validatedCatalogEntries.length + validatedManualRowEntries.length})
-                  </span>
-                </p>
-                {showValidated ? (
-                  <ChevronUp className="w-4 h-4 text-emerald-700/70 shrink-0" />
-                ) : (
-                  <ChevronDown className="w-4 h-4 text-emerald-700/70 shrink-0" />
-                )}
+                <FileDown className="w-3.5 h-3.5" strokeWidth={2.5} />
+                <span>Exportar PDF</span>
               </button>
-              <p className="text-[11px] text-emerald-700/70 leading-relaxed">
-                Já verificados e fora do espaço de contagem ativo. Continuam a fazer
-                parte desta Contagem e serão revistos antes de "Confirmar Contagem".
-              </p>
-              {/* [Sorting — Authorization §8] Applies to both the
-                  catalog and manual validated lists below, each sorted
-                  independently by the same chosen mode (they render as
-                  two visually separate groups, per Concept C's existing
-                  structure — unchanged by this addition). Ordering only
-                  ever reorders the display; it never writes to
-                  catalogRows/manualRows or any persisted field. */}
-              {showValidated && (validatedCatalogEntries.length > 0 || validatedManualRowEntries.length > 0) && (
-                <div className="flex items-center gap-2">
-                  <label className="text-[11px] font-semibold text-emerald-700/70" htmlFor="validated-sort-mode">
-                    Ordenar por
-                  </label>
-                  <select
-                    id="validated-sort-mode"
-                    value={validatedSortMode}
-                    onChange={(e) => setValidatedSortMode(e.target.value as typeof validatedSortMode)}
-                    className="text-[12px] font-semibold text-emerald-800 bg-white border border-emerald-200 rounded-lg px-2 py-1"
-                  >
-                    <option value="name-asc">Nome (A→Z)</option>
-                    <option value="name-desc">Nome (Z→A)</option>
-                    <option value="value-desc">Maior valor</option>
-                    <option value="value-asc">Menor valor</option>
-                  </select>
-                </div>
-              )}
-              {showValidated && (
-              <>
-              {/* [Concept C — Validated Product Compaction, Implementation
-                  Authorization §11] Shared desktop column header, matching
-                  the exact same five-track rowGridClass template and the
-                  same five labels the active-workspace header above
-                  already uses (Concept B §3.1) — so the Owner's eyes stay
-                  aligned between the active and validated areas, as
-                  required. Editar has no dedicated column here either,
-                  mirroring that same header's own precedent (an action,
-                  not a field, folded into the last cell below). */}
-              <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-1.5 border-b border-emerald-100`}>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Nome</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Qtd</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Unid</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Venda/Un</span>
-                <span className="text-[10px] font-bold uppercase tracking-wide text-emerald-700/70">Valor</span>
-              </div>
-              <div className="space-y-1.5">
-                {sortedValidatedCatalogEntries.map(([productId, row]) => {
-                  const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
-                  const sellingPriceNum = Number(row.sellingPrice) || 0;
-                  const rowValue = q * sellingPriceNum;
-                  // [Concept C §2/§13] Same function, same inputs
-                  // (parseFloat(row.sellingPrice), getRememberedPriceForRow)
-                  // the active-row rendering already calls at line 4124 —
-                  // never a second, independently-computed check.
-                  const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
-                  const hasPriceWarning = priceCheck.showWarning;
-                  const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
-                  // [Single-Active-Product Rule, §9] Opening this
-                  // product would activate a SECOND independent
-                  // product if a DIFFERENT one is already active —
-                  // disabled (not hidden, so the Owner can still see
-                  // and locate it) exactly like the picker's own
-                  // selection is unavailable in that same state. Never
-                  // disabled for the currently-active product itself
-                  // (there is none here — a validated row is never the
-                  // active one) or when the workspace is empty.
-                  const editDisabled = isWorkspaceActive && activeWorkspaceProductKey !== productKeyFor(row.productName);
-                  return (
-                    <div
-                      key={`validated-catalog-${productId}`}
-                      className={`grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-1 sm:items-center bg-white border border-emerald-200/70 rounded-xl px-3 py-2`}
-                    >
-                      <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-                        {/* [Concept C §12] Accessible text representation
-                            of validated state — not conveyed by the icon
-                            alone. */}
-                        <span className="sr-only">Validado</span>
-                        <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
-                        {(hasPriceWarning || hasModeAWarning) && (
-                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-                        )}
-                      </div>
-                      <div>
-                        <span className={`${fieldLabelClass} sm:hidden`}>Qtd</span>
-                        <span className="text-[13px] text-gray-700 tabular-nums">{q}</span>
-                      </div>
-                      <div>
-                        <span className={`${fieldLabelClass} sm:hidden`}>Unid</span>
-                        <span className="text-[13px] text-gray-700">{row.unit || 'un'}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
-                        <span className="block text-[13px] text-gray-700 tabular-nums truncate">{formatCurrency(sellingPriceNum, currencySymbol)}</span>
-                      </div>
-                      {/* [Total-display layout fix] Was a single-row `flex
-                          items-center justify-between` splitting this
-                          190px column's width between the Total value AND
-                          the Editar button side by side — too narrow for
-                          a full formatted amount (e.g. "425.278,50 MT")
-                          once the button's own space was subtracted,
-                          visually cutting the value off. Stacking value
-                          above button (each gets the FULL column width in
-                          turn, right-aligned) fixes this with no column
-                          width/grid change, no calculation change, and no
-                          change to what information is shown — only the
-                          two elements' relative position within this one
-                          cell. `whitespace-nowrap` on the value guarantees
-                          it renders on a single line rather than wrapping
-                          mid-amount. */}
-                      <div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">
-                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">{formatCurrency(rowValue, currencySymbol)}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleEditCatalogRow(productId)}
-                          disabled={editDisabled}
-                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
-                            editDisabled
-                              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                          }`}
-                        >
-                          {editDisabled ? 'Produto aberto' : 'Editar'}
-                        </button>
-                      </div>
-                      {/* [Concept C §2] Warnings stay fully visible text —
-                          never tooltip/hover-only — reusing the exact
-                          check-price wording pattern already established
-                          at the active-row rendering, and the exact
-                          Mode A warning sentence ModeAValuationControl
-                          itself renders (line 342, above), verbatim. */}
-                      {hasPriceWarning && (
-                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
-                          Este preço é {Math.round(priceCheck.deviationPercent! * 100)}%{' '}
-                          {priceCheck.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
-                          produto — confirme que não é um erro de digitação.
-                        </p>
-                      )}
-                      {hasModeAWarning && (
-                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-semibold leading-snug flex items-start gap-1">
-                          <AlertTriangle className="w-3 h-3 shrink-0 mt-[1px]" strokeWidth={2.25} aria-hidden="true" />
-                          <span>Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.</span>
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-                {sortedValidatedManualRowEntries.map(({ idx, row }) => {
-                  const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
-                  const sellingPriceNum = Number(row.sellingPrice) || 0;
-                  const rowValue = q * sellingPriceNum;
-                  const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
-                  const hasPriceWarning = priceCheck.showWarning;
-                  const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
-                  // [Single-Active-Product Rule, §9] Same guard as the
-                  // catalog list's own identical addition, above.
-                  const editDisabled = isWorkspaceActive && activeWorkspaceProductKey !== productKeyFor(row.productName);
-                  return (
-                    <div
-                      key={`validated-manual-${idx}`}
-                      className={`grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-1 sm:items-center bg-white border border-emerald-200/70 rounded-xl px-3 py-2`}
-                    >
-                      <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
-                        <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-                        <span className="sr-only">Validado</span>
-                        <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
-                        {(hasPriceWarning || hasModeAWarning) && (
-                          <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-                        )}
-                      </div>
-                      <div>
-                        <span className={`${fieldLabelClass} sm:hidden`}>Qtd</span>
-                        <span className="text-[13px] text-gray-700 tabular-nums">{q}</span>
-                      </div>
-                      <div>
-                        <span className={`${fieldLabelClass} sm:hidden`}>Unid</span>
-                        <span className="text-[13px] text-gray-700">{row.unit || 'un'}</span>
-                      </div>
-                      <div className="min-w-0">
-                        <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
-                        <span className="block text-[13px] text-gray-700 tabular-nums truncate">{formatCurrency(sellingPriceNum, currencySymbol)}</span>
-                      </div>
-                      {/* [Total-display layout fix] Same corrected layout
-                          as the catalog-validated list's identical cell,
-                          above — see its comment for the full rationale. */}
-                      <div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">
-                        <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">{formatCurrency(rowValue, currencySymbol)}</span>
-                        <button
-                          type="button"
-                          onClick={() => handleEditManualRow(idx)}
-                          disabled={editDisabled}
-                          className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
-                            editDisabled
-                              ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                              : 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
-                          }`}
-                        >
-                          {editDisabled ? 'Produto aberto' : 'Editar'}
-                        </button>
-                      </div>
-                      {hasPriceWarning && (
-                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
-                          Este preço é {Math.round(priceCheck.deviationPercent! * 100)}%{' '}
-                          {priceCheck.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
-                          produto — confirme que não é um erro de digitação.
-                        </p>
-                      )}
-                      {hasModeAWarning && (
-                        <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-semibold leading-snug flex items-start gap-1">
-                          <AlertTriangle className="w-3 h-3 shrink-0 mt-[1px]" strokeWidth={2.25} aria-hidden="true" />
-                          <span>Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.</span>
-                        </p>
-                      )}
-                    </div>
-                  );
-                })}
-              </div>
-              </>
-              )}
             </div>
-          )}
+
+            <div className="flex flex-col sm:flex-row gap-2.5">
+              <div className="relative flex-1">
+                <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
+                <input
+                  type="text"
+                  placeholder="Procurar um produto..."
+                  value={productSearch}
+                  onChange={(e) => setProductSearch(e.target.value)}
+                  className={`${fieldClass} pl-8`}
+                />
+              </div>
+              {/* [Accessibility — carried over from the old validated-list
+                  sort control] A visually-hidden label keeps this select
+                  properly associated with its own accessible name, exactly
+                  like the control it replaces, without spending visible
+                  space on an explanatory "Ordenar por" caption. */}
+              <label htmlFor="unified-list-sort-mode" className="sr-only">
+                Ordenar por
+              </label>
+              <select
+                id="unified-list-sort-mode"
+                value={validatedSortMode}
+                onChange={(e) => setValidatedSortMode(e.target.value as typeof validatedSortMode)}
+                className={`${fieldClass} sm:w-[180px] shrink-0`}
+              >
+                <option value="name-asc">Nome (A→Z)</option>
+                <option value="name-desc">Nome (Z→A)</option>
+                <option value="value-desc">Maior valor</option>
+                <option value="value-asc">Menor valor</option>
+              </select>
+            </div>
+
+            {products.length === 0 && !productsError && unifiedListEntries.length === 0 && (
+              <p className="text-[13px] text-gray-500 italic">
+                Ainda não tem produtos no catálogo. Adicione um manualmente abaixo.
+              </p>
+            )}
+
+            {productSearch.trim() && visibleUnifiedListEntries.length === 0 && (
+              <p className="text-[13px] text-gray-500 italic">Nenhum produto encontrado para "{productSearch.trim()}".</p>
+            )}
+
+            {visibleUnifiedListEntries.length > 0 && (
+              <>
+                <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-1.5 border-b border-[#F0EEE4]`}>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Venda/Un</span>
+                  <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor</span>
+                </div>
+                <div className="space-y-1.5">
+                  {visibleUnifiedListEntries.map((entry) => {
+                    const row =
+                      entry.kind === 'catalog' && entry.catalogProductId
+                        ? catalogRows[entry.catalogProductId]
+                        : entry.manualRowIndex !== null
+                        ? manualRows[entry.manualRowIndex]
+                        : undefined;
+                    if (!row) return null;
+                    const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
+                    const sellingPriceNum = Number(row.sellingPrice) || 0;
+                    const rowValue = q * sellingPriceNum;
+                    const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                    const hasPriceWarning = priceCheck.showWarning;
+                    const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
+                    // [Single-Active-Product Rule, §9 — extended] Every
+                    // entry remaining in this list once a workspace is
+                    // active belongs to a DIFFERENT product than the one
+                    // open (the active product's own entries are already
+                    // excluded by `visibleUnifiedListEntries`, above) —
+                    // so simply `isWorkspaceActive` itself is the correct
+                    // disabled condition here, matching the old
+                    // `editDisabled` guard's effect exactly.
+                    const disabled = isWorkspaceActive;
+                    return (
+                      <div
+                        key={entry.rowKey}
+                        role="button"
+                        tabIndex={disabled ? -1 : 0}
+                        onClick={() => !disabled && handleUnifiedEntryClick(entry)}
+                        onKeyDown={(e) => {
+                          if (!disabled && (e.key === 'Enter' || e.key === ' ')) handleUnifiedEntryClick(entry);
+                        }}
+                        className={`grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-1 sm:items-center border rounded-xl px-3 py-2 transition-colors duration-150 ${
+                          disabled
+                            ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed'
+                            : entry.validated
+                            ? 'bg-white border-emerald-200/70 hover:bg-emerald-50/40 cursor-pointer'
+                            : 'bg-white border-[#F0EEE4] hover:bg-[#D4AF37]/[0.05] cursor-pointer'
+                        }`}
+                      >
+                        <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
+                          {entry.validated ? (
+                            <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                          ) : (
+                            <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                          )}
+                          <span className="sr-only">{entry.validated ? 'Validado' : 'Não validado'}</span>
+                          <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
+                          {(hasPriceWarning || hasModeAWarning) && (
+                            <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                          )}
+                        </div>
+                        <div>
+                          <span className={`${fieldLabelClass} sm:hidden`}>Qtd</span>
+                          <span className="text-[13px] text-gray-700 tabular-nums">{row.quantity.trim() === '' ? '—' : q}</span>
+                        </div>
+                        <div>
+                          <span className={`${fieldLabelClass} sm:hidden`}>Unid</span>
+                          <span className="text-[13px] text-gray-700">{row.quantity.trim() === '' ? '—' : row.unit || 'un'}</span>
+                        </div>
+                        <div className="min-w-0">
+                          <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
+                          <span className="block text-[13px] text-gray-700 tabular-nums truncate">
+                            {row.quantity.trim() === '' ? '—' : formatCurrency(sellingPriceNum, currencySymbol)}
+                          </span>
+                        </div>
+                        <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-2">
+                          <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">
+                            {row.quantity.trim() === '' ? '—' : formatCurrency(rowValue, currencySymbol)}
+                          </span>
+                          {/* [Concept C, Hard Requirement §2 — carried over] The
+                              action stays a clearly labeled, visible-text
+                              control, never icon-only, even though the whole
+                              row is also clickable (handleUnifiedEntryClick,
+                              above) — a real <button> so it remains reachable
+                              and announced independently of the row's own
+                              onClick/role="button" wrapper. `stopPropagation`
+                              only prevents the row's own handler from firing
+                              a SECOND time for the exact same action; it never
+                              changes which handler ultimately runs. */}
+                          <button
+                            type="button"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              if (!disabled) handleUnifiedEntryClick(entry);
+                            }}
+                            disabled={disabled}
+                            className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
+                              disabled
+                                ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                : entry.validated
+                                ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
+                                : 'text-[#0B1F3A] bg-[#D4AF37]/[0.12] hover:bg-[#D4AF37]/[0.22]'
+                            }`}
+                          >
+                            {disabled ? 'Produto aberto' : entry.validated ? 'Editar' : 'Abrir'}
+                          </button>
+                        </div>
+                        {hasPriceWarning && (
+                          <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
+                            Este preço é {Math.round(priceCheck.deviationPercent! * 100)}%{' '}
+                            {priceCheck.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
+                            produto — confirme que não é um erro de digitação.
+                          </p>
+                        )}
+                        {hasModeAWarning && (
+                          <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-semibold leading-snug flex items-start gap-1">
+                            <AlertTriangle className="w-3 h-3 shrink-0 mt-[1px]" strokeWidth={2.25} aria-hidden="true" />
+                            <span>Uma ou mais porções têm uma unidade que não faz parte da relação de unidades confirmada deste produto — o preço dessas porções não foi alterado; introduza-o manualmente.</span>
+                          </p>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
+              </>
+            )}
+          </div>
           </div>
           </div>
 
