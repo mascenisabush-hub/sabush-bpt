@@ -4650,48 +4650,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
         </div>
       )}
-      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-4 sm:p-6 space-y-3">
-        {/* [Local layout compaction — Owner-reported "too much scrolling
-            before the counting workspace"] Replaces the old two-part
-            header (a `pb-5 border-b` block with a boxed 40×40 icon,
-            title, a full explanatory subtitle line, and draft-status —
-            followed, much further down the form, by a separately-
-            gridded Tipo/Data block) with ONE compact toolbar: identity
-            + draft-status on one line, Tipo/Data directly below it on
-            a second line. Nothing here changes what data exists or how
-            it's read/written — `type`/`date`/`label`/`draftSaveState`
-            and their handlers (handleTypeChange/handleDateChange/
-            handleLabelChange) are completely unchanged, only their
-            surrounding markup. The standalone subtitle ("Registe uma
-            nova contagem física...") is dropped, not silently lost —
-            its meaning is a strict subset of the fuller explanatory
-            strip immediately below, which stays fully present (see its
-            own comment, further down) — never delete guidance that
-            doesn't survive somewhere else on the same screen. */}
-        <div className="flex items-center justify-between gap-3 flex-wrap">
-          <h2 className="type-title flex items-center gap-2">
-            <ClipboardList className="w-4 h-4 text-[#0B1F3A]/70 shrink-0" strokeWidth={2.25} aria-hidden="true" />
-            Contagem de Stock Periódica
-          </h2>
-          {/* [Implementation Task, Section 4/§1a] Draft durability status —
-              a deliberately distinct UI signal from isSaving/savedMessage
-              below, never collapsed into the same indicator (frozen spec
-              §1a: "the user's work is durable" and "the final business
-              transaction has been committed" must never share a signal).
-              Unchanged condition/values — only repositioned onto the
-              compact identity row instead of its own separate header
-              block. */}
-          {draftSaveState !== 'editing' && (
-            <span className="text-[13px] text-gray-500 shrink-0 font-medium">
-              {draftSaveState === 'saving' && 'A guardar rascunho…'}
-              {draftSaveState === 'saved' && 'Rascunho guardado'}
-              {draftSaveState === 'save-failed' && (
-                <span className="text-rose-500">Falha ao guardar rascunho</span>
-              )}
-            </span>
-          )}
-        </div>
-
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-4 sm:p-6 space-y-2">
         {productsError && (
           <div className="bg-rose-50 border border-rose-200 rounded-xl px-4 py-3.5 flex items-start justify-between gap-3">
             <div className="flex items-start gap-2.5">
@@ -4717,25 +4676,38 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
         )}
 
-        <form onSubmit={handleRequestConfirmation} className="space-y-3">
-          {/* [Local layout compaction] Tipo/Data (+ Nome, for a custom
-              count) now sit directly under the compact identity row
-              above, in one flex-wrap toolbar instead of a separately
-              gridded block further down — on desktop they read as one
-              horizontal row; on narrow viewports they wrap naturally
-              (no forced cramped layout, no breakpoint-specific class
-              needed for that). Labels sit BESIDE their input instead
-              of stacked above it (still real, visible, associated
-              `<label>` text — not removed, not icon-only, not a
-              placeholder-as-label anti-pattern) purely to shave the
-              row's own height; `fieldClass` itself (the input's own
-              size/padding) is completely unchanged — comfortably-sized
-              controls, not shrunk. This local `type-label`
-              re-arrangement is scoped to these three fields only —
-              `fieldLabelClass` itself (block-stacked, `mb-1`) is left
-              completely untouched for every other call site in this
-              file that still uses it. */}
-          <div className="flex flex-wrap items-center gap-4">
+        <form onSubmit={handleRequestConfirmation} className="space-y-2">
+          {/* [Local layout compaction, round 2 — further reduction after
+              measuring the first pass fell short of the ~150-220px
+              target] The identity line and the Tipo/Data toolbar were
+              two separate rows (title+draft-status, then Tipo/Data
+              directly below) — now ONE flex-wrap row. This removes an
+              entire row-height plus its own inter-row gap: the title
+              row's own height (~26px) is no longer additive with the
+              Tipo/Data row's height (~36px) — the combined row's
+              height is simply the taller of the two (~36px, the
+              input's own height), since they now share one baseline
+              via `items-center`. Nothing else changes: `type`/`date`/
+              `label`/`draftSaveState` and their handlers
+              (handleTypeChange/handleDateChange/handleLabelChange) are
+              identical to before; every field keeps its own real,
+              visible, htmlFor-associated `<label>` (Tipo/Data/Nome) —
+              none of this removes information or shrinks a control,
+              it only removes the whitespace between two rows that
+              never needed to be two rows. `draftSaveState`'s own
+              rendering is unchanged (same three states, same text) —
+              only pushed to the row's trailing edge via `ml-auto` so
+              it still reads as a distinct, clearly separated status
+              signal, never visually merged with the form controls
+              themselves. On narrow viewports this row wraps onto
+              multiple lines exactly like the single-row version did —
+              no forced cramped layout was introduced. */}
+          <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
+            <h2 className="type-title flex items-center gap-2 shrink-0">
+              <ClipboardList className="w-4 h-4 text-[#0B1F3A]/70 shrink-0" strokeWidth={2.25} aria-hidden="true" />
+              Contagem de Stock Periódica
+            </h2>
+
             <div className="flex items-center gap-2">
               <label htmlFor="periodic-contagem-type" className="type-label shrink-0 whitespace-nowrap">
                 Tipo
@@ -4783,17 +4755,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 />
               </div>
             )}
+
+            {/* [Implementation Task, Section 4/§1a] Draft durability status —
+                a deliberately distinct UI signal from isSaving/savedMessage
+                below, never collapsed into the same indicator (frozen spec
+                §1a: "the user's work is durable" and "the final business
+                transaction has been committed" must never share a signal).
+                Unchanged condition/values — only repositioned, twice now,
+                first onto its own compact identity row and now onto the
+                trailing edge of the merged identity+Tipo/Data row. */}
+            {draftSaveState !== 'editing' && (
+              <span className="ml-auto shrink-0 text-[13px] text-gray-500 font-medium">
+                {draftSaveState === 'saving' && 'A guardar rascunho…'}
+                {draftSaveState === 'saved' && 'Rascunho guardado'}
+                {draftSaveState === 'save-failed' && (
+                  <span className="text-rose-500">Falha ao guardar rascunho</span>
+                )}
+              </span>
+            )}
           </div>
 
           {/* [Local layout compaction] Same explanatory content as
               before — full meaning preserved verbatim, including the
               conditional hasInitialStockCount copy branch below —
-              only the padding/line-height tightened (py-3.5 → py-2.5,
+              only the padding/line-height tightened (py-3.5 → py-2,
               leading-relaxed → leading-snug) to reduce its vertical
               footprint without shrinking the font size or deleting any
               guidance. Deliberately NOT made dismissible/collapsible —
               no new state was introduced for this. */}
-          <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 flex items-start gap-2.5">
+          <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3.5 py-2 flex items-start gap-2.5">
             <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[2px]" strokeWidth={2.25} />
             <p className="text-[13px] leading-snug text-gray-600">
               {/* [Capital Inicial Retirement — Implementation Authorization
