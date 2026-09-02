@@ -4650,23 +4650,37 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
         </div>
       )}
-      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8 space-y-6">
-        {/* Header */}
-        <div className="flex items-center gap-3 pb-5 border-b border-[#E5E7EB]">
-          <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
-            <ClipboardList className="w-5 h-5" strokeWidth={2} />
-          </div>
-          <div className="min-w-0 flex-1">
-            <h2 className="type-title">Contagem de Stock Periódica</h2>
-            <p className="text-[13px] text-gray-500 mt-0.5">
-              Registe uma nova contagem física para acompanhar a evolução do seu capital.
-            </p>
-          </div>
+      <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-4 sm:p-6 space-y-3">
+        {/* [Local layout compaction — Owner-reported "too much scrolling
+            before the counting workspace"] Replaces the old two-part
+            header (a `pb-5 border-b` block with a boxed 40×40 icon,
+            title, a full explanatory subtitle line, and draft-status —
+            followed, much further down the form, by a separately-
+            gridded Tipo/Data block) with ONE compact toolbar: identity
+            + draft-status on one line, Tipo/Data directly below it on
+            a second line. Nothing here changes what data exists or how
+            it's read/written — `type`/`date`/`label`/`draftSaveState`
+            and their handlers (handleTypeChange/handleDateChange/
+            handleLabelChange) are completely unchanged, only their
+            surrounding markup. The standalone subtitle ("Registe uma
+            nova contagem física...") is dropped, not silently lost —
+            its meaning is a strict subset of the fuller explanatory
+            strip immediately below, which stays fully present (see its
+            own comment, further down) — never delete guidance that
+            doesn't survive somewhere else on the same screen. */}
+        <div className="flex items-center justify-between gap-3 flex-wrap">
+          <h2 className="type-title flex items-center gap-2">
+            <ClipboardList className="w-4 h-4 text-[#0B1F3A]/70 shrink-0" strokeWidth={2.25} aria-hidden="true" />
+            Contagem de Stock Periódica
+          </h2>
           {/* [Implementation Task, Section 4/§1a] Draft durability status —
               a deliberately distinct UI signal from isSaving/savedMessage
               below, never collapsed into the same indicator (frozen spec
               §1a: "the user's work is durable" and "the final business
-              transaction has been committed" must never share a signal). */}
+              transaction has been committed" must never share a signal).
+              Unchanged condition/values — only repositioned onto the
+              compact identity row instead of its own separate header
+              block. */}
           {draftSaveState !== 'editing' && (
             <span className="text-[13px] text-gray-500 shrink-0 font-medium">
               {draftSaveState === 'saving' && 'A guardar rascunho…'}
@@ -4676,28 +4690,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               )}
             </span>
           )}
-        </div>
-
-        <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
-          <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-          <p className="text-[13px] leading-relaxed text-gray-600">
-            {/* [Capital Inicial Retirement — Implementation Authorization
-                Increment 6; Specification §44.1/FR-70] Conditional copy
-                (Implementation Plan §Increment 6, option a) — the exact
-                prior wording is preserved verbatim for a business that
-                HAS a preserved historical Capital Inicial record;
-                generic wording names no retired concept for one that
-                doesn't. The expectedCurrentStockValue arithmetic itself
-                (AppContext.tsx, initialCapitalValue +
-                totalInvestmentValueAllTime) is completely unchanged —
-                this is copy-only. */}
-            Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
-            <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> —{' '}
-            {hasInitialStockCount
-              ? 'o Capital Inicial mais o valor (a custo) do stock em lote atualmente registado'
-              : 'o valor de compras registadas (a custo)'}
-            {' '}— para mostrar se o valor do seu inventário corresponde ao que o sistema esperava.
-          </p>
         </div>
 
         {productsError && (
@@ -4725,14 +4717,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
         )}
 
-        <form onSubmit={handleRequestConfirmation} className="space-y-6">
-          <div className="grid grid-cols-2 sm:grid-cols-3 gap-3.5 max-w-2xl">
-            <div>
-              <label className={fieldLabelClass}>Tipo de Contagem</label>
+        <form onSubmit={handleRequestConfirmation} className="space-y-3">
+          {/* [Local layout compaction] Tipo/Data (+ Nome, for a custom
+              count) now sit directly under the compact identity row
+              above, in one flex-wrap toolbar instead of a separately
+              gridded block further down — on desktop they read as one
+              horizontal row; on narrow viewports they wrap naturally
+              (no forced cramped layout, no breakpoint-specific class
+              needed for that). Labels sit BESIDE their input instead
+              of stacked above it (still real, visible, associated
+              `<label>` text — not removed, not icon-only, not a
+              placeholder-as-label anti-pattern) purely to shave the
+              row's own height; `fieldClass` itself (the input's own
+              size/padding) is completely unchanged — comfortably-sized
+              controls, not shrunk. This local `type-label`
+              re-arrangement is scoped to these three fields only —
+              `fieldLabelClass` itself (block-stacked, `mb-1`) is left
+              completely untouched for every other call site in this
+              file that still uses it. */}
+          <div className="flex flex-wrap items-center gap-4">
+            <div className="flex items-center gap-2">
+              <label htmlFor="periodic-contagem-type" className="type-label shrink-0 whitespace-nowrap">
+                Tipo
+              </label>
               <select
+                id="periodic-contagem-type"
                 value={type}
                 onChange={(e) => handleTypeChange(e.target.value as StockCountType)}
-                className={`${fieldClass} font-semibold`}
+                className={`${fieldClass} font-semibold w-[150px]`}
               >
                 {TYPE_OPTIONS.map((opt) => (
                   <option key={opt.value} value={opt.value}>
@@ -4742,29 +4754,65 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               </select>
             </div>
 
-            <div>
-              <label className={fieldLabelClass}>Data da Contagem</label>
+            <div className="flex items-center gap-2">
+              <label htmlFor="periodic-contagem-date" className="type-label shrink-0 whitespace-nowrap">
+                Data
+              </label>
               <input
+                id="periodic-contagem-date"
                 type="date"
                 required
                 value={date}
                 onChange={(e) => handleDateChange(e.target.value)}
-                className={`${fieldClass} font-mono tabular-nums`}
+                className={`${fieldClass} font-mono tabular-nums w-[150px]`}
               />
             </div>
 
             {type === 'custom' && (
-              <div className="col-span-2 sm:col-span-1">
-                <label className={fieldLabelClass}>Nome da Contagem</label>
+              <div className="flex items-center gap-2">
+                <label htmlFor="periodic-contagem-label" className="type-label shrink-0 whitespace-nowrap">
+                  Nome
+                </label>
                 <input
+                  id="periodic-contagem-label"
                   type="text"
                   placeholder="Ex: Antes do Natal"
                   value={label}
                   onChange={(e) => handleLabelChange(e.target.value)}
-                  className={fieldClass}
+                  className={`${fieldClass} w-[200px]`}
                 />
               </div>
             )}
+          </div>
+
+          {/* [Local layout compaction] Same explanatory content as
+              before — full meaning preserved verbatim, including the
+              conditional hasInitialStockCount copy branch below —
+              only the padding/line-height tightened (py-3.5 → py-2.5,
+              leading-relaxed → leading-snug) to reduce its vertical
+              footprint without shrinking the font size or deleting any
+              guidance. Deliberately NOT made dismissible/collapsible —
+              no new state was introduced for this. */}
+          <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3.5 py-2.5 flex items-start gap-2.5">
+            <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[2px]" strokeWidth={2.25} />
+            <p className="text-[13px] leading-snug text-gray-600">
+              {/* [Capital Inicial Retirement — Implementation Authorization
+                  Increment 6; Specification §44.1/FR-70] Conditional copy
+                  (Implementation Plan §Increment 6, option a) — the exact
+                  prior wording is preserved verbatim for a business that
+                  HAS a preserved historical Capital Inicial record;
+                  generic wording names no retired concept for one that
+                  doesn't. The expectedCurrentStockValue arithmetic itself
+                  (AppContext.tsx, initialCapitalValue +
+                  totalInvestmentValueAllTime) is completely unchanged —
+                  this is copy-only. */}
+              Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
+              <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> —{' '}
+              {hasInitialStockCount
+                ? 'o Capital Inicial mais o valor (a custo) do stock em lote atualmente registado'
+                : 'o valor de compras registadas (a custo)'}
+              {' '}— para mostrar se o valor do seu inventário corresponde ao que o sistema esperava.
+            </p>
           </div>
 
           {/* [Implementation Authorization — Single-Product Workspace §10]

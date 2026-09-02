@@ -108,21 +108,33 @@ describe('B — repeated per-row field labels are sm:hidden on desktop', () => {
     assert.equal(occurrences.length, 9, `Expected 9 sm:hidden field labels, found ${occurrences.length}.`);
   });
 
-  it('no per-row field label still uses the bare, always-visible fieldLabelClass form', () => {
-    // The three legitimate remaining bare uses are once-per-screen
-    // fields (Tipo de Contagem, Data da Contagem, Nome da Contagem) —
-    // never repeated per product row, so they correctly stay
-    // always-visible. Confirm the count is exactly 3, not 0 (which
-    // would mean those got wrongly hidden too) and not more (which
-    // would mean a per-row label was missed).
+  it('no per-row field label still uses the bare, always-visible fieldLabelClass form — including the three once-per-screen fields, now compacted onto an inline toolbar', () => {
+    // [Local layout compaction — Owner-reported excessive pre-workspace
+    // scrolling] Tipo/Data/Nome no longer use the stacked, block-level
+    // fieldLabelClass (`block type-label mb-1`) — they moved to an
+    // inline `type-label` beside their input (see Suite F, below, for
+    // the replacement's own dedicated assertions), specifically to
+    // shave the row's height. fieldLabelClass itself is UNCHANGED and
+    // still used everywhere else (its own declaration, and the 9
+    // sm:hidden per-row uses asserted above) — this suite's own
+    // guarantee (no PER-ROW label silently lost its sm:hidden
+    // treatment) is unaffected; the count of bare, always-visible
+    // uses is now legitimately 0, not 3.
     const bareOccurrences = periodicSrc.match(/<label className=\{fieldLabelClass\}>/g) ?? [];
-    assert.equal(bareOccurrences.length, 3, `Expected exactly 3 bare (always-visible) field labels, found ${bareOccurrences.length}.`);
+    assert.equal(bareOccurrences.length, 0, `Expected zero bare (always-visible) fieldLabelClass uses after the Tipo/Data/Nome compaction, found ${bareOccurrences.length}.`);
   });
 
-  it('the three remaining always-visible labels are the once-per-screen fields, not per-row fields', () => {
-    assert.match(periodicSrc, /<label className=\{fieldLabelClass\}>Tipo de Contagem<\/label>/);
-    assert.match(periodicSrc, /<label className=\{fieldLabelClass\}>Data da Contagem<\/label>/);
-    assert.match(periodicSrc, /<label className=\{fieldLabelClass\}>Nome da Contagem<\/label>/);
+  it('the once-per-screen Tipo/Data/Nome fields moved to a compact inline label beside their input — still real, visible, associated <label> text (htmlFor/id), just repositioned, never removed', () => {
+    assert.match(periodicSrc, /<label htmlFor="periodic-contagem-type" className="type-label shrink-0 whitespace-nowrap">\s*\n\s*Tipo\s*\n\s*<\/label>/);
+    assert.match(periodicSrc, /<label htmlFor="periodic-contagem-date" className="type-label shrink-0 whitespace-nowrap">\s*\n\s*Data\s*\n\s*<\/label>/);
+    assert.match(periodicSrc, /<label htmlFor="periodic-contagem-label" className="type-label shrink-0 whitespace-nowrap">\s*\n\s*Nome\s*\n\s*<\/label>/);
+    // Each label is properly associated with its own input via
+    // matching id= — a genuine accessibility improvement over the
+    // prior sibling-only (no htmlFor/id) association, not a
+    // regression.
+    assert.match(periodicSrc, /id="periodic-contagem-type"/);
+    assert.match(periodicSrc, /id="periodic-contagem-date"/);
+    assert.match(periodicSrc, /id="periodic-contagem-label"/);
   });
 
   it('mobile is not left unlabeled — sm:hidden only hides on sm+ breakpoints, never removes the label element itself', () => {
