@@ -694,6 +694,38 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     };
   }, []);
 
+  // [Decision 41B — Initial Stock Count Unmount Protection;
+  // Implementation Authorization, Phase 2] This view has no router:
+  // InitialStockCountView is rendered behind a plain
+  // `activeTab === 'initial-stock'` conditional in App.tsx, so
+  // switching to another section is a genuine React unmount with
+  // NEITHER browser event above firing (the document never becomes
+  // hidden, no page unload occurs) — the exact gap Periodic Contagem's
+  // own equivalent unmount-cleanup effect already closes. This closes
+  // the same gap here, calling the SAME flushDraftNow function,
+  // completely unmodified — no new write-construction logic. Safe
+  // against stale closures for the identical reason the two browser-
+  // level triggers above already are: flushDraftNow reads
+  // latestFlushArgs.current (updated unconditionally on every render),
+  // applies the same !loaded/confirmed and hasAnyContent guards, and
+  // calls the existing saveInitialStockDraft write path — an
+  // unmount-triggered call is functionally indistinguishable from a
+  // pagehide-triggered one from that function's own point of view.
+  // This is a plain function-cleanup effect, never a router or
+  // navigation-guard mechanism — App.tsx's own `activeTab` handling is
+  // untouched. Independent of the Decision 41A registration effect
+  // above (that one clears pendingContagemFlushRef; this one flushes
+  // the draft directly) — the two never conflict: 41A's own flush only
+  // ever runs from inside switchShop() before a business switch, which
+  // never unmounts this component, so this unmount effect and 41A's
+  // registration cleanup are never triggered by the same event.
+  useEffect(() => {
+    return () => {
+      flushDraftNow();
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const updateRow = (id: string, fields: Partial<CountRowItem>) => {
     setRows((prev) => prev.map((row) => (row.id === id ? { ...row, ...fields } : row)));
   };
