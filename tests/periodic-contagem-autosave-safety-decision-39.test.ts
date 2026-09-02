@@ -233,8 +233,21 @@ describe('G — Validar (formerly Guardar) now persists via the exact same per-r
   it('handleSaveCatalogRow and handleSaveManualRow now route through updateCatalogRow/updateManualRow (the same write path every other field edit already uses), not a standalone local Set', () => {
     const catalogBody = extractFunctionBody(source, 'const handleSaveCatalogRow = (');
     const manualBody = extractFunctionBody(source, 'const handleSaveManualRow = (');
-    assert.match(catalogBody, /updateCatalogRow\(productId,\s*\{\s*validated:\s*true\s*\}\)/);
-    assert.match(manualBody, /updateManualRow\(index,\s*\{\s*validated:\s*true\s*\}\)/);
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization, mechanical regression fix, Product Architect
+    // authorization for narrowly-scoped test adjustment] Widened from
+    // the Decision-40-era exact `{ validated: true }` literal to allow
+    // that Authorization's own atomic-Validar requirement (§3 criterion
+    // 3): `entrySequence` merged into the SAME call. The call-count
+    // checks below preserve this test's original guarantee — a single
+    // write path, never a second/parallel one — independent of the
+    // object literal's exact contents.
+    assert.match(catalogBody, /updateCatalogRow\(productId,\s*\{\s*validated:\s*true,\s*entrySequence:[^}]*\}\)/);
+    assert.match(manualBody, /updateManualRow\(index,\s*\{\s*validated:\s*true,\s*entrySequence:[^}]*\}\)/);
+    const catalogCallCount = (catalogBody.match(/updateCatalogRow\(/g) || []).length;
+    const manualCallCount = (manualBody.match(/updateManualRow\(/g) || []).length;
+    assert.equal(catalogCallCount, 1, 'handleSaveCatalogRow must call updateCatalogRow exactly once — no second/parallel write path.');
+    assert.equal(manualCallCount, 1, 'handleSaveManualRow must call updateManualRow exactly once — no second/parallel write path.');
   });
 
   it('the prior local-only confirmedCatalogProductIds/confirmedManualRowIndices useState declarations no longer exist — comment mentions explaining the historical mechanism (already an established pattern in this file for superseded designs) are not the same as a live state declaration', () => {

@@ -975,13 +975,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // counted list, not a fact about the count itself. Uses only data
   // already computed for every validated row (productName,
   // sellingValue) — no new field, no timestamp, no schema change.
-  // Catalog-originated entry-time sorting is deliberately NOT one of
-  // the four modes: the prior investigation established catalogRows
-  // has no genuine per-row "when was this validated" timestamp to
-  // sort by, and none is invented here.
-  const [validatedSortMode, setValidatedSortMode] = useState<'name-asc' | 'name-desc' | 'value-desc' | 'value-asc'>(
-    'name-asc'
-  );
+  // [Periodic Contagem Entry-Order Sort Mode — Implementation
+  // Authorization §1 item 7] Superseding the prior note above (which
+  // read: "Catalog-originated entry-time sorting is deliberately NOT
+  // one of the four modes... no genuine per-row timestamp... none is
+  // invented here") — that was correct for a wall-clock timestamp,
+  // which is still never introduced. `'entry-order'` instead sorts by
+  // `StockCountWorkingRow.entrySequence`, an in-session integer
+  // counter (see that field's own comment, stockCount.ts), not a
+  // timestamp — an intentional, signed amendment to that prior
+  // decision, not a silent reversal of it.
+  const [validatedSortMode, setValidatedSortMode] = useState<
+    'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order'
+  >('name-asc');
   // [Picker — table view with sorting] UI-only, ephemeral, never
   // persisted — same discipline as validatedSortMode immediately
   // above, applied to the NOT-YET-ACTIVE product picker list instead
@@ -1202,6 +1208,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const nextSellingPriceEditSequence = (): number => {
     sellingPriceEditSequenceRef.current += 1;
     return sellingPriceEditSequenceRef.current;
+  };
+
+  // [Periodic Contagem Entry-Order Sort Mode — Implementation
+  // Authorization §1 item 3, §3 criterion 3] Same shape and same
+  // reasoning as sellingPriceEditSequenceRef immediately above — an
+  // in-session, monotonically increasing counter, never a wall-clock
+  // timestamp. Incremented by nextEntrySequence(), below, only via the
+  // `row.entrySequence ?? nextEntrySequence()` guard inside
+  // handleSaveCatalogRow/handleSaveManualRow — so it only ever advances
+  // on a row's FIRST successful Validar, never on a re-Validar of an
+  // already-sequenced row. Re-seeded on draft resume (see
+  // handleResumeDraft, further below) to one past the highest
+  // entrySequence found among the resumed rows, mirroring
+  // sellingPriceEditSequenceRef's own reseed exactly.
+  const entrySequenceRef = useRef<number>(0);
+  const nextEntrySequence = (): number => {
+    entrySequenceRef.current += 1;
+    return entrySequenceRef.current;
   };
 
   // [Fix #9 extended — Contagem was the one product-referencing view
@@ -1732,7 +1756,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // with no new trigger, and what makes the row leave the active
     // workspace via `visibleCatalogEntries`'s own filter, below,
     // without ever removing it from `catalogRows` itself.
-    updateCatalogRow(productId, { validated: true });
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization §1 item 4, §3 criterion 3] `entrySequence` MUST be
+    // merged into this SAME `updateCatalogRow` call, never a separate
+    // one — this is what the Rule 8 Assessment's durability finding
+    // depends on (the whole row, including this field, is written
+    // atomically as one Firestore document via the existing per-row
+    // debounce). `row.entrySequence ?? nextEntrySequence()` assigns
+    // the next sequence only the first time this row is validated;
+    // every later Validar of the same row (including via the
+    // Voltar-restore path, which reads this same `row` object) passes
+    // its own already-set value straight through unchanged.
+    updateCatalogRow(productId, { validated: true, entrySequence: row.entrySequence ?? nextEntrySequence() });
   };
 
   // Re-opening an already-validated row is deliberately gated behind
@@ -2494,7 +2529,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // counterpart to handleSaveCatalogRow's own identical write, above
     // — same `updateManualRow` path every other field edit already
     // uses, same autosave mechanism, no new trigger.
-    updateManualRow(index, { validated: true });
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization §1 item 4, §3 criterion 3] Manual-row counterpart
+    // to handleSaveCatalogRow's own identical atomic-Validar merge,
+    // above — same single-call requirement, same `?? nextEntrySequence()`
+    // first-assignment-only guard.
+    updateManualRow(index, { validated: true, entrySequence: row.entrySequence ?? nextEntrySequence() });
   };
 
   // [Existing-Product Edit/Confirm Workflow] Manual-row counterpart to
@@ -2676,6 +2716,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       0
     );
     sellingPriceEditSequenceRef.current = highestResumedSequence;
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization §1 item 6, §3 criterion 6] Identical reseed shape
+    // to sellingPriceEditSequenceRef immediately above, reusing the
+    // same allResumedRows array — re-seeds to one past the highest
+    // entrySequence found among every resumed row, ignoring rows with
+    // none, so a further Validar in this resumed session continues the
+    // correct order rather than colliding with an already-persisted
+    // value from before the interruption.
+    const highestResumedEntrySequence = allResumedRows.reduce(
+      (max, row) => (row.entrySequence !== undefined && row.entrySequence > max ? row.entrySequence : max),
+      0
+    );
+    entrySequenceRef.current = highestResumedEntrySequence;
     setType(periodicStockDraft.type);
     setLabel(periodicStockDraft.label || '');
     setDate(periodicStockDraft.date);
@@ -2998,11 +3051,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // `trim().toLowerCase()` normalization this file's own exact-match
   // logic (`isGenuinelyNewProductName`, `productKeyFor`) already uses
   // elsewhere, for consistency, not because sorting needs a new rule.
+  // [Periodic Contagem Entry-Order Sort Mode — Implementation
+  // Authorization §1 item 7, §3 criterion 7] `getSequence` is optional
+  // — the picker's own sortedPickerRows call site (further below) never
+  // supplies it and never needs to, since pickerSortMode's own type
+  // never includes 'entry-order'; only the three validated/unified call
+  // sites below opt in.
   function sortByValidatedMode<T>(
     items: T[],
     getName: (item: T) => string,
     getValue: (item: T) => number,
-    mode: typeof validatedSortMode
+    mode: typeof validatedSortMode,
+    getSequence?: (item: T) => number | undefined
   ): T[] {
     const sorted = [...items];
     sorted.sort((a, b) => {
@@ -3015,6 +3075,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           return getValue(b) - getValue(a);
         case 'value-asc':
           return getValue(a) - getValue(b);
+        case 'entry-order': {
+          // Ascending by entrySequence; rows with no sequence (never
+          // validated this session) sort last; equal sequences (a
+          // disclosed, accepted possibility under concurrent sessions —
+          // see the entrySequence field's own comment, stockCount.ts)
+          // fall back to the same normalized-name comparison name-asc
+          // already uses, deterministically, never an arbitrary order.
+          const seqA = getSequence?.(a);
+          const seqB = getSequence?.(b);
+          if (seqA === undefined && seqB === undefined) {
+            return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
+          }
+          if (seqA === undefined) return 1;
+          if (seqB === undefined) return -1;
+          if (seqA !== seqB) return seqA - seqB;
+          return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
+        }
       }
     });
     return sorted;
@@ -3026,7 +3103,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validatedCatalogEntries,
         ([, row]) => row.productName,
         ([, row]) => (row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0) * (Number(row.sellingPrice) || 0),
-        validatedSortMode
+        validatedSortMode,
+        ([, row]) => row.entrySequence
       ),
     [validatedCatalogEntries, validatedSortMode]
   );
@@ -3037,7 +3115,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validatedManualRowEntries,
         ({ row }) => row.productName,
         ({ row }) => (row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0) * (Number(row.sellingPrice) || 0),
-        validatedSortMode
+        validatedSortMode,
+        ({ row }) => row.entrySequence
       ),
     [validatedManualRowEntries, validatedSortMode]
   );
@@ -3192,6 +3271,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         unit: row.unit,
         sellingPrice: row.sellingPrice,
         validated: row.validated === true,
+        entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
       }));
     const manualEntries = manualRows
@@ -3207,6 +3287,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         unit: row.unit,
         sellingPrice: row.sellingPrice,
         validated: row.validated === true,
+        entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
       }));
     return [...catalogEntries, ...manualEntries];
@@ -3233,7 +3314,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         filteredUnifiedListEntries,
         (entry) => entry.productName,
         (entry) => (entry.quantity.trim() === '' ? 0 : Number(entry.quantity) || 0) * (Number(entry.sellingPrice) || 0),
-        validatedSortMode
+        validatedSortMode,
+        (entry) => entry.entrySequence
       ),
     [filteredUnifiedListEntries, validatedSortMode]
   );
@@ -6156,6 +6238,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <option value="name-desc">Nome (Z→A)</option>
                 <option value="value-desc">Maior valor</option>
                 <option value="value-asc">Menor valor</option>
+                <option value="entry-order">Ordem de registo</option>
               </select>
             </div>
 

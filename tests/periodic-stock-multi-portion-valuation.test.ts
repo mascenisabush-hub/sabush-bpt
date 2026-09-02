@@ -143,15 +143,18 @@ describe('workingRowToDraftItem / draftItemToWorkingRow — §17 draft round-tri
     const restoredManual = draftItemToWorkingRow(draftManual);
 
     // [Decision 40 — Validar Workflow; FR-89–FR-94, Implementation
-    // Authorization §2 item 2] draftItemToWorkingRow explicitly
-    // copies through validated/sellingPriceAutoFilled/
-    // sellingPriceBasisUnit/sellingPriceEditSequence as `undefined`
-    // for a legacy item that predates those fields — same verbatim
-    // "absent means undefined, not missing" discipline `removed`
-    // already had below. Node's strict deep-equal treats an explicit
-    // `key: undefined` differently from an absent key, so the
-    // expected object must declare all four here, not just `removed`,
-    // even though every reader of these fields treats both forms
+    // Authorization §2 item 2; Periodic Contagem Entry-Order Sort Mode
+    // — Implementation Authorization, mechanical regression fix,
+    // Product Architect authorization for narrowly-scoped test
+    // adjustment] draftItemToWorkingRow explicitly copies through
+    // validated/sellingPriceAutoFilled/sellingPriceBasisUnit/
+    // sellingPriceEditSequence/entrySequence as `undefined` for a
+    // legacy item that predates those fields — same verbatim "absent
+    // means undefined, not missing" discipline `removed` already had
+    // below. Node's strict deep-equal treats an explicit `key:
+    // undefined` differently from an absent key, so the expected
+    // object must declare all five here, not just `removed`, even
+    // though every reader of these fields treats both forms
     // identically at runtime.
     const legacyRoundTripDefaults = {
       removed: undefined,
@@ -159,6 +162,7 @@ describe('workingRowToDraftItem / draftItemToWorkingRow — §17 draft round-tri
       sellingPriceAutoFilled: undefined,
       sellingPriceBasisUnit: undefined,
       sellingPriceEditSequence: undefined,
+      entrySequence: undefined,
     };
     assert.deepEqual(restoredCatalog, { ...catalogRow, ...legacyRoundTripDefaults });
     assert.deepEqual(restoredManual, { ...manualRow, ...legacyRoundTripDefaults });

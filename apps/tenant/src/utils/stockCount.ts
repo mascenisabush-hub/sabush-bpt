@@ -330,6 +330,20 @@ export interface StockCountWorkingRow {
   // rows for the same product, which was entered last — never read by
   // any valuation calculation.
   sellingPriceEditSequence?: number;
+  // [Periodic Contagem Entry-Order Sort Mode — Implementation
+  // Authorization §1 items 1-2, §3 criteria 1-2/4-5] Working-row-only,
+  // draft-round-tripped. Set exactly once, the moment this row's
+  // `validated` first transitions to `true` (assigned in the SAME
+  // updateCatalogRow/updateManualRow call, per §3 criterion 3) — never
+  // reassigned afterward by any later edit, re-Validar, or Voltar
+  // restoration. An in-session, monotonically increasing counter, not
+  // a wall-clock timestamp — same reasoning as sellingPriceEditSequence
+  // above. Absent on a row never validated this session; never
+  // fabricated, never defaulted to 0. Excluded by construction from
+  // the finalized StockCount item shape (see recordStockCount's own
+  // explicit-literal `items` mapping), exactly as `validated` and
+  // `manualRowIndex` already are.
+  entrySequence?: number;
 }
 
 export interface StockCountTallyItem {
@@ -554,6 +568,7 @@ export function workingRowToDraftItem(row: StockCountWorkingRow): {
   sellingPriceAutoFilled?: boolean;
   sellingPriceBasisUnit?: string;
   sellingPriceEditSequence?: number;
+  entrySequence?: number;
 } {
   return {
     ...(row.productId ? { productId: row.productId } : {}),
@@ -579,6 +594,13 @@ export function workingRowToDraftItem(row: StockCountWorkingRow): {
     ...(row.sellingPriceAutoFilled !== undefined ? { sellingPriceAutoFilled: row.sellingPriceAutoFilled } : {}),
     ...(row.sellingPriceBasisUnit ? { sellingPriceBasisUnit: row.sellingPriceBasisUnit } : {}),
     ...(row.sellingPriceEditSequence !== undefined ? { sellingPriceEditSequence: row.sellingPriceEditSequence } : {}),
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization §1 item 2] Same omit-when-absent discipline as
+    // every other optional field above — never written as literal
+    // `undefined`, and this one line is what makes the existing
+    // Decision 39 autosave/flush triggers include it automatically,
+    // with no change to any of those mechanisms.
+    ...(row.entrySequence !== undefined ? { entrySequence: row.entrySequence } : {}),
   };
 }
 
@@ -600,6 +622,7 @@ export function draftItemToWorkingRow(item: {
   sellingPriceAutoFilled?: boolean;
   sellingPriceBasisUnit?: string;
   sellingPriceEditSequence?: number;
+  entrySequence?: number;
 }): StockCountWorkingRow {
   return {
     productId: item.productId,
@@ -624,5 +647,10 @@ export function draftItemToWorkingRow(item: {
     sellingPriceAutoFilled: item.sellingPriceAutoFilled,
     sellingPriceBasisUnit: item.sellingPriceBasisUnit,
     sellingPriceEditSequence: item.sellingPriceEditSequence,
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization §1 item 2, §3 criterion 2/5] Verbatim copy-through
+    // — a legacy draft item written before this feature existed simply
+    // lacks it, copied through as `undefined`, never fabricated.
+    entrySequence: item.entrySequence,
   };
 }

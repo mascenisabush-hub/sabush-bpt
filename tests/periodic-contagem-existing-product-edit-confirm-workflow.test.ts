@@ -131,11 +131,25 @@ describe('E — Reopening and re-validating an existing product never creates a 
     assert.doesNotMatch(leaveBody, /\.push\(/);
   });
 
-  it('re-validating (Validar) an existing row still routes through the SAME, unmodified handleSaveCatalogRow/handleSaveManualRow -> updateCatalogRow/updateManualRow(..., { validated: true }) path — never a second/parallel write path introduced by this workflow', () => {
+  it('re-validating (Validar) an existing row still routes through the SAME, unmodified handleSaveCatalogRow/handleSaveManualRow -> updateCatalogRow/updateManualRow path — never a second/parallel write path introduced by this workflow', () => {
     const saveCatalogBody = extractFunctionBody(periodicSrc, 'const handleSaveCatalogRow = (productId: string) => {');
     const saveManualBody = extractFunctionBody(periodicSrc, 'const handleSaveManualRow = (index: number) => {');
-    assert.match(saveCatalogBody, /updateCatalogRow\(productId, \{ validated: true \}\);/);
-    assert.match(saveManualBody, /updateManualRow\(index, \{ validated: true \}\);/);
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization, mechanical regression fix, Product Architect
+    // authorization for narrowly-scoped test adjustment] Widened from
+    // the Decision-40-era exact `{ validated: true }` literal to allow
+    // that Authorization's own atomic-Validar requirement (§3 criterion
+    // 3): `entrySequence` merged into the SAME call. Still asserts both
+    // fields land in one object literal, AND (via the call-count checks
+    // below) that this remains the ONLY updateCatalogRow/updateManualRow
+    // call in each handler — the original guarantee this test protects
+    // is unchanged, only the literal shape of the one authorized call is.
+    assert.match(saveCatalogBody, /updateCatalogRow\(productId,\s*\{\s*validated:\s*true,\s*entrySequence:[^}]*\}\);/);
+    assert.match(saveManualBody, /updateManualRow\(index,\s*\{\s*validated:\s*true,\s*entrySequence:[^}]*\}\);/);
+    const catalogCallCount = (saveCatalogBody.match(/updateCatalogRow\(/g) || []).length;
+    const manualCallCount = (saveManualBody.match(/updateManualRow\(/g) || []).length;
+    assert.equal(catalogCallCount, 1, 'handleSaveCatalogRow must call updateCatalogRow exactly once — no second/parallel write path.');
+    assert.equal(manualCallCount, 1, 'handleSaveManualRow must call updateManualRow exactly once — no second/parallel write path.');
   });
 });
 

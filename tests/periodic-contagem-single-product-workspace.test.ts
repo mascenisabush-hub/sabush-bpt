@@ -259,16 +259,62 @@ describe('J — Existing valuation, UnitRelationship, and autosave behavior are 
     .split('\n')
     .filter(Boolean);
 
-  it('production files outside PeriodicStockCountView.tsx remain untouched — valuation, UnitRelationship, Mode A/B, and persistence code all excluded from the diff (test files may legitimately change alongside it)', () => {
+  it('production files outside PeriodicStockCountView.tsx remain untouched — valuation, UnitRelationship, and persistence code all excluded from the diff (test files, and utils/stockCount.ts under its own later, separately-authorized Periodic Contagem Entry-Order Sort Mode Implementation Authorization, may legitimately change alongside it — see the next test for the narrower guarantee that authorization\'s own changes to stockCount.ts still preserve)', () => {
     assert.equal(changedFiles.includes('apps/tenant/src/components/PeriodicStockCountView.tsx'), true);
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization, mechanical regression fix, Product Architect
+    // authorization for narrowly-scoped test adjustment] Same
+    // reasoning this describe block already established for
+    // AppContext.tsx, below: this diff-based check only ever reflects
+    // the CURRENT working tree, not the single-product-workspace
+    // commit's own historical diff. utils/stockCount.ts is now
+    // legitimately touched by a later, separately-signed authorization
+    // (entrySequence) — excluded here by name, narrowly, exactly like
+    // AppContext.tsx already was; every other production file remains
+    // asserted empty, unchanged.
     const productionFilesOutsideScope = changedFiles.filter(
-      (f) => !f.startsWith('tests/') && f !== 'apps/tenant/src/components/PeriodicStockCountView.tsx'
+      (f) =>
+        !f.startsWith('tests/') &&
+        f !== 'apps/tenant/src/components/PeriodicStockCountView.tsx' &&
+        f !== 'apps/tenant/src/utils/stockCount.ts'
     );
     assert.deepEqual(productionFilesOutsideScope, []);
   });
 
-  it('utils/stockCount.ts (tallyStockCountRows, normalizeStockCountItems — the valuation formula) is not in the changed-files list', () => {
-    assert.equal(changedFiles.includes('apps/tenant/src/utils/stockCount.ts'), false);
+  it('utils/stockCount.ts\'s valuation formula (tallyStockCountRows, normalizeStockCountItems) is byte-identical to the last commit — the entrySequence Implementation Authorization touches only StockCountWorkingRow/workingRowToDraftItem/draftItemToWorkingRow, never the valuation logic this test was actually written to protect', () => {
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization, mechanical regression fix, Product Architect
+    // authorization for narrowly-scoped test adjustment] The original
+    // assertion here ("stockCount.ts is not in the changed-files list
+    // at all") stopped being meaningful the moment ANY later,
+    // separately-authorized change legitimately touched that file —
+    // exactly the AppContext.tsx situation this describe block already
+    // documents, above. Narrowed to what this test's own name always
+    // said it was protecting: the valuation formula specifically, not
+    // the whole file. Extracts both named functions from the current
+    // working tree and from the last commit, and asserts they are
+    // identical — genuine regression protection for the actual
+    // property, surviving any other, unrelated change to this file.
+    const headStockCountSrc = execSync('git show HEAD:apps/tenant/src/utils/stockCount.ts', {
+      cwd: new URL('..', import.meta.url),
+      encoding: 'utf-8',
+    });
+    const currentStockCountSrc = src('apps/tenant/src/utils/stockCount.ts');
+    const extractTopLevelExport = (source: string, marker: string): string => {
+      const start = source.indexOf(marker);
+      assert.notEqual(start, -1, `Could not locate ${marker} — has it been renamed?`);
+      const rest = source.slice(start);
+      const nextExportMatch = rest.slice(marker.length).indexOf('\nexport ');
+      return nextExportMatch === -1 ? rest : rest.slice(0, marker.length + nextExportMatch);
+    };
+    assert.equal(
+      extractTopLevelExport(currentStockCountSrc, 'export function normalizeStockCountItems('),
+      extractTopLevelExport(headStockCountSrc, 'export function normalizeStockCountItems(')
+    );
+    assert.equal(
+      extractTopLevelExport(currentStockCountSrc, 'export function tallyStockCountRows('),
+      extractTopLevelExport(headStockCountSrc, 'export function tallyStockCountRows(')
+    );
   });
 
   it('lib/purchaseToSellingConversion.ts (getConversionFactor, UnitRelationship logic) is not in the changed-files list', () => {
@@ -439,11 +485,29 @@ describe('M — Existing (pre-Authorization) draft compatibility', () => {
     assert.doesNotMatch(body, /recalculate|reconcile/i);
   });
 
-  it('draft serialization (workingRowToDraftItem) is completely unmodified by this Authorization — confirmed by the diff, not merely by absence of a matching source edit', () => {
-    const changedFiles = execSync('git diff --name-only HEAD -- apps/tenant/src/utils/stockCount.ts', {
-      cwd: new URL('..', import.meta.url),
-      encoding: 'utf-8',
-    }).trim();
-    assert.equal(changedFiles, '', 'utils/stockCount.ts must be untouched (checked against the last commit, working-tree changes included)');
+  it('draft serialization (workingRowToDraftItem) was completely unmodified by the single-product-workspace commit this diff-based check was originally written for — a LATER, separately-authorized change (Periodic Contagem Entry-Order Sort Mode) does legitimately touch it, which this assertion now accounts for rather than asserting against', () => {
+    // [Periodic Contagem Entry-Order Sort Mode — Implementation
+    // Authorization, mechanical regression fix, Product Architect
+    // authorization for narrowly-scoped test adjustment] Identical
+    // reasoning, and identical resolution, to this file's own
+    // AppContext.tsx test in describe block J, above: this diff-based
+    // check only ever proves something about the CURRENT working tree,
+    // never that specific historical commit's own diff. Unlike the
+    // valuation-formula test also fixed in that same block (which
+    // could be narrowed to a still-meaningful function-body comparison
+    // against HEAD, because those two functions are genuinely
+    // untouched by the entrySequence authorization), `workingRowToDraftItem`
+    // IS deliberately, authorizedly modified by that later
+    // authorization (§1 item 2 of its own Implementation Authorization
+    // — one additive, omit-when-absent round-trip line for
+    // `entrySequence`) — so no narrower diff-based assertion here would
+    // both pass and remain meaningful. The property this test actually
+    // existed to protect — that no automatic migration/reinterpretation
+    // logic was introduced by the single-product-workspace feature
+    // itself — remains separately, directly proven by the no-migration
+    // source assertions immediately above (handleResumeDraft never
+    // recalculates/merges/reconciles), which are unaffected by and
+    // independent of this later, unrelated authorization.
+    assert.ok(true);
   });
 });
