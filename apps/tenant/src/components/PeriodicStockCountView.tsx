@@ -2,7 +2,7 @@ import React, { useEffect, useMemo, useRef, useState } from 'react';
 import { useApp, type StockCountReconciliationSignal } from '../context/AppContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
-import { StockCount, StockCountType, PeriodicStockDraft, UnitRelationship } from '../types';
+import { StockCount, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
@@ -631,7 +631,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     periodicStockDraft,
     cashPositionDeclarations,
     periodicStockDraftLoaded,
-    savePeriodicStockDraft,
+    savePeriodicStockDraftItem,
+    removePeriodicStockDraftItem,
+    savePeriodicStockDraftMeta,
+    flushPeriodicStockDraftRows,
     clearPeriodicStockDraft,
     // [Business Worth Evolution — Implementation Authorization, Increment
     // 8; Specification §25, §26, FR-38, FR-39, FR-58] Correction/
@@ -1079,6 +1082,36 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // by construction (the same clear-then-reschedule step, now scoped
   // to one map entry instead of one ref).
   const rowDebounceTimersRef = useRef<Map<string, ReturnType<typeof setTimeout>>>(new Map());
+  // [Bug fix — a transient empty `products` delivery must never wipe
+  // already-typed row data] `products` genuinely does go through a
+  // real `[] → [the real catalog]` transition on every fresh page
+  // load (activeBusinessId itself resolves from `null` to the real
+  // business id once userProfile loads, and AppContext's own
+  // business-data effect resets `products` to `[]` synchronously
+  // whenever activeBusinessId is falsy — context/AppContext.tsx,
+  // the `if (!activeBusinessId) { ... setProducts([]); ... }`
+  // branch). The catalog-row auto-populate effect below rebuilds
+  // `catalogRows` fresh from `products` on every change; without this
+  // guard, that empty moment rebuilds it to `{}` — wiping every
+  // already-typed quantity from React state, and (if any autosave
+  // fires before the real list arrives) permanently from the
+  // persisted draft too, since each row is its own independent
+  // document keyed by productId (this file's own scheduleRowDraftSave
+  // convention) — an empty `catalogRows` simply means no row-save
+  // fires FOR those products at all, so nothing is written over them,
+  // but a NEWLY-blank row for a product that WAS already counted would
+  // still need to exist in `catalogRows` to ever be re-typed into, and
+  // wiping it loses the Owner's own already-entered value from the
+  // screen with no warning. Tracks whether this component has already
+  // seen a genuinely non-empty `products` list at least once for the
+  // CURRENT business — once true, a later empty delivery is far more
+  // likely to be exactly this transient gap than a real "every product
+  // was just deleted" event (which has no such all-at-once path in
+  // this codebase), so it's ignored rather than acted on. Reset
+  // alongside every other per-business ref in the shop-switch effect
+  // below, so switching TO a business that genuinely has zero products
+  // is never permanently blocked.
+  const hasSeenProductsRef = useRef(false);
   const draftInFlightSaveRef = useRef<Promise<void> | null>(null);
   // §4b — the one write that must NEVER be discarded: the immediate,
   // non-debounced write that establishes the submission identity
@@ -1227,6 +1260,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // survive to fire against the new one.
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
+    hasSeenProductsRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -1247,6 +1281,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // Product.active back, at which point this same effect picks it back
   // up on its next run.
   useEffect(() => {
+    // [Bug fix — a transient empty `products` delivery must never wipe
+    // already-typed row data] See hasSeenProductsRef's own declaration
+    // comment, above, for the full mechanism. Once this business has
+    // shown at least one genuinely non-empty products list this
+    // session, a LATER empty one is skipped entirely — `catalogRows`
+    // is left exactly as it was, rather than rebuilt to `{}`.
+    if (products.length === 0 && hasSeenProductsRef.current) return;
+    if (products.length > 0) hasSeenProductsRef.current = true;
     setCatalogRows((prev) => {
       const next: CatalogRowState = {};
       for (const product of products) {
@@ -1416,15 +1458,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // live, current state HERE, at fire-time — never captured as a
       // function argument at schedule-time.
       const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
-      const allRows = [...Object.values(cr), ...mr].map(workingRowToDraftItem);
-      const savePromise = savePeriodicStockDraft(
-        allRows,
-        t,
-        l.trim() || undefined,
-        d,
-        submissionIdRef.current || undefined,
-        npi
-      )
+      // [Bug fix — per-product independent draft persistence] Was one
+      // full-document write of every row combined — now routes to
+      // EXACTLY one of two narrower functions depending on what this
+      // particular rowKey actually represents: '__meta__' and
+      // 'newProductInfo:*' changes touch only the meta document
+      // (type/label/date/newProductInfo — never row content);
+      // 'catalog:*'/'manual:*' changes resolve and write ONLY that one
+      // row's own document. A row that no longer exists at fire time
+      // (e.g. a manual row removed between scheduling and firing) has
+      // nothing to write — handleRemoveManualRow's own reindex call,
+      // below, is what keeps that row's document consistent instead.
+      let rawSavePromise: Promise<string>;
+      if (rowKey === '__meta__' || rowKey.startsWith('newProductInfo:')) {
+        rawSavePromise = savePeriodicStockDraftMeta(t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi);
+      } else {
+        const row = rowKey.startsWith('catalog:')
+          ? cr[rowKey.slice('catalog:'.length)]
+          : rowKey.startsWith('manual:')
+          ? mr[parseInt(rowKey.slice('manual:'.length), 10)]
+          : undefined;
+        rawSavePromise = row ? savePeriodicStockDraftItem(rowKey, workingRowToDraftItem(row)) : Promise.resolve('');
+      }
+      const savePromise = rawSavePromise
         .then((updatedAt) => {
           // [Cross-Device Live-Update Notice] Record our own write so
           // the incoming Firestore echo of it isn't mistaken for a
@@ -1859,9 +1915,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
     const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
-    const allRows = [...Object.values(cr), ...mr].map(workingRowToDraftItem);
+    // [Bug fix — per-product independent draft persistence] Was one
+    // combined array written as a single document field — now a
+    // Record keyed exactly like scheduleRowDraftSave's own row keys,
+    // handed to flushPeriodicStockDraftRows' batch write so every row
+    // still lands in its OWN independent document, just all in one
+    // network round-trip for the interruption-durability guarantee
+    // this flush exists for.
+    const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
+    for (const [productId, row] of Object.entries(cr)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
+    mr.forEach((row, index) => {
+      rowsByKey[`manual:${index}`] = workingRowToDraftItem(row);
+    });
     setDraftSaveState('saving');
-    const flushPromise = savePeriodicStockDraft(allRows, t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi)
+    const flushPromise = flushPeriodicStockDraftRows(rowsByKey, t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi)
       .then((updatedAt) => {
         // [Cross-Device Live-Update Notice] Same bookkeeping as §4a's
         // call site, above.
@@ -2328,6 +2395,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     const nextManualRows = manualRows.filter((_, i) => i !== index);
     setManualRows(nextManualRows);
+    // [Bug fix — per-product independent draft persistence] Manual
+    // rows persist as individual `manual:{index}` documents
+    // (scheduleRowDraftSave's own rowKey convention) — removing a row
+    // shifts every LATER row down by one position in memory, so their
+    // PERSISTED documents need the identical reindex, or a later row's
+    // saved data would sit under its OLD key while a different row now
+    // occupies that index, and the removed row's own now-excess tail
+    // document would be orphaned in Firestore forever. Only rows at or
+    // after `index` actually moved — rows before it keep their existing
+    // key/content untouched. Fire-and-forget, matching every other
+    // autosave call in this file; the ordinary '__meta__' save
+    // scheduled below already drives the visible draftSaveState
+    // indicator for this action.
+    nextManualRows.forEach((row, i) => {
+      if (i >= index) savePeriodicStockDraftItem(`manual:${i}`, workingRowToDraftItem(row)).catch(() => {});
+    });
+    removePeriodicStockDraftItem(`manual:${manualRows.length - 1}`).catch(() => {});
     // [Decision 39a; Implementation Authorization §1 item 5] Re-index
     // the manual-row timer map FIRST — mirroring
     // `manualRowSaveError`'s own existing pattern immediately below,
@@ -3569,9 +3653,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // already-persisted newProductInfo the moment the operator reaches
     // pendingTally, even though nothing about it changed.
     setDraftSaveState('saving');
-    const allRows = allWorkingRows.map(workingRowToDraftItem);
-    identityWriteRef.current = savePeriodicStockDraft(
-      allRows,
+    // [Bug fix — per-product independent draft persistence] Was a
+    // full-document overwrite including every row — now a batch write
+    // (flushPeriodicStockDraftRows) of every row to its OWN document
+    // plus the meta document (submissionId included), preserving the
+    // exact same guarantee this comment already describes: everything
+    // durably written together before finalization ever proceeds.
+    const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
+    for (const [productId, row] of Object.entries(catalogRows)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
+    manualRows.forEach((row, index) => {
+      rowsByKey[`manual:${index}`] = workingRowToDraftItem(row);
+    });
+    identityWriteRef.current = flushPeriodicStockDraftRows(
+      rowsByKey,
       type,
       label.trim() || undefined,
       date,

@@ -110,8 +110,8 @@ describe('§4b — the submission identity write is never discarded, always dura
     const handleRequestConfirmationBody = extractFunctionBody(source, 'const handleRequestConfirmation = async (');
     assert.match(
       handleRequestConfirmationBody,
-      /identityWriteRef\.current\s*=\s*savePeriodicStockDraft\(/,
-      'Expected handleRequestConfirmation to issue the identity-establishing write directly (identityWriteRef.current = savePeriodicStockDraft(...)), not via the debounced scheduleDraftSave path.'
+      /identityWriteRef\.current\s*=\s*flushPeriodicStockDraftRows\(/,
+      'Expected handleRequestConfirmation to issue the identity-establishing write directly (identityWriteRef.current = flushPeriodicStockDraftRows(...) — per-product independent draft persistence: still a batch, just of independent row documents plus the meta document, never via the debounced scheduleDraftSave path.'
     );
     assert.doesNotMatch(
       handleRequestConfirmationBody,

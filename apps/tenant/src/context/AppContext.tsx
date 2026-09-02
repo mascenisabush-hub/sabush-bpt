@@ -1,4 +1,4 @@
-import React, { createContext, useContext, useState, useEffect } from 'react';
+import React, { createContext, useContext, useState, useEffect, useMemo } from 'react';
 import {
   onAuthStateChanged,
   signOut,
@@ -745,19 +745,49 @@ interface AppContextType {
   periodicStockDraft: PeriodicStockDraft | null;
   // Same "loaded" disambiguation as initialStockDraftLoaded above.
   periodicStockDraftLoaded: boolean;
-  // Full-document overwrite (Implementation Task §2's debounced
-  // autosave path — the caller debounces, this function never does).
-  // submissionId is optional so ordinary row-content saves during
-  // `editing` (before the identity exists yet) don't require one.
-  // [Cross-Device Live-Update Notice — safe interim fix] Returns the
-  // exact `updatedAt` string this write persisted, so a caller can
-  // later distinguish "the incoming Firestore snapshot is just my own
-  // write echoing back" from "another device genuinely changed this
-  // draft" — read-only bookkeeping, never used to decide what gets
-  // written. Existing callers that ignore the resolved value are
-  // unaffected (Promise<void> callers simply don't use it).
-  savePeriodicStockDraft: (
-    items: PeriodicStockDraftItem[],
+  // [Bug fix — per-product independent draft persistence] Replaces the
+  // old single full-document-overwrite savePeriodicStockDraft. Each
+  // counted row is now its own independent Firestore document (see the
+  // periodicStockDraftMeta/periodicStockDraftItemsByKey state comment,
+  // above, for the full "why") — three narrower functions replace the
+  // one broad one:
+  //   - savePeriodicStockDraftItem: writes/merges exactly ONE row's own
+  //     document, keyed by the SAME rowKey convention
+  //     scheduleRowDraftSave already uses (`catalog:{productId}`,
+  //     `manual:{index}`). This is what an ordinary per-row debounced
+  //     autosave now calls — it can never touch any other row's
+  //     document, by construction.
+  //   - savePeriodicStockDraftMeta: writes only type/label/date/
+  //     submissionId/newProductInfo — never row content. Called when a
+  //     header-level field changes (Decision 39a's existing '__meta__'
+  //     rowKey) and, deliberately, does NOT need a `null`-row escape
+  //     hatch — items are managed exclusively via the item function.
+  //   - flushPeriodicStockDraftRows: an atomic BATCH write of every
+  //     CURRENTLY-live row's own document plus the meta document
+  //     together, in one Firestore batch — used only where the prior
+  //     single-document write needed an all-at-once guarantee
+  //     (interruption flush on tab-hide/pagehide, and the
+  //     identity-establishing write immediately before finalization).
+  //     Still N independent documents afterward, never a shared array
+  //     field — the batch is a network-efficiency grouping, not a
+  //     return to "one blob that a partial write can corrupt."
+  // Every one of these returns/awaits a getDocFromServer round-trip
+  // exactly like the prior function did, for the identical "don't
+  // report saved before the server actually has it" reason.
+  savePeriodicStockDraftItem: (rowKey: string, item: PeriodicStockDraftItem) => Promise<string>;
+  removePeriodicStockDraftItem: (rowKey: string) => Promise<void>;
+  savePeriodicStockDraftMeta: (
+    type: StockCountType,
+    label: string | undefined,
+    date: string,
+    submissionId?: string,
+    newProductInfo?: Record<
+      string,
+      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
+    >
+  ) => Promise<string>;
+  flushPeriodicStockDraftRows: (
+    rowsByKey: Record<string, PeriodicStockDraftItem>,
     type: StockCountType,
     label: string | undefined,
     date: string,
@@ -1032,13 +1062,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // listener's first callback (success OR error) has actually fired.
   const [initialStockDraftLoaded, setInitialStockDraftLoaded] = useState(false);
   // [Stock Count Data-Loss Resilience — Implementation Task, Section 1]
-  // Same shape/reasoning as initialStockDraft/initialStockDraftLoaded
-  // above, for the sibling `stockCountDrafts/periodic` singleton — kept
-  // as its own separate state pair (not merged with the initial draft's)
-  // since the two are never read together and the frozen spec §5/§12
-  // explicitly keeps the two mechanisms un-shared.
-  const [periodicStockDraft, setPeriodicStockDraft] = useState<PeriodicStockDraft | null>(null);
-  const [periodicStockDraftLoaded, setPeriodicStockDraftLoaded] = useState(false);
+  // [Bug fix — per-product independent draft persistence] The single
+  // `periodicStockDraft` (still the exact same public shape every
+  // consumer already expects — PeriodicStockDraft, `{items, type,
+  // label, date, submissionId?, newProductInfo?, updatedAt}`) is now
+  // ASSEMBLED (below, via useMemo) from two separately-listened
+  // Firestore sources instead of being read directly off one document:
+  // a small META document (type/label/date/submissionId/newProductInfo/
+  // updatedAt — everything EXCEPT the counted rows) and an `items`
+  // SUBCOLLECTION where each row is its own independent document. This
+  // is what makes a save of one product's row structurally unable to
+  // touch, overwrite, or drop any other product's already-saved row —
+  // there is no longer a single array field a partial/incorrect write
+  // could ever replace wholesale. See savePeriodicStockDraftItem/
+  // savePeriodicStockDraftMeta/flushPeriodicStockDraftRows, further
+  // below, for the write side of this same change.
+  const [periodicStockDraftMeta, setPeriodicStockDraftMeta] = useState<Omit<PeriodicStockDraft, 'items'> | null>(null);
+  const [periodicStockDraftItemsByKey, setPeriodicStockDraftItemsByKey] = useState<Record<string, PeriodicStockDraftItem>>({});
+  const [periodicStockDraftMetaLoaded, setPeriodicStockDraftMetaLoaded] = useState(false);
+  const [periodicStockDraftItemsLoaded, setPeriodicStockDraftItemsLoaded] = useState(false);
+  // Same shape/reasoning as initialStockDraftLoaded above — true only
+  // once BOTH the meta document and the items subcollection have each
+  // delivered at least one snapshot, so a consumer never sees a
+  // meta-only or items-only partial state as if it were "fully loaded."
+  const periodicStockDraftLoaded = periodicStockDraftMetaLoaded && periodicStockDraftItemsLoaded;
+  // Reassembles the exact same PeriodicStockDraft shape every existing
+  // consumer (PeriodicStockCountView.tsx's handleResumeDraft,
+  // draftHasMeaningfulContent, etc.) already reads — no consumer needs
+  // to change for this restructuring. Catalog items' own relative order
+  // never mattered (handleResumeDraft keys them by productId); manual
+  // items are re-sorted by the numeric suffix of their own `manual:{i}`
+  // document id, reconstructing the exact original array order a
+  // resume already depends on (StockCountWorkingRow's own array-index
+  // identity, unchanged by this restructuring).
+  const periodicStockDraft: PeriodicStockDraft | null = useMemo(() => {
+    if (!periodicStockDraftMeta) return null;
+    const catalogItems: PeriodicStockDraftItem[] = [];
+    const manualEntries: { index: number; item: PeriodicStockDraftItem }[] = [];
+    for (const [rowKey, item] of Object.entries(periodicStockDraftItemsByKey)) {
+      if (rowKey.startsWith('catalog:')) {
+        catalogItems.push(item);
+      } else if (rowKey.startsWith('manual:')) {
+        const index = parseInt(rowKey.slice('manual:'.length), 10);
+        if (Number.isFinite(index)) manualEntries.push({ index, item });
+      }
+    }
+    manualEntries.sort((a, b) => a.index - b.index);
+    return { ...periodicStockDraftMeta, items: [...catalogItems, ...manualEntries.map((e) => e.item)] };
+  }, [periodicStockDraftMeta, periodicStockDraftItemsByKey]);
   // [Durable Purchase Capture Amendment v1.0] Same "loaded flag"
   // disambiguation as initialStockDraft above, for exactly the same
   // reason — this is a per-user document (Rule 8 Assessment, Section 7),
@@ -1490,8 +1561,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setStockCounts([]);
         setInitialStockDraft(null);
         setInitialStockDraftLoaded(false);
-        setPeriodicStockDraft(null);
-        setPeriodicStockDraftLoaded(false);
+        setPeriodicStockDraftMeta(null);
+        setPeriodicStockDraftItemsByKey({});
+        setPeriodicStockDraftMetaLoaded(false);
+        setPeriodicStockDraftItemsLoaded(false);
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
@@ -1560,8 +1633,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // already-loaded periodicStockDraft could momentarily read as
     // Business B's during a direct switch, same class of bug as the fix
     // this effect already exists to prevent for the initial draft.
-    setPeriodicStockDraft(null);
-    setPeriodicStockDraftLoaded(false);
+    setPeriodicStockDraftMeta(null);
+    setPeriodicStockDraftItemsByKey({});
+    setPeriodicStockDraftMetaLoaded(false);
+    setPeriodicStockDraftItemsLoaded(false);
     // Phase C — same "reset unconditionally on every switch" reasoning
     // as the two lines above: a direct Business A -> Business B switch
     // must never carry A's suspended state into B's screen for the
@@ -1935,20 +2010,43 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     // [Stock Count Data-Loss Resilience — Implementation Task, Section
-    // 6] Persistent Periodic Contagem draft — single doc, id
-    // 'periodic'. Own separate onSnapshot from the initial draft's
-    // above (not a modification of it), same Owner-only-per-rules
-    // reasoning.
-    const periodicDraftRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic');
-    const unsubPeriodicDraft = onSnapshot(
-      periodicDraftRef,
+    // 6] Persistent Periodic Contagem draft. [Bug fix — per-product
+    // independent draft persistence] Was a single onSnapshot on one
+    // document holding every row in one `items` array field — now TWO
+    // separate listeners: the small META document (this doc itself,
+    // sans `items`) and the `items` SUBCOLLECTION (one document per
+    // row). Neither listener's own snapshot ever depends on the
+    // other's — a row document's own update can never fire the META
+    // listener and vice versa, so an in-flight write to one product's
+    // row can never race with, or be raced by, a write to the meta
+    // fields (type/label/date/submissionId/newProductInfo) or to any
+    // OTHER row's own document.
+    const periodicDraftMetaRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic');
+    const unsubPeriodicDraftMeta = onSnapshot(
+      periodicDraftMetaRef,
       (snap) => {
-        setPeriodicStockDraft(snap.exists() ? (snap.data() as PeriodicStockDraft) : null);
-        setPeriodicStockDraftLoaded(true);
+        setPeriodicStockDraftMeta(snap.exists() ? (snap.data() as Omit<PeriodicStockDraft, 'items'>) : null);
+        setPeriodicStockDraftMetaLoaded(true);
       },
       () => {
-        setPeriodicStockDraft(null);
-        setPeriodicStockDraftLoaded(true);
+        setPeriodicStockDraftMeta(null);
+        setPeriodicStockDraftMetaLoaded(true);
+      }
+    );
+    const periodicDraftItemsRef = collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items');
+    const unsubPeriodicDraftItems = onSnapshot(
+      periodicDraftItemsRef,
+      (snap) => {
+        const byKey: Record<string, PeriodicStockDraftItem> = {};
+        snap.forEach((itemDoc) => {
+          byKey[itemDoc.id] = itemDoc.data() as PeriodicStockDraftItem;
+        });
+        setPeriodicStockDraftItemsByKey(byKey);
+        setPeriodicStockDraftItemsLoaded(true);
+      },
+      () => {
+        setPeriodicStockDraftItemsByKey({});
+        setPeriodicStockDraftItemsLoaded(true);
       }
     );
 
@@ -2054,7 +2152,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubBusinessWorthRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
       unsubInitialDraft();
-      unsubPeriodicDraft();
+      unsubPeriodicDraftMeta();
+      unsubPeriodicDraftItems();
       unsubWithdrawals();
       unsubPayments();
       unsubClosings();
@@ -5235,6 +5334,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // re-issues this delete against a document that may already be
       // gone; Firestore's batched delete on a non-existent document is
       // a no-op, not an error.
+      // [Bug fix — per-product independent draft persistence] The
+      // periodic draft's rows now live in an `items` subcollection
+      // (see AppContext's own periodicStockDraftMeta/
+      // periodicStockDraftItemsByKey comment) rather than one array
+      // field on this document — deleting only this doc would leave
+      // every row's own document orphaned (Firestore never
+      // cascade-deletes subcollections), so each is enumerated and
+      // added to this SAME batch, preserving the identical
+      // all-or-nothing guarantee this comment already describes. A
+      // Firestore batch caps at 500 operations; a Contagem large
+      // enough to exceed that (500+ distinct counted rows) is far
+      // outside any real catalog size this codebase has seen so far —
+      // documented here rather than silently handled, should that ever
+      // change.
+      const periodicDraftItemsSnap = await getDocs(
+        collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items')
+      );
+      periodicDraftItemsSnap.forEach((itemDoc) => fsBatch.delete(itemDoc.ref));
       fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic'));
     }
     await fsBatch.commit();
@@ -5748,27 +5865,60 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // of bug (optional fields conditionally included, never assigned
   // `undefined` directly).
   //
-  // `submissionId` is optional: absent during ordinary `editing`-state
-  // autosaves (no identity has been generated yet), present once the
-  // operator has entered `pendingTally` at least once. When present,
-  // this function does NOT merge — it writes the full document
-  // including the identity, which is what makes the identity durable
-  // by construction rather than needing a separate merge-only write
-  // path (see §4b of the Implementation Task for why the identity must
-  // be durable before finalization; this function's full-overwrite
-  // shape is what `establishSubmissionIdentity`-equivalent calls below
-  // rely on to avoid ever persisting a document with the identity but
-  // missing row content, or vice versa).
-  // `newProductInfo` [Decision 38 Amendment, Implementation Task §5b;
-  // Implementation Authorization §2 item 3] is optional for the same
-  // reason `label`/`submissionId` are: conditionally spread only when
-  // non-empty, never assigned the literal value `undefined` (Firestore
-  // rejects that). A draft written before this parameter existed
-  // simply lacks the field — no migration, no backward-compatibility
-  // branch is needed here; the resume path (PeriodicStockCountView.tsx)
-  // is what treats absence as an empty object.
-  const savePeriodicStockDraft = async (
-    items: PeriodicStockDraftItem[],
+  // [Bug fix — per-product independent draft persistence] The old
+  // single savePeriodicStockDraft always wrote the ENTIRE `items` array
+  // as one field on one document — a real, observed failure mode: if
+  // the in-memory row set was ever transiently smaller than reality
+  // (e.g. PeriodicStockCountView.tsx's own catalog-row-populate effect
+  // reacting to a momentarily-empty `products` listener delivery, which
+  // happens on every fresh page load while activeBusinessId briefly
+  // resolves from null), an autosave firing during that window would
+  // silently overwrite the WHOLE draft with a near-empty one — a large,
+  // already-counted total reduced to almost nothing, no error shown.
+  // Four narrower functions replace it; see the interface's own comment
+  // (above) for the full breakdown of when each is used.
+  const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    const itemRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey);
+    await setDoc(itemRef, item);
+    // [Bug fix — a device with a poor/interrupted connection can show
+    // "saved" while the write never reaches the server] Same reasoning
+    // as this function's own prior single-document version — forces an
+    // actual round-trip, resolves only once the server genuinely has
+    // this row.
+    await getDocFromServer(itemRef);
+    return new Date().toISOString();
+  };
+
+  // [Decision 40-equivalent identity churn] Used only when a row's own
+  // stable key genuinely stops existing — currently just the manual-row
+  // reindex-on-delete path below (handleRemoveManualRow's own tail
+  // document, whose index no longer has a corresponding in-memory row
+  // once the array shifts down by one).
+  const removePeriodicStockDraftItem = async (rowKey: string) => {
+    if (!activeBusinessId) return;
+    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey));
+  };
+
+  const buildPeriodicDraftMeta = (
+    type: StockCountType,
+    label: string | undefined,
+    date: string,
+    submissionId?: string,
+    newProductInfo?: Record<
+      string,
+      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
+    >
+  ): Omit<PeriodicStockDraft, 'items'> => ({
+    type,
+    ...(label ? { label } : {}),
+    date,
+    ...(submissionId ? { submissionId } : {}),
+    ...(newProductInfo && Object.keys(newProductInfo).length > 0 ? { newProductInfo } : {}),
+    updatedAt: new Date().toISOString(),
+  });
+
+  const savePeriodicStockDraftMeta = async (
     type: StockCountType,
     label: string | undefined,
     date: string,
@@ -5779,40 +5929,65 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     >
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    const draft: PeriodicStockDraft = {
-      items,
-      type,
-      ...(label ? { label } : {}),
-      date,
-      ...(submissionId ? { submissionId } : {}),
-      ...(newProductInfo && Object.keys(newProductInfo).length > 0 ? { newProductInfo } : {}),
-      updatedAt: new Date().toISOString(),
-    };
-    await setDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'), draft);
-    // [Bug fix — a device with a poor/interrupted connection can show
-    // "saved" while the write never reaches the server] Same fix as
-    // savePurchaseDraft's own identical comment, below — this is the
-    // single most consequential instance of the pattern in this file,
-    // since Contagem is the primary path to establishing Business
-    // Worth: an Owner mid-count who believes their work is safely
-    // synced, when it genuinely never reached the server, risks losing
-    // real physical-count data with no warning at all. getDocFromServer
-    // forces an actual round-trip and only resolves once the server
-    // genuinely has the data.
-    await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
-    // [Cross-Device Live-Update Notice] See the interface comment,
-    // above — purely informational, read-only.
-    return draft.updatedAt;
+    const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    await setDoc(metaRef, meta);
+    await getDocFromServer(metaRef);
+    return meta.updatedAt;
+  };
+
+  // [Bug fix — per-product independent draft persistence] The one
+  // place a still-atomic, all-rows-at-once write remains genuinely
+  // necessary: the interruption-durability flush (tab-hide/pagehide)
+  // and the identity-establishing write immediately before
+  // finalization, both of which need the strongest available guarantee
+  // that EVERY currently-live row (not just whichever ones happen to
+  // have a pending per-row timer) reaches the server before the page
+  // may disappear or finalization proceeds. A Firestore batch still
+  // writes each row to its OWN independent document — this is a single
+  // network round-trip for efficiency, never a return to one shared
+  // array field a partial write could corrupt.
+  const flushPeriodicStockDraftRows = async (
+    rowsByKey: Record<string, PeriodicStockDraftItem>,
+    type: StockCountType,
+    label: string | undefined,
+    date: string,
+    submissionId?: string,
+    newProductInfo?: Record<
+      string,
+      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
+    >
+  ) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    const fsBatch = createFirestoreBatch(db);
+    fsBatch.set(metaRef, meta);
+    for (const [rowKey, item] of Object.entries(rowsByKey)) {
+      fsBatch.set(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey), item);
+    }
+    await fsBatch.commit();
+    await getDocFromServer(metaRef);
+    return meta.updatedAt;
   };
 
   // Discards the periodic draft without finalizing it — the explicit
   // "Começar de novo" path on the stale-draft resume banner
   // (Implementation Task, Section 5), distinct from finalization's
   // automatic atomic cleanup inside recordStockCount below.
+  // [Bug fix — per-product independent draft persistence] Now also
+  // enumerates and deletes the `items` subcollection — a plain
+  // deleteDoc of the meta document alone would leave every row's own
+  // document orphaned (Firestore never cascade-deletes subcollections).
   const clearPeriodicStockDraft = async () => {
     if (!activeBusinessId) return;
-    await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
+    const itemsSnap = await getDocs(collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items'));
+    const fsBatch = createFirestoreBatch(db);
+    itemsSnap.forEach((itemDoc) => fsBatch.delete(itemDoc.ref));
+    fsBatch.delete(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
+    await fsBatch.commit();
   };
+
 
   // [Durable Purchase Capture Amendment v1.0] Upserts the persistent,
   // per-user Purchase Draft (Rule 8 Assessment, Section 3/12) — the
@@ -6869,7 +7044,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         clearInitialStockDraft,
         periodicStockDraft,
         periodicStockDraftLoaded,
-        savePeriodicStockDraft,
+        savePeriodicStockDraftItem,
+        removePeriodicStockDraftItem,
+        savePeriodicStockDraftMeta,
+        flushPeriodicStockDraftRows,
         clearPeriodicStockDraft,
         purchaseDraft,
         purchaseDraftLoaded,

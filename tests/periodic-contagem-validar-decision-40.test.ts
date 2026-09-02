@@ -316,10 +316,17 @@ describe('Corrigir (Decision 40 FR-N11; Implementation Authorization §1 item 7,
     const body = extractFunctionBody(source, 'const handleRequestConfirmation = async (e: React.FormEvent) => {');
     assert.match(body, /manualRows\.map\(\(row, idx\) => \(\{ \.\.\.row, manualRowIndex: idx \}\)\)/);
     assert.match(body, /tallyStockCountRows\(rowsForTally, effectiveCostBasisByProductName\)/);
-    // The identity write immediately below still uses the ORIGINAL,
-    // untagged allWorkingRows — proving allWorkingRows itself was
-    // never touched by this tagging.
-    assert.match(body, /const allRows = allWorkingRows\.map\(workingRowToDraftItem\)/);
+    // [Bug fix — per-product independent draft persistence] The
+    // identity write immediately below no longer reads allWorkingRows
+    // at all (it builds a rowKey-keyed map directly from catalogRows/
+    // manualRows for flushPeriodicStockDraftRows' batch write) — but
+    // it still reads catalogRows/manualRows in their ORIGINAL,
+    // untagged form, proving the SAME invariant this test's own name
+    // describes: the manualRowIndex tagging above is local to
+    // rowsForTally/tally construction, never mutating the shared
+    // catalogRows/manualRows state itself.
+    assert.match(body, /for \(const \[productId, row\] of Object\.entries\(catalogRows\)\) rowsByKey\[`catalog:\$\{productId\}`\] = workingRowToDraftItem\(row\);/);
+    assert.match(body, /manualRows\.forEach\(\(row, index\) => \{/);
   });
 });
 
@@ -369,16 +376,27 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
     assert.doesNotMatch(body, /validated/, 'scheduleRowDraftSave must have no field-specific logic — it must remain generic across every field, including validated.');
     // It must still build its write payload from the live ref and the
     // existing conversion function — the exact mechanism that makes
-    // "generic" also mean "correct for validated".
+    // "generic" also mean "correct for validated". [Bug fix —
+    // per-product independent draft persistence] Was
+    // `.map(workingRowToDraftItem)` over a combined array — now a
+    // single `workingRowToDraftItem(row)` call on whichever ONE row
+    // this rowKey resolves to (savePeriodicStockDraftItem writes just
+    // that row's own document) — still the same conversion function,
+    // still no field-specific branching for validated or anything
+    // else.
     assert.match(body, /latestFlushArgs\.current/);
-    assert.match(body, /\.map\(workingRowToDraftItem\)/);
+    assert.match(body, /workingRowToDraftItem\(row\)/);
   });
 
   it('flushPeriodicDraftNow (interruption/SPA-unmount flush) is equally generic — no validated-specific branch exists there either', () => {
     const body = extractFunctionBody(source, 'const flushPeriodicDraftNow = () => {');
     assert.doesNotMatch(body, /validated/);
     assert.match(body, /latestFlushArgs\.current/);
-    assert.match(body, /\.map\(workingRowToDraftItem\)/);
+    // [Bug fix — per-product independent draft persistence] Was
+    // `.map(workingRowToDraftItem)` over one combined array — now
+    // builds a rowKey-keyed map, calling the SAME conversion function
+    // per row, for flushPeriodicStockDraftRows' batch write.
+    assert.match(body, /workingRowToDraftItem\(row\)/);
   });
 
   it('updateCatalogRow/updateManualRow (the write path Validar/Editar/Corrigir all use to set validated) schedule their row\'s own existing timer key — no new timer key scheme was introduced for validated', () => {

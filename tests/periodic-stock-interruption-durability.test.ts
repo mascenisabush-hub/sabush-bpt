@@ -117,14 +117,14 @@ describe('§7 item 7 — PeriodicStockCountView.tsx wires both visibilitychange 
 describe('§7 item 8 — flushPeriodicDraftNow cancels the pending debounce before issuing its own write', () => {
   const flushBody = extractFlushFunctionBodyOnly(source);
 
-  it('flushPeriodicDraftNow exists and calls savePeriodicStockDraft', () => {
-    const saveIndex = flushBody.indexOf('savePeriodicStockDraft(');
-    assert.notEqual(saveIndex, -1, 'Expected flushPeriodicDraftNow to call savePeriodicStockDraft.');
+  it('flushPeriodicDraftNow exists and calls flushPeriodicStockDraftRows', () => {
+    const saveIndex = flushBody.indexOf('flushPeriodicStockDraftRows(');
+    assert.notEqual(saveIndex, -1, 'Expected flushPeriodicDraftNow to call flushPeriodicStockDraftRows.');
   });
 
   it('every pending per-row timer is cancelled before the flush write is issued', () => {
     const clearIndex = flushBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
-    const saveIndex = flushBody.indexOf('savePeriodicStockDraft(');
+    const saveIndex = flushBody.indexOf('flushPeriodicStockDraftRows(');
     assert.notEqual(clearIndex, -1, 'Expected flushPeriodicDraftNow to iterate and clearTimeout every entry in rowDebounceTimersRef.');
     assert.notEqual(saveIndex, -1);
     assert.ok(
@@ -188,17 +188,20 @@ describe('§7 item 9 — handleConfirmSave awaits flushInFlightSaveRef.current b
 describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSaveRef.current before issuing its own next write (stale/out-of-order autosave-write serialization)', () => {
   const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
 
-  it('scheduleRowDraftSave exists and calls savePeriodicStockDraft', () => {
-    assert.match(scheduleRowDraftSaveBody, /savePeriodicStockDraft\(/, 'Expected scheduleRowDraftSave to call savePeriodicStockDraft.');
+  it('scheduleRowDraftSave exists and calls savePeriodicStockDraftItem/savePeriodicStockDraftMeta', () => {
+    assert.match(scheduleRowDraftSaveBody, /savePeriodicStockDraftItem\(/, 'Expected scheduleRowDraftSave to call savePeriodicStockDraftItem for an ordinary row edit.');
+    assert.match(scheduleRowDraftSaveBody, /savePeriodicStockDraftMeta\(/, 'Expected scheduleRowDraftSave to call savePeriodicStockDraftMeta for a header-level (__meta__/newProductInfo) edit.');
   });
 
   it('awaits draftInFlightSaveRef.current, inside the debounce timer callback, before issuing its own write', () => {
     const awaitIndex = scheduleRowDraftSaveBody.indexOf('await draftInFlightSaveRef.current');
-    const saveCallIndex = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraft(');
+    const itemSaveIndex = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftItem(');
+    const metaSaveIndex = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftMeta(');
     assert.notEqual(awaitIndex, -1, 'Expected scheduleRowDraftSave\'s timer callback to await draftInFlightSaveRef.current.');
-    assert.notEqual(saveCallIndex, -1);
+    assert.notEqual(itemSaveIndex, -1);
+    assert.notEqual(metaSaveIndex, -1);
     assert.ok(
-      awaitIndex < saveCallIndex,
+      awaitIndex < itemSaveIndex && awaitIndex < metaSaveIndex,
       'await draftInFlightSaveRef.current must run before scheduleRowDraftSave issues its own next write — otherwise two overlapping ordinary autosave writes (from any two row timers) could complete out of order, letting an older one silently overwrite newer state within the same active session (Rule 8 Assessment Finding D1).'
     );
   });
@@ -228,36 +231,36 @@ describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSav
   });
 });
 
-describe('§5b — newProductInfo reaches every full-document-overwrite write path for the periodic draft', () => {
-  it('scheduleRowDraftSave sources newProductInfo live from latestFlushArgs.current and forwards it to savePeriodicStockDraft', () => {
+describe('§5b — newProductInfo reaches every meta-document write path for the periodic draft (per-product independent draft persistence: newProductInfo lives on the META document, never on a row — see AppContext.tsx\'s own periodicStockDraftMeta comment)', () => {
+  it('scheduleRowDraftSave sources newProductInfo live from latestFlushArgs.current and forwards it to savePeriodicStockDraftMeta', () => {
     const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
     assert.match(
       scheduleRowDraftSaveBody,
       /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
-      'Expected scheduleRowDraftSave\'s timer callback to destructure newProductInfo (as npi) from latestFlushArgs.current — under per-row scheduling, newProductInfo is sourced live at fire-time, the same as every other field, never passed as a schedule-time function argument.'
+      'Expected scheduleRowDraftSave\'s timer callback to destructure newProductInfo (as npi) from latestFlushArgs.current — sourced live at fire-time, the same as every other field, never passed as a schedule-time function argument.'
     );
     assert.match(
       scheduleRowDraftSaveBody,
-      /savePeriodicStockDraft\(\s*allRows,\s*t,\s*l\.trim\(\)\s*\|\|\s*undefined,\s*d,\s*submissionIdRef\.current\s*\|\|\s*undefined,\s*npi\s*\)/,
-      'Expected scheduleRowDraftSave\'s savePeriodicStockDraft call to pass the live-sourced npi as the sixth argument.'
+      /savePeriodicStockDraftMeta\(t, l\.trim\(\) \|\| undefined, d, submissionIdRef\.current \|\| undefined, npi\)/,
+      'Expected scheduleRowDraftSave\'s savePeriodicStockDraftMeta call (the "__meta__"/"newProductInfo:*" branch) to pass the live-sourced npi as its fifth argument.'
     );
   });
 
-  it('flushPeriodicDraftNow forwards newProductInfo (via latestFlushArgs) to savePeriodicStockDraft', () => {
+  it('flushPeriodicDraftNow forwards newProductInfo (via latestFlushArgs) to flushPeriodicStockDraftRows', () => {
     const flushBody = extractFlushFunctionBodyOnly(source);
     assert.match(
       flushBody,
-      /savePeriodicStockDraft\(allRows,\s*t,\s*l\.trim\(\)\s*\|\|\s*undefined,\s*d,\s*submissionIdRef\.current\s*\|\|\s*undefined,\s*npi\)/,
-      'Expected flushPeriodicDraftNow\'s savePeriodicStockDraft call to include the destructured newProductInfo (npi) value as its sixth argument.'
+      /flushPeriodicStockDraftRows\(rowsByKey, t, l\.trim\(\) \|\| undefined, d, submissionIdRef\.current \|\| undefined, npi\)/,
+      'Expected flushPeriodicDraftNow\'s flushPeriodicStockDraftRows call to include the destructured newProductInfo (npi) value as its sixth argument.'
     );
   });
 
-  it('handleRequestConfirmation\'s identity-establishing write includes newProductInfo — a full-document overwrite that must not silently erase it', () => {
+  it('handleRequestConfirmation\'s identity-establishing write includes newProductInfo — a batch write (rows + meta together) that must not silently erase it', () => {
     const handleRequestConfirmationBody = extractFunctionBody(source, 'const handleRequestConfirmation = async (');
     assert.match(
       handleRequestConfirmationBody,
-      /identityWriteRef\.current\s*=\s*savePeriodicStockDraft\(\s*allRows,\s*type,\s*label\.trim\(\)\s*\|\|\s*undefined,\s*date,\s*submissionIdRef\.current,\s*newProductInfo\s*\)/,
-      'Expected the identity-establishing write in handleRequestConfirmation to include newProductInfo as its sixth argument — omitting it would silently erase any already-persisted newProductInfo the moment the operator reaches pendingTally, since this call is also a full-document overwrite.'
+      /identityWriteRef\.current\s*=\s*flushPeriodicStockDraftRows\(\s*rowsByKey,\s*type,\s*label\.trim\(\)\s*\|\|\s*undefined,\s*date,\s*submissionIdRef\.current,\s*newProductInfo\s*\)/,
+      'Expected the identity-establishing write in handleRequestConfirmation to include newProductInfo as its sixth argument — omitting it would silently erase any already-persisted newProductInfo the moment the operator reaches pendingTally.'
     );
   });
 
@@ -270,7 +273,7 @@ describe('§5b — newProductInfo reaches every full-document-overwrite write pa
     );
   });
 
-  it('savePeriodicStockDraft (AppContext.tsx) accepts newProductInfo and never writes it as literal undefined', () => {
+  it('savePeriodicStockDraftMeta/flushPeriodicStockDraftRows (AppContext.tsx) accept newProductInfo and never write it as literal undefined', () => {
     function extractAppContextFunctionBody(src: string, signatureMarker: string): string {
       const start = src.indexOf(signatureMarker);
       assert.notEqual(start, -1, `Could not locate ${signatureMarker} in AppContext.tsx — has it been renamed?`);
@@ -278,12 +281,17 @@ describe('§5b — newProductInfo reaches every full-document-overwrite write pa
       const nextFnMatch = rest.slice(signatureMarker.length).search(/\n  const \w+ = (async )?\(/);
       return nextFnMatch === -1 ? rest : rest.slice(0, signatureMarker.length + nextFnMatch);
     }
-    const body = extractAppContextFunctionBody(appContextSource, 'const savePeriodicStockDraft = async (');
-    assert.match(body, /newProductInfo\?:/, 'Expected savePeriodicStockDraft to declare newProductInfo as an optional parameter.');
+    // [Bug fix — per-product independent draft persistence] Both
+    // savePeriodicStockDraftMeta and flushPeriodicStockDraftRows share
+    // the SAME meta-building logic via buildPeriodicDraftMeta — a
+    // single shared helper, checked once here, rather than duplicating
+    // this assertion per caller.
+    const body = extractAppContextFunctionBody(appContextSource, 'const buildPeriodicDraftMeta = (');
+    assert.match(body, /newProductInfo\?:/, 'Expected buildPeriodicDraftMeta to declare newProductInfo as an optional parameter.');
     assert.match(
       body,
       /\.\.\.\(newProductInfo && Object\.keys\(newProductInfo\)\.length > 0 \? \{ newProductInfo \} : \{\}\)/,
-      'Expected newProductInfo to be conditionally spread into the written draft only when non-empty, never assigned the literal value undefined (Firestore rejects that).'
+      'Expected newProductInfo to be conditionally spread into the built meta object only when non-empty, never assigned the literal value undefined (Firestore rejects that).'
     );
   });
 });

@@ -139,9 +139,18 @@ describe('D — global write serialization is preserved (Decision 39a FR-N3, Rul
 
   it('every row\'s timer callback awaits draftInFlightSaveRef.current before issuing its own write', () => {
     const awaitIdx = scheduleRowDraftSaveBody.indexOf('await draftInFlightSaveRef.current');
-    const saveIdx = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraft(');
+    // [Bug fix — per-product independent draft persistence] The single
+    // savePeriodicStockDraft( call site is now one of two, depending on
+    // rowKey (savePeriodicStockDraftMeta for '__meta__'/'newProductInfo:*',
+    // savePeriodicStockDraftItem for an actual row) — either way, both
+    // sit AFTER the same await, so this still proves the serialization
+    // guarantee regardless of which branch fires.
+    const metaSaveIdx = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftMeta(');
+    const itemSaveIdx = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftItem(');
     assert.notEqual(awaitIdx, -1);
-    assert.ok(awaitIdx < saveIdx);
+    assert.notEqual(metaSaveIdx, -1);
+    assert.notEqual(itemSaveIdx, -1);
+    assert.ok(awaitIdx < metaSaveIdx && awaitIdx < itemSaveIdx);
   });
 
   it('no per-row write-serialization structure (e.g. a Map of in-flight promises) was introduced', () => {
@@ -198,7 +207,7 @@ describe('F — SPA unmount triggers a current-state flush (Decision 39b, Rule 8
   it('the unmount flush calls the existing flushPeriodicDraftNow unmodified — no new write-construction logic is introduced at the call site', () => {
     const unmountEffectStart = source.indexOf('useEffect(() => {\n    return () => {\n      flushPeriodicDraftNow();');
     const unmountEffectSlice = source.slice(unmountEffectStart, unmountEffectStart + 200);
-    assert.doesNotMatch(unmountEffectSlice, /savePeriodicStockDraft\(/, 'The unmount effect must not call savePeriodicStockDraft directly — only the existing flushPeriodicDraftNow.');
+    assert.doesNotMatch(unmountEffectSlice, /savePeriodicStockDraftItem\(|savePeriodicStockDraftMeta\(|flushPeriodicStockDraftRows\(/, 'The unmount effect must not call any periodic-draft persistence function directly — only the existing flushPeriodicDraftNow.');
   });
 
   it('App.tsx is not modified — no router, no navigation guard introduced', () => {
@@ -271,14 +280,29 @@ describe('G — Validar (formerly Guardar) now persists via the exact same per-r
   });
 });
 
-describe('H — no schema/storage-shape change (Decision 39a, explicit non-goal)', () => {
-  it('PeriodicStockDraft.items remains a plain array — no new collection, subcollection, or keyed-map field reference exists in this component', () => {
-    assert.doesNotMatch(source, /stockCountDrafts\/[^p]/, 'No draft path other than the existing "periodic"/"initial" singleton ids should appear.');
-    assert.doesNotMatch(source, /\.items\[.*productId.*\]\s*=/, 'No direct keyed-map-style assignment into items should exist — it remains an array built fresh by .map() at write time.');
+describe('H — per-product independent draft persistence (superseding Decision 39a\'s original "no schema/storage-shape change" non-goal — a later, explicitly-authorized bug fix)', () => {
+  // [Bug fix — per-product independent draft persistence] Decision
+  // 39a's own non-goal (this describe block's original name/assertions)
+  // held only until the class of bug this change fixes was found: a
+  // single full-document overwrite meant a transient in-memory gap
+  // (e.g. `products` briefly empty on page load) could silently
+  // discard an already-large draft's worth of counted data with no
+  // warning. The storage shape change below — one row, one independent
+  // Firestore document — is what makes that structurally impossible
+  // going forward: a bad write can now only ever affect the ONE row it
+  // targets, never any other product's already-saved data.
+  it('PeriodicStockDraft.items is now assembled from an independent per-row `items` subcollection (AppContext.tsx), not a plain array field on one document', () => {
+    assert.match(source, /savePeriodicStockDraftItem/);
+    assert.match(source, /savePeriodicStockDraftMeta/);
+    assert.match(source, /flushPeriodicStockDraftRows/);
   });
 
-  it('savePeriodicStockDraft\'s own call signature (six positional arguments) is unchanged at every call site', () => {
-    const callSites = source.match(/savePeriodicStockDraft\(\s*[\s\S]{0,220}?\)/g) || [];
-    assert.ok(callSites.length >= 3, 'Expected savePeriodicStockDraft to still be called from scheduleRowDraftSave, flushPeriodicDraftNow, and handleRequestConfirmation.');
+  it('scheduleRowDraftSave, flushPeriodicDraftNow, and handleRequestConfirmation\'s identity write are each still the sole call sites for their own respective persistence function — no fourth, ad hoc write path was introduced', () => {
+    const itemCallSites = source.match(/savePeriodicStockDraftItem\(\s*[\s\S]{0,220}?\)/g) || [];
+    const metaCallSites = source.match(/savePeriodicStockDraftMeta\(\s*[\s\S]{0,220}?\)/g) || [];
+    const flushCallSites = source.match(/flushPeriodicStockDraftRows\(\s*[\s\S]{0,220}?\)/g) || [];
+    assert.ok(itemCallSites.length >= 1, 'Expected savePeriodicStockDraftItem to be called from scheduleRowDraftSave.');
+    assert.ok(metaCallSites.length >= 1, 'Expected savePeriodicStockDraftMeta to be called from scheduleRowDraftSave.');
+    assert.ok(flushCallSites.length >= 2, 'Expected flushPeriodicStockDraftRows to be called from both flushPeriodicDraftNow and handleRequestConfirmation\'s identity write.');
   });
 });

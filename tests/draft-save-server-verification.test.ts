@@ -61,10 +61,32 @@ describe('AppContext.tsx — getDocFromServer imported and used by all three dra
     assert.match(body, /await getDocFromServer\(doc\(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'\)\);/);
   });
 
-  it('savePeriodicStockDraft calls getDocFromServer after setDoc — the single most consequential instance, since Contagem is the primary path to establishing Business Worth', () => {
-    const body = extractFunctionBody(appContextSrc, 'const savePeriodicStockDraft = async (');
-    assert.match(body, /await setDoc\(doc\(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'\), draft\);/);
-    assert.match(body, /await getDocFromServer\(doc\(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'\)\);/);
+  // [Bug fix — per-product independent draft persistence] The old
+  // single savePeriodicStockDraft was split into savePeriodicStockDraftItem
+  // (one row's own document), savePeriodicStockDraftMeta (header fields
+  // only), and flushPeriodicStockDraftRows (an atomic batch of both,
+  // for interruption-durability/pre-confirmation writes) — see
+  // AppContext.tsx's own comment on the periodicStockDraftMeta/
+  // periodicStockDraftItemsByKey state for the full rationale. Each of
+  // the three still calls getDocFromServer after its own write(s),
+  // preserving this exact same "don't report saved before the server
+  // actually has it" guarantee for every one of them.
+  it('savePeriodicStockDraftItem calls getDocFromServer after setDoc — one row, one independent document', () => {
+    const body = extractFunctionBody(appContextSrc, 'const savePeriodicStockDraftItem = async (');
+    assert.match(body, /await setDoc\(itemRef, item\);/);
+    assert.match(body, /await getDocFromServer\(itemRef\);/);
+  });
+
+  it('savePeriodicStockDraftMeta calls getDocFromServer after setDoc — header fields only, never row content', () => {
+    const body = extractFunctionBody(appContextSrc, 'const savePeriodicStockDraftMeta = async (');
+    assert.match(body, /await setDoc\(metaRef, meta\);/);
+    assert.match(body, /await getDocFromServer\(metaRef\);/);
+  });
+
+  it('flushPeriodicStockDraftRows calls getDocFromServer after its batch commit — the single most consequential instance, since Contagem is the primary path to establishing Business Worth', () => {
+    const body = extractFunctionBody(appContextSrc, 'const flushPeriodicStockDraftRows = async (');
+    assert.match(body, /await fsBatch\.commit\(\);/);
+    assert.match(body, /await getDocFromServer\(metaRef\);/);
   });
 });
 

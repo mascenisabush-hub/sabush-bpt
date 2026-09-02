@@ -43,6 +43,17 @@
 // `npm run test:periodic-stock-finalization:emulator` as the actual
 // acceptance gate, not this file's existence or a typecheck pass.
 //
+// [Bug fix — per-product independent draft persistence] Updated for the
+// new draft storage shape (a small META document plus an `items`
+// subcollection — one document per row — replacing the old single
+// document with one `items` array field; see AppContext.tsx's own
+// periodicStockDraftMeta/periodicStockDraftItemsByKey comment for the
+// full rationale). The writeDraft/readDraft helpers below mirror the
+// app's own new write/read shape. Like every other change in this file,
+// this update is typechecked but has NOT been run against a live
+// emulator in this environment — the same SANDBOX DISCLOSURE above
+// applies to it in full.
+//
 // [Decision 38 Amendment, 24 August 2026 — Implementation Task §7 items
 // 11-12; Implementation Authorization §2 item 2, §8 items 5-6] Extended
 // with a new describe block covering newProductInfo's own round-trip
@@ -105,6 +116,59 @@ function ownerDbFor() {
 // directly rather than through application code (see file header).
 const stockCountId = (submissionId: string) => 'stockcount-periodic-' + submissionId;
 const timelineEventId = (submissionId: string) => 'tl-periodic-' + submissionId;
+
+// [Bug fix — per-product independent draft persistence] Mirrors
+// AppContext.tsx's own new draft shape exactly (see that file's
+// periodicStockDraftMeta/periodicStockDraftItemsByKey state comment,
+// and savePeriodicStockDraftItem/savePeriodicStockDraftMeta/
+// flushPeriodicStockDraftRows): the periodic draft is now a small META
+// document (everything except `items`) plus an `items` SUBCOLLECTION,
+// one document per row, keyed exactly like PeriodicStockCountView.tsx's
+// own scheduleRowDraftSave rowKey convention (`catalog:{productId}` /
+// `manual:{index}`). These two helpers replace every direct
+// `setDoc(doc(..., 'periodic'), draft)` / `getDoc(doc(..., 'periodic'))`
+// call this suite used to make against the OLD single-document shape —
+// same Firestore operations the app itself now performs, still
+// exercised directly rather than through application code (see file
+// header), just against the current shape instead of the superseded
+// one.
+function draftItemRowKey(item: { productId?: string }, index: number): string {
+  return item.productId ? `catalog:${item.productId}` : `manual:${index}`;
+}
+
+async function writeDraft(
+  db: ReturnType<typeof ownerDbFor>,
+  draft: { items: Array<Record<string, unknown>> } & Record<string, unknown>
+) {
+  const { items, ...meta } = draft;
+  const fsBatch = writeBatch(db);
+  fsBatch.set(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), meta);
+  items.forEach((item, index) => {
+    fsBatch.set(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic', 'items', draftItemRowKey(item, index)), item);
+  });
+  await fsBatch.commit();
+}
+
+async function readDraft(
+  db: ReturnType<typeof ownerDbFor>
+): Promise<({ items: Array<Record<string, unknown>> } & Record<string, unknown>) | null> {
+  const metaSnap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
+  if (!metaSnap.exists()) return null;
+  const itemsSnap = await getDocs(collection(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic', 'items'));
+  const catalogItems: Array<Record<string, unknown>> = [];
+  const manualEntries: { index: number; item: Record<string, unknown> }[] = [];
+  itemsSnap.forEach((itemDoc) => {
+    const key = itemDoc.id;
+    if (key.startsWith('catalog:')) {
+      catalogItems.push(itemDoc.data());
+    } else if (key.startsWith('manual:')) {
+      const index = parseInt(key.slice('manual:'.length), 10);
+      if (Number.isFinite(index)) manualEntries.push({ index, item: itemDoc.data() });
+    }
+  });
+  manualEntries.sort((a, b) => a.index - b.index);
+  return { ...(metaSnap.data() as Record<string, unknown>), items: [...catalogItems, ...manualEntries.map((e) => e.item)] };
+}
 
 describe('§14 item 2 — ambiguous commit + retry converges to exactly one logical result', () => {
   it('a retried stockCounts write under the same submissionId produces exactly one document, not two', async () => {
@@ -278,47 +342,63 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
       updatedAt: new Date().toISOString(),
     };
 
-    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
+    await writeDraft(db, draft);
 
-    // Simulate a reload/remount: read the draft back exactly as the
-    // periodicStockDraft onSnapshot listener would.
-    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
-    assert.equal(snap.exists(), true);
-    const restored = snap.data() as typeof draft;
-
-    assert.equal(restored.items.length, 300, 'All 300 rows must survive the round-trip.');
+    // Simulate a reload/remount: read the draft back exactly as
+    // AppContext.tsx's own periodicStockDraftMeta/
+    // periodicStockDraftItemsByKey listeners would reassemble it.
+    const restored = await readDraft(db);
+    assert.notEqual(restored, null);
+    assert.equal(restored!.items.length, 300, 'All 300 rows must survive the round-trip.');
     // Every blank stays blank, every zero stays zero — the same property
     // tests/stock-count-simplification.test.ts already proves at the
     // pure-function level, checked again here at the actual Firestore
-    // storage layer.
-    for (let i = 0; i < 300; i++) {
-      assert.equal(restored.items[i].quantity, items[i].quantity, `row ${i}: quantity mismatch after round-trip`);
-      assert.equal(restored.items[i].removed, items[i].removed, `row ${i}: removed flag mismatch after round-trip`);
-      assert.equal(restored.items[i].productId, items[i].productId, `row ${i}: productId mismatch after round-trip`);
+    // storage layer. Catalog rows are matched by productId (order is
+    // not guaranteed to be preserved across the subcollection
+    // reassembly for catalog rows — same as AppContext.tsx's own
+    // reassembly, which never relied on catalog order either, only
+    // manual rows' relative order, reconstructed via their own
+    // `manual:{index}` key).
+    const restoredByProductId = new Map(restored!.items.filter((it) => it.productId).map((it) => [it.productId, it]));
+    for (const original of items) {
+      if (!original.productId) continue;
+      const found = restoredByProductId.get(original.productId);
+      assert.ok(found, `catalog row ${original.productId} missing after round-trip`);
+      assert.equal(found!.quantity, original.quantity, `row ${original.productId}: quantity mismatch after round-trip`);
+      assert.equal(found!.removed, original.removed, `row ${original.productId}: removed flag mismatch after round-trip`);
       // [Decision 40 — Validar Workflow] validated survives the same
       // real Firestore write/read round-trip, at scale, alongside
       // every other field — not merely at the pure-JS level (that
       // narrower property is proven separately, without an emulator
       // dependency, in tests/periodic-contagem-validar-decision-40.test.ts).
-      assert.equal(restored.items[i].validated, items[i].validated, `row ${i}: validated flag mismatch after round-trip`);
+      assert.equal(found!.validated, original.validated, `row ${original.productId}: validated flag mismatch after round-trip`);
     }
-    // Manual rows (no productId) specifically preserved.
-    const restoredManualCount = restored.items.filter((it) => !it.productId).length;
-    assert.equal(restoredManualCount, 20);
+    // Manual rows (no productId) specifically preserved, in their
+    // original relative order (reconstructed via their own
+    // `manual:{index}` key, exactly like AppContext.tsx's own
+    // reassembly).
+    const restoredManualItems = restored!.items.filter((it) => !it.productId);
+    assert.equal(restoredManualItems.length, 20);
+    const originalManualItems = items.filter((it) => !it.productId);
+    for (let i = 0; i < originalManualItems.length; i++) {
+      assert.equal(restoredManualItems[i].productName, originalManualItems[i].productName, `manual row ${i}: order/identity mismatch after round-trip`);
+      assert.equal(restoredManualItems[i].validated, originalManualItems[i].validated, `manual row ${i}: validated flag mismatch after round-trip`);
+    }
     // [Decision 40 — Validar Workflow] At least one validated row of
     // each kind (catalog and manual) actually survived the round-trip
     // as `true` — guards against a vacuously-passing loop above if
     // every scattered `true` happened to collapse to `undefined`.
-    const restoredValidatedCatalogCount = restored.items.filter((it) => it.productId && it.validated === true).length;
-    const restoredValidatedManualCount = restored.items.filter((it) => !it.productId && it.validated === true).length;
+    const restoredValidatedCatalogCount = restored!.items.filter((it) => it.productId && it.validated === true).length;
+    const restoredValidatedManualCount = restored!.items.filter((it) => !it.productId && it.validated === true).length;
     assert.ok(restoredValidatedCatalogCount > 0, 'Expected at least one validated catalog row to survive the round-trip.');
     assert.ok(restoredValidatedManualCount > 0, 'Expected at least one validated manual row to survive the round-trip.');
 
-    // The submission identity itself is durable and reads back exactly —
-    // this is the specific property Implementation Task §4b depends on:
-    // a client that reloads after establishSubmissionIdentity's write
-    // has landed must see the SAME identity a retry would need to reuse.
-    assert.equal(restored.submissionId, 'sub-recovery-test');
+    // The submission identity itself is durable and reads back exactly
+    // — this is the specific property Implementation Task §4b depends
+    // on: a client that reloads after establishSubmissionIdentity's
+    // write has landed must see the SAME identity a retry would need
+    // to reuse. Lives on the META document specifically.
+    assert.equal(restored!.submissionId, 'sub-recovery-test');
   });
 
   it('a draft written without a validated field anywhere (a legacy, pre-Decision-40 draft) round-trips with the field entirely absent on every item, never as a fabricated false', async () => {
@@ -332,10 +412,10 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
       date: '2026-08-10',
       updatedAt: new Date().toISOString(),
     };
-    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
-    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
-    const restored = snap.data() as { items: Array<Record<string, unknown>> };
-    for (const item of restored.items) {
+    await writeDraft(db, draft);
+    const restored = await readDraft(db);
+    assert.notEqual(restored, null);
+    for (const item of restored!.items) {
       assert.equal('validated' in item, false, 'A legacy item must resume with validated entirely absent, never as a fabricated false.');
     }
   });
@@ -348,10 +428,10 @@ describe('§14 item 3 — periodic draft persists and is recoverable at 300+ row
       date: '2026-08-10',
       updatedAt: new Date().toISOString(),
     };
-    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
-    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
-    const restored = snap.data() as Record<string, unknown>;
-    assert.equal('submissionId' in restored, false, 'submissionId must be entirely absent before the first confirmation attempt, not present as an empty/placeholder value.');
+    await writeDraft(db, draft);
+    const restored = await readDraft(db);
+    assert.notEqual(restored, null);
+    assert.equal('submissionId' in restored!, false, 'submissionId must be entirely absent before the first confirmation attempt, not present as an empty/placeholder value.');
   });
 });
 
@@ -383,14 +463,13 @@ describe('§7 items 11-12 (Decision 38 Amendment) — newProductInfo durable dra
       newProductInfo,
       updatedAt: new Date().toISOString(),
     };
-    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
-    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
-    assert.equal(snap.exists(), true);
-    const restored = snap.data() as typeof draft;
+    await writeDraft(db, draft);
+    const restored = await readDraft(db);
+    assert.notEqual(restored, null);
     assert.deepEqual(
-      restored.newProductInfo,
+      restored!.newProductInfo,
       newProductInfo,
-      'newProductInfo must round-trip byte-for-byte through the emulator, including its nested relationshipSteps array and multiple product keys.'
+      'newProductInfo must round-trip byte-for-byte through the emulator, on the META document — including its nested relationshipSteps array and multiple product keys.'
     );
   });
 
@@ -406,12 +485,11 @@ describe('§7 items 11-12 (Decision 38 Amendment) — newProductInfo durable dra
       submissionId: 'sub-legacy-001',
       updatedAt: new Date().toISOString(),
     };
-    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), draft));
-    const snap = await getDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic'));
-    assert.equal(snap.exists(), true);
-    const restored = snap.data() as Record<string, unknown>;
+    await writeDraft(db, draft);
+    const restored = await readDraft(db);
+    assert.notEqual(restored, null);
     assert.equal(
-      'newProductInfo' in restored,
+      'newProductInfo' in restored!,
       false,
       'newProductInfo must be entirely absent on a pre-existing draft — never present as an empty object or null placeholder, and reading it back must not throw.'
     );
@@ -424,37 +502,35 @@ describe('§7 items 11-12 (Decision 38 Amendment) — newProductInfo durable dra
     assert.equal((restored as any).newProductInfo, undefined);
   });
 
-  it('a draft can be resumed, edited to ADD newProductInfo, and re-saved — the field transitions from absent to present across two writes to the same document', async () => {
+  it('a draft can be resumed, edited to ADD newProductInfo, and re-saved — the field transitions from absent to present across two writes to the same meta document', async () => {
     const db = ownerDbFor();
-    const draftRef = doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic');
 
     // Write 1: no newProductInfo yet (operator hasn't reached a new
     // product's info panel).
-    await assertSucceeds(
-      setDoc(draftRef, {
-        items: [{ productName: 'Produto Novo', quantity: '1', unit: 'un', costPrice: '', sellingPrice: '' }],
-        type: 'monthly',
-        date: '2026-08-10',
-        updatedAt: new Date().toISOString(),
-      })
-    );
-    let snap = await getDoc(draftRef);
-    assert.equal('newProductInfo' in (snap.data() as object), false);
+    await writeDraft(db, {
+      items: [{ productName: 'Produto Novo', quantity: '1', unit: 'un', costPrice: '', sellingPrice: '' }],
+      type: 'monthly',
+      date: '2026-08-10',
+      updatedAt: new Date().toISOString(),
+    });
+    let restored = await readDraft(db);
+    assert.notEqual(restored, null);
+    assert.equal('newProductInfo' in restored!, false);
 
-    // Write 2 (full-document overwrite, same as every write path this
-    // amendment adds): now includes newProductInfo.
+    // Write 2 (same META document, now including newProductInfo — the
+    // items subcollection's own already-written document for this
+    // manual row is independently overwritten too, exactly like
+    // savePeriodicStockDraftItem's own per-row write would do).
     const newProductInfo = { 'produto novo': { purchaseUnit: 'un', purchaseCost: '10', relationshipSteps: [] } };
-    await assertSucceeds(
-      setDoc(draftRef, {
-        items: [{ productName: 'Produto Novo', quantity: '1', unit: 'un', costPrice: '10', sellingPrice: '15' }],
-        type: 'monthly',
-        date: '2026-08-10',
-        newProductInfo,
-        updatedAt: new Date().toISOString(),
-      })
-    );
-    snap = await getDoc(draftRef);
-    const restored = snap.data() as any;
-    assert.deepEqual(restored.newProductInfo, newProductInfo);
+    await writeDraft(db, {
+      items: [{ productName: 'Produto Novo', quantity: '1', unit: 'un', costPrice: '10', sellingPrice: '15' }],
+      type: 'monthly',
+      date: '2026-08-10',
+      newProductInfo,
+      updatedAt: new Date().toISOString(),
+    });
+    restored = await readDraft(db);
+    assert.notEqual(restored, null);
+    assert.deepEqual(restored!.newProductInfo, newProductInfo);
   });
 });

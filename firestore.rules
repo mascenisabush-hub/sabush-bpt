@@ -1253,6 +1253,21 @@ service cloud.firestore {
         // subscription should never trap an owner unable to clean up
         // their own provisional draft.
         allow delete: if isOwnerOf(businessId);
+
+        // [Bug fix — per-product independent draft persistence] Each
+        // counted row now lives as its OWN document here, rather than
+        // bundled into the parent draft doc's own single `items` array
+        // field — a save/overwrite of one row's document can never
+        // touch, or silently discard, any other row's already-saved
+        // document. Same access rules as the parent draft doc exactly
+        // (Owner-only at every layer, matching that document's own
+        // Users-table scoping) — this is a storage-shape change only,
+        // not a new access-control surface.
+        match /items/{rowKey} {
+          allow read: if isOwnerOf(businessId);
+          allow create, update: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId);
+          allow delete: if isOwnerOf(businessId);
+        }
       }
 
       // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
