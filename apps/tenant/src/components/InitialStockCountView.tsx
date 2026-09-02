@@ -10,6 +10,7 @@ import { resolveInitialCapitalValue } from '../utils/calculations';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { groupRowsByProductName } from '../lib/stockCountPortionGrouping';
+import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -414,7 +415,18 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // exists" so an existing draft isn't overwritten by the two default
   // empty rows before the listener's first snapshot arrives.
   const [draftLoaded, setDraftLoaded] = useState(false);
-  const [draftSaveState, setDraftSaveState] = useState<'idle' | 'saving' | 'saved' | 'error'>('idle');
+  // [Decision 41C §1/§4] 'error' renamed to the governed `save-failed`,
+  // plus the three additional governed outcomes: 'retrying' (a
+  // transient failure waiting for its next bounded automatic attempt),
+  // 'save-blocked' (legitimate subscription blocking — the autosave
+  // effect below has no subscriptionBlocksNewRecords guard of its own,
+  // so a save attempt can genuinely still fire and be rejected while
+  // blocked, even though SubscriptionBlockedNotice hides the form
+  // itself), and 'save-unknown' (readback-unconfirmed or any
+  // unrecognized failure — manual retry only, never automatic).
+  const [draftSaveState, setDraftSaveState] = useState<
+    'idle' | 'saving' | 'saved' | 'save-failed' | 'retrying' | 'save-blocked' | 'save-unknown'
+  >('idle');
   // [Draft-loss fix] The autosave effect below is debounced by 800ms so
   // a fast typist doesn't trigger a write per keystroke — but that same
   // debounce is exactly what lets a page reload right after a burst of
@@ -499,6 +511,11 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     setSavedMessage(null);
     setDraftSaveState('idle');
     skipNextAutosave.current = false;
+    // [Decision 41C §11] A business switch must never leave a pending
+    // automatic retry — scheduled against the previous business's
+    // draft — able to fire and write into the newly active business.
+    cancelDraftRetry();
+    manualRetryEligibleRef.current = false;
     setDraftLoaded(false); // re-arms the load effect below for the new business
     // [Void & Redo] A new business has no bearing on the previous
     // business's void/redo flow — never carried across a switch.
@@ -560,10 +577,96 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialStockDraft, initialStockDraftLoaded, loadedForBusinessId, activeBusinessId]);
 
+  // [Decision 41C §5/§6/§8/§9] Single-target retry ownership (see the
+  // autosave effect's own comment below for why a Map isn't needed
+  // here). `generation` is bumped on every fresh save attempt (an
+  // autosave debounce firing, a manual retry, or a flush) so a pending
+  // automatic retry captured under an OLDER generation recognizes it
+  // has been superseded and no-ops instead of writing a stale value.
+  const draftRetryRef = useRef<{ timer: ReturnType<typeof setTimeout> | null; generation: number }>({
+    timer: null,
+    generation: 0,
+  });
+  // [Decision 41C §9] Whether the draft is currently in a
+  // non-auto-retryable failure state (`save-failed` / `save-unknown`)
+  // that the manual-retry button should act on.
+  const manualRetryEligibleRef = useRef(false);
+
+  const cancelDraftRetry = (): number => {
+    if (draftRetryRef.current.timer) clearTimeout(draftRetryRef.current.timer);
+    const generation = draftRetryRef.current.generation + 1;
+    draftRetryRef.current = { timer: null, generation };
+    return generation;
+  };
+
+  // [Decision 41C §1/§3/§4/§9] Performs one save attempt for the
+  // current generation and, on failure, classifies the error and either
+  // schedules the next bounded automatic retry (transient, attempts
+  // remaining) or settles into the governed non-retryable state
+  // (`save-failed` once retries are exhausted, `save-blocked`, or
+  // `save-unknown`). Always reads CURRENT form state from
+  // latestFlushArgs.current at attempt-time (declared further below —
+  // safe to reference here for the same reason
+  // PeriodicStockCountView.tsx's own scheduleRowDraftSave/
+  // performRowSaveAttempt already document: this only ever runs as a
+  // macrotask, well after that later declaration has already executed
+  // on the same render).
+  const performDraftSaveAttempt = (generation: number, attemptNumber: number) => {
+    if (draftRetryRef.current.generation !== generation) return; // superseded by a newer attempt already
+    const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
+      latestFlushArgs.current;
+    if (!loaded || confirmed) return;
+    setDraftSaveState('saving');
+    saveInitialStockDraft(r.map(rowToDraftItem), d, basis)
+      .then(() => {
+        if (draftRetryRef.current.generation !== generation) return; // superseded — the newer attempt owns the visible state now
+        manualRetryEligibleRef.current = false;
+        setDraftSaveState('saved');
+      })
+      .catch((err) => {
+        if (draftRetryRef.current.generation !== generation) return; // superseded
+        const classification = classifyDraftSaveError(err, { subscriptionBlocksNewRecords });
+        if (classification === 'transient') {
+          const delay = nextRetryDelayMs(attemptNumber);
+          if (delay !== null) {
+            setDraftSaveState('retrying');
+            const timer = setTimeout(() => {
+              performDraftSaveAttempt(generation, attemptNumber + 1);
+            }, delay);
+            draftRetryRef.current = { timer, generation };
+            return;
+          }
+          // Retries exhausted (§3).
+          console.error('[InitialStockCountView] draft autosave failed after retries', err);
+          manualRetryEligibleRef.current = true;
+          setDraftSaveState('save-failed');
+          return;
+        }
+        if (classification === 'save-blocked') {
+          // [§9] Legitimate subscription blocking is never manual-retry
+          // eligible.
+          setDraftSaveState('save-blocked');
+          return;
+        }
+        // 'save-unknown' — includes readback-unconfirmed results (§2).
+        console.error('[InitialStockCountView] draft autosave failed (unknown/unconfirmed)', err);
+        manualRetryEligibleRef.current = true;
+        setDraftSaveState('save-unknown');
+      });
+  };
+
   // Autosave to the persistent draft on every row/date change, debounced
   // so a fast typist doesn't trigger a write per keystroke. Never runs
   // before the initial load above, and never runs once Initial Stock is
   // already confirmed (nothing left to draft).
+  //
+  // [Decision 41C §5/§6/§8] This view has exactly one save target (the
+  // whole draft document, not per-product rows like Periodic Contagem),
+  // so "per-row" ownership here is a single generation token rather
+  // than a Map — every requirement it serves (a newer edit invalidates
+  // an older pending retry, a retry re-verifies it still belongs to the
+  // current value before writing) still applies, just to one target
+  // instead of N.
   useEffect(() => {
     if (!draftLoaded || hasInitialStockCount || isSaving || savedMessage) return;
     if (skipNextAutosave.current) {
@@ -573,33 +676,26 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     const hasAnyContent = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice);
     if (!hasAnyContent) return;
 
-    setDraftSaveState('saving');
+    // [Decision 41C §6] A fresh change supersedes any pending automatic
+    // retry immediately — not only once this new 800ms debounce
+    // eventually fires — so a stale retry can never fire and overwrite
+    // this newer value even during the debounce window itself.
+    const generation = cancelDraftRetry();
     const handle = setTimeout(() => {
-      saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis)
-        .then(() => setDraftSaveState('saved'))
-        .catch((err) => {
-          // [Bug fix — silent draft-save failure, same class as
-          // AddStockView.tsx's own identical fix] Previously reverted
-          // to 'idle' on any failure — no visible sign anything went
-          // wrong. Now surfaces a visible error with a manual retry.
-          console.error('[InitialStockCountView] draft autosave failed', err);
-          setDraftSaveState('error');
-        });
+      performDraftSaveAttempt(generation, 1);
     }, 800);
     return () => clearTimeout(handle);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [rows, date, initialCapitalBasis, draftLoaded, hasInitialStockCount]);
 
-  // [Bug fix — silent draft-save failure] Manual retry for the error
-  // state above — re-attempts with whatever is CURRENTLY in the form.
+  // [Bug fix — silent draft-save failure; extended by Decision 41C §9]
+  // Manual retry for `save-failed`/`save-unknown` — re-attempts with
+  // whatever is CURRENTLY in the form, restarted at attempt 1 of a
+  // fresh bounded sequence, through the exact same
+  // performDraftSaveAttempt path an ordinary autosave uses.
   const handleRetryDraftSave = () => {
-    setDraftSaveState('saving');
-    saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis)
-      .then(() => setDraftSaveState('saved'))
-      .catch((err) => {
-        console.error('[InitialStockCountView] draft autosave retry failed', err);
-        setDraftSaveState('error');
-      });
+    const generation = cancelDraftRetry();
+    performDraftSaveAttempt(generation, 1);
   };
 
   // [Draft-loss fix, part 2 / instant-save] Shared, reusable flush of
@@ -615,12 +711,27 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     if (!loaded || confirmed) return;
     const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
     if (!hasAnyContent) return;
+    // [Decision 41C §7/§10] This flush is about to write the current,
+    // authoritative value — a pending automatic retry for an OLDER
+    // value must never survive to fire afterward and race it. This is
+    // a fire-and-forget, one-shot attempt (pagehide/unmount context, no
+    // further automatic retry scheduled here — see performDraftSaveAttempt's
+    // own doc comment for why flush paths deliberately don't enter the
+    // bounded-retry sequence).
+    const generation = cancelDraftRetry();
     setDraftSaveState('saving');
     saveInitialStockDraft(r.map(rowToDraftItem), d, basis)
-      .then(() => setDraftSaveState('saved'))
+      .then(() => {
+        if (draftRetryRef.current.generation !== generation) return; // superseded
+        setDraftSaveState('saved');
+      })
       .catch((err) => {
+        if (draftRetryRef.current.generation !== generation) return; // superseded
         console.error('[InitialStockCountView] draft flush-on-exit failed', err);
-        setDraftSaveState('error');
+        const classification = classifyDraftSaveError(err, { subscriptionBlocksNewRecords });
+        setDraftSaveState(
+          classification === 'transient' ? 'save-failed' : classification === 'save-blocked' ? 'save-blocked' : 'save-unknown'
+        );
       });
   };
 
@@ -641,10 +752,16 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       latestFlushArgs.current;
     if (!loaded || confirmed) return { success: true }; // nothing this view could meaningfully flush right now
     const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
-    if (!hasAnyContent) return { success: true }; // no pending work — no unnecessary Firestore call
+    // [Decision 41C §11] Even with no in-form content change, a pending
+    // automatic retry from a PRIOR failed save is still pending work —
+    // it must be cancelled (below) before the switch, never left to
+    // fire afterward against the newly selected business.
+    if (!hasAnyContent && !draftRetryRef.current.timer) return { success: true }; // no unnecessary Firestore call
+    const generation = cancelDraftRetry();
+    if (!hasAnyContent) return { success: true }; // only a stale retry existed; cancelling it above is enough
     try {
       await saveInitialStockDraft(r.map(rowToDraftItem), d, basis);
-      setDraftSaveState('saved');
+      if (draftRetryRef.current.generation === generation) setDraftSaveState('saved');
       return { success: true };
     } catch {
       return { success: false };
@@ -1059,6 +1176,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     if (hasAnyContent && !hasInitialStockCount) {
       setIsFlushingDraft(true);
       setDraftSaveState('saving');
+      // [Decision 41C §7] This confirm-time flush is about to write the
+      // current, authoritative value — cancel any pending automatic
+      // retry for an older value first so it can never race this write.
+      cancelDraftRetry();
       try {
         await saveInitialStockDraft(rows.map(rowToDraftItem), date, initialCapitalBasis);
         setDraftSaveState('saved');
@@ -1664,11 +1785,16 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             <span className="text-[11px] text-gray-400 shrink-0 font-medium flex items-center gap-1.5">
               {draftSaveState === 'saving' && 'A guardar rascunho…'}
               {draftSaveState === 'saved' && 'Rascunho guardado'}
+              {/* [Decision 41C §4] A transient failure waiting for its
+                  next bounded automatic attempt — distinct from
+                  `saving` so it's clear this is a retry, not a fresh,
+                  first-time save. */}
+              {draftSaveState === 'retrying' && 'A tentar guardar novamente…'}
               {/* [Bug fix — silent draft-save failure] Previously this
                   state reverted to 'idle' — nothing rendered here at
                   all, no sign the save never actually reached the
                   server. */}
-              {draftSaveState === 'error' && (
+              {draftSaveState === 'save-failed' && (
                 <>
                   <span className="text-rose-600 font-semibold">Falha ao guardar</span>
                   <button
@@ -1679,6 +1805,29 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
                     Tentar novamente
                   </button>
                 </>
+              )}
+              {/* [Decision 41C §1D/§9] The write's outcome is genuinely
+                  uncertain (unrecognized failure, or the write may have
+                  reached the server but its readback couldn't be
+                  confirmed) — never silently shown as saved, and manual
+                  retry only, never automatic. */}
+              {draftSaveState === 'save-unknown' && (
+                <>
+                  <span className="text-amber-600 font-semibold">Estado do rascunho desconhecido</span>
+                  <button
+                    type="button"
+                    onClick={handleRetryDraftSave}
+                    className="text-[#0B1F3A] font-bold underline underline-offset-2 hover:text-[#D4AF37] transition-colors duration-150"
+                  >
+                    Tentar novamente
+                  </button>
+                </>
+              )}
+              {/* [Decision 41C §1C/§9] Legitimate subscription blocking
+                  — the existing subscription-blocking behavior is
+                  authoritative; no retry action here. */}
+              {draftSaveState === 'save-blocked' && (
+                <span className="text-amber-600 font-semibold">Rascunho bloqueado pela subscrição</span>
               )}
             </span>
           )}

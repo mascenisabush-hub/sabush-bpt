@@ -194,7 +194,19 @@ describe('PeriodicStockCountView.tsx — flushForSwitchIfNeeded specifics (Decis
   const body = extractFunctionBody(periodicSrc, 'const flushForSwitchIfNeeded = async (): Promise<{ success: boolean }> => {');
 
   it('returns { success: true } immediately with no Firestore call when nothing is pending', () => {
-    const guardIdx = body.indexOf('if (rowDebounceTimersRef.current.size === 0 && !draftInFlightSaveRef.current) {');
+    // [Decision 41C §11 — legitimate, foreseen extension of this exact
+    // guard] A pending automatic retry now also counts as pending work
+    // (a row waiting out its bounded retry delay has no debounce timer
+    // and no in-flight save at that instant, but skipping the flush
+    // would let it fire AFTER the switch and write stale data into the
+    // newly selected business) — so the guard condition itself grew an
+    // additional `&& rowRetryRef.current.size === 0` clause. This is
+    // still the same "nothing pending → no Firestore call" contract
+    // 41A originally established, just correctly broadened to include
+    // the retry mechanism 41A predates.
+    const guardIdx = body.indexOf(
+      'if (rowDebounceTimersRef.current.size === 0 && !draftInFlightSaveRef.current && rowRetryRef.current.size === 0) {'
+    );
     assert.notEqual(guardIdx, -1);
     const flushCallIdx = body.indexOf('flushPeriodicStockDraftRows(');
     assert.ok(guardIdx < flushCallIdx, 'the no-pending-work guard must appear before the actual write');

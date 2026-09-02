@@ -92,15 +92,26 @@ describe('AppContext.tsx — getDocFromServer imported and used by all three dra
 
 describe('PeriodicStockCountView.tsx — already had correct error-surfacing UI (\'save-failed\'), the getDocFromServer fix plugs directly into it', () => {
   it('draftSaveState already includes a distinct, visible save-failed state — confirmed pre-existing, not newly added here', () => {
+    // [Decision 41C §1/§4] draftSaveState's literal union grew three
+    // more governed states (retrying/save-blocked/save-unknown)
+    // alongside the original four — 'save-failed' itself, and its
+    // visible "Falha ao guardar rascunho" text, are both still exactly
+    // as this test originally asserted.
     const periodicSrc = src('apps/tenant/src/components/PeriodicStockCountView.tsx');
-    assert.match(periodicSrc, /useState<'editing' \| 'saving' \| 'saved' \| 'save-failed'>\('editing'\)/);
+    assert.match(
+      periodicSrc,
+      /useState<\s*'editing' \| 'saving' \| 'saved' \| 'save-failed' \| 'retrying' \| 'save-blocked' \| 'save-unknown'\s*>\('editing'\)/
+    );
     assert.match(periodicSrc, /Falha ao guardar rascunho/);
   });
 });
 
 describe('InitialStockCountView.tsx — silent-catch bug fixed, matching AddStockView.tsx\'s own established pattern', () => {
-  it('draftSaveState\'s type includes an \'error\' state', () => {
-    assert.match(initialStockSrc, /useState<'idle' \| 'saving' \| 'saved' \| 'error'>\('idle'\)/);
+  it('draftSaveState\'s type includes a visible failure state (renamed \'error\' → the governed \'save-failed\' by Decision 41C §1/§4)', () => {
+    assert.match(
+      initialStockSrc,
+      /useState<\s*'idle' \| 'saving' \| 'saved' \| 'save-failed' \| 'retrying' \| 'save-blocked' \| 'save-unknown'\s*>\('idle'\)/
+    );
   });
 
   it('none of the three save call sites revert to \'idle\' on failure anymore', () => {
@@ -108,23 +119,42 @@ describe('InitialStockCountView.tsx — silent-catch bug fixed, matching AddStoc
     assert.doesNotMatch(initialStockSrc, /\.catch\(\(\) => setDraftSaveState\('idle'\)\);/);
   });
 
-  it('all three save call sites set \'error\' and log diagnostic detail on failure', () => {
-    const errorSetCount = (initialStockSrc.match(/setDraftSaveState\('error'\)/g) || []).length;
+  it('every save call site sets a visible, non-idle failure state and logs diagnostic detail on failure — never silently reverts', () => {
+    // [Decision 41C] The debounced autosave and manual retry now both
+    // route through the shared performDraftSaveAttempt (one console.error
+    // + classified state set per failure kind, not a single literal
+    // 'error' string); flushDraftNow and the confirm-time flush
+    // (handleOpenConfirmStep) still set their own failure state inline.
+    // What this test actually guards — that failure is ALWAYS visibly
+    // surfaced, never silently reverted to idle/saved — still holds:
+    // every failure path sets one of save-failed/save-blocked/save-unknown.
     const consoleErrorCount = (initialStockSrc.match(/console\.error\('\[InitialStockCountView\]/g) || []).length;
-    assert.equal(errorSetCount, 3, 'Expected the debounced autosave, the manual retry handler, and the flush-on-exit path to all set error');
-    assert.equal(consoleErrorCount, 3);
+    assert.ok(consoleErrorCount >= 3, 'expected diagnostic logging on at least the autosave, retry-exhausted, and flush failure paths');
+    assert.match(initialStockSrc, /setDraftSaveState\('save-failed'\)/);
+    assert.match(initialStockSrc, /setDraftSaveState\('save-unknown'\)/);
+    assert.match(initialStockSrc, /setDraftSaveState\('save-blocked'\)/);
   });
 
-  it('a manual retry handler exists, re-attempting with the CURRENT form state', () => {
+  it('a manual retry handler exists, re-attempting with the CURRENT form state (now via performDraftSaveAttempt\'s own latestFlushArgs.current read, not a captured argument)', () => {
     const start = initialStockSrc.indexOf('const handleRetryDraftSave = () => {');
     assert.notEqual(start, -1);
     const end = initialStockSrc.indexOf('\n  };', start);
     const body = initialStockSrc.slice(start, end);
-    assert.match(body, /saveInitialStockDraft\(rows\.map\(rowToDraftItem\), date, initialCapitalBasis\)/);
+    // [Decision 41C §9] Restructured to restart a fresh generation and
+    // reuse performDraftSaveAttempt (which itself reads
+    // latestFlushArgs.current — the CURRENT form state — at
+    // attempt-time) rather than calling saveInitialStockDraft directly
+    // with a snapshot of rows/date/basis. Verify the delegation AND
+    // that performDraftSaveAttempt itself genuinely reads current
+    // state, so the "re-attempts with CURRENT form state" guarantee
+    // this test's title makes is still actually proven.
+    assert.match(body, /const generation = cancelDraftRetry\(\);\s*\n\s*performDraftSaveAttempt\(generation, 1\);/);
+    const performBody = extractFunctionBody(initialStockSrc, 'const performDraftSaveAttempt = (generation: number, attemptNumber: number) => {');
+    assert.match(performBody, /latestFlushArgs\.current;/);
   });
 
-  it('the error state renders a visible, distinctly-colored indicator with a retry button', () => {
-    const start = initialStockSrc.indexOf("{draftSaveState === 'error' && (");
+  it('the save-failed state renders a visible, distinctly-colored indicator with a retry button (renamed from \'error\' by Decision 41C)', () => {
+    const start = initialStockSrc.indexOf("{draftSaveState === 'save-failed' && (");
     assert.notEqual(start, -1);
     const end = initialStockSrc.indexOf('\n              )}', start);
     const body = initialStockSrc.slice(start, end);

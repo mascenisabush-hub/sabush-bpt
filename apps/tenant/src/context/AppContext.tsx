@@ -26,6 +26,9 @@ import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
+// [Decision 41C §2] Readback-uncertain wrapping used by the Initial
+// Stock / Periodic Stock draft save functions below.
+import { ReadbackUnconfirmedError } from '../lib/draftSaveFailureClassification';
 import {
   planSupplierWordingConfirmation,
   SupplierWordingConflictError,
@@ -5892,7 +5895,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // (persistentLocalCache, firebase.ts). getDocFromServer forces an
     // actual round-trip and only resolves once the server genuinely
     // has the data.
-    await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'));
+    //
+    // [Decision 41C §2] If the write above genuinely reached the
+    // server but THIS round-trip itself fails, the caller must never
+    // treat it as an ordinary write failure (which could be
+    // automatically retried as transient, silently re-issuing a write
+    // that may already have landed) — wrap it so classifyDraftSaveError
+    // always routes it to `save-unknown`, regardless of the underlying
+    // Firestore code.
+    try {
+      await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'initial'));
+    } catch (readbackError) {
+      throw new ReadbackUnconfirmedError(readbackError);
+    }
   };
 
   // Discards the draft without confirming it — an explicit "start over"
@@ -5939,7 +5954,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // as this function's own prior single-document version — forces an
     // actual round-trip, resolves only once the server genuinely has
     // this row.
-    await getDocFromServer(itemRef);
+    // [Decision 41C §2] Same readback-uncertain wrapping as
+    // saveInitialStockDraft above — see that comment for the full
+    // reasoning.
+    try {
+      await getDocFromServer(itemRef);
+    } catch (readbackError) {
+      throw new ReadbackUnconfirmedError(readbackError);
+    }
     return new Date().toISOString();
   };
 
@@ -5985,7 +6007,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
     await setDoc(metaRef, meta);
-    await getDocFromServer(metaRef);
+    // [Decision 41C §2] Same readback-uncertain wrapping as
+    // saveInitialStockDraft above.
+    try {
+      await getDocFromServer(metaRef);
+    } catch (readbackError) {
+      throw new ReadbackUnconfirmedError(readbackError);
+    }
     return meta.updatedAt;
   };
 
@@ -6020,7 +6048,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fsBatch.set(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey), item);
     }
     await fsBatch.commit();
-    await getDocFromServer(metaRef);
+    // [Decision 41C §2] Same readback-uncertain wrapping as
+    // saveInitialStockDraft above.
+    try {
+      await getDocFromServer(metaRef);
+    } catch (readbackError) {
+      throw new ReadbackUnconfirmedError(readbackError);
+    }
     return meta.updatedAt;
   };
 

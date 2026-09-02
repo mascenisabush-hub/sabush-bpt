@@ -20,6 +20,7 @@ import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanoni
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
+import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
 // independently-tested function calculations.ts already exports for
 // exactly this purpose — never a second, separately-invented
@@ -1059,7 +1060,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // lifecycle state (frozen spec §4) — rendered distinctly from
   // isSaving/savedMessage above (§1a: draft durability and finalization
   // status are never the same UI signal).
-  const [draftSaveState, setDraftSaveState] = useState<'editing' | 'saving' | 'saved' | 'save-failed'>('editing');
+  // [Decision 41C §1/§4] Extends the existing four-state model with the
+  // three additional governed outcomes — 'retrying' (a transient
+  // failure is waiting for its next bounded automatic attempt),
+  // 'save-blocked' (legitimate subscription blocking — never
+  // auto-retried), and 'save-unknown' (readback-unconfirmed or any
+  // unrecognized failure — never auto-retried, manual retry only).
+  // Remains a single, shared UI signal exactly as before (Rule 8 §C
+  // item 12) — 41C does not require this become per-row; per-row
+  // ownership lives in rowRetryRef below instead.
+  const [draftSaveState, setDraftSaveState] = useState<
+    'editing' | 'saving' | 'saved' | 'save-failed' | 'retrying' | 'save-blocked' | 'save-unknown'
+  >('editing');
   // Whether the operator has already resolved the stale-draft resume
   // banner this mount (Retomar or Começar de novo) — gates the main
   // form per §5/§6 ("never silently auto-loaded").
@@ -1121,6 +1133,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // is never permanently blocked.
   const hasSeenProductsRef = useRef(false);
   const draftInFlightSaveRef = useRef<Promise<void> | null>(null);
+  // [Decision 41C §5/§6/§8/§9] Per-row retry ownership. Keyed exactly
+  // like rowDebounceTimersRef/scheduleRowDraftSave's own row keys
+  // ('catalog:<productId>', 'manual:<index>', '__meta__',
+  // 'newProductInfo:<key>'). `generation` is a per-row monotonically
+  // increasing token: bumped every time this row is (re-)scheduled for
+  // a save, so a pending retry captured under an OLDER generation can
+  // recognize (§8) that it has been superseded by a newer edit (§6) and
+  // silently no-op instead of writing a stale value or clobbering the
+  // newer save's own state transition. `timer` is this row's own
+  // pending automatic-retry timeout, independent of every other row's
+  // (§5 — "Do NOT create one global retry timer for all rows").
+  const rowRetryRef = useRef<Map<string, { timer: ReturnType<typeof setTimeout> | null; generation: number }>>(new Map());
+  // [Decision 41C §9] Rows currently sitting in a non-auto-retryable
+  // failure state (`save-failed` / `save-unknown`) — the exact set the
+  // shared "Tentar novamente" manual-retry action re-attempts. A row
+  // leaves this set the moment it's superseded by a newer edit
+  // (scheduleRowDraftSave) or once it saves successfully.
+  const manualRetryEligibleRowsRef = useRef<Set<string>>(new Set());
   // §4b — the one write that must NEVER be discarded: the immediate,
   // non-debounced write that establishes the submission identity
   // (issued from handleRequestConfirmation), always awaited in full by
@@ -1286,6 +1316,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // survive to fire against the new one.
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
+    // [Decision 41C §11] A business switch must never leave a pending
+    // retry, scheduled against the previous business's row, able to
+    // fire and write into the newly active business.
+    cancelAllRowRetries();
+    manualRetryEligibleRowsRef.current.clear();
     hasSeenProductsRef.current = false;
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
@@ -1452,6 +1487,131 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // issuing its own write, exactly as the prior design's stale/
   // out-of-order protection already required. There is still exactly
   // one Firestore document; per-row-ness belongs to scheduling only.
+  // [Decision 41C §6/§8] Invalidates any pending automatic retry this
+  // row currently owns (clears its timer, so an old retry can never
+  // fire again) and returns a freshly bumped generation token for the
+  // row. Called both from scheduleRowDraftSave (a genuinely new edit)
+  // and from the manual-retry handler (an explicit new attempt) — both
+  // are, from this row's own point of view, "the old pending work no
+  // longer applies; whatever runs next is the authoritative attempt."
+  const cancelRowRetry = (rowKey: string): number => {
+    const existingEntry = rowRetryRef.current.get(rowKey);
+    if (existingEntry?.timer) clearTimeout(existingEntry.timer);
+    const generation = (existingEntry?.generation ?? 0) + 1;
+    rowRetryRef.current.set(rowKey, { timer: null, generation });
+    return generation;
+  };
+
+  // [Decision 41C §7/§10/§11] Cancels EVERY row's pending automatic
+  // retry at once — used wherever this file already cancels every
+  // row's debounce timer (flushPeriodicDraftNow, flushForSwitchIfNeeded,
+  // handleRequestConfirmation, handleConfirmSave), so a flush/finalize/
+  // switch/unmount can never race a stale retry (§7), a retry timer can
+  // never survive unmount (§10), and a pending retry can never write
+  // stale data into a newly-switched business (§11).
+  const cancelAllRowRetries = () => {
+    rowRetryRef.current.forEach((entry) => {
+      if (entry.timer) clearTimeout(entry.timer);
+    });
+    rowRetryRef.current.clear();
+  };
+
+  // [Decision 41C §1/§3/§4/§9] Performs one save attempt for `rowKey`
+  // (routing to the same two narrower write functions
+  // scheduleRowDraftSave's own fire-time logic already used) and, on
+  // failure, classifies the error and either schedules the next bounded
+  // automatic retry (transient, attempts remaining), or settles into
+  // the governed non-retryable state (`save-failed` once retries are
+  // exhausted, `save-blocked`, or `save-unknown`) and — for the latter
+  // two manual-retry-eligible outcomes — records this row so the shared
+  // manual-retry action can find it. `generation` ties this attempt to
+  // the row version it was scheduled for (§8/§6): if a newer edit has
+  // since bumped the row's generation, this attempt no-ops rather than
+  // writing a stale value or clobbering the newer attempt's own state.
+  const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {
+    const belongsToCurrentGeneration = () => rowRetryRef.current.get(rowKey)?.generation === generation;
+    if (!belongsToCurrentGeneration()) return;
+
+    // [Decision 41C §7 / Decision 38 Amendment, Implementation Task
+    // §5c] Unchanged serialization: await any prior in-flight periodic-
+    // draft write before issuing this one, exactly as the pre-41C
+    // debounce callback already did.
+    if (draftInFlightSaveRef.current) {
+      try {
+        await draftInFlightSaveRef.current;
+      } catch {
+        // A prior write's own failure is already surfaced via its own
+        // handling — swallowed here only so this attempt still
+        // proceeds instead of being blocked by that unrelated
+        // rejection.
+      }
+    }
+    // [Decision 41C §8] Re-verify after awaiting — a flush, a newer
+    // edit, or finalization could have superseded this attempt while
+    // it was waiting on the serialization above.
+    if (!belongsToCurrentGeneration()) return;
+
+    setDraftSaveState('saving');
+    // [Decision 39a FR-N2 — the required correctness property, §8]
+    // Read live, current state HERE, at fire-time — never a value
+    // captured earlier.
+    const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
+    let rawSavePromise: Promise<string>;
+    if (rowKey === '__meta__' || rowKey.startsWith('newProductInfo:')) {
+      rawSavePromise = savePeriodicStockDraftMeta(t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi);
+    } else {
+      const row = rowKey.startsWith('catalog:')
+        ? cr[rowKey.slice('catalog:'.length)]
+        : rowKey.startsWith('manual:')
+        ? mr[parseInt(rowKey.slice('manual:'.length), 10)]
+        : undefined;
+      rawSavePromise = row ? savePeriodicStockDraftItem(rowKey, workingRowToDraftItem(row)) : Promise.resolve('');
+    }
+    const savePromise = rawSavePromise
+      .then((updatedAt) => {
+        if (!belongsToCurrentGeneration()) return; // superseded — the newer attempt owns the visible state now
+        manualRetryEligibleRowsRef.current.delete(rowKey);
+        // [Cross-Device Live-Update Notice] Record our own write so
+        // the incoming Firestore echo of it isn't mistaken for a
+        // remote change, above.
+        lastLocalDraftWriteRef.current = updatedAt;
+        setDraftSaveState('saved');
+      })
+      .catch((err) => {
+        if (!belongsToCurrentGeneration()) return; // superseded — nothing to classify against a stale attempt
+        const classification = classifyDraftSaveError(err, { subscriptionBlocksNewRecords });
+        if (classification === 'transient') {
+          const delay = nextRetryDelayMs(attemptNumber);
+          if (delay !== null) {
+            setDraftSaveState('retrying');
+            const timer = setTimeout(() => {
+              performRowSaveAttempt(rowKey, generation, attemptNumber + 1);
+            }, delay);
+            rowRetryRef.current.set(rowKey, { timer, generation });
+            return;
+          }
+          // Retries exhausted (§3).
+          manualRetryEligibleRowsRef.current.add(rowKey);
+          setDraftSaveState('save-failed');
+          return;
+        }
+        if (classification === 'save-blocked') {
+          // [§9] Legitimate subscription blocking is never manual-retry
+          // eligible — the existing subscription-blocking UI/behavior
+          // is authoritative.
+          setDraftSaveState('save-blocked');
+          return;
+        }
+        // 'save-unknown' — includes readback-unconfirmed results (§2).
+        manualRetryEligibleRowsRef.current.add(rowKey);
+        setDraftSaveState('save-unknown');
+      })
+      .finally(() => {
+        draftInFlightSaveRef.current = null;
+      });
+    draftInFlightSaveRef.current = savePromise;
+  };
+
   const scheduleRowDraftSave = (rowKey: string) => {
     const existing = rowDebounceTimersRef.current.get(rowKey);
     if (existing) clearTimeout(existing);
@@ -1461,66 +1621,37 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // in flight. Remains a single, shared UI signal (Rule 8 §C item
     // 12) — Decision 39 does not require this become per-row.
     setDraftSaveState('editing');
-    const timer = setTimeout(async () => {
+    // [Decision 41C §6] A fresh edit to this row invalidates any
+    // pending automatic retry for the OLD value immediately — not only
+    // once the new 800ms debounce eventually fires — so a stale retry
+    // can never fire and write over this newer edit, even during the
+    // debounce window itself. The freshly bumped generation is captured
+    // here and carried into the debounce timer's own closure, so the
+    // attempt it eventually starts is tied to THIS edit, not whichever
+    // edit happens to be current 800ms from now.
+    manualRetryEligibleRowsRef.current.delete(rowKey);
+    const generation = cancelRowRetry(rowKey);
+    const timer = setTimeout(() => {
       rowDebounceTimersRef.current.delete(rowKey);
-      // [Decision 38 Amendment, Implementation Task §5c;
-      // Implementation Authorization §2 item 4; Decision 39a's own
-      // FR-N3] Stale/out-of-order autosave-write serialization: await
-      // any prior in-flight periodic-draft write before issuing this
-      // one — unchanged in kind from the prior design, now reachable
-      // from N possible row timers instead of one shared timer.
-      if (draftInFlightSaveRef.current) {
-        try {
-          await draftInFlightSaveRef.current;
-        } catch {
-          // A prior write's own failure is already surfaced via its
-          // own .catch() below (setDraftSaveState('save-failed')) —
-          // swallowed here only so this write still proceeds instead
-          // of being blocked by that unrelated rejection.
-        }
-      }
-      setDraftSaveState('saving');
-      // [Decision 39a FR-N2 — the required correctness property] Read
-      // live, current state HERE, at fire-time — never captured as a
-      // function argument at schedule-time.
-      const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
-      // [Bug fix — per-product independent draft persistence] Was one
-      // full-document write of every row combined — now routes to
-      // EXACTLY one of two narrower functions depending on what this
-      // particular rowKey actually represents: '__meta__' and
-      // 'newProductInfo:*' changes touch only the meta document
-      // (type/label/date/newProductInfo — never row content);
-      // 'catalog:*'/'manual:*' changes resolve and write ONLY that one
-      // row's own document. A row that no longer exists at fire time
-      // (e.g. a manual row removed between scheduling and firing) has
-      // nothing to write — handleRemoveManualRow's own reindex call,
-      // below, is what keeps that row's document consistent instead.
-      let rawSavePromise: Promise<string>;
-      if (rowKey === '__meta__' || rowKey.startsWith('newProductInfo:')) {
-        rawSavePromise = savePeriodicStockDraftMeta(t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi);
-      } else {
-        const row = rowKey.startsWith('catalog:')
-          ? cr[rowKey.slice('catalog:'.length)]
-          : rowKey.startsWith('manual:')
-          ? mr[parseInt(rowKey.slice('manual:'.length), 10)]
-          : undefined;
-        rawSavePromise = row ? savePeriodicStockDraftItem(rowKey, workingRowToDraftItem(row)) : Promise.resolve('');
-      }
-      const savePromise = rawSavePromise
-        .then((updatedAt) => {
-          // [Cross-Device Live-Update Notice] Record our own write so
-          // the incoming Firestore echo of it isn't mistaken for a
-          // remote change, above.
-          lastLocalDraftWriteRef.current = updatedAt;
-          setDraftSaveState('saved');
-        })
-        .catch(() => setDraftSaveState('save-failed'))
-        .finally(() => {
-          draftInFlightSaveRef.current = null;
-        });
-      draftInFlightSaveRef.current = savePromise;
+      performRowSaveAttempt(rowKey, generation, 1);
     }, 800);
     rowDebounceTimersRef.current.set(rowKey, timer);
+  };
+
+  // [Decision 41C §9] Manual retry for `save-failed` / `save-unknown`
+  // rows — the operator's explicit choice, never automatic (§9: "Manual
+  // retry must be the user's explicit choice because the previous write
+  // result is uncertain"). Re-attempts EVERY row currently eligible,
+  // each restarted at attempt 1 of its own fresh bounded sequence,
+  // reusing the exact same performRowSaveAttempt path (and therefore
+  // the exact same draftInFlightSaveRef serialization) as an ordinary
+  // autosave attempt — no parallel retry mechanism.
+  const handleManualRetryDraftSave = () => {
+    const rowKeys = Array.from(manualRetryEligibleRowsRef.current);
+    rowKeys.forEach((rowKey) => {
+      const generation = cancelRowRetry(rowKey);
+      performRowSaveAttempt(rowKey, generation, 1);
+    });
   };
 
   // [FR-89–FR-94, Implementation Authorization §2 items 3–4 / Plan §6.1,
@@ -1951,6 +2082,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // redundant, stale write racing this one.
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
+    // [Decision 41C §7/§10] This flush is about to write the full,
+    // current state of every row — a pending automatic retry for an
+    // OLDER, already-superseded value must never be allowed to fire
+    // afterward and race this write.
+    cancelAllRowRetries();
     const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
     // [Bug fix — per-product independent draft persistence] Was one
     // combined array written as a single document field — now a
@@ -2045,11 +2181,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // unmodified — no new write-construction logic, no parallel
   // persistence path.
   const flushForSwitchIfNeeded = async (): Promise<{ success: boolean }> => {
-    if (rowDebounceTimersRef.current.size === 0 && !draftInFlightSaveRef.current) {
+    // [Decision 41C §11] A pending automatic retry counts as pending
+    // work too — a row waiting out its 1s/2s/4s delay has no debounce
+    // timer and no in-flight save at this exact instant, but skipping
+    // the flush here would let that retry go on to fire AFTER the
+    // switch, writing stale data into the newly selected business.
+    if (rowDebounceTimersRef.current.size === 0 && !draftInFlightSaveRef.current && rowRetryRef.current.size === 0) {
       return { success: true }; // nothing pending — no unnecessary Firestore call
     }
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
+    // [Decision 41C §11] Cancel every pending retry before this flush's
+    // own authoritative write — a retry captured under the OLD
+    // business/value must never survive to fire after switchShop()
+    // changes activeBusinessId.
+    cancelAllRowRetries();
     try {
       // Never bypass existing serialization: if an ordinary debounced
       // save is already in flight, let it finish before this flush's
@@ -3767,6 +3913,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // [Decision 39a] Every pending per-row timer, not a single ref.
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
+    // [Decision 41C §7] Same reasoning — this identity write is about
+    // to supersede every row's current value; a pending automatic retry
+    // for an older value must not survive to race it.
+    cancelAllRowRetries();
 
     // [Race guard] Sequence this identity-establishing write strictly
     // after any write already in flight — an ordinary §4a autosave that
@@ -3846,6 +3996,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // [Decision 39a] Every pending per-row timer, not a single ref.
       rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
       rowDebounceTimersRef.current.clear();
+      // [Decision 41C §7] No pending automatic retry may survive into
+      // finalization — the identity write and flush awaited below are
+      // already the authoritative last word on every row's value.
+      cancelAllRowRetries();
       if (draftInFlightSaveRef.current) {
         await draftInFlightSaveRef.current;
       }
@@ -5124,11 +5278,48 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 first onto its own compact identity row and now onto the
                 trailing edge of the merged identity+Tipo/Data row. */}
             {draftSaveState !== 'editing' && (
-              <span className="ml-auto shrink-0 text-[13px] text-gray-500 font-medium">
+              <span className="ml-auto shrink-0 text-[13px] text-gray-500 font-medium flex items-center gap-1.5">
                 {draftSaveState === 'saving' && 'A guardar rascunho…'}
                 {draftSaveState === 'saved' && 'Rascunho guardado'}
+                {/* [Decision 41C §4] A transient failure waiting for its
+                    next bounded automatic attempt — distinct from
+                    `saving` so the operator sees this is a retry, not
+                    a fresh, first-time save. */}
+                {draftSaveState === 'retrying' && 'A tentar guardar novamente…'}
                 {draftSaveState === 'save-failed' && (
-                  <span className="text-rose-500">Falha ao guardar rascunho</span>
+                  <>
+                    <span className="text-rose-500">Falha ao guardar rascunho</span>
+                    <button
+                      type="button"
+                      onClick={handleManualRetryDraftSave}
+                      className="text-[#0B1F3A] font-bold underline underline-offset-2 hover:text-[#D4AF37] transition-colors duration-150"
+                    >
+                      Tentar novamente
+                    </button>
+                  </>
+                )}
+                {/* [Decision 41C §1D/§9] The write's outcome is genuinely
+                    uncertain (unrecognized failure, or the write may
+                    have reached the server but its readback couldn't be
+                    confirmed) — never silently shown as saved, and
+                    manual retry only, never automatic. */}
+                {draftSaveState === 'save-unknown' && (
+                  <>
+                    <span className="text-amber-600">Estado do rascunho desconhecido</span>
+                    <button
+                      type="button"
+                      onClick={handleManualRetryDraftSave}
+                      className="text-[#0B1F3A] font-bold underline underline-offset-2 hover:text-[#D4AF37] transition-colors duration-150"
+                    >
+                      Tentar novamente
+                    </button>
+                  </>
+                )}
+                {/* [Decision 41C §1C/§9] Legitimate subscription
+                    blocking — the existing subscription-blocking
+                    behavior is authoritative; no retry action here. */}
+                {draftSaveState === 'save-blocked' && (
+                  <span className="text-amber-600">Rascunho bloqueado pela subscrição</span>
                 )}
               </span>
             )}

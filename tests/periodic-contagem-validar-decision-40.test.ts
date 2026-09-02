@@ -374,18 +374,21 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
   it('scheduleRowDraftSave contains NO special-cased path for validated — it is a generic, all-fields mechanism, so the T0/T100 proof already established for every other field (Decision 39 suite, block C) applies to validated automatically, with zero new code', () => {
     const body = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
     assert.doesNotMatch(body, /validated/, 'scheduleRowDraftSave must have no field-specific logic — it must remain generic across every field, including validated.');
-    // It must still build its write payload from the live ref and the
-    // existing conversion function — the exact mechanism that makes
-    // "generic" also mean "correct for validated". [Bug fix —
-    // per-product independent draft persistence] Was
-    // `.map(workingRowToDraftItem)` over a combined array — now a
-    // single `workingRowToDraftItem(row)` call on whichever ONE row
-    // this rowKey resolves to (savePeriodicStockDraftItem writes just
-    // that row's own document) — still the same conversion function,
-    // still no field-specific branching for validated or anything
-    // else.
-    assert.match(body, /latestFlushArgs\.current/);
-    assert.match(body, /workingRowToDraftItem\(row\)/);
+    // [Decision 41C §1/§3/§4] The actual write-payload construction —
+    // live ref read + workingRowToDraftItem conversion — now lives in
+    // performRowSaveAttempt (extracted so ordinary debounce firing, a
+    // bounded automatic retry, and manual retry can all share it).
+    // scheduleRowDraftSave itself still has no field-specific branching
+    // (asserted above); the "generic, so it's correct for validated
+    // too" argument now needs one extra, still-generic link: performRowSaveAttempt
+    // is equally field-agnostic, and every debounce timer scheduleRowDraftSave
+    // creates always calls it with the SAME generic signature
+    // (rowKey, generation, 1) — no field name ever passed through.
+    const attemptBody = extractFunctionBody(source, 'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {');
+    assert.doesNotMatch(attemptBody, /validated/, 'performRowSaveAttempt must also have no field-specific logic.');
+    assert.match(attemptBody, /latestFlushArgs\.current/);
+    assert.match(attemptBody, /workingRowToDraftItem\(row\)/);
+    assert.match(body, /performRowSaveAttempt\(rowKey, generation, 1\);/);
   });
 
   it('flushPeriodicDraftNow (interruption/SPA-unmount flush) is equally generic — no validated-specific branch exists there either', () => {

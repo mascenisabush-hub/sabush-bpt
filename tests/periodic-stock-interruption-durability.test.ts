@@ -187,30 +187,43 @@ describe('§7 item 9 — handleConfirmSave awaits flushInFlightSaveRef.current b
 
 describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSaveRef.current before issuing its own next write (stale/out-of-order autosave-write serialization)', () => {
   const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
+  // [Decision 41C §1/§3/§4] The actual save-attempt logic (write
+  // routing, draftInFlightSaveRef await, live-state read) was extracted
+  // out of scheduleRowDraftSave's own debounce-timer callback into a
+  // separate, reusable performRowSaveAttempt — shared by the ordinary
+  // debounce firing, bounded automatic retries, and manual retry alike.
+  // scheduleRowDraftSave now only owns debounce scheduling + generation
+  // bookkeeping, and delegates the actual attempt to
+  // performRowSaveAttempt(rowKey, generation, 1).
+  const performRowSaveAttemptBody = extractFunctionBody(
+    source,
+    'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {'
+  );
 
-  it('scheduleRowDraftSave exists and calls savePeriodicStockDraftItem/savePeriodicStockDraftMeta', () => {
-    assert.match(scheduleRowDraftSaveBody, /savePeriodicStockDraftItem\(/, 'Expected scheduleRowDraftSave to call savePeriodicStockDraftItem for an ordinary row edit.');
-    assert.match(scheduleRowDraftSaveBody, /savePeriodicStockDraftMeta\(/, 'Expected scheduleRowDraftSave to call savePeriodicStockDraftMeta for a header-level (__meta__/newProductInfo) edit.');
+  it('scheduleRowDraftSave delegates to performRowSaveAttempt, which calls savePeriodicStockDraftItem/savePeriodicStockDraftMeta', () => {
+    assert.match(scheduleRowDraftSaveBody, /performRowSaveAttempt\(rowKey, generation, 1\);/);
+    assert.match(performRowSaveAttemptBody, /savePeriodicStockDraftItem\(/, 'Expected performRowSaveAttempt to call savePeriodicStockDraftItem for an ordinary row edit.');
+    assert.match(performRowSaveAttemptBody, /savePeriodicStockDraftMeta\(/, 'Expected performRowSaveAttempt to call savePeriodicStockDraftMeta for a header-level (__meta__/newProductInfo) edit.');
   });
 
-  it('awaits draftInFlightSaveRef.current, inside the debounce timer callback, before issuing its own write', () => {
-    const awaitIndex = scheduleRowDraftSaveBody.indexOf('await draftInFlightSaveRef.current');
-    const itemSaveIndex = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftItem(');
-    const metaSaveIndex = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftMeta(');
-    assert.notEqual(awaitIndex, -1, 'Expected scheduleRowDraftSave\'s timer callback to await draftInFlightSaveRef.current.');
+  it('performRowSaveAttempt awaits draftInFlightSaveRef.current before issuing its own write', () => {
+    const awaitIndex = performRowSaveAttemptBody.indexOf('await draftInFlightSaveRef.current');
+    const itemSaveIndex = performRowSaveAttemptBody.indexOf('savePeriodicStockDraftItem(');
+    const metaSaveIndex = performRowSaveAttemptBody.indexOf('savePeriodicStockDraftMeta(');
+    assert.notEqual(awaitIndex, -1, 'Expected performRowSaveAttempt to await draftInFlightSaveRef.current.');
     assert.notEqual(itemSaveIndex, -1);
     assert.notEqual(metaSaveIndex, -1);
     assert.ok(
       awaitIndex < itemSaveIndex && awaitIndex < metaSaveIndex,
-      'await draftInFlightSaveRef.current must run before scheduleRowDraftSave issues its own next write — otherwise two overlapping ordinary autosave writes (from any two row timers) could complete out of order, letting an older one silently overwrite newer state within the same active session (Rule 8 Assessment Finding D1).'
+      'await draftInFlightSaveRef.current must run before performRowSaveAttempt issues its own next write — otherwise two overlapping ordinary autosave writes (from any two row timers, retries, or manual retries) could complete out of order, letting an older one silently overwrite newer state within the same active session (Rule 8 Assessment Finding D1).'
     );
   });
 
-  it('the timer callback reads live current state via latestFlushArgs.current, never a schedule-time-captured argument (Decision 39a FR-N2)', () => {
+  it('performRowSaveAttempt reads live current state via latestFlushArgs.current, never a schedule-time-captured argument (Decision 39a FR-N2)', () => {
     assert.match(
-      scheduleRowDraftSaveBody,
+      performRowSaveAttemptBody,
       /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
-      'Expected the per-row timer callback to read live state from latestFlushArgs.current at fire-time, not from schedule-time function arguments — this is the exact property that makes the T0/T100 race across two different rows structurally impossible.'
+      'Expected the save-attempt function to read live state from latestFlushArgs.current at fire-time, not from schedule-time function arguments — this is the exact property that makes the T0/T100 race across two different rows structurally impossible.'
     );
   });
 
@@ -222,27 +235,30 @@ describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSav
     );
   });
 
-  it('writes remain full-document overwrites — no version/sequence field is introduced anywhere in this function', () => {
+  it('writes remain full-document overwrites — no version/sequence field is introduced anywhere in the scheduling+attempt path', () => {
     assert.doesNotMatch(
-      stripLineComments(scheduleRowDraftSaveBody),
+      stripLineComments(scheduleRowDraftSaveBody + performRowSaveAttemptBody),
       /\bversion\b|sequenceNumber|writeSeq/i,
-      'No version/sequence field should be introduced — serialization by issue-order is sufficient because writes are already whole-document overwrites (Implementation Task §5c; Decision 39a FR-N3).'
+      'No version/sequence field should be introduced — serialization by issue-order is sufficient because writes are already whole-document overwrites (Implementation Task §5c; Decision 39a FR-N3). Decision 41C\'s own generation token is a distinct, narrowly-scoped mechanism for retry supersession, never a Firestore document version/sequence field.'
     );
   });
 });
 
 describe('§5b — newProductInfo reaches every meta-document write path for the periodic draft (per-product independent draft persistence: newProductInfo lives on the META document, never on a row — see AppContext.tsx\'s own periodicStockDraftMeta comment)', () => {
-  it('scheduleRowDraftSave sources newProductInfo live from latestFlushArgs.current and forwards it to savePeriodicStockDraftMeta', () => {
-    const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
-    assert.match(
-      scheduleRowDraftSaveBody,
-      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
-      'Expected scheduleRowDraftSave\'s timer callback to destructure newProductInfo (as npi) from latestFlushArgs.current — sourced live at fire-time, the same as every other field, never passed as a schedule-time function argument.'
+  it('performRowSaveAttempt sources newProductInfo live from latestFlushArgs.current and forwards it to savePeriodicStockDraftMeta', () => {
+    const performRowSaveAttemptBody = extractFunctionBody(
+      source,
+      'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {'
     );
     assert.match(
-      scheduleRowDraftSaveBody,
+      performRowSaveAttemptBody,
+      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
+      'Expected performRowSaveAttempt to destructure newProductInfo (as npi) from latestFlushArgs.current — sourced live at fire-time, the same as every other field, never passed as a schedule-time function argument.'
+    );
+    assert.match(
+      performRowSaveAttemptBody,
       /savePeriodicStockDraftMeta\(t, l\.trim\(\) \|\| undefined, d, submissionIdRef\.current \|\| undefined, npi\)/,
-      'Expected scheduleRowDraftSave\'s savePeriodicStockDraftMeta call (the "__meta__"/"newProductInfo:*" branch) to pass the live-sourced npi as its fifth argument.'
+      'Expected performRowSaveAttempt\'s savePeriodicStockDraftMeta call (the "__meta__"/"newProductInfo:*" branch) to pass the live-sourced npi as its fifth argument.'
     );
   });
 

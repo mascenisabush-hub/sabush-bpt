@@ -45,6 +45,18 @@ function extractFunctionBody(src: string, signatureMarker: string): string {
 }
 
 const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowDraftSave = (');
+// [Decision 41C §1/§3/§4] The timer callback's own body — live-state
+// read and draftInFlightSaveRef serialization — was extracted out of
+// scheduleRowDraftSave into a separate, reusable performRowSaveAttempt
+// (so both the ordinary debounce firing AND a bounded automatic retry
+// AND a manual retry can all share it). scheduleRowDraftSave itself now
+// only owns debounce scheduling + generation bookkeeping; describe
+// blocks C/D below were updated to check performRowSaveAttemptBody for
+// the properties that moved there — this is a source-location change
+// only, not a weakening of what either test actually proves (still
+// exactly one live-state read site, still the exact same await-before-
+// write serialization).
+const performRowSaveAttemptBody = extractFunctionBody(source, 'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {');
 
 describe('A — independent per-row timers (Decision 39a FR-N1)', () => {
   it('rowDebounceTimersRef is a Map keyed by row identity, replacing the prior single shared draftDebounceTimerRef', () => {
@@ -101,9 +113,9 @@ describe('B — same-row debounce still collapses rapid edits (Decision 39a)', (
 });
 
 describe('C — live-state sourcing / T0-T100 stale-write protection (Decision 39a FR-N2, Rule 8 §D)', () => {
-  it('the timer callback reads live current state from latestFlushArgs.current, never from a schedule-time-captured argument', () => {
+  it('the save-attempt callback reads live current state from latestFlushArgs.current, never from a schedule-time-captured argument', () => {
     assert.match(
-      scheduleRowDraftSaveBody,
+      performRowSaveAttemptBody,
       /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/
     );
     // scheduleRowDraftSave's own parameter list must be JUST the row
@@ -125,9 +137,12 @@ describe('C — live-state sourcing / T0-T100 stale-write protection (Decision 3
     // anything unique to whichever row's timer happened to trigger the
     // write — this is what makes the reversion scenario structurally
     // impossible, proven by there being exactly one read site for
-    // catalogRows/manualRows inside this function, not one per row.
-    const readSiteCount = (scheduleRowDraftSaveBody.match(/latestFlushArgs\.current/g) || []).length;
-    assert.equal(readSiteCount, 1, 'Expected exactly one live-state read site inside the per-row timer callback — proving every row\'s timer shares the identical current-state source, never a per-row-captured one.');
+    // catalogRows/manualRows inside performRowSaveAttempt (§1/§3/§4's
+    // shared attempt function, called by every row's debounce timer, by
+    // every bounded automatic retry, and by manual retry alike — never
+    // one per row, never one per attempt kind).
+    const readSiteCount = (performRowSaveAttemptBody.match(/latestFlushArgs\.current/g) || []).length;
+    assert.equal(readSiteCount, 1, 'Expected exactly one live-state read site inside the shared save-attempt function — proving every row\'s timer/retry/manual-retry shares the identical current-state source, never a per-attempt-captured one.');
   });
 });
 
@@ -137,16 +152,16 @@ describe('D — global write serialization is preserved (Decision 39a FR-N3, Rul
     assert.doesNotMatch(source, /draftInFlightSaveRef\s*[:=]\s*useRef<Map/);
   });
 
-  it('every row\'s timer callback awaits draftInFlightSaveRef.current before issuing its own write', () => {
-    const awaitIdx = scheduleRowDraftSaveBody.indexOf('await draftInFlightSaveRef.current');
+  it('the shared save-attempt function awaits draftInFlightSaveRef.current before issuing its own write — every row\'s debounce firing, every bounded automatic retry, and every manual retry all route through this SAME await', () => {
+    const awaitIdx = performRowSaveAttemptBody.indexOf('await draftInFlightSaveRef.current');
     // [Bug fix — per-product independent draft persistence] The single
     // savePeriodicStockDraft( call site is now one of two, depending on
     // rowKey (savePeriodicStockDraftMeta for '__meta__'/'newProductInfo:*',
     // savePeriodicStockDraftItem for an actual row) — either way, both
     // sit AFTER the same await, so this still proves the serialization
     // guarantee regardless of which branch fires.
-    const metaSaveIdx = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftMeta(');
-    const itemSaveIdx = scheduleRowDraftSaveBody.indexOf('savePeriodicStockDraftItem(');
+    const metaSaveIdx = performRowSaveAttemptBody.indexOf('savePeriodicStockDraftMeta(');
+    const itemSaveIdx = performRowSaveAttemptBody.indexOf('savePeriodicStockDraftItem(');
     assert.notEqual(awaitIdx, -1);
     assert.notEqual(metaSaveIdx, -1);
     assert.notEqual(itemSaveIdx, -1);
