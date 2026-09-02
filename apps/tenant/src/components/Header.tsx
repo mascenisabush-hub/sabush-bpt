@@ -136,7 +136,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   return (
     <>
       <header className="bg-white">
-        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-5 pb-3">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-4 pb-2">
           {/* Single unified row: business info (left) · action icons (center) ·
               profile (right). If the icon row doesn't fit next to the other
               two on narrower desktop widths, it simply wraps onto its own
@@ -170,7 +170,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   {business.name}
                 </h1>
                 <p
-                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1.5"
+                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
                   title={business?.contact ? t('header.contactTitle', { contact: business.contact }) : undefined}
                 >
                   <span className="truncate text-gray-600 font-bold">
@@ -362,9 +362,24 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             </div>
           </div>
 
-          {/* Action nav row — same 11 tabs/handlers as before, now back on
-              the top bar as a horizontal pill row instead of a sidebar. */}
-          <nav className="hidden md:flex items-center flex-wrap gap-2 pt-4">
+          {/* [Local layout compaction — global header space-management,
+              first pass] Action nav row — same 13 tabs/handlers, same
+              icons/labels/active-state/routing as before; only the
+              chrome around each pill (padding, inter-item gap, top
+              margin before the row) was tightened. Nothing here reads
+              or writes NAV_TABS, isStaff, activeTab, or setActiveTab
+              differently — visibleTabs/isActive/onClick are byte-
+              identical to before this pass. The icon box (`w-7 h-7`)
+              and label font size (`text-[12.5px]`) are UNCHANGED —
+              the ~44px former button height was governed by the fixed
+              28px icon box plus `py-2`'s 16px of padding; tightening
+              that padding to `py-1` (8px) brings each button to ~36px
+              — still a full pill with a clearly legible label, not an
+              icon-only or truncated control. The nav may still wrap to
+              two rows at typical desktop widths (unchanged from
+              before, and explicitly acceptable per this pass's own
+              scope) — those two rows are simply shorter now. */}
+          <nav className="hidden md:flex items-center flex-wrap gap-1.5 pt-2">
             {visibleTabs.map(tab => {
               const Icon = tab.icon;
               const isActive = activeTab === tab.id;
@@ -375,7 +390,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   title={t(tab.labelKey)}
-                  className={`flex items-center gap-2 pl-2 pr-3.5 py-2 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
+                  className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
                     isActive
                       ? 'bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
                       : 'bg-transparent text-gray-600 hover:bg-[#0B1F3A]/[0.05] hover:text-[#0B1F3A]'
@@ -393,6 +408,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               );
             })}
           </nav>
+
 
           {/* Small inline reminder — replaces the old full-width banner. Same action
               (jumps into Settings → profile edit), just quiet instead of dominant. */}
