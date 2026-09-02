@@ -97,11 +97,19 @@ describe('A — validated compact representation shows every required field', ()
     assert.equal(ternaryMatches.length, 1, 'Expected the shared Editar/Abrir/Produto-aberto ternary exactly once.');
   });
 
-  it('none of the required fields are hidden behind title/hover-only attributes', () => {
-    // The validated-state icon itself is aria-hidden (decorative — see
-    // Suite G for its accessible-text sibling), but no `title=` attribute
-    // is used anywhere in this section to carry required information.
-    assert.doesNotMatch(section, /title=/);
+  it('the only title= attribute present is the supplementary full-name tooltip on the product-name span itself — never used to hide REQUIRED information exclusively behind hover', () => {
+    // [Bug fix — product name visibility] A `title={row.productName}`
+    // was added to the name span so the FULL name is available on
+    // hover/focus on the rare narrow container where the guaranteed
+    // 96px floor (unifiedRowGridClass) still isn't enough — but the
+    // name itself remains fully rendered as ordinary visible text right
+    // next to it (`{row.productName}` inside the same span), so no
+    // information is exclusively behind the tooltip; this is a
+    // supplementary affordance, not a Concept C violation.
+    const titleMatches = section.match(/title=\{row\.productName\}/g) ?? [];
+    assert.equal(titleMatches.length, 1, 'Expected exactly one title= attribute, on the name span.');
+    const otherTitleMatches = (section.match(/title=/g) ?? []).length;
+    assert.equal(otherTitleMatches, 1, 'No other title= attribute should exist in this section.');
   });
 });
 
@@ -280,12 +288,12 @@ describe('G — responsive and accessibility structure', () => {
     assert.match(section, /\{fieldLabelClass\} sm:hidden`\}>Venda\/Un</);
   });
 
-  it('a shared desktop column header exists above the validated list, aligned to the same five-track rowGridClass template used by the active workspace header', () => {
-    assert.match(section, /hidden sm:grid \$\{rowGridClass\.replace\('sm:items-end', ''\)\}/);
+  it('a shared desktop column header exists above the unified list, using its own unifiedRowGridClass template (adjusted from rowGridClass for the narrower right-column container)', () => {
+    assert.match(section, /hidden sm:grid \$\{unifiedRowGridClass\.replace\('sm:items-center', ''\)\}/);
   });
 
   it('the desktop header declares exactly the five Periodic columns (Nome/Qtd/Unid/Venda-Un/Valor)', () => {
-    const headerStart = section.indexOf("hidden sm:grid ${rowGridClass.replace('sm:items-end', '')}");
+    const headerStart = section.indexOf("hidden sm:grid ${unifiedRowGridClass.replace('sm:items-center', '')}");
     assert.notEqual(headerStart, -1);
     const headerBlock = section.slice(headerStart, headerStart + 700);
     const labels = ['Nome', 'Qtd', 'Unid', 'Venda/Un', 'Valor'];

@@ -211,13 +211,24 @@ describe('I — The single-active-product rule applies to reopening an existing 
     assert.match(reopenBody, /if \(isWorkspaceActive && activeWorkspaceProductKey !== key\) return;/);
   });
 
-  it('the counted list\'s own "Editar" buttons (both catalog and manual) are disabled whenever a DIFFERENT product is currently active — never able to activate a second independent product', () => {
-    const editDisabledMatches = periodicSrc.match(/const editDisabled = isWorkspaceActive && activeWorkspaceProductKey !== productKeyFor\(row\.productName\);/g) ?? [];
-    assert.equal(editDisabledMatches.length, 2, 'Expected the editDisabled guard on both the catalog and manual counted-list Editar buttons.');
-    assert.match(periodicSrc, /disabled=\{editDisabled\}[\s\S]{0,400}onClick=\{\(\) => handleEditCatalogRow\(productId\)\}|onClick=\{\(\) => handleEditCatalogRow\(productId\)\}[\s\S]{0,200}disabled=\{editDisabled\}/);
+  it('the unified list\'s own Editar/Abrir button (covering both catalog and manual entries, now via one shared control) is disabled whenever a DIFFERENT product is currently active — never able to activate a second independent product', () => {
+    // [Owner-requested — single unified product list] The old per-loop
+    // `editDisabled = isWorkspaceActive && activeWorkspaceProductKey !== productKeyFor(row.productName)`
+    // guard is superseded by `const disabled = isWorkspaceActive;` —
+    // simpler, but equivalent in effect: `visibleUnifiedListEntries`
+    // (declared far above) already excludes the active product's own
+    // entries from this list entirely, so every entry reaching this
+    // render is, by construction, a DIFFERENT product than the active
+    // one whenever a workspace is active — see that memo's own filter
+    // for the actual key comparison this simplification relies on.
+    const disabledMatches = periodicSrc.match(/const disabled = isWorkspaceActive;/g) ?? [];
+    assert.equal(disabledMatches.length, 1, 'Expected the disabled guard in the unified list.');
+    const visibleEntriesBody = extractFunctionBody(periodicSrc, 'const visibleUnifiedListEntries = useMemo(');
+    assert.match(visibleEntriesBody, /!isWorkspaceActive \|\| entry\.activationKey !== activeWorkspaceProductKey/);
+    assert.match(periodicSrc, /disabled=\{disabled\}[\s\S]{0,400}if \(!disabled\) handleUnifiedEntryClick\(entry\);|if \(!disabled\) handleUnifiedEntryClick\(entry\);[\s\S]{0,200}disabled=\{disabled\}/);
   });
 
-  it('the picker table itself remains completely hidden while a product (new or reopened) is active — the SAME `{!isWorkspaceActive && (...)}` gate, unmodified by this workflow', () => {
+  it('the idle-state left column (formerly the picker table) remains hidden while a product (new or reopened) is active — the SAME `{!isWorkspaceActive && (...)}` gate, unmodified by this workflow', () => {
     assert.match(periodicSrc, /\{!isWorkspaceActive && \(/);
   });
 });
@@ -269,8 +280,13 @@ describe('K — Existing calculation/valuation paths are completely untouched by
   });
 
   it('the live selling-value calculation (quantity * sellingPrice, computed for both the active row and the counted-list row) is the SAME pre-existing expression, not reimplemented for the reopened case', () => {
+    // [Owner-requested — single unified product list] Catalog and
+    // manual entries now share ONE loop, so this expression appears
+    // once for the unified list (plus once for the active-workspace
+    // row's own rowSellingValue — a differently-named but equally
+    // pre-existing sibling expression, unaffected by this workflow).
     const matches = periodicSrc.match(/const rowValue = q \* sellingPriceNum;/g) ?? [];
-    assert.ok(matches.length >= 2, 'Expected the existing rowValue calculation to still appear for both the catalog and manual counted-list rows.');
+    assert.ok(matches.length >= 1, 'Expected the existing rowValue calculation to still appear for the unified list.');
   });
 });
 

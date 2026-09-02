@@ -3925,13 +3925,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const tables = [
       {
         title: 'Produtos Contados',
-        columns: ['Produto', 'Qtd', 'Unid', 'Venda/Un', 'Total'],
+        // [Related-omission fix — Part 5 completeness audit] "Validado"
+        // added as its own column, reading `item.validated` — a field
+        // ALREADY present on every StockCountTallyItem (Decision 40,
+        // FR-N11; see that field's own comment, stockCount.ts), never a
+        // new calculation. The live unified list already visibly
+        // distinguishes validated vs. not (CheckCircle2/Circle icon +
+        // border color + Editar/Abrir label) — the export previously
+        // carried no equivalent, which is the one field genuinely
+        // visible on-screen but silently absent from this export.
+        columns: ['Produto', 'Qtd', 'Unid', 'Venda/Un', 'Total', 'Validado'],
         rows: liveTally.countedItems.map((item) => [
           item.productName,
           item.quantity,
           item.unit,
           formatCurrency(item.sellingPrice, currencySymbol),
           formatCurrency(item.sellingValue, currencySymbol),
+          item.validated ? 'Sim' : 'Não',
         ]),
       },
       ...(liveTally.notCountedProductNames.length > 0
@@ -4355,6 +4365,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // ModeAValuationControl, NewProductInfoPanel, ExistingProductSummary,
   // and the multi-portion label below) must use col-span-5 to match.
   const rowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-2.5 sm:items-end';
+
+  // [Bug fix — product name crushed to near-invisibility in the unified
+  // list] rowGridClass, above, was authored for the active-workspace
+  // grid, which renders full-width in the LEFT column of the page. The
+  // unified product list (below) instead lives in the RIGHT column of
+  // a `lg:grid-cols-2` layout — roughly half the page width on desktop
+  // — while still gated by the SAME `sm:` (640px viewport) breakpoint.
+  // rowGridClass's four non-name tracks total 84+76+112+190 = 462px of
+  // FIXED width; CSS Grid satisfies fixed-px tracks before splitting
+  // whatever's left across `fr` tracks, and `minmax(0, 2fr)` allows
+  // that leftover to shrink all the way to zero once the container is
+  // narrower than the fixed total — exactly what happens once the
+  // right column's own real width (well under 462px + gaps + padding
+  // on many common desktop widths) is accounted for. The name column
+  // isn't hidden by any color/visibility rule — it is a real CSS Grid
+  // width-starvation bug, reproducible with fixed math regardless of
+  // content. Fixed here, for this list only, by (a) roughly halving
+  // the combined non-name fixed width (462px → ~312px) and (b) giving
+  // the name track a GUARANTEED floor (`minmax(96px, 2fr)` instead of
+  // `minmax(0, 2fr)`) so it can never be squeezed below a legible
+  // width, even in a pathologically narrow container — at that point
+  // the row simply overflows/scrolls rather than erasing the name.
+  // rowGridClass itself is completely unmodified — the active-
+  // workspace grid this list doesn't touch keeps its own untouched
+  // layout and tests.
+  const unifiedRowGridClass = 'grid grid-cols-2 sm:grid-cols-[minmax(96px,2fr)_48px_56px_100px_108px] gap-x-2 gap-y-1 sm:items-center';
 
   // [Implementation Task, Section 5] A draft only counts as "worth
   // resuming" if it actually holds operator-entered content — an empty
@@ -5761,7 +5797,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
             {visibleUnifiedListEntries.length > 0 && (
               <>
-                <div className={`hidden sm:grid ${rowGridClass.replace('sm:items-end', '')} pb-1.5 border-b border-[#F0EEE4]`}>
+                <div className={`hidden sm:grid ${unifiedRowGridClass.replace('sm:items-center', '')} pb-1.5 border-b border-[#F0EEE4]`}>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Qtd</span>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Unid</span>
@@ -5801,7 +5837,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         onKeyDown={(e) => {
                           if (!disabled && (e.key === 'Enter' || e.key === ' ')) handleUnifiedEntryClick(entry);
                         }}
-                        className={`grid grid-cols-2 sm:grid-cols-[minmax(0,2fr)_84px_76px_112px_190px] gap-x-2.5 gap-y-1 sm:items-center border rounded-xl px-3 py-2 transition-colors duration-150 ${
+                        className={`${unifiedRowGridClass} border rounded-xl px-3 py-2 transition-colors duration-150 ${
                           disabled
                             ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed'
                             : entry.validated
@@ -5816,7 +5852,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
                           <span className="sr-only">{entry.validated ? 'Validado' : 'Não validado'}</span>
-                          <span className="text-[13px] font-semibold text-[#111827] truncate">{row.productName}</span>
+                          {/* [Bug fix — product name visibility] `title`
+                              surfaces the FULL name on hover/focus even on
+                              the rare container narrow enough to still
+                              truncate it despite the guaranteed 96px floor
+                              above — a low-cost, standard affordance, not
+                              a layout change. */}
+                          <span className="text-[13px] font-semibold text-[#111827] truncate min-w-0" title={row.productName}>
+                            {row.productName}
+                          </span>
                           {(hasPriceWarning || hasModeAWarning) && (
                             <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
@@ -5835,7 +5879,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             {row.quantity.trim() === '' ? '—' : formatCurrency(sellingPriceNum, currencySymbol)}
                           </span>
                         </div>
-                        <div className="col-span-2 sm:col-span-1 flex items-center justify-end gap-2">
+                        {/* [Bug fix — carried over from the original
+                            "Total-display layout fix" precedent] Stacked
+                            value-above-action (each gets the FULL column
+                            width in turn, right-aligned) rather than side
+                            by side — the unified list's own narrower Valor
+                            track (108px, freed up for the name column
+                            above) has even less room than the old 190px
+                            column for value+action side by side. */}
+                        <div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">
                           <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">
                             {row.quantity.trim() === '' ? '—' : formatCurrency(rowValue, currencySymbol)}
                           </span>

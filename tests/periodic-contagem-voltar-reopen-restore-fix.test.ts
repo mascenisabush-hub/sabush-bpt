@@ -207,32 +207,29 @@ describe('E — editing a field and then pressing Voltar keeps the edit; no reve
 });
 
 // ---------------------------------------------------------------------
-// F. Total column display fix (persistent "Produtos Validados" list)
+// F. Total column display fix (now the unified product list)
 // ---------------------------------------------------------------------
-describe('F — Total value in the validated list is no longer squeezed alongside the Editar button', () => {
-  it('the catalog-validated row\'s value+action cell now stacks the Total value above the Editar button (flex-col), instead of splitting one fixed-width row between them (flex justify-between)', () => {
+describe('F — Total value in the unified list is no longer squeezed alongside the Editar/Abrir button', () => {
+  it('the unified list\'s single shared value+action cell stacks the Total value above the button (flex-col), instead of splitting one fixed-width row between them (flex justify-between)', () => {
     assert.match(
       periodicSrc,
-      /<div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">\s*\n\s*<span className="text-\[13px\] font-semibold text-\[#633806\] tabular-nums whitespace-nowrap">\{formatCurrency\(rowValue, currencySymbol\)\}<\/span>\s*\n\s*<button\s*\n\s*type="button"\s*\n\s*onClick=\{\(\) => handleEditCatalogRow\(productId\)\}/
+      /<div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">\s*\n\s*<span className="text-\[13px\] font-semibold text-\[#633806\] tabular-nums whitespace-nowrap">\s*\n\s*\{row\.quantity\.trim\(\) === '' \? '—' : formatCurrency\(rowValue, currencySymbol\)\}\s*\n\s*<\/span>/
     );
   });
 
-  it('the manual-validated row\'s value+action cell has the identical corrected layout', () => {
-    assert.match(
-      periodicSrc,
-      /<div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">\s*\n\s*<span className="text-\[13px\] font-semibold text-\[#633806\] tabular-nums whitespace-nowrap">\{formatCurrency\(rowValue, currencySymbol\)\}<\/span>\s*\n\s*<button\s*\n\s*type="button"\s*\n\s*onClick=\{\(\) => handleEditManualRow\(idx\)\}/
-    );
+  it('the value+action cell appears exactly once — catalog and manual entries now share the SAME loop/template, not two separate ones', () => {
+    const matches = periodicSrc.match(/<div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">/g) ?? [];
+    assert.equal(matches.length, 1, 'Expected exactly one shared stacked value+action cell in the unified list.');
   });
 
   it('no calculation changed: the same pre-existing rowValue = q * sellingPriceNum expression still feeds the Total value — only its surrounding layout changed', () => {
     const matches = periodicSrc.match(/const rowValue = q \* sellingPriceNum;/g) ?? [];
-    assert.ok(matches.length >= 2, 'Expected the existing rowValue calculation to still appear for both the catalog and manual validated-list rows, unmodified.');
+    assert.ok(matches.length >= 1, 'Expected the existing rowValue calculation to still appear for the unified list, unmodified.');
   });
 
-  it('the underlying five-column grid track widths (rowGridClass and the validated list\'s own literal grid template) are unchanged by this fix — only the content WITHIN the last cell was rearranged', () => {
+  it('the unified list uses its own unifiedRowGridClass template, deliberately narrower than rowGridClass for its narrower right-column container — rowGridClass itself is untouched', () => {
     assert.match(periodicSrc, /const rowGridClass = 'grid grid-cols-2 sm:grid-cols-\[minmax\(0,2fr\)_84px_76px_112px_190px\] gap-x-2\.5 gap-y-2\.5 sm:items-end';/);
-    const validatedGridTemplateMatches = periodicSrc.match(/sm:grid-cols-\[minmax\(0,2fr\)_84px_76px_112px_190px\] gap-x-2\.5 gap-y-1 sm:items-center/g) ?? [];
-    assert.equal(validatedGridTemplateMatches.length, 2, 'Expected the unchanged 190px validated-list grid template to still appear exactly twice (catalog + manual lists).');
+    assert.match(periodicSrc, /const unifiedRowGridClass = 'grid grid-cols-2 sm:grid-cols-\[minmax\(96px,2fr\)_48px_56px_100px_108px\] gap-x-2 gap-y-1 sm:items-center';/);
   });
 
   it('[Documented, not asserted at runtime — see file header] No jsdom/testing-library harness exists in this repo to render the corrected cell and measure that the full formatted value (e.g. "425.278,50 MT") no longer clips. Regression protection here is: (1) the structural assertions above pinning the exact corrected markup, (2) TypeScript/build verification that the JSX is valid, and (3) manual visual confirmation performed alongside this change.', () => {
