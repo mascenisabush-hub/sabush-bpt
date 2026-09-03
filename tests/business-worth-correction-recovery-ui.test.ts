@@ -61,13 +61,28 @@ describe('AppContext.tsx — Increment 8 UI wiring (source-inspection)', () => {
 
 describe('DashboardView.tsx — Increment 8 correction/recovery entry point (source-inspection)', () => {
   it('destructures the eligibility fields and startBusinessWorthCorrection from useApp()', () => {
-    assert.match(dashboardSrc, /businessWorthCorrectionEligibility, businessWorthAuthorizedRecoveryEligibility/);
+    // [Decision 43 §13] businessWorthAuthorizedRecoveryEligibility is
+    // display-only by its own established convention and is no longer
+    // destructured here at all — the button's actual gating condition
+    // now uses an authoritative, freshly-checked value instead (see
+    // the test below). businessWorthCorrectionEligibility (the ordinary,
+    // non-authorized 3-hour window) is unaffected by 43 and remains
+    // destructured exactly as before.
+    assert.match(dashboardSrc, /businessWorthCorrectionEligibility,\n/);
+    assert.doesNotMatch(dashboardSrc, /businessWorthCorrectionEligibility, businessWorthAuthorizedRecoveryEligibility/);
     assert.match(dashboardSrc, /startBusinessWorthCorrection/);
   });
 
   it('the correction/recovery buttons are gated on index === 0 && snapshot.status === \'active\' — the same "current row" condition already used for the existing "Atual" badge, never a separately-selectable row', () => {
     const correctBlockStart = dashboardSrc.indexOf("index === 0 && snapshot.status === 'active' && businessWorthCorrectionEligibility.eligible");
-    const recoverBlockStart = dashboardSrc.indexOf("index === 0 && snapshot.status === 'active' && !businessWorthCorrectionEligibility.eligible && businessWorthAuthorizedRecoveryEligibility.eligible");
+    // [Decision 43 §13] The recover-via-authorization button's own
+    // gating condition now reads an authoritative, freshly-checked
+    // value (authoritativeBusinessWorthRecoveryEligibility) instead of
+    // the ambient, listener-fed businessWorthAuthorizedRecoveryEligibility
+    // — same "current row" prefix condition, different eligibility
+    // source for the reason documented in this checkpoint's own code
+    // comment.
+    const recoverBlockStart = dashboardSrc.indexOf("index === 0 && snapshot.status === 'active' && !businessWorthCorrectionEligibility.eligible && authoritativeBusinessWorthRecoveryEligibility?.eligible === true");
     assert.notEqual(correctBlockStart, -1);
     assert.notEqual(recoverBlockStart, -1);
   });

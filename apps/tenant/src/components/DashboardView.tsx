@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { useApp } from '../context/AppContext';
 import { calculateBatch, calculateInventoryTotals } from '../utils/calculations';
 import { formatCurrency } from '../utils/formatters';
@@ -163,8 +163,9 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
     businessWorth, capitalGrowth, capitalGrowthPct,
     currentBusinessWorth, estimatedBusinessWorth, businessWorthSnapshots,
     // [Business Worth Evolution — Implementation Authorization, Increment 8]
-    businessWorthCorrectionEligibility, businessWorthAuthorizedRecoveryEligibility,
-    startBusinessWorthCorrection,
+    businessWorthCorrectionEligibility,
+    startBusinessWorthCorrection, checkBusinessWorthAuthorizedRecoveryEligibility,
+    latestActiveBusinessWorthSnapshot,
   } = useApp();
   const { t } = useLanguage();
   const [searchQuery, setSearchQuery] = useState('');
@@ -172,6 +173,46 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
   const [showWorthModal, setShowWorthModal] = useState(false);
   const [showWorthHistoryModal, setShowWorthHistoryModal] = useState(false);
   const [showInitialStockValuationModal, setShowInitialStockValuationModal] = useState(false);
+  // [Decision 43 §13] Authoritative, listener-independent re-check of
+  // the "recover via SuperAdmin authorization" action's own
+  // eligibility, obtained fresh whenever the history modal — the only
+  // place this action is offered — opens. The ambient
+  // `businessWorthAuthorizedRecoveryEligibility` context value is no
+  // longer consumed by this component at all; the button's actual
+  // gating condition, below, now uses this
+  // authoritative result instead, so a `businessWorthRecoveryAuthorization`
+  // listener failure can never hide a genuinely active grant. `null`
+  // means "not yet checked" (or the check failed) — the action is not
+  // offered in that state, matching this operation's own accepted
+  // fail-safe treatment (Implementation Plan §17): a hidden action
+  // that firestore.rules would have allowed is a minor inconvenience,
+  // never a correctness problem, and never worse than what the prior,
+  // purely-ambient-listener behavior already risked.
+  const [authoritativeBusinessWorthRecoveryEligibility, setAuthoritativeBusinessWorthRecoveryEligibility] = useState<{ eligible: boolean; msRemaining: number } | null>(null);
+  useEffect(() => {
+    if (!showWorthHistoryModal || !latestActiveBusinessWorthSnapshot || businessWorthCorrectionEligibility.eligible) {
+      // Not worth an extra Firestore round-trip when the modal is
+      // closed, there is no current snapshot to check against, or the
+      // ordinary (non-authorized) correction window is still open —
+      // the authorized-recovery button never renders in either of the
+      // latter two cases regardless of this check's own result.
+      setAuthoritativeBusinessWorthRecoveryEligibility(null);
+      return;
+    }
+    let cancelled = false;
+    checkBusinessWorthAuthorizedRecoveryEligibility(latestActiveBusinessWorthSnapshot)
+      .then((result) => {
+        if (!cancelled) setAuthoritativeBusinessWorthRecoveryEligibility({ eligible: result.eligible, msRemaining: result.msRemaining });
+      })
+      .catch((err) => {
+        console.error('[DashboardView] authoritative business-worth recovery eligibility check failed', err);
+        if (!cancelled) setAuthoritativeBusinessWorthRecoveryEligibility({ eligible: false, msRemaining: 0 });
+      });
+    return () => {
+      cancelled = true;
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [showWorthHistoryModal, latestActiveBusinessWorthSnapshot?.id, businessWorthCorrectionEligibility.eligible]);
   // [Capital Inicial Retirement — Implementation Authorization
   // Increment 4] The KPI card's null-state click now opens this
   // chooser instead of navigating straight to Capital Inicial
@@ -965,7 +1006,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             })}
                           </button>
                         )}
-                        {index === 0 && snapshot.status === 'active' && !businessWorthCorrectionEligibility.eligible && businessWorthAuthorizedRecoveryEligibility.eligible && (
+                        {index === 0 && snapshot.status === 'active' && !businessWorthCorrectionEligibility.eligible && authoritativeBusinessWorthRecoveryEligibility?.eligible === true && (
                           <button
                             onClick={() => {
                               startBusinessWorthCorrection(snapshot.id, 'superadmin-authorized-recovery');
@@ -975,7 +1016,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
                             className="w-full py-1.5 rounded-[8px] bg-[#D4AF37]/10 hover:bg-[#D4AF37]/20 text-[#8A6D1F] font-bold text-[11px] transition"
                           >
                             {t('dashboard.historyModal.recoverAction', {
-                              hours: String(Math.max(1, Math.ceil(businessWorthAuthorizedRecoveryEligibility.msRemaining / (60 * 60 * 1000)))),
+                              hours: String(Math.max(1, Math.ceil(authoritativeBusinessWorthRecoveryEligibility.msRemaining / (60 * 60 * 1000)))),
                             })}
                           </button>
                         )}

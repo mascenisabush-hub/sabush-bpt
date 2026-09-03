@@ -23,7 +23,7 @@ interface SubscriptionContactModalProps {
 // any way. Confirmation happens entirely outside the client, via
 // server/scripts/confirmPayment.ts.
 export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> = ({ onClose }) => {
-  const { payments, submitPayment, subscription } = useApp();
+  const { payments, submitPayment, subscription, checkLatestPaymentAuthoritative } = useApp();
   const { t } = useLanguage();
 
   const [selectedMethod, setSelectedMethod] = useState<PaymentMethod | null>(null);
@@ -70,7 +70,56 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
   const showPendingView = !justSubmitted && latestPayment?.status === 'pending';
   const showRejectedView = !justSubmitted && latestPayment?.status === 'rejected' && !showPendingView;
 
+  // [Decision 43 §12] A listener failure on `payments` must not make
+  // an existing pending/rejected submission appear absent — that could
+  // let the Owner submit a second payment reference while a real one
+  // is already awaiting review. `latestPayment`/`showPendingView`/
+  // `showRejectedView` above remain unchanged (still used for the
+  // pending/rejected VIEW content itself, once a real one is known to
+  // exist), but the actual submission gate below is decided from a
+  // fresh, authoritative check performed when this modal mounts (and
+  // again after a fresh submission), not from the ambient listener
+  // state. `undefined` = not yet checked; the submit action stays
+  // disabled during that brief window rather than racing ahead on
+  // unconfirmed state.
+  const [authoritativeLatestPayment, setAuthoritativeLatestPayment] = useState<import('../types').Payment | null | undefined>(undefined);
+  useEffect(() => {
+    let cancelled = false;
+    setAuthoritativeLatestPayment(undefined);
+    checkLatestPaymentAuthoritative()
+      .then((result) => {
+        if (!cancelled) setAuthoritativeLatestPayment(result);
+      })
+      .catch((err) => {
+        console.error('[SubscriptionContactModal] authoritative latest-payment check failed', err);
+        // Fails safely toward the more conservative outcome: if we
+        // cannot confirm there is NO pending payment, do not allow a
+        // fresh submission that could duplicate one. Falls back to
+        // whatever the ambient listener already knew, rather than
+        // silently treating the read failure as "confirmed empty."
+        if (!cancelled) setAuthoritativeLatestPayment(latestPayment);
+      });
+    return () => {
+      cancelled = true;
+    };
+    // Re-checks after a fresh submission too, so a second open of this
+    // same mounted instance reflects the just-submitted payment
+    // authoritatively rather than only via the ambient listener.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [justSubmitted]);
+  const authoritativeShowPendingView = !justSubmitted && authoritativeLatestPayment?.status === 'pending';
+  const authoritativeSubmissionBlocked = authoritativeLatestPayment === undefined || authoritativeShowPendingView;
+
   async function handleSubmit() {
+    if (authoritativeSubmissionBlocked) {
+      // [Decision 43 §12] Either the authoritative check hasn't
+      // resolved yet, or it has and confirms a real payment is already
+      // pending — either way, submitting now risks a duplicate. Do not
+      // silently proceed using the ambient (possibly stale) listener
+      // state's own, more permissive answer.
+      setError(t('subscription.subscribe.errorGeneric'));
+      return;
+    }
     if (!selectedMethod) {
       setError(t('subscription.subscribe.errorMissingMethod'));
       return;
@@ -218,7 +267,7 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
             <button
               type="button"
               onClick={handleSubmit}
-              disabled={isSubmitting}
+              disabled={isSubmitting || authoritativeSubmissionBlocked}
               className="px-4 py-2 rounded-xl bg-[#0B1F3A] text-white text-sm font-bold hover:bg-[#0B1F3A]/90 transition disabled:opacity-50 flex items-center gap-2"
             >
               {isSubmitting ? (

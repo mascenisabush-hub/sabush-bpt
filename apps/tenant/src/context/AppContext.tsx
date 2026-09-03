@@ -18,6 +18,9 @@ import {
   runTransaction,
   deleteField,
   serverTimestamp,
+  query,
+  orderBy,
+  limit,
   type WithFieldValue,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
@@ -639,12 +642,18 @@ interface AppContextType {
   // start/clear controls.
   pendingBusinessWorthCorrection: { snapshotId: string; kind: 'owner-correction' | 'superadmin-authorized-recovery' } | null;
   startBusinessWorthCorrection: (snapshotId: string, kind: 'owner-correction' | 'superadmin-authorized-recovery') => void;
+  // [Decision 43 §13] Authoritative, listener-independent re-check —
+  // see this function's own implementation comment in AppProvider.
+  checkBusinessWorthAuthorizedRecoveryEligibility: (snapshot: BusinessWorthSnapshot | null) => Promise<AuthorizedRecoveryEligibility>;
   clearBusinessWorthCorrection: () => void;
   withdrawals: Withdrawal[];
   // Module #19 V1 Manual Payment Bridge — temporary confirmation
   // bridge, not the final payment architecture.
   payments: Payment[];
   submitPayment: (params: { method: PaymentMethod; reference: string; notes?: string }) => Promise<Payment>;
+  // [Decision 43 §12] Authoritative, listener-independent re-check —
+  // see this function's own implementation comment in AppProvider.
+  checkLatestPaymentAuthoritative: () => Promise<Payment | null>;
   staffMembers: StaffMember[];
   currencySymbol: string;
   setCurrencySymbol: (symbol: string) => void;
@@ -1197,6 +1206,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // reopenClosing's own writes.
   const [closedPeriods, setClosedPeriods] = useState<ClosedPeriod[]>([]);
   const [staffMembers, setStaffMembers] = useState<StaffMember[]>([]);
+  // [Decision 43 §11 — shared-device PIN-pad staff-state] The one
+  // piece of new listener-adjacent state this Decision's Implementation
+  // Plan (§11) explicitly authorizes: whether the `staffMembers`
+  // listener has delivered at least one successful snapshot since it
+  // was last (re-)subscribed. Deliberately narrower than a full 41D-
+  // style four-state model — a single boolean, scoped to this one
+  // listener, for this one purpose: letting the PIN-pad auto-refresh
+  // effect (below) distinguish "staffMembers is genuinely `[]`, a real
+  // successful snapshot confirmed zero staff" from "staffMembers is
+  // `[]` only because the listener has errored or not yet delivered
+  // anything." Reset to `false` on every business switch/sign-out,
+  // exactly where every other per-business listener-derived state is
+  // already reset in this file, so it is never left describing a
+  // different business's own confirmation.
+  const [staffMembersListenerConfirmed, setStaffMembersListenerConfirmed] = useState(false);
   const [timelineEvents, setTimelineEvents] = useState<TimelineEvent[]>([]);
 
   // [Phase 0 Stage 2 Compatibility Correction] Must match firestore.rules'
@@ -1339,6 +1363,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // suspending staff shows up on the PIN pad without a manual re-pair.
   useEffect(() => {
     if (!isOwner || !pairedDevice || pairedDevice.businessId !== activeBusinessId) return;
+    // [Decision 43 §11 — the core invariant this checkpoint exists to
+    // enforce] Do NOT let an unconfirmed `staffMembers` state (the
+    // listener hasn't delivered a snapshot yet, or has errored) look
+    // like "this business genuinely has zero staff" and overwrite the
+    // device's own known-good cached list with an empty one. Only a
+    // listener that has genuinely confirmed at least one snapshot may
+    // drive this refresh — an unconfirmed state simply leaves the
+    // cache untouched for now; the effect re-runs the moment a real
+    // snapshot arrives (staffMembersListenerConfirmed flips true, or
+    // staffMembers itself changes again), so nothing is permanently
+    // lost, only deferred until the state is trustworthy.
+    if (!staffMembersListenerConfirmed) return;
     const freshStaff = staffMembers.filter((s) => !s.suspended).map((s) => ({ uid: s.uid, name: s.name, email: s.email }));
     const changed = JSON.stringify(freshStaff) !== JSON.stringify(pairedDevice.staff);
     const nameChanged = business?.name && business.name !== pairedDevice.businessName;
@@ -1346,7 +1382,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       persistPairedDevice({ ...pairedDevice, staff: freshStaff, businessName: business?.name || pairedDevice.businessName });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [isOwner, activeBusinessId, JSON.stringify(staffMembers), business?.name]);
+  }, [isOwner, activeBusinessId, JSON.stringify(staffMembers), business?.name, staffMembersListenerConfirmed]);
 
   // ============================================================
   // SUBSCRIPTION STATUS — derived, read-only client mirrors of
@@ -1646,6 +1682,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
+        // [Decision 43 §11] Reset alongside staffMembers itself — a
+        // signed-out session has no confirmed listener result at all.
+        setStaffMembersListenerConfirmed(false);
         setTimelineEvents([]);
         setIsAuthLoading(false);
       }
@@ -1743,6 +1782,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setWithdrawals([]);
       setClosings([]);
       setStaffMembers([]);
+      // [Decision 43 §11] Reset alongside staffMembers itself — Business
+      // B's own listener has not delivered anything yet.
+      setStaffMembersListenerConfirmed(false);
       setTimelineEvents([]);
       return;
     }
@@ -2264,6 +2306,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         const list: StaffMember[] = [];
         snap.forEach((doc) => list.push(doc.data() as StaffMember));
         setStaffMembers(list);
+        // [Decision 43 §11] A successful snapshot — even one confirming
+        // zero staff — is what makes an empty `staffMembers` genuinely
+        // trustworthy for the PIN-pad auto-refresh effect. Never reset
+        // to `false` here; only the business-switch/sign-out resets
+        // (below, and this effect's own dependency change) may do that.
+        setStaffMembersListenerConfirmed(true);
       },
       (err) => console.error('Error fetching staff:', err)
     );
@@ -4600,6 +4648,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return newPayment;
   };
 
+  // [Decision 43 §12 — subscription payment-status gate] A listener
+  // failure on `payments` must not make an existing pending/rejected
+  // submission appear absent — `SubscriptionContactModal.tsx` currently
+  // derives its own `latestPayment` from the ambient, listener-fed
+  // `payments[0]` (already sorted client-side by the existing listener,
+  // see its own comment above) to decide whether to show the payment
+  // form or the pending/rejected status view. This function replaces
+  // that ambient read with a bounded, sorted, limited authoritative
+  // query — the narrowest mechanism sufficient for "the single most
+  // recent payment for this business," per the accepted Implementation
+  // Plan §12. `getDocs` (not the plain listener's snapshot) forces an
+  // actual round-trip rather than resolving from a possibly-empty
+  // local cache, for the same reason §10/§13's own `getDocFromServer`
+  // reads do.
+  const checkLatestPaymentAuthoritative = async (): Promise<Payment | null> => {
+    if (!activeBusinessId) return null;
+    const latestPaymentQuery = query(
+      collection(db, 'businesses', activeBusinessId, 'payments'),
+      orderBy('submittedAt', 'desc'),
+      limit(1)
+    );
+    const snap = await getDocs(latestPaymentQuery);
+    if (snap.empty) return null;
+    return snap.docs[0].data() as Payment;
+  };
+
   // [Closing Integrity Amendment v1.0] Same lock check as deleteExpense —
   // see that comment.
   const deleteWithdrawal = async (id: string) => {
@@ -4636,6 +4710,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   };
   const clearBusinessWorthCorrection = () => {
     setPendingBusinessWorthCorrection(null);
+  };
+
+  // [Decision 43 §13 — businessWorthRecoveryAuthorization] A listener
+  // failure on this collection must not cause a genuine, active
+  // recovery grant to be silently hidden from the Owner (DashboardView
+  // currently gates its own "recover via authorization" button on the
+  // ambient, listener-fed `businessWorthAuthorizedRecoveryEligibility`
+  // — see that view's own consuming condition, unchanged in shape,
+  // now fed by this function's authoritative result instead). Mirrors
+  // §10's own `voidInitialStockConfirmation` treatment exactly: a
+  // document-keyed, server-confirmed fresh read of the fixed-id
+  // `businessWorthRecoveryAuthorizations/current` document, narrowest
+  // mechanism sufficient for this single-document existence+field
+  // check, per the accepted Implementation Plan §13. `getDocFromServer`
+  // (not a plain `getDoc`) is used deliberately, for the identical
+  // reason §10's own comment explains. This function does not decide
+  // eligibility beyond what `computeBusinessWorthAuthorizedRecoveryEligibility`
+  // already computes — it only supplies that pure function with an
+  // authoritative, non-ambient input.
+  const checkBusinessWorthAuthorizedRecoveryEligibility = async (
+    snapshot: BusinessWorthSnapshot | null
+  ): Promise<AuthorizedRecoveryEligibility> => {
+    if (!activeBusinessId || !snapshot) {
+      return { eligible: false, expiresAt: null, msRemaining: 0 };
+    }
+    const authorizationSnap = await getDocFromServer(
+      doc(db, 'businesses', activeBusinessId, 'businessWorthRecoveryAuthorizations', 'current')
+    );
+    return computeBusinessWorthAuthorizedRecoveryEligibility(
+      authorizationSnap.exists() ? (authorizationSnap.data() as BusinessWorthRecoveryAuthorization) : null,
+      snapshot
+    );
   };
 
   const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries, referencePriceEntries }: RecordStockCountParams) => {
@@ -5826,8 +5932,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     //   actor — this call is authenticated as the Owner, never a
     //   platform-operator credential, and the server performs no
     //   judgment of its own beyond re-verifying what was already true.
+    // [Decision 43 §10 — Initial Stock authorized-recovery eligibility]
+    // A listener failure on `initialStockRecoveryAuthorization` must
+    // never cause a genuine, active recovery grant to be silently
+    // treated as absent — the ambient, listener-fed
+    // `initialStockAuthorizedRecoveryEligibility` is display-only by
+    // its own established convention (see its own declaration comment,
+    // above) and is deliberately NOT relied on here anymore. A
+    // document-keyed, server-confirmed fresh read of the exact same
+    // fixed-id document replaces it for this one consequential
+    // decision — the narrowest authoritative mechanism that completely
+    // supplies what this decision needs (existence of a specific,
+    // known document), per the accepted Implementation Plan §10.
+    // `getDocFromServer` (not a plain `getDoc`) is used deliberately —
+    // a plain `getDoc` can still resolve from a stale/empty local
+    // cache if the listener itself never delivered a snapshot; this
+    // forces an actual round-trip, exactly as 41C's own draft-save
+    // readback already does elsewhere in this file for the identical
+    // reason.
+    let authoritativeInitialStockAuthorizedRecoveryEligibility = initialStockAuthorizedRecoveryEligibility;
+    try {
+      const authorizationSnap = await getDocFromServer(
+        doc(db, 'businesses', businessId, 'initialStockRecoveryAuthorization', 'current')
+      );
+      authoritativeInitialStockAuthorizedRecoveryEligibility = computeInitialStockAuthorizedRecoveryEligibility(
+        authorizationSnap.exists() ? (authorizationSnap.data() as InitialStockRecoveryAuthorization) : null,
+        targetId
+      );
+    } catch (readError) {
+      // [Decision 43 §11/§17 — fail safely] The authoritative read
+      // itself failed (e.g. genuinely offline) — do NOT fall back to
+      // the ambient, possibly-stale listener state as though it were
+      // now confirmed; do NOT silently treat this as "no authorization
+      // exists" either. Surface a clear, distinct error rather than
+      // guessing, exactly as the accepted Implementation Plan's §17
+      // failure-behavior table requires for this operation.
+      console.error('[voidInitialStockConfirmation] authoritative recovery-authorization read failed', readError);
+      throw new Error(
+        'Não foi possível confirmar de forma fiável a autorização de recuperação. Verifique a sua ligação e tente novamente.'
+      );
+    }
     const usingAuthorizedRecovery =
-      !initialStockVoidEligibility.eligible && initialStockAuthorizedRecoveryEligibility.eligible;
+      !initialStockVoidEligibility.eligible && authoritativeInitialStockAuthorizedRecoveryEligibility.eligible;
 
     if (usingAuthorizedRecovery) {
       if (!currentUser) {
@@ -7239,11 +7385,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         latestActiveBusinessWorthSnapshot,
         pendingBusinessWorthCorrection,
         startBusinessWorthCorrection,
+        checkBusinessWorthAuthorizedRecoveryEligibility,
         clearBusinessWorthCorrection,
         initialStockAuthorizedRecoveryEligibility,
         withdrawals,
         payments,
         submitPayment,
+        checkLatestPaymentAuthoritative,
         staffMembers,
         currencySymbol,
         setCurrencySymbol,
