@@ -453,7 +453,7 @@ describe('InitialStockCountView.tsx — autosave effect / manual retry / flush a
   it('the debounced autosave effect calls cancelDraftRetry() synchronously (not inside the setTimeout) before scheduling the new debounce timer', () => {
     const effectIdx = initialSrc.indexOf('useEffect(() => {\n    if (!draftLoaded || hasInitialStockCount || isSaving || savedMessage) return;');
     assert.notEqual(effectIdx, -1);
-    const effectSlice = initialSrc.slice(effectIdx, effectIdx + 1200);
+    const effectSlice = initialSrc.slice(effectIdx, effectIdx + 1600);
     const cancelIdx = effectSlice.indexOf('const generation = cancelDraftRetry();');
     const setTimeoutIdx = effectSlice.indexOf('const handle = setTimeout(() => {');
     assert.notEqual(cancelIdx, -1);
@@ -485,7 +485,7 @@ describe('InitialStockCountView.tsx — autosave effect / manual retry / flush a
   it('handleOpenConfirmStep (the confirm-time flush) cancels any pending retry before its own write (§7)', () => {
     const idx = initialSrc.indexOf('const handleOpenConfirmStep = async () => {');
     assert.notEqual(idx, -1);
-    const nearby = initialSrc.slice(idx, idx + 700);
+    const nearby = initialSrc.slice(idx, idx + 1100);
     assert.match(nearby, /cancelDraftRetry\(\);/);
   });
 

@@ -5,6 +5,7 @@ import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { UNIT_GUESS_DICTIONARY } from '../data/unitGuessDictionary';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { ReadOnlyDraftRecovery } from './ReadOnlyDraftRecovery';
 import { InitialStockDraftItem, UnitRelationship, InitialCapitalBasis } from '../types';
 import { resolveInitialCapitalValue } from '../utils/calculations';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
@@ -625,6 +626,15 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // on the same render).
   const performDraftSaveAttempt = (generation: number, attemptNumber: number) => {
     if (draftRetryRef.current.generation !== generation) return; // superseded by a newer attempt already
+    // [Decision 41E §7/§13 — no incidental autosave while subscription-
+    // blocked] The single true entry point for every draft-save
+    // attempt this view can make (ordinary debounce, bounded retry, and
+    // manual retry all funnel through here) — guarding here closes all
+    // three at once, rather than needing three separate guards at each
+    // call site (which are ALSO guarded below, for direct
+    // traceability, but this is the one guard that actually matters
+    // structurally).
+    if (subscriptionBlocksNewRecords) return;
     const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
       latestFlushArgs.current;
     if (!loaded || confirmed) return;
@@ -681,6 +691,15 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // instead of N.
   useEffect(() => {
     if (!draftLoaded || hasInitialStockCount || isSaving || savedMessage) return;
+    // [Decision 41E §7] Was already conditioned on several "don't
+    // autosave right now" states above — this adds one more: the
+    // subscription-blocked case, where `rows` can legitimately have
+    // been hydrated with real, non-empty content purely for read-only
+    // DISPLAY (the load effect that populates `rows` from an existing
+    // draft is not itself gated on subscription state, and shouldn't
+    // be — see that effect's own comment) without that ever being
+    // mistaken for something worth autosaving.
+    if (subscriptionBlocksNewRecords) return;
     if (skipNextAutosave.current) {
       skipNextAutosave.current = false;
       return;
@@ -706,6 +725,13 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // fresh bounded sequence, through the exact same
   // performDraftSaveAttempt path an ordinary autosave uses.
   const handleRetryDraftSave = () => {
+    // [Decision 41E §7/§13 — belt-and-suspenders] Only ever wired to
+    // the header's own status-indicator retry button, unreachable while
+    // subscription-blocked (that whole header/form never renders — see
+    // the render gate below). performDraftSaveAttempt's own guard
+    // already makes this a structural no-op regardless; guarded here
+    // too purely for direct traceability at this call site.
+    if (subscriptionBlocksNewRecords) return;
     const generation = cancelDraftRetry();
     performDraftSaveAttempt(generation, 1);
   };
@@ -721,6 +747,16 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
       latestFlushArgs.current;
     if (!loaded || confirmed) return;
+    // [Decision 41E §7/§13 — no incidental autosave while subscription-
+    // blocked] This flush runs unconditionally on visibilitychange/
+    // pagehide/unmount, entirely independent of which JSX branch is
+    // currently rendered. `rows` can legitimately hold real, non-empty
+    // content purely from read-only-display hydration (see the load
+    // effect's own comment) while blocked — without this guard,
+    // `hasAnyContent` below would see that real content and flush an
+    // unauthorized write attempt the instant the operator navigated
+    // away from the read-only recovery screen.
+    if (subscriptionBlocksNewRecords) return;
     const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
     if (!hasAnyContent) return;
     // [Decision 41C §7/§10] This flush is about to write the current,
@@ -763,6 +799,18 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
     const { rows: r, date: d, initialCapitalBasis: basis, draftLoaded: loaded, hasInitialStockCount: confirmed } =
       latestFlushArgs.current;
     if (!loaded || confirmed) return { success: true }; // nothing this view could meaningfully flush right now
+    // [Decision 41E §7/§13] Same reasoning as flushDraftNow's own guard
+    // above, applied to the awaited business-switch variant — if the
+    // subscription is blocked, any write this could attempt would be
+    // rejected by firestore.rules anyway (subscriptionAllowsNewRecords).
+    // Treat it exactly like "nothing pending" rather than attempting
+    // (and 41C-classifying as save-blocked) a write that can only ever
+    // fail — still cancels any leftover pending retry below so nothing
+    // survives to fire after the switch either.
+    if (subscriptionBlocksNewRecords) {
+      cancelDraftRetry();
+      return { success: true };
+    }
     const hasAnyContent = r.some((row) => row.productName.trim() || row.quantity || row.costPrice || row.sellingPrice);
     // [Decision 41C §11] Even with no in-form content change, a pending
     // automatic retry from a PRIOR failed save is still pending work —
@@ -1184,6 +1232,14 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // silently risking data that was never actually persisted.
   const handleOpenConfirmStep = async () => {
     setError(null);
+    // [Decision 41E §12/§13 — belt-and-suspenders] Mirrors handleSubmit's
+    // own condition exactly (see that guard's comment for the full
+    // reasoning) — this same button/handler also serves the Void & Redo
+    // flow (Rule 8 Finding K1/Option A), which must remain reachable
+    // even while blocked. Only blocks a NEW (non-redo) confirmation
+    // attempt, which is unreachable anyway while blocked and not
+    // mid-redo (the whole form never renders in that state).
+    if (subscriptionBlocksNewRecords && !redoingConfirmationId) return;
     const hasAnyContent = rows.some((r) => r.productName.trim() || r.quantity || r.costPrice || r.sellingPrice);
     if (hasAnyContent && !hasInitialStockCount) {
       setIsFlushingDraft(true);
@@ -1208,6 +1264,20 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setError(null);
+
+    // [Decision 41E §12/§13 — belt-and-suspenders] Mirrors the render
+    // gate's own condition exactly (`subscriptionBlocksNewRecords &&
+    // !redoingConfirmationId`) — NOT an unconditional block, since Void
+    // & Redo (Rule 8 Finding K1/Option A) already, deliberately, lets a
+    // legitimate redo confirmation proceed even while blocked, and 41E
+    // must never weaken that pre-existing, governance-approved
+    // exemption. This only closes the path 41E actually cares about: a
+    // NEW (non-redo) finalization while blocked, which this handler is
+    // only ever reachable for via the editable form's own submit —
+    // itself unreachable while blocked and not mid-redo, since that
+    // whole form never renders in that state (see the render gate
+    // below).
+    if (subscriptionBlocksNewRecords && !redoingConfirmationId) return;
 
     // [FR-19] The explicit secondary confirmation step: a first
     // "Confirmar Capital Inicial" click reveals the inline panel below
@@ -1773,7 +1843,81 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
   // OTHER new-record write while blocked; only the void/redo write
   // paths are exempt at the rules layer, and this UI gate change
   // affects visibility only.
+  //
+  // [Decision 41E — Subscription-Blocked Draft Access / Read-Only
+  // Recovery §1/§4/§5/§6] Was a single unconditional
+  // `return <SubscriptionBlockedNotice />;` that hid ANY existing
+  // draft the moment the subscription was blocked — this branch
+  // replaces that blanket hide with the SAME governed
+  // initialStockDraftListenerState machine 41D already established
+  // (§4: "Decision 41D's listener states remain authoritative... Do
+  // not reinterpret a listener error as absence"), so a blocked Owner
+  // with a genuinely existing draft can still see it. The redo
+  // exemption above is completely unaffected — it still short-circuits
+  // this whole block before any of the following runs. Nothing below
+  // this point ever renders the editable form, any onChange handler, or
+  // any write-triggering button — see ReadOnlyDraftRecovery.tsx's own
+  // header comment for why that component is safe by construction, and
+  // reads directly from the raw `initialStockDraft` context value
+  // (never the local, editable `rows` state) so this display is
+  // structurally independent of whatever the editable form's own
+  // working state happens to hold.
   if (subscriptionBlocksNewRecords && !redoingConfirmationId) {
+    if (initialStockDraftListenerState === 'loading') {
+      return (
+        <div className="max-w-5xl mx-auto pb-12">
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-8 text-center text-sm text-gray-500">
+            A verificar rascunhos por terminar...
+          </div>
+        </div>
+      );
+    }
+    if (initialStockDraftListenerState === 'load-error') {
+      // [Decision 41D §3] Same "never collapse an Owner listener error
+      // into absence" guarantee applies here too — same notice
+      // text/markup as the unblocked load-error branch, below.
+      return (
+        <div className="max-w-5xl mx-auto pb-12">
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5">
+              <Info className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+              <p className="text-[13px] leading-relaxed text-amber-800">
+                Não foi possível carregar de forma fiável um eventual rascunho já guardado. Verifique a sua ligação —
+                esta página tentará novamente automaticamente.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (initialStockDraftListenerState === 'draft-exists' && initialStockDraft) {
+      // [Decision 41E §11] No existing export mechanism exists for
+      // Initial Stock's draft today (unlike Periodic Contagem's own
+      // pre-confirmation PDF export) — per the signed Implementation
+      // Plan's own instruction ("If no existing export mechanism
+      // exists for a particular screen, report that fact rather than
+      // inventing a broad export feature"), onExportPdf is simply
+      // omitted here rather than building a new export path for this
+      // screen. See the final report for this being called out
+      // explicitly.
+      return (
+        <ReadOnlyDraftRecovery
+          title="Rascunho de Capital Inicial (Subscrição Bloqueada)"
+          subtitle={`Data do rascunho: ${initialStockDraft.date}`}
+          rows={initialStockDraft.items.map((item: InitialStockDraftItem) => ({
+            productName: item.productName,
+            quantity: String(item.quantity),
+            unit: item.unit,
+            costPrice: String(item.costPrice),
+            sellingPrice: typeof item.sellingPrice === 'number' ? String(item.sellingPrice) : undefined,
+          }))}
+          currencySymbol={currencySymbol}
+        />
+      );
+    }
+    // 'confirmed-no-draft' (or the defensive draft-exists-but-null
+    // fallthrough) — no existing draft to recover, so the existing,
+    // unmodified upgrade/contact messaging remains exactly correct.
     return <SubscriptionBlockedNotice />;
   }
 

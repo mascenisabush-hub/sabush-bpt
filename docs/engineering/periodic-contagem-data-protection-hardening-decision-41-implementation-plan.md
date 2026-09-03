@@ -1074,3 +1074,167 @@ unmodified.
 
 **Next gate: Stage 8 Implementation Authorization** (separate,
 not-yet-created, signed document).
+
+---
+
+## 10. Post-Implementation Governance Clarification — Decision 41E vs. the Pre-Existing Initial Stock Void & Redo Authorization
+
+**Date:** 3 September 2026
+**Trigger:** During Decision 41E implementation and its own subsequent
+forensic self-audit, a real question surfaced that neither Decision 41
+(§2, Decision 41E's own text) nor this Implementation Plan's §8
+explicitly addressed: does Decision 41E's "genuinely read-only while
+subscription-blocked" requirement apply to, restrict, or in any way
+touch the pre-existing, separately-authorized Initial Stock Void &
+Redo capability (Rule 8 Finding K1; Product Architect Decision —
+Option A)? That capability has its own independent write paths
+(`voidRecords` creation and a redo `stockCounts` creation) that are
+*already*, deliberately exempted from `subscriptionAllowsNewRecords`
+at the `firestore.rules` layer, predating Decision 41 entirely. This
+section records the Product Architect's clarification of that
+relationship and the forensic verification performed against it.
+
+### 10.1 Clarification
+
+Decision 41E's subscription-blocked read-only requirement governs
+**ordinary** Contagem draft accessibility and recovery — viewing,
+recovering, and exporting an existing, not-yet-finalized draft, with
+no create/update/autosave/finalization write of any kind while
+blocked.
+
+Decision 41E does **not** revoke, modify, restrict, or reinterpret the
+pre-existing, separately authorized Initial Stock Void & Redo
+capability. That capability remains governed entirely by its own
+prior authorization (Rule 8 Finding K1; Product Architect Decision —
+Option A) and its own existing `firestore.rules` conditions, both of
+which predate Decision 41 and are left untouched by it.
+
+```
+SUBSCRIPTION BLOCKED
+        |
+        +--> ORDINARY EXISTING DRAFT RECOVERY (Decision 41E)
+        |       -> VIEW / RECOVER / EXPORT where existing
+        |       -> GENUINELY READ-ONLY — no create/update/autosave/finalize
+        |
+        +--> EXISTING AUTHORIZED VOID & REDO (pre-existing, unrelated authorization)
+                -> VOID an existing confirmation (voidRecords create)
+                -> RECREATE the specific, chain-linked redo record (stockCounts create)
+                -> permitted ONLY under its own existing, independent
+                   authorization and firestore.rules conditions — never
+                   a general subscription bypass
+```
+
+This clarification authorizes no new write path, no change to when
+Void & Redo is permitted, and no change to `firestore.rules`. It
+settles interpretation only; it is not a new decision.
+
+### 10.2 Forensic verification performed (read-only; no code changed)
+
+**A–E — the existing mechanism, confirmed as-is:**
+`voidInitialStockConfirmation()` (`AppContext.tsx`) is the existing
+Void step. Its ordinary path creates the existing
+`businesses/{businessId}/voidRecords/{stockCountId}` document via a
+single-document Firestore batch write. Its SuperAdmin-authorized,
+expired-window path (used only when the ordinary 12-hour window has
+already elapsed but an Authorized Recovery grant exists) calls the
+existing `POST /api/initial-stock-recovery/consume` server endpoint,
+which performs its own writes server-side. The redo confirmation calls
+the existing `recordStockCount({ ..., redoesConfirmationId })`, which
+creates the existing chain-linked `stockCounts/initial-{2,3,4}`
+authorized redo record.
+
+**F, G — introduced or widened by Decision 41E? No, on both counts,
+confirmed by direct evidence:**
+- `voidInitialStockConfirmation` and the Void & Redo application logic
+  were introduced in commits `8851c73` ("Void & Redo — step 3/5:
+  application logic") and `ff7ddcd` ("Void & Redo — implement 12-hour
+  recovery window"), both confirmed (`git merge-base --is-ancestor`)
+  to be ancestors of Decision 41A's own first commit (`bbfb4dc`) —
+  i.e. this mechanism predates the entire Decision 41A–41E chain.
+- `AppContext.tsx` (which owns `voidInitialStockConfirmation` and
+  `recordStockCount`) and `firestore.rules` (which owns every
+  condition under which either write is permitted) both show a
+  byte-for-byte **zero-line diff** across the entirety of the Decision
+  41E implementation, confirmed directly (`git diff` against the
+  pre-41E HEAD touches neither file). Decision 41E could not have
+  introduced or widened a mechanism it never touched.
+- The one guard condition Decision 41E's own implementation *does*
+  reference — `subscriptionBlocksNewRecords && !redoingConfirmationId`
+  — is the exact same expression the pre-existing render gate already
+  used before Decision 41E; Decision 41E's own new handler-level
+  guards (on `handleSubmit`/`handleOpenConfirmStep`) reuse this
+  identical condition rather than a broadened one, and if anything
+  narrow the reachable surface further (defense-in-depth at the
+  handler level, in addition to the pre-existing render-level gate) —
+  never widen it.
+
+**H, I, J — the rules-layer authorization itself:** `firestore.rules`
+independently, fully enforces every Void & Redo precondition
+(ownership, the 12-hour `confirmedAt` window or an active Authorized
+Recovery grant, exact chain-position/slot-id matching, and — for
+redo — an already-existing `voidRecords` document for the immediate
+predecessor) regardless of subscription state. Both the `voidRecords`
+create rule and the redo branch of the `stockCounts` create rule
+carry their own explicit, pre-existing comment: *"Deliberately NOT
+gated on subscriptionAllowsNewRecords... this exemption applies to
+this create rule alone... and to no other write path in this file"*
+(`voidRecords`) and *"The ONLY branch in this entire rule deliberately
+NOT gated on subscriptionAllowsNewRecords"* (`stockCounts` redo
+branch) — both attributed to "Product Architect Decision — Option A;
+Rule 8 §14, Finding K1." No other write path in either collection, and
+no ordinary (non-redo, non-void) write anywhere in the schema, carries
+an equivalent exemption — the exemption is narrow, self-contained, and
+does not authorize any ordinary subscription-blocked write.
+
+### 10.3 Verification against the 41E implementation itself
+
+Re-inspected directly against the current 41E diff (against pre-41E
+HEAD `de2972e`): ordinary subscription-blocked draft recovery
+(`ReadOnlyDraftRecovery.tsx`) performs no Firestore write of any kind
+— confirmed by direct inspection (no `setDoc`/`updateDoc`/`addDoc`/
+`writeBatch` call anywhere in that file, no `useApp()` call, no
+editable input of any kind). Ordinary draft save/autosave
+(`performDraftSaveAttempt`, the debounce effect, `flushDraftNow`,
+`flushForSwitchIfNeeded`, `handleRetryDraftSave`,
+`scheduleRowDraftSave`, `handleManualRetryDraftSave`) all guard
+unconditionally on `subscriptionBlocksNewRecords` and remain blocked
+while it is true, with no redo carve-out (correctly — the
+`stockCountDrafts` collection's own rule has no redo exemption
+either). Ordinary finalization (`handleConfirmSave` in
+`PeriodicStockCountView.tsx`; `handleSubmit`/`handleOpenConfirmStep`
+in `InitialStockCountView.tsx` for a non-redo confirmation) remains
+blocked. No new subscription bypass was introduced anywhere in the
+diff. `firestore.rules` and `firestore.indexes.json` are unchanged.
+
+### 10.4 Conclusion
+
+The current Decision 41E implementation already conforms to this
+clarification exactly, as verified above. **No source-code change was
+required or made as a result of this clarification.**
+
+**PRODUCT ARCHITECT ACCEPTANCE — GOVERNANCE CLARIFICATION**
+
+**Subject:** Relationship between Decision 41E's subscription-blocked
+read-only requirement and the pre-existing Initial Stock Void & Redo
+authorization (Rule 8 Finding K1; Product Architect Decision — Option A)
+**Status:** ✅ **ACCEPTED AS A CLARIFICATION, NOT A NEW DECISION**
+**Product Architect:** SABUSHIMIKE MASCENI
+**Date:** 3 September 2026
+
+> "I confirm that Decision 41E's ordinary subscription-blocked
+> read-only requirement and the pre-existing, separately authorized
+> Initial Stock Void & Redo capability are two distinct things.
+> Decision 41E governs ordinary draft accessibility only; it does not
+> revoke, modify, widen, or reinterpret the existing Void & Redo
+> authorization or its existing `firestore.rules` conditions. Void &
+> Redo remains permitted only under its own prior authorization and
+> is not, and must never become, a general subscription bypass. This
+> is a clarification of an existing relationship, not a new product
+> decision, and it authorizes no code change beyond what has already
+> been verified to already conform to it."
+
+This clarification does not reopen Decision 41 (§2), this
+Implementation Plan's §8, the Rule 8 Assessment, or the Stage 8
+Implementation Authorization. No Firestore rule, index, or application
+write path was changed as a result of recording it.
+

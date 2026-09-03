@@ -53,6 +53,7 @@ import { buildProductCostBasisMap, type ProductCostBasis } from '../lib/fr67Cost
 // savedSellingTotal) and calls the existing, already-tested engine.
 import { exportReportPdf, exportReportExcel } from './reports/shared/reportExport';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { ReadOnlyDraftRecovery } from './ReadOnlyDraftRecovery';
 import {
   ClipboardList,
   Plus,
@@ -1614,6 +1615,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   };
 
   const scheduleRowDraftSave = (rowKey: string) => {
+    // [Decision 41E §7/§13 — no incidental autosave while subscription-
+    // blocked] Only ever called from an onChange handler inside the
+    // editable form, which never renders while blocked — unreachable
+    // today, but guarded explicitly at this exact entry point (the
+    // debounce scheduler itself) since §7 names "debounce effects" as
+    // one of the specific paths to verify directly rather than trust
+    // by inference from the surrounding JSX.
+    if (subscriptionBlocksNewRecords) return;
     const existing = rowDebounceTimersRef.current.get(rowKey);
     if (existing) clearTimeout(existing);
     // `editing`: local changes exist, not yet acknowledged by Firestore
@@ -1648,6 +1657,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the exact same draftInFlightSaveRef serialization) as an ordinary
   // autosave attempt — no parallel retry mechanism.
   const handleManualRetryDraftSave = () => {
+    // [Decision 41E §7/§13 — belt-and-suspenders] Only ever wired to
+    // the editable form's own status-indicator button, unreachable
+    // while subscription-blocked (that whole form never renders — see
+    // the render gate above). Guarded explicitly anyway, consistent
+    // with every other write-triggering handler in this file.
+    if (subscriptionBlocksNewRecords) return;
     const rowKeys = Array.from(manualRetryEligibleRowsRef.current);
     rowKeys.forEach((rowKey) => {
       const generation = cancelRowRetry(rowKey);
@@ -2076,6 +2091,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // sole purpose is reducing the interruption-loss window, never
   // participating in the finalization data path.
   const flushPeriodicDraftNow = () => {
+    // [Decision 41E §7/§13 — no incidental autosave while subscription-
+    // blocked] This flush runs unconditionally on visibilitychange/
+    // pagehide/unmount, entirely independent of which JSX branch is
+    // currently rendered — so simply swapping in the read-only recovery
+    // view above does NOT, by itself, stop this from firing. Guarded
+    // here, at the true entry point, rather than relying solely on
+    // firestore.rules to reject the write after the fact (defense in
+    // depth, not a replacement for §3's rules-are-authoritative
+    // requirement). In practice this is also a pure no-op in the
+    // blocked state regardless — the editable form never renders while
+    // blocked, so catalogRows/manualRows can never have accumulated a
+    // real edit to flush — but the explicit guard makes that
+    // structurally certain rather than incidental.
+    if (subscriptionBlocksNewRecords) return;
     // [Decision 39a; Implementation Authorization §1 item 4] Cancel
     // EVERY pending per-row timer, not a single ref — this write is
     // about to supersede all of them at once with the current full
@@ -2182,6 +2211,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // unmodified — no new write-construction logic, no parallel
   // persistence path.
   const flushForSwitchIfNeeded = async (): Promise<{ success: boolean }> => {
+    // [Decision 41E §7/§8/§13] If the subscription is blocked, any
+    // write this flush could attempt would be rejected by
+    // firestore.rules anyway (subscriptionAllowsNewRecords) — treat
+    // this exactly like "nothing pending" rather than attempting (and
+    // classifying, via 41C, as save-blocked) a write that can only
+    // ever fail. This also cancels any leftover pending retry/timer
+    // below rather than leaving it to fire later, so a switch away
+    // from a blocked business can never trigger a stray write attempt
+    // after the fact either.
+    if (subscriptionBlocksNewRecords) {
+      rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
+      rowDebounceTimersRef.current.clear();
+      cancelAllRowRetries();
+      return { success: true };
+    }
     // [Decision 41C §11] A pending automatic retry counts as pending
     // work too — a row waiting out its 1s/2s/4s delay has no debounce
     // timer and no in-flight save at this exact instant, but skipping
@@ -3857,6 +3901,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     e.preventDefault();
     setError(null);
 
+    // [Decision 41E §12/§13 — belt-and-suspenders] This handler is
+    // only ever wired to the editable form's own onSubmit, which never
+    // renders while subscription-blocked (see the render gate above) —
+    // so this is structurally unreachable via any rendered UI element
+    // today. Guarded explicitly anyway: a write-triggering handler
+    // should never rely SOLELY on "the calling UI doesn't render" for
+    // its own safety, and this makes the guarantee verifiable directly
+    // against the function itself rather than only against the JSX
+    // tree around it.
+    if (subscriptionBlocksNewRecords) return;
+
     if (type === 'custom' && !label.trim()) {
       setError('Dê um nome a esta contagem personalizada (ex: "Antes da Época Festiva").');
       return;
@@ -3991,6 +4046,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // component could have in flight remains unresolved.
   const handleConfirmSave = async () => {
     if (!pendingTally) return;
+    // [Decision 41E §12/§13 — belt-and-suspenders] Same reasoning as
+    // handleRequestConfirmation's own guard above: this handler is only
+    // ever wired to the confirmation step's own button, unreachable
+    // while subscription-blocked (that entire step never renders — see
+    // the render gate above), but guarded explicitly anyway rather than
+    // relying solely on the surrounding JSX never mounting. This is the
+    // one path that could otherwise finalize a NEW StockCount — §12's
+    // explicit requirement.
+    if (subscriptionBlocksNewRecords) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -4935,6 +4999,105 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     periodicStockDraftLoaded && draftHasMeaningfulContent(periodicStockDraft) && !draftBannerDismissed;
 
   if (subscriptionBlocksNewRecords) {
+    // [Decision 41E — Subscription-Blocked Draft Access / Read-Only
+    // Recovery §1/§4/§5] Was a single unconditional
+    // `return <SubscriptionBlockedNotice />;` that hid ANY existing
+    // draft the moment the subscription was blocked — this branch
+    // replaces that blanket hide with the SAME governed
+    // periodicStockDraftListenerState machine 41D already established
+    // (§4: "Decision 41D's listener states remain authoritative...
+    // Do not reinterpret a listener error as absence"), so a blocked
+    // Owner with a genuinely existing draft can still see it, while
+    // every other outcome (loading, load-error, or no draft at all)
+    // keeps its own already-correct, already-tested behavior. Nothing
+    // below this point ever renders the editable form, any onChange
+    // handler, or any write-triggering button — see
+    // ReadOnlyDraftRecovery.tsx's own header comment for why that
+    // component is safe by construction.
+    if (periodicStockDraftListenerState === 'loading') {
+      return (
+        <div className="max-w-5xl mx-auto pb-12">
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-8 text-center text-sm text-gray-500">
+            A verificar contagens por terminar...
+          </div>
+        </div>
+      );
+    }
+    if (periodicStockDraftListenerState === 'load-error') {
+      // [Decision 41D §3] Same "never collapse an Owner listener error
+      // into absence" guarantee applies here too — a load-error while
+      // blocked must never be shown as SubscriptionBlockedNotice alone
+      // (which would look identical to "confirmed: no draft"). Same
+      // notice text/markup as the unblocked load-error branch, below.
+      return (
+        <div className="max-w-5xl mx-auto pb-12">
+          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-5 sm:p-8">
+            <div className="bg-amber-50 border border-amber-200 rounded-xl px-4 py-3.5 flex items-start gap-2.5">
+              <AlertTriangle className="w-3.5 h-3.5 text-amber-600 shrink-0 mt-[3px]" strokeWidth={2.25} />
+              <p className="text-[13px] leading-relaxed text-amber-800">
+                Não foi possível verificar de forma fiável se existe uma contagem por terminar. Verifique a sua
+                ligação — esta página tentará novamente automaticamente.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+    if (periodicStockDraftListenerState === 'draft-exists' && periodicStockDraft) {
+      // [Decision 41E §11] Minimal export adapter, same established
+      // pattern as buildHistoricalExportContent/buildPreConfirmExportContent
+      // above (both already documented as "smallest possible adapter
+      // reusing the EXISTING exportReportPdf helper") — reads directly
+      // from the raw, already-persisted periodicStockDraft.items rather
+      // than from liveTally/allWorkingRows (this blocked branch never
+      // seeds catalogRows/manualRows at all, so those are unavailable
+      // and, more importantly, irrelevant: the export must reflect
+      // exactly what is actually saved, not any in-memory working
+      // state). exportReportPdf itself performs no Firestore write —
+      // see reportExport.ts.
+      const draftRows = periodicStockDraft.items.filter((item) => !item.removed);
+      const handleExportBlockedDraftPdf = () => {
+        const reportTitle = `Lista de Contagem (por terminar) — ${TYPE_LABELS[periodicStockDraft.type]}`;
+        const periodLabel = `${formatDate(periodicStockDraft.date)}${
+          periodicStockDraft.label?.trim() ? ` — ${periodicStockDraft.label.trim()}` : ''
+        }`;
+        const kpis = [{ label: 'Produtos Guardados', value: String(draftRows.length) }];
+        const tables = [
+          {
+            title: 'Produtos',
+            columns: ['Produto', 'Qtd', 'Unid', 'Custo', 'Venda'],
+            rows: draftRows.map((item) => [
+              item.productName,
+              item.quantity || '—',
+              item.unit || '—',
+              item.costPrice ? formatCurrency(parseFloat(item.costPrice) || 0, currencySymbol) : '—',
+              item.sellingPrice ? formatCurrency(parseFloat(item.sellingPrice) || 0, currencySymbol) : '—',
+            ]),
+          },
+        ];
+        exportReportPdf(reportTitle, business?.name || 'Meu Negócio', periodLabel, kpis, tables);
+      };
+      return (
+        <ReadOnlyDraftRecovery
+          title="Contagem por Terminar (Subscrição Bloqueada)"
+          subtitle={`${TYPE_LABELS[periodicStockDraft.type]} — ${formatDate(periodicStockDraft.date)}${
+            periodicStockDraft.label?.trim() ? ` — ${periodicStockDraft.label.trim()}` : ''
+          }`}
+          rows={draftRows.map((item) => ({
+            productName: item.productName,
+            quantity: item.quantity,
+            unit: item.unit,
+            costPrice: item.costPrice,
+            sellingPrice: item.sellingPrice,
+          }))}
+          currencySymbol={currencySymbol}
+          onExportPdf={handleExportBlockedDraftPdf}
+        />
+      );
+    }
+    // 'confirmed-no-draft' (or the defensive draft-exists-but-null
+    // fallthrough) — no existing draft to recover, so the existing,
+    // unmodified upgrade/contact messaging remains exactly correct.
     return <SubscriptionBlockedNotice />;
   }
 

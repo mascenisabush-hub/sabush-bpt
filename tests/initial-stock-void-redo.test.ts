@@ -406,7 +406,30 @@ describe('InitialStockCountView.tsx — redo gets a fresh basis selection, never
 
 describe('InitialStockCountView.tsx — blocked users can complete the recovery/reconfirmation path under Option A (Rule 8 Finding K1)', () => {
   it('the subscription-blocked notice is skipped exactly while mid-redo (redoingConfirmationId set) — never for any other case', () => {
-    assert.match(viewSource, /if \(subscriptionBlocksNewRecords && !redoingConfirmationId\) \{\s*\n\s*return <SubscriptionBlockedNotice \/>;/);
+    // [Decision 41E — Subscription-Blocked Draft Access / Read-Only
+    // Recovery] The guard condition itself
+    // (`subscriptionBlocksNewRecords && !redoingConfirmationId`) is
+    // unchanged — the redo exemption this test proves is fully intact
+    // — but the body is no longer an immediate, unconditional
+    // `return <SubscriptionBlockedNotice />;`: 41E branches further on
+    // the governed draft-listener state first, only falling back to
+    // SubscriptionBlockedNotice for the "no existing draft" case (see
+    // that branch's own comment for the full reasoning). The guard
+    // CONDITION — the actual thing this test's title is about — is
+    // still exactly the same expression.
+    assert.match(viewSource, /if \(subscriptionBlocksNewRecords && !redoingConfirmationId\) \{/);
+    // And SubscriptionBlockedNotice is still reachable from inside that
+    // same guarded block (the confirmed-no-draft fallback), proving the
+    // guard still leads there for that case rather than to some
+    // entirely different, ungoverned path.
+    const guardIdx = viewSource.indexOf('if (subscriptionBlocksNewRecords && !redoingConfirmationId) {');
+    const nextTopLevelGuardIdx = viewSource.indexOf(
+      "if (!draftLoaded && !redoingConfirmationId && initialStockDraftListenerState === 'load-error') {"
+    );
+    assert.notEqual(guardIdx, -1);
+    assert.notEqual(nextTopLevelGuardIdx, -1);
+    const guardedBlock = viewSource.slice(guardIdx, nextTopLevelGuardIdx);
+    assert.match(guardedBlock, /return <SubscriptionBlockedNotice \/>;/);
   });
 
   it('the confirmed-summary screen (showing the recovery banner and Anular e Refazer action) itself renders regardless of subscriptionBlocksNewRecords — the guard above is the ONLY place that notice can short-circuit rendering', () => {
