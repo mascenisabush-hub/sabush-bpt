@@ -49,8 +49,19 @@ enforcement/mechanism remains undecided. **Updated 2026-09-04** to
 record that Decision 54's resolution of the eligible-delegate-pool
 question (see Part IV §IV.O-h) — any currently business-authorized user
 is eligible for Owner/Admin's explicit selection; all technical
-implementation/enforcement mechanisms remain undecided. All other Part
-IV blockers (the delegated-Editor rules branch) remain open.
+implementation/enforcement mechanisms remain undecided. **Updated
+2026-09-04** to record Decision 55's resolution of the same-row
+concurrent observation conflict semantics (see Part IV §IV.O-i) — this
+narrows, but does not resolve, 44-S-G/Finding C (§IV.C): no automatic
+winner is permitted; a colliding row enters an explicit `CONFLICT`
+state with no settled working quantity until resolved; Owner/Admin or
+the currently delegated Editor may resolve it; Viewers may see but not
+resolve a conflict; and, newly, an unresolved `CONFLICT` row now blocks
+finalization at the governance-requirement level. All technical
+mechanisms (conflict detection, conflict preservation, conflict-state
+storage, the finalization-time precondition check) remain undecided.
+All other Part IV blockers (the delegated-Editor rules branch) remain
+open.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -96,10 +107,15 @@ requirement:**
   (✅ Accepted, 4 Sept 2026, resolves 44-S-C at the governance-requirement
   level, §IV.O-g)** → **Decision 54 (✅ Accepted, 4 Sept 2026, resolves
   the eligible-delegate-pool question at the governance-requirement
-  level, §IV.O-h)**. Technical mechanisms for 44-S-D, 44-S-F, 44-D,
+  level, §IV.O-h)** → **Decision 55 (✅ Accepted, 4 Sept 2026, narrows
+  44-S-G/Finding C and resolves the same-row conflict-semantics and
+  finalization-interaction questions at the governance-requirement
+  level, §IV.O-i)**. Technical mechanisms for 44-S-D, 44-S-F, 44-D,
   44-S-G, 44-F (including 44-F's own named technical verification),
-  44-S-A, 44-S-C, and delegated-Editor eligibility/selection enforcement
-  remain undecided throughout this chain.
+  44-S-A, 44-S-C, delegated-Editor eligibility/selection enforcement,
+  and the same-row conflict detection/preservation/resolution and
+  finalization-precondition mechanisms (Decision 55) remain undecided
+  throughout this chain.
 
 **Repository baseline:** `main = origin/main` = `5570a82`, working tree
 clean. No application code, `firestore.rules`, schema, UI, or test
@@ -1025,6 +1041,83 @@ can move toward READY.
 
 ---
 
+## IV.O-i — UPDATE (2026-09-04): Same-Row Conflict Semantics and Finalization-Interaction Resolved at the Governance-Requirement Level
+
+[Decision 55 — Same-Row Concurrent Observation Conflict Semantics](../specs/stock-count-data-loss-resilience-decision-55-amendment.md)
+has been **✅ ACCEPTED AND AUTHORIZED AS GOVERNANCE DECISION —
+REQUIREMENTS ONLY** (SABUSHIMIKE MASCENI, 4 September 2026), settling
+the product-level "what must the mechanism achieve" question that
+Decision 47 §5 left open for **Finding C (§IV.C, "Same-Row Concurrent
+Legitimate Editing (Reinstated)")**, reinstated as **FAIL — CRITICAL**
+under Decision 46: no automatic winner is permitted, by any rule
+(role-based, recency-based, value-based, or otherwise); a colliding row
+enters an explicit `CONFLICT` state, with no single authoritative
+working quantity until resolved; either Owner/Admin or the currently
+delegated Editor (per Decision 46's existing symmetric editing
+authority) may resolve it; a Viewer may see that a row is in conflict
+and both preserved observations, attributable to their originating
+role/session, but may never resolve it, per Decision 52 unchanged;
+resolving a conflict is an adjudication over the two already-preserved
+observations, not a fresh physical observation; and ordinary
+counting/editing of other rows continues unaffected while a conflict
+exists on one row.
+
+**Decision 55 additionally resolves, at the governance-requirement
+level, the previously open finalization-interaction question:** an
+unresolved `CONFLICT` row now blocks finalization outright, by anyone,
+under any circumstance the decision anticipates; Owner/Admin remains
+the sole finalizer, per Decision 53 unchanged — this is a new
+*precondition* on when that existing authority may be successfully
+exercised, not a new authority model; finalization never implicitly or
+silently resolves a conflict; there is no partial-finalization path and
+no override; and a rejected finalization attempt discards neither
+preserved observation, per the same no-silent-loss principle.
+
+**Two distinct claims, kept explicit and not conflated:**
+
+- **Same-row conflict-semantics and finalization-interaction governance
+  requirements: ✅ RESOLVED**, per Decision 55.
+- **All technical implementation/enforcement mechanisms: STILL OPEN.**
+  Decision 55 selects no Firestore transaction, security-rule
+  condition, schema field, revision algorithm, conflict-record data
+  model, Cloud Function, or UI implementation for either the conflict
+  mechanism generally or the finalization-time precondition check
+  specifically — those remain a fully separate, not-yet-started gate,
+  exactly as Decisions 47 through 54 left their own technical
+  mechanisms open.
+
+**Finding C (§IV.C) is not reclassified to PASS or RESOLVED by this
+update.** It moves from "product-level requirement undecided" to
+"product-level requirement resolved — technical design required," which
+the updates below record. **No CRITICAL/HIGH technical finding in
+§IV.P — including Finding C itself (same-row conflict
+detection/preservation, still entirely unbuilt), Finding E
+(finalization uniqueness), Finding G (post-finalization immutability),
+and Finding K (shared-device/cache isolation, still UNVERIFIED) — is
+reclassified by this update.** The updates below are limited to moving
+44-S-G's product-level question from "answered at a high level by
+Decision 47, mechanism-level semantics still undecided" to "fully
+answered at the product-requirement level by Decision 55, technical
+enforcement now governed by Decision 55" — not to RESOLVED at the
+technical level — and to recording that the finalization-interaction
+question is likewise now governance-resolved rather than open.
+**Decisions 44, 46, 47, 50, 52, and 53's own already-accepted content
+is unaltered and not reopened by this decision.**
+
+**With this update, 44-S-G's product-level question is now resolved in
+full (both the base conflict-semantics half, by Decision 47, and the
+detailed same-row semantics and finalization-interaction halves, by
+Decision 55), alongside all eight of 44-S-A/44-S-C/44-S-D/44-S-F/44-D/
+44-F and the eligible-delegate-pool question already resolved by
+Decisions 48–54.** Zero fully open Product Architect governance
+questions remain among what Part IV originally identified. Every
+corresponding technical mechanism — including, newly, the same-row
+conflict detection/preservation/resolution mechanism and the
+finalization-time "no unresolved conflicts" precondition check — remains
+separately required before Rule 8 can move toward READY.
+
+---
+
 ## IV.Q — Decisions Still Required, Separated by Type (updated this session)
 
 **Product Architect decisions:**
@@ -1062,11 +1155,26 @@ can move toward READY.
   design items immediately below, now built against a settled
   governance brief rather than an open one.
 - **44-S-G** — **✅ RESOLVED at the product level by Decision 47,
-  2026-09-03.** Live synchronization is the primary conflict-avoidance
-  mechanism; detect-and-preserve is required for any genuine collision;
-  no blind last-write-wins. **The technical mechanism remains open** —
-  folded into the two technical items immediately below, which are
-  themselves unaffected in status by this resolution.
+  2026-09-03, and further narrowed to the full same-row conflict
+  semantics by Decision 55, 2026-09-04 (§IV.O-i).** Live synchronization
+  is the primary conflict-avoidance mechanism; detect-and-preserve is
+  required for any genuine collision; no blind last-write-wins
+  (Decision 47). No automatic winner is permitted; a colliding row
+  enters an explicit `CONFLICT` state with no settled working quantity
+  until resolved; Owner/Admin or the currently delegated Editor may
+  resolve it; Viewers may see but not resolve a conflict (Decision 55).
+  **The technical mechanism remains open** — folded into the technical
+  items immediately below, which are themselves unaffected in status by
+  this resolution.
+- **Finalization-interaction (conflict-blocks-finalization) — ✅
+  RESOLVED — GOVERNANCE REQUIREMENTS, at the Product Architect
+  governance-requirement level, by Decision 55, 2026-09-04.** See
+  §IV.O-i. An unresolved `CONFLICT` row blocks finalization by anyone;
+  Owner/Admin remains the sole finalizer per Decision 53, unchanged;
+  finalization never implicitly resolves a conflict; a rejected
+  finalization attempt discards neither preserved observation. **The
+  technical mechanism (the finalization-time precondition check) remains
+  open** — folded into the technical design items immediately below.
 - **Eligible-delegate pool — ✅ RESOLVED — GOVERNANCE REQUIREMENTS, at
   the Product Architect governance-requirement level, by Decision 54,
   2026-09-04.** See §IV.O-h. Any currently business-authorized user, in
@@ -1137,11 +1245,22 @@ can move toward READY.
   elsewhere in this section, which does not yet exist. **Not resolved —
   a governance brief is not a design. Distinct from, and does not
   resolve, Decision 44-A's separate staff-tier question.**
-- **Same-row conflict-detection/live-adoption mechanism** — still open;
-  has a settled product-level brief, per Decision 47 (live-sync-first,
-  detect-and-preserve, no blind last-write-wins) — the mechanism
-  itself (version/precondition check, conflict record, transaction, or
-  another approach) is still not selected.
+- **Same-row conflict-detection/preservation/resolution mechanism** —
+  still open; has a settled product-level brief, per Decision 47
+  (live-sync-first, detect-and-preserve, no blind last-write-wins) and
+  Decision 55 (no automatic winner; explicit `CONFLICT` state with no
+  settled working quantity until resolved; dual Owner/Admin +
+  delegated-Editor resolution authority; Viewer see-but-not-resolve;
+  resolution is not a new observation) — the mechanism itself
+  (version/precondition check, conflict-record schema, transaction, UI,
+  or another approach) is still not selected. **Not resolved — a
+  governance brief is not a design.**
+- **Finalization-time "no unresolved conflicts" precondition check** —
+  still open; must satisfy Decision 55's governance requirement that an
+  unresolved `CONFLICT` row blocks finalization outright, composing with
+  — not replacing — Decision 50's exactly-once finalization mechanism
+  and Decision 53's finalizer-eligibility mechanism. **Not resolved — a
+  governance brief is not a design.**
 - **Delegated-Editor `firestore.rules` branch** — still open, required
   before any of the above can be exercised at all.
 
@@ -1153,27 +1272,34 @@ can move toward READY.
 # READY AFTER DECISIONS
 
 **Verdict tier unchanged after Decision 47, Decision 48, Decision 49,
-Decision 50, Decision 51, Decision 52, Decision 53, and Decision 54.**
-44-S-G's product-level question, 44-S-D's governance-requirement
+Decision 50, Decision 51, Decision 52, Decision 53, Decision 54, and
+Decision 55.** 44-S-G's product-level question (base half by Decision
+47, fully narrowed same-row conflict semantics and finalization-
+interaction half by Decision 55), 44-S-D's governance-requirement
 question, 44-S-F's governance-requirement question, 44-D's
 governance-requirement question, 44-F's governance-requirement
 question, 44-S-A's governance-requirement question, 44-S-C's
 governance-requirement question, and the eligible-delegate-pool
 question are now all resolved (§IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
-§IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h) — **all eight open decisions Part
-IV originally identified now have settled governance briefs** for the
-technical design/verification stage to build against. **Zero fully
-open Product Architect governance questions remain.** It does **not**
-reduce the CRITICAL/HIGH blocker count in §IV.P, all of which remain
-open exactly as stated, because none of Decision 47, Decision 48,
-Decision 49, Decision 50, Decision 51, Decision 52, Decision 53, or
-Decision 54 selected or performed a technical mechanism/verification —
+§IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, §IV.O-i) — **all eight open
+decisions Part IV originally identified now have settled governance
+briefs** for the technical design/verification stage to build against,
+and Decision 55 additionally settles the finalization-interaction
+question raised alongside the same-row conflict work. **Zero fully open
+Product Architect governance questions remain.** It does **not** reduce
+the CRITICAL/HIGH blocker count in §IV.P, all of which remain open
+exactly as stated, because none of Decision 47, Decision 48, Decision
+49, Decision 50, Decision 51, Decision 52, Decision 53, Decision 54, or
+Decision 55 selected or performed a technical mechanism/verification —
 Decision 48 §10/§11, Decision 49 §8/§9, Decision 50 §9/§10, Decision 51
-§12/§13, Decision 52 §11/§12, Decision 53 §12/§13, and Decision 54
-§12/§13 all state this outright, and every one of §IV.P's nine CRITICAL
-findings plus §IV.P item 10's HIGH finding requires a mechanism
-decision or technical verification, not a governance-requirement
-decision, before it can move off FAIL/OPEN or UNVERIFIED.
+§12/§13, Decision 52 §11/§12, Decision 53 §12/§13, Decision 54 §12/§13,
+and Decision 55 §7 all state this outright, and every one of §IV.P's
+nine CRITICAL findings plus §IV.P item 10's HIGH finding requires a
+mechanism decision or technical verification, not a
+governance-requirement decision, before it can move off FAIL/OPEN or
+UNVERIFIED. **Finding C (§IV.C) in particular remains FAIL — CRITICAL**,
+now fully scoped at the product level by Decisions 47 and 55, but with
+no technical mechanism selected.
 
 **Not forced, independently re-derived** — nothing found is a
 fundamental architectural or security impossibility. The dual-role
@@ -1181,16 +1307,18 @@ model remains buildable as an extension of the existing business-owned-
 draft, listener-based architecture: it requires a new `firestore.rules`
 branch (a precedented pattern — the existing `staffTier == 'manager'`
 carve-out elsewhere in the same file is structurally similar), an
-additive schema field or two (writer identity, per-row version), and a
-genuinely new conflict-detection/live-adoption mechanism, authority
-mechanism, finalization-guard mechanism, finalizer-eligibility
-enforcement mechanism, shared-device/cache-isolation mechanism (pending
-its own named technical verification), Viewer-eligibility-enforcement
-mechanism, and delegated-Editor eligibility/selection enforcement
-mechanism, all now built against settled governance briefs — all
-additive extensions, not a redesign of what already works (business-
-owned storage, live listeners, durable local persistence, atomic
-finalization-batch cleanup).
+additive schema field or two (writer identity, per-row version,
+conflict-state marker), and a genuinely new conflict-detection/
+preservation/resolution mechanism, a finalization-time "no unresolved
+conflicts" precondition check, authority mechanism, finalization-guard
+mechanism, finalizer-eligibility enforcement mechanism,
+shared-device/cache-isolation mechanism (pending its own named
+technical verification), Viewer-eligibility-enforcement mechanism, and
+delegated-Editor eligibility/selection enforcement mechanism, all now
+built against settled governance briefs — all additive extensions, not
+a redesign of what already works (business-owned storage, live
+listeners, durable local persistence, atomic finalization-batch
+cleanup).
 
 **The minimum decisions required before Implementation Planning can
 begin, updated:**
@@ -1227,16 +1355,25 @@ begin, updated:**
    the delegated-Editor `firestore.rules` branch, which does not yet
    exist. Decision 44-A (Staff Access) remains a separate, distinct,
    still-open question, unaffected.
-9. **The new delegated-Editor `firestore.rules` branch** and the
-   **same-row conflict-detection/live-adoption mechanism** and the
-   **authority-enforcement mechanism** and the **finalization-guard
-   mechanism** and the **finalizer-eligibility enforcement mechanism**
-   and the **shared-device/cache-isolation mechanism** and the
-   **Viewer-eligibility-enforcement mechanism** and the
-   **delegated-Editor eligibility/selection enforcement mechanism**
-   (all now scoped by Decisions 47, 48, 49, 50, 51, 52, 53, and 54's
+9. ~~Same-row conflict semantics and finalization-interaction
+   governance requirements~~ **✅ RESOLVED — Decision 55, 2026-09-04.**
+   **Same-row conflict detection/preservation/resolution mechanism and
+   the finalization-time "no unresolved conflicts" precondition check —
+   still open**, now informed by Decision 55 §5–§9, and composing with —
+   not replacing — Decision 50's exactly-once finalization mechanism and
+   Decision 53's finalizer-eligibility mechanism. **Finding C (§IV.C)
+   remains FAIL — CRITICAL** pending this mechanism.
+10. **The new delegated-Editor `firestore.rules` branch** and the
+   **same-row conflict-detection/preservation/resolution mechanism** and
+   the **finalization-time "no unresolved conflicts" precondition
+   check** and the **authority-enforcement mechanism** and the
+   **finalization-guard mechanism** and the **finalizer-eligibility
+   enforcement mechanism** and the **shared-device/cache-isolation
+   mechanism** and the **Viewer-eligibility-enforcement mechanism** and
+   the **delegated-Editor eligibility/selection enforcement mechanism**
+   (all now scoped by Decisions 47, 48, 49, 50, 51, 52, 53, 54, and 55's
    settled governance briefs, none yet selected or, for 44-F, verified)
-   — technical design, dependent on 2–8 above.
+   — technical design, dependent on 2–9 above.
 
 **Not required to begin design work, though still open:** Decision
 44-A (Staff Access) — a separate, narrow, non-blocking technical-tier
@@ -1249,19 +1386,22 @@ question, distinct from and not resolved by Decision 54.
 
 > **Addendum, this session:** item 6 below (decisions still required)
 > is superseded by §IV.O-a/§IV.O-b/§IV.O-c/§IV.O-d/§IV.O-e/§IV.O-f/
-> §IV.O-g/§IV.O-h/§IV.Q's updates — 44-S-G is now resolved at the
-> product level by Decision 47, 44-S-D's governance-requirement layer
-> is resolved by Decision 48, 44-S-F's governance-requirement layer is
-> resolved by Decision 49, 44-D's governance-requirement layer is
-> resolved by Decision 50, 44-F's governance-requirement layer is
+> §IV.O-g/§IV.O-h/§IV.O-i/§IV.Q's updates — 44-S-G is now resolved at
+> the product level by Decision 47, 44-S-D's governance-requirement
+> layer is resolved by Decision 48, 44-S-F's governance-requirement
+> layer is resolved by Decision 49, 44-D's governance-requirement layer
+> is resolved by Decision 50, 44-F's governance-requirement layer is
 > resolved by Decision 51, 44-S-A's governance-requirement layer is
 > resolved by Decision 52, 44-S-C's governance-requirement layer is
-> resolved by Decision 53 (Owner/Admin only), and the eligible-delegate-
-> pool question's governance-requirement layer is resolved by Decision
-> 54. Item 7 (verdict) is unchanged in tier. Items 1–5 and 8 are
-> otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
-> §IV.O-e, §IV.O-f, §IV.O-g, and §IV.O-h for the current, authoritative
-> statements.
+> resolved by Decision 53 (Owner/Admin only), the eligible-delegate-pool
+> question's governance-requirement layer is resolved by Decision 54,
+> and 44-S-G's full same-row conflict semantics — together with the
+> finalization-interaction question (unresolved conflicts block
+> finalization) — are resolved at the governance-requirement level by
+> Decision 55. Item 7 (verdict) is unchanged in tier. Items 1–5 and 8
+> are otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
+> §IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, and §IV.O-i for the current,
+> authoritative statements.
 
 1. **File(s) changed:** exactly one —
    `docs/engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md`
