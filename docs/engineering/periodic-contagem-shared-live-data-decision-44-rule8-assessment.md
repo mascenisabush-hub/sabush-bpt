@@ -61,7 +61,18 @@ finalization at the governance-requirement level. All technical
 mechanisms (conflict detection, conflict preservation, conflict-state
 storage, the finalization-time precondition check) remain undecided.
 All other Part IV blockers (the delegated-Editor rules branch) remain
-open.
+open. **Updated 2026-09-04** to record Decision 56's resolution of the
+Finalized Periodic Contagem Immutability & Clear-All Separation
+question (see Part IV §IV.O-j), raised by the Technical Design for
+Decisions 44–55's own §14/§22: a finalized Periodic Contagem is
+immutable through normal Contagem operations; the existing Clear All
+Data capability is not itself narrowed, redesigned, or altered by this
+decision; and any future capability to intentionally remove finalized
+history must be its own explicit, separately governed operation, never
+an incidental side effect. Finding G (§IV.G) remains FAIL/OPEN — no
+`firestore.rules` change has been made. The Firestore SDK cache/
+session-isolation verification (Finding K) is unrelated to Decision 56
+and remains separately open.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -110,11 +121,16 @@ requirement:**
   level, §IV.O-h)** → **Decision 55 (✅ Accepted, 4 Sept 2026, narrows
   44-S-G/Finding C and resolves the same-row conflict-semantics and
   finalization-interaction questions at the governance-requirement
-  level, §IV.O-i)**. Technical mechanisms for 44-S-D, 44-S-F, 44-D,
-  44-S-G, 44-F (including 44-F's own named technical verification),
-  44-S-A, 44-S-C, delegated-Editor eligibility/selection enforcement,
-  and the same-row conflict detection/preservation/resolution and
-  finalization-precondition mechanisms (Decision 55) remain undecided
+  level, §IV.O-i)** → **Decision 56 (✅ Accepted, 4 Sept 2026, resolves
+  the Finalized Periodic Contagem Immutability & Clear-All Separation
+  question at the governance-requirement level, §IV.O-j)**. Technical
+  mechanisms for 44-S-D, 44-S-F, 44-D, 44-S-G, 44-F (including 44-F's
+  own named technical verification), 44-S-A, 44-S-C, delegated-Editor
+  eligibility/selection enforcement, the same-row conflict
+  detection/preservation/resolution and finalization-precondition
+  mechanisms (Decision 55), and the finalized-immutability enforcement
+  mechanism distinguishing normal-workflow mutation from a
+  separately-governed removal operation (Decision 56) remain undecided
   throughout this chain.
 
 **Repository baseline:** `main = origin/main` = `5570a82`, working tree
@@ -1118,6 +1134,90 @@ separately required before Rule 8 can move toward READY.
 
 ---
 
+## IV.O-j — UPDATE (2026-09-04): Finalized-Immutability-Versus-Clear-All-Data Resolved at the Governance-Requirement Level
+
+[Decision 56 — Finalized Periodic Contagem Immutability & Clear-All Separation](../specs/stock-count-data-loss-resilience-decision-56-amendment.md)
+has been **✅ ACCEPTED AND AUTHORIZED AS GOVERNANCE DECISION —
+REQUIREMENTS ONLY** (SABUSHIMIKE MASCENI, 4 September 2026), settling
+the Product Architect question the [Technical Design for Decisions
+44–55](./periodic-contagem-decisions-44-55-technical-design.md)
+surfaced in its own §14/§19/§22: **Finding G (§IV.G)** confirmed, by
+direct rule inspection, that `firestore.rules` currently permits
+unconditional Owner update/delete on a finalized periodic `stockCounts`
+document, and that the delete half of that same rule is the mechanism
+the existing "Clear All Data" wholesale-reset feature already depends
+on — leaving open whether Decision 55's own post-finalization
+immutability requirement is in tension with, or must narrow, that
+existing capability.
+
+**Governing answer, now in force:** a finalized Periodic Contagem is
+immutable through **normal Contagem operations** — no ordinary
+counting, editing, conflict-resolution, or finalization workflow may
+edit, overwrite, or delete an already-finalized result. The existing
+Clear All Data capability is **not itself narrowed, redesigned, or
+disabled by this decision** — whether and how it should eventually be
+reshaped is explicitly left open, not decided here. What is decided is
+a **product principle governing any future shape** that capability (or
+any successor) may take: **if SABUSH BPT retains a capability to
+intentionally remove finalized historical data, that must be an
+explicit, separately governed data-management operation, not an
+incidental consequence of Clear All Data.** Clearing working/draft
+Contagem state (the existing "Começar de novo" discard path) remains a
+categorically distinct product concept from altering finalized
+historical records, and no future design may treat them as one
+operation. No new authorization model is introduced; Decision 50's
+exactly-one-finalization protection and Decision 55's
+unresolved-conflict-blocks-finalization rule both remain in force,
+entirely unaltered; and historical observations validly made before
+finalization remain preserved/accounted for, per Decisions 44/47/55,
+unnarrowed by this decision.
+
+**Two distinct claims, kept explicit and not conflated:**
+
+- **Finalized-immutability-versus-Clear-All-Data governance
+  requirements: ✅ RESOLVED**, per Decision 56.
+- **All technical implementation/enforcement mechanisms: STILL OPEN.**
+  Decision 56 selects no `firestore.rules` condition, schema field, UI
+  flow, or Cloud Function — neither for enforcing normal-workflow
+  immutability nor for shaping any future separately-governed removal
+  operation. **No `firestore.rules` change has been made by this
+  decision or by this update.** Finding G's own underlying rule text
+  (`allow update, delete: if isOwnerOf(businessId) &&
+  resource.data.get('type', null) != 'initial';`) is byte-identical to
+  every prior citation and remains completely unmodified.
+
+**Finding G (§IV.G) is not reclassified to PASS or RESOLVED by this
+update.** It moves from "product-level tension named but unresolved" to
+"product-level scope resolved — technical design and enforcement still
+required," which the updates below record. **No CRITICAL/HIGH technical
+finding in §IV.P — including Finding G itself, Finding A/B
+(delegated-Editor `firestore.rules` support, still entirely absent),
+Finding C (same-row conflict detection/preservation, still entirely
+unbuilt), Finding E (finalization uniqueness), and Finding K
+(shared-device/cache isolation, still UNVERIFIED) — is reclassified by
+this update.** **Finding K in particular is unaffected in every
+respect** — the Firestore SDK cache/session-isolation factual
+verification the Technical Design named (its own §12/§22) is entirely
+unrelated to the immutability-versus-reset question this decision
+answers, and remains exactly as open as that document left it.
+**Decisions 44, 50, 53, and 55's own already-accepted content is
+unaltered and not reopened by this decision.**
+
+**With this update, the Product Architect question the Technical
+Design for Decisions 44–55 itself surfaced is now resolved at the
+governance-requirement level**, alongside every governance question
+Decisions 47 through 55 already settled. **Zero fully open Product
+Architect governance questions remain among what Part IV and the
+subsequent Technical Design phase have together identified.** Every
+corresponding technical mechanism — including, newly, the mechanism
+distinguishing "normal-workflow attempt" from "explicit, separately
+governed removal operation" for finalized `stockCounts` documents —
+remains separately required before Rule 8 can move toward READY. **This
+update does not move the Rule 8 verdict to READY, and does not
+authorize implementation.**
+
+---
+
 ## IV.Q — Decisions Still Required, Separated by Type (updated this session)
 
 **Product Architect decisions:**
@@ -1175,6 +1275,21 @@ separately required before Rule 8 can move toward READY.
   finalization attempt discards neither preserved observation. **The
   technical mechanism (the finalization-time precondition check) remains
   open** — folded into the technical design items immediately below.
+- **Finding G (post-finalization immutability) product-level scope,
+  and its interaction with Clear All Data — ✅ RESOLVED — GOVERNANCE
+  REQUIREMENTS, at the Product Architect governance-requirement level,
+  by Decision 56, 2026-09-04.** See §IV.O-j. A finalized Periodic
+  Contagem is immutable through normal Contagem operations; Clear All
+  Data's existing behavior is not itself narrowed or altered by this
+  decision; any future capability to intentionally remove finalized
+  history must be its own explicit, separately governed operation, not
+  an incidental consequence of Clear All Data. **The technical
+  mechanism remains open — Finding G's own underlying `firestore.rules`
+  text is completely unmodified** — folded into the technical design
+  items immediately below. **Unrelated to, and does not narrow or
+  resolve, Finding K** (shared-device/cache isolation, still
+  UNVERIFIED), which the Technical Design for Decisions 44–55 named
+  separately and which remains open on its own, independent track.
 - **Eligible-delegate pool — ✅ RESOLVED — GOVERNANCE REQUIREMENTS, at
   the Product Architect governance-requirement level, by Decision 54,
   2026-09-04.** See §IV.O-h. Any currently business-authorized user, in
@@ -1261,6 +1376,18 @@ separately required before Rule 8 can move toward READY.
   — not replacing — Decision 50's exactly-once finalization mechanism
   and Decision 53's finalizer-eligibility mechanism. **Not resolved — a
   governance brief is not a design.**
+- **Finalized-result immutability enforcement mechanism, distinguishing
+  normal-workflow mutation from a separately-governed removal
+  operation** — still open; must satisfy Decision 56's governance
+  requirement that a finalized Periodic Contagem be immutable through
+  normal Contagem operations, without assuming any particular future
+  shape for Clear All Data or any successor intentional-removal
+  capability (Decision 56 §7 leaves that shape undecided). Finding G's
+  own underlying `firestore.rules` text
+  (`allow update, delete: if isOwnerOf(businessId) &&
+  resource.data.get('type', null) != 'initial';`) remains completely
+  unmodified by this decision. **Not resolved — a governance brief is
+  not a design, and Finding G remains FAIL/OPEN.**
 - **Delegated-Editor `firestore.rules` branch** — still open, required
   before any of the above can be exercised at all.
 
@@ -1272,34 +1399,43 @@ separately required before Rule 8 can move toward READY.
 # READY AFTER DECISIONS
 
 **Verdict tier unchanged after Decision 47, Decision 48, Decision 49,
-Decision 50, Decision 51, Decision 52, Decision 53, Decision 54, and
-Decision 55.** 44-S-G's product-level question (base half by Decision
-47, fully narrowed same-row conflict semantics and finalization-
-interaction half by Decision 55), 44-S-D's governance-requirement
-question, 44-S-F's governance-requirement question, 44-D's
-governance-requirement question, 44-F's governance-requirement
-question, 44-S-A's governance-requirement question, 44-S-C's
-governance-requirement question, and the eligible-delegate-pool
-question are now all resolved (§IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
-§IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, §IV.O-i) — **all eight open
+Decision 50, Decision 51, Decision 52, Decision 53, Decision 54,
+Decision 55, and Decision 56.** 44-S-G's product-level question (base
+half by Decision 47, fully narrowed same-row conflict semantics and
+finalization-interaction half by Decision 55), 44-S-D's
+governance-requirement question, 44-S-F's governance-requirement
+question, 44-D's governance-requirement question, 44-F's
+governance-requirement question, 44-S-A's governance-requirement
+question, 44-S-C's governance-requirement question, the
+eligible-delegate-pool question, and the finalized-immutability-versus-
+Clear-All-Data question raised by the Technical Design for Decisions
+44–55 are now all resolved (§IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
+§IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, §IV.O-i, §IV.O-j) — **all eight open
 decisions Part IV originally identified now have settled governance
 briefs** for the technical design/verification stage to build against,
-and Decision 55 additionally settles the finalization-interaction
-question raised alongside the same-row conflict work. **Zero fully open
-Product Architect governance questions remain.** It does **not** reduce
+Decision 55 additionally settles the finalization-interaction question
+raised alongside the same-row conflict work, and Decision 56
+additionally settles the Product-Architect-level question the
+Technical Design phase itself surfaced. **Zero fully open Product
+Architect governance questions remain.** It does **not** reduce
 the CRITICAL/HIGH blocker count in §IV.P, all of which remain open
 exactly as stated, because none of Decision 47, Decision 48, Decision
-49, Decision 50, Decision 51, Decision 52, Decision 53, Decision 54, or
-Decision 55 selected or performed a technical mechanism/verification —
-Decision 48 §10/§11, Decision 49 §8/§9, Decision 50 §9/§10, Decision 51
-§12/§13, Decision 52 §11/§12, Decision 53 §12/§13, Decision 54 §12/§13,
-and Decision 55 §7 all state this outright, and every one of §IV.P's
-nine CRITICAL findings plus §IV.P item 10's HIGH finding requires a
-mechanism decision or technical verification, not a
-governance-requirement decision, before it can move off FAIL/OPEN or
-UNVERIFIED. **Finding C (§IV.C) in particular remains FAIL — CRITICAL**,
-now fully scoped at the product level by Decisions 47 and 55, but with
-no technical mechanism selected.
+49, Decision 50, Decision 51, Decision 52, Decision 53, Decision 54,
+Decision 55, or Decision 56 selected or performed a technical
+mechanism/verification — Decision 48 §10/§11, Decision 49 §8/§9,
+Decision 50 §9/§10, Decision 51 §12/§13, Decision 52 §11/§12, Decision
+53 §12/§13, Decision 54 §12/§13, Decision 55 §7, and Decision 56 §7 all
+state this outright, and every one of §IV.P's nine CRITICAL findings
+plus §IV.P item 10's HIGH finding requires a mechanism decision or
+technical verification, not a governance-requirement decision, before
+it can move off FAIL/OPEN or UNVERIFIED. **Finding C (§IV.C) in
+particular remains FAIL — CRITICAL**, now fully scoped at the product
+level by Decisions 47 and 55, but with no technical mechanism selected.
+**Finding G (§IV.G) likewise remains FAIL — CRITICAL**, now fully
+scoped at the product level by Decision 56, but with its own
+`firestore.rules` text completely unmodified. **Finding K (§IV.K)
+remains UNVERIFIED — HIGH, entirely unaffected by Decision 56**, which
+resolves a different, unrelated Product Architect question.
 
 **Not forced, independently re-derived** — nothing found is a
 fundamental architectural or security impossibility. The dual-role
@@ -1363,17 +1499,29 @@ begin, updated:**
    not replacing — Decision 50's exactly-once finalization mechanism and
    Decision 53's finalizer-eligibility mechanism. **Finding C (§IV.C)
    remains FAIL — CRITICAL** pending this mechanism.
-10. **The new delegated-Editor `firestore.rules` branch** and the
+10. ~~Finalized-immutability-versus-Clear-All-Data governance
+    requirements~~ **✅ RESOLVED — Decision 56, 2026-09-04.**
+    **Finalized-result immutability enforcement mechanism, distinguishing
+    normal-workflow mutation from a separately-governed removal
+    operation — still open**, now informed by Decision 56 §5–§9.
+    **Finding G (§IV.G) remains FAIL — CRITICAL** pending this
+    mechanism; its own underlying `firestore.rules` text is completely
+    unmodified by this decision. **Unaffected: Finding K (§IV.K)**,
+    which the Technical Design for Decisions 44–55 named as a separate,
+    unrelated factual verification, remains UNVERIFIED — HIGH,
+    untouched by Decision 56.
+11. **The new delegated-Editor `firestore.rules` branch** and the
    **same-row conflict-detection/preservation/resolution mechanism** and
    the **finalization-time "no unresolved conflicts" precondition
-   check** and the **authority-enforcement mechanism** and the
+   check** and the **finalized-result immutability enforcement
+   mechanism** and the **authority-enforcement mechanism** and the
    **finalization-guard mechanism** and the **finalizer-eligibility
    enforcement mechanism** and the **shared-device/cache-isolation
    mechanism** and the **Viewer-eligibility-enforcement mechanism** and
    the **delegated-Editor eligibility/selection enforcement mechanism**
-   (all now scoped by Decisions 47, 48, 49, 50, 51, 52, 53, 54, and 55's
-   settled governance briefs, none yet selected or, for 44-F, verified)
-   — technical design, dependent on 2–9 above.
+   (all now scoped by Decisions 47, 48, 49, 50, 51, 52, 53, 54, 55, and
+   56's settled governance briefs, none yet selected or, for 44-F,
+   verified) — technical design, dependent on 2–10 above.
 
 **Not required to begin design work, though still open:** Decision
 44-A (Staff Access) — a separate, narrow, non-blocking technical-tier
@@ -1386,22 +1534,26 @@ question, distinct from and not resolved by Decision 54.
 
 > **Addendum, this session:** item 6 below (decisions still required)
 > is superseded by §IV.O-a/§IV.O-b/§IV.O-c/§IV.O-d/§IV.O-e/§IV.O-f/
-> §IV.O-g/§IV.O-h/§IV.O-i/§IV.Q's updates — 44-S-G is now resolved at
-> the product level by Decision 47, 44-S-D's governance-requirement
-> layer is resolved by Decision 48, 44-S-F's governance-requirement
-> layer is resolved by Decision 49, 44-D's governance-requirement layer
-> is resolved by Decision 50, 44-F's governance-requirement layer is
-> resolved by Decision 51, 44-S-A's governance-requirement layer is
-> resolved by Decision 52, 44-S-C's governance-requirement layer is
-> resolved by Decision 53 (Owner/Admin only), the eligible-delegate-pool
-> question's governance-requirement layer is resolved by Decision 54,
-> and 44-S-G's full same-row conflict semantics — together with the
-> finalization-interaction question (unresolved conflicts block
-> finalization) — are resolved at the governance-requirement level by
-> Decision 55. Item 7 (verdict) is unchanged in tier. Items 1–5 and 8
-> are otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
-> §IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, and §IV.O-i for the current,
-> authoritative statements.
+> §IV.O-g/§IV.O-h/§IV.O-i/§IV.O-j/§IV.Q's updates — 44-S-G is now
+> resolved at the product level by Decision 47, 44-S-D's
+> governance-requirement layer is resolved by Decision 48, 44-S-F's
+> governance-requirement layer is resolved by Decision 49, 44-D's
+> governance-requirement layer is resolved by Decision 50, 44-F's
+> governance-requirement layer is resolved by Decision 51, 44-S-A's
+> governance-requirement layer is resolved by Decision 52, 44-S-C's
+> governance-requirement layer is resolved by Decision 53 (Owner/Admin
+> only), the eligible-delegate-pool question's governance-requirement
+> layer is resolved by Decision 54, 44-S-G's full same-row conflict
+> semantics — together with the finalization-interaction question
+> (unresolved conflicts block finalization) — are resolved at the
+> governance-requirement level by Decision 55, and the
+> finalized-immutability-versus-Clear-All-Data question the Technical
+> Design for Decisions 44–55 itself surfaced is resolved at the
+> governance-requirement level by Decision 56. Item 7 (verdict) is
+> unchanged in tier. Items 1–5 and 8 are otherwise still accurate. See
+> §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d, §IV.O-e, §IV.O-f, §IV.O-g,
+> §IV.O-h, §IV.O-i, and §IV.O-j for the current, authoritative
+> statements.
 
 1. **File(s) changed:** exactly one —
    `docs/engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md`
