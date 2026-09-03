@@ -34,9 +34,13 @@ Decision 48's resolution of 44-S-D's governance-requirement layer (see
 Part IV §IV.O-a, §IV.O-b) — technical mechanisms remain undecided for
 both. **Updated 2026-09-04** to record Decision 49's resolution of
 44-S-F's governance-requirement layer (see Part IV §IV.O-c) — the
-technical mechanism remains undecided. All other Part IV blockers
-(44-D, 44-F, the delegated-Editor rules branch) remain open. No part
-authorizes implementation, amends the Implementation Plan, or
+technical mechanism remains undecided. **Updated 2026-09-04** to record
+that [Decision 50 — Exactly-One Finalization Protection](../specs/stock-count-data-loss-resilience-decision-50-amendment.md)
+has been drafted (STATUS: DRAFTED — NOT ACCEPTED) proposing the
+governance-requirement layer for 44-D (see Part IV §IV.O-d) — not yet
+accepted, and no Rule 8 finding is reclassified by the draft. All other
+Part IV blockers (44-F, the delegated-Editor rules branch) remain open.
+No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
 document.
@@ -718,6 +722,33 @@ technical mechanism before it can move off FAIL/OPEN. §IV.Q and §IV.R
 below are updated only to move 44-S-F from "technical design decision,
 ungoverned" to "technical design decision, now governed by Decision
 49" — not to RESOLVED.
+
+---
+
+## IV.O-d — 44-D UNDER CONSIDERATION — NOT YET RESOLVED
+
+[Decision 50 — Exactly-One Finalization Protection](../specs/stock-count-data-loss-resilience-decision-50-amendment.md)
+has been **drafted (STATUS: DRAFTED — NOT ACCEPTED)**, proposing the
+governance-requirement layer for 44-D: the required product-level
+outcome for exactly-one finalization, first-successful-finalization
+handling, stale working state at finalization time, pending writes
+arriving at or after finalization, the required separation between
+finalization protection and legitimate historical observations, and
+offline behavior at the finalization moment — explicitly independent
+of, and without reopening, the Owner/Admin + delegated Editor authority
+model already governed by Decisions 46, 48, and 49.
+
+**It does not select a technical mechanism and is not yet accepted.**
+**44-D is now being addressed at the governance-requirement level
+only — not resolved.** Finding E (finalization uniqueness) below
+(§IV.E), and the related items in §IV.P (item 5) and §IV.Q, remain
+exactly as classified — **FAIL / OPEN — technical design required,
+CRITICAL, confirmed reachable in production today** — unchanged by this
+draft. No CRITICAL technical finding is marked resolved by this notice.
+§IV.Q and §IV.R are **not** updated by this notice — 44-D remains
+listed there as open until (and unless) Decision 50 is formally
+accepted. This notice exists so a reader does not mistake a drafted
+governance proposal for a resolved Rule 8 finding.
 
 ---
 
