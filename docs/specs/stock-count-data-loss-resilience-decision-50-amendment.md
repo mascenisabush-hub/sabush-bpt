@@ -2,8 +2,8 @@
 
 ## Decision 50 — Exactly-One Finalization Protection
 
-**Status:** DRAFTED — NOT ACCEPTED
-**Resolves (proposed):** Decision 44-D — Finalization Guard / Exactly-One
+**Status:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY — 4 September 2026
+**Resolves:** Decision 44-D — Finalization Guard / Exactly-One
 Finalization, as identified in the original [Rule 8 Assessment](../engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md)
 (Part I §L, Part III §III.7, Part IV §IV.E) and carried forward,
 unresolved, through every subsequent reassessment and decision
@@ -301,39 +301,36 @@ Per the Rule 8 Assessment (Part IV §IV.E, §IV.P item 5, §IV.Q, §IV.R),
 technical design decision, confirmed reachable in the current
 production system today under the same-Owner-multi-device scenario, and
 explicitly unaffected in root cause by Decisions 46, 47, 48, or 49.
-This document, **once accepted**, would establish the
-**governance-requirement layer** 44-D's eventual technical design must
-satisfy — it does **not** resolve the technical design question itself,
-and does **not** move the corresponding Part IV CRITICAL finding (§IV.E,
-"Finalization uniqueness (44-D)") to RESOLVED. Specifically, upon
-acceptance:
+This document establishes the **governance-requirement layer** 44-D's
+eventual technical design must satisfy — it does **not** resolve the
+technical design question itself, and does **not** move the
+corresponding Part IV CRITICAL finding (§IV.E, "Finalization uniqueness
+(44-D)") to RESOLVED. Specifically, now that this decision is accepted:
 
-- **44-D would be RESOLVED at the governance-requirement level.**
-  Finding E (§IV.E) and the related items in §IV.P (item 5) and §IV.Q
-  would have a settled governance brief to be designed against — but
-  would remain **FAIL / OPEN — technical design required**, exactly as
-  Part IV classified them. No technical mechanism is chosen by this
-  document.
+- **44-D is RESOLVED at the governance-requirement level.** Finding E
+  (§IV.E) and the related items in §IV.P (item 5) and §IV.Q now have a
+  settled governance brief to be designed against — but they remain
+  **FAIL / OPEN — technical design required**, exactly as Part IV
+  classified them. No technical mechanism is chosen by this document.
 - **44-S-C, 44-F, 44-S-A, and the eligible-delegate-pool question**
   are entirely unaffected.
-- The Rule 8 verdict would **remain READY AFTER DECISIONS**, not
-  READY.
+- The Rule 8 verdict **remains READY AFTER DECISIONS**, not READY.
 
-**This document, while DRAFTED — NOT ACCEPTED, does not modify the
-Rule 8 assessment's classification of any finding.** Per this task's
-instruction, only a pointer/status note identifying Decision 50 as
-drafted for 44-D is added to the Rule 8 artifact, not a reclassification
-of Finding E or any other finding.
+**This document itself does not modify the Rule 8 assessment artifact.**
+Per this task's instruction, only a pointer/status note identifying
+Decision 50 as accepted for 44-D's governance-requirement layer is
+added there, not a reclassification of Finding E or any other finding.
 
 ---
 
 # 12. Status
 
-**SPECIFICATION AMENDMENT:** DRAFTED — NOT ACCEPTED
-**PRODUCT ARCHITECT ACCEPTANCE:** PENDING
-**RULE 8:** Unaffected in verdict (remains READY AFTER DECISIONS) while
-this document is in DRAFTED status; Rule 8 artifact updated only to
-note this document's drafted status, per §11
+**SPECIFICATION AMENDMENT:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY
+**PRODUCT ARCHITECT ACCEPTANCE:** ✅ GRANTED — 4 September 2026
+**RULE 8:** 44-D now RESOLVED at the governance-requirement level; the
+technical mechanism/design remains OPEN. Verdict remains READY AFTER
+DECISIONS — see the Rule 8 artifact's own updated record of this
+decision.
 **IMPLEMENTATION PLAN:** NOT YET AMENDED
 **IMPLEMENTATION AUTHORIZATION:** NOT GRANTED
 **CODE CHANGES:** NONE AUTHORIZED BY THIS DOCUMENT
@@ -342,12 +339,34 @@ note this document's drafted status, per §11
 
 ## Product Architect Decision Record
 
-**Decision:** PENDING
+**Decision:** ✅ ACCEPTED — the finalization-protection governance
+requirements in §2–§8 above (exactly-one finalization; first-successful-
+finalization outcome; stale working state has no authority to
+finalize; pending writes not yet durable before finalization must not
+later recreate, mutate, or finalize the closed Contagem; finalization
+protection must never discard legitimate durable historical
+observations; no new authority model introduced; offline status has no
+bearing on finalization authority; no silent overwrite of the
+authoritative finalized result) are adopted as the governing
+requirements 44-D's eventual technical design must satisfy. The
+technical mechanism itself is explicitly NOT decided by this acceptance
+and remains open, per §9/§10 above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** __________________
+**Date:** 2026-09-04
 
-**Acceptance Signature:** __________________
+**Acceptance Signature:** SABUSHIMIKE MASCENI
 
-**Decision Notes:** __________________
+**Decision Notes:** Accepted as a requirements-level governance
+decision only, exactly as Decisions 44, 45, 46, 47, 48, and 49 were
+each accepted. This acceptance does not authorize implementation,
+Firestore rule changes, schema changes, UI changes, code changes,
+tests, a technical mechanism for finalization-uniqueness
+representation/enforcement, an Implementation Plan amendment, or an
+Implementation Authorization. The Rule 8 verdict remains READY AFTER
+DECISIONS — the CRITICAL technical finding concerning finalization
+uniqueness (§IV.E), confirmed reachable in production today, remains
+unresolved until technical design is completed. 44-S-C (finalizer
+authorization), 44-F, 44-S-A, and the eligible-delegate-pool question
+are unaffected by this decision and remain exactly as open as before.
