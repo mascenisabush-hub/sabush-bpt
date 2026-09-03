@@ -29,13 +29,14 @@ RULE 8 REASSESSMENT — ANALYSIS ONLY — NO IMPLEMENTATION AUTHORIZED
 
 **Overall STATUS:** 🟡 DRAFT — Part IV analysis complete, verdict
 READY AFTER DECISIONS. **Updated 2026-09-03** to record Decision 47's
-resolution of 44-S-G's product-level conflict-handling requirement (see
-Part IV §IV.O-a) — the technical mechanism remains undecided, and all
-other Part IV blockers (44-S-D, 44-S-F, 44-D, 44-F, the delegated-
-Editor rules branch) remain open. No part authorizes implementation,
-amends the Implementation Plan, or constitutes an Implementation
-Authorization. No code, `firestore.rules`, schema, UI, or test file was
-modified to produce any part of this document.
+resolution of 44-S-G's product-level conflict-handling requirement and
+Decision 48's resolution of 44-S-D's governance-requirement layer (see
+Part IV §IV.O-a, §IV.O-b) — technical mechanisms remain undecided for
+both, and all other Part IV blockers (44-S-F, 44-D, 44-F, the
+delegated-Editor rules branch) remain open. No part authorizes
+implementation, amends the Implementation Plan, or constitutes an
+Implementation Authorization. No code, `firestore.rules`, schema, UI,
+or test file was modified to produce any part of this document.
 
 ---
 
@@ -636,14 +637,54 @@ half only; the verdict itself is unchanged in tier.
 
 ---
 
+## IV.O-b — UPDATE (this session): 44-S-D Resolved at the Governance-Requirement Level
+
+[Decision 48 — Authority Model Governance Requirements](../specs/stock-count-data-loss-resilience-decision-48-amendment.md)
+has been **✅ ACCEPTED AND AUTHORIZED AS GOVERNANCE DECISION —
+REQUIREMENTS ONLY** (SABUSHIMIKE MASCENI, 3 September 2026), settling
+what the authority model must guarantee: authority ownership (§2), the
+delegated slot (§3), concurrent legitimate authority (§4), the
+assignment-change state transition (§5), stale former-Editor protection
+(§6), offline behavior (§7), the Case-1-vs-Case-2 distinction (§8), and
+the Viewer boundary (§9).
+
+**Two distinct claims, kept explicit and not conflated:**
+
+- **44-S-D governance requirements: ✅ RESOLVED**, per Decision 48.
+- **44-S-D technical mechanism/design: STILL OPEN.** Decision 48
+  selects no mechanism (no Firestore transaction, lease, lock, revision
+  counter, server timestamp, Cloud Function, security-rule design, or
+  client-side design) — that remains a fully separate, not-yet-started
+  gate.
+
+**Findings B, D, F, H, and J below (§IV.B, §IV.D, §IV.F, §IV.H, §IV.J)
+remain exactly as classified — FAIL / OPEN — technical design
+required.** Decision 48 gives that design work a settled brief to build
+against; it does not perform any of it. **None of the CRITICAL
+technical findings concerning authority enforcement, delegated-Editor
+authorization, reassignment enforcement, stale former-Editor
+protection, offline authority handling, or multi-tab authority are
+reclassified by this update** — every one of them requires the still-
+undecided technical mechanism before it can move off FAIL/OPEN. §IV.Q
+and §IV.R below are updated only to move 44-S-D from "technical design
+decision, ungoverned" to "technical design decision, now governed by
+Decision 48" — not to RESOLVED.
+
+---
+
 ## IV.Q — Decisions Still Required, Separated by Type (updated this session)
 
 **Product Architect decisions:**
 
 - **44-S-A** (Viewer authorization) — still open, unaffected by
-  Decision 46/47.
+  Decision 46/47/48.
 - **44-S-C** (Finalizer authorization) — still open; recommended to
   confirm explicitly given two active contributors may now exist.
+- **44-S-D — ✅ RESOLVED at the governance-requirement level by
+  Decision 48, 2026-09-03.** See §IV.O-b. The technical mechanism
+  remains open — folded into the technical design items immediately
+  below, now built against a settled governance brief rather than an
+  open one.
 - **44-S-G** — **✅ RESOLVED at the product level by Decision 47,
   2026-09-03.** Live synchronization is the primary conflict-avoidance
   mechanism; detect-and-preserve is required for any genuine collision;
@@ -653,21 +694,25 @@ half only; the verdict itself is unchanged in tier.
 - **Eligible-delegate pool** (§IV.O) — narrow, non-blocking, still
   open.
 
-**Technical design decisions (mechanism, not policy) — all unaffected in status by Decision 47:**
+**Technical design decisions (mechanism, not policy) — all unaffected in RESOLUTION status by Decisions 47/48, now governed by settled briefs:**
 
-- **44-S-D** (authority model mechanism) — still open, must support two
-  concurrent role-slots (Owner/Admin fixed + one revocable delegate).
+- **44-S-D mechanism** (how authority is represented, checked, and
+  enforced) — still open; must satisfy Decision 48's governance
+  requirements and support two concurrent role-slots (Owner/Admin fixed
+  + one revocable delegate). **Not resolved — a governance brief is not
+  a design.**
 - **44-S-F** (former-Editor reconnection mechanism) — still open, must
-  distinguish "reassigned-away delegated Editor" from "Owner/Admin."
+  distinguish "reassigned-away delegated Editor" from "Owner/Admin,"
+  now informed by Decision 48 §6/§7's governance requirements.
 - **44-D** (finalization guard mechanism) — still open, unaffected in
-  shape by Decision 46 or 47.
+  shape by Decision 46, 47, or 48.
 - **44-F** (cache isolation mechanism) — still open, pending the
   verification named in §IV.K.
-- **Same-row conflict-detection/live-adoption mechanism** — **now has
-  a settled product-level brief, per Decision 47** (live-sync-first,
+- **Same-row conflict-detection/live-adoption mechanism** — still open;
+  has a settled product-level brief, per Decision 47 (live-sync-first,
   detect-and-preserve, no blind last-write-wins) — the mechanism
   itself (version/precondition check, conflict record, transaction, or
-  another approach) is still not selected here.
+  another approach) is still not selected.
 - **Delegated-Editor `firestore.rules` branch** — still open, required
   before any of the above can be exercised at all.
 
@@ -678,13 +723,17 @@ half only; the verdict itself is unchanged in tier.
 
 # READY AFTER DECISIONS
 
-**Verdict tier unchanged after Decision 47.** 44-S-G's product-level
-question is now resolved (§IV.O-a), which is real, meaningful progress
-— it settles *what* the eventual mechanism must guarantee, removing
-one source of ambiguity from the technical design work. It does **not**
-reduce the CRITICAL/HIGH blocker count in §IV.P, all of which remain
-open exactly as stated, because Decision 47 deliberately did not select
-a mechanism, per its own §5/§9.
+**Verdict tier unchanged after Decision 47 and Decision 48.** 44-S-G's
+product-level question and 44-S-D's governance-requirement question are
+now both resolved (§IV.O-a, §IV.O-b) — real, meaningful progress: two
+of the open decisions Part IV originally identified now have settled
+governance briefs for the technical design stage to build against. It
+does **not** reduce the CRITICAL/HIGH blocker count in §IV.P, all of
+which remain open exactly as stated, because neither Decision 47 nor
+Decision 48 selected a technical mechanism — Decision 48 §10/§11 states
+this outright, and every one of §IV.P's nine CRITICAL findings requires
+a mechanism decision, not a governance-requirement decision, before it
+can move off FAIL/OPEN.
 
 **Not forced, independently re-derived** — nothing found is a
 fundamental architectural or security impossibility. The dual-role
@@ -693,26 +742,29 @@ draft, listener-based architecture: it requires a new `firestore.rules`
 branch (a precedented pattern — the existing `staffTier == 'manager'`
 carve-out elsewhere in the same file is structurally similar), an
 additive schema field or two (writer identity, per-row version), and a
-genuinely new conflict-detection/live-adoption mechanism now built
-against a settled product-level brief — all additive extensions, not a
-redesign of what already works (business-owned storage, live listeners,
-durable local persistence, atomic finalization-batch cleanup).
+genuinely new conflict-detection/live-adoption mechanism and authority
+mechanism, both now built against settled governance briefs — all
+additive extensions, not a redesign of what already works (business-
+owned storage, live listeners, durable local persistence, atomic
+finalization-batch cleanup).
 
 **The minimum decisions required before Implementation Planning can
 begin, updated:**
 
 1. ~~44-S-G, reopened/expanded~~ **✅ RESOLVED — Decision 47,
    2026-09-03.**
-2. **44-S-D** (authority model for two role-slots) and **44-S-F**
-   (former-delegate reconnection), both still open, now scoped to the
-   two-role shape.
-3. **The new delegated-Editor `firestore.rules` branch** and the
-   **same-row conflict-detection/live-adoption mechanism** (now
-   scoped by Decision 47's product-level brief) — technical design,
-   dependent on 2 above.
-4. **44-D** (finalization guard) and **44-F** (cache isolation) —
-   carried over, entirely unaffected by Decision 46 or 47, exactly as
-   critical/high as in every prior part.
+2. ~~44-S-D governance requirements~~ **✅ RESOLVED — Decision 48,
+   2026-09-03.** **44-S-D technical mechanism — still open.**
+3. **44-S-F** (former-delegate reconnection mechanism), still open,
+   now informed by Decision 48 §6/§7.
+4. **The new delegated-Editor `firestore.rules` branch** and the
+   **same-row conflict-detection/live-adoption mechanism** and the
+   **authority-enforcement mechanism** (all now scoped by Decisions 47
+   and 48's settled governance briefs, none yet selected) — technical
+   design, dependent on 3 above.
+5. **44-D** (finalization guard) and **44-F** (cache isolation) —
+   carried over, entirely unaffected by Decision 46, 47, or 48, exactly
+   as critical/high as in every prior part.
 
 **Not required to begin design work, though still open:** 44-S-A,
 44-S-C (recommended to confirm explicitly, not strictly blocking), and
