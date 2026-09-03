@@ -2,8 +2,8 @@
 
 ## Decision 53 — Finalizer Authorization Requirements
 
-**Status:** DRAFTED — NOT ACCEPTED
-**Resolves (proposed):** Decision 44-S-C — Finalizer Authorization, as
+**Status:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY — 4 September 2026
+**Resolves:** Decision 44-S-C — Finalizer Authorization, as
 identified in the original [Rule 8 Assessment](../engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md)
 (Part II §II.O, Part III §III.3-C, Part IV §IV.E/§IV.N summary table)
 and carried forward, **OPEN (elevated priority) — Product Architect
@@ -395,64 +395,109 @@ required**, with the assessment repeatedly noting that Owner-only
 finalization is "likely already substantially answered by existing
 governance" (the `firestore.rules` finalization path having been
 Owner-only since before Decision 44) but recommending explicit
-confirmation rather than treating it as decided. This document, **once
-accepted**, would provide that explicit confirmation at the
-governance-requirement level — it does **not** introduce any new
-technical mechanism, and does **not** move any Part IV CRITICAL/HIGH
-technical finding (including Finding E, finalization uniqueness) to
-RESOLVED, since 44-S-C was never itself classified as a CRITICAL/HIGH
-technical finding — it was a distinct, open Product Architect decision
-about eligibility, not about mechanism. Upon acceptance:
+confirmation rather than treating it as decided. This document provides
+that explicit confirmation at the governance-requirement level — it
+does **not** introduce any new technical mechanism, and does **not**
+move any Part IV CRITICAL/HIGH technical finding (including Finding E,
+finalization uniqueness) to RESOLVED, since 44-S-C was never itself
+classified as a CRITICAL/HIGH technical finding — it was a distinct,
+open Product Architect decision about eligibility, not about
+mechanism. Now that this decision is accepted:
 
-- **44-S-C would be RESOLVED at the Product Architect
-  governance-requirement level.** The open item in the Rule 8
-  Assessment's summary table and decision lists (§IV.N, §IV.Q, §IV.R)
-  would have a settled governance answer: Owner/Admin only.
+- **44-S-C is RESOLVED at the Product Architect governance-requirement
+  level.** The open item in the Rule 8 Assessment's summary table and
+  decision lists (§IV.N, §IV.Q, §IV.R) now has a settled governance
+  answer: **Owner/Admin is the only authorized finalizer.** The
+  currently delegated Editor, a Viewer, a former delegated Editor, and
+  an unauthorized user are all explicitly **not** authorized to
+  finalize. **The technical enforcement/mechanism for this restriction
+  remains STILL OPEN** — this decision selects no Firestore
+  authorization/enforcement mechanism, no finalization-guard mechanism,
+  no schema, no live-synchronization mechanism, no collision-detection
+  mechanism, no cache-isolation mechanism, no Viewer-enforcement
+  mechanism, and no delegated-Editor-enforcement mechanism.
 - **The eligible-delegate-pool question and every CRITICAL/HIGH
   technical finding in §IV.P (including Finding E, finalization
   uniqueness, and Finding K, cache isolation)** are entirely
   unaffected — none of them is resolved, narrowed, or reclassified by
   this decision.
-- The Rule 8 verdict would **remain READY AFTER DECISIONS**, not
-  READY.
-- **This document, once accepted, would leave zero fully-open Product
-  Architect decisions among 44-S-A/44-S-C/44-S-D/44-S-F/44-S-G/44-D/
-  44-F** — all seven would then have settled governance answers, with
-  every corresponding technical mechanism (and, for 44-F, the named
-  technical verification) still separately required before Rule 8 can
-  move toward READY. Only the eligible-delegate-pool question (a
-  narrow, non-blocking item) would remain as an open Product Architect
-  question.
+- The Rule 8 verdict **remains READY AFTER DECISIONS**, not READY.
+- **This document leaves zero fully-open Product Architect decisions
+  among 44-S-A/44-S-C/44-S-D/44-S-F/44-S-G/44-D/44-F** — all seven now
+  have settled governance answers, with every corresponding technical
+  mechanism (and, for 44-F, the named technical verification) still
+  separately required before Rule 8 can move toward READY. Only the
+  eligible-delegate-pool question (a narrow, non-blocking item) remains
+  as an open Product Architect question.
+- **This acceptance does not constitute Implementation Authorization**
+  and does not amend the Implementation Plan.
 
-**This document, while DRAFTED — NOT ACCEPTED, does not modify the
-Rule 8 assessment's classification of any finding or open decision.**
-Per this task's instruction, only a pointer/status note identifying
-Decision 53 as drafted for 44-S-C is added to the Rule 8 artifact, not
-a reclassification of any finding or decision.
+**This document itself does not modify the Rule 8 assessment's
+classification of any finding or open decision.** Per this task's
+instruction, only a pointer/status note identifying Decision 53 as
+accepted for 44-S-C's governance-requirement layer is added to the Rule
+8 artifact, not a reclassification of any finding or decision.
 
 ---
 
 # 15. Status
 
-**SPECIFICATION AMENDMENT:** DRAFTED — NOT ACCEPTED
-**PRODUCT ARCHITECT ACCEPTANCE:** PENDING
-**RULE 8:** Unaffected in verdict (remains READY AFTER DECISIONS) while
-this document is in DRAFTED status; Rule 8 artifact updated only to
-note this document's drafted status, per §14
+**SPECIFICATION AMENDMENT:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY
+**PRODUCT ARCHITECT ACCEPTANCE:** ✅ GRANTED — 4 September 2026
+**RULE 8:** 44-S-C now RESOLVED at the Product Architect
+governance-requirement level — Owner/Admin is the only authorized
+finalizer; the delegated Editor, Viewer, former delegated Editor, and
+unauthorized users are not authorized to finalize. The technical
+enforcement/mechanism remains OPEN. Verdict remains READY AFTER
+DECISIONS — see the Rule 8 artifact's own updated record of this
+decision.
 **IMPLEMENTATION PLAN:** NOT YET AMENDED
-**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED
+**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED — this acceptance does
+not constitute Implementation Authorization
 **CODE CHANGES:** NONE AUTHORIZED BY THIS DOCUMENT
 
 ---
 
 ## Product Architect Decision Record
 
-**Decision:** PENDING
+**Decision:** ✅ ACCEPTED — the finalizer-authorization governance
+requirements in §2–§11 above are adopted, in particular: **Owner/Admin
+is the only authorized finalizer**, holding inherent finalization
+authority requiring no delegation or additional qualification; **the
+currently delegated Editor is not authorized to finalize**, an explicit
+determination that editing authority does not imply finalization
+authority; **a Viewer is not authorized to finalize**, restating
+Decision 52 unchanged; **a former delegated Editor is not authorized to
+finalize**, since delegated Editors never held finalization authority
+to lose or regain, applying Decisions 48/49 without changing either;
+**an unauthorized user is not authorized to finalize**; offline status
+neither removes Owner/Admin's finalization authority nor creates it for
+any other role; a finalization attempt following delegated-Editor
+reassignment resolves at the eligibility level; and Decision 50's
+exactly-one-finalization guarantee remains entirely untouched and
+separate from this decision's who-may-attempt determination. The
+technical mechanism itself — Firestore authorization/enforcement, the
+finalization-guard mechanism, schema, live synchronization, collision
+detection, cache isolation, Viewer enforcement, and delegated-Editor
+enforcement — is explicitly NOT decided by this acceptance and remains
+open, per §12/§13 above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** __________________
+**Date:** 2026-09-04
 
-**Acceptance Signature:** __________________
+**Acceptance Signature:** SABUSHIMIKE MASCENI
 
-**Decision Notes:** __________________
+**Decision Notes:** Accepted as a requirements-level governance
+decision only, exactly as Decisions 44, 45, 46, 47, 48, 49, 50, 51, and
+52 were each accepted. This acceptance does not authorize
+implementation, `firestore.rules` changes, schema changes, UI changes,
+code changes, tests, a technical mechanism for finalizer-eligibility
+representation or enforcement, an Implementation Plan amendment, or an
+Implementation Authorization. The Rule 8 verdict remains READY AFTER
+DECISIONS — every CRITICAL/HIGH technical finding in §IV.P, including
+Finding E (finalization uniqueness, mechanism still open) and Finding K
+(shared-device/cache isolation, still UNVERIFIED), remains exactly as
+classified and unaffected by this decision. The eligible-delegate-pool
+question is unaffected by this decision and remains exactly as open as
+before.
