@@ -2,8 +2,8 @@
 
 ## Decision 51 — Shared-Device / Cache Isolation Requirements
 
-**Status:** DRAFTED — NOT ACCEPTED
-**Resolves (proposed):** Decision 44-F — Shared-Device/Cache Isolation,
+**Status:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY — 4 September 2026
+**Resolves:** Decision 44-F — Shared-Device/Cache Isolation,
 as identified in the original [Rule 8 Assessment](../engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md)
 (Part I §P, Part III §III.12, Part IV §IV.K) and carried forward,
 **UNVERIFIED — not PASS**, through every subsequent reassessment and
@@ -370,54 +370,83 @@ technical verification (whether Firestore's client SDK re-evaluates
 `firestore.rules` against the current `request.auth` on every read
 served from `persistentLocalCache`) before a sound technical decision
 can even be made — and explicitly unaffected in status by Decisions 46,
-47, 48, 49, or 50. This document, **once accepted**, would establish
-the **governance-requirement layer** 44-F's eventual technical
+47, 48, 49, or 50. This document establishes the
+**governance-requirement layer** 44-F's eventual technical
 verification and design must satisfy — it does **not** perform the
 named technical verification, and does **not** move the corresponding
-Part IV finding (§IV.K) to PASS or RESOLVED. Specifically, upon
-acceptance:
+Part IV finding (§IV.K) to PASS or RESOLVED. Specifically, now that
+this decision is accepted:
 
-- **44-F would be RESOLVED at the governance-requirement level.**
-  Finding K (§IV.K) and the related item in §IV.P (item 10) would have
-  a settled governance brief to be verified and designed against — but
-  would remain **UNVERIFIED — technical verification and design
-  required**, exactly as Part IV classified it. No technical
+- **44-F is RESOLVED at the Product Architect governance-requirement
+  level.** Finding K (§IV.K) and the related item in §IV.P (item 10)
+  now have a settled governance brief to be verified and designed
+  against — but they remain **UNVERIFIED — technical verification and
+  design required**, exactly as Part IV classified it. No technical
   verification is performed and no mechanism is chosen by this
   document.
 - **44-S-A, 44-S-C, and the eligible-delegate-pool question** are
   entirely unaffected.
-- The Rule 8 verdict would **remain READY AFTER DECISIONS**, not
-  READY.
+- The Rule 8 verdict **remains READY AFTER DECISIONS**, not READY.
+- **This acceptance does not constitute Implementation Authorization**
+  and does not amend the Implementation Plan — it settles only what the
+  system must guarantee, not how, and not that building it may now
+  begin.
 
-**This document, while DRAFTED — NOT ACCEPTED, does not modify the
-Rule 8 assessment's classification of any finding.** Per this task's
-instruction, only a pointer/status note identifying Decision 51 as
-drafted for 44-F is added to the Rule 8 artifact, not a reclassification
-of Finding K or any other finding.
+**This document itself does not modify the Rule 8 assessment artifact.**
+Per this task's instruction, only a pointer/status note identifying
+Decision 51 as accepted for 44-F's governance-requirement layer is
+added there, not a reclassification of Finding K or any other finding.
 
 ---
 
 # 15. Status
 
-**SPECIFICATION AMENDMENT:** DRAFTED — NOT ACCEPTED
-**PRODUCT ARCHITECT ACCEPTANCE:** PENDING
-**RULE 8:** Unaffected in verdict (remains READY AFTER DECISIONS) while
-this document is in DRAFTED status; Rule 8 artifact updated only to
-note this document's drafted status, per §14
+**SPECIFICATION AMENDMENT:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY
+**PRODUCT ARCHITECT ACCEPTANCE:** ✅ GRANTED — 4 September 2026
+**RULE 8:** 44-F now RESOLVED at the Product Architect
+governance-requirement level; the technical mechanism/verification/
+design remains OPEN. Verdict remains READY AFTER DECISIONS — see the
+Rule 8 artifact's own updated record of this decision.
 **IMPLEMENTATION PLAN:** NOT YET AMENDED
-**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED
+**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED — this acceptance does
+not constitute Implementation Authorization
 **CODE CHANGES:** NONE AUTHORIZED BY THIS DOCUMENT
 
 ---
 
 ## Product Architect Decision Record
 
-**Decision:** PENDING
+**Decision:** ✅ ACCEPTED — the context-isolation governance
+requirements in §2–§11 above (business isolation; user/session
+isolation; logout; business switching; offline state across context
+changes; pending writes across context changes; the required
+separation between context-isolation protection and legitimate
+historical observations; no new authority model introduced; recovery
+never crosses a tenant/user/session boundary; the explicit six-point
+prohibition against cross-context leakage) are adopted as the governing
+requirements 44-F's eventual technical verification and design must
+satisfy. The technical mechanism itself — including the specific
+Firestore SDK cache/auth-transition verification named in Part IV
+§IV.K — is explicitly NOT decided or performed by this acceptance and
+remains open, per §12/§13 above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** __________________
+**Date:** 2026-09-04
 
-**Acceptance Signature:** __________________
+**Acceptance Signature:** SABUSHIMIKE MASCENI
 
-**Decision Notes:** __________________
+**Decision Notes:** Accepted as a requirements-level governance
+decision only, exactly as Decisions 44, 45, 46, 47, 48, 49, and 50 were
+each accepted. This acceptance does not authorize implementation,
+`firestore.rules` changes, schema changes, UI changes, code changes,
+tests, a technical mechanism for context-isolation
+representation/enforcement, the named Firestore SDK technical
+verification itself, an Implementation Plan amendment, or an
+Implementation Authorization. The Rule 8 verdict remains READY AFTER
+DECISIONS — the UNVERIFIED, HIGH-priority finding concerning
+shared-device/cache isolation (§IV.K) remains unresolved until the
+named technical verification and subsequent technical design are
+completed. 44-S-A (Viewer authorization), 44-S-C (finalizer
+authorization), and the eligible-delegate-pool question are unaffected
+by this decision and remain exactly as open as before.
