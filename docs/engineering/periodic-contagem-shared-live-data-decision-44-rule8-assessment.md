@@ -46,13 +46,11 @@ remains undecided. **Updated 2026-09-04** to record Decision 53's
 resolution of 44-S-C's governance-requirement layer (see Part IV
 §IV.O-g) — Owner/Admin is the only authorized finalizer; the technical
 enforcement/mechanism remains undecided. **Updated 2026-09-04** to
-record that [Decision 54 — Delegated Editor Eligibility & Selection
-Requirements](../specs/stock-count-data-loss-resilience-decision-54-amendment.md)
-has been drafted (STATUS: DRAFTED — NOT ACCEPTED) proposing the
-governance-requirement layer for the eligible-delegate-pool question
-(see Part IV §IV.O-h) — not yet accepted, and no Rule 8 finding or open
-decision is reclassified by the draft. All other Part IV blockers
-(the delegated-Editor rules branch) remain open.
+record that Decision 54's resolution of the eligible-delegate-pool
+question (see Part IV §IV.O-h) — any currently business-authorized user
+is eligible for Owner/Admin's explicit selection; all technical
+implementation/enforcement mechanisms remain undecided. All other Part
+IV blockers (the delegated-Editor rules branch) remain open.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -96,9 +94,12 @@ requirement:**
   level, §IV.O-e)** → **Decision 52 (✅ Accepted, 4 Sept 2026, resolves
   44-S-A at the governance-requirement level, §IV.O-f)** → **Decision 53
   (✅ Accepted, 4 Sept 2026, resolves 44-S-C at the governance-requirement
-  level, §IV.O-g)**. Technical mechanisms for 44-S-D, 44-S-F, 44-D,
+  level, §IV.O-g)** → **Decision 54 (✅ Accepted, 4 Sept 2026, resolves
+  the eligible-delegate-pool question at the governance-requirement
+  level, §IV.O-h)**. Technical mechanisms for 44-S-D, 44-S-F, 44-D,
   44-S-G, 44-F (including 44-F's own named technical verification),
-  44-S-A, and 44-S-C remain undecided throughout this chain.
+  44-S-A, 44-S-C, and delegated-Editor eligibility/selection enforcement
+  remain undecided throughout this chain.
 
 **Repository baseline:** `main = origin/main` = `5570a82`, working tree
 clean. No application code, `firestore.rules`, schema, UI, or test
@@ -584,6 +585,13 @@ rather than silently assuming an answer. **Not elevated to a blocker**,
 since it can plausibly be answered alongside 44-S-A without holding up
 the authority-mechanism design work.
 
+> **UPDATE (2026-09-04):** This question is now **✅ RESOLVED at the
+> governance-requirement level by Decision 54** — see §IV.O-h. Any
+> currently business-authorized user is eligible; the "any Staff
+> account vs. elevated `staffTier`" technical subdivision named above
+> remains a separate, unaddressed question (Decision 44-A). The
+> technical implementation/enforcement mechanism remains open.
+
 ---
 
 ## IV.P — Critical and High Blockers
@@ -950,47 +958,70 @@ before Rule 8 can move toward READY.
 
 ---
 
-## IV.O-h — ELIGIBLE-DELEGATE-POOL QUESTION UNDER CONSIDERATION — NOT YET RESOLVED
+## IV.O-h — UPDATE (2026-09-04): Eligible-Delegate-Pool Question Resolved at the Governance-Requirement Level
 
 [Decision 54 — Delegated Editor Eligibility & Selection Requirements](../specs/stock-count-data-loss-resilience-decision-54-amendment.md)
-has been **drafted (STATUS: DRAFTED — NOT ACCEPTED)**, proposing the
-governance-requirement layer for the eligible-delegate-pool question
-first named in §IV.O above: any user currently business-authorized in
-relation to the specific business is eligible for the Owner/Admin to
-select as delegated Editor, with no additional eligibility tier
-introduced by this decision (any further technical subdivision, e.g.
-Decision 44-A's staff-tier question, remains separate and unaddressed);
-eligibility is tied to the specific business, preserving Decision 51's
-tenant isolation; the Owner/Admin's exclusive, explicit selection
-authority, at-most-one-delegate rule, and non-automatic delegation are
-all restated from Decisions 46/48, not reopened; the existing
-"Owner/Admin" terminology is preserved exactly as used throughout the
-accepted governance chain, with no silent expansion to a separately
-defined "Admin" role; loss of underlying business authorization ends
-delegate eligibility on a continuing basis, not merely at the moment of
-selection; a former delegated Editor's eligibility, reselection, and
-Viewer status all apply Decisions 48/49/52 unchanged; offline status
-neither preserves nor blocks a new Owner/Admin selection; and being
-eligible, being currently selected, being currently delegated, being a
-Viewer, and being Owner/Admin are kept as five categorically distinct
-concepts — explicitly independent of, and without reopening, the
-Editor authority model (Decisions 46/48), the reconnection governance
-requirements (Decision 49), the context-isolation governance
-requirements (Decision 51), or the Viewer-authorization governance
-requirements (Decision 52).
+has been **✅ ACCEPTED AND AUTHORIZED AS GOVERNANCE DECISION —
+REQUIREMENTS ONLY** (SABUSHIMIKE MASCENI, 4 September 2026), settling
+the governance-requirement layer for the eligible-delegate-pool
+question first named in §IV.O above: any user currently
+business-authorized in relation to the specific business is eligible
+for the Owner/Admin to select as delegated Editor, with no additional
+eligibility tier introduced by this decision (any further technical
+subdivision, e.g. Decision 44-A's staff-tier question, remains separate
+and unaddressed); eligibility is tied to the specific business,
+preserving Decision 51's tenant isolation; the Owner/Admin's exclusive,
+explicit selection authority, at-most-one-delegate rule, and
+non-automatic delegation are all restated from Decisions 46/48, not
+reopened; the existing "Owner/Admin" terminology is preserved exactly
+as used throughout the accepted governance chain, with no silent
+expansion to a separately defined "Admin" role; loss of underlying
+business authorization ends delegate eligibility on a continuing basis,
+not merely at the moment of selection; a former delegated Editor's
+eligibility, reselection, and Viewer status all apply Decisions
+48/49/52 unchanged; offline status neither preserves nor blocks a new
+Owner/Admin selection; and being eligible, being currently selected,
+being currently delegated, being a Viewer, and being Owner/Admin are
+kept as five categorically distinct concepts — explicitly independent
+of, and without reopening, the Editor authority model (Decisions
+46/48), the reconnection governance requirements (Decision 49), the
+context-isolation governance requirements (Decision 51), or the
+Viewer-authorization governance requirements (Decision 52).
 
-**It does not select a technical mechanism and is not yet accepted.**
-**The eligible-delegate-pool question is now being addressed at the
-governance-requirement level only — not resolved.** The open item in
-§IV.O above, and in §IV.Q and §IV.R below, remains exactly as
-classified — **OPEN — narrow, non-blocking** — unchanged by this draft.
-No finding or open decision is marked resolved by this notice. §IV.Q
-and §IV.R are **not** updated by this notice — the eligible-delegate-
-pool question remains listed there as open until (and unless) Decision
-54 is formally accepted. **Decision 44-A (Staff Access) is explicitly
-not addressed by Decision 54 and remains separately open.** This notice
-exists so a reader does not mistake a drafted governance proposal for a
-resolved Rule 8 open decision.
+**Two distinct claims, kept explicit and not conflated:**
+
+- **Eligible-delegate-pool governance requirements: ✅ RESOLVED**, per
+  Decision 54.
+- **All technical implementation/enforcement mechanisms: STILL OPEN.**
+  Decision 54 selects no schema, `firestore.rules` implementation,
+  authentication-claims design, membership-schema design, invitation
+  mechanism, or UI implementation — those remain a fully separate,
+  not-yet-started gate, exactly as Decisions 48, 49, 50, 51, 52, and 53
+  left their own technical mechanisms open.
+
+**The open item in §IV.O above is not reclassified to PASS by this
+update** — it moves from "OPEN — narrow, non-blocking" to
+"governance-resolved — technical enforcement required," which §IV.Q
+and §IV.R below record. **No CRITICAL/HIGH technical finding in §IV.P —
+including Finding A/B (delegated-Editor `firestore.rules` support,
+still entirely absent), Finding E (finalization uniqueness), and
+Finding K (shared-device/cache isolation, still UNVERIFIED) — is
+reclassified by this update.** §IV.Q and §IV.R below are updated only
+to move the eligible-delegate-pool question from "open Product
+Architect decision" to "resolved at the governance-requirement level,
+technical enforcement now governed by Decision 54" — not to RESOLVED
+at the technical level. **Decision 44-A (Staff Access) is unaffected
+by this decision and remains a separate, still-open, distinct
+question — not merged into Decision 54.**
+
+**With this update, all eight of 44-S-A/44-S-C/44-S-D/44-S-F/44-S-G/
+44-D/44-F/eligible-delegate-pool now have settled governance-requirement
+answers.** Zero fully open Product Architect governance questions
+remain among what Part IV originally identified. Every corresponding
+technical mechanism — and, for 44-F, the named technical verification,
+and for the delegated-Editor role generally, the entirely-absent
+`firestore.rules` branch — remains separately required before Rule 8
+can move toward READY.
 
 ---
 
@@ -1036,10 +1067,23 @@ resolved Rule 8 open decision.
   no blind last-write-wins. **The technical mechanism remains open** —
   folded into the two technical items immediately below, which are
   themselves unaffected in status by this resolution.
-- **Eligible-delegate pool** (§IV.O) — narrow, non-blocking, still
-  open. **The only remaining fully open Product Architect decision.**
+- **Eligible-delegate pool — ✅ RESOLVED — GOVERNANCE REQUIREMENTS, at
+  the Product Architect governance-requirement level, by Decision 54,
+  2026-09-04.** See §IV.O-h. Any currently business-authorized user, in
+  relation to the specific business, is eligible for the Owner/Admin's
+  explicit selection; no additional eligibility tier introduced;
+  Decision 44-A (Staff Access) remains a separate, distinct, still-open
+  question, not merged into this resolution. **All technical
+  implementation/enforcement mechanisms remain open** — folded into the
+  technical design items immediately below, now built against a
+  settled governance brief rather than an open one. **With this
+  resolution, zero fully open Product Architect governance questions
+  remain among what Part IV originally identified** (44-S-A, 44-S-C,
+  44-S-D, 44-S-F, 44-S-G, 44-D, 44-F, and the eligible-delegate-pool
+  question — all eight now settled at the governance-requirement
+  level).
 
-**Technical design decisions (mechanism, not policy) — all unaffected in RESOLUTION status by Decisions 47/48/49/50/51/52/53, now governed by settled briefs:**
+**Technical design decisions (mechanism, not policy) — all unaffected in RESOLUTION status by Decisions 47/48/49/50/51/52/53/54, now governed by settled briefs:**
 
 - **44-S-D mechanism** (how authority is represented, checked, and
   enforced) — still open; must satisfy Decision 48's governance
@@ -1083,6 +1127,16 @@ resolved Rule 8 open decision.
   finalization-visibility without finalizer inference; shared-device
   isolation per Decision 51), unaffected in shape by any prior
   decision. **Not resolved — a governance brief is not a design.**
+- **Eligible-delegate-pool mechanism** (delegated-Editor eligibility and
+  selection enforcement mechanism) — still open; must satisfy Decision
+  54's governance requirements (eligibility limited to currently
+  business-authorized users, tied to the specific business; Owner/Admin
+  exclusive and explicit selection; at-most-one-delegate enforcement;
+  continuing — not one-time — authorization check for eligibility), and
+  presupposes the delegated-Editor `firestore.rules` branch named
+  elsewhere in this section, which does not yet exist. **Not resolved —
+  a governance brief is not a design. Distinct from, and does not
+  resolve, Decision 44-A's separate staff-tier question.**
 - **Same-row conflict-detection/live-adoption mechanism** — still open;
   has a settled product-level brief, per Decision 47 (live-sync-first,
   detect-and-preserve, no blind last-write-wins) — the mechanism
@@ -1099,26 +1153,27 @@ resolved Rule 8 open decision.
 # READY AFTER DECISIONS
 
 **Verdict tier unchanged after Decision 47, Decision 48, Decision 49,
-Decision 50, Decision 51, Decision 52, and Decision 53.** 44-S-G's
-product-level question, 44-S-D's governance-requirement question,
-44-S-F's governance-requirement question, 44-D's governance-requirement
-question, 44-F's governance-requirement question, 44-S-A's
-governance-requirement question, and 44-S-C's governance-requirement
+Decision 50, Decision 51, Decision 52, Decision 53, and Decision 54.**
+44-S-G's product-level question, 44-S-D's governance-requirement
+question, 44-S-F's governance-requirement question, 44-D's
+governance-requirement question, 44-F's governance-requirement
+question, 44-S-A's governance-requirement question, 44-S-C's
+governance-requirement question, and the eligible-delegate-pool
 question are now all resolved (§IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
-§IV.O-e, §IV.O-f, §IV.O-g) — real, meaningful progress: seven of the
-eight open decisions Part IV originally identified now have settled
-governance briefs for the technical design/verification stage to build
-against, leaving only the eligible-delegate-pool question fully open.
-It does **not** reduce the CRITICAL/HIGH blocker count in §IV.P, all of
-which remain open exactly as stated, because none of Decision 47,
-Decision 48, Decision 49, Decision 50, Decision 51, Decision 52, or
-Decision 53 selected or performed a technical mechanism/verification —
+§IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h) — **all eight open decisions Part
+IV originally identified now have settled governance briefs** for the
+technical design/verification stage to build against. **Zero fully
+open Product Architect governance questions remain.** It does **not**
+reduce the CRITICAL/HIGH blocker count in §IV.P, all of which remain
+open exactly as stated, because none of Decision 47, Decision 48,
+Decision 49, Decision 50, Decision 51, Decision 52, Decision 53, or
+Decision 54 selected or performed a technical mechanism/verification —
 Decision 48 §10/§11, Decision 49 §8/§9, Decision 50 §9/§10, Decision 51
-§12/§13, Decision 52 §11/§12, and Decision 53 §12/§13 all state this
-outright, and every one of §IV.P's nine CRITICAL findings plus §IV.P
-item 10's HIGH finding requires a mechanism decision or technical
-verification, not a governance-requirement decision, before it can move
-off FAIL/OPEN or UNVERIFIED.
+§12/§13, Decision 52 §11/§12, Decision 53 §12/§13, and Decision 54
+§12/§13 all state this outright, and every one of §IV.P's nine CRITICAL
+findings plus §IV.P item 10's HIGH finding requires a mechanism
+decision or technical verification, not a governance-requirement
+decision, before it can move off FAIL/OPEN or UNVERIFIED.
 
 **Not forced, independently re-derived** — nothing found is a
 fundamental architectural or security impossibility. The dual-role
@@ -1130,11 +1185,12 @@ additive schema field or two (writer identity, per-row version), and a
 genuinely new conflict-detection/live-adoption mechanism, authority
 mechanism, finalization-guard mechanism, finalizer-eligibility
 enforcement mechanism, shared-device/cache-isolation mechanism (pending
-its own named technical verification), and Viewer-eligibility-
-enforcement mechanism, all now built against settled governance
-briefs — all additive extensions, not a redesign of what already works
-(business-owned storage, live listeners, durable local persistence,
-atomic finalization-batch cleanup).
+its own named technical verification), Viewer-eligibility-enforcement
+mechanism, and delegated-Editor eligibility/selection enforcement
+mechanism, all now built against settled governance briefs — all
+additive extensions, not a redesign of what already works (business-
+owned storage, live listeners, durable local persistence, atomic
+finalization-batch cleanup).
 
 **The minimum decisions required before Implementation Planning can
 begin, updated:**
@@ -1164,19 +1220,27 @@ begin, updated:**
    eligibility restriction to Owner/Admin only) — still open**, now
    informed by Decision 53 §2–§11, and composing with — not replacing —
    Decision 50's own finalization-guard mechanism.
-8. **The new delegated-Editor `firestore.rules` branch** and the
+8. ~~Eligible-delegate-pool governance requirements~~ **✅ RESOLVED —
+   Decision 54, 2026-09-04.** **Eligible-delegate-pool technical
+   enforcement mechanism (delegated-Editor eligibility and selection) —
+   still open**, now informed by Decision 54 §2–§11, and presupposes
+   the delegated-Editor `firestore.rules` branch, which does not yet
+   exist. Decision 44-A (Staff Access) remains a separate, distinct,
+   still-open question, unaffected.
+9. **The new delegated-Editor `firestore.rules` branch** and the
    **same-row conflict-detection/live-adoption mechanism** and the
    **authority-enforcement mechanism** and the **finalization-guard
    mechanism** and the **finalizer-eligibility enforcement mechanism**
    and the **shared-device/cache-isolation mechanism** and the
-   **Viewer-eligibility-enforcement mechanism** (all now scoped by
-   Decisions 47, 48, 49, 50, 51, 52, and 53's settled governance
-   briefs, none yet selected or, for 44-F, verified) — technical
-   design, dependent on 2–7 above.
+   **Viewer-eligibility-enforcement mechanism** and the
+   **delegated-Editor eligibility/selection enforcement mechanism**
+   (all now scoped by Decisions 47, 48, 49, 50, 51, 52, 53, and 54's
+   settled governance briefs, none yet selected or, for 44-F, verified)
+   — technical design, dependent on 2–8 above.
 
-**Not required to begin design work, though still open:** the
-eligible-delegate-pool question (§IV.O) — the only fully open Product
-Architect decision remaining after this session.
+**Not required to begin design work, though still open:** Decision
+44-A (Staff Access) — a separate, narrow, non-blocking technical-tier
+question, distinct from and not resolved by Decision 54.
 
 ---
 
@@ -1185,17 +1249,19 @@ Architect decision remaining after this session.
 
 > **Addendum, this session:** item 6 below (decisions still required)
 > is superseded by §IV.O-a/§IV.O-b/§IV.O-c/§IV.O-d/§IV.O-e/§IV.O-f/
-> §IV.O-g/§IV.Q's updates — 44-S-G is now resolved at the product level
-> by Decision 47, 44-S-D's governance-requirement layer is resolved by
-> Decision 48, 44-S-F's governance-requirement layer is resolved by
-> Decision 49, 44-D's governance-requirement layer is resolved by
-> Decision 50, 44-F's governance-requirement layer is resolved by
-> Decision 51, 44-S-A's governance-requirement layer is resolved by
-> Decision 52, and 44-S-C's governance-requirement layer is resolved by
-> Decision 53 (Owner/Admin only). Item 7 (verdict) is unchanged in
-> tier. Items 1–5 and 8 are otherwise still accurate. See §IV.O-a,
-> §IV.O-b, §IV.O-c, §IV.O-d, §IV.O-e, §IV.O-f, and §IV.O-g for the
-> current, authoritative statements.
+> §IV.O-g/§IV.O-h/§IV.Q's updates — 44-S-G is now resolved at the
+> product level by Decision 47, 44-S-D's governance-requirement layer
+> is resolved by Decision 48, 44-S-F's governance-requirement layer is
+> resolved by Decision 49, 44-D's governance-requirement layer is
+> resolved by Decision 50, 44-F's governance-requirement layer is
+> resolved by Decision 51, 44-S-A's governance-requirement layer is
+> resolved by Decision 52, 44-S-C's governance-requirement layer is
+> resolved by Decision 53 (Owner/Admin only), and the eligible-delegate-
+> pool question's governance-requirement layer is resolved by Decision
+> 54. Item 7 (verdict) is unchanged in tier. Items 1–5 and 8 are
+> otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
+> §IV.O-e, §IV.O-f, §IV.O-g, and §IV.O-h for the current, authoritative
+> statements.
 
 1. **File(s) changed:** exactly one —
    `docs/engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md`

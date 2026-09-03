@@ -2,8 +2,8 @@
 
 ## Decision 54 — Delegated Editor Eligibility & Selection Requirements
 
-**Status:** DRAFTED — NOT ACCEPTED
-**Resolves (proposed):** The eligible-delegate-pool question, as
+**Status:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY — 4 September 2026
+**Resolves:** The eligible-delegate-pool question, as
 identified in the original [Rule 8 Assessment](../engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md)
 (Part IV §IV.O, "A Narrow Governance Gap Discovered, Not an
 Inconsistency") and carried forward, **OPEN — narrow, non-blocking,
@@ -351,70 +351,124 @@ Decision 54 does not authorize, and does not resolve:
 Per the Rule 8 Assessment (Part IV §IV.O), the eligible-delegate-pool
 question was identified as a **narrow, non-blocking governance gap —
 OPEN**, distinct from and never elevated to the status of a Rule 8
-CRITICAL/HIGH technical finding. It has remained the sole fully open
+CRITICAL/HIGH technical finding. It remained the sole fully open
 Product Architect question since Decision 53's acceptance (per Decision
-53 §14/§IV.O-g). This document, **once accepted**, would resolve that
-question at the governance level — it does **not** introduce any new
-technical mechanism, and does **not** move any Part IV CRITICAL/HIGH
-technical finding to RESOLVED, since the eligible-delegate-pool
-question was never itself classified as one. Upon acceptance:
+53 §14/§IV.O-g). This document resolves that question at the
+governance level — it does **not** introduce any new technical
+mechanism, and does **not** move any Part IV CRITICAL/HIGH technical
+finding to RESOLVED, since the eligible-delegate-pool question was
+never itself classified as one. Now that this decision is accepted:
 
-- **The eligible-delegate-pool question would be RESOLVED at the
-  governance-requirement level.** The open item in the Rule 8
-  Assessment (§IV.O, and its carrying-forward through §IV.Q/§IV.R)
-  would have a settled governance answer: any currently
-  business-authorized user, in relation to the specific business, is
-  eligible; the Owner/Admin selects explicitly; at most one delegate at
-  a time.
+- **The eligible-delegate-pool question is RESOLVED — GOVERNANCE
+  REQUIREMENTS, at the Product Architect governance-requirement
+  level.** The open item in the Rule 8 Assessment (§IV.O, and its
+  carrying-forward through §IV.Q/§IV.R) now has a settled governance
+  answer: any currently business-authorized user, in relation to the
+  specific business, is eligible; the Owner/Admin selects explicitly;
+  at most one delegate at a time. **All technical
+  implementation/enforcement mechanisms remain STILL OPEN** — this
+  decision selects no schema, `firestore.rules` implementation,
+  authentication-claims design, membership-schema design, invitation
+  mechanism, or UI implementation.
 - **Every CRITICAL/HIGH technical finding in §IV.P** — including
   Finding A/B (delegated-Editor `firestore.rules` support, still
   entirely absent), Finding E (finalization uniqueness), and Finding K
   (cache isolation, still UNVERIFIED) — is entirely unaffected: none of
   them is resolved, narrowed, or reclassified by this decision.
+  Governance acceptance does not turn any technical finding into PASS.
 - **Decision 44-A (Staff Access)** remains entirely separate and
-  unaffected — this decision does not resolve, narrow, or depend on it.
-- The Rule 8 verdict would **remain READY AFTER DECISIONS**, not
-  READY.
-- **This document, once accepted, would leave zero fully open Product
-  Architect governance questions** among everything Part IV originally
-  identified as requiring one (44-S-A, 44-S-C, 44-S-D, 44-S-F, 44-S-G,
-  44-D, 44-F, and the eligible-delegate-pool question) — all eight
-  would then have settled governance answers. Every corresponding
-  technical mechanism (and, for 44-F, the named technical verification,
-  and for the delegated-Editor role generally, the entirely-absent
-  `firestore.rules` branch) would remain separately required before
-  Rule 8 could move toward READY.
+  unaffected — this decision does not resolve, narrow, merge into, or
+  depend on it. Any other separate staff-tier question in the Rule 8
+  artifact remains distinct.
+- The Rule 8 verdict **remains READY AFTER DECISIONS**, not READY.
+- **This document leaves zero fully open Product Architect governance
+  questions** among everything Part IV originally identified as
+  requiring one (44-S-A, 44-S-C, 44-S-D, 44-S-F, 44-S-G, 44-D, 44-F,
+  and the eligible-delegate-pool question) — all eight now have settled
+  governance answers. Every corresponding technical mechanism (and, for
+  44-F, the named technical verification, and for the delegated-Editor
+  role generally, the entirely-absent `firestore.rules` branch) remains
+  separately required before Rule 8 can move toward READY.
+- **This acceptance does not constitute Implementation Authorization**
+  and does not amend the Implementation Plan.
+- **All previously accepted decisions (44, 46, 47, 48, 49, 50, 51, 52,
+  53) remain substantively unchanged** — this acceptance does not
+  reopen, reinterpret, weaken, or expand any of them; it only confirms
+  the Owner/Admin terminology and authority model exactly as those
+  decisions already established.
 
-**This document, while DRAFTED — NOT ACCEPTED, does not modify the
-Rule 8 assessment's classification of any finding or open decision.**
-Per this task's instruction, only a pointer/status note identifying
-Decision 54 as drafted for the eligible-delegate-pool question is added
-to the Rule 8 artifact, not a reclassification of any finding or
-decision.
+**This document itself does not modify the Rule 8 assessment's
+classification of any finding or open decision.** Per this task's
+instruction, only a pointer/status note identifying Decision 54 as
+accepted for the eligible-delegate-pool question is added to the Rule 8
+artifact, not a reclassification of any finding or decision.
 
 ---
 
 # 15. Status
 
-**SPECIFICATION AMENDMENT:** DRAFTED — NOT ACCEPTED
-**PRODUCT ARCHITECT ACCEPTANCE:** PENDING
-**RULE 8:** Unaffected in verdict (remains READY AFTER DECISIONS) while
-this document is in DRAFTED status; Rule 8 artifact updated only to
-note this document's drafted status, per §14
+**SPECIFICATION AMENDMENT:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY
+**PRODUCT ARCHITECT ACCEPTANCE:** ✅ GRANTED — 4 September 2026
+**RULE 8:** The eligible-delegate-pool question is now RESOLVED —
+GOVERNANCE REQUIREMENTS at the Product Architect governance-requirement
+level. All technical implementation/enforcement mechanisms remain
+OPEN. Verdict remains READY AFTER DECISIONS — see the Rule 8 artifact's
+own updated record of this decision.
 **IMPLEMENTATION PLAN:** NOT YET AMENDED
-**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED
+**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED — this acceptance does
+not constitute Implementation Authorization
 **CODE CHANGES:** NONE AUTHORIZED BY THIS DOCUMENT
 
 ---
 
 ## Product Architect Decision Record
 
-**Decision:** PENDING
+**Decision:** ✅ ACCEPTED — the delegated-Editor eligibility and
+selection governance requirements in §2–§11 above are adopted, in
+particular: **the Owner/Admin is the authority who explicitly selects
+the delegated Editor**, consistent with the existing accepted authority
+model (Decisions 46/48), and this decision introduces no second
+selecting authority; **the selected person must be currently
+business-authorized for that specific business** — mere platform
+authentication is insufficient, and authorization in one business does
+not create delegation eligibility in another business, preserving
+Decision 51's tenant isolation; **at most one person is actually
+delegated at a time**; **delegation is explicit, never automatic**;
+**reassignment/re-selection requires a new, explicit Owner/Admin
+action**; **a former delegate does not regain delegation merely by
+reconnecting** (restating Decision 49, not reopening it); **a former
+delegate may be selected again only through a new explicit delegation
+action**, with no standing advantage from having held the role before;
+**offline status does not create or transfer delegation authority**,
+in either direction; and **no unnecessary eligibility tier is
+introduced** — eligibility is exactly "currently business-authorized,"
+with any further technical subdivision (e.g. Decision 44-A's
+staff-tier question) left entirely separate and unresolved. The
+"Owner/Admin" terminology and substance already accepted in Decisions
+46 and 48 is preserved exactly, with no silent expansion of selection
+authority to a separately defined "Admin" role. The technical mechanism
+itself — schema, `firestore.rules` implementation, authentication
+claims, membership design, invitation mechanism, and UI — is explicitly
+NOT decided by this acceptance and remains open, per §12/§13 above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** __________________
+**Date:** 2026-09-04
 
-**Acceptance Signature:** __________________
+**Acceptance Signature:** SABUSHIMIKE MASCENI
 
-**Decision Notes:** __________________
+**Decision Notes:** Accepted as a requirements-level governance
+decision only, exactly as Decisions 44, 45, 46, 47, 48, 49, 50, 51, 52,
+and 53 were each accepted. This acceptance does not authorize
+implementation, `firestore.rules` changes, schema changes, UI changes,
+code changes, tests, a technical mechanism for delegation
+representation or enforcement, an Implementation Plan amendment, or an
+Implementation Authorization. The Rule 8 verdict remains READY AFTER
+DECISIONS — every CRITICAL/HIGH technical finding in §IV.P, including
+Finding A/B (delegated-Editor `firestore.rules` support, still entirely
+absent), Finding E (finalization uniqueness), and Finding K
+(shared-device/cache isolation, still UNVERIFIED), remains exactly as
+classified and unaffected by this decision. Decision 44-A (Staff
+Access) is unaffected by this decision and remains exactly as open and
+separate as before. All previously accepted decisions (44, 46, 47, 48,
+49, 50, 51, 52, 53) remain substantively unchanged.
