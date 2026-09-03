@@ -2,57 +2,783 @@ RULE 8 REASSESSMENT — ANALYSIS ONLY — NO IMPLEMENTATION AUTHORIZED
 
 # Rule 8 Assessment — Periodic Contagem Shared Live Data (Decision 44) — Combined Record
 
-**This document now contains three parts, preserved separately:**
+**This document now contains four parts, preserved separately:**
 
-- **Part III (below, current):** **Corrected Rule 8 Reassessment —
-  Decision 44 Refinement: Single Active Editor + Live Read-Only
-  Viewers.** This is the current, governing Rule 8 artifact. It
-  corrects a conceptual-baseline error in Part II (below): Part II
-  continued to carry forward general multi-writer conflict findings as
-  unchanged CRITICAL blockers rather than fully re-deriving the risk
-  picture from the accepted Single Active Editor model. Part III
-  re-derives it correctly.
+- **Part IV (below, current):** **Fresh Rule 8 Reassessment — Decision
+  46 Dual Active Editor Model.** This is the current, governing Rule 8
+  artifact. It is a genuinely fresh analysis, not a patch — the
+  accepted governing model changed from "at most one legitimate writer"
+  to "Owner/Admin + at most one delegated Editor may legitimately write
+  simultaneously," which invalidates the premise several Part III
+  conclusions depended on.
+- **Part III (further down, superseded):** the corrected reassessment
+  against the accepted Single Active Editor + Live Read-Only Viewers
+  model. Preserved exactly as originally written — **not deleted, not
+  silently overwritten** — but superseded by Part IV wherever the two
+  disagree, specifically regarding same-row concurrent editing and
+  Editor authorization. See Part IV §IV.0 for exactly what changed and
+  why.
 - **Part II (further down, superseded):** the first reassessment
-  against the refined model, produced before this correction. Preserved
-  exactly as originally written — **not deleted, not silently
-  overwritten** — but its conclusions are **superseded by Part III**
-  wherever the two disagree, specifically regarding how the same-row
-  concurrent-editing findings should be classified. See Part III §III.0
-  for exactly what was wrong and why.
+  against the refined model, produced before Part III's correction.
+  Preserved exactly as originally written. Superseded by both Part III
+  and Part IV wherever they disagree.
 - **Part I (further down, historical):** the original Rule 8 Assessment
   against the pre-refinement, open-ended shared-editing model. Preserved
-  exactly as originally written. Superseded by both Part II and Part
-  III wherever they disagree, per the accepted refinement chain.
+  exactly as originally written. Superseded by Parts II, III, and IV
+  wherever they disagree.
 
-**Overall STATUS:** 🟡 DRAFT — Part III analysis complete, verdict
-READY AFTER DECISIONS. **Updated 2026-09-03** to record Decision 45's
-resolution of 44-S-B and 44-S-E (see Part III §III.14a) — four blocking
-decisions remain (44-S-D, 44-S-F, 44-D, 44-F). No part authorizes
-implementation, amends the Implementation Plan, or constitutes an
-Implementation Authorization. No code, `firestore.rules`, schema, or
-test file was modified to produce any part of this document.
+**Overall STATUS:** 🟡 DRAFT — Part IV analysis complete, verdict
+READY AFTER DECISIONS. **Updated 2026-09-03** to record Decision 47's
+resolution of 44-S-G's product-level conflict-handling requirement (see
+Part IV §IV.O-a) — the technical mechanism remains undecided, and all
+other Part IV blockers (44-S-D, 44-S-F, 44-D, 44-F, the delegated-
+Editor rules branch) remain open. No part authorizes implementation,
+amends the Implementation Plan, or constitutes an Implementation
+Authorization. No code, `firestore.rules`, schema, UI, or test file was
+modified to produce any part of this document.
 
-> ⚠️ **GOVERNING MODEL CHANGED — REASSESSMENT REQUIRED, NOT YET
-> PERFORMED.** [Decision 46 — Dual Active Editor Authority](../specs/stock-count-data-loss-resilience-decision-46-amendment.md)
-> was **accepted 3 September 2026** (SABUSHIMIKE MASCENI), superseding
-> the Single Active Editor premise every classification in Part III
-> (and, further down, Parts II and I) was derived from — specifically,
-> Part III's central finding that general multi-writer conflict
-> resolution is **RESOLVED** because no legitimate simultaneous-writer
-> scenario can occur. **That premise no longer holds: the Owner/Admin
-> and a delegated Editor may now legitimately edit simultaneously,
-> including the same row.** Per Decision 46 §11, this requires a fresh,
-> full Rule 8 reassessment, not a patch — and **that reassessment has
-> not yet been performed.** Every conclusion in Part III below (and, by
-> extension, everything it superseded in Parts II/I) should be treated
-> as **describing the pre-Decision-46 model only**, pending that
-> reassessment. This notice exists so a reader does not mistake
-> Decision 46's acceptance for an already-completed reassessment against
-> it — none has occurred.
+---
+
+# PART IV — Fresh Rule 8 Reassessment — Decision 46 Dual Active Editor Model
+
+**Current governing baseline, stated explicitly per the task's own
+requirement:**
+
+- [Decision 46 — Dual Active Editor Authority](../specs/stock-count-data-loss-resilience-decision-46-amendment.md):
+  **✅ ACCEPTED — REQUIREMENTS ONLY**, SABUSHIMIKE MASCENI, 3 September
+  2026.
+- **Governing authority model:** Owner/Admin is always an Active
+  Editor; Owner/Admin may designate at most one delegated Editor;
+  Owner/Admin + one delegated Editor may legitimately edit
+  simultaneously, including the same row; only Owner/Admin may
+  assign/change the delegated Editor; reassignment A→B immediately
+  removes A's delegated authority; no automatic takeover in either
+  direction (delegated Editor offline, or Owner/Admin offline); former
+  delegated Editors remain Viewers unless explicitly reassigned;
+  technical mechanisms and implementation remain unauthorized.
+- **Governing chain:** Decision 38 → Decisions 39–42 → Decision 44
+  (✅ Accepted, 3 Sept 2026) → Decision 44 Refinement — Single Active
+  Editor + Live Read-Only Viewers (✅ Accepted, 3 Sept 2026, now
+  **partially superseded** — INV-44-S01 superseded, INV-44-S04
+  narrowed, per Decision 46 §10) → Decision 45 (✅ Accepted, resolves
+  44-S-B/44-S-E, now **reinterpreted** under Decision 46's two-role
+  model, per Decision 46 §1) → Part I/II/III of this document (🟡, each
+  superseded in turn) → **Decision 46 (✅ Accepted, 3 Sept 2026)** →
+  **Part IV (this reassessment, current)**.
+
+**Repository baseline:** `main = origin/main` = `5570a82`, working tree
+clean. No application code, `firestore.rules`, schema, UI, or test
+implementing any part of Decision 44, its Refinement, Decision 45, or
+Decision 46 exists anywhere in the repository. Every finding below is
+derived from the same, already-reviewed evidence Parts I–III
+established (draft paths, rules text, listener wiring, `submissionId`
+generation, schema field lists) — **no new code exists to inspect
+since Part III**; what changed is the requirement the same evidence
+must now be judged against.
+
+---
+
+## IV.0 — What Changed, and Why This Is a Fresh Analysis, Not a Patch
+
+Part III's central, load-bearing finding was:
+
+> General multi-writer conflict resolution is **RESOLVED** — the
+> scenario of two simultaneously-valid writers is excluded by the
+> accepted product requirement (INV-44-S01/S04).
+
+**This premise no longer holds.** Decision 46 explicitly reintroduces
+exactly the scenario Part III eliminated — two simultaneously-valid
+writers (Owner/Admin + delegated Editor) — though **bounded to exactly
+two known roles**, not the fully open-ended "any number of authorized
+Staff" scenario Part I originally assessed. This is a materially
+different problem from both prior states:
+
+- **Not** the same as Part I/II's open-ended multi-user sharing
+  (unbounded legitimate writers).
+- **Not** the same as Part III's Single Active Editor model (exactly
+  one legitimate writer, all conflicts reduce to staleness).
+- **A new, third shape:** exactly two, individually-identifiable,
+  simultaneously-legitimate roles, one of which is fixed (Owner/Admin)
+  and one of which is assignable and revocable (delegated Editor).
+
+Every classification below is re-derived against this specific shape —
+not copied from Part III with labels flipped, and not reverted wholesale
+to Part I/II's open-ended framing, which would overstate the problem
+Decision 46 actually creates.
+
+**The same axis discipline Part III established still applies and is
+reused here:** Axis 1 (current code state) is unchanged since Part
+III — nothing has been implemented. Axis 2 (target-model risk shape) is
+what every classification below describes.
+
+---
+
+## IV.A — Business Ownership and Tenant Isolation
+
+- **Business-owned active Periodic Contagem state:** unaffected by
+  Decision 46 — the draft path
+  (`businesses/{businessId}/stockCountDrafts/periodic(+/items/{rowKey})`)
+  has no device/session/role identifier in it regardless of how many
+  legitimate editing roles exist. **PASS.**
+- **Cross-business isolation:** unaffected — `isOwnerOf`/`isMemberOf`
+  resolve against `request.auth`-derived profile lookups, never a
+  client-supplied field. **PASS.**
+- **Owner/Admin authority boundaries:** the Owner/Admin's own authority
+  is not newly at risk of crossing a business boundary — `isOwnerOf`
+  is already business-scoped. **PASS.**
+- **Do current Firestore rules enforce the required model?** **FAIL.**
+  `firestore.rules`' `stockCountDrafts` block (both the parent doc and
+  the `items/{rowKey}` sub-match) grants read/create/update/delete to
+  `isOwnerOf(businessId)` **only** — there is no rule branch for a
+  "delegated Editor" role at all. A delegated Editor, under the
+  currently-deployed rules, **cannot read or write the draft at all**,
+  regardless of any assignment the Owner/Admin makes at the application
+  layer, because no such assignment concept exists in the rules or the
+  schema. This is a **hard FAIL**, not a partial gap — the entire
+  delegated-Editor half of Decision 46's model has zero rules-layer
+  support today.
+
+---
+
+## IV.B — Editor Authorization
+
+Answering the task's four explicit sub-questions directly:
+
+- **Can the current system distinguish Owner/Admin from delegated
+  Editor?** **FAIL.** `isOwnerOf` answers "is this the Owner/Admin
+  account," and nothing else — there is no second role concept
+  anywhere in `firestore.rules`, `types.ts`, or `AppContext.tsx`'s
+  Contagem-related code.
+- **Can it enforce at most one delegated Editor?** **FAIL.** There is
+  no field to hold "who is currently the delegated Editor," so nothing
+  can be enforced against it.
+- **Can it prevent unauthorized users from becoming Editors?**
+  **PARTIAL — accidentally, not by design.** Today, only `isOwnerOf`
+  sessions can write to the draft at all, so a genuinely unauthorized
+  (non-Owner, non-delegated) user cannot write — but this is because
+  **no one except the Owner can write today**, not because a
+  delegated-Editor concept correctly gates access. Once a delegated-
+  Editor rule branch is added, this protection must be re-verified
+  against the new branch specifically, not assumed to carry over.
+- **Can it enforce immediate loss of delegated authority after
+  reassignment?** **FAIL.** With no authority-state field, there is
+  nothing to update on reassignment and nothing for a write path to
+  check.
+
+**Overall for §B: FAIL / OPEN — DECISION+DESIGN REQUIRED.** This is the
+single largest implementation gap Decision 46 introduces relative to
+Part III's world — Part III's gaps were about *enforcing* a
+single-editor model that was at least conceptually simple; here, the
+*basic access grant* for a second legitimate role doesn't exist yet.
+
+---
+
+## IV.C — Same-Row Concurrent Legitimate Editing (Reinstated)
+
+This is confirmed, per the task's framing, as a **real, intended,
+legitimate scenario now**, not a prohibited one.
+
+- **What happens with simultaneous writes to the same row today?**
+  Unchanged mechanism from every prior part: plain Firestore
+  document write, last-physical-arrival-wins, on
+  `stockCountDrafts/periodic/items/{rowKey}`. No transaction, no
+  precondition, confirmed again by the same code paths
+  (`savePeriodicStockDraftItem`/`flushPeriodicStockDraftRows`).
+- **Does current last-write-wins behavior silently discard one
+  observation?** **Yes — confirmed, and now via a *legitimate* second
+  writer, not merely a stale one.** This is the material difference
+  from Part III: Part III's residual risk was a stale former Editor
+  (an edge case — offline, crash, or an explicit takeover). Under
+  Decision 46, Owner/Admin and delegated Editor writing the same row
+  moments apart is an **ordinary, expected, non-edge-case occurrence**
+  the moment two people are counting stock together.
+- **Is the accepted Decision 44 no-silent-loss requirement satisfied?**
+  **No — FAIL.** Decision 44 §9/§21 and the refinement's own §16
+  require no valid operator-entered value to be silently discarded.
+  A last-write-wins overwrite between two now-legitimate writers is
+  exactly the silent loss both documents prohibit.
+- **Can observations currently be distinguished and preserved/
+  accounted for?** **No — FAIL, confirmed by schema inspection.**
+  `PeriodicStockDraftItem` (re-checked this session, unchanged from
+  Part I/II/III's own findings) has fields: `productId`, `productName`,
+  `quantity`, `unit`, `costPrice`, `sellingPrice`, `removed`,
+  `validated`. **No writer-identity field. No per-row timestamp or
+  revision.** The only timestamp anywhere in the draft structure is the
+  meta document's single, whole-draft `updatedAt` — which cannot say
+  *which row* changed or *who* changed it. There is currently **no way
+  even to detect**, let alone resolve, that Owner/Admin and delegated
+  Editor entered different values for the same product — the data
+  model itself is insufficient, independent of any conflict-resolution
+  algorithm choice.
+- **Is a technical conflict-resolution mechanism now required?**
+  **Yes — confirmed as a requirement, mechanism explicitly not
+  selected here**, per the task's own instruction.
+
+**Overall for §C: FAIL — CRITICAL.** This is the most consequential
+re-opened finding in this reassessment: Part III's RESOLVED
+classification for general multi-writer conflict handling is **directly
+invalidated** by Decision 46, and unlike Part III's narrower residual
+concern (stale-former-editor only), this now covers routine,
+expected-to-happen operation.
+
+---
+
+## IV.D — Stale Former-Editor Writes
+
+Re-tracing Editor A losing authority to Editor B (now: delegated Editor
+A replaced by delegated Editor B, with Owner/Admin as a constant third
+party in every scenario, per Decision 46 §1-A/§4):
+
+- **Can A's queued/local writes reach Firestore after reassignment?**
+  **Yes — unchanged.** Same generation-token gap as every prior part:
+  A's cancellation logic is scoped to A's own subsequent actions, not
+  an externally-observed reassignment.
+- **Can A overwrite B/Admin data?** **Yes — unchanged**, same
+  last-write-wins semantics, now with a second possible legitimate
+  victim (Admin's own concurrent edit) in addition to B's.
+- **Can A resurrect a draft?** **Yes — unchanged**, same mechanism as
+  Part I §L / Part III §III.1/§III.8.
+- **Can A mutate finalized data?** **Yes — unchanged**, per
+  `firestore.rules` L727's unconditional Owner update/delete on
+  periodic-type `stockCounts` — though note: A, as a former **delegated
+  Editor** (not Owner/Admin), would need `isOwnerOf` to be true for
+  this specific rule to apply, which it is **not** for a non-Owner
+  delegated Editor under current rules. **This means today, a former
+  delegated Editor literally cannot mutate finalized data, only because
+  delegated Editors have no write access to anything Contagem-related
+  at all yet** (§B) — once delegated-Editor write access is built, this
+  specific protection must be re-verified, not assumed to hold by
+  accident the way it does today.
+
+**Overall for §D: FAIL — CRITICAL, unchanged in kind from Part III,
+now with two distinct "current legitimate holder" identities (Admin,
+current delegated Editor) either of which a stale write could
+target.**
+
+---
+
+## IV.E — Finalization Uniqueness (Decision 44-D, Reassessed)
+
+Explicitly addressing the task's named scenarios:
+
+- **Admin finalization vs. delegated Editor finalization:** Decision
+  46 does not state that the delegated Editor may finalize — only that
+  they may edit. Finalization authorization (44-S-C) remains open, and
+  existing governance (the original specification's own note, reaffirmed
+  in Part III §III.3-C) suggests Owner-only finalization is the likely
+  baseline. **This reassessment does not assume delegated Editors can
+  finalize** — but flags that Decision 46 makes confirming 44-S-C
+  explicitly, rather than by default, more operationally important than
+  before (two people are now actively contributing to a count only one
+  of them may be able to close out).
+- **Simultaneous finalization attempts:** if finalization remains
+  Owner-only, this specific scenario (two *finalizers*) doesn't arise
+  from Decision 46 directly — but **Owner/Admin on two devices** still
+  can, exactly as in Part III §III.7, and Decision 46 does nothing to
+  change that risk.
+- **Offline queued finalization, retry after timeout, stale former
+  Editor finalization, draft deletion/resurrection, duplicate
+  `stockCounts`:** every one of these is **identical to Part III §III.7's
+  findings, unaffected by Decision 46**, because the `submissionId`
+  generation mechanism (`PeriodicStockCountView.tsx`'s
+  `submissionIdRef`) has no concept of Editor role at all — it is
+  generated per local session regardless of whether that session is
+  Owner/Admin or a delegated Editor.
+- **Does the current `submissionId` mechanism guarantee exactly one
+  finalization of a physical Periodic Contagem?** **No — FAIL,
+  unchanged from Part I/II/III.** Confirmed again this session against
+  the same code: the deterministic `stockCounts` id is derived from a
+  per-session `submissionId`, with no cross-session/cross-role
+  uniqueness check.
+
+**Overall for §E: FAIL — CRITICAL, unaffected in root cause by Decision
+46, though its practical likelihood arguably increases slightly now
+that two people are actively working the same count (more sessions
+= more chances for an ambiguous network retry or a stale device to
+independently reach the confirmation step).**
+
+---
+
+## IV.F — Draft Lifecycle and Resurrection
+
+- **Draft creation, updates:** unaffected by Decision 46 at the
+  mechanism level — same per-row/meta write functions, now needing
+  (once built) to also accept delegated-Editor writes, which they
+  cannot today (§B).
+- **Deletion after finalization:** unchanged — atomic batch, per prior
+  parts.
+- **Stale/offline writes after deletion:** unchanged — same
+  resurrection gap as §D.
+- **Reassignment between Editors:** **entirely unimplemented.** There
+  is no code path anywhere that represents "the delegated Editor was A,
+  now it's B" — this doesn't yet exist as a data structure, let alone a
+  guarded transition.
+- **Can an old client recreate the active draft?** **Yes — unchanged**,
+  same `create` rule gap as Part I §M / Part III §III.9 (no check for
+  an already-finalized count before allowing a fresh `create`).
+
+**Overall for §F: FAIL / OPEN — mechanism does not exist for the
+reassignment half of this section; resurrection risk unchanged and
+CRITICAL from prior parts.**
+
+---
+
+## IV.G — Post-Finalization Immutability
+
+Re-verified this session, `firestore.rules` L727, byte-identical to
+every prior citation: `allow update, delete: if isOwnerOf(businessId)
+&& resource.data.get('type', null) != 'initial';` — **unconditional
+Owner update/delete on finalized periodic `stockCounts`, independent of
+draft behavior, exactly as the task requires assessing separately.**
+**FAIL — unaffected by Decision 46**, since this rule is keyed to
+`isOwnerOf` (i.e., Owner/Admin specifically), not to any
+Editor/delegated-Editor concept — a delegated Editor cannot exploit this
+today only because delegated Editors have no write access to anything
+in this area yet (§B), which is an accident of current incompleteness,
+not a designed protection.
+
+---
+
+## IV.H — Offline/Reconnect Safety
+
+- **Durable local persistence, queued writes:** unaffected by Decision
+  46 — `persistentLocalCache` operates identically regardless of how
+  many legitimate writer roles exist. **PASS** (mechanism itself).
+- **Reconnect ordering, stale writes:** **FAIL**, unchanged — no
+  ordering/version check exists (§C/§D).
+- **Authority changes while offline:** **FAIL/OPEN** — there is no
+  authority state to change in the first place (§B/§F), so "what
+  happens to an offline session when authority changes" cannot yet be
+  answered by the current architecture; it's an unimplemented question,
+  not merely an unsafe one.
+- **Can local persistence replay writes after authority has changed?**
+  **Yes, confirmed unsafe** — the SDK's offline queue has no
+  application-level awareness of anything resembling authority, so a
+  queued write from a since-reassigned former delegated Editor would
+  replay exactly as if nothing had changed, once connectivity returns.
+
+**Overall for §H: FAIL, unchanged in mechanism from Part III, now with
+an additional "authority changed while offline" case that is
+unimplemented rather than merely unsafe.**
+
+---
+
+## IV.I — Live Synchronization
+
+Distinguishing transport-level delivery from actual safe state
+adoption, as the task requires:
+
+- **Firestore listeners:** unaffected, still live, still business-
+  scoped, unchanged since Part I §E. **PASS** (transport only).
+- **Does working state actually adopt remote changes?** **No — FAIL,
+  unchanged.** The existing "safe interim fix" notice remains passive
+  and whole-draft-level; it does not distinguish Owner/Admin's view
+  from a delegated Editor's view, and does not adopt content
+  automatically for either.
+- **Viewer behavior:** unaffected — Viewers already only ever read via
+  the same listeners; nothing about Decision 46 changes this half.
+- **Admin + delegated Editor behavior:** **new territory, unimplemented.**
+  Neither role has any way today to see, in real time, that the *other*
+  legitimate Editor just changed a specific row — both would rely on
+  the same manual-reload notice, which (per §C) cannot even tell them
+  *which* row changed, only that *something* in the shared draft did.
+- **Are legitimate concurrent changes visible?** **Only in the weakest
+  sense** — a whole-draft "something changed" signal, not a row-level,
+  attributable, real-time view of the other Editor's specific edit.
+- **Can the UI silently replace or ignore another user's observation?**
+  **Yes — confirmed** per §C: since nothing tracks per-row writer
+  identity or version, a UI built naively on top of the existing notice
+  mechanism could easily present whichever value happened to load last
+  as if it were simply "the" value, with no visible indication a
+  second legitimate Editor's differing entry ever existed.
+
+**Overall for §I: FAIL for genuine dual-Editor live-adoption; PASS for
+raw transport only.**
+
+---
+
+## IV.J — Multi-Tab / Multi-Session Authority
+
+- **Can two tabs simultaneously act as Owner/Admin or delegated
+  Editor?** **Yes, trivially** — same finding as Part III §III.11,
+  now applying to two role-slots instead of one: two Owner/Admin tabs,
+  two delegated-Editor tabs (if such access existed), or one of each in
+  duplicate, are all indistinguishable from the rules layer's
+  perspective, since no session-identity concept exists at all.
+- **Is authority durable/shared or merely browser-local?** **Currently
+  neither — it doesn't exist as a concept**, so the question is
+  premature until §B/§F are built; once built, it must be durable/
+  Firestore-visible, not browser-local, for the same reason Part III
+  §III.11 already established (a browser-local signal is invisible to
+  a different browser/tab entirely).
+- **Can two sessions both believe they are the delegated Editor?**
+  **Not currently testable** (no such state exists), but by
+  construction of an eventual naive implementation, yes, unless the
+  assignment mechanism itself is built with a single-writer-safe
+  update pattern (e.g. a transaction) — flagged as a design
+  requirement, not solved here.
+- **Does same-user multi-tab behavior create additional concurrency/
+  finalization risk?** **Yes — compounds §E.** If Owner/Admin has
+  multiple tabs open, each could independently generate its own
+  `submissionId` and attempt finalization, exactly as in Part III
+  §III.7, entirely unaffected by whether a delegated Editor exists at
+  all.
+
+**Overall for §J: FAIL/OPEN, unchanged in root cause from Part III,
+scope widened to two role-slots.**
+
+---
+
+## IV.K — Shared-Device / Logout / Cache Isolation
+
+Re-verified this session: no cache-clear-on-auth-transition code found,
+no explicit confirmation of Firestore SDK rules-re-evaluation-on-cached-
+read behavior beyond what Parts I/II/III already stated. **Marked
+UNVERIFIED, not PASS, exactly as the task requires** — unaffected by
+Decision 46, since this question is orthogonal to how many legitimate
+Editor roles exist. The specific verification required is unchanged
+from Part III §III.12: whether Firestore's client SDK re-evaluates
+`firestore.rules` against the current `request.auth` on every read
+served from `persistentLocalCache`.
+
+**Overall for §K: UNVERIFIED — unaffected by Decision 46.**
+
+---
+
+## IV.L — Scale / Performance
+
+No new scale concern introduced specifically by the two-role model —
+an authority-state field (whatever shape it eventually takes) remains,
+at most, one additional small field per row or on the meta document,
+not a new per-product cost multiplier. Two simultaneous writers instead
+of one does not meaningfully change listener/write volume at the
+scales already assessed (100–500+ products) in Part I §P/Part III
+§III.14 — this reassessment finds no basis to revise that conclusion.
+**PASS**, with the caveat (unchanged from every prior part) that this
+is assessment only, not a scale redesign.
+
+---
+
+## IV.M — Decision 46-Specific Questions, Answered Directly
+
+1. **Does allowing two legitimate Editors invalidate the previous
+   resolution of general multi-writer conflict handling?** **Yes.**
+   Part III's RESOLVED classification is invalidated for the bounded
+   two-writer case; it is not reverted all the way to Part I/II's
+   open-ended framing, since the writer count remains capped at two
+   identifiable roles, not arbitrary Staff.
+2. **Is same-row concurrent editing now a Rule 8 blocker?** **Yes —
+   CRITICAL**, per §IV.C.
+3. **What exactly must be preserved when Admin and delegated Editor
+   enter different physical observations for the same stock row?**
+   Per BDR-0009's physical-observation semantics and Decision 44 §9/
+   §21's no-silent-loss invariant: **neither entry may silently
+   disappear** — the losing value must remain visible/recoverable
+   (e.g. via a conflict record or history), even though only one value
+   can ultimately become the working/finalized quantity. Not an
+   additive-merge case, consistent with every prior part's own
+   reasoning on this point.
+4. **Does the current data model contain enough information to
+   distinguish those observations?** **No — confirmed FAIL**, per
+   §IV.C's schema inspection: no writer-identity field, no per-row
+   timestamp/revision.
+5. **Can stale writes from a former delegated Editor be rejected
+   safely?** **No, not today** — per §IV.D, the same generation-token
+   gap applies; no authority-aware rejection exists.
+6. **Can authority changes be made authoritative across devices/tabs?**
+   **Not currently** — no authority-state concept exists at all (§IV.B/
+   §IV.J); once built, it must be Firestore-durable, not browser-local,
+   to be authoritative across devices.
+7. **Can exactly-one finalization be guaranteed with two legitimate
+   Editors?** **No** — per §IV.E, unaffected by Decision 46, the same
+   `submissionId`-per-session gap governs regardless of role.
+8. **Can a finalized Contagem be made immutable?** **Not currently** —
+   per §IV.G, `firestore.rules` grants unconditional Owner update/
+   delete on periodic-type `stockCounts`.
+9. **Can offline clients safely reconnect after authority changes?**
+   **No** — per §IV.H, queued writes replay with no authority
+   awareness.
+10. **Does the current architecture satisfy the no-silent-loss
+    requirement under the Dual Active Editor model?** **No** — per
+    §IV.C, a same-row overwrite between two now-legitimate writers is
+    exactly the silent loss Decision 44/46 prohibit, and no mechanism
+    exists to prevent or record it.
+
+---
+
+## IV.N — Findings Summary Table
+
+| Area | Classification | Severity | Type |
+|---|---|---|---|
+| A — Business ownership / tenant isolation (storage shape) | PASS | — | Requirement satisfied |
+| A — `firestore.rules` enforcing the dual-role model | FAIL | CRITICAL | Not satisfied — technical design + rules change required |
+| B — Distinguish Owner/Admin vs. delegated Editor | FAIL | CRITICAL | Not satisfied — technical design required |
+| B — Enforce at most one delegated Editor | FAIL | CRITICAL | Not satisfied — technical design required |
+| B — Prevent unauthorized users from editing | PARTIAL (accidental) | HIGH | Must be re-verified once delegated-Editor access is built |
+| B — Enforce immediate loss on reassignment | FAIL | CRITICAL | Not satisfied — technical design required |
+| C — Same-row concurrent write handling | FAIL | **CRITICAL (reinstated)** | Product-level requirement + technical design required |
+| C — Data model distinguishes observations | FAIL | CRITICAL | Schema addition required (writer id, per-row version) |
+| D — Stale former-(delegated)-Editor protection | FAIL | CRITICAL | Technical design required |
+| E — Finalization uniqueness (44-D) | FAIL | CRITICAL | Technical design required, unaffected by Decision 46 |
+| F — Reassignment lifecycle | OPEN (unimplemented) | CRITICAL | Technical design required |
+| F — Draft resurrection | FAIL | CRITICAL | Technical design required, unaffected |
+| G — Post-finalization immutability | FAIL | CRITICAL | Technical design required, unaffected |
+| H — Offline/reconnect safety | FAIL | CRITICAL | Technical design required |
+| I — Live transport | PASS | — | Requirement satisfied |
+| I — Safe live state adoption for dual Editors | FAIL | HIGH | Technical design required |
+| J — Multi-tab authority | FAIL/OPEN | CRITICAL | Technical design required, unaffected in root cause |
+| K — Shared-device/cache isolation | **UNVERIFIED** | HIGH | Verification required, unaffected by Decision 46 |
+| L — Scale/performance | PASS | — | No new concern identified |
+| 44-S-A — Viewer authorization | OPEN | — | Product Architect decision required |
+| 44-S-C — Finalizer authorization | OPEN (elevated priority) | — | Product Architect decision required — recommend explicit confirmation now |
+| 44-S-G — Conflict handling | **REOPENED, scope expanded** | CRITICAL | Product Architect decision + technical design required |
+| Eligible-delegate pool (who may be assigned) | OPEN (new, narrow gap) | — | Product Architect decision — noted in §IV.O |
+
+---
+
+## IV.O — A Narrow Governance Gap Discovered, Not an Inconsistency
+
+Decision 45/46 resolve **who decides** who may edit (Owner/Admin,
+exclusively) but do not state **which pool of users is eligible to be
+selected** as the delegated Editor — e.g., any Staff account, or only
+an elevated `staffTier == 'manager'` tier (the same precedent pattern
+Part III §III.3-A/B already discussed for the now-superseded single-
+delegate case). This is not a contradiction between Decision 45 and
+Decision 46 — both are silent on this specific point, consistently —
+but it is a small residual scope question worth naming explicitly
+rather than silently assuming an answer. **Not elevated to a blocker**,
+since it can plausibly be answered alongside 44-S-A without holding up
+the authority-mechanism design work.
+
+---
+
+## IV.P — Critical and High Blockers
+
+**CRITICAL (prevents Implementation Authorization):**
+
+1. No `firestore.rules` support for a delegated-Editor role at all
+   (§IV.A/§IV.B).
+2. No data-model support for distinguishing concurrent same-row
+   observations (§IV.C) — a schema gap, not merely a missing algorithm.
+3. Same-row concurrent-write conflict handling is required again and
+   entirely unbuilt (§IV.C) — the single most consequential re-opened
+   item relative to Part III.
+4. Stale former-(delegated)-Editor write protection remains unbuilt
+   (§IV.D), now covering two distinct "current legitimate holder"
+   identities instead of one.
+5. Cross-device/cross-role finalization uniqueness (44-D) remains
+   unbuilt and unaffected by Decision 46 (§IV.E).
+6. Draft-reassignment lifecycle does not exist as a mechanism at all
+   (§IV.F).
+7. Post-finalization immutability gap remains, unaffected (§IV.G).
+8. Offline/reconnect replay of stale authority-unaware writes remains
+   unbuilt (§IV.H).
+9. Multi-tab authority race remains unbuilt, scope widened to two
+   role-slots (§IV.J).
+
+**HIGH:**
+
+10. Shared-device/logout cache isolation remains UNVERIFIED (§IV.K).
+11. Genuine row-level live-adoption for two simultaneous Editors is
+    unbuilt beyond the existing whole-draft passive notice (§IV.I).
+12. "Prevent unauthorized users from editing" currently passes only by
+    accident (no delegated-Editor access exists yet at all) and must be
+    re-verified, not assumed, once that access is built (§IV.B).
+
+---
+
+## IV.O-a — UPDATE (this session): 44-S-G Resolved at the Product Level
+
+**What changed, precisely, and nothing else:** the Product Architect
+has since accepted [Decision 47](../specs/stock-count-data-loss-resilience-decision-47-amendment.md)
+(SABUSHIMIKE MASCENI, 3 September 2026), resolving **44-S-G's
+product-level question**: what must same-row conflict handling
+guarantee under the Dual Active Editor model?
+
+**Governing answer, now in force:** live synchronization is the
+**primary conflict-avoidance mechanism** — durable writes must
+propagate to the other legitimate editor near-real-time, to minimize
+the window in which two legitimate editors work from stale values. This
+does **not** authorize blind last-write-wins. If a genuine simultaneous
+collision still occurs despite live synchronization, the system must
+**detect** it and **preserve/account for** the competing observation —
+never silently discard it. The **technical mechanism** achieving either
+half of this (the live-adoption mechanism; the detect-and-preserve
+mechanism) is **explicitly NOT decided** — Decision 47 §5 states this
+outright.
+
+**What did NOT change — restated because this is the load-bearing
+point of this update:** every technical blocker §IV.P/§IV.Q already
+identified remains exactly as open as before. Decision 47 answers *what
+conflict handling must achieve*, not *how*. Specifically still open,
+unaffected in technical status:
+
+- detecting stale/conflicting legitimate writes;
+- preventing silent last-write-wins (now a confirmed product
+  *requirement*, per Decision 47 §2.3 — not merely a risk finding
+  anymore, but still technically unimplemented);
+- preserving/accounting for competing observations;
+- genuine live working-state adoption (beyond the existing passive
+  whole-draft notice);
+- delegated Editor authorization (the `firestore.rules` branch does not
+  exist);
+- authority/reassignment enforcement;
+- former delegated Editor stale-write rejection;
+- exact-one finalization (44-D);
+- post-finalization immutability;
+- offline/reconnect safety;
+- multi-tab authority;
+- shared-device/cache isolation (44-F, still UNVERIFIED).
+
+**This does not move the Rule 8 verdict to READY.** §IV.Q and §IV.R
+below are updated to reflect the resolution of 44-S-G's product-level
+half only; the verdict itself is unchanged in tier.
+
+---
+
+## IV.Q — Decisions Still Required, Separated by Type (updated this session)
+
+**Product Architect decisions:**
+
+- **44-S-A** (Viewer authorization) — still open, unaffected by
+  Decision 46/47.
+- **44-S-C** (Finalizer authorization) — still open; recommended to
+  confirm explicitly given two active contributors may now exist.
+- **44-S-G** — **✅ RESOLVED at the product level by Decision 47,
+  2026-09-03.** Live synchronization is the primary conflict-avoidance
+  mechanism; detect-and-preserve is required for any genuine collision;
+  no blind last-write-wins. **The technical mechanism remains open** —
+  folded into the two technical items immediately below, which are
+  themselves unaffected in status by this resolution.
+- **Eligible-delegate pool** (§IV.O) — narrow, non-blocking, still
+  open.
+
+**Technical design decisions (mechanism, not policy) — all unaffected in status by Decision 47:**
+
+- **44-S-D** (authority model mechanism) — still open, must support two
+  concurrent role-slots (Owner/Admin fixed + one revocable delegate).
+- **44-S-F** (former-Editor reconnection mechanism) — still open, must
+  distinguish "reassigned-away delegated Editor" from "Owner/Admin."
+- **44-D** (finalization guard mechanism) — still open, unaffected in
+  shape by Decision 46 or 47.
+- **44-F** (cache isolation mechanism) — still open, pending the
+  verification named in §IV.K.
+- **Same-row conflict-detection/live-adoption mechanism** — **now has
+  a settled product-level brief, per Decision 47** (live-sync-first,
+  detect-and-preserve, no blind last-write-wins) — the mechanism
+  itself (version/precondition check, conflict record, transaction, or
+  another approach) is still not selected here.
+- **Delegated-Editor `firestore.rules` branch** — still open, required
+  before any of the above can be exercised at all.
+
+---
+
+
+## IV.R — Final Rule 8 Verdict (updated this session)
+
+# READY AFTER DECISIONS
+
+**Verdict tier unchanged after Decision 47.** 44-S-G's product-level
+question is now resolved (§IV.O-a), which is real, meaningful progress
+— it settles *what* the eventual mechanism must guarantee, removing
+one source of ambiguity from the technical design work. It does **not**
+reduce the CRITICAL/HIGH blocker count in §IV.P, all of which remain
+open exactly as stated, because Decision 47 deliberately did not select
+a mechanism, per its own §5/§9.
+
+**Not forced, independently re-derived** — nothing found is a
+fundamental architectural or security impossibility. The dual-role
+model remains buildable as an extension of the existing business-owned-
+draft, listener-based architecture: it requires a new `firestore.rules`
+branch (a precedented pattern — the existing `staffTier == 'manager'`
+carve-out elsewhere in the same file is structurally similar), an
+additive schema field or two (writer identity, per-row version), and a
+genuinely new conflict-detection/live-adoption mechanism now built
+against a settled product-level brief — all additive extensions, not a
+redesign of what already works (business-owned storage, live listeners,
+durable local persistence, atomic finalization-batch cleanup).
+
+**The minimum decisions required before Implementation Planning can
+begin, updated:**
+
+1. ~~44-S-G, reopened/expanded~~ **✅ RESOLVED — Decision 47,
+   2026-09-03.**
+2. **44-S-D** (authority model for two role-slots) and **44-S-F**
+   (former-delegate reconnection), both still open, now scoped to the
+   two-role shape.
+3. **The new delegated-Editor `firestore.rules` branch** and the
+   **same-row conflict-detection/live-adoption mechanism** (now
+   scoped by Decision 47's product-level brief) — technical design,
+   dependent on 2 above.
+4. **44-D** (finalization guard) and **44-F** (cache isolation) —
+   carried over, entirely unaffected by Decision 46 or 47, exactly as
+   critical/high as in every prior part.
+
+**Not required to begin design work, though still open:** 44-S-A,
+44-S-C (recommended to confirm explicitly, not strictly blocking), and
+the eligible-delegate-pool question (§IV.O).
+
+---
+
+
+## IV.S — Reporting Summary (Part IV, original)
+
+> **Addendum, this session:** item 6 below (decisions still required)
+> is superseded by §IV.O-a/§IV.Q's update — 44-S-G is now resolved at
+> the product level by Decision 47. Item 7 (verdict) is unchanged in
+> tier. Items 1–5 and 8 are otherwise still accurate. See §IV.O-a for
+> the current, authoritative statement.
+
+1. **File(s) changed:** exactly one —
+   `docs/engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md`
+   (this file), with Part IV inserted above the preserved, unmodified
+   Parts III, II, and I.
+2. **Current governing baseline used:** Decision 46 — ACCEPTED,
+   REQUIREMENTS ONLY; Owner/Admin + at most one delegated Editor.
+3. **Major PASS findings:** business-owned storage shape (§IV.A); live
+   listener transport (§IV.I, transport-only); scale/performance at
+   existing product-count ranges (§IV.L).
+4. **Major FAIL/PARTIAL/UNVERIFIED findings:** no `firestore.rules`
+   support for a delegated-Editor role at all (§IV.A/§IV.B); no
+   data-model support for distinguishing concurrent observations
+   (§IV.C); same-row conflict handling reopened as CRITICAL (§IV.C);
+   stale former-Editor protection unchanged/unbuilt (§IV.D);
+   finalization uniqueness unbuilt, unaffected (§IV.E); reassignment
+   lifecycle unimplemented (§IV.F); post-finalization immutability gap
+   unaffected (§IV.G); offline/reconnect replay risk (§IV.H); genuine
+   dual-Editor live adoption unbuilt (§IV.I); multi-tab authority race
+   unbuilt (§IV.J); shared-device/cache isolation **UNVERIFIED**
+   (§IV.K).
+5. **Critical/High blockers:** nine CRITICAL, three HIGH — full list in
+   §IV.P.
+6. **Decisions still required:** four Product Architect decisions
+   (44-S-A, 44-S-C, 44-S-G reopened, eligible-delegate pool) and six
+   technical design decisions (44-S-D, 44-S-F, 44-D, 44-F, new
+   conflict-detection mechanism, new delegated-Editor rules branch) —
+   full list in §IV.Q.
+7. **Final Rule 8 verdict:** **READY AFTER DECISIONS** — not forced,
+   decision set materially larger than Part III's.
+8. **Confirmation:** no application code, `firestore.rules`, schema,
+   UI, or test file was changed to produce this reassessment — only
+   this one governance markdown file, and only by insertion; Parts
+   I/II/III were not deleted, edited, or rewritten.
 
 ---
 
 # PART III — Corrected Rule 8 Reassessment — Decision 44 Refinement: Single Active Editor + Live Read-Only Viewers
+
+## ⚠️ SUPERSEDED — see Part IV above
+
+*(This Part III reassessment is preserved exactly as originally
+written, for audit-history purposes. **Its central finding — that
+general same-row multi-writer conflict resolution is RESOLVED because
+no legitimate simultaneous-writer scenario can occur — has been
+superseded by [Decision 46 — Dual Active Editor Authority](../specs/stock-count-data-loss-resilience-decision-46-amendment.md),
+accepted 3 September 2026, and Part IV's fresh reassessment above.**
+Decision 46 reintroduces a legitimate simultaneous-writer scenario
+(Owner/Admin + one delegated Editor), so Part III's elimination of the
+same-row conflict problem no longer holds. Where Part III and Part IV
+disagree, Part IV governs. Nothing below this notice was edited.)*
 
 **Why this correction exists:** Part II, produced in the immediately
 preceding session, restated the general concurrent-multi-writer
