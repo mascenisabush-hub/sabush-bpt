@@ -40,12 +40,10 @@ Part IV §IV.O-d) — the technical mechanism remains undecided. **Updated
 2026-09-04** to record Decision 51's resolution of 44-F's
 governance-requirement layer (see Part IV §IV.O-e) — the technical
 verification and mechanism remain undecided. **Updated 2026-09-04** to
-record that [Decision 52 — Viewer Authorization Requirements](../specs/stock-count-data-loss-resilience-decision-52-amendment.md)
-has been drafted (STATUS: DRAFTED — NOT ACCEPTED) proposing the
-governance-requirement layer for 44-S-A (see Part IV §IV.O-f) — not yet
-accepted, and no Rule 8 finding or open decision is reclassified by the
-draft. All other Part IV blockers (the delegated-Editor rules branch)
-remain open.
+record Decision 52's resolution of 44-S-A's governance-requirement
+layer (see Part IV §IV.O-f) — the technical enforcement/mechanism
+remains undecided. All other Part IV blockers (the delegated-Editor
+rules branch) remain open.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -86,9 +84,11 @@ requirement:**
   §IV.O-c)** → **Decision 50 (✅ Accepted, 4 Sept 2026, resolves 44-D at
   the governance-requirement level, §IV.O-d)** → **Decision 51
   (✅ Accepted, 4 Sept 2026, resolves 44-F at the governance-requirement
-  level, §IV.O-e)**. Technical mechanisms for 44-S-D, 44-S-F, 44-D,
-  44-S-G, and 44-F (including 44-F's own named technical verification)
-  remain undecided throughout this chain.
+  level, §IV.O-e)** → **Decision 52 (✅ Accepted, 4 Sept 2026, resolves
+  44-S-A at the governance-requirement level, §IV.O-f)**. Technical
+  mechanisms for 44-S-D, 44-S-F, 44-D, 44-S-G, 44-F (including 44-F's
+  own named technical verification), and 44-S-A remain undecided
+  throughout this chain.
 
 **Repository baseline:** `main = origin/main` = `5570a82`, working tree
 clean. No application code, `firestore.rules`, schema, UI, or test
@@ -553,7 +553,7 @@ is assessment only, not a scale redesign.
 | J — Multi-tab authority | FAIL/OPEN | CRITICAL | Technical design required, unaffected in root cause |
 | K — Shared-device/cache isolation | **UNVERIFIED** | HIGH | Verification required, unaffected by Decision 46 |
 | L — Scale/performance | PASS | — | No new concern identified |
-| 44-S-A — Viewer authorization | OPEN | — | Product Architect decision required |
+| 44-S-A — Viewer authorization | **✅ RESOLVED at governance-requirement level (Decision 52, 2026-09-04)** | — | Technical enforcement/mechanism still required — see §IV.O-f |
 | 44-S-C — Finalizer authorization | OPEN (elevated priority) | — | Product Architect decision required — recommend explicit confirmation now |
 | 44-S-G — Conflict handling | **REOPENED, scope expanded** | CRITICAL | Product Architect decision + technical design required |
 | Eligible-delegate pool (who may be assigned) | OPEN (new, narrow gap) | — | Product Architect decision — noted in §IV.O |
@@ -822,11 +822,12 @@ Architect decisions.**
 
 ---
 
-## IV.O-f — 44-S-A UNDER CONSIDERATION — NOT YET RESOLVED
+## IV.O-f — UPDATE (2026-09-04): 44-S-A Resolved at the Governance-Requirement Level
 
 [Decision 52 — Viewer Authorization Requirements](../specs/stock-count-data-loss-resilience-decision-52-amendment.md)
-has been **drafted (STATUS: DRAFTED — NOT ACCEPTED)**, proposing the
-governance-requirement layer for 44-S-A: who is eligible to be a
+has been **✅ ACCEPTED AND AUTHORIZED AS GOVERNANCE DECISION —
+REQUIREMENTS ONLY** (SABUSHIMIKE MASCENI, 4 September 2026), settling
+the governance-requirement layer for 44-S-A: who is eligible to be a
 Viewer (business-authorized users other than Owner/Admin or the
 currently delegated Editor, plus former delegated Editors who remain
 otherwise business-authorized); the requirement that mere
@@ -846,18 +847,30 @@ reconnection governance requirements (Decision 49), the finalization-
 protection governance requirements (Decision 50), or the context-
 isolation governance requirements (Decision 51).
 
-**It does not select a technical mechanism and is not yet accepted.**
-**44-S-A is now being addressed at the governance-requirement level
-only — not resolved.** The open item for 44-S-A in §IV.N's summary
-table, and in §IV.Q and §IV.R below, remains exactly as classified —
-**OPEN — Product Architect decision required** — unchanged by this
-draft. No finding or open decision is marked resolved by this notice.
-§IV.Q and §IV.R are **not** updated by this notice — 44-S-A remains
-listed there as open until (and unless) Decision 52 is formally
-accepted. **44-S-C (finalizer authorization) and the eligible-delegate-
-pool question are explicitly not addressed by Decision 52 and remain
-separately open.** This notice exists so a reader does not mistake a
-drafted governance proposal for a resolved Rule 8 open decision.
+**Two distinct claims, kept explicit and not conflated:**
+
+- **44-S-A governance requirements: ✅ RESOLVED**, per Decision 52.
+- **44-S-A technical enforcement/mechanism: STILL OPEN.** Decision 52
+  selects no Firestore rules, authentication implementation, role
+  claims, database schema, query, index, security-rule expression, UI
+  implementation, invitation mechanism, membership table, or cache
+  mechanism — those remain a fully separate, not-yet-started gate,
+  exactly as Decisions 48, 49, 50, and 51 left their own technical
+  mechanisms open.
+
+**The open item for 44-S-A in §IV.N's summary table is not
+reclassified to PASS by this update** — it moves from "OPEN — Product
+Architect decision required" to "governance-resolved — technical
+enforcement required," which §IV.Q and §IV.R below record. **No
+CRITICAL/HIGH technical finding in §IV.P — including Finding K
+(shared-device/cache isolation, still UNVERIFIED) — is reclassified by
+this update.** §IV.Q and §IV.R below are updated only to move 44-S-A
+from "open Product Architect decision" to "resolved at the
+governance-requirement level, technical enforcement now governed by
+Decision 52" — not to RESOLVED at the technical level. **44-S-C
+(finalizer authorization) and the eligible-delegate-pool question are
+unaffected by this decision and remain separate, still-open Product
+Architect decisions.**
 
 ---
 
@@ -865,11 +878,15 @@ drafted governance proposal for a resolved Rule 8 open decision.
 
 **Product Architect decisions:**
 
-- **44-S-A** (Viewer authorization) — still open, unaffected by
-  Decision 46/47/48.
+- **44-S-A — ✅ RESOLVED at the Product Architect governance-requirement
+  level by Decision 52, 2026-09-04.** See §IV.O-f. The technical
+  enforcement/mechanism remains open — folded into the technical design
+  items immediately below, now built against a settled governance
+  brief rather than an open one.
 - **44-S-C** (Finalizer authorization) — still open; recommended to
   confirm explicitly given two active contributors may now exist, and
   now that 44-D's finalization-protection guarantees are governance-
+  settled and 44-S-A's Viewer-eligibility question is governance-
   settled, this is the last open question about *who* may finalize.
 - **44-S-D — ✅ RESOLVED at the governance-requirement level by
   Decision 48, 2026-09-03.** See §IV.O-b. The technical mechanism
@@ -900,7 +917,7 @@ drafted governance proposal for a resolved Rule 8 open decision.
 - **Eligible-delegate pool** (§IV.O) — narrow, non-blocking, still
   open.
 
-**Technical design decisions (mechanism, not policy) — all unaffected in RESOLUTION status by Decisions 47/48/49/50/51, now governed by settled briefs:**
+**Technical design decisions (mechanism, not policy) — all unaffected in RESOLUTION status by Decisions 47/48/49/50/51/52, now governed by settled briefs:**
 
 - **44-S-D mechanism** (how authority is represented, checked, and
   enforced) — still open; must satisfy Decision 48's governance
@@ -928,6 +945,15 @@ drafted governance proposal for a resolved Rule 8 open decision.
   leakage prohibition), and the technical verification named in §IV.K
   still has not been performed. **Not resolved — a governance brief is
   not a design, and is not itself the verification.**
+- **44-S-A mechanism** (Viewer-eligibility and Viewer-restriction
+  enforcement mechanism) — still open; must satisfy Decision 52's
+  governance requirements (eligibility limited to business-authorized
+  users; edit-authority exclusion authoritative and server-enforced,
+  not UI-only; former-delegated-Editor Viewer eligibility per Decisions
+  48/49; live-synchronization entitlement with state-distinguishability;
+  finalization-visibility without finalizer inference; shared-device
+  isolation per Decision 51), unaffected in shape by any prior
+  decision. **Not resolved — a governance brief is not a design.**
 - **Same-row conflict-detection/live-adoption mechanism** — still open;
   has a settled product-level brief, per Decision 47 (live-sync-first,
   detect-and-preserve, no blind last-write-wins) — the mechanism
@@ -944,22 +970,24 @@ drafted governance proposal for a resolved Rule 8 open decision.
 # READY AFTER DECISIONS
 
 **Verdict tier unchanged after Decision 47, Decision 48, Decision 49,
-Decision 50, and Decision 51.** 44-S-G's product-level question,
-44-S-D's governance-requirement question, 44-S-F's governance-
-requirement question, 44-D's governance-requirement question, and
-44-F's governance-requirement question are now all resolved (§IV.O-a,
-§IV.O-b, §IV.O-c, §IV.O-d, §IV.O-e) — real, meaningful progress: five of
+Decision 50, Decision 51, and Decision 52.** 44-S-G's product-level
+question, 44-S-D's governance-requirement question, 44-S-F's
+governance-requirement question, 44-D's governance-requirement
+question, 44-F's governance-requirement question, and 44-S-A's
+governance-requirement question are now all resolved (§IV.O-a, §IV.O-b,
+§IV.O-c, §IV.O-d, §IV.O-e, §IV.O-f) — real, meaningful progress: six of
 the open decisions Part IV originally identified now have settled
 governance briefs for the technical design/verification stage to build
 against. It does **not** reduce the CRITICAL/HIGH blocker count in
 §IV.P, all of which remain open exactly as stated, because none of
-Decision 47, Decision 48, Decision 49, Decision 50, or Decision 51
-selected or performed a technical mechanism/verification — Decision 48
-§10/§11, Decision 49 §8/§9, Decision 50 §9/§10, and Decision 51 §12/§13
-all state this outright, and every one of §IV.P's nine CRITICAL
-findings plus §IV.P item 10's HIGH finding requires a mechanism
-decision or technical verification, not a governance-requirement
-decision, before it can move off FAIL/OPEN or UNVERIFIED.
+Decision 47, Decision 48, Decision 49, Decision 50, Decision 51, or
+Decision 52 selected or performed a technical mechanism/verification —
+Decision 48 §10/§11, Decision 49 §8/§9, Decision 50 §9/§10, Decision 51
+§12/§13, and Decision 52 §11/§12 all state this outright, and every one
+of §IV.P's nine CRITICAL findings plus §IV.P item 10's HIGH finding
+requires a mechanism decision or technical verification, not a
+governance-requirement decision, before it can move off FAIL/OPEN or
+UNVERIFIED.
 
 **Not forced, independently re-derived** — nothing found is a
 fundamental architectural or security impossibility. The dual-role
@@ -969,12 +997,12 @@ branch (a precedented pattern — the existing `staffTier == 'manager'`
 carve-out elsewhere in the same file is structurally similar), an
 additive schema field or two (writer identity, per-row version), and a
 genuinely new conflict-detection/live-adoption mechanism, authority
-mechanism, finalization-guard mechanism, and shared-device/cache-
-isolation mechanism (the latter pending its own named technical
-verification), all now built against settled governance briefs — all
-additive extensions, not a redesign of what already works (business-
-owned storage, live listeners, durable local persistence, atomic
-finalization-batch cleanup).
+mechanism, finalization-guard mechanism, shared-device/cache-isolation
+mechanism (pending its own named technical verification), and
+Viewer-eligibility-enforcement mechanism, all now built against settled
+governance briefs — all additive extensions, not a redesign of what
+already works (business-owned storage, live listeners, durable local
+persistence, atomic finalization-batch cleanup).
 
 **The minimum decisions required before Implementation Planning can
 begin, updated:**
@@ -995,18 +1023,23 @@ begin, updated:**
    cache isolation, including the named Firestore SDK cache/
    `request.auth`-re-evaluation verification) — still open**, now
    informed by Decision 51 §2–§11.
-6. **The new delegated-Editor `firestore.rules` branch** and the
+6. ~~44-S-A governance requirements~~ **✅ RESOLVED — Decision 52,
+   2026-09-04.** **44-S-A technical enforcement/mechanism (Viewer
+   eligibility and Viewer restriction) — still open**, now informed by
+   Decision 52 §2–§10.
+7. **The new delegated-Editor `firestore.rules` branch** and the
    **same-row conflict-detection/live-adoption mechanism** and the
    **authority-enforcement mechanism** and the **finalization-guard
-   mechanism** and the **shared-device/cache-isolation mechanism**
-   (all now scoped by Decisions 47, 48, 49, 50, and 51's settled
-   governance briefs, none yet selected or, for 44-F, verified) —
-   technical design, dependent on 2–5 above.
+   mechanism** and the **shared-device/cache-isolation mechanism** and
+   the **Viewer-eligibility-enforcement mechanism** (all now scoped by
+   Decisions 47, 48, 49, 50, 51, and 52's settled governance briefs,
+   none yet selected or, for 44-F, verified) — technical design,
+   dependent on 2–6 above.
 
-**Not required to begin design work, though still open:** 44-S-A,
-44-S-C (recommended to confirm explicitly, not strictly blocking — and
-now the last open finalizer-authorization question now that 44-D's
-protection guarantees are governance-settled), and the
+**Not required to begin design work, though still open:** 44-S-C
+(recommended to confirm explicitly, not strictly blocking — and now the
+last fully open Product Architect decision now that 44-D's and
+44-S-A's governance requirements are settled), and the
 eligible-delegate-pool question (§IV.O).
 
 ---
@@ -1015,15 +1048,16 @@ eligible-delegate-pool question (§IV.O).
 ## IV.S — Reporting Summary (Part IV, original)
 
 > **Addendum, this session:** item 6 below (decisions still required)
-> is superseded by §IV.O-a/§IV.O-b/§IV.O-c/§IV.O-d/§IV.O-e/§IV.Q's
-> updates — 44-S-G is now resolved at the product level by Decision
-> 47, 44-S-D's governance-requirement layer is resolved by Decision 48,
-> 44-S-F's governance-requirement layer is resolved by Decision 49,
-> 44-D's governance-requirement layer is resolved by Decision 50, and
-> 44-F's governance-requirement layer is resolved by Decision 51. Item
-> 7 (verdict) is unchanged in tier. Items 1–5 and 8 are otherwise still
-> accurate. See §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d, and §IV.O-e for the
-> current, authoritative statements.
+> is superseded by §IV.O-a/§IV.O-b/§IV.O-c/§IV.O-d/§IV.O-e/§IV.O-f/
+> §IV.Q's updates — 44-S-G is now resolved at the product level by
+> Decision 47, 44-S-D's governance-requirement layer is resolved by
+> Decision 48, 44-S-F's governance-requirement layer is resolved by
+> Decision 49, 44-D's governance-requirement layer is resolved by
+> Decision 50, 44-F's governance-requirement layer is resolved by
+> Decision 51, and 44-S-A's governance-requirement layer is resolved by
+> Decision 52. Item 7 (verdict) is unchanged in tier. Items 1–5 and 8
+> are otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d,
+> §IV.O-e, and §IV.O-f for the current, authoritative statements.
 
 1. **File(s) changed:** exactly one —
    `docs/engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md`

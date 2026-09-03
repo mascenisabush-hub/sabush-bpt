@@ -2,8 +2,8 @@
 
 ## Decision 52 — Viewer Authorization Requirements
 
-**Status:** DRAFTED — NOT ACCEPTED
-**Resolves (proposed):** Decision 44-S-A — Viewer Authorization, as
+**Status:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY — 4 September 2026
+**Resolves:** Decision 44-S-A — Viewer Authorization, as
 identified in the original [Rule 8 Assessment](../engineering/periodic-contagem-shared-live-data-decision-44-rule8-assessment.md)
 (Part III §III.3, Part IV §IV.N summary table) and carried forward,
 **OPEN — Product Architect decision required**, through every
@@ -410,53 +410,88 @@ Per the Rule 8 Assessment (Part IV §IV.N summary table, and its
 carrying-forward through §IV.O, §IV.Q, §IV.R across every subsequent
 part), 44-S-A (Viewer authorization) was identified as **OPEN —
 Product Architect decision required**, and remained unnarrowed by
-Decisions 45 through 51. This document, **once accepted**, would
-establish the **governance-requirement layer** 44-S-A requires — it
-does **not** introduce any new technical mechanism, and does **not**
-move any Part IV CRITICAL/HIGH technical finding to RESOLVED, since
-44-S-A was never itself classified as a CRITICAL/HIGH technical
-finding — it was a distinct, open Product Architect decision. Upon
-acceptance:
+Decisions 45 through 51. This document establishes the
+**governance-requirement layer** 44-S-A requires — it does **not**
+introduce any new technical mechanism, and does **not** move any Part
+IV CRITICAL/HIGH technical finding to RESOLVED, since 44-S-A was never
+itself classified as a CRITICAL/HIGH technical finding — it was a
+distinct, open Product Architect decision. Now that this decision is
+accepted:
 
-- **44-S-A would be RESOLVED at the governance-requirement level.**
-  The open item in the Rule 8 Assessment's summary table and decision
-  lists (§IV.N, §IV.Q, §IV.R) would have a settled governance answer.
+- **44-S-A is RESOLVED at the Product Architect governance-requirement
+  level.** The open item in the Rule 8 Assessment's summary table and
+  decision lists (§IV.N, §IV.Q, §IV.R) now has a settled governance
+  answer. **The technical enforcement/mechanism for Viewer eligibility
+  and restriction remains STILL OPEN** — this decision selects no
+  Firestore rules, authentication mechanism, schema, UI, cache
+  mechanism, or live-sync mechanism.
 - **44-S-C, the eligible-delegate-pool question, and every CRITICAL/
   HIGH technical finding in §IV.P** are entirely unaffected — none of
   them is a Viewer-authorization question, and none is resolved,
   narrowed, or reclassified by this decision.
-- The Rule 8 verdict would **remain READY AFTER DECISIONS**, not
-  READY.
+- The Rule 8 verdict **remains READY AFTER DECISIONS**, not READY.
+- **This acceptance does not constitute Implementation Authorization**
+  and does not amend the Implementation Plan.
 
-**This document, while DRAFTED — NOT ACCEPTED, does not modify the
-Rule 8 assessment's classification of any finding or open decision.**
-Per this task's instruction, only a pointer/status note identifying
-Decision 52 as drafted for 44-S-A is added to the Rule 8 artifact, not
-a reclassification of any finding or decision.
+**This document itself does not modify the Rule 8 assessment's
+classification of any finding or open decision.** Per this task's
+instruction, only a pointer/status note identifying Decision 52 as
+accepted for 44-S-A's governance-requirement layer is added to the Rule
+8 artifact, not a reclassification of any finding or decision.
 
 ---
 
 # 14. Status
 
-**SPECIFICATION AMENDMENT:** DRAFTED — NOT ACCEPTED
-**PRODUCT ARCHITECT ACCEPTANCE:** PENDING
-**RULE 8:** Unaffected in verdict (remains READY AFTER DECISIONS) while
-this document is in DRAFTED status; Rule 8 artifact updated only to
-note this document's drafted status, per §13
+**SPECIFICATION AMENDMENT:** ✅ ACCEPTED — GOVERNANCE REQUIREMENTS ONLY
+**PRODUCT ARCHITECT ACCEPTANCE:** ✅ GRANTED — 4 September 2026
+**RULE 8:** 44-S-A now RESOLVED at the Product Architect
+governance-requirement level; the technical enforcement/mechanism
+remains OPEN. Verdict remains READY AFTER DECISIONS — see the Rule 8
+artifact's own updated record of this decision.
 **IMPLEMENTATION PLAN:** NOT YET AMENDED
-**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED
+**IMPLEMENTATION AUTHORIZATION:** NOT GRANTED — this acceptance does
+not constitute Implementation Authorization
 **CODE CHANGES:** NONE AUTHORIZED BY THIS DOCUMENT
 
 ---
 
 ## Product Architect Decision Record
 
-**Decision:** PENDING
+**Decision:** ✅ ACCEPTED — the Viewer-authorization governance
+requirements in §2–§10 above (Viewer eligibility limited to
+business-authorized users, with Owner/Admin and the currently delegated
+Editor always eligible and unauthorized users never eligible; mere
+authentication insufficient, tenant isolation per Decision 51
+preserved; the full Viewer permission/prohibition set, with
+edit-authority exclusion required to be authoritative and
+server-enforced, never UI-only; former-delegated-Editor Viewer
+eligibility applying Decisions 48/49 unchanged; Viewer entitlement to
+live synchronization with authoritative state, stale local state, and
+historical observations kept distinguishable; Viewer visibility into
+finalization state with no finalizer inference and 44-S-C untouched;
+Viewer-authorization-change handling online/offline/reconnecting with
+no automatic role takeover; shared-device isolation applied to Viewer
+access per Decision 51) are adopted as the governing requirements
+44-S-A's eventual technical enforcement/design must satisfy. The
+technical mechanism itself is explicitly NOT decided by this acceptance
+and remains open, per §11/§12 above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** __________________
+**Date:** 2026-09-04
 
-**Acceptance Signature:** __________________
+**Acceptance Signature:** SABUSHIMIKE MASCENI
 
-**Decision Notes:** __________________
+**Decision Notes:** Accepted as a requirements-level governance
+decision only, exactly as Decisions 44, 45, 46, 47, 48, 49, 50, and 51
+were each accepted. This acceptance does not authorize implementation,
+`firestore.rules` changes, schema changes, UI changes, code changes,
+tests, a technical mechanism for Viewer-eligibility representation or
+enforcement, an Implementation Plan amendment, or an Implementation
+Authorization. The Rule 8 verdict remains READY AFTER DECISIONS — every
+CRITICAL/HIGH technical finding in §IV.P, including Finding K
+(shared-device/cache isolation, still UNVERIFIED), remains exactly as
+classified and unaffected by this decision. 44-S-C (finalizer
+authorization) and the eligible-delegate-pool question are unaffected
+by this decision and remain exactly as open as before.
