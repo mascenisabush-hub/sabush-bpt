@@ -21,6 +21,7 @@ import {
   query,
   orderBy,
   limit,
+  where,
   type WithFieldValue,
 } from 'firebase/firestore';
 import { auth, db, firebaseConfig } from '../lib/firebase';
@@ -6785,7 +6786,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!isOwner) throw new Error('Apenas o dono pode reabrir um período fechado.');
 
-    const target = closings.find((c) => c.id === id);
+    // [Decision 43 §7 — reopenClosing authoritative target] A listener
+    // failure on `closings` must not make a genuine, existing Closing
+    // appear absent — the ambient `closings.find(...)` is deliberately
+    // NOT relied on here anymore. A document-keyed, server-confirmed
+    // fresh read of the exact same target id replaces it, per the
+    // accepted Implementation Plan §7. `getDocFromServer` (not a plain
+    // `getDoc`) forces an actual round-trip rather than resolving from a
+    // possibly-empty local cache, matching §10/§13's own established
+    // reasoning. If the read itself fails, reopen must not proceed with
+    // an unconfirmed target, per the accepted Plan §17 — abort with a
+    // distinct error rather than treating the failure as "not found."
+    let target: Closing | null;
+    try {
+      const closingSnap = await getDocFromServer(doc(db, 'businesses', activeBusinessId, 'closings', id));
+      target = closingSnap.exists() ? ({ id: closingSnap.id, ...(closingSnap.data() as Omit<Closing, 'id'>) }) : null;
+    } catch (readError) {
+      console.error('[reopenClosing] authoritative closing target read failed', readError);
+      throw new Error(
+        'Não foi possível confirmar de forma fiável o fecho a reabrir. Verifique a sua ligação e tente novamente.'
+      );
+    }
     if (!target) throw new Error('Fecho não encontrado.');
     if ((target.status ?? 'active') !== 'active') {
       throw new Error('Este período já foi reaberto anteriormente.');
@@ -6800,8 +6821,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     };
     if (reason && reason.trim()) closingUpdate.reopenReason = reason.trim();
 
-    const lockedExpenses = expenses.filter((e) => e.closingId === id);
-    const lockedWithdrawals = withdrawals.filter((w) => w.closingId === id);
+    // [Decision 43 §7 — reopenClosing unlock scope] A listener failure
+    // on `expenses`/`withdrawals` must not make records genuinely locked
+    // to this Closing appear absent — the ambient `.filter(closingId===id)`
+    // arrays are deliberately NOT relied on here anymore. Two bounded,
+    // `closingId`-scoped fresh reads replace them; only the record ids
+    // are needed (the unlock write below only ever references `.id`),
+    // per the accepted Implementation Plan §7. As with the cascade-scope
+    // read above, the read itself failing must abort the reopen rather
+    // than silently unlocking nothing.
+    let lockedExpenseIds: string[];
+    let lockedWithdrawalIds: string[];
+    try {
+      const [expensesSnap, withdrawalsSnap] = await Promise.all([
+        getDocs(query(collection(db, 'businesses', activeBusinessId, 'expenses'), where('closingId', '==', id))),
+        getDocs(query(collection(db, 'businesses', activeBusinessId, 'withdrawals'), where('closingId', '==', id))),
+      ]);
+      lockedExpenseIds = expensesSnap.docs.map((d) => d.id);
+      lockedWithdrawalIds = withdrawalsSnap.docs.map((d) => d.id);
+    } catch (readError) {
+      console.error('[reopenClosing] authoritative unlock-scope read failed', readError);
+      throw new Error(
+        'Não foi possível confirmar de forma fiável as despesas e retiradas deste período. Verifique a sua ligação e tente novamente.'
+      );
+    }
 
     // [Increment 6] No ClosedPeriod doc was ever written for a 'custom'
     // (Fecho) Closing — see recordClosing/closedPeriodKey's own comments —
@@ -6815,11 +6858,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ? []
         : [(b: ReturnType<typeof createFirestoreBatch>) =>
             b.delete(doc(db, 'businesses', activeBusinessId!, 'closedPeriods', closedPeriodKey(targetPeriodType, target.startDate)))]),
-      ...lockedExpenses.map((e) => (b: ReturnType<typeof createFirestoreBatch>) =>
-        b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', e.id), { closingId: deleteField(), lockedAt: deleteField() })
+      ...lockedExpenseIds.map((eid) => (b: ReturnType<typeof createFirestoreBatch>) =>
+        b.update(doc(db, 'businesses', activeBusinessId!, 'expenses', eid), { closingId: deleteField(), lockedAt: deleteField() })
       ),
-      ...lockedWithdrawals.map((w) => (b: ReturnType<typeof createFirestoreBatch>) =>
-        b.update(doc(db, 'businesses', activeBusinessId!, 'withdrawals', w.id), { closingId: deleteField(), lockedAt: deleteField() })
+      ...lockedWithdrawalIds.map((wid) => (b: ReturnType<typeof createFirestoreBatch>) =>
+        b.update(doc(db, 'businesses', activeBusinessId!, 'withdrawals', wid), { closingId: deleteField(), lockedAt: deleteField() })
       ),
     ];
     await commitInChunks(ops);
@@ -6989,8 +7032,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!activeBusinessId) return;
     const businessId = activeBusinessId;
 
-    const prodBatchIds = batches.filter((b) => b.productId === id).map((b) => b.id);
-    const prodQuebraIds = quebras.filter((q) => q.productId === id).map((q) => q.id);
+    // [Decision 43 §5 — deleteProduct cascade scope] A listener failure
+    // on `batches`/`quebras` must not make this product's own related
+    // records appear absent — the ambient, listener-fed `batches`/
+    // `quebras` arrays are deliberately NOT relied on here anymore. Two
+    // bounded, product-scoped fresh reads (`where('productId','==',id)`)
+    // replace them, immediately before the existing delete-plan/chunked-
+    // commit logic — the narrowest mechanism that completely supplies
+    // what this cascade needs, per the accepted Implementation Plan §5.
+    // No transaction is used: the Rule 8 Assessment (§6, §8) found no
+    // race scenario specific to this operation requiring atomicity
+    // between this read and the subsequent chunked deletes — the risk
+    // being closed is "the client's ambient list was wrong," not a
+    // concurrent-write race. If either fresh read itself fails, the
+    // cascade must not proceed with an incomplete (silently-empty)
+    // scope, per the accepted Plan §17 — abort with a distinct error
+    // rather than guessing.
+    let prodBatchIds: string[];
+    let prodQuebraIds: string[];
+    try {
+      const [batchesSnap, quebrasSnap] = await Promise.all([
+        getDocs(query(collection(db, 'businesses', businessId, 'batches'), where('productId', '==', id))),
+        getDocs(query(collection(db, 'businesses', businessId, 'quebras'), where('productId', '==', id))),
+      ]);
+      prodBatchIds = batchesSnap.docs.map((d) => d.id);
+      prodQuebraIds = quebrasSnap.docs.map((d) => d.id);
+    } catch (readError) {
+      console.error('[deleteProduct] authoritative batch/quebra cascade-scope read failed', readError);
+      throw new Error(
+        'Não foi possível confirmar de forma fiável os lotes e quebras associados a este produto. Verifique a sua ligação e tente novamente.'
+      );
+    }
     const chunks = planDeleteProduct(id, prodBatchIds, prodQuebraIds);
 
     const collectionFor = (kind: 'product' | 'batch' | 'quebra') =>
