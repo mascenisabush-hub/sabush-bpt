@@ -479,3 +479,86 @@ Reliability, strictly according to the accepted Implementation Plan
 
 **Implementation is now authorized, but only within the accepted
 Plan.**
+
+---
+
+## 17. Stage 8 Authorization Amendment — DashboardView.tsx File-Surface Addition
+
+**Date:** 3 September 2026
+**Trigger:** During implementation of Checkpoint 1b (§13,
+`businessWorthRecoveryAuthorization`), the exact consuming call site
+the Implementation Plan's own §13 flagged as requiring
+"implementation-time confirmation" (rather than being fabricated in
+the Plan itself) was traced and confirmed to be
+`apps/tenant/src/components/DashboardView.tsx` — specifically, the
+"recover via SuperAdmin authorization" button's own gating condition,
+inside the Business Worth history modal. This file was not listed in
+this document's original §2 "Approved file surface" table, which
+named only `AppContext.tsx` and `SubscriptionContactModal.tsx`.
+Implementation was correctly paused at this discovery, per this
+document's own §15, item 6 ("a contradiction discovered between...
+the accepted Implementation Plan and what implementation-time
+investigation finds"), and reported for governance resolution rather
+than silently proceeding.
+
+### 17.1 Resolution
+
+The Product Architect accepts this as a legitimate implementation-time
+finding, not a scope expansion requiring a new Rule 8 cycle: §13 of
+the accepted Implementation Plan already fully specified this
+operation's mechanism ("the same document-keyed fresh-read mechanism
+as §10") and already anticipated needing to confirm its exact
+consuming file — this amendment supplies exactly that confirmation,
+nothing more.
+
+**`apps/tenant/src/components/DashboardView.tsx` is hereby added to
+the approved file surface (§2), solely and exactly for:**
+
+- performing an authoritative, document-keyed fresh check of
+  `businessWorthRecoveryAuthorizations/current` (via the new
+  `checkBusinessWorthAuthorizedRecoveryEligibility` function this
+  amendment also confirms as within §2's `AppContext.tsx` scope) when
+  the Business Worth history modal opens;
+- using that authoritative result, instead of the ambient,
+  listener-fed `businessWorthAuthorizedRecoveryEligibility` context
+  value, to gate the "recover via SuperAdmin authorization" button's
+  visibility and displayed remaining-time text.
+
+**No other `DashboardView.tsx` behavior is authorized for
+modification by this amendment.** No UI redesign, no unrelated
+refactor, no new consequential operation, and no broader
+listener-hardening change to this file is authorized — consistent
+with §3's own explicit exclusions, unchanged by this amendment.
+
+### 17.2 Governance Scope Confirmation
+
+This amendment does not reopen Decision 43, the Rule 8 Assessment, or
+the accepted Implementation Plan — all three remain exactly as
+previously accepted, unmodified. It does not redesign any part of the
+already-authorized §13 mechanism, only confirms the one additional
+file that mechanism's own UI-gating half requires, exactly as §13's
+own text anticipated might be necessary.
+
+### 17.3 Product Architect Acceptance — Amendment
+
+**Status:** ✅ **ACCEPTED.**
+
+**Decision:** ACCEPTED
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Date:** 3 September 2026
+
+> I confirm: `DashboardView.tsx` is added to the approved
+> implementation file surface for Decision 43, solely for the
+> `businessWorthRecoveryAuthorization` consequential-operation guard
+> already described in the accepted Implementation Plan §13, exactly
+> as traced during implementation. This authorization is limited to
+> that exact behavior. No other `DashboardView.tsx` change is
+> authorized. Decision 43, the Rule 8 Assessment, and the accepted
+> Implementation Plan remain unmodified and unreopened by this
+> amendment.
+
+**Effective immediately.** §2's approved file surface now reads:
+`AppContext.tsx`, `SubscriptionContactModal.tsx`,
+`DashboardView.tsx` (limited to §17.1's exact scope).
