@@ -42,8 +42,13 @@ governance-requirement layer (see Part IV §IV.O-e) — the technical
 verification and mechanism remain undecided. **Updated 2026-09-04** to
 record Decision 52's resolution of 44-S-A's governance-requirement
 layer (see Part IV §IV.O-f) — the technical enforcement/mechanism
-remains undecided. All other Part IV blockers (the delegated-Editor
-rules branch) remain open.
+remains undecided. **Updated 2026-09-04** to record that [Decision 53 —
+Finalizer Authorization Requirements](../specs/stock-count-data-loss-resilience-decision-53-amendment.md)
+has been drafted (STATUS: DRAFTED — NOT ACCEPTED) proposing the
+governance-requirement layer for 44-S-C (see Part IV §IV.O-g) — not yet
+accepted, and no Rule 8 finding or open decision is reclassified by the
+draft. All other Part IV blockers (the delegated-Editor rules branch)
+remain open.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -871,6 +876,46 @@ Decision 52" — not to RESOLVED at the technical level. **44-S-C
 (finalizer authorization) and the eligible-delegate-pool question are
 unaffected by this decision and remain separate, still-open Product
 Architect decisions.**
+
+---
+
+## IV.O-g — 44-S-C UNDER CONSIDERATION — NOT YET RESOLVED
+
+[Decision 53 — Finalizer Authorization Requirements](../specs/stock-count-data-loss-resilience-decision-53-amendment.md)
+has been **drafted (STATUS: DRAFTED — NOT ACCEPTED)**, proposing the
+governance-requirement layer for 44-S-C: the explicit determination
+that finalization is restricted to Owner/Admin only (inherent
+authority, restating Decision 46/48, not reopening either); that
+editing authority does not imply finalization authority (the currently
+delegated Editor may edit per Decision 46 but may not finalize); that a
+Viewer never gains finalization authority merely by observing the
+Contagem (restating Decision 52 §4/§8, not reopening either); that a
+former delegated Editor never held finalization authority to lose or
+regain (applying Decisions 48/49 without changing either); that offline
+status neither removes Owner/Admin's finalization authority nor creates
+finalization authority for any other role; that a finalization attempt
+following delegated-Editor reassignment resolves at the eligibility
+level rather than the reconnection-timing level; and that Decision 50's
+exactly-one-finalization guarantee remains entirely untouched and
+separate from the who-may-attempt question this decision answers —
+explicitly independent of, and without reopening, the Editor authority
+model (Decisions 46/48), the reconnection governance requirements
+(Decision 49), the finalization-protection governance requirements
+(Decision 50), the context-isolation governance requirements (Decision
+51), or the Viewer-authorization governance requirements (Decision 52).
+
+**It does not select a technical mechanism and is not yet accepted.**
+**44-S-C is now being addressed at the governance-requirement level
+only — not resolved.** The open item for 44-S-C in §IV.N's summary
+table, and in §IV.Q and §IV.R below, remains exactly as classified —
+**OPEN (elevated priority) — Product Architect decision required** —
+unchanged by this draft. No finding or open decision is marked resolved
+by this notice. §IV.Q and §IV.R are **not** updated by this notice —
+44-S-C remains listed there as open until (and unless) Decision 53 is
+formally accepted. **The eligible-delegate-pool question is explicitly
+not addressed by Decision 53 and remains separately open.** This notice
+exists so a reader does not mistake a drafted governance proposal for a
+resolved Rule 8 open decision.
 
 ---
 
