@@ -2,11 +2,17 @@
 
 ## Decision 46 — Dual Active Editor Authority (Owner/Admin + One Delegated Editor)
 
-**Status:** DRAFTED — NOT ACCEPTED
+**Status:** ✅ ACCEPTED — REQUIREMENTS ONLY. Technical mechanism for
+concurrent legitimate edits, conflict handling, stale writes,
+finalization protection, offline/reconnect behavior, and cache
+isolation remains UNDECIDED and must be resolved through a fresh Rule 8
+reassessment, which is REQUIRED and NOT YET PERFORMED. This acceptance
+is not an Implementation Authorization.
 **Amends:** Decision 44 Refinement — Single Active Editor + Live Read-Only Viewers (`stock-count-data-loss-resilience-decision-44-refinement-single-editor-viewers.md`, ✅ Accepted, requirements only, 3 September 2026), specifically its core concurrency invariant (§2/§17, INV-44-S01/INV-44-S04)
 **Does not reopen:** Decision 44 (`stock-count-data-loss-resilience-decision-44-amendment.md`) or Decision 45 (`stock-count-data-loss-resilience-decision-45-amendment.md`) beyond the one concurrency assumption named below
 **Affected Area:** Periodic Contagem
 **Decision Authority:** Product Architect
+**Accepted by:** SABUSHIMIKE MASCENI, 3 September 2026
 **Implementation Status:** NOT AUTHORIZED
 
 ---
@@ -264,10 +270,14 @@ Specifically, upon acceptance:
   transition safety, durability, and isolation, all of which apply
   identically whether one or two sessions may legitimately edit.
 
-**This correction takes effect only upon Product Architect acceptance
-of this document (§11) — until then, the Decision 44 Refinement's
-original INV-44-S01/S04 remain the accepted, governing invariants, and
-this section describes what *would* change, not what has changed yet.**
+**This correction is now in effect, per Product Architect acceptance
+recorded 3 September 2026 (§14 below).** As of this acceptance,
+INV-44-S01 is superseded and INV-44-S04 is narrowed exactly as stated
+above, in both this document and the Decision 44 Refinement's own §17
+(updated accordingly — see that document's own pending-amendment notice,
+now resolved). Before this acceptance, the original INV-44-S01/S04
+remained governing; this sentence records that the transition has now
+occurred.
 
 ---
 
@@ -334,7 +344,7 @@ Decision 46 does not authorize:
 
 # 13. Product Architect Acceptance Boundary
 
-Acceptance of this amendment would mean:
+Acceptance of this amendment means:
 
 > The Product Architect accepts that Periodic Contagem editing
 > authority may be held simultaneously by the Owner/Admin and one
@@ -343,7 +353,7 @@ Acceptance of this amendment would mean:
 > subject to a mandatory fresh Rule 8 reassessment before any
 > Implementation Plan or Implementation Authorization.
 
-Acceptance would **not** mean:
+Acceptance does **not** mean:
 
 - a specific conflict-resolution or authority-enforcement mechanism is
   approved;
@@ -359,9 +369,11 @@ its Refinement.
 
 # 14. Status
 
-**SPECIFICATION AMENDMENT:** DRAFTED — NOT ACCEPTED
-**PRODUCT ARCHITECT ACCEPTANCE:** PENDING
-**RULE 8:** NOT PERFORMED — a fresh reassessment is mandatory once accepted, per §11
+**SPECIFICATION AMENDMENT:** ✅ ACCEPTED — REQUIREMENTS ONLY
+**PRODUCT ARCHITECT ACCEPTANCE:** ✅ GRANTED — 3 September 2026
+**RULE 8:** NOT PERFORMED — a fresh reassessment against this accepted
+Dual Active Editor model is REQUIRED and is the next governance gate,
+per §11
 **IMPLEMENTATION PLAN:** NOT YET AMENDED
 **IMPLEMENTATION AUTHORIZATION:** NOT GRANTED
 **CODE CHANGES:** NONE AUTHORIZED BY THIS DOCUMENT
@@ -370,12 +382,29 @@ its Refinement.
 
 ## Product Architect Decision Record
 
-**Decision:** PENDING
+**Decision:** ✅ ACCEPTED — the Dual Active Editor Authority model
+(§1–§12 above, Owner/Admin as permanent Active Editor + at most one
+explicitly-assigned delegated Editor) is adopted as the governing
+concurrency requirement for Periodic Contagem, superseding INV-44-S01
+and narrowing INV-44-S04 exactly as §10 states. The technical mechanism
+for concurrent legitimate edits, conflict handling, stale writes,
+finalization protection, offline/reconnect behavior, and cache
+isolation is explicitly NOT decided by this acceptance and remains
+UNDECIDED, to be resolved through a fresh Rule 8 reassessment — not yet
+performed.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** __________________
+**Date:** 2026-09-03
 
-**Acceptance Signature:** __________________
+**Acceptance Signature:** SABUSHIMIKE MASCENI
 
-**Decision Notes:** __________________
+**Decision Notes:** Accepted as a requirements-level governance decision
+only, exactly as Decision 44, its Refinement, and Decision 45 were each
+accepted. This acceptance does not authorize implementation, Firestore
+rule changes, schema changes, UI changes, code changes, a concurrency
+mechanism, a conflict-resolution algorithm, finalization implementation,
+an Implementation Plan amendment, or an Implementation Authorization. A
+fresh Rule 8 reassessment against this accepted Dual Active Editor
+model is the required next governance gate and has not been performed
+by this document.

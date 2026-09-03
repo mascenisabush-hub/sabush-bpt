@@ -32,21 +32,23 @@ implementation, amends the Implementation Plan, or constitutes an
 Implementation Authorization. No code, `firestore.rules`, schema, or
 test file was modified to produce any part of this document.
 
-> ⚠️ **PENDING AMENDMENT — NOT YET IN EFFECT, NOT YET ASSESSED.**
-> [Decision 46 — Dual Active Editor Authority](../specs/stock-count-data-loss-resilience-decision-46-amendment.md)
-> is currently **DRAFTED — NOT ACCEPTED**. If accepted, it would
-> replace the Single Active Editor premise every classification in Part
-> III (and, further down, Parts II and I) depends on — specifically,
+> ⚠️ **GOVERNING MODEL CHANGED — REASSESSMENT REQUIRED, NOT YET
+> PERFORMED.** [Decision 46 — Dual Active Editor Authority](../specs/stock-count-data-loss-resilience-decision-46-amendment.md)
+> was **accepted 3 September 2026** (SABUSHIMIKE MASCENI), superseding
+> the Single Active Editor premise every classification in Part III
+> (and, further down, Parts II and I) was derived from — specifically,
 > Part III's central finding that general multi-writer conflict
 > resolution is **RESOLVED** because no legitimate simultaneous-writer
-> scenario can occur. **That finding, and everything downstream of it in
-> §III.14/§III.15/§III.16/§III.17, would need a fresh, full
-> reassessment, not a patch, if Decision 46 is accepted** — see Decision
-> 46 §11 for why. **No part of this document has been reassessed against
-> Decision 46. Every conclusion below still describes the accepted
-> Single Active Editor model as of this writing** — this notice exists
-> so a reader does not mistake Decision 46's draft existence for an
-> already-completed reassessment.
+> scenario can occur. **That premise no longer holds: the Owner/Admin
+> and a delegated Editor may now legitimately edit simultaneously,
+> including the same row.** Per Decision 46 §11, this requires a fresh,
+> full Rule 8 reassessment, not a patch — and **that reassessment has
+> not yet been performed.** Every conclusion in Part III below (and, by
+> extension, everything it superseded in Parts II/I) should be treated
+> as **describing the pre-Decision-46 model only**, pending that
+> reassessment. This notice exists so a reader does not mistake
+> Decision 46's acceptance for an already-completed reassessment against
+> it — none has occurred.
 
 ---
 

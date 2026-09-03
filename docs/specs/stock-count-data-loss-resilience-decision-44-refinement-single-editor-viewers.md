@@ -428,23 +428,25 @@ resolved.
 
 # 17. Required New Product-Level Invariants
 
-> ⚠️ **PENDING AMENDMENT — NOT YET IN EFFECT.** [Decision 46 — Dual
-> Active Editor Authority](./stock-count-data-loss-resilience-decision-46-amendment.md)
-> is currently **DRAFTED — NOT ACCEPTED** and, if accepted, would
-> replace INV-44-S01 and narrow INV-44-S04 below. **Until Decision 46
-> is explicitly accepted by the Product Architect, INV-44-S01 and
-> INV-44-S04 as originally written remain the accepted, governing
-> invariants** — this notice records what is proposed, not what is
-> currently in force.
+> ⚠️ **SUPERSEDED IN PART — [Decision 46 — Dual Active Editor
+> Authority](./stock-count-data-loss-resilience-decision-46-amendment.md)
+> was accepted 3 September 2026 (SABUSHIMIKE MASCENI).** INV-44-S01 is
+> now superseded and INV-44-S04 is now narrowed, exactly as shown below.
+> **The technical mechanism for enforcing the dual-editor model —
+> concurrent legitimate edits, conflict handling, stale writes,
+> finalization protection, offline/reconnect behavior, and cache
+> isolation — remains UNDECIDED and requires a fresh Rule 8
+> reassessment, not yet performed.** This acceptance does not authorize
+> implementation.
 
-### INV-44-S01 — Single Editing Authority
-At most one active editing authority exists for a business's
-unfinished Periodic Contagem at any given time.
+### INV-44-S01 — Single Editing Authority *(superseded)*
+~~At most one active editing authority exists for a business's
+unfinished Periodic Contagem at any given time.~~
 
-*(Proposed replacement, pending Decision 46 acceptance: "At most two
-active editing authorities may exist for an unfinished Periodic
-Contagem: the permanent Owner/Admin authority and at most one
-explicitly delegated Editor authority." Not in effect until accepted.)*
+**Superseded by Decision 46, in effect since 3 September 2026:** At
+most two active editing authorities may exist for an unfinished
+Periodic Contagem: the permanent Owner/Admin authority and at most one
+explicitly delegated Editor authority.
 
 ### INV-44-S02 — Shared State
 Editor and Viewers operate against the same business-owned Contagem —
@@ -453,15 +455,16 @@ never independent copies.
 ### INV-44-S03 — Viewer Read-Only
 A Viewer-mode session cannot modify Contagem quantity state.
 
-### INV-44-S04 — No Dual Editor
-Two independent sessions — including two sessions of the same user —
-cannot simultaneously hold valid editing authority.
+### INV-44-S04 — No Dual Editor *(narrowed)*
+~~Two independent sessions — including two sessions of the same
+user — cannot simultaneously hold valid editing authority.~~
 
-*(Proposed narrowing, pending Decision 46 acceptance: continues to
-govern the delegated-Editor slot specifically — no two sessions may
-simultaneously hold that one delegated authority — but would no longer
-prohibit the Owner/Admin + delegated Editor combination. Not in effect
-until accepted.)*
+**Narrowed by Decision 46, in effect since 3 September 2026:** Two
+independent sessions cannot simultaneously hold the *delegated* Editor
+authority — no gap in which two sessions both believe they are the
+delegated Editor. This no longer prohibits the legitimate Owner/Admin +
+delegated Editor combination, which is now an intended, governed dual-
+authority state, not a violation.
 
 ### INV-44-S05 — Authority Transition Safety
 A takeover of editing authority cannot silently destroy durable work
