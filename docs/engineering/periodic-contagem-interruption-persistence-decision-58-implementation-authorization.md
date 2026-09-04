@@ -1,22 +1,23 @@
-Implementation Authorization Proposal — DRAFT
+Implementation Authorization
 
 # Implementation Authorization — Periodic Contagem Interruption Persistence and Recovery Parity (Decision 58)
 
 **Type:** Governance bridge document — the formal record that
-engineering governance is complete and implementation would be
-authorized to begin, strictly within the scope defined below, **once
-signed**. Does not itself perform implementation and does not modify
-code, `firestore.rules`, schema, UI, or tests.
+engineering governance is complete and implementation is authorized to
+begin, per this signature, strictly within the scope defined below.
+Does not itself perform implementation and does not modify code,
+`firestore.rules`, schema, UI, or tests.
 
 ## 1. Authorization Status
 
-**DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
-
-This is not yet an authorization. No code change is permitted on the
-basis of this document until §8's signature block is completed by the
-Product Architect. Prior to that signature, no code, `firestore.rules`,
-schema, UI, or test file has been created, modified, or committed to
-produce this document.
+**✅ IMPLEMENTATION AUTHORIZED — WITHIN DEFINED SCOPE.** Signed 5
+September 2026 by SABUSHIMIKE MASCENI, Product Architect. See §8 for
+the signed acceptance record. Authorization is valid only for the
+exact scope defined in §3 of this document; anything outside that
+scope remains unauthorized and requires the appropriate governance
+process (a new or amended Decision, Rule 8 Assessment, Implementation
+Plan, and Implementation Authorization, as applicable) before any code
+implementing it may be written.
 
 **Repository state at drafting:** `main = origin/main = 483446d467b7bb91a510917d3e51290b1dd531d9`,
 working tree clean, confirmed via `git fetch` immediately before this
@@ -324,12 +325,25 @@ implemented, verified, or complete.**
 
 ## 8. Acceptance
 
-**No implementation may begin until the Product Architect accepts and
-signs this authorization.**
+**✅ ACCEPTED AND SIGNED.** Implementation may now begin, strictly
+within the exact scope defined in §3, subject to §4's verification
+requirements, §5's safety/invariants, §6's explicit exclusions, and
+§7's completion criteria — all unchanged by this signature.
 
 > I accept this Implementation Authorization and authorize
 > implementation within the exact scope defined above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** *[to be recorded upon acceptance]*
+**Date:** 5 September 2026
+
+**IMPLEMENTATION AUTHORIZED — WITHIN DEFINED SCOPE.** Anything outside
+the exact scope §3 defines — including, without limitation, every item
+named in §6's Explicit Exclusions — remains unauthorized and requires
+its own governance process (Decision, Rule 8 Assessment, Implementation
+Plan, and Implementation Authorization, as applicable) before any code
+implementing it may be written. §3 item 2 (the cross-device
+meta-existence guard) remains conditional exactly as written — this
+signature does not resolve that condition in either direction; Test
+Group F's own verification result is what determines whether it is
+implemented.
