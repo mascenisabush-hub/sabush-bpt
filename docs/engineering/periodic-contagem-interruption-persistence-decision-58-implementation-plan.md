@@ -2,9 +2,10 @@ Implementation Plan — DRAFT, NOT AUTHORIZED
 
 # Periodic Contagem Interruption Persistence and Recovery Parity — Implementation Plan (Decision 58)
 
-**Status:** 🟡 **DRAFT — NOT AUTHORIZED.** Does not authorize
-implementation. Implementation Authorization remains a separate,
-subsequent, signed document (not created here).
+**Status:** ✅ **ACCEPTED BY THE PRODUCT ARCHITECT.** See §31, "Product
+Architect Acceptance," for the signed record. Acceptance of this Plan
+does not itself authorize implementation. Implementation Authorization
+remains a separate, subsequent, signed document (not created here).
 
 **Governing chain:** [`stock-count-data-loss-resilience-specification.md`](../specs/stock-count-data-loss-resilience-specification.md)
 (Frozen, Decision 38) → [Decision 39 amendment](../specs/stock-count-data-loss-resilience-decision-39-amendment.md)
@@ -869,3 +870,72 @@ Decision 57 separation, §J Finding K, §K feasibility), with no addition,
 narrowing, or reinterpretation of either. **No STOP condition
 triggered** — no repository-state conflict requiring a governance
 decision was discovered during drafting.
+
+---
+
+## 31. Product Architect Acceptance
+
+**Important product-behavior clarification, preserved exactly as the
+Plan itself already establishes (§7, §10–§11):** this Plan does not
+convert Periodic Contagem into a whole-form or whole-Contagem autosave
+system. The accepted architecture remains, unchanged: normal autosave
+is per-row (edit one row → that row becomes dirty → that row alone is
+autosaved through the per-row mechanism). On interruption, only the
+rows currently marked dirty each receive their own individual
+persistence attempt through that same governed per-row mechanism — a
+clean row receives no attempt (§10). This acceptance record explicitly
+confirms this framing is not altered by acceptance.
+
+**Scope of this acceptance:** the Implementation Plan as written, in
+full, including its explicit treatment of per-row dirty tracking (§10),
+interruption flush sequencing (§11), in-flight save serialization
+(§12), retry/classification reuse (§13), generation protection (§14),
+CONFLICT handling (§15), the batch-atomicity transition and poison-batch
+elimination (§16), retention of `flushPeriodicStockDraftRows` for its
+two other, legitimate call paths (§17), metadata handling (§18),
+lifecycle triggers (§19), post-unmount retry behavior (§20), manual
+recovery (§21), the cross-device finalization edge case (§22),
+authorization/tenant isolation (§23), Finding K (§24), Decision 57
+separation (§25), and Test Groups A–H (§26). **Accepted as written —
+no substantive technical decision in §1–§30 is altered, narrowed, or
+expanded by this acceptance.**
+
+**Explicitly not decided by this acceptance** (left exactly as the Plan
+itself left them, at the Implementation Authorization/implementation-
+verification stage): whether an already-mid-retry row should be left
+running or restarted at interruption (§20), and whether the §22
+cross-device meta-existence mitigation is ultimately necessary pending
+Test Group F's (§26) verification result. Neither is resolved here.
+
+**PRODUCT ARCHITECT ACCEPTANCE**
+
+**Implementation Plan:** Periodic Contagem Interruption Persistence and
+Recovery Parity (Decision 58)
+**Status:** ✅ **ACCEPTED — IMPLEMENTATION PLAN**
+**Product Architect:** SABUSHIMIKE MASCENI
+**Date:** 5 September 2026
+
+> "This acceptance approves the Decision 58 Implementation Plan as the
+> governing implementation-planning artifact. It does not itself
+> authorize implementation. Implementation Authorization remains a
+> separate mandatory gate."
+
+**Plan Acceptance ≠ Implementation Authorization.** No code, test,
+Firestore rule, schema, or index has been written, modified, or
+authorized by this acceptance. Decision 58, its Rule 8 Assessment,
+Decision 55, Decision 57, and Finding K all remain unmodified.
+
+**Resulting governance chain:**
+
+```text
+Decision 58                    → ACCEPTED
+Rule 8                         → READY
+Implementation Plan            → ACCEPTED
+Implementation Authorization   → NEXT GATE (not yet prepared)
+Implementation                 → NOT YET AUTHORIZED
+Verification                   → AFTER IMPLEMENTATION
+```
+
+**Next gate: a separate, signed Implementation Authorization**, to be
+prepared for Product Architect review/signature as its own subsequent
+task — not created by this acceptance record.
