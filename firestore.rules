@@ -114,6 +114,39 @@ service cloud.firestore {
       );
     }
 
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+    // Implementation Authorization, §2 items 2/4] Mirrors
+    // isOwnerOrGrantedManager's own shape immediately above: a single
+    // fixed-id document (`contagemAuthority/current`) names, at most,
+    // one currently delegated Editor per business — never a role field
+    // on the profile itself, never a client-writable claim. Re-read
+    // LIVE on every single request (via the same exists()-guarded
+    // get() pattern isBusinessSuspended/isOwnerOrGrantedManager already
+    // use) — never cached, never assumed from a prior request — which
+    // is exactly what makes reassignment (Decision 48) and revocation
+    // (Decision 49) take effect immediately, and what makes an
+    // offline-queued write from a just-revoked delegate evaluate
+    // against CURRENT, not queued-time, authority (Decision 49 §2-§7).
+    // isMemberOf(businessId) is re-checked here, not only at
+    // assignment time, so losing underlying business authorization
+    // ends delegate eligibility on a continuing basis (Decision 54).
+    function isCurrentDelegatedEditor(businessId) {
+      return isMemberOf(businessId) &&
+        exists(/databases/$(database)/documents/businesses/$(businessId)/contagemAuthority/current) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/contagemAuthority/current)
+          .data.get('delegatedEditorUid', null) == request.auth.uid;
+    }
+
+    // [Decision 46 §1] Owner/Admin's editing authority is inherent,
+    // never stored — this is simply isOwnerOf OR the live delegate
+    // check immediately above. Exactly the two roles Decision 46
+    // authorizes to write simultaneously; a Viewer (Decision 52) is
+    // never a member of this set, by construction, not by a separate
+    // stored flag.
+    function isActiveContagemEditor(businessId) {
+      return isOwnerOf(businessId) || isCurrentDelegatedEditor(businessId);
+    }
+
     // [Module #20 Phase 1 (Foundations), Checkpoint 2] `notifications` is
     // this repository's first top-level (not business-nested) collection
     // — recipient scoping (spec 20.1/20.2) is expressed via document
@@ -656,9 +689,27 @@ service cloud.firestore {
         // BDR-0015/POL-0008 decision.
         allow create: if isOwnerOf(businessId) && (
           // Non-'initial' counts (periodic/weekly/monthly/etc.) —
-          // entirely unaffected by this feature, unchanged rule.
+          // [Decision 55 §5 items 7-10; Implementation Authorization
+          // §2 item 7] now additionally requires that the single
+          // shared Periodic Contagem draft (there is exactly one
+          // singleton draft per business regardless of which
+          // non-'initial' type label a given confirmation carries —
+          // see stockCountDrafts/periodic below) currently has NO
+          // unresolved same-row conflict. `get()` on a path that does
+          // not exist would throw, so this is guarded by `exists()`
+          // first, exactly like isBusinessSuspended's own documented
+          // fix elsewhere in this file — a business that has never
+          // used Periodic Contagem, or whose draft was already
+          // cleared, correctly treats "no draft" as "no unresolved
+          // conflict" (openConflictCount defaults to 0), never as a
+          // reason to block finalization.
           (request.resource.data.get('type', null) != 'initial' &&
-            subscriptionAllowsNewRecords(businessId)) ||
+            subscriptionAllowsNewRecords(businessId) &&
+            (
+              !exists(/databases/$(database)/documents/businesses/$(businessId)/stockCountDrafts/$("periodic")) ||
+              get(/databases/$(database)/documents/businesses/$(businessId)/stockCountDrafts/$("periodic"))
+                .data.get('openConflictCount', 0) == 0
+            )) ||
 
           // [Capital Inicial Retirement — Implementation Authorization
           // Increment 2] The two ORIGINAL-confirmation creation
@@ -716,15 +767,32 @@ service cloud.firestore {
         // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 3]
         // The 'initial' count is Architecture 8.6's "no exceptions"
         // immutability tier — refused unconditionally, Owner included,
-        // not merely a UI omission. Every other type keeps its prior
-        // Owner-editable/deletable behavior unchanged. UNMODIFIED by
-        // Void & Redo (Rule 8 Finding G1, Direction 2 — this line is
-        // byte-for-byte identical to before this feature) — and, since
-        // every confirmation event in a chain (original AND every
-        // redo) is itself type: 'initial', this one unchanged line
-        // automatically protects all of them, with no additional rule
-        // needed.
-        allow update, delete: if isOwnerOf(businessId) && resource.data.get('type', null) != 'initial';
+        // not merely a UI omission. UNMODIFIED by Void & Redo (Rule 8
+        // Finding G1, Direction 2 — this line is byte-for-byte
+        // identical to before that feature).
+        //
+        // [Decision 56 — Finalized Periodic Contagem Immutability &
+        // Clear-All Separation; Implementation Authorization §2 item 8,
+        // §4] The `update` half for a non-'initial' (i.e. finalized
+        // Periodic Contagem) document is now narrowed to `if false`,
+        // unconditionally — Decision 56 §5 items 1-2 require a
+        // finalized result to be immutable through NORMAL Contagem
+        // operations, and grep-confirmed zero call sites in
+        // AppContext.tsx ever call `updateDoc` on `stockCounts` for any
+        // type, so this closes a real, previously-open gap (Rule 8
+        // Finding G) with no known functional regression. The `delete`
+        // half is DELIBERATELY, EXPLICITLY left unchanged — the
+        // existing "Clear All Data" wholesale-reset capability depends
+        // on it (AppContext.tsx's own stockCounts-deletion loop), and
+        // Decision 56 §7 explicitly does NOT decide whether that
+        // capability's own delete behavior must itself be reshaped.
+        // Narrowing `delete` here would silently decide that open
+        // Product Architect question inside a rules file — exactly
+        // what Decision 56 §7 and the Implementation Authorization §4
+        // both forbid. Do not narrow `delete` without a separate,
+        // explicit governance decision resolving §7 first.
+        allow update: if false;
+        allow delete: if isOwnerOf(businessId) && resource.data.get('type', null) != 'initial';
       }
 
       // [Business Worth Evolution — Implementation Authorization,
@@ -1267,6 +1335,136 @@ service cloud.firestore {
           allow read: if isOwnerOf(businessId);
           allow create, update: if isOwnerOf(businessId) && subscriptionAllowsNewRecords(businessId);
           allow delete: if isOwnerOf(businessId);
+        }
+      }
+
+      // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+      // Implementation Authorization §2 items 2, 4, 6, 10] The
+      // authoritative delegated-Editor assignment for this business —
+      // see isCurrentDelegatedEditor() above. Fixed id ('current') per
+      // business, same singleton-per-business convention as
+      // stockCountDrafts/periodic itself. Read by every business
+      // member (a Viewer must be able to see who currently holds
+      // delegate authority, per Decision 52); written only by
+      // Owner/Admin, and only naming a uid currently authorized for
+      // THIS exact business (Decision 54's eligibility requirement,
+      // enforced structurally here, not merely by client discipline) —
+      // or null, to explicitly clear the delegation (Decision 48: no
+      // automatic transfer, only explicit assignment/clearing).
+      match /contagemAuthority/current {
+        allow read: if isMemberOf(businessId);
+        allow create, update: if isOwnerOf(businessId) && (
+          request.resource.data.get('delegatedEditorUid', null) == null ||
+          (
+            // [Decision 54] Eligibility = currently business-authorized
+            // for this exact business — checked against the NAMED
+            // candidate uid's own profile, not the caller's. Mirrors
+            // isMemberOf()'s own two-clause shape (single legacy
+            // `businessId` OR multi-shop `businessIds[]`), re-expressed
+            // for an arbitrary named uid rather than request.auth.uid.
+            exists(/databases/$(database)/documents/users/$(request.resource.data.delegatedEditorUid)) &&
+            (
+              get(/databases/$(database)/documents/users/$(request.resource.data.delegatedEditorUid))
+                .data.get('businessId', null) == businessId ||
+              businessId in get(/databases/$(database)/documents/users/$(request.resource.data.delegatedEditorUid))
+                .data.get('businessIds', [])
+            )
+          )
+        ) &&
+          request.resource.data.get('assignedByUid', null) == request.auth.uid &&
+          request.resource.data.get('assignedAt', null) == request.time;
+        // [Decision 48/49] Never deleted — an absent document already
+        // reads as "no delegate" everywhere this is consulted
+        // (exists()-guarded); deleting it would be indistinguishable
+        // from explicitly clearing it via a null assignment, so the
+        // explicit-null write above is the sole, auditable clearing
+        // path (records who cleared it and when, which a bare delete
+        // would not).
+        allow delete: if false;
+      }
+
+      // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+      // Implementation Authorization §2 items 1, 5, 6, 7, 10, 11, 12]
+      // A MORE-SPECIFIC override for exactly the 'periodic' document —
+      // Firestore Security Rules evaluate every matching rule for a
+      // given path and grant access if ANY matching `allow` passes, so
+      // this block ADDS a broader grant for 'periodic' specifically
+      // without touching or narrowing the wildcard block above, which
+      // continues to govern 'initial' (and any other draftId) exactly
+      // as before, byte-for-byte. This is deliberate: Decisions 44-56
+      // are scoped to Periodic Contagem only — Initial Stock Count's
+      // own, separately-governed Owner-only draft model is untouched.
+      match /stockCountDrafts/periodic {
+        // [Decision 52] Any authorized business member may read the
+        // shared Contagem meta document — Owner/Admin, the current
+        // delegated Editor, and every Viewer alike.
+        allow read: if isMemberOf(businessId);
+        // [Decision 46/54] Only Owner/Admin or the current delegated
+        // Editor may write — never merely isMemberOf, unlike read.
+        allow create, update: if isActiveContagemEditor(businessId) &&
+          subscriptionAllowsNewRecords(businessId);
+        allow delete: if isActiveContagemEditor(businessId);
+
+        // [Decision 47/55; Technical Design §7/§8/§9] Per-row shared
+        // observation state. Three, and only three, shapes of write
+        // are accepted, each requiring isActiveContagemEditor —
+        // Owner/Admin or the current delegated Editor, never a Viewer
+        // (Decision 52), never anyone else:
+        match /items/{rowKey} {
+          allow read: if isMemberOf(businessId);
+
+          // [Technical Design §7] First write for a row — establishes
+          // rev 1, records the writer, starts ACCEPTED.
+          allow create: if isActiveContagemEditor(businessId) &&
+            subscriptionAllowsNewRecords(businessId) &&
+            request.resource.data.get('rev', null) == 1 &&
+            request.resource.data.get('lastWriterUid', null) == request.auth.uid &&
+            request.resource.data.get('state', 'ACCEPTED') == 'ACCEPTED';
+
+          allow update: if isActiveContagemEditor(businessId) &&
+            subscriptionAllowsNewRecords(businessId) && (
+            // Branch 1 — [Technical Design §7] ordinary accepted write:
+            // strictly monotonic rev, writer identity is the CURRENT
+            // caller (never trusted from the client's own prior belief
+            // of who they are), no transition into/out of CONFLICT.
+            (
+              resource.data.get('state', 'ACCEPTED') == 'ACCEPTED' &&
+              request.resource.data.get('state', 'ACCEPTED') == 'ACCEPTED' &&
+              request.resource.data.get('rev', -1) == resource.data.get('rev', 0) + 1 &&
+              request.resource.data.get('lastWriterUid', null) == request.auth.uid
+            ) ||
+            // Branch 2 — [Decision 55 §5 items 1-3; Technical Design
+            // §7/§8] genuine collision detected by the writer's own
+            // transaction: transition ACCEPTED -> CONFLICT, both
+            // observations must be present, not yet resolved.
+            (
+              resource.data.get('state', 'ACCEPTED') == 'ACCEPTED' &&
+              request.resource.data.get('state', null) == 'CONFLICT' &&
+              request.resource.data.get('conflict', null) != null &&
+              request.resource.data.conflict.get('observationA', null) != null &&
+              request.resource.data.conflict.get('observationB', null) != null &&
+              request.resource.data.conflict.get('resolvedValue', null) == null
+            ) ||
+            // Branch 3 — [Decision 55 §5 items 4, 6; Technical Design
+            // §9] resolution: CONFLICT -> ACCEPTED, the new quantity
+            // MUST equal one of the two already-preserved observations
+            // (never a third, freshly-typed value — that is a fresh
+            // recount, a different, not-yet-addressed workflow per
+            // Decision 55 §6 item 6), and the resolver identity is the
+            // current caller.
+            (
+              resource.data.get('state', null) == 'CONFLICT' &&
+              request.resource.data.get('state', null) == 'ACCEPTED' &&
+              request.resource.data.get('quantity', null) in [
+                resource.data.conflict.observationA.value,
+                resource.data.conflict.observationB.value
+              ] &&
+              request.resource.data.conflict.get('resolverUid', null) == request.auth.uid &&
+              request.resource.data.conflict.get('resolvedValue', null) == request.resource.data.get('quantity', null)
+            )
+          );
+
+          allow delete: if isActiveContagemEditor(businessId);
         }
       }
 

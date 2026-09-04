@@ -1409,6 +1409,82 @@ export interface PeriodicStockDraftItem {
   // data from live component state (`pendingTally`), never from this
   // draft.
   validated?: boolean;
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
+  // Design §7/§8; Implementation Authorization §2 items 6, 10] Every
+  // field below is additive and optional, following this interface's
+  // own existing "omit entirely when absent, never a literal
+  // `undefined`" discipline — a row written before this feature
+  // existed has none of them, and every read site treats their
+  // absence as the safe default noted per field. This is what makes
+  // the addition backward-compatible with every draft already
+  // persisted.
+  //
+  // Monotonic per-row optimistic-concurrency counter, enforced by
+  // `firestore.rules` (rev must equal the prior rev + 1 on an
+  // ordinary write). Absent = 0.
+  rev?: number;
+  // 'ACCEPTED' is the ordinary, settled state; absent is treated
+  // identically to 'ACCEPTED' everywhere this is read (pre-existing
+  // rows have no conflict machinery at all). 'CONFLICT' means two
+  // legitimate editors recorded different values for this row and
+  // neither has been discarded — see `conflict` below. Never any
+  // other value.
+  state?: 'ACCEPTED' | 'CONFLICT';
+  // Identity of whoever made the last ACCEPTED write to this row —
+  // audit/attribution only, never itself an authorization check (the
+  // authorization check is `isActiveContagemEditor`, evaluated fresh
+  // server-side on every write; this field only records who it was).
+  lastWriterUid?: string;
+  lastWriterRole?: 'owner' | 'delegate';
+  lastWriteAt?: string; // ISO string, client-set at write time
+  // [Decision 55] Present only while, or after, this row has genuinely
+  // conflicted. Deliberately retained (never deleted) even once
+  // resolved — Decision 55 §6 item 1 requires both original
+  // observations to remain referenceable after resolution. Scoped to
+  // `quantity` only (the field the Decision 55 scenario itself
+  // concerns) — a divergent `unit`/price edit is an ordinary
+  // sequential edit under the same `rev` mechanism, not a
+  // Decision-55-class conflict (Technical Design §8's own explicit
+  // scoping note).
+  conflict?: {
+    observationA: PeriodicStockConflictObservation;
+    observationB: PeriodicStockConflictObservation;
+    // Present only once resolved. `resolvedValue` MUST equal one of
+    // the two observations' own `value` — enforced by
+    // `firestore.rules`, never trusted from the client alone.
+    resolvedValue?: string;
+    resolverUid?: string;
+    resolverRole?: 'owner' | 'delegate';
+    resolvedAt?: string; // ISO string
+  };
+}
+
+// [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
+// Design §8] One preserved physical observation inside a `conflict`
+// object — never a standalone document, never itself the working
+// value while unresolved (Decision 55 §5 item 3).
+export interface PeriodicStockConflictObservation {
+  value: string; // the observed `quantity`, in the same string shape every other quantity field on this row already uses
+  writerUid: string;
+  writerRole: 'owner' | 'delegate';
+  at: string; // ISO string
+  baseRev: number; // the `rev` this observation's writer believed was current when they wrote
+}
+
+// [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
+// Design §5; Implementation Authorization §2 item 2] The authoritative
+// delegated-Editor assignment for one business — mirrors
+// `firestore.rules`' own `contagemAuthority/current` document exactly,
+// field for field. `delegatedEditorUid: null` means no delegate is
+// currently assigned (Owner/Admin is the sole Active Editor). Never
+// itself an authority CHECK — `isActiveContagemEditor`/
+// `isCurrentDelegatedEditor` (client-side derivation in AppContext,
+// server-side enforcement in `firestore.rules`) are the actual checks;
+// this type only describes the document those checks read.
+export interface ContagemAuthority {
+  delegatedEditorUid: string | null;
+  assignedByUid: string;
+  assignedAt: string; // ISO string, client-set to serverTimestamp-equivalent at write time (see firestore.rules' own request.time requirement)
 }
 
 export interface PeriodicStockDraft {
@@ -1441,6 +1517,19 @@ export interface PeriodicStockDraft {
     string,
     { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
   >;
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
+  // 55 §5 items 7-10; Technical Design §11] Denormalized count of
+  // currently-`state: 'CONFLICT'` rows, maintained transactionally in
+  // the SAME transaction that flips any row into or out of CONFLICT
+  // (never derived by a separate read/recompute step, which is what
+  // keeps it from drifting relative to the true per-row count).
+  // `firestore.rules`' finalization precondition reads this single
+  // field rather than scanning the `items` subcollection, which rules
+  // cannot cheaply do. Absent = 0 = no open conflicts (a business that
+  // has never hit this code path, or whose draft predates this field,
+  // is correctly never blocked from finalizing for a reason that does
+  // not apply to it).
+  openConflictCount?: number;
   updatedAt: string; // ISO string
 }
 

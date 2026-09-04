@@ -16,6 +16,8 @@ import {
   onSnapshot,
   writeBatch as createFirestoreBatch,
   runTransaction,
+  terminate,
+  clearIndexedDbPersistence,
   deleteField,
   serverTimestamp,
   query,
@@ -62,6 +64,7 @@ import {
   InitialStockDraftItem,
   PeriodicStockDraft,
   PeriodicStockDraftItem,
+  ContagemAuthority,
   PurchaseDraft,
   PurchaseDraftLineItem,
   SupplierRecord,
@@ -816,6 +819,12 @@ interface AppContextType {
   // exactly like the prior function did, for the identical "don't
   // report saved before the server actually has it" reason.
   savePeriodicStockDraftItem: (rowKey: string, item: PeriodicStockDraftItem) => Promise<string>;
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 55]
+  // Explicit conflict resolution — a distinct act from an ordinary
+  // save; see this function's own implementation comment for why it
+  // is never reachable merely by continuing to type into a CONFLICT
+  // row.
+  resolvePeriodicConflict: (rowKey: string, resolvedValue: string) => Promise<void>;
   removePeriodicStockDraftItem: (rowKey: string) => Promise<void>;
   savePeriodicStockDraftMeta: (
     type: StockCountType,
@@ -988,6 +997,23 @@ interface AppContextType {
   maxShopsPerOwner: number;
   addShop: (businessName: string, category: string, currencySymbol?: string) => Promise<void>;
   switchShop: (businessId: string) => Promise<void>;
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 46
+  // §1, 48, 52, 54] The authoritative delegated-Editor assignment for
+  // the active business, and the derived authority booleans every
+  // Contagem-facing component should consult rather than re-deriving
+  // this logic themselves. `contagemAuthority` is `null` when no
+  // delegate is currently assigned OR while the listener has not yet
+  // delivered a result — `contagemAuthorityLoaded` distinguishes the
+  // two. `isActiveContagemEditor` is the single boolean gating every
+  // Contagem write action (Owner/Admin or the current delegate); a
+  // Viewer is precisely `isMemberOf` (i.e. authorized for the
+  // business, implied by having reached this context at all) AND
+  // `!isActiveContagemEditor` — never a separately stored role.
+  contagemAuthority: ContagemAuthority | null;
+  contagemAuthorityLoaded: boolean;
+  isCurrentDelegatedEditor: boolean;
+  isActiveContagemEditor: boolean;
+  assignDelegatedEditor: (uid: string | null) => Promise<void>;
   // [Decision 41A — Business-Switch Protection] Lets the currently
   // mounted Contagem view (Periodic or Initial — never both, since
   // they occupy mutually exclusive App.tsx tabs) register a flush
@@ -1192,6 +1218,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     manualEntries.sort((a, b) => a.index - b.index);
     return { ...periodicStockDraftMeta, items: [...catalogItems, ...manualEntries.map((e) => e.item)] };
   }, [periodicStockDraftMeta, periodicStockDraftItemsByKey]);
+
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+  // Implementation Authorization §2 items 2, 4] The authoritative
+  // delegated-Editor assignment for the active business — read via a
+  // live listener (§below), never cached across a business switch or
+  // trusted from a prior request, exactly matching firestore.rules'
+  // own isCurrentDelegatedEditor()'s live-read discipline. `null`
+  // (not merely absent) is the explicit "no delegate" default so a
+  // business that has never used delegation renders identically to
+  // one that explicitly cleared it. (`isCurrentDelegatedEditor`/
+  // `isActiveContagemEditor` themselves are derived further below,
+  // once `isOwner` is in scope.)
+  const [contagemAuthority, setContagemAuthority] = useState<ContagemAuthority | null>(null);
+  const [contagemAuthorityLoaded, setContagemAuthorityLoaded] = useState(false);
+
   // [Durable Purchase Capture Amendment v1.0] Same "loaded flag"
   // disambiguation as initialStockDraft above, for exactly the same
   // reason — this is a per-user document (Rule 8 Assessment, Section 7),
@@ -1233,6 +1274,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // layer). Fixed here, not a new role model.
   const isOwner = userProfile?.role === 'owner' || userProfile?.role === 'admin';
   const isStaff = userProfile?.role === 'staff';
+
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 46
+  // §1; Decision 54] Derived, never stored client-side as its own
+  // authority claim — recomputed from the live `contagemAuthority`
+  // listener plus the current uid on every render, the same "never
+  // cache authority" discipline firestore.rules itself enforces
+  // server-side (isCurrentDelegatedEditor there re-reads live, on
+  // every request). A Staff member who is not the named delegate is
+  // correctly `false` here even if they were the delegate a moment ago
+  // and the listener simply hasn't delivered the reassignment yet —
+  // the server-side rule remains the actual authority backstop
+  // regardless of any brief client-side staleness window (Technical
+  // Design §19; Mechanism Analysis §D).
+  const isCurrentDelegatedEditor =
+    !!currentUser && !!contagemAuthority && contagemAuthority.delegatedEditorUid === currentUser.uid;
+  // [Decision 46 §1] Exactly the two roles Decision 46 authorizes to
+  // edit the same active Periodic Contagem simultaneously — a Viewer
+  // (Decision 52) is never a member of this set, by construction, not
+  // by a separate stored flag.
+  const isActiveContagemEditor = isOwner || isCurrentDelegatedEditor;
+
   // BDS #16 — additive on top of isStaff, never a replacement for it.
   // Every existing `isStaff` check in the app is unaffected; these three
   // are new, narrower checks used only where Manager delegation applies.
@@ -1680,6 +1742,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setPeriodicStockDraftItemsLoaded(false);
         setPeriodicStockDraftMetaListenerState('loading');
         setPeriodicStockDraftItemsListenerState('loading');
+        // [Decisions 44-56] Same "no listener result at all" reset
+        // discipline as the periodic draft state immediately above —
+        // a signed-out session has no authority document result,
+        // definite or otherwise.
+        setContagemAuthority(null);
+        setContagemAuthorityLoaded(false);
         setWithdrawals([]);
         setClosings([]);
         setStaffMembers([]);
@@ -1764,6 +1832,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     setPeriodicStockDraftItemsLoaded(false);
     setPeriodicStockDraftMetaListenerState('loading');
     setPeriodicStockDraftItemsListenerState('loading');
+    // [Decisions 44-56; Decision 51 — Shared-Device/Cache Isolation]
+    // Same staleness-avoidance reasoning as the periodic draft reset
+    // immediately above, applied to the authority document — Business
+    // A's delegated-Editor assignment must never be momentarily read
+    // as if it applied to Business B during a direct switch (it is a
+    // different document at a different business path, but the STATE
+    // holding its last-known value is the same React state regardless
+    // of which business populated it, exactly the class of risk
+    // Decision 51/Finding K name).
+    setContagemAuthority(null);
+    setContagemAuthorityLoaded(false);
     // Phase C — same "reset unconditionally on every switch" reasoning
     // as the two lines above: a direct Business A -> Business B switch
     // must never carry A's suspended state into B's screen for the
@@ -2247,18 +2326,87 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     );
 
-    // 5c. Withdrawals collection (money the owner has taken out — NOT an expense)
-    const withdrawalsRef = collection(db, 'businesses', businessId, 'withdrawals');
-    const unsubWithdrawals = onSnapshot(
-      withdrawalsRef,
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+    // Implementation Authorization §2 items 2, 4] The authoritative
+    // delegated-Editor assignment. Readable by isMemberOf() in
+    // firestore.rules — EVERY business member, including a Viewer, so
+    // this listener is never role-gated on attachment (unlike a
+    // Finding K Tier-1-style collection — this document's own content
+    // is not privileged; who currently holds delegate authority is
+    // exactly what every role needs to know to render correctly).
+    const contagemAuthorityRef = doc(db, 'businesses', businessId, 'contagemAuthority', 'current');
+    const unsubContagemAuthority = onSnapshot(
+      contagemAuthorityRef,
       (snap) => {
-        const list: Withdrawal[] = [];
-        snap.forEach((doc) => list.push(doc.data() as Withdrawal));
-        list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
-        setWithdrawals(list);
+        setContagemAuthority(snap.exists() ? (snap.data() as ContagemAuthority) : null);
+        setContagemAuthorityLoaded(true);
       },
-      (err) => console.error('Error fetching withdrawals:', err)
+      (err) => {
+        console.error('Error fetching contagem authority:', err);
+        // [Decision 48/49] Fail-closed on error, not fail-open: an
+        // unreadable authority document must never be treated as "no
+        // delegate restriction" — it is read by isMemberOf(), so a
+        // read failure here means something is wrong with the
+        // business/session context itself, not that delegation is
+        // absent. Resetting to null is safe specifically because
+        // isCurrentDelegatedEditor's own default (null) already means
+        // "no delegate," which is the same fail-safe direction
+        // (nobody's delegate authority is ever granted by an error).
+        setContagemAuthority(null);
+        setContagemAuthorityLoaded(true);
+      }
     );
+
+    // 5c. Withdrawals collection (money the owner has taken out — NOT
+    // an expense).
+    //
+    // [Decisions 44-56 — Finding K Mechanism Analysis §C/§D, item 1;
+    // Implementation Authorization §2 items 10, 13] This is the exact
+    // collection the two Finding K verification passes this session
+    // used to empirically demonstrate cache-first-emission exposure:
+    // an Owner-only (`firestore.rules`: `allow read: if
+    // isOwnerOf(businessId)`) collection whose listener previously
+    // attached unconditionally, regardless of role, with no reset on
+    // a permission error — meaning a non-Owner session on a
+    // previously-Owner-used device could have Owner-only financial
+    // data served from the shared local cache before any server
+    // round-trip. Fixed per the finalized mechanism (Technical Design
+    // §12): never attach the listener at all for a session whose
+    // already-known role (`isOwner`, computed synchronously from
+    // `userProfile` before this effect ever runs) says it has no
+    // standing to read this collection — this is the primary,
+    // connectivity-independent guarantee; `firestore.rules` remains
+    // the unchanged, authoritative server-side backstop regardless.
+    let unsubWithdrawals: () => void = () => {};
+    if (isOwner) {
+      const withdrawalsRef = collection(db, 'businesses', businessId, 'withdrawals');
+      unsubWithdrawals = onSnapshot(
+        withdrawalsRef,
+        (snap) => {
+          const list: Withdrawal[] = [];
+          snap.forEach((doc) => list.push(doc.data() as Withdrawal));
+          list.sort((a, b) => new Date(b.date).getTime() - new Date(a.date).getTime());
+          setWithdrawals(list);
+        },
+        (err) => {
+          console.error('Error fetching withdrawals:', err);
+          // [Finding K — this line is the fix for the second half of
+          // the demonstrated gap: previously this branch only logged,
+          // never resetting state, so an already-rendered privileged
+          // record could survive indefinitely past a permission error.
+          // Now matches the Contagem drafts' own pre-existing
+          // safe-reset pattern.]
+          setWithdrawals([]);
+        }
+      );
+    } else {
+      // [Finding K — fail-closed, not fail-open] A non-Owner session
+      // never attaches this listener at all, so no cache-first
+      // emission of Owner-only data is ever possible for it, online or
+      // offline, regardless of what a previous session on this device
+      // may have cached.
+      setWithdrawals([]);
+    }
 
     // 5c-ii. Payments collection (Module #19 V1 Manual Payment Bridge —
     // temporary confirmation bridge, not the final payment architecture)
@@ -2357,6 +2505,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubInitialDraft();
       unsubPeriodicDraftMeta();
       unsubPeriodicDraftItems();
+      unsubContagemAuthority();
       unsubWithdrawals();
       unsubPayments();
       unsubClosings();
@@ -2604,6 +2753,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       });
     } finally {
       switchInFlightRef.current = false;
+    }
+  };
+
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 46
+  // §1, Decision 48, Decision 54; Implementation Authorization §2
+  // items 2, 4] Owner/Admin-only explicit assignment/reassignment/
+  // clearing of the single delegated-Editor slot for the active
+  // business. `uid: null` explicitly clears delegation (Decision 48:
+  // no automatic transfer — clearing is itself an explicit act, not a
+  // side effect of anything else). `firestore.rules`' own
+  // `contagemAuthority/current` write rule is the authoritative
+  // enforcement of Decision 54's eligibility requirement (the named
+  // uid must currently be business-authorized for this exact
+  // business) — this function does not duplicate that check
+  // client-side beyond the minimal guard below, since duplicating it
+  // imperfectly would risk disagreeing with the real, authoritative
+  // rule.
+  const assignDelegatedEditor = async (uid: string | null) => {
+    if (!currentUser || !isOwner || !activeBusinessId) {
+      throw new Error('Apenas o dono do negócio pode atribuir um Editor delegado.');
+    }
+    const authorityRef = doc(db, 'businesses', activeBusinessId, 'contagemAuthority', 'current');
+    const payload: WithFieldValue<ContagemAuthority> = {
+      delegatedEditorUid: uid,
+      assignedByUid: currentUser.uid,
+      // [firestore.rules' own request.time requirement — same
+      // server-verified-timestamp discipline as StockCount.confirmedAt
+      // elsewhere in this codebase] Never a client-computed Date; a
+      // client-computed value would fail the rule outright, by design.
+      assignedAt: serverTimestamp() as unknown as string,
+    };
+    await setDoc(authorityRef, payload);
+    // [Decision 41C §2 — same readback-uncertain wrapping as every
+    // other durable write in this file] Forces an actual round-trip,
+    // resolves only once the server genuinely has this assignment —
+    // critical here specifically because Decision 48/49's own
+    // immediate-effect guarantee depends on the write having actually
+    // reached the server, not merely appearing to succeed locally.
+    try {
+      await getDocFromServer(authorityRef);
+    } catch (readbackError) {
+      throw new ReadbackUnconfirmedError(readbackError);
     }
   };
 
@@ -4762,6 +4953,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (type === 'initial' && !redoesConfirmationId && hasInitialStockCount) {
       throw new Error('O Capital Inicial já foi definido e não pode ser registado novamente.');
     }
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
+    // 55 §5 items 7-10; Implementation Authorization §2 item 7] Fast,
+    // non-authoritative client guard — firestore.rules' own
+    // `openConflictCount == 0` precondition on the `stockCounts`
+    // create rule is the actual, authoritative enforcement regardless
+    // of this check; this only avoids a doomed round-trip when the
+    // already-live `periodicStockDraftMeta` mirror already shows an
+    // unresolved conflict.
+    if (type !== 'initial' && (periodicStockDraftMeta?.openConflictCount ?? 0) > 0) {
+      throw new Error(
+        'Existem linhas em conflito por resolver nesta Contagem. Resolva todos os conflitos antes de finalizar.'
+      );
+    }
     // [Void & Redo] A redo must name a real predecessor slot — resolved
     // here, once, as the single source of truth for both the new
     // document's id and its chainPosition (never separately passed and
@@ -6235,10 +6439,127 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // already-counted total reduced to almost nothing, no error shown.
   // Four narrower functions replace it; see the interface's own comment
   // (above) for the full breakdown of when each is used.
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
+  // 47/55; Technical Design §7/§8; Implementation Authorization §2
+  // item 6] Rewritten from a plain `setDoc` (unconditional overwrite,
+  // last-write-wins) to a `runTransaction`-based read-compare-write.
+  // The outward signature is UNCHANGED — every existing call site in
+  // PeriodicStockCountView.tsx continues to pass a full
+  // `PeriodicStockDraftItem` describing the operator's own newly
+  // entered content, exactly as before. What changes is entirely
+  // internal: `rev`/`state`/`lastWriter*`/`conflict` are never taken
+  // from the caller (any such fields on the passed-in `item` are
+  // discarded below) — they are exclusively transaction-derived,
+  // because a Firestore transaction already gives an atomic
+  // read-then-write with automatic retry-on-concurrent-change, which
+  // is what actually detects a genuine same-row collision (a plain
+  // `baseRev` comparison is redundant once the transaction itself
+  // always reads the true, current server value at write time).
   const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão não autenticada.');
+    // [Decision 46 §1/Decision 52] Fast, non-authoritative client
+    // guard — firestore.rules' own isActiveContagemEditor() check is
+    // the real enforcement; this only avoids a doomed round-trip for
+    // a Viewer whose UI should never have offered this action anyway.
+    if (!isActiveContagemEditor) {
+      throw new Error('Não tem autorização para editar esta Contagem.');
+    }
     const itemRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey);
-    await setDoc(itemRef, item);
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    const writerRole: 'owner' | 'delegate' = isOwner ? 'owner' : 'delegate';
+    const nowIso = new Date().toISOString();
+    // Strip any rev/state/writer/conflict fields the caller might
+    // still be carrying in its own local copy of this row — never
+    // trusted, always recomputed inside the transaction below.
+    const {
+      rev: _ignoredRev,
+      state: _ignoredState,
+      lastWriterUid: _ignoredWriterUid,
+      lastWriterRole: _ignoredWriterRole,
+      lastWriteAt: _ignoredWriteAt,
+      conflict: _ignoredConflict,
+      ...content
+    } = item;
+
+    await runTransaction(db, async (tx) => {
+      const [currentSnap, metaSnap] = await Promise.all([tx.get(itemRef), tx.get(metaRef)]);
+      const current = currentSnap.exists() ? (currentSnap.data() as PeriodicStockDraftItem) : null;
+      const currentState = current?.state ?? 'ACCEPTED';
+
+      // [Decision 55 §6 item 6] A row already in CONFLICT cannot be
+      // silently overwritten by an ordinary save — resolving it is a
+      // distinct, explicit act (resolvePeriodicConflict, below), never
+      // an incidental side effect of continuing to type.
+      if (currentState === 'CONFLICT') {
+        throw new Error(
+          'Esta linha está em conflito e precisa de ser resolvida antes de continuar a editar.'
+        );
+      }
+
+      if (!current) {
+        // First write for this row.
+        tx.set(itemRef, {
+          ...content,
+          rev: 1,
+          state: 'ACCEPTED',
+          lastWriterUid: currentUser.uid,
+          lastWriterRole: writerRole,
+          lastWriteAt: nowIso,
+        });
+        return;
+      }
+
+      const currentRev = current.rev ?? 0;
+
+      if (current.quantity === content.quantity) {
+        // [Technical Design §7] Same value already on the server —
+        // not a genuine disagreement (someone else's write, or this
+        // same editor's own retry, already landed identically).
+        // Advance rev/writer, no conflict.
+        tx.set(itemRef, {
+          ...content,
+          rev: currentRev + 1,
+          state: 'ACCEPTED',
+          lastWriterUid: currentUser.uid,
+          lastWriterRole: writerRole,
+          lastWriteAt: nowIso,
+        });
+        return;
+      }
+
+      // [Decision 47/55 §5 items 1-3; Technical Design §7/§8] Genuine
+      // collision: the value this transaction just read from the
+      // server differs from this editor's own new value. Both
+      // observations are preserved; the row's own `quantity` is left
+      // exactly as the server already has it — never overwritten by
+      // either side, per Decision 55's no-automatic-winner
+      // requirement.
+      tx.set(itemRef, {
+        ...current,
+        state: 'CONFLICT',
+        rev: currentRev + 1,
+        conflict: {
+          observationA: {
+            value: current.quantity,
+            writerUid: current.lastWriterUid ?? 'unknown',
+            writerRole: current.lastWriterRole ?? 'owner',
+            at: current.lastWriteAt ?? nowIso,
+            baseRev: currentRev,
+          },
+          observationB: {
+            value: content.quantity,
+            writerUid: currentUser.uid,
+            writerRole: writerRole,
+            at: nowIso,
+            baseRev: currentRev,
+          },
+        },
+      });
+      const priorOpenConflictCount = metaSnap.exists() ? (metaSnap.data().openConflictCount ?? 0) : 0;
+      tx.set(metaRef, { openConflictCount: priorOpenConflictCount + 1 }, { merge: true });
+    });
+
     // [Bug fix — a device with a poor/interrupted connection can show
     // "saved" while the write never reaches the server] Same reasoning
     // as this function's own prior single-document version — forces an
@@ -6253,6 +6574,72 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       throw new ReadbackUnconfirmedError(readbackError);
     }
     return new Date().toISOString();
+  };
+
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 55
+  // §5 items 4, 6, 9; Technical Design §9; Implementation
+  // Authorization §2 item 6] Explicit conflict resolution — a distinct
+  // act from an ordinary save, never reachable by continuing to type
+  // into a CONFLICT row (savePeriodicStockDraftItem, above, refuses
+  // that outright). The resolver selects one of the two ALREADY
+  // preserved observations; a value that matches neither is refused —
+  // that would be a fresh recount, a different, not-yet-addressed
+  // workflow per Decision 55 §6 item 6, not a resolution.
+  const resolvePeriodicConflict = async (rowKey: string, resolvedValue: string) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão não autenticada.');
+    if (!isActiveContagemEditor) {
+      throw new Error('Não tem autorização para resolver este conflito.');
+    }
+    const itemRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey);
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    const writerRole: 'owner' | 'delegate' = isOwner ? 'owner' : 'delegate';
+    const nowIso = new Date().toISOString();
+
+    await runTransaction(db, async (tx) => {
+      const [itemSnap, metaSnap] = await Promise.all([tx.get(itemRef), tx.get(metaRef)]);
+      if (!itemSnap.exists()) {
+        throw new Error('Esta linha já não existe.');
+      }
+      const current = itemSnap.data() as PeriodicStockDraftItem;
+      if (current.state !== 'CONFLICT' || !current.conflict) {
+        // [Decision 55 §5 item 6 discipline — precondition-checked,
+        // idempotent-safe write, same family as this codebase's
+        // existing Void & Redo slot preconditions] A stale/duplicate
+        // resolution attempt (e.g. a second resolver's stale UI) is
+        // rejected outright, not silently accepted as a no-op that
+        // could disagree with whatever actually resolved it first.
+        throw new Error('Esta linha já não está em conflito.');
+      }
+      const { observationA, observationB } = current.conflict;
+      if (resolvedValue !== observationA.value && resolvedValue !== observationB.value) {
+        throw new Error('O valor escolhido tem de corresponder a uma das duas observações preservadas.');
+      }
+      tx.set(itemRef, {
+        ...current,
+        quantity: resolvedValue,
+        state: 'ACCEPTED',
+        rev: (current.rev ?? 0) + 1,
+        lastWriterUid: currentUser.uid,
+        lastWriterRole: writerRole,
+        lastWriteAt: nowIso,
+        conflict: {
+          ...current.conflict,
+          resolvedValue,
+          resolverUid: currentUser.uid,
+          resolverRole: writerRole,
+          resolvedAt: nowIso,
+        },
+      });
+      const priorOpenConflictCount = metaSnap.exists() ? (metaSnap.data().openConflictCount ?? 0) : 0;
+      tx.set(metaRef, { openConflictCount: Math.max(0, priorOpenConflictCount - 1) }, { merge: true });
+    });
+
+    try {
+      await getDocFromServer(itemRef);
+    } catch (readbackError) {
+      throw new ReadbackUnconfirmedError(readbackError);
+    }
   };
 
   // [Decision 40-equivalent identity churn] Used only when a row's own
@@ -6296,7 +6683,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
-    await setDoc(metaRef, meta);
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
+    // 55 §5 items 7-10] This function does a plain (non-merge)
+    // `setDoc` — a deliberate, pre-existing full-replace, relied upon
+    // elsewhere to CLEAR `submissionId`/`newProductInfo` when a caller
+    // omits them (see buildPeriodicDraftMeta's own field-omission
+    // shape immediately above). `openConflictCount` is not one of this
+    // function's own concerns at all — a meta-only save (type/label/
+    // date change) must never silently reset the Decision 55
+    // finalization-blocking counter to 0 as an accidental side effect
+    // of that unrelated full-replace behavior, which is exactly what
+    // would happen without this line (a wiped counter would silently
+    // UNBLOCK finalization while a real conflict is still open).
+    // Sourced from `periodicStockDraftMeta`, the already-live in-memory
+    // mirror of this same document (kept current by its own listener),
+    // not a fresh read — no extra round trip needed.
+    const preservedOpenConflictCount = periodicStockDraftMeta?.openConflictCount ?? 0;
+    await setDoc(metaRef, {
+      ...meta,
+      ...(preservedOpenConflictCount > 0 ? { openConflictCount: preservedOpenConflictCount } : {}),
+    });
     // [Decision 41C §2] Same readback-uncertain wrapping as
     // saveInitialStockDraft above.
     try {
@@ -6330,12 +6736,67 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     >
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão não autenticada.');
     const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
     const fsBatch = createFirestoreBatch(db);
-    fsBatch.set(metaRef, meta);
+    // [Decisions 44-56; Decision 55 §5 items 7-10] Same
+    // openConflictCount-preservation fix as savePeriodicStockDraftMeta
+    // immediately above — this batch's own meta write is the same
+    // full-replace shape and would otherwise silently wipe the
+    // Decision 55 finalization-blocking counter on every interruption
+    // flush.
+    const preservedOpenConflictCount = periodicStockDraftMeta?.openConflictCount ?? 0;
+    fsBatch.set(metaRef, {
+      ...meta,
+      ...(preservedOpenConflictCount > 0 ? { openConflictCount: preservedOpenConflictCount } : {}),
+    });
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+    // Implementation Authorization §2 item 6] This is a best-effort,
+    // interruption-driven emergency save (Decision 38-41: pagehide/
+    // visibilitychange flush, and the pre-business-switch/pre-logout
+    // flush) writing potentially many rows in one atomic batch — not
+    // the same code path as the live, single-row transactional save
+    // (savePeriodicStockDraftItem, above). It must still satisfy
+    // firestore.rules' own ordinary-write shape (a bare `setDoc`-style
+    // payload with no `rev`/`lastWriterUid` would now be REJECTED
+    // outright), so each row's `rev` is advanced from the last value
+    // this session actually observed (`periodicStockDraftItemsByKey`,
+    // kept current by the live listener). Note the explicit, narrower
+    // scope this implies: unlike the live path, a batch commit is not
+    // itself a per-row read-compare-write — if a row has genuinely
+    // gone stale relative to the server since this session last
+    // observed it, firestore.rules' own `rev == resource.rev + 1`
+    // check correctly rejects the ENTIRE batch (Firestore batches are
+    // atomic), which surfaces through this function's own existing
+    // `ReadbackUnconfirmedError`/thrown-error path exactly like any
+    // other failed flush already does — never a silent, partial
+    // overwrite. A genuine same-row collision occurring in the exact
+    // narrow window of an interruption flush is not separately
+    // conflict-detected here; this is an explicit, acknowledged,
+    // narrower guarantee than the live editing path's own full
+    // Decision 55 conflict semantics, not an oversight.
+    const writerRole: 'owner' | 'delegate' = isOwner ? 'owner' : 'delegate';
+    const nowIso = new Date().toISOString();
     for (const [rowKey, item] of Object.entries(rowsByKey)) {
-      fsBatch.set(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey), item);
+      const known = periodicStockDraftItemsByKey[rowKey];
+      const {
+        rev: _ignoredRev,
+        state: _ignoredState,
+        lastWriterUid: _ignoredWriterUid,
+        lastWriterRole: _ignoredWriterRole,
+        lastWriteAt: _ignoredWriteAt,
+        conflict: _ignoredConflict,
+        ...content
+      } = item;
+      fsBatch.set(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey), {
+        ...content,
+        rev: (known?.rev ?? 0) + 1,
+        state: 'ACCEPTED',
+        lastWriterUid: currentUser.uid,
+        lastWriterRole: writerRole,
+        lastWriteAt: nowIso,
+      });
     }
     await fsBatch.commit();
     // [Decision 41C §2] Same readback-uncertain wrapping as
@@ -6347,6 +6808,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
     return meta.updatedAt;
   };
+
 
   // Discards the periodic draft without finalizing it — the explicit
   // "Começar de novo" path on the stale-draft resume banner
@@ -7307,7 +7769,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 51;
+  // Finding K Mechanism Analysis §D item 5, §E item 1; Technical
+  // Design §12 item 5; Implementation Authorization §2 items 11, 12]
+  // Previously exactly `await signOut(auth)` — confirmed, empirically,
+  // by this session's own Finding K verification harness, to leave
+  // every previously-cached document (including Owner-only privileged
+  // data) sitting in the shared IndexedDB store indefinitely, readable
+  // by whichever session starts next on the same device. Rewritten to
+  // a flush-gated, opportunistic deep clean:
+  //
+  //   1. Attempt the SAME pre-existing flush discipline switchShop()
+  //      already uses, BEFORE touching anything else.
+  //   2. Only if that flush confirms durable, proceed to
+  //      terminate(db) -> clearIndexedDbPersistence(db) -> a full page
+  //      reload (obtains a genuinely fresh Firestore instance for
+  //      whichever session starts next — `db` is a module-level
+  //      `const` export consumed by 100+ call sites in this file, so a
+  //      reload is the safe way to get a new instance without
+  //      restructuring how every one of them already imports it; this
+  //      is an explicit, deliberate scope boundary, not an oversight).
+  //   3. If the flush cannot complete (genuinely offline, or nothing
+  //      pending to flush), skip the clear entirely and sign out
+  //      directly — running an unconditional clear risks discarding a
+  //      genuinely still-syncing Contagem observation, which would
+  //      violate Decision 44's no-silent-loss principle. This
+  //      deliberately mirrors switchShop()'s own existing
+  //      flush-before-context-change discipline, not a new pattern.
+  //
+  // This is explicitly a SECONDARY, defense-in-depth guarantee. The
+  // PRIMARY, connectivity-independent guarantee against unauthorized
+  // cached data reaching a subsequent session is the
+  // authorization-aware listener gating already applied to this
+  // file's role-restricted onSnapshot call sites (e.g. `withdrawals`,
+  // above) — this opportunistic clean succeeding or failing does not
+  // change whether that guarantee holds.
   const logout = async () => {
+    let flushSucceeded = true;
+    const flush = pendingContagemFlushRef.current;
+    if (flush) {
+      try {
+        const result = await flush();
+        flushSucceeded = result.success;
+      } catch {
+        flushSucceeded = false;
+      }
+    }
+
+    if (flushSucceeded) {
+      try {
+        // [SDK precondition confirmed empirically this session, via an
+        // isolated harness against the real firebase@12.16.0 package —
+        // NOT assumed from documentation alone]
+        // clearIndexedDbPersistence() fails with `failed-precondition`
+        // unless the instance has already been terminated; terminate()
+        // itself handles tearing down any still-active listeners as
+        // part of its own operation, so no separate manual
+        // unsubscribe step is required or attempted here.
+        await terminate(db);
+        await clearIndexedDbPersistence(db);
+        await signOut(auth);
+        window.location.reload();
+        return;
+      } catch (err) {
+        // The opportunistic deep clean failing must never block the
+        // ordinary, always-required sign-out itself — fall through.
+        console.error(
+          'Error performing opportunistic Firestore cache clean on logout (non-fatal, falling back to ordinary sign-out):',
+          err
+        );
+      }
+    }
+
     await signOut(auth);
   };
 
@@ -7497,6 +8030,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         periodicStockDraftLoaded,
         periodicStockDraftListenerState,
         savePeriodicStockDraftItem,
+        resolvePeriodicConflict,
         removePeriodicStockDraftItem,
         savePeriodicStockDraftMeta,
         flushPeriodicStockDraftRows,
@@ -7551,6 +8085,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         maxShopsPerOwner: MAX_SHOPS_PER_OWNER,
         addShop,
         switchShop,
+        contagemAuthority,
+        contagemAuthorityLoaded,
+        isCurrentDelegatedEditor,
+        isActiveContagemEditor,
+        assignDelegatedEditor,
         registerPendingContagemFlush,
         refreshShopWorth,
         logout,

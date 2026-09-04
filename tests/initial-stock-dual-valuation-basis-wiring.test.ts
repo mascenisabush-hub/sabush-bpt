@@ -88,7 +88,23 @@ describe('AppContext.tsx — immutability enforced by the pre-existing, uncondit
   });
 
   it('firestore.rules still refuses update/delete for type == \'initial\' unconditionally — confirms new fields inherit this immutability for free', () => {
-    assert.match(rulesSource, /allow update, delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data, Decision
+    // 56 — Finalized Periodic Contagem Immutability & Clear-All
+    // Separation; Implementation Authorization §2 item 8] The single
+    // combined `allow update, delete: if isOwnerOf(businessId) &&
+    // resource.data.get('type', null) != 'initial';` line this
+    // assertion used to match verbatim was deliberately split by
+    // Decision 56's authorized implementation: `update` is now refused
+    // unconditionally for EVERY type (including 'initial', unchanged
+    // from before), and `delete` keeps the exact prior
+    // type-conditioned text, byte-for-byte. The semantic property this
+    // test actually verifies — 'initial' is refused for both update
+    // and delete, unconditionally — is unchanged; only the rule's own
+    // text shape changed, and only for a reason unrelated to this
+    // feature. Both new lines are asserted below in place of the one
+    // old combined line.
+    assert.match(rulesSource, /allow update: if false;/);
+    assert.match(rulesSource, /allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
   });
 
   it('this feature introduced zero changes to firestore.rules (source-level proof, not just a claim)', () => {
