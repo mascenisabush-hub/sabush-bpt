@@ -819,6 +819,12 @@ interface AppContextType {
   // exactly like the prior function did, for the identical "don't
   // report saved before the server actually has it" reason.
   savePeriodicStockDraftItem: (rowKey: string, item: PeriodicStockDraftItem) => Promise<string>;
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
+  // 55 §5 items 1-6] The true rowKey -> row map, exposed so UI callers
+  // (conflict rendering/resolution) can address a specific row without
+  // reconstructing its key from the flattened `periodicStockDraft.items`
+  // array, which does not itself carry each item's own storage key.
+  periodicStockDraftItemsByKey: Record<string, PeriodicStockDraftItem>;
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 55]
   // Explicit conflict resolution — a distinct act from an ordinary
   // save; see this function's own implementation comment for why it
@@ -1912,14 +1918,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // own activate-trial endpoint both key it this same way). Added
     // per the Release Readiness Audit's own finding: previously never
     // read client-side at all.
+    //
+    // [Decisions 44-56 — Finding K Mechanism Analysis §D item 1]
+    // firestore.rules: `isOwnerOf(subscriptionId) || (isMemberOf &&
+    // manager)` — gated here on the matching client-side combination
+    // (isOwner || isManager), never attached for an ordinary Staff
+    // session.
     const subscriptionRef = doc(db, 'subscriptions', businessId);
-    const unsubSubscription = onSnapshot(
-      subscriptionRef,
-      (snap) => {
-        setSubscription(snap.exists() ? (snap.data() as Subscription) : null);
-      },
-      (err) => console.error('Error fetching subscription:', err)
-    );
+    let unsubSubscription: () => void = () => {};
+    if (isOwner || isManager) {
+      unsubSubscription = onSnapshot(
+        subscriptionRef,
+        (snap) => {
+          setSubscription(snap.exists() ? (snap.data() as Subscription) : null);
+        },
+        (err) => {
+          console.error('Error fetching subscription:', err);
+          setSubscription(null);
+        }
+      );
+    } else {
+      setSubscription(null);
+    }
 
     // 2. Products collection
     const productsRef = collection(db, 'businesses', businessId, 'products');
@@ -2068,98 +2088,164 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // introduced, matching this Plan's own "no unrelated engineering
     // improvement" discipline).
     const cashLedgerEntriesRef = collection(db, 'businesses', businessId, 'cashLedgerEntries');
-    const unsubCashLedgerEntries = onSnapshot(
-      cashLedgerEntriesRef,
-      (snap) => {
-        const list: CashLedgerEntry[] = [];
-        snap.forEach((doc) => list.push(doc.data() as CashLedgerEntry));
-        setCashLedgerEntries(list);
-      },
-      (err) => console.error('Error fetching cash ledger entries:', err)
-    );
+    // [Decisions 44-56 — Finding K Mechanism Analysis §D item 1;
+    // Implementation Authorization §2 items 10, 13] The following
+    // seven collections are all Owner-only per firestore.rules
+    // (`allow read: if isOwnerOf(businessId)`) — same class of risk as
+    // `withdrawals` above, fixed the same way: never attach for a
+    // session whose already-known role says it has no standing to
+    // read, and reset to the safe empty value on any permission error
+    // rather than only logging it.
+    let unsubCashLedgerEntries: () => void = () => {};
+    if (isOwner) {
+      unsubCashLedgerEntries = onSnapshot(
+        cashLedgerEntriesRef,
+        (snap) => {
+          const list: CashLedgerEntry[] = [];
+          snap.forEach((doc) => list.push(doc.data() as CashLedgerEntry));
+          setCashLedgerEntries(list);
+        },
+        (err) => {
+          console.error('Error fetching cash ledger entries:', err);
+          setCashLedgerEntries([]);
+        }
+      );
+    } else {
+      setCashLedgerEntries([]);
+    }
 
     const receivablesRef = collection(db, 'businesses', businessId, 'receivables');
-    const unsubReceivables = onSnapshot(
-      receivablesRef,
-      (snap) => {
-        const list: Receivable[] = [];
-        snap.forEach((doc) => list.push(doc.data() as Receivable));
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setReceivables(list);
-      },
-      (err) => console.error('Error fetching receivables:', err)
-    );
+    let unsubReceivables: () => void = () => {};
+    if (isOwner) {
+      unsubReceivables = onSnapshot(
+        receivablesRef,
+        (snap) => {
+          const list: Receivable[] = [];
+          snap.forEach((doc) => list.push(doc.data() as Receivable));
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setReceivables(list);
+        },
+        (err) => {
+          console.error('Error fetching receivables:', err);
+          setReceivables([]);
+        }
+      );
+    } else {
+      setReceivables([]);
+    }
 
     const receivablePaymentsRef = collection(db, 'businesses', businessId, 'receivablePayments');
-    const unsubReceivablePayments = onSnapshot(
-      receivablePaymentsRef,
-      (snap) => {
-        const list: ReceivablePayment[] = [];
-        snap.forEach((doc) => list.push(doc.data() as ReceivablePayment));
-        setReceivablePayments(list);
-      },
-      (err) => console.error('Error fetching receivable payments:', err)
-    );
+    let unsubReceivablePayments: () => void = () => {};
+    if (isOwner) {
+      unsubReceivablePayments = onSnapshot(
+        receivablePaymentsRef,
+        (snap) => {
+          const list: ReceivablePayment[] = [];
+          snap.forEach((doc) => list.push(doc.data() as ReceivablePayment));
+          setReceivablePayments(list);
+        },
+        (err) => {
+          console.error('Error fetching receivable payments:', err);
+          setReceivablePayments([]);
+        }
+      );
+    } else {
+      setReceivablePayments([]);
+    }
 
     const payablesRef = collection(db, 'businesses', businessId, 'payables');
-    const unsubPayables = onSnapshot(
-      payablesRef,
-      (snap) => {
-        const list: Payable[] = [];
-        snap.forEach((doc) => list.push(doc.data() as Payable));
-        list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setPayables(list);
-      },
-      (err) => console.error('Error fetching payables:', err)
-    );
+    let unsubPayables: () => void = () => {};
+    if (isOwner) {
+      unsubPayables = onSnapshot(
+        payablesRef,
+        (snap) => {
+          const list: Payable[] = [];
+          snap.forEach((doc) => list.push(doc.data() as Payable));
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setPayables(list);
+        },
+        (err) => {
+          console.error('Error fetching payables:', err);
+          setPayables([]);
+        }
+      );
+    } else {
+      setPayables([]);
+    }
 
     const payablePaymentsRef = collection(db, 'businesses', businessId, 'payablePayments');
-    const unsubPayablePayments = onSnapshot(
-      payablePaymentsRef,
-      (snap) => {
-        const list: PayablePayment[] = [];
-        snap.forEach((doc) => list.push(doc.data() as PayablePayment));
-        setPayablePayments(list);
-      },
-      (err) => console.error('Error fetching payable payments:', err)
-    );
+    let unsubPayablePayments: () => void = () => {};
+    if (isOwner) {
+      unsubPayablePayments = onSnapshot(
+        payablePaymentsRef,
+        (snap) => {
+          const list: PayablePayment[] = [];
+          snap.forEach((doc) => list.push(doc.data() as PayablePayment));
+          setPayablePayments(list);
+        },
+        (err) => {
+          console.error('Error fetching payable payments:', err);
+          setPayablePayments([]);
+        }
+      );
+    } else {
+      setPayablePayments([]);
+    }
 
     // [Owner-recorded cash position] Same listener shape as payables,
     // above — sorted newest-first so consumers (DebtsView's "current"
     // reading) can simply take index 0 rather than re-sorting themselves.
     const cashPositionDeclarationsRef = collection(db, 'businesses', businessId, 'cashPositionDeclarations');
-    const unsubCashPositionDeclarations = onSnapshot(
-      cashPositionDeclarationsRef,
-      (snap) => {
-        const list: CashPositionDeclaration[] = [];
-        snap.forEach((doc) => list.push(doc.data() as CashPositionDeclaration));
-        list.sort((a, b) => new Date(b.declaredAt).getTime() - new Date(a.declaredAt).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
-        setCashPositionDeclarations(list);
-      },
-      (err) => console.error('Error fetching cash position declarations:', err)
-    );
+    let unsubCashPositionDeclarations: () => void = () => {};
+    if (isOwner) {
+      unsubCashPositionDeclarations = onSnapshot(
+        cashPositionDeclarationsRef,
+        (snap) => {
+          const list: CashPositionDeclaration[] = [];
+          snap.forEach((doc) => list.push(doc.data() as CashPositionDeclaration));
+          list.sort((a, b) => new Date(b.declaredAt).getTime() - new Date(a.declaredAt).getTime() || new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setCashPositionDeclarations(list);
+        },
+        (err) => {
+          console.error('Error fetching cash position declarations:', err);
+          setCashPositionDeclarations([]);
+        }
+      );
+    } else {
+      setCashPositionDeclarations([]);
+    }
 
     // [Business Worth Evolution — Implementation Authorization, Increment
     // 5; Specification §13] StartupInvestmentEntry — Owner-only per
     // firestore.rules; sorted newest-first by recordedAt, mirroring
     // receivables' own createdAt-descending convention above.
     const startupInvestmentEntriesRef = collection(db, 'businesses', businessId, 'startupInvestmentEntries');
-    const unsubStartupInvestmentEntries = onSnapshot(
-      startupInvestmentEntriesRef,
-      (snap) => {
-        const list: StartupInvestmentEntry[] = [];
-        snap.forEach((doc) => list.push(doc.data() as StartupInvestmentEntry));
-        list.sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
-        setStartupInvestmentEntries(list);
-      },
-      (err) => console.error('Error fetching startup investment entries:', err)
-    );
+    let unsubStartupInvestmentEntries: () => void = () => {};
+    if (isOwner) {
+      unsubStartupInvestmentEntries = onSnapshot(
+        startupInvestmentEntriesRef,
+        (snap) => {
+          const list: StartupInvestmentEntry[] = [];
+          snap.forEach((doc) => list.push(doc.data() as StartupInvestmentEntry));
+          list.sort((a, b) => new Date(b.recordedAt).getTime() - new Date(a.recordedAt).getTime());
+          setStartupInvestmentEntries(list);
+        },
+        (err) => {
+          console.error('Error fetching startup investment entries:', err);
+          setStartupInvestmentEntries([]);
+        }
+      );
+    } else {
+      setStartupInvestmentEntries([]);
+    }
 
     // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
     // §2/§17] Single fixed-id document, not a collection — mirrors the
     // subscription doc listener's own shape (1a, above) rather than
     // voidRecords' collection-query shape, since this artifact is a
-    // per-business singleton, not a bounded list.
+    // per-business singleton, not a bounded list. isMemberOf-tier per
+    // firestore.rules (any business member) — not a Finding K Tier-1
+    // collection, no gating required.
     const initialStockRecoveryAuthorizationRef = doc(db, 'businesses', businessId, 'initialStockRecoveryAuthorization', 'current');
     const unsubInitialStockRecoveryAuthorization = onSnapshot(
       initialStockRecoveryAuthorizationRef,
@@ -2173,7 +2259,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // 8; Specification §26, FR-43] A FULLY SEPARATE listener from the
     // Initial-Stock one immediately above — same fixed-id-singleton
     // shape, never merged with it (mirrors the two collections'
-    // own firestore.rules separation).
+    // own firestore.rules separation). isMemberOf-tier, not Tier-1.
     const businessWorthRecoveryAuthorizationRef = doc(db, 'businesses', businessId, 'businessWorthRecoveryAuthorizations', 'current');
     const unsubBusinessWorthRecoveryAuthorization = onSnapshot(
       businessWorthRecoveryAuthorizationRef,
@@ -2185,6 +2271,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // [Initial Stock Valuation History] Immutable, append-only price-change
     // audit trail — read tier matches stockCounts (any team member).
+    // isMemberOf-tier, not Tier-1.
     const initialStockPriceChangeEventsRef = collection(db, 'businesses', businessId, 'initialStockPriceChangeEvents');
     const unsubInitialStockPriceChangeEvents = onSnapshot(
       initialStockPriceChangeEventsRef,
@@ -2410,32 +2497,54 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     // 5c-ii. Payments collection (Module #19 V1 Manual Payment Bridge —
     // temporary confirmation bridge, not the final payment architecture)
+    // Owner-only per firestore.rules — same Finding K treatment as
+    // withdrawals/the seven financial collections above.
     const paymentsRef = collection(db, 'businesses', businessId, 'payments');
-    const unsubPayments = onSnapshot(
-      paymentsRef,
-      (snap) => {
-        const list: Payment[] = [];
-        snap.forEach((doc) => list.push(doc.data() as Payment));
-        list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
-        setPayments(list);
-      },
-      (err) => console.error('Error fetching payments:', err)
-    );
+    let unsubPayments: () => void = () => {};
+    if (isOwner) {
+      unsubPayments = onSnapshot(
+        paymentsRef,
+        (snap) => {
+          const list: Payment[] = [];
+          snap.forEach((doc) => list.push(doc.data() as Payment));
+          list.sort((a, b) => new Date(b.submittedAt).getTime() - new Date(a.submittedAt).getTime());
+          setPayments(list);
+        },
+        (err) => {
+          console.error('Error fetching payments:', err);
+          setPayments([]);
+        }
+      );
+    } else {
+      setPayments([]);
+    }
 
-    // 5d. Closings collection (Monthly/Yearly period locks)
+    // 5d. Closings collection (Monthly/Yearly period locks) —
+    // isOwnerOrGrantedManager(businessId, 'closings') per
+    // firestore.rules; matches the already-existing
+    // `canManagerCloseBooks` client-side derivation exactly.
     const closingsRef = collection(db, 'businesses', businessId, 'closings');
-    const unsubClosings = onSnapshot(
-      closingsRef,
-      (snap) => {
-        const list: Closing[] = [];
-        snap.forEach((doc) => list.push(doc.data() as Closing));
-        list.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
-        setClosings(list);
-      },
-      (err) => console.error('Error fetching closings:', err)
-    );
+    let unsubClosings: () => void = () => {};
+    if (isOwner || canManagerCloseBooks) {
+      unsubClosings = onSnapshot(
+        closingsRef,
+        (snap) => {
+          const list: Closing[] = [];
+          snap.forEach((doc) => list.push(doc.data() as Closing));
+          list.sort((a, b) => new Date(b.endDate).getTime() - new Date(a.endDate).getTime());
+          setClosings(list);
+        },
+        (err) => {
+          console.error('Error fetching closings:', err);
+          setClosings([]);
+        }
+      );
+    } else {
+      setClosings([]);
+    }
 
-    // 5e. [Closing Integrity Amendment v1.0] ClosedPeriod lock-index docs
+    // 5e. [Closing Integrity Amendment v1.0] ClosedPeriod lock-index
+    // docs — isMemberOf-tier, not Tier-1, no gating required.
     const closedPeriodsRef = collection(db, 'businesses', businessId, 'closedPeriods');
     const unsubClosedPeriods = onSnapshot(
       closedPeriodsRef,
@@ -2447,23 +2556,44 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       (err) => console.error('Error fetching closed periods:', err)
     );
 
-    // 6. Staff collection
+    // 6. Staff collection — isOwnerOrGrantedManager(businessId,
+    // 'staffManagement') per firestore.rules; matches the
+    // already-existing `canManagerManageStaff` client-side derivation.
+    // An ordinary (non-manager) Staff session was already denied this
+    // read server-side before this change — gating attachment here
+    // does not restrict anything beyond what was already enforced, it
+    // only removes the cache-first exposure window for whoever
+    // previously used this device with Owner/Manager access.
     const staffRef = collection(db, 'businesses', businessId, 'staff');
-    const unsubStaff = onSnapshot(
-      staffRef,
-      (snap) => {
-        const list: StaffMember[] = [];
-        snap.forEach((doc) => list.push(doc.data() as StaffMember));
-        setStaffMembers(list);
-        // [Decision 43 §11] A successful snapshot — even one confirming
-        // zero staff — is what makes an empty `staffMembers` genuinely
-        // trustworthy for the PIN-pad auto-refresh effect. Never reset
-        // to `false` here; only the business-switch/sign-out resets
-        // (below, and this effect's own dependency change) may do that.
-        setStaffMembersListenerConfirmed(true);
-      },
-      (err) => console.error('Error fetching staff:', err)
-    );
+    let unsubStaff: () => void = () => {};
+    if (isOwner || canManagerManageStaff) {
+      unsubStaff = onSnapshot(
+        staffRef,
+        (snap) => {
+          const list: StaffMember[] = [];
+          snap.forEach((doc) => list.push(doc.data() as StaffMember));
+          setStaffMembers(list);
+          // [Decision 43 §11] A successful snapshot — even one confirming
+          // zero staff — is what makes an empty `staffMembers` genuinely
+          // trustworthy for the PIN-pad auto-refresh effect. Never reset
+          // to `false` here; only the business-switch/sign-out resets
+          // (below, and this effect's own dependency change) may do that.
+          setStaffMembersListenerConfirmed(true);
+        },
+        (err) => {
+          console.error('Error fetching staff:', err);
+          setStaffMembers([]);
+          setStaffMembersListenerConfirmed(true);
+        }
+      );
+    } else {
+      setStaffMembers([]);
+      // [Decision 43 §11] A definitively-not-authorized session is
+      // itself a confirmed result (empty, correctly), not a pending
+      // one — never leaves the PIN-pad auto-refresh effect waiting on
+      // a listener that will never attach.
+      setStaffMembersListenerConfirmed(true);
+    }
 
     // 7. Timeline Events collection (Business Timeline — see types.ts).
     // Sorted by createdAt (the moment the event was logged) so entries
@@ -8027,6 +8157,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         saveInitialStockDraft,
         clearInitialStockDraft,
         periodicStockDraft,
+        periodicStockDraftItemsByKey,
         periodicStockDraftLoaded,
         periodicStockDraftListenerState,
         savePeriodicStockDraftItem,

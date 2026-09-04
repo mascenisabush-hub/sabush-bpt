@@ -73,6 +73,9 @@ import {
   Package,
   Circle,
   FileDown,
+  Users,
+  Eye,
+  ShieldAlert,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -632,6 +635,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     batches,
     productsError,
     periodicStockDraft,
+    periodicStockDraftItemsByKey,
     cashPositionDeclarations,
     periodicStockDraftLoaded,
     periodicStockDraftListenerState,
@@ -670,8 +674,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     payables,
     receivables,
     activeBusinessId,
+    // [Decisions 44-56 — Periodic Contagem Shared Live Data;
+    // Implementation Authorization §2 items 2-4, 6, 13] Authority and
+    // conflict-resolution wiring — see the "Contagem partilhada" panel
+    // and the conflict-resolution panel further below.
+    isOwner,
+    isCurrentDelegatedEditor,
+    isActiveContagemEditor,
+    contagemAuthority,
+    assignDelegatedEditor,
+    resolvePeriodicConflict,
+    staffMembers,
+    currentUser,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
+
+  // [Decision 55 §5 items 7-10; Implementation Authorization §2 item
+  // 7] The same authoritative counter `firestore.rules`' own
+  // finalization precondition already enforces — consulted here only
+  // to keep the UI from ever implying finalization is available while
+  // it is not. The server-side check remains authoritative regardless
+  // of whether this client-side value is momentarily stale; a stale
+  // "no conflicts" reading can, at worst, let an operator attempt a
+  // finalization the server then correctly rejects (surfaced via the
+  // existing `catch`/`setError` path in handleConfirmSave) — it can
+  // never let a real conflict finalize silently.
+  const unresolvedConflictRows = (periodicStockDraft?.items ?? []).filter(
+    (item) => item.state === 'CONFLICT'
+  );
+  const hasUnresolvedConflicts = (periodicStockDraft?.openConflictCount ?? unresolvedConflictRows.length) > 0;
 
   const createManualRow = (): StockCountWorkingRow => ({
     productId: undefined,
@@ -1005,6 +1036,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     'name-asc'
   );
   const [error, setError] = useState<string | null>(null);
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 55
+  // §5 items 4, 6, 9] Local, UI-only tracking of an in-flight
+  // resolution attempt — never persisted, never itself an
+  // authorization check (resolvePeriodicConflict/firestore.rules
+  // remain the actual enforcement); only disables the two buttons for
+  // the specific row being resolved so a double-click cannot fire two
+  // competing resolution attempts for the same row.
+  const [resolvingRowKey, setResolvingRowKey] = useState<string | null>(null);
+  // [Decision 46 §1; Decision 48; Implementation Authorization §2
+  // items 2, 4] Local, UI-only tracking for the delegate-assignment
+  // control below — the selected candidate uid before "Atribuir" is
+  // pressed, and an in-flight flag so the button cannot be double-
+  // clicked into two competing assignment writes.
+  const [selectedDelegateUid, setSelectedDelegateUid] = useState('');
+  const [assigningDelegate, setAssigningDelegate] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [savedMessage, setSavedMessage] = useState<string | null>(null);
   const [savedTotal, setSavedTotal] = useState<number>(0);
@@ -4044,6 +4090,42 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // then call recordStockCount. By the time fsBatch.commit() is even
   // queued inside recordStockCount, no draft-write promise this
   // component could have in flight remains unresolved.
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 55
+  // §5 items 4, 6, 9; Implementation Authorization §2 item 6] Thin UI
+  // wrapper around the already-authorized `resolvePeriodicConflict` —
+  // this function invents no new resolution authority model; it only
+  // tracks the in-flight/error UI state around that single existing
+  // call.
+  const handleResolveConflict = async (rowKey: string, resolvedValue: string) => {
+    setResolvingRowKey(rowKey);
+    setError(null);
+    try {
+      await resolvePeriodicConflict(rowKey, resolvedValue);
+    } catch (err: any) {
+      setError(err.message || 'Erro ao resolver o conflito.');
+    } finally {
+      setResolvingRowKey(null);
+    }
+  };
+
+  // [Decision 46 §1; Decision 48; Implementation Authorization §2
+  // items 2, 4] Thin UI wrapper around the already-authorized
+  // `assignDelegatedEditor` — no new authority model, no eligibility
+  // logic duplicated here beyond what that function/firestore.rules
+  // already enforce.
+  const handleAssignDelegate = async (uid: string | null) => {
+    setAssigningDelegate(true);
+    setError(null);
+    try {
+      await assignDelegatedEditor(uid);
+      setSelectedDelegateUid('');
+    } catch (err: any) {
+      setError(err.message || 'Erro ao atribuir o Editor delegado.');
+    } finally {
+      setAssigningDelegate(false);
+    }
+  };
+
   const handleConfirmSave = async () => {
     if (!pendingTally) return;
     // [Decision 41E §12/§13 — belt-and-suspenders] Same reasoning as
@@ -4909,6 +4991,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
           )}
 
+          {hasUnresolvedConflicts && (
+            // [Decision 55 §5 items 7-10] Proactive, not merely
+            // reactive — the server-side `openConflictCount == 0`
+            // precondition (firestore.rules) is the actual
+            // authoritative enforcement regardless of this message;
+            // this only keeps the UI from implying finalization is
+            // available when it is not.
+            <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+              Existem {unresolvedConflictRows.length === 1 ? 'uma linha' : `${unresolvedConflictRows.length} linhas`} em conflito por resolver nesta Contagem.
+              Resolva {unresolvedConflictRows.length === 1 ? 'o conflito' : 'todos os conflitos'} antes de finalizar (ver abaixo).
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -4922,7 +5017,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <button
               type="button"
               onClick={handleConfirmSave}
-              disabled={isSaving}
+              disabled={isSaving || hasUnresolvedConflicts}
               className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span>{isSaving ? 'A guardar...' : 'Confirmar Contagem'}</span>
@@ -5312,6 +5407,154 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           >
             <X className="w-4 h-4" strokeWidth={2} />
           </button>
+        </div>
+      )}
+
+      {/* [Decisions 44-56 — Periodic Contagem Shared Live Data;
+          Implementation Authorization §2 items 2, 4; Decision 46 §1,
+          Decision 48, Decision 52] "Contagem partilhada" — the
+          authority panel. Shows who is currently an Active Editor for
+          this shared Contagem, and (Owner/Admin only) the
+          assign/reassign/clear control for the single delegated-Editor
+          slot. A non-editor (Viewer) sees a plain, read-only notice
+          instead — never a disabled-but-visible control, since a
+          disabled control still implies the action exists for this
+          role, which it does not. */}
+      <div className="bg-white border border-gray-200 rounded-2xl px-5 py-4 space-y-3">
+        <div className="flex items-center gap-2">
+          <Users className="w-4 h-4 text-gray-500" strokeWidth={2} />
+          <h3 className="type-label text-gray-700">Contagem partilhada</h3>
+        </div>
+        <p className="text-[13px] text-gray-600">
+          Dono/Admin{contagemAuthority?.delegatedEditorUid ? ' e o Editor delegado abaixo' : ''} podem editar esta
+          Contagem em simultâneo. {isCurrentDelegatedEditor ? 'Você é o Editor delegado atual.' : ''}
+        </p>
+        {isOwner ? (
+          <div className="flex flex-wrap items-center gap-2">
+            {contagemAuthority?.delegatedEditorUid ? (
+              <>
+                <span className="text-[13px] text-gray-700">
+                  Editor delegado atual:{' '}
+                  <strong>
+                    {staffMembers.find((s) => s.uid === contagemAuthority.delegatedEditorUid)?.name ||
+                      contagemAuthority.delegatedEditorUid}
+                  </strong>
+                </span>
+                <button
+                  type="button"
+                  onClick={() => handleAssignDelegate(null)}
+                  disabled={assigningDelegate}
+                  className="btn-secondary py-1.5 px-3 text-[13px] disabled:opacity-60"
+                >
+                  <span>Remover delegação</span>
+                </button>
+              </>
+            ) : (
+              <>
+                <select
+                  value={selectedDelegateUid}
+                  onChange={(e) => setSelectedDelegateUid(e.target.value)}
+                  className="text-[13px] border border-gray-300 rounded-lg px-2 py-1.5"
+                >
+                  <option value="">Selecionar funcionário…</option>
+                  {staffMembers
+                    .filter((s) => !s.suspended)
+                    .map((s) => (
+                      <option key={s.uid} value={s.uid}>
+                        {s.name}
+                      </option>
+                    ))}
+                </select>
+                <button
+                  type="button"
+                  onClick={() => selectedDelegateUid && handleAssignDelegate(selectedDelegateUid)}
+                  disabled={assigningDelegate || !selectedDelegateUid}
+                  className="btn-secondary py-1.5 px-3 text-[13px] disabled:opacity-60"
+                >
+                  <span>Atribuir como Editor delegado</span>
+                </button>
+              </>
+            )}
+          </div>
+        ) : !isActiveContagemEditor ? (
+          <div className="flex items-start gap-2 text-[13px] text-gray-500">
+            <Eye className="w-4 h-4 shrink-0 mt-0.5" strokeWidth={2} />
+            <span>
+              Está a ver esta Contagem em modo de visualização — pode acompanhar em tempo real, mas apenas o
+              Dono/Admin ou o Editor delegado podem editar, resolver conflitos ou finalizar.
+            </span>
+          </div>
+        ) : null}
+      </div>
+
+      {/* [Decision 47/55; Technical Design §8/§9; Implementation
+          Authorization §2 items 6, 10] "Conflitos por resolver" —
+          rendered only when at least one row is genuinely in
+          CONFLICT. Never silently picks a winner: both preserved
+          observations are always shown, and the two buttons commit
+          to whichever the resolver picks via the already-authorized
+          resolvePeriodicConflict — never a third, freshly-typed
+          value. Resolve buttons render only for an Active Editor
+          (Owner/Admin or the current delegated Editor); a Viewer sees
+          the same conflict information with no resolve affordance at
+          all, consistent with Decision 52. Server-side
+          firestore.rules remain the actual enforcement regardless of
+          what this panel renders. */}
+      {unresolvedConflictRows.length > 0 && (
+        <div className="bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 space-y-3">
+          <div className="flex items-center gap-2">
+            <ShieldAlert className="w-4 h-4 text-amber-700" strokeWidth={2} />
+            <h3 className="type-label text-amber-800">
+              {unresolvedConflictRows.length === 1 ? 'Conflito por resolver' : 'Conflitos por resolver'}
+            </h3>
+          </div>
+          <p className="text-[13px] text-amber-700">
+            Duas observações diferentes e legítimas foram registadas para a(s) mesma(s) linha(s). Nenhuma foi
+            descartada — escolha qual valor fica como o correto.
+          </p>
+          <div className="space-y-3">
+            {Object.entries(periodicStockDraftItemsByKey)
+              .filter(([, item]) => item.state === 'CONFLICT' && item.conflict)
+              .map(([rowKey, item]) => {
+                const conflict = item.conflict!;
+                const isResolving = resolvingRowKey === rowKey;
+                return (
+                  <div key={rowKey} className="bg-white border border-amber-200 rounded-xl px-4 py-3 space-y-2">
+                    <p className="text-[13px] font-bold text-gray-800">{item.productName}</p>
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                      {[
+                        { label: 'Observação A', obs: conflict.observationA },
+                        { label: 'Observação B', obs: conflict.observationB },
+                      ].map(({ label, obs }) => (
+                        <div key={label} className="border border-gray-200 rounded-lg px-3 py-2">
+                          <p className="text-[11px] text-gray-500">
+                            {label} — {obs.writerRole === 'owner' ? 'Dono/Admin' : 'Editor delegado'}
+                          </p>
+                          <p className="text-[15px] font-bold text-gray-800">
+                            {obs.value} {item.unit}
+                          </p>
+                          {isActiveContagemEditor && (
+                            <button
+                              type="button"
+                              onClick={() => handleResolveConflict(rowKey, obs.value)}
+                              disabled={isResolving}
+                              className="btn-secondary mt-1.5 py-1 px-2.5 text-[12px] disabled:opacity-60"
+                            >
+                              <span>{isResolving ? 'A resolver…' : `Usar ${label.toLowerCase()}`}</span>
+                            </button>
+                          )}
+                        </div>
+                      ))}
+                    </div>
+                    {!isActiveContagemEditor && (
+                      <p className="text-[12px] text-gray-500">
+                        Apenas o Dono/Admin ou o Editor delegado pode resolver este conflito.
+                      </p>
+                    )}
+                  </div>
+                );
+              })}
+          </div>
         </div>
       )}
       {/* [Business Worth Evolution — Implementation Authorization,
