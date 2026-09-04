@@ -1,18 +1,35 @@
 // Finding K — REAL-ENVIRONMENT verification harness (client SDK +
 // persistence + REAL Firebase Auth + REAL firestore.rules enforcement).
 //
-// CORRECTION HISTORY: an earlier revision of this file contained a
-// hardcoded `const staffIsOwner = false;` literal standing in for a
-// real authorization check, and an un-awaited baseline write in the
-// K6/K7 scenario that raced against `disableNetwork()`. Both were
-// found by code review BEFORE this file was ever run or committed —
-// see the review report for the full list. This revision replaces
-// both with genuine runtime checks against the real emulator; nothing
-// in this file has been executed yet (still blocked by this sandbox's
-// network allow-list — confirmed again immediately before writing
-// this revision). THIS REMAINS EVIDENCE-IN-WAITING, NOT EVIDENCE. Do
-// not read the presence of this file, or a clean code review, as a
-// Finding K result of any kind.
+// CORRECTION HISTORY:
+//   Round 1 (found by code review, before this file was ever run or
+//   committed): a hardcoded `const staffIsOwner = false;` literal
+//   standing in for a real authorization check, and an un-awaited
+//   baseline write in the K6/K7 scenario racing against
+//   `disableNetwork()`. Both replaced with genuine runtime checks.
+//   Round 2 (found by this file's own FIRST real execution, on the
+//   user's machine — commit history has the exact output): a
+//   PERMISSION_DENIED crash in K6/K7, root-caused to Firestore's
+//   credential provider needing a brief moment to pick up a
+//   freshly-issued ID token after a rapid sign-out/sign-in — fixed by
+//   routing every sign-in/sign-out through `signInAs`/`signOutOf`
+//   helpers that settle briefly, applied uniformly (the prior
+//   inconsistent, ad-hoc `sleep()` placement is exactly what let this
+//   slip through). That same first real run also produced a genuine
+//   K5 result (`CONFIRMED HIGH` — a pending write appeared to survive
+//   an identity switch) which this revision does NOT accept at face
+//   value: an interpretive caveat and a disambiguation cross-check
+//   (does a fresh, non-queued, online write by the same unauthorized
+//   identity also succeed?) were added, because the credential-timing
+//   bug just found raises a real, undecided question about whether
+//   the write actually transmitted under the old or new identity —
+//   see the K5 section's own comments for the full reasoning. This
+//   round's changes are themselves NOT YET RE-EXECUTED.
+//
+// THIS REMAINS EVIDENCE-IN-WAITING FOR EVERY SCENARIO THAT HAS NOT YET
+// BEEN CLEANLY RE-RUN AFTER ROUND 2. Do not read the presence of this
+// file, a clean code review, or any single run's raw output, as a
+// settled Finding K result without accounting for the caveats above.
 //
 // WHY THIS FILE IS DIFFERENT FROM THE OTHER TWO FINDING K TEST FILES:
 //   - tests/periodic-contagem-shared-live-data-decisions-44-56.test.ts
@@ -138,6 +155,29 @@ const BIZ2 = 'bizK2'; // a genuinely separate business, for K2/K4
 const RESULTS = [];
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// [Bug found by this session's own real emulator run — see the K6/K7
+// crash: a PERMISSION_DENIED on contagemAuthority's own `isOwnerOf`
+// check, immediately after re-signing in as Owner, at firestore.rules
+// line 1379] Firestore's internal credential provider can need a
+// brief moment to pick up a freshly-issued ID token after a rapid
+// sign-out/sign-in — a write issued immediately afterward can still go
+// out carrying the PREVIOUS (already signed-out) credential and be
+// rejected, even though the application-level identity switch was
+// already complete from the caller's point of view. This is a harness
+// timing bug, not a rules bug or a product finding — fixed by routing
+// every sign-in through this one helper, which settles briefly before
+// returning, rather than inconsistently sprinkling `sleep()` after
+// some transitions but not others (the inconsistency is exactly what
+// let this bug slip through the first real run).
+async function signInAs(device, email, password) {
+  await signInWithEmailAndPassword(device.auth, email, password);
+  await sleep(500);
+}
+async function signOutOf(device) {
+  await signOut(device.auth);
+  await sleep(200);
+}
+
 // Valid classification values ONLY — enforced at the call site so a
 // future edit cannot silently reintroduce a taxonomy misuse.
 const VALID_RESULTS = new Set(['CONFIRMED HIGH', 'CONFIRMED PASS', 'PARTIALLY VERIFIED', 'UNVERIFIED', 'NOT TESTABLE']);
@@ -248,7 +288,7 @@ async function main() {
   // are the genuinely distinct cross-BUSINESS scenarios.)
   // =================================================================
   console.log('\n--- K1/K3: Owner writes privileged data, Staff (different real user) signs in on the SAME device ---');
-  await signInWithEmailAndPassword(ownerDevice.auth, 'owner@k-test.local', 'password123');
+  await signInAs(ownerDevice, 'owner@k-test.local', 'password123');
   const withdrawalPath = `businesses/${BIZ}/withdrawals/w1`;
   await setDoc(doc(ownerDevice.db, withdrawalPath), { amount: 50000, reason: 'Owner privileged withdrawal', date: '2026-09-04' });
   const serverConfirm = await getDoc(doc(ownerDevice.db, withdrawalPath));
@@ -269,8 +309,8 @@ async function main() {
   } else {
     // Naive, old logout() behavior — signOut only, no clear — same
     // device, different real user signs in.
-    await signOut(ownerDevice.auth);
-    await signInWithEmailAndPassword(ownerDevice.auth, 'staff@k-test.local', 'password123');
+    await signOutOf(ownerDevice);
+    await signInAs(ownerDevice, 'staff@k-test.local', 'password123');
 
     // [Correction #2] REAL runtime check — fetches Staff's actual
     // seeded profile from the real emulator via the now-Staff-
@@ -387,8 +427,8 @@ async function main() {
   // K4 — same user, two REAL businesses, ONLINE
   // =================================================================
   console.log('\n--- K4: same Owner, Business A vs Business B, business-scoped paths ---');
-  await signOut(ownerDevice.auth);
-  await signInWithEmailAndPassword(ownerDevice.auth, 'owner@k-test.local', 'password123');
+  await signOutOf(ownerDevice);
+  await signInAs(ownerDevice, 'owner@k-test.local', 'password123');
   const bizAOnlyPath = `businesses/${BIZ}/withdrawals/w-biz-a-only`;
   const bizBOnlyPath = `businesses/${BIZ2}/withdrawals/w-biz-b-only`;
   await setDoc(doc(ownerDevice.db, bizAOnlyPath), { amount: 111, reason: 'Business A only', date: '2026-09-04' });
@@ -455,14 +495,14 @@ async function main() {
   // K5 — offline pending write across a real auth identity change
   // =================================================================
   console.log('\n--- K5: Owner queues an offline write, then Staff signs in on the SAME device before reconnect ---');
-  await signOut(ownerDevice.auth);
-  await signInWithEmailAndPassword(ownerDevice.auth, 'owner@k-test.local', 'password123');
+  await signOutOf(ownerDevice);
+  await signInAs(ownerDevice, 'owner@k-test.local', 'password123');
   await disableNetwork(ownerDevice.db);
   const pendingPath = `businesses/${BIZ}/withdrawals/w2-pending`;
   const pendingWritePromise = setDoc(doc(ownerDevice.db, pendingPath), { amount: 999, reason: 'Queued while offline', date: '2026-09-04' }).catch((e) => ({ queuedWriteError: e.code || e.message }));
   await sleep(300); // let it enter the local queue
-  await signOut(ownerDevice.auth);
-  await signInWithEmailAndPassword(ownerDevice.auth, 'staff@k-test.local', 'password123');
+  await signOutOf(ownerDevice);
+  await signInAs(ownerDevice, 'staff@k-test.local', 'password123');
   await enableNetwork(ownerDevice.db);
   const settledOrTimeout = await Promise.race([
     pendingWritePromise.then(() => 'RESOLVED'),
@@ -477,16 +517,40 @@ async function main() {
   record(
     'K5',
     serverHasPendingDoc === true ? 'CONFIRMED HIGH' : serverHasPendingDoc === false ? 'CONFIRMED PASS' : 'UNVERIFIED',
-    `Write queued while authenticated as Owner and offline; identity switched to Staff before reconnect; write ${settledOrTimeout === 'RESOLVED' ? 'settled' : 'did not settle within 6s (treat as UNVERIFIED-leaning if this occurs — real SDK retry/backoff timing, not necessarily a rejection)'}. Server-side ground truth (rules bypassed): document exists = ${serverHasPendingDoc}. Owner-authored content is transmitted under whichever identity is real and current AT SEND TIME — this is the send-time-identity behavior every prior Finding K report named as UNVERIFIED, now tested against a real backend for the first time.`
+    `Write queued while authenticated as Owner and offline; identity switched to Staff before reconnect; write ${settledOrTimeout === 'RESOLVED' ? 'settled' : 'did not settle within 6s (treat as UNVERIFIED-leaning if this occurs — real SDK retry/backoff timing, not necessarily a rejection)'}. Server-side ground truth (rules bypassed): document exists = ${serverHasPendingDoc}. ` +
+    `IMPORTANT INTERPRETIVE CAVEAT, not resolved by this check alone: if the document exists, there are two materially different explanations this single check cannot itself distinguish — (a) the write transmitted carrying Owner's credential, captured at the moment it was queued (before the identity switch), which would mean this is Owner's own already-legitimate write landing late, not a Staff-authored write succeeding; or (b) the write genuinely transmitted under Staff's current identity and firestore.rules incorrectly allowed it, which would be a real rules defect independent of any offline-queueing behavior. See the immediately following disambiguation check.`
+  );
+
+  // [Disambiguation] Does a GENUINELY FRESH, non-queued, ONLINE write
+  // by the CURRENT Staff identity to the SAME collection get correctly
+  // rejected? If yes, Staff is not generally permitted to write
+  // `withdrawals` at all — which means explanation (a) above (the K5
+  // write carried Owner's own captured-at-enqueue-time credential) is
+  // the far more likely account of what just happened, not a general
+  // rules bypass for Staff. If this ALSO incorrectly succeeds, that
+  // would point to explanation (b) — a genuine, standalone rules
+  // defect unrelated to offline queueing, requiring immediate,
+  // separate escalation.
+  let staffFreshOnlineWriteResult = null;
+  try {
+    await setDoc(doc(ownerDevice.db, `businesses/${BIZ}/withdrawals/w-staff-fresh-online-check`), { amount: 1, reason: 'Staff fresh online write — must be rejected', date: '2026-09-04' });
+    staffFreshOnlineWriteResult = { rejected: false };
+  } catch (e) {
+    staffFreshOnlineWriteResult = { rejected: true, code: e.code || e.message };
+  }
+  record(
+    'K5 disambiguation (fresh online Staff write, same collection)',
+    staffFreshOnlineWriteResult.rejected ? 'CONFIRMED PASS' : 'CONFIRMED HIGH',
+    `A fresh, non-queued, online write attempt by the CURRENT Staff identity to the same \`withdrawals\` collection was ${staffFreshOnlineWriteResult.rejected ? `correctly REJECTED (${staffFreshOnlineWriteResult.code}) — this makes explanation (a) above (K5's write carried Owner's own credential from enqueue time, not a general Staff bypass) the far more likely account, though this check alone still does not prove which happened for the specific K5 write` : 'INCORRECTLY ACCEPTED — this points to explanation (b): a general rules defect allowing Staff to write withdrawals, unrelated to offline queueing, requiring immediate separate escalation regardless of how K5 itself is interpreted'}.`
   );
 
   // =================================================================
   // K6/K7 — delegated Editor revocation while offline, REAL rules
   // =================================================================
   console.log('\n--- K6/K7: Owner assigns Delegate, Delegate goes offline, Owner reassigns, Delegate reconnects ---');
-  await signInWithEmailAndPassword(delegateDevice.auth, 'delegate@k-test.local', 'password123');
-  await signOut(ownerDevice.auth);
-  await signInWithEmailAndPassword(ownerDevice.auth, 'owner@k-test.local', 'password123');
+  await signInAs(delegateDevice, 'delegate@k-test.local', 'password123');
+  await signOutOf(ownerDevice);
+  await signInAs(ownerDevice, 'owner@k-test.local', 'password123');
   const authorityPath = `businesses/${BIZ}/contagemAuthority/current`;
   await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: DELEGATE_UID, assignedByUid: OWNER_UID, assignedAt: new Date().toISOString() });
   await sleep(300);
@@ -562,8 +626,8 @@ async function main() {
 
   // Scenario A — the SAFE branch: nothing pending, flush trivially
   // succeeds, cleanup should proceed and actually clear the cache.
-  await signOut(ownerDevice.auth);
-  await signInWithEmailAndPassword(ownerDevice.auth, 'owner@k-test.local', 'password123');
+  await signOutOf(ownerDevice);
+  await signInAs(ownerDevice, 'owner@k-test.local', 'password123');
   const logoutTestPath = `businesses/${BIZ}/withdrawals/w-logout-test`;
   await setDoc(doc(ownerDevice.db, logoutTestPath), { amount: 1, reason: 'logout cleanup test', date: '2026-09-04' });
   await sleep(300);
