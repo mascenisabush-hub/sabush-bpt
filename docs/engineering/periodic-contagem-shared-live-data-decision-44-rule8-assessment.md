@@ -630,7 +630,8 @@ is assessment only, not a scale redesign.
 | E — Finalization uniqueness (44-D) | FAIL | CRITICAL | Technical design required, unaffected by Decision 46. The NEW `openConflictCount` precondition clause on this same rule has been emulator-verified (§IV.O-l); the exactly-once/idempotent-retry mechanism itself has not been separately re-tested this session |
 | F — Reassignment lifecycle | OPEN (unimplemented) | CRITICAL | Technical design required |
 | F — Draft resurrection | FAIL | CRITICAL | Technical design required, unaffected |
-| G — Post-finalization immutability | **MECHANISM IMPLEMENTED, EMULATOR-VERIFIED (2026-09-04, §IV.O-l)** | CRITICAL (Decision 56 scope only) | `update: if false` confirmed rejected for the Owner; `delete` confirmed still available (Decision 56 §7 untouched) — 2/2 targeted tests pass
+| G — Post-finalization immutability (`update` half) | **MECHANISM IMPLEMENTED, EMULATOR-VERIFIED (2026-09-04, §IV.O-l)** | CRITICAL (Decision 56 scope only) | `update: if false` confirmed rejected for the Owner — 2/2 targeted tests pass
+| G — Clear-All-Data/`delete` half (Decision 56 §7 / Decision 57 scope) | **GOVERNANCE ✅ RESOLVED (Decision 57, 2026-09-04, Option B) — MECHANISM PROPOSED AND ASSESSED, NOT YET IMPLEMENTED (§IV.O-n)** | CRITICAL (Decision 57 scope only) | `delete` today still permits Owner deletion of every non-`initial` `stockCounts` document (confirmed fresh, §IV.O-n §A) — narrowing to unconditional `false`, and removing `clearAllData()`'s corresponding loop, is the assessed mechanism; a future Implementation Plan amendment and Implementation Authorization are required before either is implemented
 | H — Offline/reconnect safety | FAIL | CRITICAL | Technical design required |
 | I — Live transport | PASS | — | Requirement satisfied |
 | I — Safe live state adoption for dual Editors | FAIL | HIGH | Technical design required |
@@ -1645,6 +1646,281 @@ it was — this reassessment is scoped to Finding K alone.
 
 ---
 
+## IV.O-n — UPDATE (2026-09-04): Decision 57 Reassessment — Clear-All-Data/`stockCounts`-Delete Narrowing Proposed and Assessed, Not Yet Implemented
+
+[Decision 57](../specs/stock-count-data-loss-resilience-decision-57-amendment.md)
+(✅ Accepted, `ecab8fe`, SABUSHIMIKE MASCENI, 4 September 2026) resolves
+the one item [Decision 56](../specs/stock-count-data-loss-resilience-decision-56-amendment.md)
+§7 left open: **if SABUSH BPT retains a capability to intentionally
+remove finalized Periodic Contagem history, what shape must it take.**
+Decision 57 adopts Option B — Clear-All-Data must not delete finalized
+Periodic Contagem history; any future intentional-removal capability
+must be a distinct, separately governed operation, not designed here.
+This reassessment evaluates the narrow technical mechanism that
+requirement implies, exactly as §IV.O-j did for Decision 56 itself.
+**This is a technical readiness assessment, not an implementation
+record and not an Implementation Authorization.**
+
+### A. Current Violation
+
+Confirmed by direct, fresh inspection of the current repository (not
+assumed from any prior session's summary):
+
+- `firestore.rules`, the single `stockCounts/{stockCountId}` match
+  block: `allow delete: if isOwnerOf(businessId) &&
+  resource.data.get('type', null) != 'initial';` — permits the Owner
+  to delete **any** non-`initial` `stockCounts` document, i.e. every
+  finalized Periodic Contagem result (see §D below on why "non-`initial`"
+  and "finalized Periodic Contagem" are exactly the same set today).
+- `AppContext.tsx`'s `clearAllData()` exercises exactly that
+  permission: `for (const s of stockCounts) { if (s.type === 'initial')
+  continue; await deleteDoc(...); }` — every non-`initial` `stockCounts`
+  document is deleted by the ordinary "Limpar Todos os Dados" reset.
+- This is a direct conflict with Decision 57's governing requirement
+  ("Clear-All-Data must not delete finalized Periodic Contagem
+  history") — today, it does, unconditionally, for the Owner, via the
+  in-app reset action.
+
+### B. Proposed Mechanism (Assessed, Not Implemented)
+
+The narrow mechanism already identified in the accepted Implementation
+Authorization Proposal discussion is confirmed, by this reassessment,
+to be the correct and sufficient shape — no different mechanism is
+required by any repository evidence found:
+
+1. Narrow the `stockCounts/{stockCountId}` `allow delete` condition
+   from its current conditional form to unconditional `false` — the
+   same treatment `allow update` already has, and the same treatment
+   `initial` documents already effectively have today via the existing
+   condition.
+2. Remove the `stockCounts` deletion loop from `clearAllData()` in its
+   entirety (not merely widen its skip condition) — once no
+   `stockCounts` document of any type is deletable, the loop becomes
+   dead code, exactly mirroring how the Closings-deletion loop was
+   fully removed, not left in place with a broader guard, when Closings
+   went through this identical tension (see §F below).
+3. No other line of `clearAllData()`, and no other file, is touched.
+4. No future intentional-removal operation is designed, named, or
+   implemented by this mechanism — Decision 57 §4/§7 leaves that
+   entirely open, and this reassessment does not narrow that openness
+   in either direction.
+
+### C. Governance Compatibility — Explicit, Per Decision
+
+- **Decision 44** (shared live data, no-silent-loss): compatible —
+  removing a delete *permission* cannot itself cause silent loss; it
+  removes a path by which loss could occur.
+- **Decision 45** (authority — Owner/Admin decides who edits): untouched
+  — this mechanism does not touch editing authority at all.
+- **Decision 46** (dual active editors): untouched — no interaction;
+  this mechanism concerns a already-finalized document, never a draft
+  `stockCountDrafts/periodic` document either role edits.
+- **Decision 47** (conflict avoidance / live sync): untouched — no
+  interaction with draft-row live adoption or conflict detection.
+- **Decision 48** (authority/revocation): untouched.
+- **Decision 49** (former delegated Editor reconnection): untouched.
+- **Decision 50** (exactly-once finalization): untouched — this
+  mechanism concerns what happens to a result *after* finalization,
+  never finalization itself; the deterministic-id/idempotent-retry
+  mechanism is not read, written, or referenced by this change.
+- **Decision 51** (cache/session isolation, Finding K): untouched — no
+  `onSnapshot` listener, no logout path, no cache-clear logic is
+  touched by this mechanism. Finding K's classification (PARTIALLY
+  VERIFIED, §IV.O-m) is unaffected in every respect.
+- **Decision 52** (Viewer authorization): untouched — a Viewer already
+  cannot write or delete `stockCounts` today (`isOwnerOf` required);
+  this mechanism narrows the Owner's own permission, granting nothing
+  to anyone.
+- **Decision 53** (Owner/Admin finalizer authorization): untouched —
+  who may finalize is not affected by what may happen to a result after
+  finalization.
+- **Decision 54** (delegated Editor eligibility): untouched — no
+  interaction with `contagemAuthority/current` or delegate eligibility.
+- **Decision 55** (same-row conflicts): untouched — no interaction with
+  `rev`/`state`/`conflict` fields on draft items; a finalized
+  `stockCounts` document carries none of those fields.
+- **Decision 56** (finalized immutability & Clear-All separation):
+  directly implements the one item (§7) Decision 56 itself deferred;
+  does not reopen, restate as newly decided, or alter Decision 56's own
+  §5 items 1–4 or 6–9, all of which govern the `update` half and other
+  already-settled requirements, unaffected by this delete-only change.
+- **Decision 57** (Option B): this mechanism is the direct, minimal
+  technical expression of Decision 57's own requirement — nothing more,
+  nothing less.
+
+**Confirmed, explicitly, per this reassessment's own review:** this
+mechanism grants no new permission (it only removes one); introduces no
+new authority model, role, or permission tier; does not alter editing
+authority (Decision 45/46/54); does not alter finalization authority
+(Decision 50/53); does not alter conflict semantics (Decision 47/55);
+does not alter live synchronization (Decision 44/47); does not alter
+Finding K or any cache/listener-gating mechanism (Decision 51); does
+not alter tenant isolation — the `isOwnerOf(businessId)` gate on every
+other `stockCounts` operation, and every other collection's own rules,
+are untouched, byte-for-byte, by this change.
+
+### D. Record-Type Boundary — Verified, Not Assumed
+
+Freshly re-confirmed against the current repository, not carried over
+from any prior session: `apps/tenant/src/types.ts` line 526 —
+`export type StockCountType = 'initial' | 'weekly' | 'monthly' |
+'quarterly' | 'yearly' | 'custom';`. There is no non-`initial`
+`StockCountType` value unrelated to a finalized Periodic Contagem
+result — `weekly`, `monthly`, `quarterly`, `yearly`, and `custom` are
+all Periodic Contagem finalization type labels; none names an
+unrelated record category. **Narrowing `stockCounts`'s `allow delete`
+to unconditional `false` therefore does not remove a legitimate
+deletion path for any other stock-count record type — there is no
+"other" non-`initial` type to accidentally affect.** If a future
+decision ever introduces a new `StockCountType` unrelated to Periodic
+Contagem, this conclusion would need to be re-verified against that
+future schema; it is correct against the schema as it exists today.
+
+### E. Clear-All-Data Boundary — Every Call Site Verified
+
+Freshly re-confirmed by direct `grep` of the current
+`AppContext.tsx`: **exactly one** code path in the entire file ever
+calls `deleteDoc` on a `stockCounts` document — the loop inside
+`clearAllData()` named in §A/§B above. No other function, component,
+or file deletes a `stockCounts` document.
+
+`clearAllData()`'s other deletion targets, confirmed unaffected by
+this mechanism (each is its own separate loop/call, untouched):
+`products`, `batches`, `purchaseBatches`, `quebras`, `expenses`,
+`stockCountDrafts/initial` (a working-draft document, not a finalized
+result — Decision 57's own §5 item 3 explicitly preserves this
+distinction), `withdrawals`, and `timelineEvents`. Removing the
+`stockCounts` loop removes deletion of exactly one category and no
+other.
+
+### F. Existing Precedent
+
+This repository already resolved this exact tension twice, for two
+directly comparable record types, and this mechanism proposes the
+identical treatment for a third:
+
+- **`initial` Stock Count:** `firestore.rules` already denies
+  `update`/`delete` unconditionally ("no exceptions," Architecture
+  §7.6); `clearAllData()` already skips it (`if (s.type === 'initial')
+  continue;`).
+- **Closings/ClosedPeriods:** per the Closing Integrity Amendment
+  (`docs/specs/08-09-11-closing-integrity-amendment.md`), `delete` was
+  narrowed to unconditional `false`, and `clearAllData()`'s own
+  Closings-deletion loop was removed entirely — that document's own
+  text names the resulting "does Clear-All-Data still claim to wipe
+  everything" copy question as flagged-but-unresolved, exactly the
+  posture this reassessment adopts for the equivalent question here
+  (not resolved by this reassessment; §7 above, not reopened).
+
+This reassessment does not generalize beyond what these two precedents
+actually establish — it does not, for example, assume any conclusion
+about Withdrawals, Expenses, Quebras, or any other collection not
+already governed this way.
+
+### G. Finding G — Precise Status (Not Falsely Resolved)
+
+**Finding G is NOT reclassified to PASS or RESOLVED by Decision 57 or
+by this reassessment.** The precise distinction, per the vocabulary
+this document already uses for exactly this kind of layered status
+(see §IV.O-j, §IV.O-l, §IV.O-m):
+
+- **Product/governance question: ✅ RESOLVED.** Decision 57 (2026-09-04)
+  settles, at the Product Architect level, the one question Decision
+  56 §7 left open — Clear-All-Data must not delete finalized Periodic
+  Contagem history (Option B).
+- **Technical mechanism: proposed and assessed by this reassessment
+  (§B above), NOT YET IMPLEMENTED.** `firestore.rules` is byte-for-byte
+  unmodified by Decision 57 or by this reassessment — confirmed fresh,
+  §A above. `clearAllData()` is likewise unmodified.
+- **Implementation readiness: this reassessment concludes the proposed
+  mechanism is READY FOR A FUTURE IMPLEMENTATION PLAN AMENDMENT AND
+  IMPLEMENTATION AUTHORIZATION** — the scope is narrow (one rule
+  condition, one call-site removal), fully precedented (§F), and
+  verified compatible with every other governing decision (§C). **This
+  reassessment does not itself constitute, and does not substitute
+  for, that Implementation Plan amendment or Implementation
+  Authorization — neither exists yet, and no code change is authorized
+  by this reassessment.**
+- Finding G's `update`-half classification from §IV.O-l
+  (`MECHANISM IMPLEMENTED, EMULATOR-VERIFIED`) is unaffected and not
+  restated here — this reassessment concerns the `delete` half only.
+
+### H. Tests and Verification Required (Not Yet Written)
+
+**New Decision 57 verification requirements**, to be satisfied by a
+future implementation, distinct from anything that exists today:
+
+1. `firestore.rules`: Owner cannot delete a finalized (non-`initial`)
+   `stockCounts` document through the ordinary client-authorized path
+   (a rules-emulator assertion, flipped from today's
+   `assertSucceeds` to `assertFails`).
+2. Source-text: `clearAllData()`'s own source no longer contains a
+   `stockCounts` deletion call at all (not merely a differently-guarded
+   one).
+3. Regression: `initial` Stock Count's existing protection (`update`
+   and `delete` both `if false`) remains unchanged and re-verified,
+   not merely assumed.
+4. Regression: Closings/ClosedPeriods' existing protection remains
+   unchanged and re-verified.
+5. Regression: every other `clearAllData()` category named in §E
+   remains deletable exactly as today — products, batches, purchase
+   batches, quebras, expenses, the `stockCountDrafts/initial` working
+   draft, withdrawals, and timeline events.
+6. Tenant isolation: a user from a different business still cannot
+   read, create, update, or delete this business's `stockCounts`
+   documents (unaffected, but worth an explicit regression assertion
+   given the rule text itself is being edited).
+
+**Pre-existing test-maintenance problems, discovered incidentally
+during this reassessment's own inspection — explicitly NOT Decision 57
+regressions, and NOT created by this reassessment or by Decision 57:**
+
+- `tests/firestore-rules.test.ts` (a general, emulator-only legacy
+  suite, not part of `npm run test:all`, requiring Firestore emulator
+  infrastructure this sandbox cannot reach) contains a test
+  (`'Owner can update/delete a non-initial count, but never an initial
+  count — no exceptions'`) asserting `assertSucceeds(updateDoc(...))`
+  on a non-`initial` `stockCounts` document — **this assertion has
+  already been false since Decision 56's `update: if false` was
+  implemented (`d3b8d9b`)**, predating Decision 57 entirely. This file
+  was evidently never updated for Decision 56's own `update`-narrowing.
+- `tests/superadmin-assisted-initial-stock-recovery.test.ts` contains a
+  regression guard (`'the original stockCounts allow update/delete line
+  is completely unmodified'`) pinning the literal combined-line string
+  `allow update, delete: if isOwnerOf(businessId) &&
+  resource.data.get('type', null) != 'initial';` — **this exact string
+  no longer exists in `firestore.rules`** (Decision 56 already split it
+  into separate `update`/`delete` lines). Running this file directly
+  confirms 2 pre-existing failures on current `HEAD` (`ecab8fe`), one
+  being this stale guard, the other an unrelated stale regex against
+  `voidInitialStockConfirmation()` wiring, unconnected to `stockCounts`
+  at all.
+
+Any future implementation of Decision 57 will necessarily touch the
+same rule text these two pre-existing, already-broken assertions pin —
+whoever implements it should know these were broken beforehand, not by
+that implementation, and should decide separately (not under Decision
+57's authorization alone) whether to also repair them.
+
+**This update does not move the Rule 8 verdict.** The verdict remains
+**READY AFTER DECISIONS** — Decision 57 is a governance-requirement
+resolution, not a technical mechanism or verification (see §IV.R). It
+does **not** authorize implementation of anything, does not modify
+`firestore.rules` or `AppContext.tsx`, and does not touch Finding K,
+Finding C, or any CRITICAL/HIGH finding other than the specific slice
+of Finding G named above.
+
+**Consequential updates elsewhere in this document, made for internal
+consistency only (no other finding's status is touched):** §IV.N's
+table row for Finding G, and §IV.R's Finding G discussion, are updated
+below to reflect this reassessment. §IV.Q gains one new bullet for
+Decision 57, matching its existing entries for Decisions 52–56. Every
+other row, item, and finding in §IV.N/§IV.P/§IV.Q/§IV.R is left exactly
+as it was — this reassessment is scoped to Decision 57/Finding G's
+delete-path slice alone.
+
+---
+
 ## IV.Q — Decisions Still Required, Separated by Type (updated this session)
 
 **Product Architect decisions:**
@@ -1718,6 +1994,21 @@ it was — this reassessment is scoped to Finding K alone.
   VERIFIED per §IV.O-m), which the Technical Design for Decisions 44–55
   named separately and which remains open on its own, independent
   track.
+- **Decision 56 §7 (the one item Decision 56 itself deferred — what
+  shape a future intentional-removal capability must take) — ✅
+  RESOLVED — GOVERNANCE REQUIREMENTS, at the Product Architect
+  governance-requirement level, by Decision 57, 2026-09-04.** See
+  §IV.O-n. Option B adopted: Clear-All-Data must not delete finalized
+  Periodic Contagem history; any future intentional-removal capability
+  must be a distinct, separately governed operation, not designed by
+  Decision 57. **The technical mechanism (narrowing `stockCounts`'s
+  `allow delete` to unconditional `false`; removing the corresponding
+  loop from `clearAllData()`) has been assessed and found narrow,
+  precedented, and compatible with every other governing decision
+  (§IV.O-n) but is NOT YET IMPLEMENTED** — folded into the technical
+  design items immediately below. **Zero fully open Product Architect
+  governance questions remain** across the entire Decisions 44–57
+  chain as of this update.
 - **Eligible-delegate pool — ✅ RESOLVED — GOVERNANCE REQUIREMENTS, at
   the Product Architect governance-requirement level, by Decision 54,
   2026-09-04.** See §IV.O-h. Any currently business-authorized user, in
@@ -1871,7 +2162,14 @@ particular remains FAIL — CRITICAL**, now fully scoped at the product
 level by Decisions 47 and 55, but with no technical mechanism selected.
 **Finding G (§IV.G) likewise remains FAIL — CRITICAL**, now fully
 scoped at the product level by Decision 56, but with its own
-`firestore.rules` text completely unmodified. **Finding K (§IV.K) was
+`firestore.rules` text completely unmodified. **Decision 56 §7's own
+residual open item — what shape a future intentional-removal
+capability must take — is now further resolved at the governance level
+by Decision 57 (2026-09-04, Option B) — see §IV.O-n.** This narrows
+Finding G's `delete`-half scope to a specific, narrow, precedented
+mechanism (assessed, not implemented) but does **not** move Finding G
+off FAIL — CRITICAL; `firestore.rules` remains completely unmodified by
+Decision 57 or by this reassessment. **Finding K (§IV.K) was
 reclassified from UNVERIFIED to CONFIRMED FAIL — HIGH per §IV.O-k, and
 has since been further reassessed to PARTIALLY VERIFIED per §IV.O-m
 (2026-09-04)** — the mechanism §IV.O-k found designed-but-unimplemented

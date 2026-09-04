@@ -609,14 +609,115 @@ gap is named explicitly in the reassessment and remains open.
 **What remains, concretely, as of this update:**
 
 - Decision 56 §7's Clear-All-Data `delete`-path reconciliation
-  (Section 3.2/Area F) — still an open Product Architect question, not
-  decided by anything listed above.
+  (Section 3.2/Area F) — **UPDATE, see Section 14 below: this question
+  has since been resolved at the governance level by [Decision
+  57](../specs/stock-count-data-loss-resilience-decision-57-amendment.md)
+  (Option B). The resulting narrow technical mechanism is proposed and
+  assessed, not yet implemented — see Section 14.**
 - The real browser/cross-tab verification gap named in the Finding K
   reassessment.
 - No new Product Architect decision has been created or reopened by
   any of the above; Decisions 44–56 remain the complete and unaltered
-  governing set for this scope.
+  governing set for this scope. (Decision 57 is a distinct, later,
+  separately accepted decision — see Section 14.)
 
 **This section does not itself constitute a new Rule 8 assessment,
 decision, or authorization — it is a factual status reconciliation
 only, cross-referencing commits and documents that already exist.**
+
+---
+
+## 14. Decision 57 Amendment — Clear-All-Data / Finalized Periodic Contagem History Deletion Protection (added 4 September 2026 — narrow addendum, does not alter Sections 1–13 above)
+
+**Governing basis:** [Decision 57](../specs/stock-count-data-loss-resilience-decision-57-amendment.md)
+(✅ Accepted, `ecab8fe`, SABUSHIMIKE MASCENI, 4 September 2026),
+resolving [Decision 56](../specs/stock-count-data-loss-resilience-decision-56-amendment.md)
+§7, reassessed for technical readiness in the Rule 8 Assessment's
+[§IV.O-n](./periodic-contagem-shared-live-data-decision-44-rule8-assessment.md).
+**This section is a plan amendment only — it does not itself authorize
+implementation.** A separate, distinct Implementation Authorization,
+signed by the Product Architect, remains required before any file
+named below may be changed. Implementation Authorization `67d60a7` is
+NOT amended, expanded, or superseded by this section — it continues to
+govern exactly the Decisions 44–56 scope it always did; this section
+concerns a distinct, later decision requiring its own, separate,
+future authorization.
+
+### 14.A — Firestore Deletion Protection
+
+**Authorized-once-signed future change:** `firestore.rules`, the
+`stockCounts/{stockCountId}` match block — narrow the `allow delete`
+condition from `if isOwnerOf(businessId) &&
+resource.data.get('type', null) != 'initial'` to unconditional `if
+false`, i.e. the identical treatment `allow update` already has.
+**Not implemented by this section.**
+
+### 14.B — Clear-All-Data Separation
+
+**Authorized-once-signed future change:** `apps/tenant/src/context/AppContext.tsx`'s
+`clearAllData()` — remove the `stockCounts` deletion loop (`for (const
+s of stockCounts) { if (s.type === 'initial') continue; await
+deleteDoc(...); }`) in its entirety. Every other deletion this function
+performs (`products`, `batches`, `purchaseBatches`, `quebras`,
+`expenses`, `stockCountDrafts/initial`, `withdrawals`,
+`timelineEvents`) is explicitly unchanged. **Not implemented by this
+section.**
+
+### 14.C — Tests
+
+A future implementation must satisfy, at minimum:
+
+1. `firestore.rules`: Owner cannot delete a finalized (non-`initial`)
+   `stockCounts` document.
+2. Source-text: `clearAllData()` contains no `stockCounts` deletion
+   call site.
+3. Regression: `initial` Stock Count's existing `update`/`delete`
+   protection is unchanged.
+4. Regression: Closings/ClosedPeriods' existing `delete: if false`
+   protection is unchanged.
+5. Regression: every other `clearAllData()` category (§14.B's list)
+   remains deletable exactly as today.
+6. Regression: tenant isolation (`isOwnerOf(businessId)`) on
+   `stockCounts` and every other collection is unaffected.
+
+Separately, and not as new Decision 57 obligations: the Rule 8
+Assessment's §IV.O-n identifies two pre-existing, already-broken test
+assertions (`tests/firestore-rules.test.ts`'s stale `update`
+assertion; `tests/superadmin-assisted-initial-stock-recovery.test.ts`'s
+stale combined-rule-line regression guard) that predate Decision 57
+and were not caused by it — a future implementer should be aware these
+were already failing before touching this rule text, and should decide
+separately whether to repair them alongside this change.
+
+### 14.D — Future Intentional Removal
+
+**OUT OF SCOPE.** No separate historical-removal operation is designed,
+specified, or implemented by this amendment. Decision 57 §4/§7
+explicitly leaves that capability's shape, authority, workflow, and
+technical mechanism to a future, separate Product Architect decision.
+
+### 14.E — Existing Governance Boundaries
+
+- Implementation Authorization `67d60a7` is **not** amended, expanded,
+  or retroactively broadened by this section.
+- Decisions 44–56 are **not** reopened, reinterpreted, or restated as
+  newly decided by this section.
+- Decision 57 is the sole governing basis for the scope in 14.A–14.C.
+- **No new authority model, role, or permission tier is introduced** —
+  this amendment only removes a delete permission; it grants nothing.
+- **No UI redesign is included** — the "should Clear-All-Data's own
+  copy/promise be updated" question, already flagged unresolved for
+  the analogous Closings case, is not addressed or decided here.
+- **No unrelated Clear-All-Data redesign is included** — every category
+  named in §14.B outside `stockCounts` is explicitly unchanged.
+
+### 14.F — Next Gate
+
+Per this repository's established sequence (Rule 8 → Implementation
+Plan → Implementation Authorization → Implementation), the next gate
+is Product Architect acceptance of this Section 14 amendment together
+with the Rule 8 Assessment's §IV.O-n reassessment, followed by a
+separate, distinct, signed Implementation Authorization covering
+exactly the scope in 14.A–14.C. **No Implementation Authorization is
+created or signed by this section. Implementation remains
+UNAUTHORIZED.**
