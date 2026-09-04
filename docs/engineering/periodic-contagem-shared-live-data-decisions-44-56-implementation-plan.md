@@ -1,4 +1,4 @@
-Implementation Plan — ✅ ACCEPTED AS GOVERNING PLANNING ARTIFACT — IMPLEMENTATION AUTHORIZATION NOT GRANTED — NO CODE CHANGED
+Implementation Plan — ✅ ACCEPTED AS GOVERNING PLANNING ARTIFACT — SEE SECTION 13 FOR CURRENT STATUS: IMPLEMENTATION AUTHORIZATION WAS SUBSEQUENTLY SIGNED (`67d60a7`) AND AREAS A–G ARE NOW IMPLEMENTED — SECTIONS 1–12 BELOW ARE PRESERVED AS THE ORIGINAL, PRE-AUTHORIZATION PLANNING RECORD
 
 # Implementation Plan — Periodic Contagem Shared Live Data (Decisions 44–56, including the Finding K Mechanism)
 
@@ -562,3 +562,61 @@ by, and not implied by, this document. Until then, implementation of
 any item in Section 4 remains unauthorized.
 
 **IMPLEMENTATION REMAINS NOT AUTHORIZED.**
+
+---
+
+## 13. Post-Authorization Status Update (added 4 September 2026 — does not alter Sections 1–12 above, which remain the historical planning record as originally written)
+
+**This section exists for the same reason the Rule 8 document's own
+reassessments exist: this Plan's original text (Sections 1–12) is now
+stale relative to what has actually happened, and silently leaving
+"IMPLEMENTATION REMAINS NOT AUTHORIZED" as the last line would misstate
+current reality to a future session reading this file. Nothing above
+this section is edited or retracted — it is preserved exactly as
+originally written, as the historical planning record.**
+
+**Implementation Authorization was subsequently signed:**
+[`periodic-contagem-shared-live-data-decisions-44-56-implementation-authorization.md`](./periodic-contagem-shared-live-data-decisions-44-56-implementation-authorization.md),
+commit `67d60a7` (SABUSHIMIKE MASCENI, 4 Sept 2026) — Decision 56 §7's
+delete-path reconciliation explicitly remained excluded/unresolved at
+signing, exactly as Section 11 above anticipated.
+
+**Areas A–G, as enumerated in Section 4, are now implemented, in this
+order:**
+
+| Area | Commit(s) | What shipped |
+|---|---|---|
+| B (Authority), C (Viewer), D (Concurrent Observation), E (Finalization), F (Clear-All `update` narrowing), G items 1/3/5 (listener gating, safe-reset, logout flush-then-clear) | `d3b8d9b` | `contagemAuthority/current` doc + `isCurrentDelegatedEditor`/`isActiveContagemEditor` rules helpers and `AppContext.tsx` wiring; `rev`-based `runTransaction` concurrency + `CONFLICT` state; `openConflictCount`-gated finalization `create` rule; `stockCounts` non-`initial` `update: if false`; Owner-only/manager-restricted listener attachment gated on already-known client role (`withdrawals`, `payments`, `cashLedgerEntries`, `receivables`, `receivablePayments`, `payables`, `payablePayments`, `cashPositionDeclarations`, `startupInvestmentEntries`, `closings`, `staff`), each reset to its safe empty value both when not attached and on a permission error |
+| G item 5 completion (logout flush-then-clear) | `d3b8d9b` (`logout()` rewritten: flush → `terminate()` → `clearIndexedDbPersistence()` → re-`initializeFirestore()`, skipped on unconfirmed flush) | see Technical Design §12 item 5 |
+| UI wiring for conflict resolution, delegate authority, Finding K listener migration completion | `aefaf65` | `PeriodicStockCountView.tsx` conflict panel/`resolvePeriodicConflict` UI, delegate-assignment UI, remaining listener migrations |
+| Real Firestore emulator verification (Finding C mechanism + Decision 56 immutability) | `326dc46` | 26/26 pass, server-side confirmed |
+| Wildcard-bypass fix found by that emulator run | `1bbdd89` | closed an Owner wildcard bypass of the row concurrency/conflict rules |
+| A (genuine per-row live adoption) | `f0863ed` | `rowHasUnsavedLocalEditRef`-gated live adoption of remote row snapshots, replacing the whole-draft passive notice for row-level changes |
+| A (lifecycle-gap correction) | `d9e9590` | fixed a case where an already-`CONFLICT` row's dirty flag never cleared, permanently blocking later adoption of the resolved value |
+
+**Finding K (Area G/H) status:** reclassified from CONFIRMED FAIL —
+HIGH to **PARTIALLY VERIFIED** by a dedicated Rule 8 reassessment
+(commit `1e068ff`, superseding this Plan's Section 11's "Finding K
+remains CONFIRMED FAIL" language and the Rule 8 document's own prior
+verdict) — see that reassessment and
+[`finding-k-real-environment-verification-evidence.md`](./finding-k-real-environment-verification-evidence.md)
+(two independent, byte-for-byte matching real Auth+Firestore-emulator
+runs) for the current, authoritative status. **Not reclassified to
+RESOLVED** — no real browser/page-lifecycle or cross-tab
+`persistentMultipleTabManager` coordination has been exercised; that
+gap is named explicitly in the reassessment and remains open.
+
+**What remains, concretely, as of this update:**
+
+- Decision 56 §7's Clear-All-Data `delete`-path reconciliation
+  (Section 3.2/Area F) — still an open Product Architect question, not
+  decided by anything listed above.
+- The real browser/cross-tab verification gap named in the Finding K
+  reassessment.
+- No new Product Architect decision has been created or reopened by
+  any of the above; Decisions 44–56 remain the complete and unaltered
+  governing set for this scope.
+
+**This section does not itself constitute a new Rule 8 assessment,
+decision, or authorization — it is a factual status reconciliation
+only, cross-referencing commits and documents that already exist.**

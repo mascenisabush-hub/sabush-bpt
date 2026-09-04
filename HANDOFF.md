@@ -12,6 +12,89 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Periodic Contagem Shared Live Data (Decisions 44–56 +
+Finding K) — Areas A–G of the Implementation Plan are **implemented,
+tested (module-level, `tsx --test`), typechecked, and pushed to
+`main` at `d9e9590`.** **Nothing mid-flight; working tree clean.**
+This section was stale for a long time (last touched `c775503`, 17
+Aug) while several other module threads (BDR-0012/0013 Product
+Memory/UOM, Owner Portfolio v0.2, Void & Redo, Capital Inicial
+Retirement, Business Worth Evolution Increments 1–10, Contagem
+Integrity Diagnostics, and finally this Decisions 44–56 thread) were
+implemented, committed, and pushed without a corresponding update here
+— **do not trust this file's own age; re-verify `git log` and
+`docs/specs/README.md` yourself before relying on any summary,
+including this one.**
+
+**What's true right now for Decisions 44–56 (most recent thread,
+`main` HEAD):**
+
+- **Governing chain:** Decisions 44–56 (all ✅ Accepted) → Rule 8
+  Reassessment (`02cd599`, READY AFTER DECISIONS) → Technical Design
+  (`96a28eb`) → Finding K Mechanism Analysis (`2e875b7`) →
+  Implementation Plan (`9ddd3e9`, accepted as governing planning
+  artifact) → **signed Implementation Authorization `67d60a7`**
+  (SABUSHIMIKE MASCENI, 4 Sept 2026) → implementation.
+- **Areas B, C, D, E, F implemented** in `d3b8d9b`: `contagemAuthority/current`
+  authority document + `firestore.rules` helpers
+  (`isCurrentDelegatedEditor`/`isActiveContagemEditor`); `rev`-based
+  `runTransaction` concurrency with explicit `CONFLICT` state;
+  `openConflictCount`-gated finalization; `stockCounts` non-`initial`
+  `update: if false`.
+- **Area G (Finding K mechanism) implemented** in `d3b8d9b`/`aefaf65`:
+  every Owner/manager-restricted listener (`withdrawals`, `payments`,
+  the seven financial collections, `closings`, `staff`) is now gated
+  on already-known client-side role at attachment time (never
+  attaches for an unauthorized session — no cache-first exposure
+  window), resets to its safe empty value both when not attached and
+  on a permission error; `logout()` rewritten to flush-then-clear
+  (`terminate()` → `clearIndexedDbPersistence()` →
+  re-`initializeFirestore()`, skipped if the flush can't confirm
+  durability).
+- **Area A (genuine per-row live adoption) implemented** in `f0863ed`,
+  a lifecycle-gap bug found and fixed in `d9e9590` — this was the last
+  remaining piece of the already-authorized scope.
+- **Finding K reclassified** CONFIRMED FAIL — HIGH → **PARTIALLY
+  VERIFIED** (`1e068ff`), backed by two independent, byte-for-byte
+  matching real Auth+Firestore-emulator verification runs
+  (`finding-k-real-environment-verification-evidence.md`, `294eabd` +
+  `612e118`). **Not RESOLVED** — no real browser/page-lifecycle or
+  cross-tab `persistentMultipleTabManager` coordination has been
+  exercised; named explicitly, not narrowed.
+- A real wildcard-bypass defect (`1bbdd89`) and a real emulator-run
+  (`326dc46`, 26/26 pass) both happened along the way — not merely
+  claimed, independently re-run.
+- **Implementation Plan's own Section 11/12 language ("IMPLEMENTATION
+  REMAINS NOT AUTHORIZED") is now stale** — corrected with an appended
+  Section 13 (this session) rather than rewriting the historical
+  planning record; read that Section 13 for the authoritative
+  cross-reference table if picking this thread up.
+- **Verified this session (fresh, not assumed):** `npm run test:all` —
+  every suite 0 failures; `npx tsc --noEmit -p apps/tenant` — clean.
+
+**What remains, concretely, for this thread:**
+
+1. **Decision 56 §7's Clear-All-Data `delete`-path reconciliation** —
+   still an explicit, open Product Architect question; nothing above
+   decides it.
+2. **Real browser/cross-tab verification** of Finding K (the gap named
+   in the `1e068ff` reassessment) — needs a real browser + a second
+   real device/tab, not available in this sandbox.
+3. Whether the `fromCache` reconnect flash documented in `d9e9590`'s
+   own commit message (a benign, self-correcting nuance, not fixed)
+   is worth a future dedicated pass.
+4. No Decisions-44–56-specific closeout document exists yet (compare
+   `docs/engineering/18-superadmin-business-directory-closeout.md`'s
+   pattern) — item 13 above stands in for one for now; a dedicated
+   closeout would be a reasonable next documentation step once items 1–2
+   are resolved or explicitly deferred.
+
+**If the next session's task is something else entirely:** verify
+`docs/specs/README.md` and `git log` directly — this file drifts, as
+demonstrated by its own history below.
+
+## Prior status — SuperAdmin V1 (superseded above, kept for continuity)
+
 **Status:** SuperAdmin V1 — both authorized slices are implemented, tested,
 deployed, and production-verified. **Nothing mid-flight; working tree
 clean.**
