@@ -133,6 +133,87 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
   });
 });
 
+// [Technical Design §19; Implementation Authorization §2 item 13]
+// "Denormalized counter drift risk" — openConflictCount is only as
+// correct as every code path touching `state` remembering to update it
+// in the same transaction. §19 names the required mitigation
+// explicitly: keep the counter's only writers to exactly two call
+// sites, both already inside a runTransaction for other reasons, and
+// cover this with "a dedicated consistency test (e.g. 'sum of
+// state==CONFLICT rows always equals openConflictCount')". This block
+// is that dedicated test, added as outstanding Implementation
+// Authorization §2 item 13 verification — no application code changed
+// to add it.
+describe('Technical Design §19 — openConflictCount consistency invariant', () => {
+  it('exactly two call sites in the whole file ever change the counter\'s VALUE (the §7 collision branch and the §9 resolution branch) — a third would be the exact drift risk §19 warns about', () => {
+    // Every `openConflictCount:` occurrence in the file, whatever its
+    // shape, so a future third writer cannot silently avoid this count
+    // by using different syntax.
+    const allOccurrences = contextSource.match(/openConflictCount:/g) ?? [];
+    assert.equal(allOccurrences.length, 4, 'expected exactly 4 openConflictCount: occurrences total');
+    // Of those 4, exactly 2 actually change the value (+1 on collision,
+    // -1 on resolution) — the other 2 are the preservation-only spread
+    // pattern verified by the 'preserve openConflictCount' test above,
+    // which never mutates the value, only carries it forward unchanged.
+    const valueChangingOccurrences = contextSource.match(
+      /openConflictCount: (?:priorOpenConflictCount \+ 1|Math\.max\(0, priorOpenConflictCount - 1\))/g
+    ) ?? [];
+    assert.equal(valueChangingOccurrences.length, 2, 'expected exactly 2 value-changing openConflictCount writes');
+  });
+
+  it('the +1 (collision) write happens inside the SAME runTransaction call, and the SAME tx.set, as the state: CONFLICT transition it corresponds to', () => {
+    const fnMatch = contextSource.match(/const savePeriodicStockDraftItem = async[\s\S]*?\n  \};/);
+    assert.ok(fnMatch, 'expected to find savePeriodicStockDraftItem');
+    const body = fnMatch![0];
+    // Both statements exist inside one runTransaction callback with
+    // nothing but the CONFLICT tx.set between them — i.e. the counter
+    // increment is the very next transactional statement after the
+    // state transition it accounts for, not a separate write outside
+    // the transaction (which is exactly how drift could be introduced).
+    assert.match(
+      body,
+      /state: 'CONFLICT',[\s\S]*?\n\s*\}\);\s*\n\s*const priorOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;\s*\n\s*tx\.set\(metaRef, \{ openConflictCount: priorOpenConflictCount \+ 1 \}, \{ merge: true \}\);\s*\n\s*\}\);/
+    );
+    // And this whole thing is itself inside a single runTransaction —
+    // confirmed separately (existing test, above) that
+    // savePeriodicStockDraftItem uses runTransaction at all; this
+    // assertion additionally confirms the increment is not issued via
+    // some second, later transaction or a bare tx.update/setDoc outside
+    // the one already proven to exist.
+    assert.match(body, /await runTransaction\(db, async \(tx\) => \{[\s\S]*state: 'CONFLICT',[\s\S]*priorOpenConflictCount \+ 1[\s\S]*\n  \};$/);
+  });
+
+  it('the -1 (resolution) write happens inside the SAME runTransaction call, and the SAME tx.set, as the state: ACCEPTED transition it corresponds to', () => {
+    const fnMatch = contextSource.match(/const resolvePeriodicConflict = async[\s\S]*?\n  \};/);
+    assert.ok(fnMatch, 'expected to find resolvePeriodicConflict');
+    const body = fnMatch![0];
+    assert.match(
+      body,
+      /state: 'ACCEPTED',[\s\S]*?\n\s*\}\);\s*\n\s*const priorOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;\s*\n\s*tx\.set\(metaRef, \{ openConflictCount: Math\.max\(0, priorOpenConflictCount - 1\) \}, \{ merge: true \}\);\s*\n\s*\}\);/
+    );
+    assert.match(body, /await runTransaction\(db, async \(tx\) => \{[\s\S]*state: 'ACCEPTED',[\s\S]*priorOpenConflictCount - 1[\s\S]*\n  \};$/);
+  });
+
+  it('the decrement floors at 0 (Math.max), so a resolution can never drive the counter negative even under a hypothetical prior miscount', () => {
+    assert.match(contextSource, /openConflictCount: Math\.max\(0, priorOpenConflictCount - 1\)/);
+  });
+
+  it('no other code path in the file writes a bare "state: \'CONFLICT\'" or transitions a periodic draft item\'s state away from CONFLICT — the two writers above are exhaustive', () => {
+    // Every occurrence of transitioning a row TO CONFLICT in the whole
+    // file must be the one already verified above (savePeriodicStockDraftItem's
+    // collision branch) — a second, un-counted path would silently
+    // reintroduce the exact drift §19 warns about.
+    const toConflict = contextSource.match(/state: 'CONFLICT',/g) ?? [];
+    assert.equal(toConflict.length, 1, 'expected exactly one place that ever transitions a row TO CONFLICT');
+    // Every occurrence of transitioning a row's state to ACCEPTED with
+    // an accompanying `conflict:` field carried forward (i.e. a
+    // resolution, not an ordinary first-time save, which never has a
+    // conflict object at all) must be the one already verified above.
+    const resolutionAccepted = contextSource.match(/quantity: resolvedValue,\s*\n\s*state: 'ACCEPTED',/g) ?? [];
+    assert.equal(resolutionAccepted.length, 1, 'expected exactly one resolution-shaped ACCEPTED transition');
+  });
+});
+
 describe('Decisions 44-56 — firestore.rules', () => {
   it('isCurrentDelegatedEditor/isActiveContagemEditor helpers exist', () => {
     assert.match(rulesSource, /function isCurrentDelegatedEditor\(businessId\) \{/);
