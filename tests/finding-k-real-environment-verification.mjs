@@ -38,9 +38,37 @@
 //   this substantially weakens, but does not conclusively settle, the
 //   original K5 `CONFIRMED HIGH` from Round 2's run. This round's own
 //   fix to K6/K7 has not yet been re-executed.
+//   Round 4 (found by RE-running Round 3's fix — the script completed
+//   end-to-end for the first time, producing real results for every
+//   scenario, but K6/K7 came back `UNVERIFIED` with evidence literally
+//   containing `(undefined)` where a real document or explicit `null`
+//   was expected): `adminRead()`'s own implementation returned
+//   `rulesEnv.withSecurityRulesDisabled(async (ctx) => { ...; return
+//   X; })` directly, trusting — without ever having verified it in
+//   this file — that the method's returned Promise would propagate
+//   the callback's return value. It did not, in practice, on this
+//   run. This is MORE SERIOUS than a K6/K7-only bug: K5's own
+//   ground-truth check used `(await adminRead(...)) !== null`, and
+//   `undefined !== null` is `true` in JavaScript — so the SAME break
+//   could have silently produced K5's earlier `CONFIRMED HIGH` for the
+//   wrong reason (the helper always returning `undefined`, never
+//   genuine ground truth) purely because that specific comparison
+//   happened not to expose it, while K6/K7's stricter comparison did.
+//   Fixed by switching `adminRead()` to the outer-variable-mutation
+//   pattern already proven correct in this repo's OWN sibling
+//   rules-only emulator test file, which never relied on this
+//   method's return value at all — and by making `adminRead()` throw
+//   loudly if its internal sentinel is ever left unset, so this exact
+//   failure mode can never again masquerade as a valid result. A
+//   settling delay was also added before the K6/K7 baseline's
+//   cross-client ground-truth read, as defense-in-depth.
+//   CONSEQUENCE: K5's `CONFIRMED HIGH` from Round 2/3's runs must be
+//   treated as UNVERIFIED-pending-re-confirmation, not as a settled
+//   result, until it is re-obtained under this fixed `adminRead()`.
+//   This round's fix has not yet been re-executed.
 //
 // THIS REMAINS EVIDENCE-IN-WAITING FOR EVERY SCENARIO THAT HAS NOT YET
-// BEEN CLEANLY RE-RUN AFTER ROUND 3. Do not read the presence of this
+// BEEN CLEANLY RE-RUN AFTER ROUND 4. Do not read the presence of this
 // file, a clean code review, or any single run's raw output, as a
 // settled Finding K result without accounting for the caveats above.
 
@@ -254,12 +282,38 @@ async function seedUserAndBusinessProfile(rulesEnv, uid, profile) {
   });
 }
 
+// [Bug found by this session's own real run: K6/K7's baseline check
+// printed evidence containing literally `(undefined)` where a real
+// document or an explicit `null` was expected — proof that
+// `rulesEnv.withSecurityRulesDisabled()`'s own returned Promise was
+// NOT propagating this callback's return value in practice, contrary
+// to what its documented generic signature implies. This is more
+// serious than it looks: K5's own ground-truth check used
+// `(await adminRead(...)) !== null`, and `undefined !== null` is
+// `true` in JavaScript — so the SAME underlying break could have
+// silently produced K5's "CONFIRMED HIGH" for the wrong reason (the
+// helper always returning `undefined`, not genuine ground truth),
+// simply because that specific comparison happened not to expose it.
+// Fixed by switching to the OUTER-VARIABLE-MUTATION pattern already
+// proven correct in this repo's own
+// periodic-contagem-shared-live-data-decisions-44-56-emulator.test.ts
+// (which never relied on this method's return value at all), instead
+// of trusting an unverified assumption about this library's API
+// contract. K5's own check is also tightened below to compare against
+// an explicit sentinel rather than a loose `!== null`, so a future
+// break of this kind fails loudly (UNVERIFIED) instead of silently
+// masquerading as a positive result.
 async function adminRead(rulesEnv, path) {
-  return rulesEnv.withSecurityRulesDisabled(async (ctx) => {
+  let result = 'NEVER_SET'; // sentinel — if this is still the value after the callback runs, something is structurally wrong, not merely "document absent"
+  await rulesEnv.withSecurityRulesDisabled(async (ctx) => {
     const { doc: aDoc, getDoc: aGet } = await import('firebase/firestore');
     const snap = await aGet(aDoc(ctx.firestore(), path));
-    return snap.exists() ? snap.data() : null;
+    result = snap.exists() ? snap.data() : null;
   });
+  if (result === 'NEVER_SET') {
+    throw new Error(`adminRead('${path}') — the withSecurityRulesDisabled callback never ran or never assigned a result. This is a harness infrastructure bug, not a Finding K result — surfacing it as a thrown error rather than a silent UNVERIFIED, so it cannot be mistaken for a real outcome.`);
+  }
+  return result;
 }
 
 async function main() {
@@ -586,6 +640,7 @@ async function main() {
   } else {
     // Confirm the baseline write is genuinely durable server-side
     // before proceeding — not merely that the promise resolved.
+    await sleep(300); // settle before a cross-client (admin) ground-truth read, same defensive discipline as every other identity/write transition in this file
     const baselineServerState = await adminRead(rulesEnv, rowPath);
     const baselineDurable = baselineServerState && baselineServerState.rev === 1;
     if (!baselineDurable) {
