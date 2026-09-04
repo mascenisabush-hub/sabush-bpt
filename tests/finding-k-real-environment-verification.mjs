@@ -9,27 +9,41 @@
 //   `disableNetwork()`. Both replaced with genuine runtime checks.
 //   Round 2 (found by this file's own FIRST real execution, on the
 //   user's machine — commit history has the exact output): a
-//   PERMISSION_DENIED crash in K6/K7, root-caused to Firestore's
-//   credential provider needing a brief moment to pick up a
-//   freshly-issued ID token after a rapid sign-out/sign-in — fixed by
-//   routing every sign-in/sign-out through `signInAs`/`signOutOf`
-//   helpers that settle briefly, applied uniformly (the prior
-//   inconsistent, ad-hoc `sleep()` placement is exactly what let this
-//   slip through). That same first real run also produced a genuine
-//   K5 result (`CONFIRMED HIGH` — a pending write appeared to survive
-//   an identity switch) which this revision does NOT accept at face
+//   PERMISSION_DENIED crash in K6/K7. Diagnosed at the time as
+//   Firestore's credential provider needing a brief moment after a
+//   rapid sign-out/sign-in — THIS DIAGNOSIS WAS WRONG, see Round 3.
+//   The `signInAs`/`signOutOf` settling helpers added here are
+//   harmless and were kept, but they did not fix the actual bug. That
+//   same first real run also produced a genuine K5 result
+//   (`CONFIRMED HIGH` — a pending write appeared to survive an
+//   identity switch) which this revision did NOT accept at face
 //   value: an interpretive caveat and a disambiguation cross-check
-//   (does a fresh, non-queued, online write by the same unauthorized
-//   identity also succeed?) were added, because the credential-timing
-//   bug just found raises a real, undecided question about whether
-//   the write actually transmitted under the old or new identity —
-//   see the K5 section's own comments for the full reasoning. This
-//   round's changes are themselves NOT YET RE-EXECUTED.
+//   were added instead.
+//   Round 3 (found by RE-running Round 2's own fix — the K6/K7 crash
+//   recurred IDENTICALLY, proving Round 2's diagnosis wrong): the
+//   REAL cause was `firestore.rules`' own `contagemAuthority/current`
+//   write rule requiring `request.resource.data.get('assignedAt',
+//   null) == request.time` — a server-timestamp SENTINEL comparison,
+//   only satisfiable by writing `serverTimestamp()`, never a
+//   client-computed string. This file was writing `assignedAt: new
+//   Date().toISOString()` in all three `contagemAuthority` writes,
+//   which could never satisfy that check and so was rejected with
+//   100% reproducibility regardless of any timing — exactly what was
+//   observed twice in a row. Fixed by importing and using the real
+//   `serverTimestamp()`, which also now correctly mirrors what
+//   `AppContext.tsx`'s own real `assignDelegatedEditor()` has always
+//   done for this exact field. This round's K5 disambiguation check
+//   (added in Round 2) DID execute successfully on this run and
+//   returned `CONFIRMED PASS` — see the K5 section's own comments;
+//   this substantially weakens, but does not conclusively settle, the
+//   original K5 `CONFIRMED HIGH` from Round 2's run. This round's own
+//   fix to K6/K7 has not yet been re-executed.
 //
 // THIS REMAINS EVIDENCE-IN-WAITING FOR EVERY SCENARIO THAT HAS NOT YET
-// BEEN CLEANLY RE-RUN AFTER ROUND 2. Do not read the presence of this
+// BEEN CLEANLY RE-RUN AFTER ROUND 3. Do not read the presence of this
 // file, a clean code review, or any single run's raw output, as a
 // settled Finding K result without accounting for the caveats above.
+
 //
 // WHY THIS FILE IS DIFFERENT FROM THE OTHER TWO FINDING K TEST FILES:
 //   - tests/periodic-contagem-shared-live-data-decisions-44-56.test.ts
@@ -145,6 +159,7 @@ const {
   enableNetwork,
   terminate,
   clearIndexedDbPersistence,
+  serverTimestamp,
 } = await import('firebase/firestore');
 const { initializeTestEnvironment } = await import('@firebase/rules-unit-testing');
 const { readFileSync } = await import('node:fs');
@@ -552,7 +567,7 @@ async function main() {
   await signOutOf(ownerDevice);
   await signInAs(ownerDevice, 'owner@k-test.local', 'password123');
   const authorityPath = `businesses/${BIZ}/contagemAuthority/current`;
-  await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: DELEGATE_UID, assignedByUid: OWNER_UID, assignedAt: new Date().toISOString() });
+  await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: DELEGATE_UID, assignedByUid: OWNER_UID, assignedAt: serverTimestamp() });
   await sleep(300);
 
   const rowPath = `businesses/${BIZ}/stockCountDrafts/periodic/items/catalog:pRevoke`;
@@ -583,7 +598,7 @@ async function main() {
       }).catch((e) => ({ queuedWriteError: e.code || e.message }));
 
       // Owner reassigns delegation away from DELEGATE_UID WHILE delegate is offline.
-      await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: null, assignedByUid: OWNER_UID, assignedAt: new Date().toISOString() });
+      await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: null, assignedByUid: OWNER_UID, assignedAt: serverTimestamp() });
       await sleep(300);
 
       await enableNetwork(delegateDevice.db);
@@ -601,7 +616,7 @@ async function main() {
       // Shared Contagem — must NOT be misclassified as a leak
       // =================================================================
       console.log('\n--- Shared Contagem: Owner and a NEWLY (re-)assigned delegate must both see the SAME live row ---');
-      await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: DELEGATE_UID, assignedByUid: OWNER_UID, assignedAt: new Date().toISOString() });
+      await setDoc(doc(ownerDevice.db, authorityPath), { delegatedEditorUid: DELEGATE_UID, assignedByUid: OWNER_UID, assignedAt: serverTimestamp() });
       await sleep(300);
       let delegateSeesOwnerRow = false;
       const unsubShared = onSnapshot(doc(delegateDevice.db, rowPath), (snap) => {
