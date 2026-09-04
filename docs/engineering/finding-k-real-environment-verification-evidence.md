@@ -53,7 +53,7 @@ modified to produce this record.
 - **No real browser or page lifecycle.** `persistentSingleTabManager` stood in for production's `persistentMultipleTabManager` throughout every scenario. A real page `reload()`, real cross-tab lock coordination, and real `pagehide`/`visibilitychange` timing were **not** tested — Node has no faithful equivalent for any of these.
 - **The harness does not import or execute `AppContext.tsx` or `PeriodicStockCountView.tsx` directly.** React components with hooks are not runnable headless. Every gating decision exercised below is a hand-written re-implementation of the same pattern (`if (isOwner) { attach } else { setX(safe) }`, fail-closed first-emission handling, the flush-gated logout sequence), using the same real SDK calls those files make — not the production files themselves. A clean result is strong evidence the **pattern** is sound; it is not, by itself, proof that every actual call site in those files applies the pattern identically or is free of an unrelated implementation defect. This is a distinct claim from the source-text pattern-matching test
   (`tests/periodic-contagem-shared-live-data-decisions-44-56.test.ts`), which confirms the pattern's **presence** in the real files — the two together are stronger evidence than either alone, but neither substitutes for the other.
-- **This was one independent, clean run**, arrived at after three prior rounds each found and fixed a real bug in the harness itself (see §3 below). One clean run following a history of real bugs found by execution is good evidence, not yet the strongest available evidence — a second independent clean run (ideally after some elapsed time, to rule out any residual order-dependency or flakiness in the harness) has not yet been performed.
+- **This was one independent, clean run** *(addendum: a second, fully independent run has since been performed — see §2.1 below — with an exactly matching result. The observation that repeatability strengthens confidence, made here originally, is preserved for the historical record even though it has now been partially addressed).* One clean run following a history of real bugs found by execution is good evidence; two independent, byte-for-byte matching clean runs is stronger still. Further repetition, and/or direct confirmation of the browser-only substitutions named above, would strengthen the evidence further.
 
 ---
 
@@ -75,6 +75,14 @@ modified to produce this record.
 | 12 | Logout cleanup — unsafe branch (flush fails / pending write) | **CONFIRMED PASS** | Cleanup was correctly skipped; the pending write survived and reached the server once reconnected — no data destroyed, consistent with Decision 44's no-silent-loss requirement |
 
 **Summary: eleven of twelve scenarios CONFIRMED PASS on genuine, real evidence. The twelfth (item 8) is an intentional control condition whose `CONFIRMED HIGH` result is itself the expected and required outcome — it is not counted as a failure or a defect.**
+
+### 2.1 Second Independent Run (addendum, same day)
+
+A second, fully independent execution of the identical harness (`npm run test:finding-k-real-environment:emulator`), on the same commit (`294eabd`), with **zero code changes made between the two runs**, was performed to address §1.2's own stated limitation ("this was one independent run").
+
+**Result: byte-for-byte identical to the first run, all twelve lines, same order, same classification for every scenario — including the intentional control condition (`Fail-closed — gate deliberately removed`), which reproduced `CONFIRMED HIGH` exactly as required, not flaky, not flipped.** The script exited successfully (code 0) on both runs.
+
+This directly strengthens the evidence base beyond "one clean run": two independent executions of unmodified code produced an exactly matching result set, with no divergence in any of the twelve scenarios. The remaining limitations in §1.2 (no real browser/page lifecycle, `persistentSingleTabManager` substitution, the harness's own distinctness from the real React wiring) are unaffected by this second run and remain exactly as stated — a second matching run addresses *repeatability*, not the *scope* of what was tested.
 
 ---
 
@@ -103,17 +111,18 @@ This clean result was reached only after three real bugs were found by actually 
 
 ## 5. Recommendation for the Future Rule 8 Reassessment (Not Enacted Here)
 
-Based on the evidence in §2, a future, separate, deliberate Rule 8
-reassessment may find grounds to move Finding K from its current
-`CONFIRMED FAIL — HIGH, NOT RESOLVED` classification (§IV.O-k) toward
-something reflecting `PARTIALLY VERIFIED` status — the mechanism is
-now confirmed working end-to-end in a real (non-browser) environment,
-across every named scenario, with one intentional control condition
-behaving exactly as required. **This document does not make that
-change.** A defensible full `RESOLVED` classification would still
-reasonably wait on: a second independent clean run (§1.2), and/or
-direct confirmation of the specific browser-only substitutions named
-in §1.2 (`persistentMultipleTabManager`, real page reload, real
+Based on the evidence in §2 (including the second independent run in
+§2.1), a future, separate, deliberate Rule 8 reassessment may find
+grounds to move Finding K from its current `CONFIRMED FAIL — HIGH, NOT
+RESOLVED` classification (§IV.O-k) toward something reflecting
+`PARTIALLY VERIFIED` status — the mechanism is now confirmed working
+end-to-end in a real (non-browser) environment, across every named
+scenario, reproduced identically across two independent runs, with one
+intentional control condition behaving exactly as required both times.
+**This document does not make that change.** A defensible full
+`RESOLVED` classification would still reasonably wait on direct
+confirmation of the specific browser-only substitutions named in §1.2
+(`persistentMultipleTabManager`, real page reload, real
 `pagehide`/`visibilitychange` timing).
 
 ---
