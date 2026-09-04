@@ -258,3 +258,113 @@ describe('Decisions 44-56 — PeriodicStockCountView.tsx UI wiring', () => {
     assert.match(viewSource, /await assignDelegatedEditor\(uid\);/);
   });
 });
+
+// [Implementation Plan Area A; Implementation Authorization §2 item 1]
+// Genuine per-row live adoption (Stage 2). Same source-level regression
+// technique as every describe block above — this repository has no
+// React/DOM test harness (see file header), so these assert the
+// specific structural properties that produce each required behavior,
+// rather than rendering and simulating keystrokes.
+describe('Implementation Authorization §2 item 1 — genuine per-row live adoption (Stage 2)', () => {
+  it('rowHasUnsavedLocalEditRef exists and is a plain ref, not React state (never re-renders on its own)', () => {
+    assert.match(viewSource, /const rowHasUnsavedLocalEditRef = useRef<Record<string, boolean>>\(\{\}\);/);
+  });
+
+  it('scheduling a row edit (scheduleRowDraftSave) marks that exact row dirty for catalog:/manual: keys only', () => {
+    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string) => {');
+    assert.ok(idx >= 0, 'expected scheduleRowDraftSave to exist');
+    const body = viewSource.slice(idx, idx + 2500);
+    assert.match(
+      body,
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[rowKey\] = true;\s*\n\s*\}/
+    );
+  });
+
+  it('a successful save (performRowSaveAttempt) clears the dirty flag only once belongsToCurrentGeneration is confirmed', () => {
+    const thenIdx = viewSource.indexOf(".then((updatedAt) => {");
+    assert.ok(thenIdx >= 0, 'expected the save-success callback to exist');
+    const body = viewSource.slice(thenIdx, thenIdx + 1500);
+    // The generation guard is the very first line of this callback —
+    // the clear below it is therefore already gated by it.
+    assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return;/);
+    assert.match(
+      body,
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+    );
+  });
+
+  it('the live-adoption effect skips a row with an unsaved local edit — never overwrites in-progress typing', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    assert.ok(idx >= 0, 'expected the Stage 2 live-adoption effect to exist');
+    const body = viewSource.slice(idx, idx + 6000);
+    assert.match(body, /if \(rowHasUnsavedLocalEditRef\.current\[rowKey\]\) continue;/);
+  });
+
+  it('the live-adoption effect skips a row in CONFLICT state — never picks an automatic winner (Decision 55)', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 6000);
+    assert.match(body, /if \(item\.state === 'CONFLICT'\) continue;/);
+  });
+
+  it('a clean catalog row (no local edit, no conflict) is adopted from periodicStockDraftItemsByKey into catalogRows', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 6000);
+    assert.match(body, /const productId = rowKey\.slice\('catalog:'\.length\);/);
+    assert.match(body, /const existing = catalogRows\[productId\];/);
+    assert.match(body, /nextCatalogRows\[productId\] = candidate;/);
+  });
+
+  it('a clean manual row (no local edit, no conflict) is adopted from periodicStockDraftItemsByKey into manualRows, existing indices only', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 6000);
+    assert.match(body, /const index = parseInt\(rowKey\.slice\('manual:'\.length\), 10\);/);
+    assert.match(body, /const existing = manualRows\[index\];/);
+    assert.match(body, /if \(!existing\) continue; \/\/ scope: existing local rows only/);
+    assert.match(body, /nextManualRows\[index\] = candidate;/);
+  });
+
+  it('adoption is skipped when the candidate is identical to the existing row (no needless re-render/churn)', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 6000);
+    const occurrences = body.match(/JSON\.stringify\(workingRowToDraftItem\(existing\)\) === JSON\.stringify\(workingRowToDraftItem\(candidate\)\)/g);
+    assert.ok(occurrences && occurrences.length === 2, 'expected the equality guard on both the catalog and manual branches');
+  });
+
+  it('the adoption effect never runs while the stale-draft resume banner is still pending an explicit operator decision', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 6000);
+    assert.match(body, /if \(hasMeaningfulContent && !draftBannerDismissed\) return;/);
+  });
+
+  it('rowHasUnsavedLocalEditRef is reset on business switch, on draft resume, and on draft discard — never leaks across contexts', () => {
+    assert.match(
+      viewSource,
+      /hasSeenProductsRef\.current = false;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*\/\/ eslint-disable-next-line react-hooks\/exhaustive-deps\s*\n\s*\}, \[activeBusinessId\]\);/
+    );
+    assert.match(
+      viewSource,
+      /lastLocalDraftWriteRef\.current = periodicStockDraft\.updatedAt;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*setDraftBannerDismissed\(true\);\s*\n\s*\};/
+    );
+    assert.match(
+      viewSource,
+      /\} finally \{\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,250}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*setDraftBannerDismissed\(true\);\s*\n\s*\}/
+    );
+  });
+
+  it('does not replace or touch the existing runTransaction conflict-detection mechanism (Decision 55) in AppContext.tsx', () => {
+    // Regression guard: this Stage 2 change lives entirely in
+    // PeriodicStockCountView.tsx; savePeriodicStockDraftItem's own
+    // transaction shape (asserted earlier in this file) must remain
+    // byte-for-byte the same read-compare-write mechanism.
+    assert.match(contextSource, /await runTransaction\(db, async \(tx\) => \{/);
+    assert.match(contextSource, /state: 'CONFLICT',/);
+  });
+
+  it('Viewer read-only and finalization/immutability protections remain intact (untouched by Stage 2)', () => {
+    // Same assertions the pre-existing describe blocks above already
+    // make — re-checked here to confirm Stage 2 did not regress them.
+    assert.match(rulesSource, /allow create, update: if isActiveContagemEditor\(businessId\)/);
+    assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts\}/);
+    assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+  });
+});

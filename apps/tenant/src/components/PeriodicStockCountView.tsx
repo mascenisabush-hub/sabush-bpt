@@ -904,6 +904,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // already typed into an existing one.
   const [catalogRows, setCatalogRows] = useState<CatalogRowState>({});
   const [manualRows, setManualRows] = useState<StockCountWorkingRow[]>([]);
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
+  // Design §6; Implementation Plan Area A; Implementation Authorization
+  // §2 item 1] `rowHasUnsavedLocalEdit`, keyed by this file's own
+  // existing rowKey convention (`catalog:{productId}` / `manual:{index}`
+  // — never `__meta__` or `newProductInfo:*`, which this feature does
+  // not touch). `true` from the instant a keystroke schedules THIS
+  // row's own autosave (scheduleRowDraftSave, below) until the instant
+  // that exact edit's own save resolves (performRowSaveAttempt, below)
+  // — the row-level analogue of the existing whole-draft
+  // `draftSaveState`, but per-row and consulted only by the live-
+  // adoption effect immediately below, never rendered directly. A ref,
+  // not state: it is read only inside that effect (at the moment a
+  // remote snapshot arrives), never during render, so no re-render
+  // should be triggered merely by it changing.
+  const rowHasUnsavedLocalEditRef = useRef<Record<string, boolean>>({});
   // [Feature — per-row Save + confirm, Owner-requested: validate each
   // product as it's entered instead of only discovering a mistake in
   // the final review, and be able to leave/return mid-count with
@@ -1268,6 +1283,105 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodicStockDraft?.updatedAt, periodicStockDraftLoaded, draftBannerDismissed]);
 
+  // [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
+  // Design §6 ("Shared Live State"); Implementation Plan Area A;
+  // Implementation Authorization §2 item 1] Genuine per-row live
+  // adoption — Decision 47's "live sync is the primary conflict-
+  // avoidance mechanism" applied at the row level, replacing the
+  // whole-draft passive notice (immediately above) for the row-level
+  // case specifically; that notice remains exactly as-is for meta-level
+  // changes (type/label/date), which this effect does not touch.
+  //
+  // Exactly three states this effect distinguishes for a given row, per
+  // the Technical Design's own §6 language:
+  //   1. `rowHasUnsavedLocalEditRef.current[rowKey]` true — this
+  //      operator has an in-progress, not-yet-saved edit on this exact
+  //      row. The incoming remote snapshot is NEVER written into
+  //      visible working state here. Genuine reconciliation happens
+  //      naturally at this row's own next save
+  //      (`savePeriodicStockDraftItem`'s `runTransaction` in
+  //      AppContext.tsx already re-reads the true current server value
+  //      at that exact moment — precisely where a genuine collision
+  //      must be detected anyway, per Decision 55/Decision 47). This
+  //      effect does not separately re-implement that detection.
+  //   2. `item.state === 'CONFLICT'` — left entirely to the existing
+  //      conflict panel / `resolvePeriodicConflict` flow, rendered
+  //      further below directly from `periodicStockDraftItemsByKey`/
+  //      `periodicStockDraft`. Never silently adopted into an editable
+  //      field here, which would let this effect pick an automatic
+  //      winner in exactly the case Decision 55 forbids one.
+  //   3. Neither of the above — this row is not currently at risk from
+  //      this operator's own typing. Adopted directly: no manual
+  //      reload, no whole-page notice, "live" in the sense Decision 47
+  //      actually asks for.
+  //
+  // Scope, deliberately narrow (smallest mechanism, no architecture
+  // change, per the governing task): only rows ALREADY present in local
+  // `catalogRows`/`manualRows` are adopted here. Every catalog product
+  // already has a local entry the instant `products` loads (the
+  // catalog-populate effect above, keyed on `[products]`), so this
+  // covers the entire catalog surface unconditionally. A genuinely NEW
+  // manual row inserted concurrently by a different Active Editor is
+  // deliberately NOT synthesized here: `manual:{index}` is this file's
+  // own existing, purely local, array-position identity with no stable
+  // cross-device meaning — fabricating a new local index from a remote
+  // one would risk silently colliding with this operator's own next
+  // manually-added row, a new failure mode this task does not ask for
+  // and this effect must not introduce. This is an intentional, named
+  // limitation, not an oversight: a new manual row added by another
+  // editor becomes visible on this device the same way it always has —
+  // at this device's own next full draft read (e.g. resume) — while
+  // every row this effect DOES cover (every catalog row; any manual row
+  // at an index this device already has) is adopted live.
+  //
+  // Gated on the identical "resume/discard decision not yet made"
+  // condition the whole-draft notice effect above already uses
+  // (deliberately duplicated here rather than depended on, for the
+  // exact same self-containment reason that effect's own comment
+  // gives) — this must never silently adopt draft content into working
+  // state while the stale-draft resume banner is still pending the
+  // operator's own explicit choice; that decision remains exactly as
+  // un-automated as it always was.
+  useEffect(() => {
+    if (!periodicStockDraftLoaded) return;
+    if (periodicStockDraft) {
+      const hasMeaningfulContent = periodicStockDraft.items.some(
+        (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
+      );
+      if (hasMeaningfulContent && !draftBannerDismissed) return;
+    }
+    let nextCatalogRows: CatalogRowState | null = null;
+    let nextManualRows: StockCountWorkingRow[] | null = null;
+    for (const [rowKey, item] of Object.entries(periodicStockDraftItemsByKey)) {
+      if (rowHasUnsavedLocalEditRef.current[rowKey]) continue; // protect this operator's in-progress edit
+      if (item.state === 'CONFLICT') continue; // left to the conflict panel / resolvePeriodicConflict flow
+      if (rowKey.startsWith('catalog:')) {
+        const productId = rowKey.slice('catalog:'.length);
+        const existing = catalogRows[productId];
+        if (!existing) continue; // scope: existing local rows only — see comment above
+        const candidate = draftItemToWorkingRow(item);
+        if (JSON.stringify(workingRowToDraftItem(existing)) === JSON.stringify(workingRowToDraftItem(candidate))) continue;
+        if (!nextCatalogRows) nextCatalogRows = { ...catalogRows };
+        nextCatalogRows[productId] = candidate;
+      } else if (rowKey.startsWith('manual:')) {
+        const index = parseInt(rowKey.slice('manual:'.length), 10);
+        const existing = manualRows[index];
+        if (!existing) continue; // scope: existing local rows only — see comment above
+        const candidate = draftItemToWorkingRow(item);
+        if (JSON.stringify(workingRowToDraftItem(existing)) === JSON.stringify(workingRowToDraftItem(candidate))) continue;
+        if (!nextManualRows) nextManualRows = [...manualRows];
+        nextManualRows[index] = candidate;
+      }
+      // Every other key ('__meta__', 'newProductInfo:*') never appears
+      // in periodicStockDraftItemsByKey — that map only ever holds
+      // stockCountDrafts/periodic/items subdocuments (AppContext.tsx),
+      // keyed exactly by this file's own catalog:/manual: convention.
+    }
+    if (nextCatalogRows) setCatalogRows(nextCatalogRows);
+    if (nextManualRows) setManualRows(nextManualRows);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodicStockDraftItemsByKey, periodicStockDraftLoaded, draftBannerDismissed, catalogRows, manualRows]);
+
   // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]
   // In-session, monotonically increasing counter — the sole source of
   // "last deliberately entered," never array/row order, never Map
@@ -1370,6 +1484,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     cancelAllRowRetries();
     manualRetryEligibleRowsRef.current.clear();
     hasSeenProductsRef.current = false;
+    // [Implementation Authorization §2 item 1] A business switch clears
+    // every row this device might have been protecting from live
+    // adoption — there is no in-progress edit left to protect once
+    // catalogRows/manualRows themselves have just been reset to empty,
+    // immediately above.
+    rowHasUnsavedLocalEditRef.current = {};
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -1624,6 +1744,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // remote change, above.
         lastLocalDraftWriteRef.current = updatedAt;
         setDraftSaveState('saved');
+        // [Implementation Authorization §2 item 1] This exact edit is
+        // now durably persisted (the generation check above already
+        // confirms no newer edit has since superseded it) — the row is
+        // no longer at risk from the live-adoption effect above, so it
+        // may resume adopting further remote changes. '__meta__' and
+        // 'newProductInfo:*' are not row keys the adoption effect ever
+        // consults; skipped here to avoid growing this ref with keys
+        // that mechanism never reads.
+        if (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) {
+          delete rowHasUnsavedLocalEditRef.current[rowKey];
+        }
       })
       .catch((err) => {
         if (!belongsToCurrentGeneration()) return; // superseded — nothing to classify against a stale attempt
@@ -1686,6 +1817,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // attempt it eventually starts is tied to THIS edit, not whichever
     // edit happens to be current 800ms from now.
     manualRetryEligibleRowsRef.current.delete(rowKey);
+    // [Implementation Authorization §2 item 1] Set the instant a
+    // genuine edit is scheduled for this exact row — the live-adoption
+    // effect above must never overwrite it with a remote value while
+    // this is true. Only 'catalog:'/'manual:' keys are ones that effect
+    // ever consults; '__meta__'/'newProductInfo:*' edits are
+    // deliberately excluded so this ref only ever grows for row keys
+    // Stage 2 actually protects.
+    if (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) {
+      rowHasUnsavedLocalEditRef.current[rowKey] = true;
+    }
     const generation = cancelRowRetry(rowKey);
     const timer = setTimeout(() => {
       rowDebounceTimersRef.current.delete(rowKey);
@@ -3055,6 +3196,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // with its updatedAt so the notice effect, above, doesn't
     // immediately fire on the very data the operator just loaded.
     lastLocalDraftWriteRef.current = periodicStockDraft.updatedAt;
+    // [Implementation Authorization §2 item 1] Every row just loaded
+    // here IS the current remote state as of this instant — no local
+    // edit is in progress on any of them yet, so the live-adoption
+    // effect above must not treat any row as protected from the outset.
+    rowHasUnsavedLocalEditRef.current = {};
     setDraftBannerDismissed(true);
   };
 
@@ -3088,6 +3234,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // overwritten by the next autosave, or the banner reappears next
       // mount; not a blocking error for the operator's current session.
     } finally {
+      // [Implementation Authorization §2 item 1] Nothing remote is left
+      // to protect any row from once the draft itself has been cleared.
+      rowHasUnsavedLocalEditRef.current = {};
       setDraftBannerDismissed(true);
     }
   };
