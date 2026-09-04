@@ -72,7 +72,22 @@ history must be its own explicit, separately governed operation, never
 an incidental side effect. Finding G (§IV.G) remains FAIL/OPEN — no
 `firestore.rules` change has been made. The Firestore SDK cache/
 session-isolation verification (Finding K) is unrelated to Decision 56
-and remains separately open.
+and remains separately open. **Updated 2026-09-04** to record the
+completed Finding K technical verification and mechanism-selection
+track (see Part IV §IV.O-k) — this is **not** a Product Architect
+decision and does not add one: two empirical Firestore SDK verification
+passes and a dedicated mechanism-analysis pass have together **confirmed
+Finding K as an actual, reachable, application-layer failure** (not
+merely an unverified risk), and have **finalized the technical
+mechanism** (authorization-aware listener gating, with a binding
+fail-closed requirement for any authorization-unknown or
+potentially-stale state) that the Technical Design for Decisions 44–55
+now records in its own §12. **Finding K is reclassified from UNVERIFIED
+to CONFIRMED FAIL — HIGH; it is explicitly NOT resolved** — the
+mechanism is designed, not implemented, and no code, `firestore.rules`,
+schema, UI, or test file has been changed to produce this update. The
+Rule 8 verdict remains READY AFTER DECISIONS — see §IV.O-k and §IV.R
+for the full reasoning.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -594,7 +609,7 @@ is assessment only, not a scale redesign.
 | I — Live transport | PASS | — | Requirement satisfied |
 | I — Safe live state adoption for dual Editors | FAIL | HIGH | Technical design required |
 | J — Multi-tab authority | FAIL/OPEN | CRITICAL | Technical design required, unaffected in root cause |
-| K — Shared-device/cache isolation | **UNVERIFIED** | HIGH | Verification required, unaffected by Decision 46 |
+| K — Shared-device/cache isolation | **CONFIRMED FAIL** (mechanism finalized, not yet implemented — see §IV.O-k) | HIGH | Empirically verified application-layer failure; implementation required, unaffected by Decision 46 |
 | L — Scale/performance | PASS | — | No new concern identified |
 | 44-S-A — Viewer authorization | **✅ RESOLVED at governance-requirement level (Decision 52, 2026-09-04)** | — | Technical enforcement/mechanism still required — see §IV.O-f |
 | 44-S-C — Finalizer authorization | **✅ RESOLVED at governance-requirement level (Decision 53, 2026-09-04) — Owner/Admin only** | — | Technical enforcement/mechanism still required — see §IV.O-g |
@@ -652,7 +667,9 @@ the authority-mechanism design work.
 
 **HIGH:**
 
-10. Shared-device/logout cache isolation remains UNVERIFIED (§IV.K).
+10. Shared-device/logout cache isolation — **CONFIRMED FAIL**, no
+    longer merely UNVERIFIED (§IV.K, updated §IV.O-k) — an
+    application-layer mechanism is designed but not yet implemented.
 11. Genuine row-level live-adoption for two simultaneous Editors is
     unbuilt beyond the existing whole-draft passive notice (§IV.I).
 12. "Prevent unauthorized users from editing" currently passes only by
@@ -1218,6 +1235,121 @@ authorize implementation.**
 
 ---
 
+## IV.O-k — UPDATE (2026-09-04): Finding K Empirically Verified — CONFIRMED FAIL, Mechanism Finalized, Implementation Not Yet Done
+
+**This update is explicitly not a Product Architect decision and does
+not add one.** Unlike §IV.O-a through §IV.O-j, which each record a new
+Decision resolving a product-level governance question, this update
+records the completion of a **technical verification and
+mechanism-selection track** for **Finding K (§IV.K, "Shared-Device /
+Logout / Cache Isolation")** — a CRITICAL/HIGH technical finding
+Decision 51 already fully governs at the requirement level. No accepted
+decision is reopened, reinterpreted, or expanded by this update, and no
+new one was created. Decisions 44, 46, 47, 48, 49, 50, 51, 52, 53, 54,
+55, and 56 all remain exactly as previously accepted.
+
+**What changed, precisely:** two dedicated Finding K verification
+passes and one mechanism-analysis pass were performed this session,
+using an isolated, out-of-repository harness against the actual
+`firebase@12.16.0` SDK version and `persistentLocalCache` configuration
+this repository pins (`apps/tenant/src/lib/firebase.ts`), plus direct
+inspection of `AppContext.tsx` and `firestore.rules`. No application
+code, `firestore.rules`, schema, UI, or test file in this repository
+was modified to produce any of this evidence.
+
+**Confirmed, not merely suspected:**
+
+- A freshly-attached `onSnapshot` listener serves a cached document as
+  its first emission (`fromCache: true`) before any server round-trip,
+  independent of the current session's identity, business context, or
+  authorization — demonstrated directly, not inferred from SDK
+  documentation alone.
+- At least one concrete, reachable application code path exploits this
+  today: `unsubWithdrawals` (Owner-only `withdrawals` collection)
+  attaches unconditionally regardless of role and never resets state on
+  a permission-denied response — an Owner-only financial record was
+  demonstrated reaching a simulated non-Owner session's rendered state
+  purely from the local cache, with `firestore.rules` never having had
+  a chance to act.
+- The two Contagem draft listeners already have a **better, but still
+  incomplete**, precedented pattern (owner-vs-staff branching that
+  resets to a safe value on a permission error) — better than most
+  other listeners in the same file, but it only corrects **after** one
+  cache-first emission has already rendered, not before.
+- A prior recommendation in the Technical Design for Decisions 44–55's
+  own §12 ("unsubscribe listeners, then call
+  `clearIndexedDbPersistence()`") was itself **confirmed incorrect** by
+  this verification: `clearIndexedDbPersistence()` fails with
+  `failed-precondition` unless `terminate()` is called first, and
+  `terminate()` does not cancel pending writes. The Technical Design
+  has since been corrected (commit `96a28eb`) to reflect this.
+- The **intended, correct, shared-collaboration behavior** (Owner/Admin
+  and a currently delegated Editor both seeing the same live Contagem
+  observations) was distinguished, explicitly and carefully, from the
+  **confirmed leakage** above — B seeing A's legitimate shared Contagem
+  observation, once Decision 46/54's mechanism exists, is correct
+  product behavior, not a Finding K failure. This distinction was the
+  entire purpose of the second verification pass and is preserved
+  throughout this update.
+
+**Mechanism finalized (recorded in full in the Technical Design for
+Decisions 44–55 §12, and in the companion [Finding K — Cache/Session
+Isolation Mechanism Analysis](./finding-k-isolation-mechanism-analysis.md)):**
+authorization-aware listener attachment (never subscribe a
+role-restricted collection for a session the client's own already-known
+role/business state says shouldn't read it) combined with a **binding
+fail-closed requirement**: an authorization-unknown or
+potentially-stale state must render nothing until independently
+confirmed, never render a cache-first emission provisionally while
+waiting for the server to confirm or deny it. This is backed by a
+narrow, flush-gated, opportunistic `terminate()`/
+`clearIndexedDbPersistence()` deep-clean on `logout()` as
+defense-in-depth (never run unconditionally, since an unconditional
+clear risks discarding a genuinely still-syncing Contagem observation,
+which would violate Decision 44's no-silent-loss principle). `firestore.rules`
+remains the unchanged, authoritative backstop throughout — this
+mechanism closes the *application-layer* gap rules cannot reach, it
+does not replace or narrow any existing rule.
+
+**Two distinct claims, kept explicit and not conflated, exactly as
+every prior update in this ledger has done:**
+
+- **Finding K classification: reclassified from UNVERIFIED to
+  ✅ CONFIRMED FAIL — HIGH.** The evidence is no longer absent; the
+  failure is no longer merely theorized.
+- **Finding K resolution status: NOT RESOLVED.** The mechanism is
+  **designed, not implemented.** No code, `firestore.rules`, schema, or
+  UI change has been made. Finding K remains an open CRITICAL/HIGH
+  technical blocker requiring implementation before it can move toward
+  RESOLVED — see §IV.P item 10 and §IV.N's updated table row.
+
+**What remains genuinely open, not answered by this update:**
+
+- Real-backend confirmation that the fail-closed gate introduces no
+  false negative for a legitimately authorized co-editor's shared
+  Contagem access.
+- Real-backend confirmation that a privileged collection genuinely
+  never renders to an unauthorized session once the gate is
+  implemented (this session's evidence is from an isolated harness
+  with no reachable Firebase project — see the verification reports'
+  own stated limitations).
+- The server-side half of a stale pending write's identity-at-send-time
+  behavior (K5) — unaffected by this update, and separately governed by
+  the concurrency/authority mechanism already scoped in the Technical
+  Design §7/§10/§11, deliberately treated as a distinct problem from
+  cache isolation.
+- Delegated-Editor revocation while offline (K6/K7, Decision 49) —
+  **still not yet testable**, since no delegated-Editor mechanism
+  (Decision 46/48/54) has any implementation in the repository to
+  revoke. Unaffected by this update.
+
+**This update does not move the Rule 8 verdict to READY, and does not
+authorize implementation.** See §IV.R for the full verdict reasoning,
+including why a CONFIRMED-but-unimplemented technical finding does not,
+by itself, change the READY AFTER DECISIONS tier.
+
+---
+
 ## IV.Q — Decisions Still Required, Separated by Type (updated this session)
 
 **Product Architect decisions:**
@@ -1331,16 +1463,22 @@ authorize implementation.**
   the two are separate mechanisms answering separate questions (who
   may attempt vs. whether more than one may succeed), both still
   required. **Not resolved — a governance brief is not a design.**
-- **44-F mechanism** (shared-device/cache isolation mechanism,
-  including the named Firestore SDK cache/`request.auth`-re-evaluation
-  technical verification) — still open; must satisfy Decision 51's
-  governance requirements (business isolation; user/session isolation;
-  logout; business switching; offline-state/pending-write handling
-  across context changes; no discarding of durable historical
+- **44-F mechanism** (shared-device/cache isolation mechanism) — **the
+  mechanism is now finalized, per §IV.O-k**: authorization-aware
+  listener attachment, a binding fail-closed requirement for any
+  authorization-unknown or potentially-stale cache-first emission, and
+  a flush-gated opportunistic cache clean on logout, all recorded in
+  the Technical Design for Decisions 44–55 §12 and the companion
+  Finding K mechanism analysis document. Must still satisfy Decision
+  51's full governance requirements (business isolation; user/session
+  isolation; logout; business switching; offline-state/pending-write
+  handling across context changes; no discarding of durable historical
   observations; no new authority model; the six-point cross-context-
-  leakage prohibition), and the technical verification named in §IV.K
-  still has not been performed. **Not resolved — a governance brief is
-  not a design, and is not itself the verification.**
+  leakage prohibition) — the mechanism is designed to satisfy all of
+  them, but **implementation has not occurred**, and the real-backend
+  verification named in §IV.O-k's own "what remains open" list has not
+  yet been performed. **Not resolved — a finalized design is not an
+  implementation, and Finding K remains FAIL, not PASS.**
 - **44-S-A mechanism** (Viewer-eligibility and Viewer-restriction
   enforcement mechanism) — still open; must satisfy Decision 52's
   governance requirements (eligibility limited to business-authorized
@@ -1433,9 +1571,31 @@ particular remains FAIL — CRITICAL**, now fully scoped at the product
 level by Decisions 47 and 55, but with no technical mechanism selected.
 **Finding G (§IV.G) likewise remains FAIL — CRITICAL**, now fully
 scoped at the product level by Decision 56, but with its own
-`firestore.rules` text completely unmodified. **Finding K (§IV.K)
-remains UNVERIFIED — HIGH, entirely unaffected by Decision 56**, which
-resolves a different, unrelated Product Architect question.
+`firestore.rules` text completely unmodified. **Finding K (§IV.K) is
+reclassified from UNVERIFIED to CONFIRMED FAIL — HIGH, per §IV.O-k** —
+two empirical verification passes and a mechanism-analysis pass have
+confirmed the failure and finalized a technical mechanism (recorded in
+the Technical Design for Decisions 44–55 §12), but **implementation has
+not occurred**; Finding K remains exactly as much an open CRITICAL/HIGH
+blocker to Implementation Authorization as before, now with more
+evidence and a selected mechanism instead of an open question.
+
+**Why this reclassification does not move the verdict tier.** READY
+AFTER DECISIONS has never meant "no technical work remains" — every
+prior update in this ledger (§IV.O-a through §IV.O-j) has been explicit
+that it records the resolution of a *governance* question while
+leaving every *technical* mechanism exactly as open as before. Finding
+K's move from UNVERIFIED to CONFIRMED FAIL is the same kind of event a
+technical design or verification pass produces for any other finding
+in §IV.P — it is evidence maturing, and a mechanism being selected, not
+a Product Architect decision being resolved. Decision 51 already fully
+governs the *product requirement* Finding K measures compliance
+against; nothing about *how confident* the assessment is in Finding
+K's current FAIL status changes what decision, if any, is still needed
+— and none is. **Zero fully open Product Architect governance
+questions remain**, exactly as before this update; the verdict tier
+tracks that fact, not the confidence level of any individual technical
+finding.
 
 **Not forced, independently re-derived** — nothing found is a
 fundamental architectural or security impossibility. The dual-role
@@ -1448,8 +1608,9 @@ conflict-state marker), and a genuinely new conflict-detection/
 preservation/resolution mechanism, a finalization-time "no unresolved
 conflicts" precondition check, authority mechanism, finalization-guard
 mechanism, finalizer-eligibility enforcement mechanism,
-shared-device/cache-isolation mechanism (pending its own named
-technical verification), Viewer-eligibility-enforcement mechanism, and
+shared-device/cache-isolation mechanism (now finalized in design, per
+§IV.O-k, and pending implementation plus real-backend verification),
+Viewer-eligibility-enforcement mechanism, and
 delegated-Editor eligibility/selection enforcement mechanism, all now
 built against settled governance briefs — all additive extensions, not
 a redesign of what already works (business-owned storage, live
@@ -1471,10 +1632,12 @@ begin, updated:**
    2026-09-04.** **44-D technical mechanism (finalization guard
    mechanism) — still open**, now informed by Decision 50 §2–§8.
 5. ~~44-F governance requirements~~ **✅ RESOLVED — Decision 51,
-   2026-09-04.** **44-F technical verification/mechanism (shared-device/
-   cache isolation, including the named Firestore SDK cache/
-   `request.auth`-re-evaluation verification) — still open**, now
-   informed by Decision 51 §2–§11.
+   2026-09-04.** **44-F technical mechanism — FINALIZED IN DESIGN, per
+   §IV.O-k (2026-09-04): authorization-aware listener gating, binding
+   fail-closed handling of authorization-unknown/stale cache-first
+   emissions, flush-gated opportunistic logout clean. Implementation
+   and real-backend verification still open** — Finding K is CONFIRMED
+   FAIL, not PASS, until built and verified.
 6. ~~44-S-A governance requirements~~ **✅ RESOLVED — Decision 52,
    2026-09-04.** **44-S-A technical enforcement/mechanism (Viewer
    eligibility and Viewer restriction) — still open**, now informed by
@@ -1549,10 +1712,14 @@ question, distinct from and not resolved by Decision 54.
 > governance-requirement level by Decision 55, and the
 > finalized-immutability-versus-Clear-All-Data question the Technical
 > Design for Decisions 44–55 itself surfaced is resolved at the
-> governance-requirement level by Decision 56. Item 7 (verdict) is
-> unchanged in tier. Items 1–5 and 8 are otherwise still accurate. See
-> §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d, §IV.O-e, §IV.O-f, §IV.O-g,
-> §IV.O-h, §IV.O-i, and §IV.O-j for the current, authoritative
+> governance-requirement level by Decision 56. **Separately, and not a
+> governance resolution: Finding K (§IV.K) has been empirically
+> verified this session — reclassified from UNVERIFIED to CONFIRMED
+> FAIL, with its technical mechanism finalized in design (§IV.O-k) but
+> not implemented.** Item 7 (verdict) is unchanged in tier. Items 1–5
+> and 8 are otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c,
+> §IV.O-d, §IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, §IV.O-i, §IV.O-j, and
+> §IV.O-k for the current, authoritative
 > statements.
 
 1. **File(s) changed:** exactly one —
