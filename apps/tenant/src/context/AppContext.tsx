@@ -6628,6 +6628,31 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (!current) {
+        // [Decision 58 — Interruption Persistence and Recovery Parity,
+        // Implementation Authorization §3 item 2] Guard added following
+        // Test Group F's own empirical confirmation (Firestore emulator,
+        // tests/decision-58-cross-device-finalization.test.ts, all 5
+        // cases passing pre-fix, including the determining one): without
+        // this check, a stale retry landing after a DIFFERENT device
+        // has already finalized this same Contagem (deleting both this
+        // item document and the meta document atomically,
+        // recordStockCount, above) would silently recreate this row as
+        // an orphaned document under a path with no corresponding meta
+        // document — and because stockCountDrafts/periodic is a FIXED
+        // path reused by every Periodic Contagem this business ever
+        // starts (no per-Contagem-instance segment or generation field
+        // exists anywhere in this schema), that orphan would be visible
+        // to, and inherited by, the NEXT active Contagem's own
+        // unfiltered items-subcollection listener — confirmed, not
+        // merely theoretical, by that test's own "DETERMINING RESULT"
+        // case. `metaSnap` is already read above for the unrelated
+        // openConflictCount bookkeeping the CONFLICT branch below uses;
+        // reusing it here costs no additional read.
+        if (!metaSnap.exists()) {
+          throw new Error(
+            'Esta Contagem já não está ativa — a alteração não foi guardada.'
+          );
+        }
         // First write for this row.
         tx.set(itemRef, {
           ...content,

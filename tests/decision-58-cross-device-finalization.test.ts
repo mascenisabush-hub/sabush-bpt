@@ -4,25 +4,45 @@
 //
 // [Implementation Authorization §3 item 2, §4 Test Group F; Rule 8
 // Assessment §H] This is the one mandatory, gating verification the
-// Implementation Authorization requires before the conditional §22
-// meta-existence guard's necessity can be determined. It was not
-// written as part of the Decision 58 code change itself (commit
-// 2897673) because it requires the Firestore emulator, which this
-// authoring session's own sandboxed environment cannot reach (see
-// tests/periodic-contagem-shared-live-data-decisions-44-56-emulator.test.ts's
-// own header comment for the identical, already-documented network
-// constraint). Written once the Product Architect confirmed emulator
-// access is available on a separate machine.
+// Implementation Authorization required before the conditional §22
+// meta-existence guard's necessity could be determined.
+//
+// RESULT (Firestore emulator, user's own machine, 2026-09-05): 5
+// tests, 5 pass, 0 fail — including the determining case, which
+// confirmed a subsequently created active Contagem DOES inherit the
+// orphaned item. The §22/Implementation Authorization §3 item 2 guard
+// was therefore implemented in savePeriodicStockDraftItem
+// (AppContext.tsx) immediately after this result, per the
+// Authorization's own conditional structure.
+//
+// WHAT THIS SUITE STILL PROVES, NOW THAT THE GUARD EXISTS: the tests
+// below write directly against firestore.rules via the plain client
+// SDK (assertSucceeds on the exact payload shape
+// savePeriodicStockDraftItem's transaction would produce), NOT through
+// the application's own transaction function — consistent with this
+// suite's sibling emulator files' stated methodology of exercising
+// Firestore directly rather than through application code. The new
+// guard is implemented entirely at the APPLICATION layer, inside that
+// transaction, not in firestore.rules — so these rules-level
+// assertions correctly continue to show the write succeeding at the
+// rules layer; that is exactly what makes the application-layer guard
+// necessary rather than redundant, and is not a sign the fix is
+// missing. The guard's own presence and placement is verified
+// separately, at the source level, in
+// tests/periodic-contagem-shared-live-data-decisions-44-56.test.ts's
+// "Decision 58 — the 'first write' branch refuses to (re-)create a
+// row..." test, matching this repository's own established,
+// documented choice for verifying AppContext.tsx transaction-body
+// logic without a live application harness.
 //
 // SCENARIO (mirrors the Implementation Authorization §4 Test Group F
 // text exactly): Device A holds a dirty row and, per Decision 58,
 // would retry persisting it through the exact write shape
 // savePeriodicStockDraftItem's transaction produces for a row whose
 // document no longer exists ("first write" branch,
-// AppContext.tsx:6630-6640) — exercised here directly against
-// firestore.rules, not through application code, consistent with this
-// suite's sibling emulator files' own stated methodology. Device B
-// finalizes the same Contagem in between (simulated here via
+// AppContext.tsx:6630-6640, now guarded — see above) — exercised here
+// directly against firestore.rules, not through application code.
+// Device B finalizes the same Contagem in between (simulated here via
 // withSecurityRulesDisabled, mirroring recordStockCount's own atomic
 // delete of the periodic draft's meta document and every item
 // document — AppContext.tsx:5991-5997 — without needing to invoke the
@@ -181,7 +201,7 @@ describe('Decision 58 — Test Group F: stale interruption retry executing after
     );
   });
 
-  it('DETERMINING RESULT: a subsequently created active Contagem DOES inherit the orphaned item — its own items subcollection query is unfiltered by any per-Contagem generation field', async () => {
+  it('CONFIRMED RESULT (guard implemented in response): firestore.rules alone would let a subsequently created active Contagem inherit the orphaned item — this is exactly the gap savePeriodicStockDraftItem\'s new meta-existence guard closes at the application layer', async () => {
     const db = ownerDbFor();
     // Same stale-retry setup as the tests above, ending with the
     // orphaned item present and the meta document absent.

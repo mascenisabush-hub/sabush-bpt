@@ -105,6 +105,51 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
     assert.match(fnMatch![0], /if \(currentState === 'CONFLICT'\) \{/);
   });
 
+  // [Decision 58 — Interruption Persistence and Recovery Parity;
+  // Implementation Authorization §3 item 2] Added after Test Group F
+  // (tests/decision-58-cross-device-finalization.test.ts) empirically
+  // confirmed, via the Firestore emulator, that without this guard a
+  // stale retry landing after a different device's finalization could
+  // recreate an orphaned item document that a subsequently created
+  // active Contagem's own unfiltered items-subcollection listener would
+  // then inherit. This is an application-layer guard only — it is not,
+  // and does not need to be, enforced by firestore.rules, which permits
+  // this write shape regardless (confirmed by that same emulator suite,
+  // whose rules-layer assertions this guard does not change).
+  it('Decision 58 — the "first write" branch refuses to (re-)create a row when the parent meta document does not exist (guards against a stale interruption retry resurrecting an orphaned row after a different device finalized this Contagem)', () => {
+    const fnMatch = contextSource.match(/const savePeriodicStockDraftItem = async[\s\S]*?\n  \};/);
+    assert.ok(fnMatch, 'expected to find savePeriodicStockDraftItem');
+    const body = fnMatch![0];
+    const notCurrentIdx = body.indexOf('if (!current) {');
+    const guardIdx = body.indexOf('if (!metaSnap.exists()) {', notCurrentIdx);
+    const setIdx = body.indexOf('tx.set(itemRef, {', notCurrentIdx);
+    assert.notEqual(notCurrentIdx, -1);
+    assert.notEqual(guardIdx, -1, 'Expected a metaSnap.exists() guard inside the "first write" (!current) branch.');
+    assert.notEqual(setIdx, -1);
+    assert.ok(
+      notCurrentIdx < guardIdx && guardIdx < setIdx,
+      'The meta-existence guard must run inside the "first write" branch, before tx.set — refusing the write outright, not merely logging or writing anyway.'
+    );
+    // Reuses the metaSnap already read at the top of the transaction
+    // (for the unrelated openConflictCount bookkeeping the CONFLICT
+    // branch uses) — no second Firestore read is introduced.
+    assert.doesNotMatch(
+      body.slice(0, notCurrentIdx),
+      /const metaSnap = await tx\.get/,
+      'metaSnap must remain sourced from the single Promise.all([tx.get(itemRef), tx.get(metaRef)]) at the top of the transaction, not a second, separate read added for this guard.'
+    );
+    // The guard must be scoped to the "first write" branch only — an
+    // ordinary edit to an EXISTING row (the branches below this one)
+    // must remain entirely unaffected, since only a genuinely new/
+    // resurrected document can ever be the orphan this guard prevents.
+    const afterNotCurrentBlock = body.slice(setIdx);
+    assert.doesNotMatch(
+      afterNotCurrentBlock.slice(0, afterNotCurrentBlock.indexOf('const currentRev')),
+      /metaSnap\.exists\(\)/,
+      'The guard should not appear again outside the "first write" branch — an existing row\'s ordinary update/conflict handling is unaffected by Decision 58.'
+    );
+  });
+
   it('resolvePeriodicConflict only accepts one of the two already-preserved observation values', () => {
     const fnMatch = contextSource.match(/const resolvePeriodicConflict = async[\s\S]*?\n  \};/);
     assert.ok(fnMatch, 'expected to find resolvePeriodicConflict');
