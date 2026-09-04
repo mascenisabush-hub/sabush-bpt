@@ -2359,17 +2359,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const latestFlushArgs = useRef({ catalogRows, manualRows, type, label, date, newProductInfo });
   latestFlushArgs.current = { catalogRows, manualRows, type, label, date, newProductInfo };
 
-  // §4c / §5a — the interruption-durability flush itself: cancels any
-  // pending ordinary autosave (superseded by this immediate write —
-  // letting it also fire afterward would just be a redundant, stale
-  // write), then issues its own immediate, non-debounced write of the
-  // current live state, tracked in flushInFlightSaveRef so
-  // handleConfirmSave can await it before finalization (§4c above).
-  // This write is safe to have fired even if the operator goes on to
-  // confirm normally moments later — finalization (recordStockCount)
-  // never reads this Firestore draft, only live component state — its
-  // sole purpose is reducing the interruption-loss window, never
-  // participating in the finalization data path.
+  // [Decision 38 Amendment §5a; Decision 58 — Interruption Persistence
+  // and Recovery Parity] The interruption-durability flush itself:
+  // cancels any pending ordinary debounce (superseded by an immediate
+  // attempt below), then routes every row still owed a save attempt
+  // through the same governed per-row mechanism ordinary edits already
+  // use (`performRowSaveAttempt` → `savePeriodicStockDraftItem`/
+  // `savePeriodicStockDraftMeta`) — no separate batch write, no
+  // separate persistence path. `performRowSaveAttempt` already routes
+  // its own write through `draftInFlightSaveRef`, which
+  // `handleConfirmSave` already awaits before finalization — no
+  // additional in-flight tracking is needed here for that guarantee.
+  // Safe to have fired even if the operator goes on to confirm
+  // normally moments later — finalization (`recordStockCount`) never
+  // reads this Firestore draft, only live component state.
+  //
+  // Every rowKey with a pending debounce timer has not yet had its
+  // first save attempt — captured here, before clearing, so each one
+  // still receives an immediate attempt below instead of the timer
+  // simply being cancelled with nothing to replace it. This also
+  // covers '__meta__'/'newProductInfo:*' keys, which
+  // rowHasUnsavedLocalEditRef never tracks (see that ref's own
+  // declaration comment) — this is their only path into the set below.
   const flushPeriodicDraftNow = () => {
     // [Decision 41E §7/§13 — no incidental autosave while subscription-
     // blocked] This flush runs unconditionally on visibilitychange/
@@ -2385,44 +2396,39 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // real edit to flush — but the explicit guard makes that
     // structurally certain rather than incidental.
     if (subscriptionBlocksNewRecords) return;
-    // [Decision 39a; Implementation Authorization §1 item 4] Cancel
-    // EVERY pending per-row timer, not a single ref — this write is
-    // about to supersede all of them at once with the current full
-    // state; letting any of them also fire afterward would just be a
-    // redundant, stale write racing this one.
+    const notYetAttemptedKeys = Array.from(rowDebounceTimersRef.current.keys());
+    // [Decision 39a; Implementation Authorization §1 item 4] Still
+    // cancel EVERY pending per-row debounce timer — each one is about
+    // to receive an immediate attempt below instead of waiting out its
+    // remaining delay.
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
-    // [Decision 41C §7/§10] This flush is about to write the full,
-    // current state of every row — a pending automatic retry for an
-    // OLDER, already-superseded value must never be allowed to fire
-    // afterward and race this write.
-    cancelAllRowRetries();
-    const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
-    // [Bug fix — per-product independent draft persistence] Was one
-    // combined array written as a single document field — now a
-    // Record keyed exactly like scheduleRowDraftSave's own row keys,
-    // handed to flushPeriodicStockDraftRows' batch write so every row
-    // still lands in its OWN independent document, just all in one
-    // network round-trip for the interruption-durability guarantee
-    // this flush exists for.
-    const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
-    for (const [productId, row] of Object.entries(cr)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
-    mr.forEach((row, index) => {
-      rowsByKey[`manual:${index}`] = workingRowToDraftItem(row);
+    // [Decision 58] Deliberately NOT cancelAllRowRetries() here — a row
+    // already mid-retry (bounded 1s/2s/4s backoff from an ordinary
+    // edit) is left running rather than restarted at attempt 1:
+    // restarting would only extend its total exposure window, and the
+    // existing generation/ref machinery (rowRetryRef, `useRef`-based)
+    // is already safe to keep running past this point, whether or not
+    // this component remains mounted to observe it.
+    const dirtyRowKeys = Object.keys(rowHasUnsavedLocalEditRef.current).filter(
+      (rowKey) => rowHasUnsavedLocalEditRef.current[rowKey]
+    );
+    // [Decision 58] Every row still owed a save attempt — whichever of
+    // the two ever applies to a given key. `performRowSaveAttempt`
+    // itself (via its existing `savePeriodicStockDraftItem`/
+    // `savePeriodicStockDraftMeta` routing, generation check, and
+    // `draftInFlightSaveRef` serialization) is the one, already-
+    // governed mechanism now used for every row here — no separate
+    // batch write, no separate persistence path.
+    const candidateKeys = new Set<string>([...notYetAttemptedKeys, ...dirtyRowKeys]);
+    candidateKeys.forEach((rowKey) => {
+      // A row already mid-retry keeps its own scheduled attempt —
+      // triggering a second one here would either duplicate it or
+      // reset it back to attempt 1, neither of which is wanted.
+      if (rowRetryRef.current.get(rowKey)?.timer) return;
+      const generation = cancelRowRetry(rowKey);
+      performRowSaveAttempt(rowKey, generation, 1);
     });
-    setDraftSaveState('saving');
-    const flushPromise = flushPeriodicStockDraftRows(rowsByKey, t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi)
-      .then((updatedAt) => {
-        // [Cross-Device Live-Update Notice] Same bookkeeping as §4a's
-        // call site, above.
-        lastLocalDraftWriteRef.current = updatedAt;
-        setDraftSaveState('saved');
-      })
-      .catch(() => setDraftSaveState('save-failed'))
-      .finally(() => {
-        flushInFlightSaveRef.current = null;
-      });
-    flushInFlightSaveRef.current = flushPromise;
   };
 
   // [Decision 38 Amendment §5a item 1] `visibilitychange` (tab hidden

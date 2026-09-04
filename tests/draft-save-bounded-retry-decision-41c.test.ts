@@ -41,6 +41,24 @@ function extractFunctionBody(src: string, signatureMarker: string): string {
   throw new Error(`Could not find a balanced closing brace for ${signatureMarker}`);
 }
 
+// Strip `//`-style line comments before searching for actual code —
+// otherwise an explanatory comment that legitimately mentions a
+// function-call-shaped term (e.g. documenting a call that was
+// deliberately REMOVED, as Decision 58's own comment in
+// flushPeriodicDraftNow does) would produce a false positive. Same
+// technique tests/periodic-stock-interruption-durability.test.ts and
+// tests/periodic-stock-draft-resurrection.test.ts already establish
+// for this exact problem.
+function stripLineComments(code: string): string {
+  return code
+    .split('\n')
+    .map((line) => {
+      const idx = line.indexOf('//');
+      return idx === -1 ? line : line.slice(0, idx);
+    })
+    .join('\n');
+}
+
 // ==================================================================
 // §2 — Readback-uncertain wiring in AppContext.tsx
 // ==================================================================
@@ -286,15 +304,22 @@ describe('PeriodicStockCountView.tsx — cancelAllRowRetries wired into every ex
     assert.match(nearby, /manualRetryEligibleRowsRef\.current\.clear\(\);/);
   });
 
-  it('is called inside flushPeriodicDraftNow, before the flush\'s own write (§7)', () => {
+  it('is deliberately NOT called inside flushPeriodicDraftNow (Decision 58 — a row already mid-retry is left running, not cancelled/restarted, at interruption time)', () => {
     const body = extractFunctionBody(periodicSrc, 'const flushPeriodicDraftNow = () => {');
+    assert.doesNotMatch(
+      stripLineComments(body),
+      /cancelAllRowRetries\(\)/,
+      'Decision 58 deliberately removed this call from flushPeriodicDraftNow — see tests/periodic-stock-interruption-durability.test.ts\'s own Decision 58 describe block for the corresponding positive assertion and rationale.'
+    );
+    // flushPeriodicDraftNow still cancels every pending per-row DEBOUNCE
+    // timer (rows not yet attempted) before issuing any interruption-
+    // triggered attempt — only the separate, already-scheduled RETRY
+    // timers (rowRetryRef) are left alone.
     const clearIdx = body.indexOf('rowDebounceTimersRef.current.clear();');
-    const cancelIdx = body.indexOf('cancelAllRowRetries();');
-    const writeIdx = body.indexOf('flushPeriodicStockDraftRows(rowsByKey');
+    const attemptIdx = body.indexOf('performRowSaveAttempt(rowKey, generation, 1)');
     assert.notEqual(clearIdx, -1);
-    assert.notEqual(cancelIdx, -1);
-    assert.notEqual(writeIdx, -1);
-    assert.ok(clearIdx < cancelIdx && cancelIdx < writeIdx);
+    assert.notEqual(attemptIdx, -1);
+    assert.ok(clearIdx < attemptIdx);
   });
 
   it('is called inside flushForSwitchIfNeeded, and the early-return guard also accounts for a pending retry with no debounce timer/in-flight save (§11)', () => {

@@ -325,12 +325,30 @@ describe('H — per-product independent draft persistence (superseding Decision 
     assert.match(source, /flushPeriodicStockDraftRows/);
   });
 
-  it('scheduleRowDraftSave, flushPeriodicDraftNow, and handleRequestConfirmation\'s identity write are each still the sole call sites for their own respective persistence function — no fourth, ad hoc write path was introduced', () => {
+  it('scheduleRowDraftSave still routes through savePeriodicStockDraftItem/savePeriodicStockDraftMeta; flushForSwitchIfNeeded and handleRequestConfirmation\'s identity write are the two remaining flushPeriodicStockDraftRows callers (Decision 58 — flushPeriodicDraftNow itself is no longer one of them)', () => {
     const itemCallSites = source.match(/savePeriodicStockDraftItem\(\s*[\s\S]{0,220}?\)/g) || [];
     const metaCallSites = source.match(/savePeriodicStockDraftMeta\(\s*[\s\S]{0,220}?\)/g) || [];
     const flushCallSites = source.match(/flushPeriodicStockDraftRows\(\s*[\s\S]{0,220}?\)/g) || [];
     assert.ok(itemCallSites.length >= 1, 'Expected savePeriodicStockDraftItem to be called from scheduleRowDraftSave.');
     assert.ok(metaCallSites.length >= 1, 'Expected savePeriodicStockDraftMeta to be called from scheduleRowDraftSave.');
-    assert.ok(flushCallSites.length >= 2, 'Expected flushPeriodicStockDraftRows to be called from both flushPeriodicDraftNow and handleRequestConfirmation\'s identity write.');
+    // [Decision 58 — Interruption Persistence and Recovery Parity]
+    // flushPeriodicDraftNow no longer calls flushPeriodicStockDraftRows
+    // (it now routes dirty rows through performRowSaveAttempt instead —
+    // see tests/periodic-stock-interruption-durability.test.ts's own
+    // Decision 58 describe block). Exactly its two other, legitimate,
+    // Decision-58-unaffected call sites remain: flushForSwitchIfNeeded
+    // (business-switch flush) and handleRequestConfirmation's
+    // pre-finalization identity write.
+    assert.equal(
+      flushCallSites.length,
+      2,
+      'Expected flushPeriodicStockDraftRows to be called from exactly flushForSwitchIfNeeded and handleRequestConfirmation\'s identity write — no more (a stray third caller) and no fewer (Decision 58 must not have accidentally removed one of its two legitimate, unaffected callers).'
+    );
+    const flushBody = source.slice(source.indexOf('const flushPeriodicDraftNow = () => {'), source.indexOf('const flushForSwitchIfNeeded ='));
+    assert.doesNotMatch(
+      flushBody,
+      /flushPeriodicStockDraftRows\(/,
+      'flushPeriodicDraftNow itself must not be one of the two remaining flushPeriodicStockDraftRows callers (Decision 58).'
+    );
   });
 });

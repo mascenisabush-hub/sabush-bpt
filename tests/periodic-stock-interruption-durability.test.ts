@@ -8,6 +8,16 @@
 // 7-10 (source-level tier); Implementation Plan §7; Implementation
 // Authorization §2 items 4, 5, 6, 7, §8 items 1-4]
 //
+// [Decision 58 — Interruption Persistence and Recovery Parity;
+// Implementation Authorization §3 item 1] §7 item 8 and §5b's second
+// test were updated in place (not merely appended around) to assert
+// the current, Decision-58-authorized mechanism — flushPeriodicDraftNow
+// now routes every row still owed a save through the same governed
+// performRowSaveAttempt path ordinary edits already use, rather than
+// its own separate flushPeriodicStockDraftRows batch write. A new
+// describe block below covers Decision 58's own dirty-row-only and
+// retry-left-running behavior specifically.
+//
 // SCOPE: same documented constraint as
 // tests/periodic-stock-draft-resurrection.test.ts and
 // tests/initial-stock-confirmation.test.ts — PeriodicStockCountView.tsx
@@ -114,35 +124,48 @@ describe('§7 item 7 — PeriodicStockCountView.tsx wires both visibilitychange 
   });
 });
 
-describe('§7 item 8 — flushPeriodicDraftNow cancels the pending debounce before issuing its own write', () => {
+describe('§7 item 8 / Decision 58 — flushPeriodicDraftNow cancels the pending debounce, then routes every row still owed a save through performRowSaveAttempt', () => {
   const flushBody = extractFlushFunctionBodyOnly(source);
 
-  it('flushPeriodicDraftNow exists and calls flushPeriodicStockDraftRows', () => {
-    const saveIndex = flushBody.indexOf('flushPeriodicStockDraftRows(');
-    assert.notEqual(saveIndex, -1, 'Expected flushPeriodicDraftNow to call flushPeriodicStockDraftRows.');
-  });
-
-  it('every pending per-row timer is cancelled before the flush write is issued', () => {
-    const clearIndex = flushBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
-    const saveIndex = flushBody.indexOf('flushPeriodicStockDraftRows(');
-    assert.notEqual(clearIndex, -1, 'Expected flushPeriodicDraftNow to iterate and clearTimeout every entry in rowDebounceTimersRef.');
-    assert.notEqual(saveIndex, -1);
-    assert.ok(
-      clearIndex < saveIndex,
-      'Every pending per-row timer must be cancelled before the flush issues its own write — otherwise any still-pending row timer could still fire afterward as a redundant, stale write racing this one.'
+  it('flushPeriodicDraftNow exists and calls performRowSaveAttempt (Decision 58 — no longer flushPeriodicStockDraftRows)', () => {
+    const saveIndex = flushBody.indexOf('performRowSaveAttempt(rowKey, generation, 1)');
+    assert.notEqual(saveIndex, -1, 'Expected flushPeriodicDraftNow to call performRowSaveAttempt for each row still owed a save.');
+    assert.doesNotMatch(
+      stripLineComments(flushBody),
+      /flushPeriodicStockDraftRows\(/,
+      'Decision 58 replaced the interruption flush\'s own separate batch write — flushPeriodicDraftNow must no longer call flushPeriodicStockDraftRows itself (its two other call sites, flushForSwitchIfNeeded and the pre-finalization identity write, are unaffected and unchanged).'
     );
   });
 
-  it('tracks its own write in flushInFlightSaveRef, distinct from draftInFlightSaveRef and identityWriteRef', () => {
+  it('every pending per-row debounce timer is cancelled before any interruption-triggered attempt is issued', () => {
+    const clearIndex = flushBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
+    const attemptIndex = flushBody.indexOf('performRowSaveAttempt(rowKey, generation, 1)');
+    assert.notEqual(clearIndex, -1, 'Expected flushPeriodicDraftNow to iterate and clearTimeout every entry in rowDebounceTimersRef.');
+    assert.notEqual(attemptIndex, -1);
+    assert.ok(
+      clearIndex < attemptIndex,
+      'Every pending per-row debounce timer must be cancelled before any interruption-triggered attempt is issued — otherwise a still-pending row timer could still fire afterward as a redundant, stale write racing the interruption-triggered one.'
+    );
+  });
+
+  it('does NOT call cancelAllRowRetries — a row already mid-retry is left running, not restarted (Decision 58)', () => {
+    assert.doesNotMatch(
+      stripLineComments(flushBody),
+      /cancelAllRowRetries\(\)/,
+      'Decision 58 deliberately does not cancel an already-scheduled bounded retry at interruption time — restarting it would reset it to attempt 1, extending its total exposure window for no benefit, since the existing ref/timer machinery is already safe to keep running past this point.'
+    );
     assert.match(
       flushBody,
-      /flushInFlightSaveRef\.current\s*=\s*flushPromise/,
-      'Expected flushPeriodicDraftNow to assign its own write promise to flushInFlightSaveRef.current.'
+      /if \(rowRetryRef\.current\.get\(rowKey\)\?\.timer\) return;/,
+      'Expected flushPeriodicDraftNow to skip issuing a fresh attempt for any row that already has a pending scheduled retry.'
     );
+  });
+
+  it('no longer tracks a dedicated flushInFlightSaveRef write — serialization is delegated to performRowSaveAttempt\'s own draftInFlightSaveRef usage', () => {
     assert.doesNotMatch(
       flushBody,
-      /draftInFlightSaveRef\.current\s*=/,
-      'flushPeriodicDraftNow must not assign to draftInFlightSaveRef — that ref belongs exclusively to the ordinary debounced autosave path (§4a), and conflating the two would break the distinct cancel-vs-await treatment §4a/§4c each require.'
+      /flushInFlightSaveRef\.current\s*=/,
+      'flushPeriodicDraftNow no longer builds or tracks its own combined write promise — each row\'s attempt is issued through performRowSaveAttempt, which already serializes via the shared draftInFlightSaveRef and which handleConfirmSave already awaits directly.'
     );
   });
 });
@@ -262,12 +285,26 @@ describe('§5b — newProductInfo reaches every meta-document write path for the
     );
   });
 
-  it('flushPeriodicDraftNow forwards newProductInfo (via latestFlushArgs) to flushPeriodicStockDraftRows', () => {
+  it('flushPeriodicDraftNow reaches newProductInfo/meta persistence via delegation, not by forwarding it itself (Decision 58)', () => {
     const flushBody = extractFlushFunctionBodyOnly(source);
+    // Decision 58: flushPeriodicDraftNow no longer builds a payload or
+    // reads latestFlushArgs itself — it only decides WHICH keys need an
+    // attempt (including '__meta__'/'newProductInfo:*' keys, captured
+    // from rowDebounceTimersRef before it clears them) and calls
+    // performRowSaveAttempt for each. That function is the one already
+    // proven, in the test immediately above, to source newProductInfo
+    // live from latestFlushArgs.current and forward it to
+    // savePeriodicStockDraftMeta — flushPeriodicDraftNow itself must not
+    // duplicate that logic.
+    assert.doesNotMatch(
+      stripLineComments(flushBody),
+      /latestFlushArgs\.current/,
+      'flushPeriodicDraftNow should no longer read latestFlushArgs.current directly — performRowSaveAttempt already does this, live, at the moment each row\'s attempt actually fires.'
+    );
     assert.match(
       flushBody,
-      /flushPeriodicStockDraftRows\(rowsByKey, t, l\.trim\(\) \|\| undefined, d, submissionIdRef\.current \|\| undefined, npi\)/,
-      'Expected flushPeriodicDraftNow\'s flushPeriodicStockDraftRows call to include the destructured newProductInfo (npi) value as its sixth argument.'
+      /const notYetAttemptedKeys = Array\.from\(rowDebounceTimersRef\.current\.keys\(\)\);/,
+      'Expected flushPeriodicDraftNow to capture every pending debounce-timer key (which includes any dirty \'__meta__\'/\'newProductInfo:*\' key) before clearing those timers, so a pending meta/newProductInfo edit still receives an interruption-triggered attempt.'
     );
   });
 
@@ -375,3 +412,52 @@ describe('§7 item 13 (source half) — Firestore persistent local cache is conf
     );
   });
 });
+
+// [Decision 58 — Periodic Contagem Interruption Persistence and
+// Recovery Parity; Implementation Authorization §3 item 1] Source-level
+// regression guards for the specific properties Decision 58 requires:
+// only currently-dirty rows receive an interruption-triggered attempt
+// (never every row unconditionally, as the retired
+// flushPeriodicStockDraftRows-based flush did), a CONFLICT row cannot
+// poison an unrelated dirty row's own attempt, generation protection is
+// reused unmodified, and no second dirty-state, retry, or
+// in-flight-tracking mechanism was introduced. Same source-inspection
+// approach as every other describe block in this file — see this file's
+// own header comment for why.
+describe('Decision 58 — interruption persistence is per dirty row, not per whole draft', () => {
+  const flushBody = extractFlushFunctionBodyOnly(source);
+
+  it('builds its candidate set from rowHasUnsavedLocalEditRef (dirty rows) and rowDebounceTimersRef keys (not-yet-attempted rows), not from catalogRows/manualRows directly', () => {
+    assert.match(
+      flushBody,
+      /Object\.keys\(rowHasUnsavedLocalEditRef\.current\)\.filter\(\s*\(rowKey\) => rowHasUnsavedLocalEditRef\.current\[rowKey\]\s*\)/,
+      'Expected flushPeriodicDraftNow to derive its dirty-row set from the existing rowHasUnsavedLocalEditRef, not a new dirty-state mechanism.'
+    );
+    assert.doesNotMatch(
+      stripLineComments(flushBody),
+      /Object\.entries\(cr\)|Object\.entries\(catalogRows\)|mr\.forEach|manualRows\.forEach/,
+      'flushPeriodicDraftNow must no longer iterate every catalog/manual row unconditionally — Decision 58 requires only currently-dirty rows to receive an interruption-triggered attempt.'
+    );
+  });
+
+  it('does not introduce a second dirty-state, retry, or in-flight-tracking ref — reuses rowHasUnsavedLocalEditRef, rowRetryRef, and (via performRowSaveAttempt) draftInFlightSaveRef only', () => {
+    assert.doesNotMatch(
+      stripLineComments(source),
+      /interruptionDirtyRef|pendingInterruptionRef|flushDirtyRowsRef|interruptionRetryRef/i,
+      'No new dirty-state/retry/in-flight ref should exist anywhere in this file for the interruption path — Decision 58 consolidates onto the mechanism ordinary edits already use.'
+    );
+  });
+
+  it('a row already mid-retry is skipped, not duplicated or restarted, by the same generation mechanism ordinary edits use', () => {
+    // This is the same belongsToCurrentGeneration()/cancelRowRetry
+    // machinery performRowSaveAttempt and scheduleRowDraftSave already
+    // use — Decision 58 introduces no second generation model, only a
+    // new caller of the existing one.
+    assert.match(
+      flushBody,
+      /const generation = cancelRowRetry\(rowKey\);/,
+      'Expected flushPeriodicDraftNow to obtain a fresh generation via the existing cancelRowRetry, exactly as scheduleRowDraftSave already does for an ordinary edit.'
+    );
+  });
+});
+
