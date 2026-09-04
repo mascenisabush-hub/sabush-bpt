@@ -5,8 +5,19 @@ TECHNICAL DESIGN — ANALYSIS ONLY — NO IMPLEMENTATION AUTHORIZED
 **Phase:** Technical Design (post-governance, pre-Implementation-Plan)
 **Governing baseline:** Decisions 44, 45, 46, 47, 48, 49, 50, 51, 52, 53,
 54, and 55 — all ✅ ACCEPTED, GOVERNANCE REQUIREMENTS ONLY. Decision 55
-accepted and recorded in `origin/main` at commit `980e68c`.
+accepted and recorded in `origin/main` at commit `980e68c`. Decision 56
+(Finalized Periodic Contagem Immutability & Clear-All Separation),
+accepted and recorded at commit `0d96ae6`, additionally informs §14/§22
+below.
 **Rule 8 status:** READY AFTER DECISIONS (unchanged by this document).
+**Updated:** §12 (Cache/Session Isolation) has been revised from an
+open factual question to a finalized mechanism, following two Finding K
+verification passes and a dedicated mechanism-analysis pass — see §12
+and the companion [Finding K — Cache/Session Isolation Mechanism
+Analysis](./finding-k-isolation-mechanism-analysis.md). This update is
+documentation only; no code, rules, schema, or UI has been changed, and
+no new Product Architect decision was created or is required — Decision
+51 already governs *what* must hold, and this update settles *how*.
 **This document does NOT:** modify application code, `firestore.rules`,
 schemas/types, UI, tests, indexes, or configuration; create an
 Implementation Authorization; or begin implementation.
@@ -537,65 +548,157 @@ non-`initial` branch only:
 
 ## §12 — Cache / Session Isolation
 
-**Confirmed findings (§3 items 8–10), restated as the design baseline:**
-a single shared `persistentLocalCache` per browser origin;
-`persistentMultipleTabManager` deliberately shares it across tabs of
-the *same* browser, which structurally means across different users
-who log into that same browser in sequence; `logout()` is exactly
-`signOut(auth)`, nothing else; `switchShop()` never clears the cache.
+**Status: mechanism finalized.** This section originally left the
+underlying SDK behavior as an open factual question (§12/§22, prior
+revision). Two dedicated Finding K verification passes (empirical
+Firestore SDK harness testing, using the exact `firebase@12.16.0`
+version and `persistentLocalCache` configuration this repository pins)
+plus a focused mechanism-analysis pass have since answered it and
+selected a mechanism. That evidence and analysis live in full in
+[Finding K — Cache/Session Isolation Mechanism Analysis](./finding-k-isolation-mechanism-analysis.md);
+this section restates the finalized mechanism and requirement for this
+design document's own record, and corrects one recommendation this
+section previously got wrong (item 1, prior revision — see the
+correction below).
 
-**Factual SDK question that must be verified before implementation**
-(named explicitly, per the task's own instruction, not assumed either
-way): does a freshly-created `onSnapshot`/`getDoc` call, made
-immediately after a new `request.auth` context is established (new
-login, or a business switch), ever serve a previously-cached document
-from the *prior* context before the SDK has re-validated against the
-new context's server-side permissions — or does every fresh
-listener/read always force a server round-trip that Firestore's own
-rules evaluation gates on the *current* `request.auth`, with the local
-cache only ever serving as a fallback for genuinely offline reads of
-documents the *current* context has itself already legitimately
-fetched? This is precisely Finding K's own named verification and is
-**not answered by this design** — it determines which of the two
-options below is strictly required versus merely an extra safety
-margin.
+**Confirmed findings (verified, no longer merely suspected):**
 
-**Recommended minimum design, regardless of that verification's
-outcome:**
+- A single shared `persistentLocalCache` per browser origin;
+  `persistentMultipleTabManager` deliberately shares it across tabs of
+  the same browser, which structurally means across different users
+  who log into that same browser in sequence.
+- `logout()` is exactly `signOut(auth)`, nothing else; `switchShop()`
+  never clears the cache.
+- **The named factual question is answered.** A freshly-attached
+  `onSnapshot` listener empirically **does** serve a previously-cached
+  document as its first emission (`snapshot.metadata.fromCache ===
+  true`), independent of the current session's identity, business
+  context, or authorization — confirmed by direct harness observation,
+  not inferred. There is no server round-trip gating this first
+  emission; it is served purely from the local IndexedDB store, keyed
+  by document path only.
+- **Correction to this document's own prior recommendation:**
+  `clearIndexedDbPersistence()` **cannot** be made to work merely by
+  unsubscribing listeners, as this section previously suggested.
+  Verified directly: it fails with `failed-precondition` unless
+  `terminate()` is called first, and `terminate()` itself does **not**
+  cancel pending writes — the SDK resumes sending them on the next
+  instance start. Any design relying on "unsubscribe, then clear" alone
+  is incorrect.
+- At least one confirmed, reachable, application-level exposure exists
+  today, independent of `firestore.rules`: `unsubWithdrawals`
+  (`AppContext.tsx`) attaches unconditionally for any signed-in
+  business member regardless of role, and its error callback never
+  resets state on a permission-denied response — meaning an
+  Owner-only, cached `withdrawals` record can be rendered to a
+  non-Owner session's UI purely from the local cache. The two Contagem
+  draft listeners already have a partial, precedented correction
+  pattern (owner-vs-staff branching that resets to a safe value on
+  error) — but even they only correct *after* one cache-first emission
+  has already rendered, not before.
 
-1. **On `logout()`:** unsubscribe every active `onSnapshot` listener
-   first (Firestore requires no active listeners for
-   `clearIndexedDbPersistence()` to succeed), then call
-   `clearIndexedDbPersistence()` (or `terminate()` followed by a fresh
-   `initializeFirestore()` on next login, if `clearIndexedDbPersistence`
-   proves impractical given `persistentMultipleTabManager`'s
-   multi-tab coordination — this exact trade-off is itself part of the
-   named factual verification above), then `signOut(auth)`. This
-   guarantees no document from the departing user's session persists
-   into a subsequent different user's session on the same browser,
-   independent of whatever the verification above concludes.
-2. **On `switchShop()`:** at minimum, rely on the fact that every read
-   remains gated by `isMemberOf(newBusinessId)` for any read that
-   genuinely reaches the server — the named risk is specifically a
-   cache-only read that never reaches the server. If the verification
-   in this section concludes that risk is real, the same clear-and-
-   reinitialize treatment as logout should be applied to business
-   switching as well; if the verification concludes fresh listeners
-   already force a server-validated round-trip, listener
-   re-subscription (which `switchShop` already does via the existing
-   `activeBusinessId` effect dependency) is sufficient on its own. This
-   design does not claim to already know which is true — it names the
-   exact experiment required and the two safe outcomes.
-3. **General principle, precedented by this codebase's own
-   `ReadbackUnconfirmedError` pattern:** never treat a cache-only read
-   as authoritative for anything security- or authority-sensitive
-   without a `getDocFromServer` confirmation at the exact moment a
-   context boundary (login, business switch, authority reassignment)
-   is crossed.
+**Finalized mechanism (Candidate F in the mechanism analysis —
+authorization-aware listener/rendering as the primary,
+connectivity-independent guarantee, with a narrow, flush-gated cache
+clear as opportunistic defense-in-depth):**
 
-**No unsupported claim is made here about which SDK behavior is
-already true** — per the task's own instruction, this is named as an
-open factual verification, not asserted either way.
+1. **Gate listener attachment on already-known role/business
+   authorization.** Never attach a listener for a collection the
+   current session's already-known client-side state (`isOwner`,
+   business membership) says it has no standing to read — extend this
+   check to every role-restricted collection, not only the two
+   Contagem drafts.
+2. **Fail-closed on a freshly-mounted listener's first cache-only
+   emission — this is now an explicit, binding requirement of this
+   design, not a preference:**
+
+   > **An authorization-unknown or potentially-stale state MUST be
+   > fail-closed, never fail-open.** If the current session's
+   > entitlement to a given piece of cached data has not yet been
+   > independently confirmed (either by the client's own already-known
+   > role/business state, or by a server-confirmed, non-cache
+   > emission), the application MUST render nothing for that data —
+   > never render the cached value "provisionally" while waiting for
+   > Firestore to confirm or deny it. Rendering first and correcting
+   > later (Tier 2's existing pattern) is insufficient and is
+   > explicitly superseded by this requirement: a fail-open window,
+   > however brief, is exactly the exposure both verification passes
+   > demonstrated.
+
+   Concretely: a freshly-attached listener's first emission is
+   committed to rendered state **only if** it is already
+   server-confirmed (`fromCache === false`), **or** the current
+   session's own already-known role/business state independently
+   establishes entitlement before the emission ever arrives. A
+   `fromCache === true` first emission for a collection the client
+   cannot yet independently vouch for is held back, not shown.
+3. **Extend the existing safe-reset pattern everywhere.** The two
+   Contagem drafts' "reset to a safe value on permission-denied"
+   branching is real, working precedent — apply the same pattern to
+   every remaining listener that currently lacks it (`withdrawals` and
+   others named in the mechanism analysis), as a backstop for the case
+   a fail-closed render was nonetheless somehow bypassed.
+4. **Server rules remain the authoritative backstop, unchanged.**
+   Nothing in this mechanism replaces or narrows any `isOwnerOf`/
+   `isMemberOf` check already in `firestore.rules` — this mechanism
+   closes the *application-layer* gap those rules were never able to
+   close by themselves (a rule cannot act on a read that never reaches
+   the server).
+5. **On `logout()` — corrected from this section's prior revision:**
+   first attempt the existing `switchShop()`-style flush (await
+   durable confirmation of any pending Contagem write via the same
+   readback-confirmed pattern already used elsewhere in this
+   codebase). **Only if that flush succeeds**, follow it with
+   `terminate()` → `clearIndexedDbPersistence()` → re-`initializeFirestore()`,
+   as a best-effort deep clean — never unconditionally, and never
+   while a pending write cannot yet be confirmed durable, since
+   `clearIndexedDbPersistence()` deletes the mutation queue along with
+   cached documents and an unconditional clear would risk exactly the
+   silent-loss outcome Decision 44 prohibits.
+6. **On `switchShop()`:** the same fail-closed listener-gating (items
+   1–2) applies identically to a same-user business switch — no
+   additional mechanism is required beyond what already governs
+   logout, since the risk (a stale cache-first emission for the
+   newly-active business/role combination) is the same risk, not a
+   different one.
+
+**Why this is sufficient without requiring the cache to be made
+physically empty:** the product requirement (Decision 51) is that an
+unauthorized user must never see, recover, or act on cached data
+*through SABUSH BPT* — not that no byte of a prior session's data may
+ever physically remain in browser storage under any circumstance. The
+fail-closed gate satisfies the former completely and is connectivity-
+independent (it never depends on reaching a server to deny an
+unauthorized render); the opportunistic flush-then-clear in item 5
+narrows, but does not eliminate, the residual physical-storage
+question, which the mechanism analysis document treats as an honestly-
+acknowledged, separate, lower-priority concern.
+
+**Why shared Contagem is fully preserved:** the gate in items 1–2 is a
+role **and** business-membership check, never an
+identity-of-previous-user check. Owner/Admin and the currently
+delegated Editor both pass it for their own shared business's
+Contagem, exactly as before — an already-live, already-rendering
+subscription is never subject to the "freshly mounted" fail-closed
+rule, since that rule only governs the moment of a *new* attach. No
+added latency or interruption is introduced to ongoing collaborative
+editing.
+
+**What remains open, explicitly separate from this mechanism (per the
+mechanism analysis document's own §F Verification Plan):**
+
+- Real-backend confirmation that the gating introduces no false
+  negative for a legitimately authorized co-editor.
+- Real-backend confirmation of the send-time identity question for a
+  stale pending write (§7/§10/§11 of this document already scope the
+  concurrency/revision mechanism that governs this — cache isolation
+  and pending-write authority are deliberately treated as **separate
+  problems**, per the mechanism analysis's own conclusion; this section
+  does not re-decide the concurrency mechanism, only the cache-render
+  boundary).
+- K6/K7 (delegated-Editor revocation while offline) — **not yet
+  testable**, since no delegated-Editor mechanism (§5 of this document)
+  is implemented yet to revoke.
 
 ---
 
@@ -824,17 +927,21 @@ expectation / Data-integrity expectation.**
     Firestore's own persistent local cache plus the existing flush
     discipline, unaffected by this design.
 12. **Device shutdown.** Same as crash.
-13. **Logout with pending writes.** Expected: existing pre-logout flush
-    discipline (if any) completes first; §12's cache-clear happens
-    only after listeners are torn down, never mid-write.
-14. **User A logout → User B login, same browser.** Expected, per §12:
-    no document from A's session is readable by B afterward — verified
-    against whichever of §12's two safe designs the named SDK
-    verification selects.
-15. **Business A → Business B, same user.** Expected, per §12: no
-    document from Business A's Contagem is readable once switched to
-    Business B, at minimum for any read that reaches the server; cache-
-    only leakage is exactly the item §12 names as needing verification.
+13. **Logout with pending writes.** Expected, per the finalized §12
+    mechanism: `logout()` first attempts the existing flush; the
+    opportunistic `terminate()`/`clearIndexedDbPersistence()` deep
+    clean runs only if that flush confirms durable, never
+    unconditionally and never mid-write.
+14. **User A logout → User B login, same browser.** Expected, per the
+    finalized §12 mechanism: B's own listeners are gated on B's
+    already-known role/business state and fail-closed on any
+    unconfirmed cache-first emission — B never renders A's data
+    regardless of whether the opportunistic cache clear in test 13 ran.
+15. **Business A → Business B, same user.** Expected, per the
+    finalized §12 mechanism: the same fail-closed listener gating
+    applies to a business switch — no document from Business A renders
+    under Business B's context regardless of what remains physically
+    cached.
 16. **Viewer attempts direct write.** Expected: rejected — fails
     `isActiveContagemEditor`. Security: enforced by rules, not UI.
     Data integrity: no partial state change.
@@ -897,10 +1004,19 @@ expectation / Data-integrity expectation.**
   to this design, and does not violate any accepted requirement (no
   durable observation is discarded — it is preserved as one side of a
   conflict if it genuinely disagrees with current state).
-- **Cache limitations:** §12's open factual question is the single
-  largest unresolved technical risk in this document — Decision 51's
-  guarantee cannot be fully closed out until it is answered
-  experimentally.
+- **Cache limitations:** §12's mechanism is now finalized (fail-closed
+  listener gating), but two residual risks remain, both named
+  explicitly rather than hidden: (1) the fail-closed gate relies on the
+  client's own already-known role/business state, which can briefly lag
+  a server-side change (e.g. the instant after a revocation, before the
+  client's own profile listener has delivered the update) — this
+  composes with, and is backstopped by, `firestore.rules`, not replaced
+  by it; (2) the gate prevents the *application* from ever rendering
+  unauthorized cached data, but does not itself make the underlying
+  IndexedDB store physically empty — a determined actor with direct
+  device/IndexedDB access, outside the application's own UI, is a
+  separate, lower-priority concern the opportunistic flush-then-clear
+  in §12 item 5 only partially narrows, never fully closes.
 - **Rules limitations:** the finalization precondition's `get()` on the
   meta document adds one read to every finalization attempt — trivial
   in cost, but worth naming as a rules-execution-count increase for
@@ -942,9 +1058,14 @@ expectation / Data-integrity expectation.**
    clear rejection message when `openConflictCount > 0`, and resolving
    §14's open delete-path question before shipping the narrowed
    `update` rule.
-9. **Cache isolation** — `logout()`/`switchShop()` changes, gated on
-   the §12 factual verification being completed first (this step
-   cannot be finalized before that verification, by construction).
+9. **Cache isolation** — the finalized §12 mechanism: authorization-
+   aware listener gating and fail-closed first-emission handling,
+   applied across every role-restricted listener, plus the flush-gated
+   opportunistic `logout()` deep-clean. No longer blocked on an open
+   factual question — the mechanism is selected; what remains is the
+   real-backend verification named in §12's own "what remains open"
+   list and the mechanism analysis document's §F, which should run
+   alongside this step, not block starting it.
 10. **Tests** — the full §18 failure-injection suite, run last against
     the fully wired system, though individual unit tests for the
     transaction logic and rules should accompany steps 3–4 as they are
@@ -986,14 +1107,17 @@ all of which are fully specified and independent of that outcome.
 
 ### Product Architect decision required
 
-- **§14 — Clear All Data vs. finalized-result immutability.** Does
-  Decision 55/Finding G's post-finalization immutability requirement
-  extend to the existing wholesale "Clear All Data" reset capability,
-  or is that capability governed by a separate, already-accepted
-  authorization this decision does not touch? The accepted decisions
-  do not currently answer this — it is a genuine gap between an
-  already-shipped capability and a newly-load-bearing requirement, not
-  something this design can responsibly decide unilaterally.
+- **§14 — Clear All Data vs. finalized-result immutability. RESOLVED
+  since this document was first written** — [Decision 56 — Finalized
+  Periodic Contagem Immutability & Clear-All Separation](../specs/stock-count-data-loss-resilience-decision-56-amendment.md)
+  (✅ Accepted, 4 September 2026) settled this at the
+  governance-requirement level: a finalized Periodic Contagem is
+  immutable through normal Contagem operations; Clear All Data's
+  existing behavior is not itself narrowed by that decision; any future
+  intentional-removal capability must be its own explicit, separately
+  governed operation. The technical enforcement mechanism for §14
+  remains open exactly as this document's §14 already states — Decision
+  56 resolved the product question, not the mechanism.
 
 ### Technical design choices (resolved above, restated for visibility)
 
@@ -1008,19 +1132,33 @@ all of which are fully specified and independent of that outcome.
   never a third typed value (§9) — a reading of Decision 55 §6 item 6's
   own explicit non-assumption about recounts, not a resolution of that
   open question, which remains genuinely open per that same item.
+- **§12's cache-isolation mechanism (authorization-aware listener
+  gating, fail-closed first-emission handling, flush-gated opportunistic
+  logout clean) — finalized**, per two Finding K verification passes and
+  a dedicated mechanism analysis. Does not require, and does not
+  constitute, a new Product Architect decision: Decision 51 already
+  states *what* must hold (business/session/cache isolation); this is
+  the *how*, entirely within Decision 51's existing governance
+  requirements.
 
 ### Factual verification required
 
-- **§12 — Firestore persistent-cache behavior across auth/business
-  context changes**, specifically: does a freshly-created listener/read
-  ever serve a document cached under a prior `request.auth` context
-  before a server round-trip re-validates it, or does every fresh
-  subscription force that validation first? This determines whether
-  `switchShop()` needs the same clear-and-reinitialize treatment as
-  `logout()`, or whether listener re-subscription alone already
-  suffices for the business-switch case. Must be verified against the
-  actual Firestore JS SDK documentation/behavior before implementation,
-  not assumed in either direction.
+- **§12's finalized mechanism still needs real-backend confirmation**
+  before implementation (not before this design, which is now
+  complete): that the fail-closed gate introduces no false negative for
+  a legitimately authorized co-editor's shared Contagem access; that a
+  privileged collection genuinely never renders to an unauthorized
+  session once the gate is implemented; and that the flush-then-clear
+  sequencing on `logout()` is safe under real network-flakiness
+  conditions, not merely the clean-success/clean-offline cases reasoned
+  about in the mechanism analysis. See the [Finding K mechanism
+  analysis](./finding-k-isolation-mechanism-analysis.md) §F for the
+  full verification plan.
+- **K6/K7 (delegated-Editor revocation while offline) — not yet
+  testable**, since no delegated-Editor mechanism (§5 of this document)
+  is implemented yet to revoke. Unaffected by §12's now-finalized
+  cache-isolation mechanism, which is written to extend to the
+  delegated-Editor case once it exists, without redesign.
 
 ---
 
@@ -1043,12 +1181,15 @@ all of which are fully specified and independent of that outcome.
   unresolved conflicts block finalization (§11,
   `openConflictCount == 0`); exactly one finalization (§11, existing
   deterministic-id mechanism, unmodified); no draft resurrection (§11,
-  §10 test 9); finalized result immutable (§14, with one open
-  reconciliation question flagged, not hidden).
+  §10 test 9); finalized result immutable (§14 — the Clear-All-Data
+  reconciliation question is now governance-resolved by Decision 56;
+  the technical enforcement mechanism remains open, per §14).
 - **Security:** business isolation (`isMemberOf`, unchanged); user/
-  session isolation (§12, pending factual verification); cache
-  isolation (§12, same); stale context cannot become authoritative
-  (§5/§10, live-read discipline throughout).
+  session isolation (§12, mechanism finalized — authorization-aware
+  fail-closed listener gating); cache isolation (§12, same; real-backend
+  verification still required before implementation, per §22); stale
+  context cannot become authoritative (§5/§10, live-read discipline
+  throughout).
 - **Recovery:** durable local observations survive interruptions (§18
   tests 10–13, existing Decision 38–41 mechanism unmodified); recovery
   never bypasses authority or revision checks (§10).
