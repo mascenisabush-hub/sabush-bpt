@@ -296,19 +296,19 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
   it('the live-adoption effect skips a row with an unsaved local edit — never overwrites in-progress typing', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
     assert.ok(idx >= 0, 'expected the Stage 2 live-adoption effect to exist');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 7000);
     assert.match(body, /if \(rowHasUnsavedLocalEditRef\.current\[rowKey\]\) continue;/);
   });
 
   it('the live-adoption effect skips a row in CONFLICT state — never picks an automatic winner (Decision 55)', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 7000);
     assert.match(body, /if \(item\.state === 'CONFLICT'\) continue;/);
   });
 
   it('a clean catalog row (no local edit, no conflict) is adopted from periodicStockDraftItemsByKey into catalogRows', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 7000);
     assert.match(body, /const productId = rowKey\.slice\('catalog:'\.length\);/);
     assert.match(body, /const existing = catalogRows\[productId\];/);
     assert.match(body, /nextCatalogRows\[productId\] = candidate;/);
@@ -316,7 +316,7 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
 
   it('a clean manual row (no local edit, no conflict) is adopted from periodicStockDraftItemsByKey into manualRows, existing indices only', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 7000);
     assert.match(body, /const index = parseInt\(rowKey\.slice\('manual:'\.length\), 10\);/);
     assert.match(body, /const existing = manualRows\[index\];/);
     assert.match(body, /if \(!existing\) continue; \/\/ scope: existing local rows only/);
@@ -325,14 +325,14 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
 
   it('adoption is skipped when the candidate is identical to the existing row (no needless re-render/churn)', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 7000);
     const occurrences = body.match(/JSON\.stringify\(workingRowToDraftItem\(existing\)\) === JSON\.stringify\(workingRowToDraftItem\(candidate\)\)/g);
     assert.ok(occurrences && occurrences.length === 2, 'expected the equality guard on both the catalog and manual branches');
   });
 
   it('the adoption effect never runs while the stale-draft resume banner is still pending an explicit operator decision', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 6000);
+    const body = viewSource.slice(idx, idx + 7000);
     assert.match(body, /if \(hasMeaningfulContent && !draftBannerDismissed\) return;/);
   });
 
@@ -366,5 +366,114 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     assert.match(rulesSource, /allow create, update: if isActiveContagemEditor\(businessId\)/);
     assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts\}/);
     assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+  });
+});
+
+// [Bug fix — Area A `rowHasUnsavedLocalEditRef` lifecycle, corrective
+// session] Root cause: a save rejected because the row is ALREADY
+// `state: 'CONFLICT'` throws a plain, non-Firestore-coded Error,
+// classified 'save-unknown' (never auto-retried), and — before this
+// fix — nothing ever cleared the dirty flag afterward, so the
+// live-adoption effect would refuse forever to adopt the row's eventual
+// authoritative resolution. Same source-level regression convention as
+// every describe block above.
+describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)', () => {
+  it('1. a save rejected because the row is already CONFLICT clears the dirty flag, checking the TRUE current remote state via a dedicated live ref', () => {
+    const idx = viewSource.indexOf("if (classification === 'transient') {");
+    assert.ok(idx >= 0, 'expected the classification branch to exist');
+    const body = viewSource.slice(idx, idx + 5200);
+    assert.match(
+      body,
+      /if \(\s*\n\s*\(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) &&\s*\n\s*latestPeriodicStockDraftItemsByKeyRef\.current\[rowKey\]\?\.state === 'CONFLICT'\s*\n\s*\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+    );
+  });
+
+  it('the freshness ref (latestPeriodicStockDraftItemsByKeyRef) is kept live, updated unconditionally every render — never a stale closure', () => {
+    assert.match(
+      viewSource,
+      /const latestPeriodicStockDraftItemsByKeyRef = useRef\(periodicStockDraftItemsByKey\);\s*\n\s*latestPeriodicStockDraftItemsByKeyRef\.current = periodicStockDraftItemsByKey;/
+    );
+  });
+
+  it('2. a conflicted row remains protected from adoption independently of the dirty flag — the two guards are separate, not merged', () => {
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 7000);
+    // Two distinct, sequential `continue` guards — not a single
+    // combined condition — is exactly what makes it safe to clear the
+    // dirty flag while a row is still CONFLICT: the state guard alone
+    // already fully protects it.
+    assert.match(body, /if \(rowHasUnsavedLocalEditRef\.current\[rowKey\]\) continue; \/\/ protect this operator's in-progress edit\s*\n\s*if \(item\.state === 'CONFLICT'\) continue;/);
+  });
+
+  it('3. once resolution flips the row back to ACCEPTED, the (now-clean) dirty flag no longer blocks the live-adoption effect from adopting the resolved value', () => {
+    // resolvePeriodicConflict (AppContext.tsx) is the sole path back to
+    // 'ACCEPTED', and it is untouched by this fix — asserted separately
+    // below (test 6). This test confirms the adoption effect itself has
+    // no OTHER gate besides the two already verified in test 2 above,
+    // so clearing the dirty flag is suffient, on its own, to let
+    // adoption resume once state genuinely becomes 'ACCEPTED' again.
+    const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
+    const body = viewSource.slice(idx, idx + 7000);
+    assert.match(body, /const candidate = draftItemToWorkingRow\(item\);/);
+    assert.doesNotMatch(body, /item\.state !== 'ACCEPTED'/); // no third gate was added
+  });
+
+  it('4. a genuinely new local edit after resolution re-establishes the dirty flag through the entirely unmodified scheduleRowDraftSave path', () => {
+    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string) => {');
+    const body = viewSource.slice(idx, idx + 2500);
+    // Unconditional set — scheduleRowDraftSave has no awareness of
+    // conflict/resolution history for a row; every genuine edit sets it.
+    assert.match(
+      body,
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[rowKey\] = true;\s*\n\s*\}/
+    );
+  });
+
+  it('5. the already-CONFLICT clear is reached only after belongsToCurrentGeneration() — a superseded (older) rejected attempt can never clear a newer edit\'s dirty flag', () => {
+    const catchIdx = viewSource.indexOf('.catch((err) => {');
+    assert.ok(catchIdx >= 0, 'expected the catch handler to exist');
+    const body = viewSource.slice(catchIdx, catchIdx + 200);
+    // The generation guard is the very first statement in the catch
+    // handler — every branch below it, including the new dirty-flag
+    // clear (test 1, ~5000 chars further into this same handler), is
+    // therefore already unreachable for a superseded attempt.
+    assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return; \/\/ superseded/);
+  });
+
+  it('6. existing same-row conflict detection/resolution (Decision 55) is untouched — runTransaction, CONFLICT creation, and resolvePeriodicConflict all unchanged', () => {
+    assert.match(contextSource, /await runTransaction\(db, async \(tx\) => \{/);
+    assert.match(contextSource, /if \(currentState === 'CONFLICT'\) \{\s*\n\s*throw new Error\(/);
+    assert.match(contextSource, /const resolvePeriodicConflict = async \(rowKey: string, resolvedValue: string\) => \{/);
+  });
+
+  it('7. the existing successful-save dirty-clearing path (ordinary ACCEPTED save) is unchanged', () => {
+    const thenIdx = viewSource.indexOf('.then((updatedAt) => {');
+    const body = viewSource.slice(thenIdx, thenIdx + 1500);
+    assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return; \/\/ superseded/);
+    assert.match(
+      body,
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+    );
+  });
+
+  it('8. business-switch/resume/discard reset behavior is unchanged by this fix', () => {
+    assert.match(
+      viewSource,
+      /hasSeenProductsRef\.current = false;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};/
+    );
+  });
+
+  it('does not modify firestore.rules, Decision 56 §7, or any Finding K listener gating', () => {
+    // Regression guard for the explicit "preserve existing semantics"
+    // boundary this corrective session was given.
+    assert.match(rulesSource, /allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+    const idx = contextSource.indexOf("'withdrawals'");
+    const nearby = contextSource.slice(Math.max(0, idx - 200), idx + 1600);
+    assert.match(nearby, /if \(isOwner\)/);
+  });
+
+  it('the fromCache reconnect nuance is documented as a deliberate, unaddressed limitation, not silently ignored', () => {
+    assert.match(viewSource, /Known, deliberately-unaddressed nuance/);
+    assert.match(viewSource, /fromCache/);
   });
 });

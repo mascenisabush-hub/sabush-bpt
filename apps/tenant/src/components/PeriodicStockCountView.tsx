@@ -919,6 +919,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // remote snapshot arrives), never during render, so no re-render
   // should be triggered merely by it changing.
   const rowHasUnsavedLocalEditRef = useRef<Record<string, boolean>>({});
+  // [Bug fix — Area A dirty-flag lifecycle, corrective session] A save
+  // attempt that is REJECTED specifically because the row is already
+  // `state: 'CONFLICT'` (savePeriodicStockDraftItem's own explicit
+  // guard, AppContext.tsx) throws a plain, non-Firestore-coded `Error`
+  // — classifyDraftSaveError has no other choice but 'save-unknown' for
+  // it, which is never auto-retried, so without this the dirty flag for
+  // that exact row would stay `true` forever: even after the conflict
+  // is later resolved through the existing conflict-resolution flow,
+  // the live-adoption effect below would keep refusing to adopt the
+  // now-authoritative resolved value, because the affected row's own
+  // per-render closure inside performRowSaveAttempt's `.catch` handler
+  // (declared far above this ref, but reading `periodicStockDraftItemsByKey`
+  // from the moment that specific attempt was scheduled) would
+  // otherwise be looking at STALE data by the time the rejection
+  // actually arrives. A dedicated "always current" ref — read only
+  // inside that `.catch` handler, at the moment of rejection — is what
+  // lets that handler check the row's TRUE current remote state rather
+  // than whatever it was when the save was first scheduled, mirroring
+  // `latestFlushArgs`'s own established "read live, never a captured
+  // value" pattern elsewhere in this file for the identical reason.
+  const latestPeriodicStockDraftItemsByKeyRef = useRef(periodicStockDraftItemsByKey);
+  latestPeriodicStockDraftItemsByKeyRef.current = periodicStockDraftItemsByKey;
   // [Feature — per-row Save + confirm, Owner-requested: validate each
   // product as it's entered instead of only discovering a mistake in
   // the final review, and be able to leave/return mid-count with
@@ -1342,6 +1364,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // state while the stale-draft resume banner is still pending the
   // operator's own explicit choice; that decision remains exactly as
   // un-automated as it always was.
+  //
+  // [Known, deliberately-unaddressed nuance — corrective session] On
+  // reconnect, Firestore commonly delivers a `fromCache: true` snapshot
+  // shortly before the server-confirmed one. This effect does not
+  // distinguish the two, so a non-dirty row can briefly display a
+  // stale (but never privileged, never locally-at-risk) value before
+  // self-correcting moments later when the fresh snapshot arrives.
+  // `snap.metadata.fromCache` is NOT currently captured or exposed
+  // anywhere in AppContext.tsx's periodic-draft-items listener —
+  // surfacing it would mean extending that context's public surface
+  // for this one narrow case, a broader architectural change than this
+  // benign, self-correcting flash justifies. Left exactly as-is,
+  // deliberately, not fixed here.
   useEffect(() => {
     if (!periodicStockDraftLoaded) return;
     if (periodicStockDraft) {
@@ -1782,6 +1817,64 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           return;
         }
         // 'save-unknown' — includes readback-unconfirmed results (§2).
+        //
+        // [Bug fix — Area A dirty-flag lifecycle, corrective session]
+        // One specific cause of 'save-unknown' is savePeriodicStockDraftItem's
+        // own explicit rejection of a write against a row that is
+        // ALREADY `state: 'CONFLICT'` (a plain Error, no Firestore
+        // code — see classifyDraftSaveError's own final fallback).
+        // Detected here by reading the row's own TRUE, current remote
+        // state at the moment of rejection (latestPeriodicStockDraftItemsByKeyRef,
+        // above — never the possibly-stale value closed over when this
+        // attempt was first scheduled). When that is genuinely the
+        // case, this row's dirty flag is cleared — safely, for three
+        // reasons together:
+        //   1. `belongsToCurrentGeneration()` (checked at the very top
+        //      of this `.catch`) already guarantees this is the MOST
+        //      RECENT attempt for this row — if the operator has typed
+        //      anything further since scheduling this one, a newer
+        //      generation already exists and this whole callback would
+        //      already have returned above, leaving that newer edit's
+        //      own dirty flag completely untouched. This is what
+        //      correctly distinguishes "a local edit attempted after
+        //      the row is already CONFLICT" (this exact case, cleared)
+        //      from "a genuinely newer local edit" (never reached by
+        //      this code at all).
+        //   2. While the row remains genuinely `CONFLICT`, the
+        //      live-adoption effect's OWN separate, independent
+        //      `item.state === 'CONFLICT'` guard already fully protects
+        //      it from any adoption regardless of this flag's value —
+        //      so clearing it here introduces no window where a
+        //      CONFLICT row's editable field could be silently
+        //      overwritten. The two guards are deliberately
+        //      independent, not layered as a single condition, exactly
+        //      so this is true.
+        //   3. Clearing happens ONLY as a direct, immediate reaction to
+        //      THIS attempt's own rejection — never merely because the
+        //      live-adoption effect happened to observe CONFLICT state
+        //      on some render. A blind "clear whenever CONFLICT is
+        //      observed" rule (considered and rejected) would incorrectly
+        //      clear the flag for an entirely different, still
+        //      in-progress edit that has not yet even attempted a save
+        //      — e.g. a second editor typing into this exact row while
+        //      it is already conflicted from a third party's write, who
+        //      has not yet been debounced into their own save attempt.
+        //      Tying the clear to an actual rejection of THIS
+        //      generation's own attempt avoids that race entirely.
+        // The net effect: once the conflict is later resolved through
+        // the existing, untouched resolvePeriodicConflict flow (state
+        // flips back to 'ACCEPTED' with the authoritative resolved
+        // value), this row is no longer treated as dirty, so the
+        // live-adoption effect can — and will — adopt that authoritative
+        // value the next time it runs. A genuinely NEW local edit made
+        // after that adoption re-establishes the dirty flag normally,
+        // through the entirely unmodified scheduleRowDraftSave path.
+        if (
+          (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) &&
+          latestPeriodicStockDraftItemsByKeyRef.current[rowKey]?.state === 'CONFLICT'
+        ) {
+          delete rowHasUnsavedLocalEditRef.current[rowKey];
+        }
         manualRetryEligibleRowsRef.current.add(rowKey);
         setDraftSaveState('save-unknown');
       })
