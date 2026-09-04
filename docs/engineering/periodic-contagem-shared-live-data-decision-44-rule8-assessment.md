@@ -99,6 +99,21 @@ and fixed in `firestore.rules`. **This is unrelated to, and does not
 move, Finding K**, which remains CONFIRMED FAIL — HIGH, untouched by
 this update. See §IV.O-l for the full scope and explicit limits of
 what this run does and does not establish.
+**Further updated 2026-09-04** to record §IV.O-m: the deliberate Rule 8
+reassessment of Finding K, performed after the mechanism was
+implemented (`d3b8d9b`, `aefaf65`), a real bug it exposed was fixed
+(`1bbdd89`), and two independent, byte-for-byte matching real
+Auth+Firestore-emulator verification runs were recorded (evidence
+artifact, addendum in `612e118`). **Finding K is reclassified from
+CONFIRMED FAIL — HIGH to PARTIALLY VERIFIED.** It is explicitly **not**
+reclassified to RESOLVED — no real browser/page lifecycle,
+`persistentMultipleTabManager` cross-tab coordination, or direct
+execution of `AppContext.tsx`/`PeriodicStockCountView.tsx` has been
+exercised. See §IV.O-m for the full reasoning, evidence considered, and
+exactly what remains open. This is a technical evidence/status update,
+not a Product Architect decision — Decision 51 continues to govern the
+underlying requirement unchanged, and no decision is reopened, amended,
+or created by this update.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -620,7 +635,7 @@ is assessment only, not a scale redesign.
 | I — Live transport | PASS | — | Requirement satisfied |
 | I — Safe live state adoption for dual Editors | FAIL | HIGH | Technical design required |
 | J — Multi-tab authority | FAIL/OPEN | CRITICAL | Technical design required, unaffected in root cause |
-| K — Shared-device/cache isolation | **CONFIRMED FAIL** (mechanism finalized, not yet implemented — see §IV.O-k) | HIGH | Empirically verified application-layer failure; implementation required, unaffected by Decision 46 |
+| K — Shared-device/cache isolation | **PARTIALLY VERIFIED (2026-09-04, §IV.O-m)** | HIGH | Mechanism implemented and confirmed working across two matching real Auth+Firestore-emulator runs, all twelve scenarios; real browser/multi-tab/production-React-file verification remains open — see §IV.O-m for exact scope |
 | L — Scale/performance | PASS | — | No new concern identified |
 | 44-S-A — Viewer authorization | **✅ RESOLVED at governance-requirement level (Decision 52, 2026-09-04)** | — | Technical enforcement/mechanism still required — see §IV.O-f |
 | 44-S-C — Finalizer authorization | **✅ RESOLVED at governance-requirement level (Decision 53, 2026-09-04) — Owner/Admin only** | — | Technical enforcement/mechanism still required — see §IV.O-g |
@@ -678,9 +693,15 @@ the authority-mechanism design work.
 
 **HIGH:**
 
-10. Shared-device/logout cache isolation — **CONFIRMED FAIL**, no
-    longer merely UNVERIFIED (§IV.K, updated §IV.O-k) — an
-    application-layer mechanism is designed but not yet implemented.
+10. Shared-device/logout cache isolation — **PARTIALLY VERIFIED**
+    (§IV.K, updated §IV.O-k, reassessed §IV.O-m) — the application-layer
+    mechanism is implemented and has twice matched, byte-for-byte, in
+    independent real Auth+Firestore-emulator verification across all
+    twelve named scenarios; real browser/page-lifecycle,
+    `persistentMultipleTabManager` cross-tab coordination, and direct
+    execution of the production React files remain unverified. Retained
+    in this HIGH list because those gaps are unclosed, not because the
+    mechanism is unconfirmed at the layer that was tested.
 11. Genuine row-level live-adoption for two simultaneous Editors is
     unbuilt beyond the existing whole-draft passive notice (§IV.I).
 12. "Prevent unauthorized users from editing" currently passes only by
@@ -1464,6 +1485,166 @@ NOT resolved, entirely unaffected by this update.**
 
 ---
 
+## IV.O-m — UPDATE (2026-09-04): Deliberate Rule 8 Reassessment of Finding K — CONFIRMED FAIL — HIGH → PARTIALLY VERIFIED
+
+**This is the deliberate, separate Rule 8 reassessment step that
+§IV.O-k and the Finding K real-environment verification evidence
+record (`docs/engineering/finding-k-real-environment-verification-evidence.md`)
+both explicitly deferred.** It is a technical evidence/status
+reassessment, not a Product Architect decision. Decision 51 continues
+to govern the underlying product requirement (shared-device/cache
+isolation) exactly as accepted; nothing about that requirement is
+reopened, reinterpreted, or expanded here. No new decision is created.
+
+**What changed since §IV.O-k (which set the CONFIRMED FAIL — HIGH
+classification):**
+
+1. The mechanism §IV.O-k described as "designed, not implemented" has
+   since been **implemented** — authorization-aware listener gating
+   applied to every identified Tier-1 (Owner/Admin-only) collection,
+   plus the flush-gated opportunistic `terminate()` →
+   `clearIndexedDbPersistence()` logout sequence — per the
+   Implementation Authorization (`67d60a7`), commits `d3b8d9b` and
+   `aefaf65`. Confirmed present in `apps/tenant/src/context/AppContext.tsx`
+   by direct inspection (e.g. the `isOwner`/`isActiveContagemEditor`
+   gating conditions guarding the Owner-only listeners).
+2. A real, previously-unknown bug the implementation itself introduced
+   (a `firestore.rules` wildcard silently bypassing the new periodic
+   row concurrency/conflict rules for the Owner) was found by actual
+   emulator execution, not code review, and fixed in `1bbdd89`.
+3. Two independent, real-environment verification runs — real Firebase
+   Auth Emulator, real Firestore Emulator, real distinct Auth UIDs per
+   role, the actual current `firestore.rules` loaded verbatim,
+   `firebase@12.16.0` (the pinned version) — were executed by the user
+   (this sandbox cannot reach emulator infrastructure) against the
+   implemented mechanism, recorded in
+   `docs/engineering/finding-k-real-environment-verification-evidence.md`
+   (commit `294eabd`, second-run addendum in `612e118`). Both runs
+   exited successfully (code 0) and produced **byte-for-byte identical**
+   results across all twelve scenarios, in the same order, with no
+   divergence.
+4. All eleven non-control scenarios (K1–K4, K5, K6/K7, the applied
+   fail-closed gate, the listener-error reset, legitimate shared
+   Contagem visibility, and both branches of logout cleanup)
+   **CONFIRMED PASS** on both runs. The twelfth scenario — the gate
+   *deliberately removed* — reproduced `CONFIRMED HIGH` identically on
+   both runs, exactly as required: this is the intentional control
+   condition proving the danger the gate protects against is real, not
+   a defect, and its non-flaky reproduction is itself part of the
+   evidence that the mechanism (not luck) accounts for the other eleven
+   passes.
+5. K6/K7 (delegated-Editor revocation while offline) received direct
+   evidence for the first time in this entire governance chain — this
+   scenario was previously untestable because no delegated-Editor
+   mechanism existed to revoke.
+
+**Evidence explicitly considered and weighed, not merely cited:**
+
+- The distinction between the mechanism's **presence** (confirmed by
+  the separate source-text pattern test,
+  `tests/periodic-contagem-shared-live-data-decisions-44-56.test.ts`,
+  40/40 pass) and its **behavior** (confirmed by the real-environment
+  harness) — the two are complementary, and both point the same
+  direction, but neither alone would be sufficient grounds for this
+  reclassification.
+- The rules-engine layer's own independent real-emulator confirmation
+  (§IV.O-l, 26/26 pass) — a different layer (server-side `firestore.rules`
+  enforcement) from Finding K's client-SDK/cache-layer concern, but
+  corroborating that this verification arc's general real-emulator
+  methodology has already caught one genuine bug by execution, which
+  weighs in favor of trusting a clean result rather than assuming it
+  is vacuous.
+- The harness's own explicitly documented substitution of
+  `persistentSingleTabManager` for production's
+  `persistentMultipleTabManager`, and its explicit non-execution of
+  `AppContext.tsx`/`PeriodicStockCountView.tsx` directly — these are
+  not new information, but they are the reason this reassessment does
+  **not** conclude RESOLVED.
+
+**Determination: Finding K moves from `CONFIRMED FAIL — HIGH` to
+`PARTIALLY VERIFIED`.** This is not an automatic or default choice —
+the evidence was weighed on its own terms:
+
+- Moving to **RESOLVED** would be unsupported: no real browser or page
+  lifecycle was ever exercised (no real `reload()`, no real
+  `pagehide`/`visibilitychange` timing), production's real
+  `persistentMultipleTabManager` cross-tab coordination was never
+  tested (only its Node-compatible single-tab substitute), and the
+  harness's gating logic — while using real SDK calls against a real
+  backend — is a hand-written re-implementation of the pattern, not an
+  execution of the actual `AppContext.tsx`/`PeriodicStockCountView.tsx`
+  call sites. Any of these, if it concealed a real defect, would not
+  have been caught by what was actually run.
+- Remaining at **CONFIRMED FAIL — HIGH** would now be unsupported by
+  the record: that classification reflected a mechanism that was
+  "designed, not implemented" (§IV.O-k's own words) with zero
+  real-backend evidence. Neither is true any longer — the mechanism is
+  implemented, and it has now been exercised twice, independently, in
+  a real (non-browser) environment, against every named scenario,
+  including a control condition that continues to fail exactly where
+  it is supposed to. Treating this as unchanged from §IV.O-k would
+  ignore evidence the record itself established.
+- **PARTIALLY VERIFIED** is the classification the evidence actually
+  supports: real, repeated, non-vacuous confirmation of the mechanism's
+  behavior at the layer that was actually tested (client SDK + real
+  cache + real Auth + real `firestore.rules`, server round-trip
+  included), with specifically-named, unclosed gaps at the layer that
+  was not (real browser/tab lifecycle, the production React files
+  themselves).
+
+**What is now verified, precisely:**
+
+- The fail-closed gating pattern (attach nothing / render nothing for
+  an authorization-unknown or potentially-stale session; never render
+  a cache-first emission provisionally) behaves correctly against a
+  real backend, for a Tier-1 collection, across a same-device identity
+  switch, an offline business-context switch, and a same-user
+  multi-business scenario.
+- The flush-gated logout cleanup sequence (`terminate()` →
+  `clearIndexedDbPersistence()`, skipped when a flush has not
+  succeeded) behaves correctly in both its safe and unsafe branches
+  against a real cache and a real pending write.
+- Legitimate shared-Contagem visibility (Owner/Admin and a currently
+  delegated Editor both seeing the same live observation) is not
+  incorrectly suppressed by the isolation mechanism — confirmed
+  distinct from the leakage the mechanism guards against.
+- The mechanism composes correctly with the real, current
+  `contagemAuthority`/`firestore.rules` delegated-Editor rules, not
+  merely a mocked stand-in for them.
+
+**What remains genuinely unverified — preserved, not narrowed:**
+
+- No real browser or page lifecycle: no real `reload()`, no real
+  `pagehide`/`visibilitychange` timing, no genuine cross-tab lock
+  coordination.
+- Production's actual `persistentMultipleTabManager` has never been
+  exercised — every run used the Node-compatible
+  `persistentSingleTabManager` substitute.
+- The harness does not import or execute `AppContext.tsx` or
+  `PeriodicStockCountView.tsx` directly; a defect specific to an actual
+  call site in those files, not shared with the harness's
+  re-implementation of the pattern, would not be caught by this
+  evidence.
+- Only two independent runs have been performed. Both matched exactly,
+  which is meaningful, but it is not the same depth of repetition a
+  long-running production system would eventually accumulate.
+
+**This update does not move the Rule 8 verdict.** The verdict remains
+**READY AFTER DECISIONS** — this reassessment changes confidence in a
+technical finding's status, not whether any Product Architect
+governance question remains open (none does; see §IV.R). It also does
+**not** authorize implementation of anything not already authorized by
+`67d60a7`, does not start Stage 2, and does not touch Decision 56 §7.
+
+**Consequential updates elsewhere in this document, made for internal
+consistency only (no other finding's status is touched):** §IV.N's
+table row for Finding K, §IV.P item 10, and §IV.R's Finding K
+discussion are updated below to reflect this reclassification. Every
+other row, item, and finding in §IV.N/§IV.P/§IV.R is left exactly as
+it was — this reassessment is scoped to Finding K alone.
+
+---
+
 ## IV.Q — Decisions Still Required, Separated by Type (updated this session)
 
 **Product Architect decisions:**
@@ -1533,9 +1714,10 @@ NOT resolved, entirely unaffected by this update.**
   mechanism remains open — Finding G's own underlying `firestore.rules`
   text is completely unmodified** — folded into the technical design
   items immediately below. **Unrelated to, and does not narrow or
-  resolve, Finding K** (shared-device/cache isolation, still
-  UNVERIFIED), which the Technical Design for Decisions 44–55 named
-  separately and which remains open on its own, independent track.
+  resolve, Finding K** (shared-device/cache isolation, now PARTIALLY
+  VERIFIED per §IV.O-m), which the Technical Design for Decisions 44–55
+  named separately and which remains open on its own, independent
+  track.
 - **Eligible-delegate pool — ✅ RESOLVED — GOVERNANCE REQUIREMENTS, at
   the Product Architect governance-requirement level, by Decision 54,
   2026-09-04.** See §IV.O-h. Any currently business-authorized user, in
@@ -1578,21 +1760,25 @@ NOT resolved, entirely unaffected by this update.**
   may attempt vs. whether more than one may succeed), both still
   required. **Not resolved — a governance brief is not a design.**
 - **44-F mechanism** (shared-device/cache isolation mechanism) — **the
-  mechanism is now finalized, per §IV.O-k**: authorization-aware
-  listener attachment, a binding fail-closed requirement for any
-  authorization-unknown or potentially-stale cache-first emission, and
-  a flush-gated opportunistic cache clean on logout, all recorded in
-  the Technical Design for Decisions 44–55 §12 and the companion
-  Finding K mechanism analysis document. Must still satisfy Decision
-  51's full governance requirements (business isolation; user/session
-  isolation; logout; business switching; offline-state/pending-write
-  handling across context changes; no discarding of durable historical
-  observations; no new authority model; the six-point cross-context-
-  leakage prohibition) — the mechanism is designed to satisfy all of
-  them, but **implementation has not occurred**, and the real-backend
-  verification named in §IV.O-k's own "what remains open" list has not
-  yet been performed. **Not resolved — a finalized design is not an
-  implementation, and Finding K remains FAIL, not PASS.**
+  mechanism was finalized in design per §IV.O-k and has since been
+  implemented and reassessed to PARTIALLY VERIFIED per §IV.O-m**:
+  authorization-aware listener attachment, a binding fail-closed
+  requirement for any authorization-unknown or potentially-stale
+  cache-first emission, and a flush-gated opportunistic cache clean on
+  logout, all recorded in the Technical Design for Decisions 44–55 §12
+  and the companion Finding K mechanism analysis document, now built
+  and twice independently real-environment-verified (byte-for-byte
+  matching, all twelve named scenarios). Decision 51's governance
+  requirements (business isolation; user/session isolation; logout;
+  business switching; offline-state/pending-write handling across
+  context changes; no discarding of durable historical observations; no
+  new authority model; the six-point cross-context-leakage prohibition)
+  are addressed by the tested scenarios at the client-SDK/real-backend
+  layer. **Not fully resolved — real browser/page-lifecycle behavior,
+  production's `persistentMultipleTabManager` cross-tab coordination,
+  and direct execution of the production React files remain
+  unverified, per §IV.O-m — Finding K is PARTIALLY VERIFIED, not
+  RESOLVED.**
 - **44-S-A mechanism** (Viewer-eligibility and Viewer-restriction
   enforcement mechanism) — still open; must satisfy Decision 52's
   governance requirements (eligibility limited to business-authorized
@@ -1685,14 +1871,21 @@ particular remains FAIL — CRITICAL**, now fully scoped at the product
 level by Decisions 47 and 55, but with no technical mechanism selected.
 **Finding G (§IV.G) likewise remains FAIL — CRITICAL**, now fully
 scoped at the product level by Decision 56, but with its own
-`firestore.rules` text completely unmodified. **Finding K (§IV.K) is
-reclassified from UNVERIFIED to CONFIRMED FAIL — HIGH, per §IV.O-k** —
-two empirical verification passes and a mechanism-analysis pass have
-confirmed the failure and finalized a technical mechanism (recorded in
-the Technical Design for Decisions 44–55 §12), but **implementation has
-not occurred**; Finding K remains exactly as much an open CRITICAL/HIGH
-blocker to Implementation Authorization as before, now with more
-evidence and a selected mechanism instead of an open question.
+`firestore.rules` text completely unmodified. **Finding K (§IV.K) was
+reclassified from UNVERIFIED to CONFIRMED FAIL — HIGH per §IV.O-k, and
+has since been further reassessed to PARTIALLY VERIFIED per §IV.O-m
+(2026-09-04)** — the mechanism §IV.O-k found designed-but-unimplemented
+has since been implemented and has twice matched, byte-for-byte, across
+independent real Auth+Firestore-emulator verification runs covering all
+twelve named scenarios, including the intentional control condition.
+This is **not** a RESOLVED classification: real browser/page-lifecycle
+behavior, production's `persistentMultipleTabManager` cross-tab
+coordination, and direct execution of `AppContext.tsx`/
+`PeriodicStockCountView.tsx` remain unverified, exactly as named in
+§IV.O-m. Finding K remains an open HIGH item requiring further
+verification before Implementation Authorization scope could be
+considered complete on this point — see §IV.O-m for the full reasoning
+and residual gaps.
 
 **Why this reclassification does not move the verdict tier.** READY
 AFTER DECISIONS has never meant "no technical work remains" — every
@@ -1749,9 +1942,14 @@ begin, updated:**
    2026-09-04.** **44-F technical mechanism — FINALIZED IN DESIGN, per
    §IV.O-k (2026-09-04): authorization-aware listener gating, binding
    fail-closed handling of authorization-unknown/stale cache-first
-   emissions, flush-gated opportunistic logout clean. Implementation
-   and real-backend verification still open** — Finding K is CONFIRMED
-   FAIL, not PASS, until built and verified.
+   emissions, flush-gated opportunistic logout clean.** *(Update,
+   reassessed §IV.O-m, 2026-09-04): the mechanism has since been
+   implemented and independently real-environment-verified twice,
+   byte-for-byte matching, across all twelve named scenarios — Finding
+   K moves from CONFIRMED FAIL to* **PARTIALLY VERIFIED**, *not
+   RESOLVED: real browser/page-lifecycle and production
+   `persistentMultipleTabManager` cross-tab behavior remain untested.
+   See §IV.O-m.)*
 6. ~~44-S-A governance requirements~~ **✅ RESOLVED — Decision 52,
    2026-09-04.** **44-S-A technical enforcement/mechanism (Viewer
    eligibility and Viewer restriction) — still open**, now informed by
@@ -1785,8 +1983,9 @@ begin, updated:**
     mechanism; its own underlying `firestore.rules` text is completely
     unmodified by this decision. **Unaffected: Finding K (§IV.K)**,
     which the Technical Design for Decisions 44–55 named as a separate,
-    unrelated factual verification, remains UNVERIFIED — HIGH,
-    untouched by Decision 56.
+    unrelated factual verification, untouched by Decision 56 — its
+    status has since moved (via §IV.O-k, then §IV.O-m) to PARTIALLY
+    VERIFIED, for reasons entirely independent of Decision 56.
 11. **The new delegated-Editor `firestore.rules` branch** and the
    **same-row conflict-detection/preservation/resolution mechanism** and
    the **finalization-time "no unresolved conflicts" precondition
@@ -1827,13 +2026,15 @@ question, distinct from and not resolved by Decision 54.
 > finalized-immutability-versus-Clear-All-Data question the Technical
 > Design for Decisions 44–55 itself surfaced is resolved at the
 > governance-requirement level by Decision 56. **Separately, and not a
-> governance resolution: Finding K (§IV.K) has been empirically
-> verified this session — reclassified from UNVERIFIED to CONFIRMED
-> FAIL, with its technical mechanism finalized in design (§IV.O-k) but
-> not implemented.** Item 7 (verdict) is unchanged in tier. Items 1–5
-> and 8 are otherwise still accurate. See §IV.O-a, §IV.O-b, §IV.O-c,
-> §IV.O-d, §IV.O-e, §IV.O-f, §IV.O-g, §IV.O-h, §IV.O-i, §IV.O-j, and
-> §IV.O-k for the current, authoritative
+> governance resolution: Finding K (§IV.K) has since been empirically
+> verified, implemented, and reassessed — reclassified from UNVERIFIED
+> to CONFIRMED FAIL — HIGH (§IV.O-k), then, following implementation
+> and two independent matching real-environment verification runs, to
+> PARTIALLY VERIFIED (§IV.O-m, 2026-09-04).** Item 7 (verdict) is
+> unchanged in tier. Items 1–5 and 8 are otherwise still accurate. See
+> §IV.O-a, §IV.O-b, §IV.O-c, §IV.O-d, §IV.O-e, §IV.O-f, §IV.O-g,
+> §IV.O-h, §IV.O-i, §IV.O-j, §IV.O-k, §IV.O-l, and §IV.O-m for the
+> current, authoritative
 > statements.
 
 1. **File(s) changed:** exactly one —
