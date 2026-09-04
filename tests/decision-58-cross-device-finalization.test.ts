@@ -166,16 +166,14 @@ describe('Decision 58 — Test Group F: stale interruption retry executing after
       rev: 1, state: 'ACCEPTED', lastWriterUid: OWNER_UID, lastWriterRole: 'owner', lastWriteAt: new Date().toISOString(),
     });
 
-    const stockCountSnap = await testEnv.withSecurityRulesDisabled((ctx) =>
-      getDoc(doc(ctx.firestore(), ...STOCK_COUNTS_COLLECTION, 'stockcount-periodic-sub-001'))
-    );
+    const stockCountSnap = await getDoc(doc(db, ...STOCK_COUNTS_COLLECTION, 'stockcount-periodic-sub-001'));
     assert.deepEqual(
       (stockCountSnap.data() as any).items,
       [{ productId: 'p1', quantity: '12' }],
       'Finalized stockCounts must be byte-for-byte unchanged by Device A\'s stale retry — that retry never targets stockCounts under any code path.'
     );
 
-    const metaSnapAfter = await testEnv.withSecurityRulesDisabled((ctx) => getDoc(doc(ctx.firestore(), ...META_PATH)));
+    const metaSnapAfter = await getDoc(doc(db, ...META_PATH));
     assert.equal(
       metaSnapAfter.exists(),
       false,
