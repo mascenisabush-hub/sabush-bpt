@@ -12,7 +12,7 @@
 // (commit 67d60a7) added.
 //
 // HOW TO RUN:
-//   npm run test:periodic-contagem-shared-live-data-decisions-44-56:emulator
+//   npm run test:periodic-contagem-44-56-rules:emulator
 // which uses `firebase-tools emulators:exec` to start the Firestore
 // emulator, run this suite against it, then tear the emulator down
 // automatically. Requires a one-time emulator binary download from
@@ -23,12 +23,19 @@
 // (npm, github, pypi, crates.io, ubuntu archives) and does not include
 // Google's emulator-binary infrastructure (confirmed empirically this
 // session: `firebase emulators:exec` fails with `download failed, status
-// 403: Host not in allowlist: storage.googleapis.com`). It has been
-// typechecked (`tsc --noEmit`) but NOT run end-to-end. A clean run of the
-// `:emulator` script above — not this file's mere existence or a passing
-// typecheck — is the actual evidence needed before Finding K, or any of
-// Decisions 47/50/55/56's technical mechanisms, can be reclassified as
-// server-side verified in the Rule 8 Assessment.
+// 403: Host not in allowlist: storage.googleapis.com`).
+//
+// ACTUALLY RUN, 2026-09-04 (user's own machine, Windows/PowerShell, per
+// this repository's own README-style setup instructions): first run
+// found a real bug (a Firestore Security Rules additive-OR interaction
+// let the wildcard stockCountDrafts/{draftId} block's unconditional
+// isOwnerOf write grant silently bypass the new rev/conflict rules for
+// the Owner specifically) — fixed in the same commit that added the two
+// regression tests reproducing it (see firestore.rules' own comment at
+// `draftId != 'periodic'`). Re-run after the fix: 26 tests, 26 pass, 0
+// fail. This is genuine server-side verification, not reasoning about
+// rule text — see the Rule 8 Assessment's own record of this result for
+// the authoritative statement of what it does and does not establish.
 
 import { readFileSync } from 'node:fs';
 import { before, after, beforeEach, describe, it } from 'node:test';

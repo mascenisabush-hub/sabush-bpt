@@ -88,6 +88,17 @@ mechanism is designed, not implemented, and no code, `firestore.rules`,
 schema, UI, or test file has been changed to produce this update. The
 Rule 8 verdict remains READY AFTER DECISIONS — see §IV.O-k and §IV.R
 for the full reasoning.
+**Further updated 2026-09-04** to record §IV.O-l: the first real,
+Firestore-emulator-based server-side verification in this entire
+governance chain (run by the user, on their own machine, since this
+sandbox cannot reach the emulator infrastructure) — 26/26 tests pass
+for the Finding C mechanism (same-row conflict detection/preservation/
+resolution) and the Decision 56 `update`-only immutability narrowing,
+after a real wildcard-bypass bug the emulator itself caught was found
+and fixed in `firestore.rules`. **This is unrelated to, and does not
+move, Finding K**, which remains CONFIRMED FAIL — HIGH, untouched by
+this update. See §IV.O-l for the full scope and explicit limits of
+what this run does and does not establish.
 No part authorizes implementation, amends the Implementation Plan, or
 constitutes an Implementation Authorization. No code, `firestore.rules`,
 schema, UI, or test file was modified to produce any part of this
@@ -598,13 +609,13 @@ is assessment only, not a scale redesign.
 | B — Enforce at most one delegated Editor | FAIL | CRITICAL | Not satisfied — technical design required |
 | B — Prevent unauthorized users from editing | PARTIAL (accidental) | HIGH | Must be re-verified once delegated-Editor access is built |
 | B — Enforce immediate loss on reassignment | FAIL | CRITICAL | Not satisfied — technical design required |
-| C — Same-row concurrent write handling | FAIL | **CRITICAL (reinstated)** | Product-level requirement + technical design required |
-| C — Data model distinguishes observations | FAIL | CRITICAL | Schema addition required (writer id, per-row version) |
+| C — Same-row concurrent write handling | **MECHANISM IMPLEMENTED, EMULATOR-VERIFIED (2026-09-04, §IV.O-l)** | CRITICAL (reinstated) | rev/state/conflict three-branch rule; 26/26 targeted emulator tests pass, including the wildcard-bypass bug found and fixed — see §IV.O-l for exact scope/limits |
+| C — Data model distinguishes observations | **IMPLEMENTED** | — | `rev`, `lastWriterUid/Role/At`, `conflict.observationA/B` fields shipped, per Technical Design §8 |
 | D — Stale former-(delegated)-Editor protection | FAIL | CRITICAL | Technical design required |
-| E — Finalization uniqueness (44-D) | FAIL | CRITICAL | Technical design required, unaffected by Decision 46 |
+| E — Finalization uniqueness (44-D) | FAIL | CRITICAL | Technical design required, unaffected by Decision 46. The NEW `openConflictCount` precondition clause on this same rule has been emulator-verified (§IV.O-l); the exactly-once/idempotent-retry mechanism itself has not been separately re-tested this session |
 | F — Reassignment lifecycle | OPEN (unimplemented) | CRITICAL | Technical design required |
 | F — Draft resurrection | FAIL | CRITICAL | Technical design required, unaffected |
-| G — Post-finalization immutability | FAIL | CRITICAL | Technical design required, unaffected |
+| G — Post-finalization immutability | **MECHANISM IMPLEMENTED, EMULATOR-VERIFIED (2026-09-04, §IV.O-l)** | CRITICAL (Decision 56 scope only) | `update: if false` confirmed rejected for the Owner; `delete` confirmed still available (Decision 56 §7 untouched) — 2/2 targeted tests pass
 | H — Offline/reconnect safety | FAIL | CRITICAL | Technical design required |
 | I — Live transport | PASS | — | Requirement satisfied |
 | I — Safe live state adoption for dual Editors | FAIL | HIGH | Technical design required |
@@ -1347,6 +1358,109 @@ every prior update in this ledger has done:**
 authorize implementation.** See §IV.R for the full verdict reasoning,
 including why a CONFIRMED-but-unimplemented technical finding does not,
 by itself, change the READY AFTER DECISIONS tier.
+
+---
+
+## IV.O-l — UPDATE (2026-09-04): First Real Server-Side Verification — Finding C Mechanism and Decision 56 Immutability Emulator-Tested, a Real Bug Found and Fixed
+
+**This is a technical implementation/verification event, not a governance
+decision, and not a Finding K update.** It records the first genuine
+server-side (Firestore emulator) test run in the entire Decisions 44–56
+chain — every prior verification in this document (including §IV.O-k's
+own Finding K passes) ran against an isolated, out-of-repository harness
+with no reachable backend. This one ran against a real `firestore.rules`
+evaluation engine, on the user's own machine, using the
+`tests/periodic-contagem-shared-live-data-decisions-44-56-emulator.test.ts`
+suite added alongside the Decisions 44–56 implementation.
+
+**A real bug was found on the first run, not merely a gap in coverage.**
+Firestore Security Rules are additive across every `match` block that
+matches a given path — the pre-existing wildcard
+`stockCountDrafts/{draftId}` block's unconditional `isOwnerOf &&
+subscriptionAllowsNewRecords` write grant also matched
+`stockCountDrafts/periodic` (since `'periodic'` satisfies the
+`{draftId}` wildcard too), which meant an Owner's write to the periodic
+draft or its rows always passed that old, unconstrained rule regardless
+of what the new rev/state/conflict three-branch rule required —
+completely bypassing Decision 47/55's no-blind-last-write-wins guarantee
+for the Owner specifically. The delegated Editor was unaffected (they
+never satisfy `isOwnerOf`). Confirmed by two failing tests
+(`assertFails` expected, `assertSucceeds` observed): a stale write and
+an arbitrary-value conflict "resolution" both incorrectly succeeded for
+the Owner. **Fixed** by adding `draftId != 'periodic'` to the wildcard's
+two write grants only (read and delete were correctly left unexcluded —
+those are widened, not narrowed, for `'periodic'`, so the additive OR
+semantics already worked as intended there).
+
+**After the fix, re-run result: 26 tests, 26 pass, 0 fail.**
+
+**What this run verified, concretely, against a real rules engine:**
+
+- `contagemAuthority/current`: Owner can assign an eligible (same-
+  business) candidate; cannot assign an ineligible one (Decision 54);
+  the document is never deletable, only explicitly cleared (Decision
+  48/49); a Viewer can read it; tenant isolation holds (a different
+  business's Owner cannot write it).
+- `stockCountDrafts/periodic`: the delegated Editor gets real read+write;
+  an authorized non-delegate (Viewer) gets read but not write; a former
+  delegate loses write access immediately upon reassignment (Decision
+  49); `stockCountDrafts/initial`'s own wildcard-governed behavior is
+  unaffected (regression-checked).
+- `items/{rowKey}`: correct `rev+1` succeeds; a stale write is rejected
+  (the bug above, now fixed and regression-tested); a genuine collision
+  correctly transitions to `CONFLICT` with both observations preserved;
+  resolution succeeds only when the new value matches one of the two
+  preserved observations, and is rejected for any third, freshly-typed
+  value; a Viewer cannot write a row at all.
+- `stockCounts` create: blocked while `openConflictCount > 0`; allowed
+  at `0` or when no draft exists at all.
+- `stockCounts` update/delete: `update` rejected unconditionally, even
+  for the Owner; `delete` still succeeds for the Owner — confirming
+  Decision 56 §7 remains untouched by this implementation.
+
+**What this run did NOT verify — explicitly, not by omission:**
+
+- **Finding K (§IV.K) is entirely untouched by this run.** This suite
+  tests `firestore.rules` write/read enforcement; it does not exercise
+  the Firestore JS SDK's local persistence layer, `onSnapshot`
+  cache-first emission behavior, or the fail-closed listener-gating
+  mechanism at all. Finding K's own remaining verification (named in
+  §IV.O-k) is a categorically different test — this run supplies zero
+  evidence toward it either way.
+- **Not the full Technical Design §18 24-scenario failure-injection
+  suite** — 26 targeted tests covering the core mechanism, not
+  exhaustive coverage of every named scenario (e.g. offline/reconnect
+  timing, multi-tab, browser-crash durability are untested here — those
+  are client-side/SDK behaviors this rules-only suite cannot exercise
+  regardless).
+- **Decision 50's exactly-once/idempotent-retry mechanism itself** — the
+  new `openConflictCount` clause on the `stockCounts` create rule was
+  tested; the pre-existing deterministic-id retry mechanism it composes
+  with was not separately re-tested this session.
+- **K6/K7 (delegated-Editor revocation while offline)** — still not
+  testable; no such scenario was attempted here either.
+- **Stage 2's per-row live-adoption UI mechanism** — not a rules
+  concern; untouched by this run.
+
+**Classification, per §IV.N's updated table rows:** Finding C moves from
+FAIL/CRITICAL (mechanism unbuilt) to **mechanism implemented and
+emulator-verified for the tested scenarios above** — this is
+substantially stronger evidence than any prior technical finding in
+this document has had, but it is **not** the same as exhaustive
+verification against every scenario Decision 55 describes, and Finding
+C is not marked fully RESOLVED on this basis alone. The corresponding
+slice of Finding G (the Decision 56 `update`-only narrowing
+specifically) is likewise implemented and emulator-verified; Finding G's
+own broader post-finalization-immutability scope (beyond what Decision
+56 itself governs) is unaffected.
+
+**This update does not move the Rule 8 verdict, and does not authorize
+implementation beyond what `67d60a7` already authorized** — it records
+that a portion of already-authorized implementation work has now
+received real, not merely reasoned-through, technical verification, and
+that the verification process caught and the implementation fixed a
+genuine bug in the process. **Finding K remains CONFIRMED FAIL — HIGH,
+NOT resolved, entirely unaffected by this update.**
 
 ---
 
