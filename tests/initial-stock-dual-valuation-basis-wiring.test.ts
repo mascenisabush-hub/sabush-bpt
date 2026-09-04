@@ -96,15 +96,22 @@ describe('AppContext.tsx — immutability enforced by the pre-existing, uncondit
     // assertion used to match verbatim was deliberately split by
     // Decision 56's authorized implementation: `update` is now refused
     // unconditionally for EVERY type (including 'initial', unchanged
-    // from before), and `delete` keeps the exact prior
-    // type-conditioned text, byte-for-byte. The semantic property this
-    // test actually verifies — 'initial' is refused for both update
-    // and delete, unconditionally — is unchanged; only the rule's own
-    // text shape changed, and only for a reason unrelated to this
-    // feature. Both new lines are asserted below in place of the one
-    // old combined line.
+    // from before).
+    //
+    // [Decision 57 — Intentional Removal of Finalized Periodic
+    // Contagem History, Option B; Implementation Authorization
+    // (decision-57-clear-all-data-finalized-history-implementation-
+    // authorization.md) §3 item 1] `delete` was subsequently ALSO
+    // narrowed to unconditional `false` for every type — 'initial' was
+    // already refused before this change (via the type-conditioned
+    // text this assertion previously matched); it remains refused now,
+    // for the identical reason, unconditionally. The semantic property
+    // this test actually verifies — 'initial' is refused for both
+    // update and delete, unconditionally — is unchanged; only the
+    // rule's own text shape changed again, and only for a reason
+    // unrelated to this feature.
     assert.match(rulesSource, /allow update: if false;/);
-    assert.match(rulesSource, /allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+    assert.match(rulesSource, /allow delete: if false;/);
   });
 
   it('this feature introduced zero changes to firestore.rules (source-level proof, not just a claim)', () => {

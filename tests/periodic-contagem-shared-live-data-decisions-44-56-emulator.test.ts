@@ -446,7 +446,7 @@ describe('stockCounts create — openConflictCount precondition (Decision 55)', 
   });
 });
 
-describe('stockCounts update/delete — Decision 56 immutability (update-only narrowing)', () => {
+describe('stockCounts update/delete — Decision 56/57 immutability (update AND delete both narrowed)', () => {
   it('a finalized non-initial stockCounts document CANNOT be updated by anyone, even the Owner', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'sc1'), {
@@ -457,13 +457,43 @@ describe('stockCounts update/delete — Decision 56 immutability (update-only na
     await assertFails(updateDoc(doc(db, 'businesses', BIZ, 'stockCounts', 'sc1'), { label: 'edited' }));
   });
 
-  it('REGRESSION — Decision 56 §7 NOT decided here: delete remains available to the Owner exactly as before (Clear All Data dependency)', async () => {
+  it('Decision 57 (Option B): a finalized non-initial stockCounts document CANNOT be deleted by anyone, even the Owner — ordinary client deletion of finalized Periodic Contagem now fails', async () => {
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
       await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'sc2'), {
         type: 'periodic', date: '2026-09-04', items: [],
       });
     });
     const db = ctxFor(OWNER_UID).firestore();
-    await assertSucceeds(deleteDoc(doc(db, 'businesses', BIZ, 'stockCounts', 'sc2')));
+    await assertFails(deleteDoc(doc(db, 'businesses', BIZ, 'stockCounts', 'sc2')));
+  });
+
+  it('Decision 57: a Staff member (non-Owner) also cannot delete a finalized stockCounts document — no authorization was expanded for anyone', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'sc2b'), {
+        type: 'monthly', date: '2026-09-04', items: [],
+      });
+    });
+    const staffDb = ctxFor(OTHER_STAFF_UID).firestore();
+    await assertFails(deleteDoc(doc(staffDb, 'businesses', BIZ, 'stockCounts', 'sc2b')));
+  });
+
+  it('Decision 57: the initial StockCount remains equally protected — delete: if false already covered it, and remains unaffected by this change', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'initial'), {
+        type: 'initial', date: '2026-09-04', items: [],
+      });
+    });
+    const db = ctxFor(OWNER_UID).firestore();
+    await assertFails(deleteDoc(doc(db, 'businesses', BIZ, 'stockCounts', 'initial')));
+  });
+
+  it('tenant isolation: a user from a DIFFERENT business still cannot delete this business\'s stockCounts document either (unaffected by the Decision 57 narrowing)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'stockCounts', 'sc2c'), {
+        type: 'weekly', date: '2026-09-04', items: [],
+      });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'stockCounts', 'sc2c')));
   });
 });

@@ -738,7 +738,25 @@ describe('stockCounts', () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { id: 'sc-periodic', type: 'monthly', countedAt: new Date().toISOString() }));
     await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { countedAt: new Date().toISOString() }));
-    await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic')));
+    // [Decision 57 — Intentional Removal of Finalized Periodic Contagem
+    // History, Option B; Implementation Authorization (decision-57-
+    // clear-all-data-finalized-history-implementation-authorization.md)
+    // §3 item 1] `delete` is now unconditionally `false` for every
+    // stockCounts type — this assertion previously read
+    // assertSucceeds, matching this test's own pre-Decision-57 title
+    // ("Owner can update/delete a non-initial count"); the `delete`
+    // half of that title is now factually wrong, updated below to the
+    // now-correct assertFails. NOTE, left deliberately unfixed here:
+    // the `updateDoc` assertSucceeds two lines above already
+    // contradicts `allow update: if false;` (unconditional since
+    // Decision 56, commit d3b8d9b) and was already stale before this
+    // change — that is a separate, pre-existing test-maintenance gap
+    // unrelated to Decision 57, not fixed by this edit; see Rule 8
+    // §IV.O-n §H and the Decision 57 Implementation Authorization §4.
+    // This whole file requires a real Firestore emulator to execute at
+    // all and could not be run in this environment to confirm the
+    // edit below passes.
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic')));
 
     // [Capital Inicial Retirement — Implementation Authorization
     // Increment 2 — RECLASSIFIED: UPDATE. This test's own subject is

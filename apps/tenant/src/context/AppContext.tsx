@@ -8018,31 +8018,30 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const e of expenses) {
       await deleteDoc(doc(db, 'businesses', businessId, 'expenses', e.id));
     }
-    // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 3]
-    // The 'initial' StockCount is now refused by firestore.rules for
-    // update/delete unconditionally, Owner included ("no exceptions",
-    // Architecture 8.6). This loop is sequential, unguarded deleteDoc
-    // calls — the same shape the Closing Integrity Amendment already
-    // found and fixed for Closings (comment below), so an attempted
-    // delete of the 'initial' document here would throw and silently
-    // abort before reaching withdrawals/timelineEvents. Skipping it
-    // explicitly is the identical fix applied there: "Clear All Data"
-    // now no longer removes the Initial Capital baseline either — a
-    // real, deliberate, and directly-intended consequence of the
-    // already-approved immutability rule (not a new decision made here),
-    // flagged plainly rather than left to be discovered as a runtime
-    // error.
-    for (const s of stockCounts) {
-      if (s.type === 'initial') continue;
-      await deleteDoc(doc(db, 'businesses', businessId, 'stockCounts', s.id));
-    }
+    // [Decision 57 — Intentional Removal of Finalized Periodic Contagem
+    // History, Option B; Rule 8 §IV.O-n; Implementation Plan §14;
+    // Implementation Authorization (decision-57-clear-all-data-
+    // finalized-history-implementation-authorization.md) §3 item 2]
+    // "Clear All Data" no longer deletes any `stockCounts` document at
+    // all — previously this loop deleted every non-'initial' (i.e.
+    // finalized Periodic Contagem) document while skipping 'initial'
+    // only; `firestore.rules` now denies `delete` on `stockCounts`
+    // unconditionally (same commit), so this loop would fail on its
+    // very first non-'initial' iteration if left in place. Removed
+    // entirely rather than re-guarded, matching the identical pattern
+    // already established for Closings immediately below (Closing
+    // Integrity Amendment) and for Initial Stock Valuation History two
+    // comments down — a fully-immutable record type is not iterated at
+    // all here, not looped-and-caught. Any future, separately governed
+    // intentional-removal capability (left entirely undecided by
+    // Decision 57 §4/§7) is not this function's concern.
     // [Initial Stock Valuation History] Same "no exceptions" immutability
     // tier as the 'initial' StockCount itself (firestore.rules: allow
     // delete: if false, unconditionally) — "Clear All Data" does not
-    // attempt to remove these either, for the identical reason the loop
-    // above skips the 'initial' StockCount. Not iterated at all, matching
-    // that established pattern rather than looping and swallowing a
-    // guaranteed per-item failure.
+    // attempt to remove these either, for the same reason `stockCounts`
+    // itself is no longer touched above (Decision 57). Not iterated at
+    // all, matching that established pattern rather than looping and
+    // swallowing a guaranteed per-item failure.
     // The draft (if any) is not itself Initial Capital, so it is still
     // fully cleared by "Clear All Data" — no rule prevents this.
     await deleteDoc(doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial')).catch(() => {

@@ -780,19 +780,31 @@ service cloud.firestore {
         // operations, and grep-confirmed zero call sites in
         // AppContext.tsx ever call `updateDoc` on `stockCounts` for any
         // type, so this closes a real, previously-open gap (Rule 8
-        // Finding G) with no known functional regression. The `delete`
-        // half is DELIBERATELY, EXPLICITLY left unchanged — the
-        // existing "Clear All Data" wholesale-reset capability depends
-        // on it (AppContext.tsx's own stockCounts-deletion loop), and
-        // Decision 56 §7 explicitly does NOT decide whether that
-        // capability's own delete behavior must itself be reshaped.
-        // Narrowing `delete` here would silently decide that open
-        // Product Architect question inside a rules file — exactly
-        // what Decision 56 §7 and the Implementation Authorization §4
-        // both forbid. Do not narrow `delete` without a separate,
-        // explicit governance decision resolving §7 first.
+        // Finding G) with no known functional regression.
+        //
+        // [Decision 57 — Intentional Removal of Finalized Periodic
+        // Contagem History, Option B; Rule 8 §IV.O-n; Implementation
+        // Plan §14; Implementation Authorization (decision-57-clear-
+        // all-data-finalized-history-implementation-authorization.md)
+        // §3 item 1] The `delete` half — previously DELIBERATELY,
+        // EXPLICITLY left unchanged pending exactly this governance
+        // decision (see the superseded reasoning this replaces, in
+        // git history) — is now ALSO narrowed to `if false`,
+        // unconditionally, the identical treatment `update` already
+        // has. Decision 56 §7 left open whether "Clear All Data"'s own
+        // reliance on this permissive `delete` rule (via
+        // AppContext.tsx's own stockCounts-deletion loop) must be
+        // reshaped; Decision 57 answers that question (Option B):
+        // Clear-All-Data must not delete finalized Periodic Contagem
+        // history, and any future intentional-removal capability must
+        // be its own separately governed operation, not this rule.
+        // AppContext.tsx's `clearAllData()` no longer attempts this
+        // deletion at all (its own loop removed, same commit). This
+        // does NOT resolve, decide, or foreclose that future
+        // separately-governed operation — it only closes the ordinary,
+        // unreviewed path this rule previously left open.
         allow update: if false;
-        allow delete: if isOwnerOf(businessId) && resource.data.get('type', null) != 'initial';
+        allow delete: if false;
       }
 
       // [Business Worth Evolution — Implementation Authorization,

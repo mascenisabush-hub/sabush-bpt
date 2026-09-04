@@ -256,12 +256,55 @@ describe('Decisions 44-56 — firestore.rules', () => {
     );
   });
 
-  it('Decision 56: stockCounts update is unconditionally false; delete is UNCHANGED (Decision 56 §7 not decided here)', () => {
-    assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+  it('Decision 57: stockCounts update AND delete are both unconditionally false (Option B implemented — Clear-All-Data may no longer delete finalized Periodic Contagem)', () => {
+    assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if false;/);
   });
 
-  it('does not introduce a combined update-and-delete grant for non-initial stockCounts (the old, now-narrowed shape)', () => {
+  it('does not introduce a combined update-and-delete grant for non-initial stockCounts (the old, pre-Decision-56 shape)', () => {
     assert.doesNotMatch(rulesSource, /allow update, delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+  });
+
+  it('does not reintroduce the pre-Decision-57 conditional delete permission (the old, now-narrowed shape)', () => {
+    assert.doesNotMatch(rulesSource, /allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+  });
+});
+
+// [Decision 57 — Intentional Removal of Finalized Periodic Contagem
+// History, Option B; Rule 8 §IV.O-n; Implementation Plan §14;
+// Implementation Authorization (decision-57-clear-all-data-finalized-
+// history-implementation-authorization.md)] Same source-level
+// regression technique as every describe block in this file — proves
+// clearAllData() no longer attempts to delete stockCounts at all, and
+// that every unrelated category it deletes is unchanged.
+describe('Decision 57 — Clear-All-Data no longer deletes stockCounts (Option B)', () => {
+  const fnMatch = contextSource.match(/const clearAllData = async \(\) => \{[\s\S]*?\n  \};/);
+
+  it('clearAllData exists and was found for the assertions below', () => {
+    assert.ok(fnMatch, 'expected to find clearAllData');
+  });
+
+  it('clearAllData() contains no stockCounts deletion call of any kind', () => {
+    assert.doesNotMatch(fnMatch![0], /deleteDoc\([^)]*'stockCounts'/);
+    assert.doesNotMatch(fnMatch![0], /for \(const \w+ of stockCounts\)/);
+  });
+
+  it('clearAllData() does not reference the stockCounts collection at all anymore', () => {
+    assert.doesNotMatch(fnMatch![0], /'stockCounts'/);
+  });
+
+  it('every unrelated Clear-All-Data deletion category is unchanged — products, batches, purchaseBatches, quebras, expenses, withdrawals, timelineEvents, and the initial stockCountDrafts working draft', () => {
+    assert.match(fnMatch![0], /for \(const p of products\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'products', p\.id\)\);/);
+    assert.match(fnMatch![0], /for \(const b of batches\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'batches', b\.id\)\);/);
+    assert.match(fnMatch![0], /for \(const pb of purchaseBatches\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'purchaseBatches', pb\.id\)\);/);
+    assert.match(fnMatch![0], /for \(const q of quebras\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'quebras', q\.id\)\);/);
+    assert.match(fnMatch![0], /for \(const e of expenses\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'expenses', e\.id\)\);/);
+    assert.match(fnMatch![0], /for \(const w of withdrawals\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'withdrawals', w\.id\)\);/);
+    assert.match(fnMatch![0], /for \(const t of timelineEvents\) \{\s*\n\s*await deleteDoc\(doc\(db, 'businesses', businessId, 'timelineEvents', t\.id\)\);/);
+    assert.match(fnMatch![0], /await deleteDoc\(doc\(db, 'businesses', businessId, 'stockCountDrafts', 'initial'\)\)\.catch/);
+  });
+
+  it('firestore.rules independently guarantees the same outcome even if a future edit reintroduced the loop — delete is unconditionally false, not merely absent from this one call site', () => {
+    assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if false;/);
   });
 });
 
@@ -446,7 +489,7 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     // make — re-checked here to confirm Stage 2 did not regress them.
     assert.match(rulesSource, /allow create, update: if isActiveContagemEditor\(businessId\)/);
     assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts\}/);
-    assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+    assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if false;/);
   });
 });
 
@@ -544,10 +587,15 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     );
   });
 
-  it('does not modify firestore.rules, Decision 56 §7, or any Finding K listener gating', () => {
+  it('does not modify Decision 56 §7\'s (now Decision 57-superseded) delete path incidentally, or any Finding K listener gating — the delete narrowing below is the explicitly authorized Decision 57 Option B change, not an accidental one', () => {
     // Regression guard for the explicit "preserve existing semantics"
-    // boundary this corrective session was given.
-    assert.match(rulesSource, /allow delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/);
+    // boundary this corrective session was given. Updated for Decision
+    // 57 (Option B): `delete` is now unconditionally `false`, exactly
+    // as Implementation Authorization (decision-57-clear-all-data-
+    // finalized-history-implementation-authorization.md) §3 item 1
+    // authorizes — this is the one intentional, authorized exception
+    // to "nothing else changed" this test otherwise guards.
+    assert.match(rulesSource, /allow delete: if false;/);
     const idx = contextSource.indexOf("'withdrawals'");
     const nearby = contextSource.slice(Math.max(0, idx - 200), idx + 1600);
     assert.match(nearby, /if \(isOwner\)/);
