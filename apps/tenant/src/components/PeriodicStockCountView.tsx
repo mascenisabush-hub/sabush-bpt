@@ -3183,11 +3183,47 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const handleRenameManualGroup = (groupKey: string, newName: string) => {
     if (!groupKey) return; // a blank/solo group has no shared name to rename — its own input already handles this via updateManualRow
     submissionIdRef.current = null;
+    // [Bug fix — renamed-manual-product input appeared to "freeze"/
+    // revert mid-typing] Collected BEFORE the rename below, from the
+    // CURRENT manualRows — these are the row indices this rename
+    // actually touches, keyed exactly like scheduleRowDraftSave's own
+    // `manual:${index}` convention.
+    const affectedIndices = manualRows.reduce<number[]>((acc, row, index) => {
+      if (productKeyFor(row.productName) === groupKey) acc.push(index);
+      return acc;
+    }, []);
     const nextManualRows = manualRows.map((row) => (productKeyFor(row.productName) === groupKey ? { ...row, productName: newName } : row));
     setManualRows(nextManualRows);
     // [Decision 39a] A bulk rename spans potentially several manual
-    // rows at once, not one row's own edit — scheduled under '__meta__'.
+    // rows at once, not one row's own edit — scheduled under '__meta__'
+    // in addition to (never instead of) each row's own key below.
     scheduleRowDraftSave('__meta__');
+    // [Bug fix — the actual cause of the "freeze"] '__meta__' alone
+    // does two things wrong for a rename: it never re-arms
+    // rowHasUnsavedLocalEditRef for the row(s) actually being renamed
+    // (only a 'catalog:'/'manual:' key does that — see
+    // scheduleRowDraftSave's own guard), and it never schedules the
+    // per-row Firestore write that actually persists the new name (the
+    // productName field lives on each row's OWN document in the
+    // `items` subcollection, never on the meta document '__meta__'
+    // saves). Once this row's very FIRST keystroke's own save (via
+    // updateManualRow, which correctly uses `manual:${index}`)
+    // completed, its protection was released as designed for a normal
+    // successful save — but every keystroke after that point, once the
+    // name became non-blank and routed through THIS function instead,
+    // never re-armed that protection or scheduled a real save for the
+    // row again. The live-adoption effect (Implementation Authorization
+    // §2 item 1) would then see an unprotected row whose local value
+    // no longer matched the last thing actually saved, and adopt the
+    // stale saved value back over whatever was typed since — which is
+    // exactly what "the input won't accept typing past a couple of
+    // characters" looks like from the operator's side. Scheduling each
+    // affected row's own key here re-arms its protection and schedules
+    // its real save on every keystroke, exactly like every other
+    // per-row edit in this file already does.
+    for (const index of affectedIndices) {
+      scheduleRowDraftSave(`manual:${index}`);
+    }
   };
 
   const handleTypeChange = (nextType: StockCountType) => {
