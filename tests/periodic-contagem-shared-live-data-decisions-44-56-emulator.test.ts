@@ -243,6 +243,39 @@ describe('stockCountDrafts/periodic — dual-editor + Viewer read', () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(getDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial')));
   });
+  it('REGRESSION FIX (found by this exact emulator run): the wildcard stockCountDrafts/{draftId} block no longer bypasses the periodic three-branch rule for the Owner', async () => {
+    // Before the fix: the wildcard's unconditional isOwnerOf write
+    // grant also matched draftId=='periodic', so an Owner's stale
+    // write (or an arbitrary-value "resolution") always succeeded
+    // regardless of what the more-specific block required. Fixed by
+    // adding `draftId != 'periodic'` to the wildcard's own two write
+    // grants (meta doc and items/{rowKey}) — see firestore.rules'
+    // own comment at that exact line for the full explanation.
+    await seedRow('catalog:pWildcard', {
+      productName: 'Produto Wildcard', quantity: '10', unit: 'un', costPrice: '5', sellingPrice: '8',
+      rev: 5, state: 'ACCEPTED', lastWriterUid: OWNER_UID, lastWriterRole: 'owner', lastWriteAt: new Date().toISOString(),
+    });
+    const db = ctxFor(OWNER_UID).firestore();
+    // A stale rev (not 5+1=6) must now be rejected for the Owner too.
+    await assertFails(
+      setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic', 'items', 'catalog:pWildcard'), {
+        productName: 'Produto Wildcard', quantity: '99', unit: 'un', costPrice: '5', sellingPrice: '8',
+        rev: 1, state: 'ACCEPTED', lastWriterUid: OWNER_UID, lastWriterRole: 'owner', lastWriteAt: new Date().toISOString(),
+      })
+    );
+  });
+
+  it('the exclusion does not affect stockCountDrafts/initial — Owner can still write it exactly as before', async () => {
+    const db = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(
+      setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { type: 'initial' })
+    );
+    await assertSucceeds(
+      setDoc(doc(db, 'businesses', BIZ, 'stockCountDrafts', 'initial', 'items', 'row1'), {
+        productName: 'X', quantity: '1', unit: 'un', costPrice: '1', sellingPrice: '1',
+      })
+    );
+  });
 });
 
 // ---------------------------------------------------------------------
