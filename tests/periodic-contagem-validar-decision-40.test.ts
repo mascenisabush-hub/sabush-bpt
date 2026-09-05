@@ -200,7 +200,32 @@ describe('Guardar -> Validar rename is complete in the visible UI (Decision 40 F
   });
 
   it('the status-dot tooltip text is "Validado"/"Ainda não validado", not the old "Guardado"/"Ainda não guardado"', () => {
-    assert.doesNotMatch(source, /Guardado|Ainda não guardado/);
+    // [Bug fix — test over-scoped past its own stated intent; Product
+    // Architect authorization for narrowly-scoped test adjustment]
+    // This assertion's own name is specifically about the status-dot
+    // TOOLTIP text — but its implementation swept the entire file for
+    // the word "Guardado" anywhere at all, which collides with two
+    // genuinely different, still-accurate uses that have nothing to do
+    // with the per-row validation tooltip this test exists to protect:
+    // a PDF-export KPI label counting persisted draft items
+    // ("Produtos Guardados" — how many products are SAVED to the
+    // draft, a persistence count, not a validation status), and a
+    // data-safety warning banner telling the operator not to close the
+    // tab before seeing the autosave confirmation text ("Guardado" —
+    // referring to `draftSaveState === 'saved'`'s own "Rascunho
+    // guardado" status message, an entirely different concept from
+    // per-row Validar). Narrowed to the two literal tooltip `title`
+    // attributes this test's own name is actually about — both
+    // re-verified directly against source to confirm the underlying
+    // property (Decision 40's rename) genuinely still holds; this
+    // narrowing changes no production code and weakens no real
+    // guarantee, since neither excluded string was ever the tooltip
+    // Decision 40 renamed.
+    const tooltipOccurrences = source.match(/title=\{isConfirmed \? '(.+?)' : '(.+?)'\}/g) ?? [];
+    assert.equal(tooltipOccurrences.length, 2, 'expected exactly the catalog and manual row status-dot tooltips');
+    for (const occurrence of tooltipOccurrences) {
+      assert.doesNotMatch(occurrence, /Guardado|Ainda não guardado/, `status-dot tooltip must not use the old Guardado wording: ${occurrence}`);
+    }
     assert.match(source, /'Validado' : 'Ainda não validado'/);
   });
 });
@@ -391,15 +416,45 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
     assert.match(body, /performRowSaveAttempt\(rowKey, generation, 1\);/);
   });
 
-  it('flushPeriodicDraftNow (interruption/SPA-unmount flush) is equally generic — no validated-specific branch exists there either', () => {
+  it('flushPeriodicDraftNow (interruption/SPA-unmount flush) is equally generic — no validated-specific branch exists there either, and every at-risk row — one never yet attempted AND one with a genuine unsaved local edit — still reaches the same governed save path', () => {
+    // [Decision 58 — flush-mechanism rewrite; mechanical regression
+    // fix, Product Architect authorization for narrowly-scoped test
+    // adjustment] This test's own two prior assertions
+    // (`latestFlushArgs.current` / `workingRowToDraftItem(row)` present
+    // directly in this function's body) described the PRE-Decision-58
+    // shape, where flushPeriodicDraftNow built each draft item inline
+    // itself. Decision 58 rewrote it to route every row through
+    // performRowSaveAttempt instead (the same, single mechanism
+    // scheduleRowDraftSave's own ordinary debounce already uses,
+    // verified immediately above) — this function's own job narrowed
+    // to correctly IDENTIFYING every row that still needs a save
+    // attempt, not building the write payload itself anymore.
+    // Re-verified directly against the current implementation, not
+    // assumed: performRowSaveAttempt's own body (checked in the
+    // sibling test immediately above, which still passes unchanged)
+    // is what now reads `latestFlushArgs.current` and calls
+    // `workingRowToDraftItem(row)` — the actual write-construction
+    // logic still exists, just one call frame further in, behind the
+    // SAME governed function every other save path already shares. No
+    // separate, weaker, or parallel persistence path was introduced by
+    // Decision 58, and none is introduced by this test update.
     const body = extractFunctionBody(source, 'const flushPeriodicDraftNow = () => {');
-    assert.doesNotMatch(body, /validated/);
-    assert.match(body, /latestFlushArgs\.current/);
-    // [Bug fix — per-product independent draft persistence] Was
-    // `.map(workingRowToDraftItem)` over one combined array — now
-    // builds a rowKey-keyed map, calling the SAME conversion function
-    // per row, for flushPeriodicStockDraftRows' batch write.
-    assert.match(body, /workingRowToDraftItem\(row\)/);
+    assert.doesNotMatch(body, /validated/, 'flushPeriodicDraftNow must remain generic — no field-specific branch, including none for validated.');
+    // T0: a row still on its very first, never-yet-attempted ordinary
+    // debounce timer when the tab closes/unmounts — its timer is
+    // cancelled and immediately re-attempted here rather than lost.
+    assert.match(body, /notYetAttemptedKeys/, 'must still capture rows that have never had a save attempt yet');
+    // T100: a row with a genuine unsaved local edit (already attempted
+    // at least once, or edited again since) — covered independently of
+    // the above, so neither category can silently shadow the other.
+    assert.match(body, /dirtyRowKeys/, 'must still capture rows with an unsaved local edit, independently of notYetAttemptedKeys');
+    // Both categories are unioned (not just one or the other) before
+    // being iterated — the actual completeness property this test's
+    // own T0-T100 name refers to.
+    assert.match(body, /new Set<string>\(\[\.\.\.notYetAttemptedKeys, \.\.\.dirtyRowKeys\]\)/, 'both at-risk categories must be combined into one set, not handled as alternatives');
+    // The one governed save mechanism — never a second, parallel write
+    // path invented for the flush case specifically.
+    assert.match(body, /performRowSaveAttempt\(rowKey, generation, 1\)/, 'every candidate row must still go through the same performRowSaveAttempt every other save path uses');
   });
 
   it('updateCatalogRow/updateManualRow (the write path Validar/Editar/Corrigir all use to set validated) schedule their row\'s own existing timer key — no new timer key scheme was introduced for validated', () => {
