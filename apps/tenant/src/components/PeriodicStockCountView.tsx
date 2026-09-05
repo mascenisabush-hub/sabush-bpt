@@ -1042,24 +1042,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // scope/non-goals, immediately above.
   const [reopenedValidatedCatalogRowIds, setReopenedValidatedCatalogRowIds] = useState<string[] | null>(null);
   const [reopenedValidatedManualRowIndices, setReopenedValidatedManualRowIndices] = useState<number[] | null>(null);
-  // [Sorting — Authorization §8] UI-only, ephemeral, never persisted
-  // (same discipline as activeWorkspaceKey/activeNewManualRowIndex,
-  // above) — a pure display-order preference for the persistent
-  // counted list, not a fact about the count itself. Uses only data
-  // already computed for every validated row (productName,
-  // sellingValue) — no new field, no timestamp, no schema change.
+  // [Sorting — Authorization §8] Ephemeral React state — the actual
+  // durability behavior (persisting across leave/return) is added by
+  // a small effect further below, per Decision 60 §13.B; this
+  // `useState` itself remains the ordinary React display-state
+  // mechanism, not a source of truth for anything about the count.
   // [Periodic Contagem Entry-Order Sort Mode — Implementation
   // Authorization §1 item 7] Superseding the prior note above (which
   // read: "Catalog-originated entry-time sorting is deliberately NOT
   // one of the four modes... no genuine per-row timestamp... none is
   // invented here") — that was correct for a wall-clock timestamp,
-  // which is still never introduced. `'entry-order'` instead sorts by
-  // `StockCountWorkingRow.entrySequence`, an in-session integer
-  // counter (see that field's own comment, stockCount.ts), not a
-  // timestamp — an intentional, signed amendment to that prior
-  // decision, not a silent reversal of it.
+  // which is still never introduced FOR `'entry-order'` itself. That
+  // mode still sorts by `StockCountWorkingRow.entrySequence`, an
+  // in-session integer counter (see that field's own comment,
+  // stockCount.ts), not a timestamp — an intentional, signed amendment
+  // to that prior decision, not a silent reversal of it.
+  // [Entry-Order Sort Mode Amendment §6; Decision 60 §5/§13.C] `'time-
+  // desc'`/`'time-asc'` are the two NEW, separate, timestamp-based
+  // modes that amendment authorizes — sorting by each entry's own
+  // `lastWriteAt` (an authoritative, server-set timestamp already in
+  // the schema), never by `entrySequence` and never conflated with
+  // it. `'entry-order'` itself is UNCHANGED by this addition — it
+  // remains available, still ordinal, still not time-based.
   const [validatedSortMode, setValidatedSortMode] = useState<
-    'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order'
+    'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc'
   >('name-asc');
   // [Picker — table view with sorting] UI-only, ephemeral, never
   // persisted — same discipline as validatedSortMode immediately
@@ -1068,12 +1074,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the identical `sortByValidatedMode` sorting function (declared
   // further below, hoisted — a plain function declaration, so it is
   // callable from this earlier point in the component body) — no
-  // second sorting implementation.
+  // second sorting implementation. Deliberately NOT extended with the
+  // two new timestamp modes: a not-yet-active picker entry has no
+  // `lastWriteAt` of its own to sort by in the first place.
   const [pickerSortMode, setPickerSortMode] = useState<'name-asc' | 'name-desc' | 'value-desc' | 'value-asc'>(
     'name-asc'
   );
   const [error, setError] = useState<string | null>(null);
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision 55
+
   // §5 items 4, 6, 9] Local, UI-only tracking of an in-flight
   // resolution attempt — never persisted, never itself an
   // authorization check (resolvePeriodicConflict/firestore.rules
@@ -3688,7 +3697,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     getName: (item: T) => string,
     getValue: (item: T) => number,
     mode: typeof validatedSortMode,
-    getSequence?: (item: T) => number | undefined
+    getSequence?: (item: T) => number | undefined,
+    getTimestamp?: (item: T) => string | undefined
   ): T[] {
     const sorted = [...items];
     sorted.sort((a, b) => {
@@ -3716,6 +3726,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           if (seqA === undefined) return 1;
           if (seqB === undefined) return -1;
           if (seqA !== seqB) return seqA - seqB;
+          return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
+        }
+        // [Entry-Order Sort Mode Amendment §6; Decision 60 §5/§13.C]
+        // Genuine wall-clock ordering by each row's own authoritative
+        // `lastWriteAt` — never `entrySequence`, never conflated with
+        // it (see that mode's own case, immediately above, which this
+        // one deliberately does not touch or share logic with beyond
+        // the same missing-value/tie-break shape). A row with no
+        // `lastWriteAt` yet (never saved this session) sorts last
+        // regardless of direction — mirroring 'entry-order's own
+        // missing-sequence convention exactly, for the same reason: an
+        // unsaved row has no genuine position in either time order.
+        case 'time-desc':
+        case 'time-asc': {
+          const tsA = getTimestamp?.(a);
+          const tsB = getTimestamp?.(b);
+          if (tsA === undefined && tsB === undefined) {
+            return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
+          }
+          if (tsA === undefined) return 1;
+          if (tsB === undefined) return -1;
+          const msA = new Date(tsA).getTime();
+          const msB = new Date(tsB).getTime();
+          if (msA !== msB) return mode === 'time-desc' ? msB - msA : msA - msB;
           return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
         }
       }
@@ -3899,6 +3933,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validated: row.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
+        // [Decision 60 §6/§13.C; Entry-Order Sort Mode Amendment §6]
+        // The authoritative, server-assigned timestamp of this row's
+        // latest genuine write — already present in the schema
+        // (AppContext.tsx's savePeriodicStockDraftItem sets it on
+        // every accepted write, including the same-writer branch
+        // above). Read directly from the live, authoritative
+        // `periodicStockDraftItemsByKey` map — never from local
+        // component state, which carries no timestamp of its own —
+        // so a row never yet saved this session (no entry in that map
+        // yet) simply has `lastWriteAt: undefined` here, handled
+        // explicitly (sorted last) by `sortByValidatedMode`, below.
+        lastWriteAt: periodicStockDraftItemsByKey[`catalog:${productId}`]?.lastWriteAt,
       }));
     const manualEntries = manualRows
       .map((row, idx) => ({ row, idx }))
@@ -3915,9 +3961,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validated: row.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
+        lastWriteAt: periodicStockDraftItemsByKey[`manual:${idx}`]?.lastWriteAt,
       }));
     return [...catalogEntries, ...manualEntries];
-  }, [catalogRows, manualRows]);
+  }, [catalogRows, manualRows, periodicStockDraftItemsByKey]);
 
   // Search — reuses the exact same `productSearch` state the old picker
   // already read, applied the same way (trim + lowercase substring
@@ -3941,7 +3988,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         (entry) => entry.productName,
         (entry) => (entry.quantity.trim() === '' ? 0 : Number(entry.quantity) || 0) * (Number(entry.sellingPrice) || 0),
         validatedSortMode,
-        (entry) => entry.entrySequence
+        (entry) => entry.entrySequence,
+        (entry) => entry.lastWriteAt
       ),
     [filteredUnifiedListEntries, validatedSortMode]
   );
@@ -7414,6 +7462,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <option value="name-desc">Nome (Z→A)</option>
                 <option value="value-desc">Maior valor</option>
                 <option value="value-asc">Menor valor</option>
+                {/* [Entry-Order Sort Mode Amendment §6; Decision 60
+                    §5/§13.C] The two new, authoritative-timestamp-based
+                    modes — sorted by lastWriteAt, never entrySequence.
+                    'entry-order' (below) is preserved unchanged,
+                    alongside these, per that amendment's own explicit
+                    "not removed, replaced, or redefined" requirement. */}
+                <option value="time-desc">Edição mais recente</option>
+                <option value="time-asc">Edição mais antiga</option>
                 <option value="entry-order">Ordem de registo</option>
               </select>
             </div>
