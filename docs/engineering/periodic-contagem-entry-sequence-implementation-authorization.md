@@ -319,6 +319,31 @@ elsewhere.
    every one of those paths is deferred to engineering validation at
    the Implementation Plan stage, per Decision 60's own instruction not
    to select mechanism at the decision stage.
+3a. **Engineering validation performed (5 September 2026), confirming
+    `lastWriteAt` correctly and exclusively represents "latest valid
+    edit" across every one of the four paths named in item 3 above,
+    with no gap requiring a code change:**
+    - **Ordinary edits** — `savePeriodicStockDraftItem`'s own same-value
+      and same-writer branches (`AppContext.tsx`) both set
+      `lastWriteAt: nowIso` on every accepted write.
+    - **Same-writer corrections** — the same branch, confirmed above,
+      handles this identically; no separate code path exists.
+    - **Conflict resolution** — traced directly: `resolvePeriodicConflict`
+      (`AppContext.tsx`) sets `lastWriteAt: nowIso` at the moment of
+      resolution, alongside `quantity`/`state: 'ACCEPTED'` — a resolved
+      row's timestamp correctly reflects when its value actually became
+      authoritative, not the stale pre-conflict write.
+    - **Interruption persistence** — Decision 58 routes the interruption
+      flush through the identical governed per-row save mechanism
+      (`performRowSaveAttempt` → `savePeriodicStockDraftItem`,
+      `PeriodicStockCountView.tsx`) — no separate persistence path
+      exists, so no separate validation was needed; the ordinary-edit
+      case above already covers it completely.
+    - **The one-time backlog-cleanup action** (Decision 60 §7) — calls
+      `resolvePeriodicConflict` unmodified, once per qualifying row —
+      the conflict-resolution case above already covers it completely.
+    No gap was found; no code change was required as a result of this
+    validation.
 4. **`entrySequence` is not silently redefined as a timestamp**, and no
    part of this amendment treats the two concepts as interchangeable —
    they remain two distinct sort keys serving two distinct, named
