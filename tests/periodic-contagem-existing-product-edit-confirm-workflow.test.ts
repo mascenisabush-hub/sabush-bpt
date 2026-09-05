@@ -239,7 +239,18 @@ describe('I — The single-active-product rule applies to reopening an existing 
     assert.equal(disabledMatches.length, 1, 'Expected the disabled guard in the unified list.');
     const visibleEntriesBody = extractFunctionBody(periodicSrc, 'const visibleUnifiedListEntries = useMemo(');
     assert.match(visibleEntriesBody, /!isWorkspaceActive \|\| entry\.activationKey !== activeWorkspaceProductKey/);
-    assert.match(periodicSrc, /disabled=\{disabled\}[\s\S]{0,400}if \(!disabled\) handleUnifiedEntryClick\(entry\);|if \(!disabled\) handleUnifiedEntryClick\(entry\);[\s\S]{0,200}disabled=\{disabled\}/);
+    // [Bug fix — "editing a validated product is not accepting"] The
+    // click is now routed through `handleEntryActivation`, a small
+    // per-entry wrapper that ALSO redirects a CONFLICT row to the
+    // conflict panel instead of opening it — but it still checks
+    // `disabled` first, before anything else, so the single-active-
+    // product guarantee this test exists to protect is unchanged.
+    assert.match(
+      periodicSrc,
+      /const handleEntryActivation = \(\) => \{\s*if \(disabled\) return;/,
+      'Expected handleEntryActivation to refuse activation whenever disabled, before considering anything else.'
+    );
+    assert.match(periodicSrc, /disabled=\{disabled\}[\s\S]{0,400}handleEntryActivation\(\);|handleEntryActivation\(\)[\s\S]{0,200}disabled=\{disabled\}/);
   });
 
   it('the idle-state left column (formerly the picker table) remains hidden while a product (new or reopened) is active — the SAME `{!isWorkspaceActive && (...)}` gate, unmodified by this workflow', () => {

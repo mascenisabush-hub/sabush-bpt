@@ -93,8 +93,18 @@ describe('A — validated compact representation shows every required field', ()
     // 'Editar' for an already-validated entry, 'Abrir' for one that
     // isn't yet — all three keep the label as visible TEXT, never an
     // icon-only control, which is this test's own actual guarantee.
-    const ternaryMatches = section.match(/\{disabled \? 'Produto aberto' : entry\.validated \? 'Editar' : 'Abrir'\}/g) ?? [];
-    assert.equal(ternaryMatches.length, 1, 'Expected the shared Editar/Abrir/Produto-aberto ternary exactly once.');
+    // [Bug fix — "editing a validated product is not accepting"]
+    // Extended to a four-way ternary: a row whose AUTHORITATIVE server
+    // state is CONFLICT now gets its own distinct 'Resolver conflito'
+    // label — inserted before the existing validated/unvalidated
+    // check — so it's never presented as an ordinary editable entry
+    // that would silently fail to save. Still visible TEXT throughout,
+    // never icon-only, which remains this test's own actual guarantee.
+    const ternaryMatches =
+      section.match(
+        /\{disabled \? 'Produto aberto' : isRowConflicted \? 'Resolver conflito' : entry\.validated \? 'Editar' : 'Abrir'\}/g
+      ) ?? [];
+    assert.equal(ternaryMatches.length, 1, 'Expected the shared Editar/Abrir/Resolver-conflito/Produto-aberto ternary exactly once.');
   });
 
   it('the only title= attribute present is the supplementary full-name tooltip on the product-name span itself — never used to hide REQUIRED information exclusively behind hover', () => {
@@ -164,10 +174,27 @@ describe('B — warnings are visibly represented when active', () => {
 // ---------------------------------------------------------------------
 describe('C — Editar reuses the existing edit handlers, no alternative mechanism', () => {
   it('the unified list\'s click routes through handleUnifiedEntryClick, both card and button alike', () => {
-    const cardMatches = section.match(/onClick=\{\(\) => !disabled && handleUnifiedEntryClick\(entry\)\}/g) ?? [];
-    const buttonMatches = section.match(/if \(!disabled\) handleUnifiedEntryClick\(entry\);/g) ?? [];
+    // [Bug fix — "editing a validated product is not accepting"] Both
+    // the card and the button now route through the shared
+    // `handleEntryActivation` wrapper, which itself still calls
+    // handleUnifiedEntryClick — and only handleUnifiedEntryClick —
+    // once it has confirmed the entry isn't disabled and isn't a
+    // CONFLICT row needing redirect instead. No alternative edit
+    // mechanism was introduced.
+    const cardMatches = section.match(/onClick=\{handleEntryActivation\}/g) ?? [];
+    const activationBodyMatches = section.match(/const handleEntryActivation = \(\) => \{[\s\S]*?handleUnifiedEntryClick\(entry\);[\s\S]*?\};/g) ?? [];
+    // [Bug fix — "editing a validated product is not accepting"]
+    // `handleEntryActivation();` now legitimately appears twice in this
+    // section — once for the row's own onKeyDown (Enter/Space
+    // keyboard activation, pre-existing behavior, just re-pointed at
+    // the new wrapper) and once for the button's onClick — rather than
+    // once. Both still resolve to the exact same single wrapper, which
+    // is what actually matters; neither introduces an alternative edit
+    // mechanism.
+    const callMatches = section.match(/handleEntryActivation\(\);/g) ?? [];
     assert.equal(cardMatches.length, 1, 'Expected the card-level click handler exactly once.');
-    assert.equal(buttonMatches.length, 1, 'Expected the button-level click handler exactly once.');
+    assert.equal(activationBodyMatches.length, 1, 'Expected handleEntryActivation to still call handleUnifiedEntryClick.');
+    assert.equal(callMatches.length, 2, 'Expected exactly two direct calls: the row\'s onKeyDown and the button\'s onClick.');
   });
 
   it('handleUnifiedEntryClick itself calls the existing handleEditCatalogRow(entry.catalogProductId) for a validated catalog entry', () => {
@@ -278,7 +305,15 @@ describe('G — responsive and accessibility structure', () => {
     // now covers both states via a ternary — 'Validado' when
     // entry.validated, a distinct 'Não validado' otherwise — rather
     // than a static 'Validado' string repeated per loop.
-    const matches = section.match(/<span className="sr-only">\{entry\.validated \? 'Validado' : 'Não validado'\}<\/span>/g) ?? [];
+    // [Bug fix — "editing a validated product is not accepting"] Now
+    // covers three states via a nested ternary — 'Conflito por
+    // resolver' when the row's AUTHORITATIVE server state is CONFLICT,
+    // otherwise the existing 'Validado'/'Não validado' pair — still an
+    // accessible text label, never conveyed by icon alone.
+    const matches =
+      section.match(
+        /<span className="sr-only">\s*\{isRowConflicted \? 'Conflito por resolver' : entry\.validated \? 'Validado' : 'Não validado'\}\s*<\/span>/g
+      ) ?? [];
     assert.equal(matches.length, 1, 'Expected the shared sr-only validated-state label exactly once.');
   });
 

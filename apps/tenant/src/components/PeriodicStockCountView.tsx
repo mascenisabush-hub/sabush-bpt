@@ -1081,6 +1081,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the specific row being resolved so a double-click cannot fire two
   // competing resolution attempts for the same row.
   const [resolvingRowKey, setResolvingRowKey] = useState<string | null>(null);
+  // [Bug fix — "editing a validated product is not accepting"] Lets a
+  // blocked-edit attempt (handleEditCatalogRow/handleEditManualRow,
+  // above) or a disabled unified-list row (below) point the operator
+  // directly at the one place that can actually resolve a CONFLICT
+  // row, rather than leaving them to scroll and find it themselves.
+  // Purely a UI convenience — never touches conflict data itself.
+  const conflictPanelRef = useRef<HTMLDivElement | null>(null);
+  const scrollToConflictPanel = () => {
+    conflictPanelRef.current?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+  };
   // [Decision 46 §1; Decision 48; Implementation Authorization §2
   // items 2, 4] Local, UI-only tracking for the delegate-assignment
   // control below — the selected candidate uid before "Atribuir" is
@@ -2219,6 +2229,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const handleEditCatalogRow = (productId: string) => {
     const row = catalogRows[productId];
     if (!row) return;
+    // [Bug fix — reported live, "editing a validated product is not
+    // accepting"] A row whose SERVER state is already `CONFLICT` (most
+    // often a leftover from the pre-Decision-58 blank-placeholder
+    // backlog) still has a normal-looking local `catalogRows` entry —
+    // the live-adoption effect deliberately never touches a CONFLICT
+    // row's local copy, leaving it looking exactly like an ordinary
+    // validated product. Opening it here would let the operator retype
+    // a value that `savePeriodicStockDraftItem` then silently refuses
+    // (its own explicit CONFLICT guard), surfacing only as a generic,
+    // unlocated "Estado do rascunho desconhecido" banner elsewhere on
+    // the page — indistinguishable, from the operator's seat, from the
+    // app simply not accepting the edit. Caught here, before the
+    // confirmation dialog even opens, with a clear, specific message
+    // and a direct path to the one place that can actually resolve it.
+    if (periodicStockDraftItemsByKey[`catalog:${productId}`]?.state === 'CONFLICT') {
+      window.alert(
+        'Este produto tem um conflito por resolver — não pode ser editado diretamente. Resolva o conflito na secção "Conflitos por resolver", acima.'
+      );
+      scrollToConflictPanel();
+      return;
+    }
     if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
     reopenExistingProductForEditing(productKeyFor(row.productName));
   };
@@ -3087,6 +3118,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const handleEditManualRow = (index: number) => {
     const row = manualRows[index];
     if (!row) return;
+    // [Bug fix — reported live, "editing a validated product is not
+    // accepting"] Manual-row counterpart to handleEditCatalogRow's own
+    // identical guard, immediately above — see that guard's comment
+    // for the full mechanism.
+    if (periodicStockDraftItemsByKey[`manual:${index}`]?.state === 'CONFLICT') {
+      window.alert(
+        'Este produto tem um conflito por resolver — não pode ser editado diretamente. Resolva o conflito na secção "Conflitos por resolver", acima.'
+      );
+      scrollToConflictPanel();
+      return;
+    }
     if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
     reopenExistingProductForEditing(productKeyFor(row.productName));
   };
@@ -5785,7 +5827,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           firestore.rules remain the actual enforcement regardless of
           what this panel renders. */}
       {unresolvedConflictRows.length > 0 && (
-        <div className="bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 space-y-3">
+        <div ref={conflictPanelRef} className="bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 space-y-3">
           <div className="flex items-center gap-2">
             <ShieldAlert className="w-4 h-4 text-amber-700" strokeWidth={2} />
             <h3 className="type-label text-amber-800">
@@ -7285,31 +7327,67 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // so simply `isWorkspaceActive` itself is the correct
                     // disabled condition here, matching the old
                     // `editDisabled` guard's effect exactly.
+                    // [Bug fix — reported live, "editing a validated
+                    // product is not accepting"] Cross-references this
+                    // entry against the AUTHORITATIVE server-side
+                    // draft-item state (`periodicStockDraftItemsByKey`,
+                    // keyed exactly as `savePeriodicStockDraftItem`/the
+                    // live-adoption effect above already key it) —
+                    // never `entry.validated` alone, which is a purely
+                    // local flag the live-adoption effect deliberately
+                    // leaves untouched for a CONFLICT row (see that
+                    // effect's own comment). A row in this state can
+                    // never be saved via the ordinary edit path
+                    // (`savePeriodicStockDraftItem`'s own explicit
+                    // CONFLICT refusal) — surfaced here proactively,
+                    // before the operator wastes an edit finding that
+                    // out the hard way.
+                    const conflictRowKey =
+                      entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : `manual:${entry.manualRowIndex}`;
+                    const isRowConflicted = periodicStockDraftItemsByKey[conflictRowKey]?.state === 'CONFLICT';
                     const disabled = isWorkspaceActive;
+                    const handleEntryActivation = () => {
+                      if (disabled) return;
+                      if (isRowConflicted) {
+                        scrollToConflictPanel();
+                        return;
+                      }
+                      handleUnifiedEntryClick(entry);
+                    };
                     return (
                       <div
                         key={entry.rowKey}
                         role="button"
                         tabIndex={disabled ? -1 : 0}
-                        onClick={() => !disabled && handleUnifiedEntryClick(entry)}
+                        onClick={handleEntryActivation}
                         onKeyDown={(e) => {
-                          if (!disabled && (e.key === 'Enter' || e.key === ' ')) handleUnifiedEntryClick(entry);
+                          if (!disabled && (e.key === 'Enter' || e.key === ' ')) handleEntryActivation();
                         }}
                         className={`${unifiedRowGridClass} border rounded-xl px-3 py-2 transition-colors duration-150 ${
                           disabled
                             ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed'
+                            : isRowConflicted
+                            ? 'bg-amber-50 border-amber-300 hover:bg-amber-100/70 cursor-pointer'
                             : entry.validated
                             ? 'bg-white border-emerald-200/70 hover:bg-emerald-50/40 cursor-pointer'
                             : 'bg-white border-[#F0EEE4] hover:bg-[#D4AF37]/[0.05] cursor-pointer'
                         }`}
                       >
                         <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
-                          {entry.validated ? (
+                          {isRowConflicted ? (
+                            <AlertTriangle
+                              className="w-3.5 h-3.5 text-amber-600 shrink-0"
+                              strokeWidth={2.5}
+                              aria-hidden="true"
+                            />
+                          ) : entry.validated ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           ) : (
                             <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
-                          <span className="sr-only">{entry.validated ? 'Validado' : 'Não validado'}</span>
+                          <span className="sr-only">
+                            {isRowConflicted ? 'Conflito por resolver' : entry.validated ? 'Validado' : 'Não validado'}
+                          </span>
                           {/* [Bug fix — product name visibility] `title`
                               surfaces the FULL name on hover/focus even on
                               the rare container narrow enough to still
@@ -7363,18 +7441,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              if (!disabled) handleUnifiedEntryClick(entry);
+                              handleEntryActivation();
                             }}
                             disabled={disabled}
                             className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
                               disabled
                                 ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
+                                : isRowConflicted
+                                ? 'text-amber-800 bg-amber-100 hover:bg-amber-200'
                                 : entry.validated
                                 ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
                                 : 'text-[#0B1F3A] bg-[#D4AF37]/[0.12] hover:bg-[#D4AF37]/[0.22]'
                             }`}
                           >
-                            {disabled ? 'Produto aberto' : entry.validated ? 'Editar' : 'Abrir'}
+                            {disabled ? 'Produto aberto' : isRowConflicted ? 'Resolver conflito' : entry.validated ? 'Editar' : 'Abrir'}
                           </button>
                         </div>
                         {hasPriceWarning && (

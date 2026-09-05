@@ -117,9 +117,17 @@ describe('C — A second independent product cannot be activated while one is al
     assert.match(visibleEntriesBody, /!isWorkspaceActive \|\| entry\.activationKey !== activeWorkspaceProductKey/);
   });
 
-  it('a disabled entry cannot be clicked — handleUnifiedEntryClick is only invoked when !disabled, both from the card and from its own button', () => {
-    assert.match(unifiedList, /onClick=\{\(\) => !disabled && handleUnifiedEntryClick\(entry\)\}/);
-    assert.match(unifiedList, /if \(!disabled\) handleUnifiedEntryClick\(entry\);/);
+  it('a disabled entry cannot be clicked — both the card and its own button route through handleEntryActivation, which itself only ever calls handleUnifiedEntryClick when !disabled', () => {
+    // [Bug fix — "editing a validated product is not accepting"]
+    // Superseded the direct `!disabled && handleUnifiedEntryClick(entry)`
+    // call with a small per-entry wrapper, `handleEntryActivation`, so
+    // a CONFLICT row can also be redirected to the conflict panel
+    // instead of being opened — but the disabled guard is still the
+    // very first thing checked, before anything else, so a disabled
+    // entry remains exactly as unclickable as before.
+    assert.match(unifiedList, /onClick=\{handleEntryActivation\}/);
+    assert.match(unifiedList, /const handleEntryActivation = \(\) => \{\s*if \(disabled\) return;/);
+    assert.match(unifiedList, /handleUnifiedEntryClick\(entry\);/);
   });
 
   it('activeWorkspaceKey/activeNewManualRowIndex are plain nullable scalars, never an array or Set — structurally impossible to hold two products at once', () => {
@@ -239,7 +247,13 @@ describe('I — Search selects one product into the workspace; it never activate
 
   it('each unified-list row activates via its own per-entry activationKey — clicking one never affects any other row\'s own activation (one shared row template, mapped once per entry, not a separate literal onClick per product)', () => {
     const unifiedList = unifiedListSection();
-    const onClickMatches = unifiedList.match(/onClick=\{\(\) => !disabled && handleUnifiedEntryClick\(entry\)\}/g) ?? [];
+    // [Bug fix — "editing a validated product is not accepting"] The
+    // card's onClick is now the shared `handleEntryActivation`
+    // reference (not an inline arrow calling handleUnifiedEntryClick
+    // directly) — still exactly one shared row template, still mapped
+    // once per entry via the same closure-captured `entry`/`disabled`,
+    // so per-row independence is unchanged.
+    const onClickMatches = unifiedList.match(/onClick=\{handleEntryActivation\}/g) ?? [];
     assert.equal(onClickMatches.length, 1);
     // The per-row independence lives one level up, in how
     // `entry.activationKey` is computed for EACH entry independently —
