@@ -6683,13 +6683,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
+      // [Decision 60 §2 / §13.A — Same-Writer False-Conflict
+      // Prevention, Product Architect Decision 5 September 2026] The
+      // value differs, but the writer who owns the server's current
+      // value is the SAME authenticated person making this write — a
+      // self-correction (a typo fixed, a value reconsidered), never a
+      // genuine two-person disagreement. `current.lastWriterUid` is
+      // never client-suppliable independent of the actual writer: this
+      // exact field is enforced server-side by firestore.rules
+      // (`request.resource.data.get('lastWriterUid', null) ==
+      // request.auth.uid`, confirmed at rules.lines ~1456/1469) on
+      // every write to this collection, so a client cannot have
+      // written a `lastWriterUid` other than its own true UID — this
+      // comparison cannot be spoofed. Deliberately keyed on UID alone,
+      // never `lastWriterRole`: two different delegated Editors can
+      // share the same role label, and treating that as "the same
+      // person" would silently discard a genuine second person's
+      // observation, exactly what Decision 55 prohibits. Handled
+      // identically to the same-value branch immediately above — no
+      // CONFLICT, no observation recorded, the new value simply
+      // becomes authoritative — because Decision 55's no-automatic-
+      // winner principle governs disagreement between two DIFFERENT
+      // people; it was never written to apply to one person changing
+      // their own mind, and this branch is reached only when the
+      // identity check below confirms that is exactly what happened.
+      if (current.lastWriterUid === currentUser.uid) {
+        tx.set(itemRef, {
+          ...content,
+          rev: currentRev + 1,
+          state: 'ACCEPTED',
+          lastWriterUid: currentUser.uid,
+          lastWriterRole: writerRole,
+          lastWriteAt: nowIso,
+        });
+        return;
+      }
+
       // [Decision 47/55 §5 items 1-3; Technical Design §7/§8] Genuine
       // collision: the value this transaction just read from the
-      // server differs from this editor's own new value. Both
-      // observations are preserved; the row's own `quantity` is left
-      // exactly as the server already has it — never overwritten by
-      // either side, per Decision 55's no-automatic-winner
-      // requirement.
+      // server differs from this editor's own new value, AND the
+      // server's current value was written by a DIFFERENT person (the
+      // same-writer branch, immediately above, already exits this
+      // transaction for the same-person case). Both observations are
+      // preserved; the row's own `quantity` is left exactly as the
+      // server already has it — never overwritten by either side, per
+      // Decision 55's no-automatic-winner requirement.
       tx.set(itemRef, {
         ...current,
         state: 'CONFLICT',

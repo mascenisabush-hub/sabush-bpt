@@ -4434,6 +4434,85 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
   };
 
+  // [Decision 60 §7 — Existing Backlog Cleanup, Rule 8 Assessment §6]
+  // One-time, operator-triggered bulk resolution of the historical
+  // CONFLICT backlog (pre-Decision-58 blank-placeholder collisions,
+  // and same-writer false conflicts predating Decision 59/60's own
+  // fixes) — NOT a permanent feature. Reuses `resolvePeriodicConflict`
+  // completely unmodified, once per qualifying row; invents no second
+  // resolution path and no new transaction semantics. A row qualifies
+  // under exactly one of two categories, matching Decision 60 §7
+  // precisely:
+  //   (a) same-writer backlog — both observations share a writerUid —
+  //       resolved to whichever has the LATER `at` timestamp (that
+  //       person's own more recent, and therefore correct, answer);
+  //   (b) blank-vs-real backlog — exactly one observation's value is
+  //       blank — resolved to the non-blank one (a blank entry can
+  //       never represent a real physical count).
+  // Any row failing BOTH — two different writers, both non-blank,
+  // genuinely differing — is a real disagreement and is deliberately
+  // EXCLUDED here, left for manual resolution exactly as today; this
+  // is the one thing this action must never do, per Decision 55's
+  // no-automatic-winner principle.
+  const autoResolvableConflictEntries = useMemo(() => {
+    return Object.entries(periodicStockDraftItemsByKey)
+      .filter(([, item]) => item.state === 'CONFLICT' && item.conflict)
+      .map(([rowKey, item]) => {
+        const conflict = item.conflict!;
+        const { observationA, observationB } = conflict;
+        const sameWriter = observationA.writerUid === observationB.writerUid;
+        const aBlank = observationA.value.trim() === '';
+        const bBlank = observationB.value.trim() === '';
+        const exactlyOneBlank = aBlank !== bBlank;
+        let resolvedValue: string | null = null;
+        if (sameWriter) {
+          resolvedValue = new Date(observationA.at) >= new Date(observationB.at) ? observationA.value : observationB.value;
+        } else if (exactlyOneBlank) {
+          resolvedValue = aBlank ? observationB.value : observationA.value;
+        }
+        return resolvedValue !== null ? { rowKey, resolvedValue } : null;
+      })
+      .filter((entry): entry is { rowKey: string; resolvedValue: string } => entry !== null);
+  }, [periodicStockDraftItemsByKey]);
+
+  const [bulkResolvingConflicts, setBulkResolvingConflicts] = useState(false);
+  const [bulkResolveConfirmOpen, setBulkResolveConfirmOpen] = useState(false);
+
+  // [Decision 60 §7] A batch action affecting multiple rows should not
+  // fire silently on a single click — `bulkResolveConfirmOpen` gates a
+  // short confirmation naming how many rows qualify and how many will
+  // still require manual attention afterward, mirroring this file's
+  // own existing confirmation-before-destructive/bulk-action
+  // discipline (e.g. handleDiscardDraft's own confirm step).
+  const handleBulkResolveConflicts = async () => {
+    setBulkResolveConfirmOpen(false);
+    setBulkResolvingConflicts(true);
+    setError(null);
+    try {
+      // Sequential, not Promise.all — each call is its own Firestore
+      // transaction against a different row; sequential execution
+      // keeps this identical in shape to an operator clicking each
+      // row's own existing resolve button one at a time, just without
+      // the manual clicking, and avoids any risk of overwhelming the
+      // existing per-call readback-uncertain retry discipline with
+      // many simultaneous in-flight writes.
+      for (const { rowKey, resolvedValue } of autoResolvableConflictEntries) {
+        try {
+          await resolvePeriodicConflict(rowKey, resolvedValue);
+        } catch (err: any) {
+          // [Decision 60 §7] One row's failure (e.g. a stale/already-
+          // resolved row from a concurrent editor) must never abort
+          // the rest of the batch — resolvePeriodicConflict's own
+          // precondition check already refuses a stale attempt safely;
+          // this loop simply continues to the next qualifying row.
+          console.error(`Erro ao resolver automaticamente o conflito ${rowKey}:`, err);
+        }
+      }
+    } finally {
+      setBulkResolvingConflicts(false);
+    }
+  };
+
   // [Decision 46 §1; Decision 48; Implementation Authorization §2
   // items 2, 4] Thin UI wrapper around the already-authorized
   // `assignDelegatedEditor` — no new authority model, no eligibility
@@ -5828,12 +5907,66 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           what this panel renders. */}
       {unresolvedConflictRows.length > 0 && (
         <div ref={conflictPanelRef} className="bg-amber-50 border border-amber-300 rounded-2xl px-5 py-4 space-y-3">
-          <div className="flex items-center gap-2">
-            <ShieldAlert className="w-4 h-4 text-amber-700" strokeWidth={2} />
-            <h3 className="type-label text-amber-800">
-              {unresolvedConflictRows.length === 1 ? 'Conflito por resolver' : 'Conflitos por resolver'}
-            </h3>
+          <div className="flex items-center justify-between gap-2 flex-wrap">
+            <div className="flex items-center gap-2">
+              <ShieldAlert className="w-4 h-4 text-amber-700" strokeWidth={2} />
+              <h3 className="type-label text-amber-800">
+                {unresolvedConflictRows.length === 1 ? 'Conflito por resolver' : 'Conflitos por resolver'}
+              </h3>
+            </div>
+            {/* [Decision 60 §7 — Existing Backlog Cleanup] One-time,
+                operator-triggered bulk action — never a permanent/
+                scheduled feature (Rule 8 Assessment §6's own explicit
+                reasoning: once Decision 59's same-writer fix and
+                Decision 58's flush fix are both live, this backlog can
+                only shrink, never regrow). Rendered only when at
+                least one row qualifies under one of the two safe,
+                narrow categories Decision 60 §7 permits — a row that
+                is a genuine two-writer, non-blank, differing
+                disagreement never qualifies and is never touched by
+                this button. isActiveContagemEditor-gated, same as
+                every other resolution affordance in this panel. */}
+            {isActiveContagemEditor && autoResolvableConflictEntries.length > 0 && (
+              <button
+                type="button"
+                onClick={() => setBulkResolveConfirmOpen(true)}
+                disabled={bulkResolvingConflicts}
+                className="btn-secondary py-1.5 px-3 text-[12px] disabled:opacity-60 whitespace-nowrap"
+              >
+                <span>
+                  {bulkResolvingConflicts
+                    ? 'A resolver…'
+                    : `Resolver automaticamente os conflitos óbvios (${autoResolvableConflictEntries.length})`}
+                </span>
+              </button>
+            )}
           </div>
+          {bulkResolveConfirmOpen && (
+            <div className="bg-white border border-amber-200 rounded-xl px-4 py-3 space-y-2">
+              <p className="text-[13px] text-gray-700">
+                {autoResolvableConflictEntries.length === 1
+                  ? '1 conflito será resolvido automaticamente'
+                  : `${autoResolvableConflictEntries.length} conflitos serão resolvidos automaticamente`}{' '}
+                — cada um porque as duas observações vêm da mesma pessoa (fica o valor mais recente) ou porque uma
+                das observações está em branco (fica o valor real).{' '}
+                {unresolvedConflictRows.length - autoResolvableConflictEntries.length > 0
+                  ? `Os restantes ${unresolvedConflictRows.length - autoResolvableConflictEntries.length} continuam a precisar de resolução manual, pois são desacordos genuínos entre duas pessoas diferentes.`
+                  : 'Não ficará nenhum conflito por resolver manualmente.'}
+              </p>
+              <div className="flex gap-2">
+                <button
+                  type="button"
+                  onClick={() => setBulkResolveConfirmOpen(false)}
+                  className="btn-secondary py-1.5 px-3 text-[12px]"
+                >
+                  <span>Cancelar</span>
+                </button>
+                <button type="button" onClick={handleBulkResolveConflicts} className="btn-primary py-1.5 px-3 text-[12px]">
+                  <span>Confirmar</span>
+                </button>
+              </div>
+            </div>
+          )}
           <p className="text-[13px] text-amber-700">
             Duas observações diferentes e legítimas foram registadas para a(s) mesma(s) linha(s). Nenhuma foi
             descartada — escolha qual valor fica como o correto.
