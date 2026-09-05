@@ -2,7 +2,7 @@ Rule 8 Assessment — FINAL
 
 # Rule 8 Assessment — Periodic Contagem Interruption/Re-Entry Recovery, Authoritative-State Synchronization, and False-Conflict Prevention (Decision 60)
 
-**STATUS:** ✅ **FINAL — RULE 8 ASSESSMENT COMPLETE.** This document does not authorize implementation. A separate Implementation Plan and a signed Implementation Authorization remain required, subsequent gates. **✅ UPDATED 5 September 2026 — see §13 — recording that the Product Architect has resolved both blocking items §1 identified (Decisions A, B, C); see §13 for the updated status.**
+**STATUS:** ✅ **FINAL — RULE 8 ASSESSMENT COMPLETE.** This document does not authorize implementation. A separate Implementation Plan and a signed Implementation Authorization remain required, subsequent gates. **✅ UPDATED 5 September 2026 — see §13 — recording that the Product Architect has resolved both blocking items §1 identified (Decisions A, B, C). ✅ UPDATED AGAIN 5 September 2026 — see §14 — implementation itself is now complete; see §14 for the final status.**
 
 **Governing chain:** [Decision 60 Amendment](../specs/stock-count-data-loss-resilience-decision-60-amendment.md) (✅ **ACCEPTED AS PROPOSED** — SABUSHIMIKE MASCENI, Product Architect, 5 September 2026, §12) → **this assessment** → (next: Implementation Plan, then Implementation Authorization — neither exists yet).
 
@@ -377,3 +377,36 @@ This document (§13 and this updated status block, added additively) and the Ent
 
 COMMITS:
 Recorded together with the Decision 60 amendment update and the Entry-Order Sort Mode amendment in this same governance-recording action.
+
+---
+
+# 14. Implementation Complete (5 September 2026)
+
+**Everything above this section, including §13's own "UPDATED STATUS" block, is preserved unedited as the historical record of this assessment at each point it was updated.** This section records, additively, that implementation itself has since been completed — at the Product Architect's own explicit, direct instruction, ahead of a formally drafted-and-signed-in-advance Implementation Plan/Authorization, mirroring the same retroactive pattern already used for Decision 59.
+
+All four checkpoints identified as buildable once Decisions A/B/C were recorded (§13) have shipped: commits `5a4af67`, `2d439fe`, `ea84a5c`, `e62bddb`, all on `main`. Full detail is recorded in `periodic-contagem-reentry-recovery-decision-60-implementation-plan.md` (the retroactive Plan) and `periodic-contagem-reentry-recovery-decision-60-implementation-authorization.md` (the retroactive Authorization, signed).
+
+**What this update does NOT do:** it does not re-examine or revise any technical finding in §1–§11 above — every gap, risk, and governance dependency this assessment identified was addressed exactly as this assessment described it should be, with no new gap discovered during implementation that required returning to this document. It does not reopen Decisions 38–59, Decision 55's conflict semantics, or Decision 58's own scope.
+
+---
+
+RULE 8 DECISION 60 — FINAL STATUS (5 September 2026):
+IMPLEMENTED
+
+DECISIONS 38–59:
+UNCHANGED / CLOSED
+
+DECISION 60:
+ACCEPTED AND IMPLEMENTED — all nine accepted requirements are either satisfied by pre-existing architecture (already confirmed in §2 above) or implemented across the four checkpoints referenced in §14.
+
+IMPLEMENTATION:
+✅ AUTHORIZED (retroactively) AND COMPLETE — see the Implementation Authorization's own §4 for the signed ratification.
+
+NEXT GOVERNANCE GATE:
+None outstanding for Decision 60 itself. Ordinary verification/monitoring of the shipped behavior in production is the only remaining activity; no further gate is pending unless new evidence surfaces a gap.
+
+REPOSITORY CHANGES (this update):
+This document (§14 and this final status block, added additively). No application code, `firestore.rules`, `firestore.indexes.json`, or test changes made as part of recording this update itself (the four checkpoints it describes were already committed separately, per their own commits).
+
+COMMITS:
+Recorded together with the retroactive Implementation Plan and Implementation Authorization in this same governance-recording action.
