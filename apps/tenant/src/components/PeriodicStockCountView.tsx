@@ -4933,6 +4933,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // tree around it.
     if (subscriptionBlocksNewRecords) return;
 
+    // [Owner-only finalization — Product Architect decision] Only the
+    // Owner/Admin may ever finalize a Contagem — matching
+    // firestore.rules' own `stockCounts`/`businessWorthSnapshots`
+    // `allow create` requirement (`isOwnerOf`, not the broader
+    // `isActiveContagemEditor` a delegated Editor already satisfies).
+    // Guarded here, at the TRUE entry point into the review screen —
+    // the "Rever e Confirmar Contagem" button is also disabled for a
+    // non-Owner (see its own JSX), but this guard is what actually
+    // makes it impossible to reach `pendingTally`/the review screen at
+    // all, regardless of how this handler is ever triggered, exactly
+    // matching the `subscriptionBlocksNewRecords` guard immediately
+    // above. This touches ONLY the transition into the review screen —
+    // it does not read, write, or clear anything on
+    // `catalogRows`/`manualRows`/the periodic draft; a delegated
+    // Editor's own autosave, Validar, and full counting workflow are
+    // completely unaffected — their in-progress draft remains exactly
+    // as safe and intact as it always was, simply not yet finalizable
+    // by them.
+    if (!isOwner) return;
+
     if (type === 'custom' && !label.trim()) {
       setError('Dê um nome a esta contagem personalizada (ex: "Antes da Época Festiva").');
       return;
@@ -5191,6 +5211,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // one path that could otherwise finalize a NEW StockCount — §12's
     // explicit requirement.
     if (subscriptionBlocksNewRecords) return;
+    // [Owner-only finalization — Product Architect decision] Same
+    // belt-and-suspenders reasoning as immediately above, and as
+    // handleRequestConfirmation's own identical guard: in practice
+    // this branch is only reachable via handleRequestConfirmation
+    // having already let a non-Owner through to set `pendingTally`,
+    // which its own guard now prevents — but this function never
+    // relies solely on that upstream guard for its own safety. Reading
+    // `isOwner` only; touches no draft state, no autosave, no
+    // persistence path.
+    if (!isOwner) return;
     setIsSaving(true);
     setError(null);
     try {
@@ -6058,6 +6088,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
           )}
 
+          {/* [Owner-only finalization — Product Architect decision]
+              Defense-in-depth only — handleRequestConfirmation's own
+              guard already prevents a non-Owner from ever setting
+              pendingTally, so this branch should never actually render
+              for one in practice. Kept anyway, matching this
+              component's own established "never rely solely on the
+              surrounding JSX/upstream guard" discipline (see
+              handleConfirmSave's own comment). "Voltar" is deliberately
+              NOT restricted — it only clears pendingTally, never
+              touches the draft, and must remain available to everyone
+              regardless of ownership. */}
+          {!isOwner && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
+              <div className="flex-1">
+                <p className="text-[13px] font-bold text-amber-800">Só o Dono/Admin pode confirmar esta Contagem</p>
+                <p className="text-[13px] text-amber-700 mt-0.5">
+                  A tua contagem está guardada — nada se perde. Pede ao Dono/Admin para a confirmar.
+                </p>
+              </div>
+            </div>
+          )}
+
           <div className="flex items-center gap-3">
             <button
               type="button"
@@ -6071,7 +6124,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <button
               type="button"
               onClick={handleConfirmSave}
-              disabled={isSaving || hasUnresolvedConflicts}
+              disabled={isSaving || hasUnresolvedConflicts || !isOwner}
               className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
             >
               <span>{isSaving ? 'A guardar...' : 'Confirmar Contagem'}</span>
@@ -8314,9 +8367,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
           </div>
 
+          {/* [Owner-only finalization — Product Architect decision]
+              Shown only to a non-Owner delegated Editor — reassures
+              explicitly that their counting work is already safely
+              saved (the existing per-row autosave/flush mechanism is
+              completely untouched by this restriction; nothing here
+              reads, clears, or otherwise affects the draft) and that
+              only the Owner/Admin can take the final finalization
+              step, matching firestore.rules' own `isOwnerOf`
+              requirement for both the StockCount and
+              BusinessWorthSnapshot writes. Rendered ABOVE the button
+              so a delegated Editor sees this before ever attempting to
+              submit, rather than discovering it only via a disabled
+              button or a raw permission error at the end. */}
+          {!isOwner && (
+            <div className="bg-amber-50 border border-amber-200 rounded-2xl px-5 py-4 flex items-start gap-3">
+              <AlertTriangle className="w-5 h-5 text-amber-600 shrink-0 mt-0.5" strokeWidth={2} />
+              <div className="flex-1">
+                <p className="text-[13px] font-bold text-amber-800">Só o Dono/Admin pode confirmar esta Contagem</p>
+                <p className="text-[13px] text-amber-700 mt-0.5">
+                  A tua contagem está guardada — nada se perde. Pede ao Dono/Admin para a rever e confirmar quando
+                  estiver pronta.
+                </p>
+              </div>
+            </div>
+          )}
+
           <button
             type="submit"
-            disabled={isSaving}
+            disabled={isSaving || !isOwner}
             className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
           >
             <span>Rever e Confirmar Contagem {TYPE_LABELS[type]}</span>

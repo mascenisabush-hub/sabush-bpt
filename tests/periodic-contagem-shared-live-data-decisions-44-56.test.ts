@@ -402,7 +402,16 @@ describe('Finding K — fail-closed listener gating (AppContext.tsx)', () => {
 describe('Decisions 44-56 — PeriodicStockCountView.tsx UI wiring', () => {
   it('the finalization button is disabled while hasUnresolvedConflicts is true', () => {
     assert.match(viewSource, /const hasUnresolvedConflicts = \(periodicStockDraft\?\.openConflictCount \?\? unresolvedConflictRows\.length\) > 0;/);
-    assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts\}/);
+    // [Owner-only finalization — Product Architect decision, mechanical
+    // regression fix] Widened from a strict, exact match on the old
+    // `disabled={isSaving || hasUnresolvedConflicts}` expression to
+    // confirm each individual condition is still present in the
+    // (now wider) expression, rather than the old literal string —
+    // hasUnresolvedConflicts still disables the button exactly as
+    // before; `!isOwner` is a new, additive condition alongside it,
+    // never a replacement for it.
+    const disabledExprMatch = viewSource.match(/disabled=\{isSaving \|\| hasUnresolvedConflicts \|\| !isOwner\}/);
+    assert.notEqual(disabledExprMatch, null, 'the finalization button must still disable on isSaving and hasUnresolvedConflicts, now alongside !isOwner');
   });
 
   it('the conflict panel shows both preserved observations and gates the resolve buttons on isActiveContagemEditor', () => {
@@ -425,6 +434,81 @@ describe('Decisions 44-56 — PeriodicStockCountView.tsx UI wiring', () => {
 
   it('delegate assignment calls the existing authorized assignDelegatedEditor, never a new authority model', () => {
     assert.match(viewSource, /await assignDelegatedEditor\(uid\);/);
+  });
+});
+
+describe('Owner-only finalization — Product Architect decision (delegated Editor may count, only Owner/Admin may finalize)', () => {
+  it('handleRequestConfirmation — the true entry point into the review screen — returns early for a non-Owner, matching the existing subscriptionBlocksNewRecords belt-and-suspenders guard immediately above it', () => {
+    const start = viewSource.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
+    assert.notEqual(start, -1, 'could not locate handleRequestConfirmation');
+    const body = viewSource.slice(start, start + 2000);
+    const subscriptionGuardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
+    const ownerGuardIdx = body.indexOf('if (!isOwner) return;');
+    assert.notEqual(subscriptionGuardIdx, -1, 'the pre-existing subscription guard must still be present, unmodified');
+    assert.notEqual(ownerGuardIdx, -1, 'a new if (!isOwner) return; guard must be present');
+    assert.ok(subscriptionGuardIdx < ownerGuardIdx, 'the two guards must appear in this order, both before any tally/review logic runs');
+  });
+
+  it('handleConfirmSave — the finalization action itself — also returns early for a non-Owner, as defense-in-depth (not relying solely on handleRequestConfirmation upstream)', () => {
+    const start = viewSource.indexOf('const handleConfirmSave = async () => {');
+    assert.notEqual(start, -1, 'could not locate handleConfirmSave');
+    const body = viewSource.slice(start, start + 1600);
+    assert.match(body, /if \(!pendingTally\) return;/);
+    assert.match(body, /if \(subscriptionBlocksNewRecords\) return;/);
+    assert.match(body, /if \(!isOwner\) return;/);
+    assert.match(body, /setIsSaving\(true\);/);
+    const ownerGuardIdx = body.indexOf('if (!isOwner) return;');
+    const setIsSavingIdx = body.indexOf('setIsSaving(true);');
+    assert.ok(ownerGuardIdx < setIsSavingIdx, 'the Owner guard must return before any saving state is set or any write is attempted');
+  });
+
+  it('neither Owner-only guard touches catalogRows, manualRows, or any draft-clearing/persistence function — a delegated Editor\'s in-progress draft and autosave are completely unaffected', () => {
+    const requestStart = viewSource.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
+    const requestGuardIdx = viewSource.indexOf('if (!isOwner) return;', requestStart);
+    const requestGuardLine = viewSource.slice(requestGuardIdx - 20, requestGuardIdx + 25);
+    assert.doesNotMatch(requestGuardLine, /setCatalogRows|setManualRows|clearPeriodicStockDraft|updateCatalogRow|updateManualRow/);
+
+    const confirmStart = viewSource.indexOf('const handleConfirmSave = async () => {');
+    const confirmGuardIdx = viewSource.indexOf('if (!isOwner) return;', confirmStart);
+    const confirmGuardLine = viewSource.slice(confirmGuardIdx - 20, confirmGuardIdx + 25);
+    assert.doesNotMatch(confirmGuardLine, /setCatalogRows|setManualRows|clearPeriodicStockDraft|updateCatalogRow|updateManualRow/);
+  });
+
+  it('the "Rever e Confirmar Contagem" submit button is disabled for a non-Owner, with an explanatory banner shown above it reassuring the draft is saved', () => {
+    assert.match(viewSource, /disabled=\{isSaving \|\| !isOwner\}/);
+    assert.match(viewSource, /Só o Dono\/Admin pode confirmar esta Contagem/);
+    assert.match(viewSource, /A tua contagem está guardada — nada se perde\./);
+  });
+
+  it('"Voltar" on the review screen is NOT gated on isOwner — it only clears pendingTally, never touches the draft, and must remain available to everyone', () => {
+    const voltarIdx = viewSource.indexOf("onClick={() => setPendingTally(null)}");
+    assert.notEqual(voltarIdx, -1);
+    const voltarButtonBlock = viewSource.slice(voltarIdx, voltarIdx + 150);
+    assert.match(voltarButtonBlock, /disabled=\{isSaving\}/);
+    assert.doesNotMatch(voltarButtonBlock, /isOwner/, '"Voltar" must remain unrestricted by ownership — it is always safe and must always be available');
+  });
+
+  it('the review screen\'s own "Confirmar Contagem" button is also disabled for a non-Owner (defense-in-depth) and shows the same reassurance banner', () => {
+    assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts \|\| !isOwner\}/);
+    const reviewBannerOccurrences = viewSource.match(/Só o Dono\/Admin pode confirmar esta Contagem/g) ?? [];
+    assert.equal(reviewBannerOccurrences.length, 2, 'expected the reassurance banner on both the edit screen and the review screen');
+  });
+
+  it('every existing counting/editing action (Validar, search, arrows, Adicionar produto, autosave) remains completely ungated by isOwner — only finalization itself is restricted', () => {
+    // Regression guard: confirms this change did not spill over into
+    // restricting anything a delegated Editor is still supposed to do.
+    const validarBody = viewSource.match(/onClick=\{\(\) => handleSaveCatalogRow\(productId\)\}/g) ?? [];
+    assert.ok(validarBody.length >= 1, 'Validar must remain reachable');
+    assert.doesNotMatch(
+      viewSource.slice(viewSource.indexOf('const handleSaveCatalogRow = ('), viewSource.indexOf('const handleSaveCatalogRow = (') + 200),
+      /isOwner/,
+      'handleSaveCatalogRow (Validar) must not be gated on isOwner — a delegated Editor must still be able to validate rows'
+    );
+    assert.doesNotMatch(
+      viewSource.slice(viewSource.indexOf('const scheduleRowDraftSave = ('), viewSource.indexOf('const scheduleRowDraftSave = (') + 300),
+      /isOwner/,
+      'autosave (scheduleRowDraftSave) must not be gated on isOwner — a delegated Editor\'s work must keep saving normally'
+    );
   });
 });
 
@@ -533,7 +617,12 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     // Same assertions the pre-existing describe blocks above already
     // make — re-checked here to confirm Stage 2 did not regress them.
     assert.match(rulesSource, /allow create, update: if isActiveContagemEditor\(businessId\)/);
-    assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts\}/);
+    // [Owner-only finalization — Product Architect decision, mechanical
+    // regression fix] Same widening as the sibling test above — the
+    // finalization button's disable condition now also includes
+    // `!isOwner`, additively, alongside the two conditions this test
+    // already existed to protect.
+    assert.match(viewSource, /disabled=\{isSaving \|\| hasUnresolvedConflicts \|\| !isOwner\}/);
     assert.match(rulesSource, /allow update: if false;\s*\n\s*allow delete: if false;/);
   });
 });
