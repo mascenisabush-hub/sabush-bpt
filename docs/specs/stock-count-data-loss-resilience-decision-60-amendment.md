@@ -210,3 +210,65 @@ Any row failing both — two different writers, both non-blank, genuinely differ
 **What this signature does NOT authorize:** any code, `firestore.rules`, or test change; any Implementation Plan; any Implementation Authorization; any implementation of any kind; any silent technical redesign; any reopening of Decisions 38–58, including Decision 55's genuine-concurrent-observation conflict semantics or Decision 58's own already-closed scope. The prior Entry-Order Sort Mode decision likewise stands unamended by this signature — §5's own requirement, that Rule 8 determine whether a formal amendment to it is needed, is preserved exactly as written, not decided here.
 
 **Distinct from Decision 59:** this acceptance is a separate governance act from Decision 59's retroactive ratification (`stock-count-data-loss-resilience-decision-59-amendment.md` §7a) — the two decisions are not merged, and accepting this proposal does not itself ratify, ratify further, or otherwise touch Decision 59's already-closed record.
+
+---
+
+## 13. Product Architect Decisions Following Rule 8 Assessment
+
+**Status: ✅ RECORDED (5 September 2026).** These are Product Architect decisions resolving specific open items the Rule 8 Assessment (`../engineering/periodic-contagem-reentry-recovery-decision-60-rule8-assessment.md`, ✅ FINAL — READY AFTER PRODUCT ARCHITECT DECISIONS) identified as blocking Implementation Planning. They clarify and narrow how §0/§3 ("Leave-and-Return Continuity...") and §5 ("Sorting Requirements") of this same accepted decision are to be read — they do not reopen, narrow, or expand any other part of Decision 60, and they do not themselves authorize an Implementation Plan, Implementation Authorization, or any code/`firestore.rules`/test change. A separate, formal amendment to the prior Entry-Order Sort Mode decision, required by the third item below, is recorded independently (see `../engineering/periodic-contagem-entry-sequence-implementation-authorization.md`, its own §6, added by this same governance action) — that amendment is not performed here, only cross-referenced.
+
+### 13.A — Decision A: Resume/Re-Entry Behavior
+
+The Rule 8 Assessment (§1, §2.A) found that `PeriodicStockCountView`'s existing `draftDecisionPending` resume/discard gate re-appears on **every** leave-and-return cycle, not once per Contagem lifetime, because the state governing it (`draftBannerDismissed`) is ephemeral, per-mount local state. No data is ever lost by this gate; the finding was one of interaction friction, not data integrity.
+
+**Product Architect decision:** "No forced restart" (§0 item 1 of this decision) means precisely that returning to an interrupted, still-active Periodic Contagem must **not** require the operator to make an explicit resume/discard decision merely because the component remounted. Specifically:
+
+1. If the operator leaves Periodic Contagem and returns while the same active Contagem still exists, the system must reopen that active Contagem directly.
+2. The operator must see the latest authoritative shared state on return (restating §0 item 2 — unchanged).
+3. The operator must not be routed through a "Retomar/Descartar" decision merely because the component remounted.
+4. The system must never silently discard the active Contagem.
+5. The system must never overwrite authoritative shared quantities with stale local state.
+6. If another authorized editor changed data while the operator was away, the returning operator must see that latest authoritative state (restating §0 item 2/§6 — unchanged).
+7. Existing editing authority rules (Decisions 45/46/48/54) remain exactly as they are — unchanged by this decision.
+8. This decision does **not** authorize automatic editor takeover or any authority change of any kind.
+9. Decision 55's genuine two-person conflict semantics remain governed exactly as before — unchanged by this decision.
+10. The working-position requirement (§4 of this decision) remains navigation-only and must never become a second source of truth — unchanged by this decision.
+
+**What HOW remains open:** the exact mechanism by which the system "reopens the active Contagem directly" — whether that means removing the gate entirely, replacing it with a non-blocking/automatic reconciliation, or some other design — is explicitly left to the Implementation Plan, per Decision 60's own governing instruction not to prescribe mechanism at the decision stage. This decision fixes *what* must be true of the result, not *how* it is achieved.
+
+### 13.B — Decision B: Sort-Mode Persistence
+
+The Rule 8 Assessment (§2.F, §10 item 1) found that the repository does not currently establish whether the operator's selected sort mode itself must survive a leave-and-return cycle, and that Decision 60's own text did not resolve this either way.
+
+**Product Architect decision:** the selected sort mode **should** persist across leave-and-return, for the same active Periodic Contagem/workspace, so that returning does not unexpectedly revert the operator's own display ordering. This is subject to the following, all of which restate and narrow constraints Decision 60 already establishes elsewhere:
+
+1. Sort mode is display state only.
+2. It must never mutate quantities, observations, conflicts, validation state, authority, or any other underlying Contagem data.
+3. A persisted sort preference must never become a source of truth for stock data.
+4. It must be safely scoped to the appropriate business/user/workspace context.
+5. It must not create cross-business or cross-user leakage — this is the same boundary the Rule 8 Assessment already flagged as a Finding K review item for the working-position mechanism (§2.E), and applies identically here.
+6. It must remain compatible with all six sort modes required by §5 of this decision, as amended by the Entry-Order Sort Mode amendment (§13.C, below).
+7. The exact storage mechanism is left to the Implementation Plan / Rule 8-approved implementation design — not decided here.
+
+### 13.C — Decision C: Cross-Reference to the Entry-Order Sort Mode Amendment
+
+The Rule 8 Assessment (§7) confirmed that adopting a genuine timestamp-based "entry/edit time" sort mode requires a formal amendment to the already-signed prior decision governing `entrySequence` (`../engineering/periodic-contagem-entry-sequence-implementation-authorization.md`, ✅ Accepted and Authorized, 2 September 2026), which explicitly and deliberately chose an in-session counter "never a wall-clock timestamp" for that purpose.
+
+**Product Architect decision:** that prior decision is formally amended, by a new §6 added to its own document (not here — see that document directly), to preserve `entrySequence` exactly as originally authorized while additionally authorizing two new, separate, timestamp-based sort modes. This decision's own six required sort modes (§5) are, following that amendment:
+
+1. Newest entry/edit time → oldest (new — timestamp-based, per the amendment)
+2. Oldest entry/edit time → newest (new — timestamp-based, per the amendment)
+3. Name A → Z (already authorized, unchanged)
+4. Name Z → A (already authorized, unchanged)
+5. Value high → low (already authorized, unchanged)
+6. Value low → high (already authorized, unchanged)
+
+The existing ordinal `entrySequence` mode is **not** removed, replaced, or redefined as a timestamp by this decision or by the amendment it requires — it remains exactly as the prior decision authorized it, available as its own internal concept per that decision's own governance, distinct from the two new timestamp-based modes above.
+
+### Signature
+
+> I record Decision A (resume/re-entry behavior), Decision B (sort-mode persistence), and Decision C (cross-reference to the Entry-Order Sort Mode amendment) as specified above, resolving the two Product-Architect-level items the Rule 8 Assessment identified as blocking Implementation Planning. This does not itself authorize an Implementation Plan, Implementation Authorization, or any code/`firestore.rules`/test change, and does not reopen Decisions 44–59, Decision 55's conflict semantics, or Decision 58's own scope.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 2026-09-05
+> **Decision:** ✅ ACCEPTED / AMENDED AS SPECIFIED ABOVE

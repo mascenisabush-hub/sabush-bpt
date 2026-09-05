@@ -5,7 +5,11 @@ Implementation Authorization
 **Status:** ✅ **ACCEPTED AND AUTHORIZED. Signed 2 September 2026 by
 SABUSHIMIKE MASCENI, Product Architect, with one correction to §3
 criterion 10 (see that criterion, and the changelog note below) made
-before signature.**
+before signature. ✅ AMENDED 5 September 2026 — see §6 — to authorize
+two additional, separate, timestamp-based sort modes required by
+Decision 60 (`../specs/stock-count-data-loss-resilience-decision-60-amendment.md`
+§13.C), without altering, replacing, or reinterpreting anything
+authorized below for `entrySequence` itself.**
 
 **Governing chain:** Specification Addendum — "Periodic Contagem
 Entry-Order Sort Mode (`entrySequence`)" (ACCEPTED — technical
@@ -258,3 +262,102 @@ this signed scope.
   construction, unchanged code) rather than as an additional test
   requirement. No other section was affected. Implementation must
   follow the corrected criterion — no such test is to be added.
+
+---
+
+## 6. Amendment — Authorizing Two Additional Timestamp-Based Sort Modes (5 September 2026)
+
+**Status: ✅ AMENDED — SIGNED (5 September 2026).** This section is an
+additive amendment to the Authorization above, per this repository's
+established convention for amending rather than silently reversing a
+prior signed decision. Sections 1–5 above are preserved unedited as
+the historical record of what was originally authorized and signed;
+this section records the actual, dated act of amendment.
+
+**Reason this amendment exists:** Decision 60
+(`../specs/stock-count-data-loss-resilience-decision-60-amendment.md`,
+✅ Accepted, 5 September 2026) requires two sort-list display modes —
+"entry/edit time newest → oldest" and "oldest → newest" — based on a
+genuine wall-clock timestamp of a product's latest valid edit. The
+dedicated Rule 8 Assessment for Decision 60
+(`periodic-contagem-reentry-recovery-decision-60-rule8-assessment.md`,
+§7) confirmed, from direct repository evidence, that this Authorization's
+own §1 item 3 explicitly and deliberately chose an in-session integer
+counter (`entrySequence`) **"never a wall-clock timestamp,"** for the
+Entry-Order sort mode this Authorization itself scopes — and that
+introducing a genuine timestamp-based mode for the same general
+purpose (entry/edit-time ordering) therefore requires this
+Authorization's own explicit amendment, not a silent addition
+elsewhere.
+
+**What this amendment does:**
+
+1. **`entrySequence` is preserved exactly as originally authorized.**
+   Nothing in §1–§5 above is altered, replaced, reinterpreted, or
+   reversed. The existing `'entry-order'` sort mode continues to sort
+   by `entrySequence` — an in-session integer counter, never a
+   timestamp — exactly as signed on 2 September 2026. This amendment
+   does not touch `entrySequenceRef`, `nextEntrySequence()`, the
+   `entrySequence` field on `StockCountWorkingRow`, or its round-trip
+   through `workingRowToDraftItem`/`draftItemToWorkingRow`.
+2. **Two new, separate, timestamp-based sort modes are authorized**,
+   additive to — never a replacement of — the existing `'entry-order'`
+   mode:
+   - Newest authoritative entry/edit time → oldest.
+   - Oldest authoritative entry/edit time → newest.
+3. **The timestamp itself must be an authoritative, persisted timestamp
+   already associated with the row's own relevant write/edit state** —
+   never client-local time, and never a value invented or estimated by
+   this amendment. This Authorization does not itself select which
+   existing persisted timestamp field satisfies that requirement in
+   every relevant case (ordinary edits, same-writer corrections,
+   conflict resolution, interruption persistence, and the separate
+   backlog-cleanup action) — the Rule 8 Assessment (§8 item 9, §10 item
+   4) already identified `lastWriteAt` as a strong existing candidate,
+   already present in the schema for a different purpose, but final
+   confirmation that it correctly represents "latest valid edit" across
+   every one of those paths is deferred to engineering validation at
+   the Implementation Plan stage, per Decision 60's own instruction not
+   to select mechanism at the decision stage.
+4. **`entrySequence` is not silently redefined as a timestamp**, and no
+   part of this amendment treats the two concepts as interchangeable —
+   they remain two distinct sort keys serving two distinct, named
+   modes.
+
+**What this amendment does NOT do:**
+
+- Does not remove, replace, or deprecate the existing `'entry-order'`
+  mode or the `entrySequence` field.
+- Does not select the exact timestamp field/implementation — deferred
+  to the Implementation Plan.
+- Does not authorize any code, `firestore.rules`, or test change by
+  itself — implementation of the two new modes still requires its own
+  Implementation Plan and Implementation Authorization, exactly as any
+  other change would.
+- Does not reopen or alter anything else in this Authorization's
+  original §1–§5 scope.
+
+**Resulting six user-facing sort modes for Periodic Contagem** (per
+Decision 60 §13.C): (1) newest entry/edit time → oldest [new, this
+amendment], (2) oldest entry/edit time → newest [new, this amendment],
+(3) name A→Z [already authorized, unchanged], (4) name Z→A [already
+authorized, unchanged], (5) value high→low [already authorized,
+unchanged], (6) value low→high [already authorized, unchanged]. The
+existing internal `entrySequence`/`'entry-order'` concept continues to
+exist under its own original governance, distinct from the two new
+modes above, and is not itself one of Decision 60's six required
+user-facing modes.
+
+### Signature
+
+> I formally amend this Authorization to preserve `entrySequence`
+> exactly as originally authorized while additionally authorizing two
+> new, separate, timestamp-based sort modes required by Decision 60,
+> as specified in this §6. This amendment does not replace or
+> invalidate `entrySequence`, does not select the exact timestamp
+> mechanism (deferred to the Implementation Plan), and does not
+> authorize any code, `firestore.rules`, or test change.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 2026-09-05
+> **Decision:** ✅ ACCEPTED / AMENDED AS SPECIFIED ABOVE

@@ -2,7 +2,7 @@ Rule 8 Assessment — FINAL
 
 # Rule 8 Assessment — Periodic Contagem Interruption/Re-Entry Recovery, Authoritative-State Synchronization, and False-Conflict Prevention (Decision 60)
 
-**STATUS:** ✅ **FINAL — RULE 8 ASSESSMENT COMPLETE.** This document does not authorize implementation. A separate Implementation Plan and a signed Implementation Authorization remain required, subsequent gates.
+**STATUS:** ✅ **FINAL — RULE 8 ASSESSMENT COMPLETE.** This document does not authorize implementation. A separate Implementation Plan and a signed Implementation Authorization remain required, subsequent gates. **✅ UPDATED 5 September 2026 — see §13 — recording that the Product Architect has resolved both blocking items §1 identified (Decisions A, B, C); see §13 for the updated status.**
 
 **Governing chain:** [Decision 60 Amendment](../specs/stock-count-data-loss-resilience-decision-60-amendment.md) (✅ **ACCEPTED AS PROPOSED** — SABUSHIMIKE MASCENI, Product Architect, 5 September 2026, §12) → **this assessment** → (next: Implementation Plan, then Implementation Authorization — neither exists yet).
 
@@ -340,3 +340,40 @@ None to application code, `firestore.rules`, `firestore.indexes.json`, or tests.
 
 COMMITS:
 None yet for this assessment document itself — to be committed as a single governance-recording commit, consistent with every prior Rule 8 Assessment in this chain.
+
+---
+
+# 13. Post-Assessment Update — Product Architect Decisions Recorded (5 September 2026)
+
+**Everything above this section is preserved unedited as the historical record of this assessment exactly as originally concluded.** This section records, additively, that the Product Architect has since made the two decisions §1 identified as required before Implementation Planning could be correctly scoped:
+
+- **Decision A (resume/re-entry behavior)** — recorded in `../specs/stock-count-data-loss-resilience-decision-60-amendment.md` §13.A. Resolves §2.A's open question: the existing per-mount resume/discard gate does **not** satisfy "no forced restart" as the Product Architect intends it; the system must reopen an active Contagem directly on return, without requiring an explicit resume/discard decision, subject to the ten constraints recorded there (data must never be silently discarded, authoritative shared state must never be overwritten by stale local state, existing authority rules and Decision 55 remain unchanged, working position remains navigation-only). The mechanism (HOW) remains explicitly deferred to the Implementation Plan.
+- **Decision B (sort-mode persistence)** — recorded in the same document, §13.B. Resolves §10 item 1: sort-mode preference **should** persist across leave-and-return, subject to the seven constraints recorded there (display-only, never a source of truth, scoped safely to business/user/workspace, no cross-business/cross-user leakage, compatible with all six modes, mechanism deferred to the Implementation Plan).
+- **Decision C (formal amendment to the prior Entry-Order Sort Mode decision)** — the amendment itself is recorded in `periodic-contagem-entry-sequence-implementation-authorization.md` §6 (added 5 September 2026), not in this document. It preserves `entrySequence` exactly as originally authorized (2 September 2026) and additionally authorizes two new, separate, timestamp-based sort modes, resolving §7 and §10 item 5 of this assessment. The exact timestamp field/mechanism is still deferred to the Implementation Plan, per that amendment's own §6.
+
+**What this update does NOT do:** it does not itself constitute a new technical review — no new repository investigation was required to record these decisions, since they answer product questions this assessment already surfaced with full evidence, and none of them contradicts anything §2–§11 above found. It does not authorize an Implementation Plan, an Implementation Authorization, or any code/`firestore.rules`/test change. It does not reopen or re-examine Decisions 44–59, Decision 55's conflict semantics, or Decision 58's own scope.
+
+**Whether any further documentary update is needed before the next gate:** none identified. Every requirement, gap, and governance dependency §2–§9 identified is either already satisfied, now resolved by Decisions A/B/C above, or explicitly and correctly deferred to the Implementation Plan (the exact persistence mechanism for working position and sort mode; the exact timestamp field powering the two new sort modes; the exact resume/re-entry mechanism). No part of this assessment's own technical findings requires revision in light of Decisions A/B/C — they answer the open product questions this assessment raised without invalidating any of its evidence.
+
+---
+
+RULE 8 DECISION 60 — UPDATED STATUS (5 September 2026):
+READY FOR IMPLEMENTATION PLANNING, ONCE FORMALLY AUTHORIZED TO PROCEED
+
+DECISIONS 38–59:
+UNCHANGED / CLOSED
+
+DECISION 60:
+ACCEPTED — unchanged. Decisions A, B, and C (§13, above) resolve the two blocking Product Architect questions this assessment's original §1 identified; they narrow *how* §0/§3/§5 are read, they do not reopen, expand, or contradict any part of Decision 60's own accepted text.
+
+IMPLEMENTATION:
+STILL NOT AUTHORIZED — recording Decisions A/B/C is a Product Architect governance act, not an Implementation Plan or Implementation Authorization. Both remain separate, subsequent, explicitly-gated steps.
+
+NEXT GOVERNANCE GATE:
+Implementation Plan — may now be correctly scoped, since both product-level blockers are resolved — but has not been created and requires its own separate initiation, drafting, and (per this repository's standard sequence) its own subsequent Implementation Authorization before any code, `firestore.rules`, or test may be written.
+
+REPOSITORY CHANGES (this update):
+This document (§13 and this updated status block, added additively) and the Entry-Order Sort Mode amendment (`periodic-contagem-entry-sequence-implementation-authorization.md` §6). No application code, `firestore.rules`, `firestore.indexes.json`, or test changes.
+
+COMMITS:
+Recorded together with the Decision 60 amendment update and the Entry-Order Sort Mode amendment in this same governance-recording action.
