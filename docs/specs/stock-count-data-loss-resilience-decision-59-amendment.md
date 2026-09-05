@@ -2,7 +2,7 @@
 
 ## Decision 59 — CONFLICT-Backlog Rows No Longer Silently Refuse Ordinary Edits
 
-**Status:** ✅ IMPLEMENTED — RETROACTIVELY AUTHORIZED, PENDING PRODUCT ARCHITECT RATIFICATION SIGNATURE (§7). Code shipped and merged to `main` ahead of the normal gate sequence, at the Product Architect's own explicit, direct instruction, in response to a live production report from a real user. This document exists to give that already-shipped change the same governance record every other change in this chain receives — it does not itself authorize anything further, and the deviation from the normal order is disclosed plainly in §6 rather than presented as though the normal sequence was followed.
+**Status:** ✅ IMPLEMENTED — RATIFIED AS SHIPPED — 5 September 2026 (see §7a for the recorded signature; §7 preserved above it as the historical record of what was circulated for review). Code shipped and merged to `main` ahead of the normal gate sequence, at the Product Architect's own explicit, direct instruction, in response to a live production report from a real user. This document gives that already-shipped change the same governance record every other change in this chain receives — the deviation from the normal order is disclosed plainly in §6 rather than presented as though the normal sequence was followed.
 **Resolves:** A live production report — an operator could not edit an already-validated product in an active Periodic Contagem; the edit appeared to simply "not be accepted."
 **Builds on:** [Decision 39 Amendment](./stock-count-data-loss-resilience-decision-39-amendment.md) (per-row autosave), [Decision 41 Amendment](./stock-count-data-loss-resilience-decision-41-amendment.md) (bounded retry/error classification), [Decisions 44–56](../engineering/periodic-contagem-shared-live-data-decisions-44-56-implementation-authorization.md) (shared live data, conflict semantics), [Decision 55 Amendment](./stock-count-data-loss-resilience-decision-55-amendment.md) (Same-Row Concurrent Observation Conflict Semantics — the no-automatic-winner principle this fix does not touch), [Decision 58 Amendment](./stock-count-data-loss-resilience-decision-58-amendment.md) (interruption-flush persistence/retry parity — the fix that stops NEW blank-placeholder conflicts, distinct from this fix, which only stops the EXISTING backlog from silently blocking edits). This decision assumes and does not restate, reinterpret, weaken, or expand any of their governance content.
 **Does not reopen:** Decisions 38, 39, 40, 41, 44–58's own already-accepted content.
@@ -70,3 +70,19 @@ This repository's own governance discipline requires Decision → Rule 8 Assessm
 > **Product Architect:** _______________________________
 > **Date:** _______________________________
 > **Decision:** ☐ RATIFIED AS SHIPPED &nbsp;&nbsp; ☐ RATIFIED WITH NOTED CONCERNS (specify) &nbsp;&nbsp; ☐ NOT RATIFIED — FURTHER ACTION REQUIRED
+
+---
+
+# 7a. Signature — Recorded
+
+**Status: ✅ RATIFIED AS SHIPPED — SIGNED (5 September 2026).** Recorded additively below, per this repository's established signature-recording convention — the pending signature block immediately above (§7) is preserved unedited as the historical record of what was circulated for review; this section is the actual, dated act of ratification.
+
+> I confirm that I directed this fix to be implemented ahead of the normal Decision → Rule 8 → Plan → Authorization sequence, in direct response to a live user-reported production issue, and that the fix as shipped (commit `4e56521`) matches what I authorized. I ratify this specific deviation for this specific change; it does not change the required gate sequence for any other change in this repository.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 2026-09-05
+> **Decision:** ✅ RATIFIED AS SHIPPED
+
+**What this signature ratifies:** the disclosed governance-sequence deviation (§6, above) for this one specific, already-shipped change — commit `4e56521` on `main` (governance record itself committed as `b0c1713`). It confirms the fix as shipped matches what the Product Architect directed.
+
+**What this signature does NOT authorize:** any new implementation; any additional change to this decision's own technical scope; any relaxation of the normal Decision → Rule 8 → Plan → Authorization sequence for any other change in this repository, including the separate, broader Decision 60.
