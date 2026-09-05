@@ -1691,6 +1691,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // instruction that already-counted businesses must still be able to
   // view what they counted.
   const [viewingCount, setViewingCount] = useState<StockCount | null>(null);
+  // [Bug fix — silent PDF download failure] The historical modal
+  // renders above (z-50) the two places the shared `error` state
+  // already displays — setting `error` from inside this modal would be
+  // invisible until the operator closed it. A small, modal-scoped
+  // error instead, cleared whenever a different count is opened.
+  const [historicalPdfError, setHistoricalPdfError] = useState<string | null>(null);
+  // [Bug fix — silent PDF download failure] Same reasoning as
+  // historicalPdfError immediately above — this specific export button
+  // lives inside ReadOnlyDraftRecovery, a purely presentational
+  // component with no error display of its own until this fix; the
+  // shared `error` state is never rendered on this subscription
+  // -blocked branch at all.
+  const [blockedDraftPdfError, setBlockedDraftPdfError] = useState<string | null>(null);
 
   // [Bug fix — Owner-reported, real client complaint] Correction mode
   // previously opened a BLANK Contagem screen (every row auto-populated
@@ -5662,7 +5675,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const handleDownloadPreConfirmPdf = () => {
     const content = buildPreConfirmExportContent();
-    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables);
+    // [Bug fix — silent PDF download failure] exportReportPdf is async
+    // (dynamically imports jspdf/jspdf-autotable before building the
+    // document); every call site here previously fired it with no
+    // await and no .catch(), so a failed import, a transient network
+    // issue, or any error while building the document rejected into
+    // the void — the button appeared to simply do nothing, with no
+    // visible error at all. Every call site below now surfaces a real
+    // failure via the same setError(...) state this screen already
+    // uses everywhere else.
+    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables).catch(
+      (err: any) => setError(err?.message || 'Erro ao gerar o PDF da lista de contagem.')
+    );
   };
 
   const handleDownloadReceiptPdf = () => {
@@ -5672,7 +5696,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
     const content = buildReceiptContent();
     if (!content) return;
-    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables);
+    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables).catch(
+      (err: any) => setError(err?.message || 'Erro ao gerar o PDF do comprovativo.')
+    );
   };
 
   const handleDownloadReceiptExcel = () => {
@@ -5739,8 +5765,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const handleDownloadHistoricalPdf = () => {
     if (!viewingCount) return;
+    setHistoricalPdfError(null);
     const content = buildHistoricalExportContent(viewingCount);
-    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables);
+    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables).catch(
+      (err: any) => setHistoricalPdfError(err?.message || 'Erro ao gerar o PDF desta contagem.')
+    );
   };
 
   if (savedMessage) {
@@ -6265,6 +6294,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // see reportExport.ts.
       const draftRows = periodicStockDraft.items.filter((item) => !item.removed);
       const handleExportBlockedDraftPdf = () => {
+        setBlockedDraftPdfError(null);
         const reportTitle = `Lista de Contagem (por terminar) — ${TYPE_LABELS[periodicStockDraft.type]}`;
         const periodLabel = `${formatDate(periodicStockDraft.date)}${
           periodicStockDraft.label?.trim() ? ` — ${periodicStockDraft.label.trim()}` : ''
@@ -6283,7 +6313,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             ]),
           },
         ];
-        exportReportPdf(reportTitle, business?.name || 'Meu Negócio', periodLabel, kpis, tables);
+        exportReportPdf(reportTitle, business?.name || 'Meu Negócio', periodLabel, kpis, tables).catch(
+          (err: any) => setBlockedDraftPdfError(err?.message || 'Erro ao gerar o PDF deste rascunho.')
+        );
       };
       return (
         <ReadOnlyDraftRecovery
@@ -6300,6 +6332,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           }))}
           currencySymbol={currencySymbol}
           onExportPdf={handleExportBlockedDraftPdf}
+          exportPdfError={blockedDraftPdfError}
         />
       );
     }
@@ -8425,7 +8458,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <button
                   type="button"
                   key={count.id}
-                  onClick={() => setViewingCount(count)}
+                  onClick={() => {
+                    setHistoricalPdfError(null);
+                    setViewingCount(count);
+                  }}
                   className="w-full flex items-center justify-between gap-2 rounded-xl px-3 py-2.5 -mx-2.5 transition-colors duration-150 hover:bg-[#FAFBFC] text-left"
                 >
                   <div>
@@ -8591,6 +8627,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 </button>
               </div>
             </div>
+
+            {historicalPdfError && (
+              <div className="mx-5 sm:mx-6 mt-3 px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[13px] font-medium">
+                {historicalPdfError}
+              </div>
+            )}
 
             <div className="flex-1 overflow-y-auto px-5 sm:px-6 py-3 space-y-1">
               {viewingCount.items.length === 0 ? (

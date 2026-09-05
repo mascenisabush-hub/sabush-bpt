@@ -198,6 +198,87 @@ describe('D — Historical PDF export reuses the existing exportReportPdf helper
   });
 });
 
+describe('D2 — Bug fix: silent PDF download failure now surfaces a visible error, for every export call site', () => {
+  // [Bug fix — silent PDF download failure] exportReportPdf is async
+  // (dynamically imports jspdf/jspdf-autotable before building the
+  // document) — every call site previously fired it with no await and
+  // no .catch(), so any failure (a failed dynamic import, a transient
+  // network issue, any error while building the document) rejected
+  // into the void: the button appeared to simply do nothing. All four
+  // call sites now catch and surface a real message.
+  it('handleDownloadPreConfirmPdf catches a rejection and surfaces it via setError', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleDownloadPreConfirmPdf = () => {');
+    assert.match(body, /\.catch\(\s*\n?\s*\(err: any\) => setError\(/);
+  });
+
+  it('handleDownloadReceiptPdf catches a rejection and surfaces it via setError', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleDownloadReceiptPdf = () => {');
+    assert.match(body, /\.catch\(\s*\n?\s*\(err: any\) => setError\(/);
+  });
+
+  it('handleDownloadHistoricalPdf catches a rejection and surfaces it via a MODAL-SCOPED error state (historicalPdfError), never the shared `error` state — the historical modal is a z-50 overlay rendered above both places `error` displays, so setting the shared state there would be invisible until the modal was closed', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleDownloadHistoricalPdf = () => {');
+    assert.match(body, /\.catch\(\s*\n?\s*\(err: any\) => setHistoricalPdfError\(/);
+    assert.doesNotMatch(body, /setError\(/, 'must not use the shared error state, which is not visible while this modal is open');
+  });
+
+  it('historicalPdfError is declared as local state, cleared both when a new count is opened and at the start of every export attempt', () => {
+    assert.match(periodicSrc, /const \[historicalPdfError, setHistoricalPdfError\] = useState<string \| null>\(null\);/);
+    // Cleared on open, so a stale error from a PREVIOUS count never
+    // bleeds into a newly-opened one.
+    assert.match(periodicSrc, /setHistoricalPdfError\(null\);\s*\n\s*setViewingCount\(count\);/);
+    // Cleared at the start of a fresh attempt, so a successful retry
+    // after a failure doesn't leave the old message lingering.
+    const handlerBody = extractFunctionBody(periodicSrc, 'const handleDownloadHistoricalPdf = () => {');
+    assert.match(handlerBody, /setHistoricalPdfError\(null\);/);
+  });
+
+  it('the historical modal renders historicalPdfError as a visible inline banner, inside the modal itself', () => {
+    assert.match(modal, /\{historicalPdfError && \(/);
+  });
+
+  it('the subscription-blocked export (handleExportBlockedDraftPdf) catches a rejection and passes it to ReadOnlyDraftRecovery via its new exportPdfError prop — that component is purely presentational and has no error-detection of its own', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleExportBlockedDraftPdf = () => {');
+    assert.match(body, /\.catch\(\s*\n?\s*\(err: any\) => setBlockedDraftPdfError\(/);
+    assert.match(periodicSrc, /exportPdfError=\{blockedDraftPdfError\}/);
+  });
+
+  it('ReadOnlyDraftRecovery.tsx accepts an optional exportPdfError prop and renders it as an inline banner near the export button, without performing any export or error-detection logic of its own', () => {
+    const readOnlySrcLocal = readFileSync(
+      new URL('../apps/tenant/src/components/ReadOnlyDraftRecovery.tsx', import.meta.url),
+      'utf-8'
+    );
+    assert.match(readOnlySrcLocal, /exportPdfError\?: string \| null;/);
+    assert.match(readOnlySrcLocal, /\{exportPdfError && \(/);
+    // Still purely presentational — this fix must not have introduced
+    // any Firestore access or export logic into this component. Checks
+    // for actual usage (an import or a call), not mere mentions in
+    // explanatory comments — the file's own pre-existing header comment
+    // already references exportReportPdf by name to explain why it
+    // deliberately has none.
+    assert.doesNotMatch(readOnlySrcLocal, /collection\(|doc\(|onSnapshot\(|getDoc\(/);
+    assert.doesNotMatch(readOnlySrcLocal, /import .*exportReportPdf|exportReportPdf\(/);
+  });
+
+  it('none of the four fixes touch any persistence/autosave function — every catch handler only calls a setState, never a draft/Firestore function', () => {
+    for (const marker of [
+      'const handleDownloadPreConfirmPdf = () => {',
+      'const handleDownloadReceiptPdf = () => {',
+      'const handleDownloadHistoricalPdf = () => {',
+      'const handleExportBlockedDraftPdf = () => {',
+    ]) {
+      const body = extractFunctionBody(periodicSrc, marker);
+      const catchBlockMatch = body.match(/\.catch\(\s*\n?\s*\(err: any\) => set\w+\([^)]*\)\s*\n?\s*\);/);
+      assert.notEqual(catchBlockMatch, null, `expected a .catch(...) block in ${marker}`);
+      assert.doesNotMatch(
+        catchBlockMatch![0],
+        /updateCatalogRow|updateManualRow|clearPeriodicStockDraft|flushPeriodicDraftNow|recordStockCount/,
+        'a PDF-export failure handler must never touch persistence — only report the error'
+      );
+    }
+  });
+});
+
 // ---------------------------------------------------------------------
 // E. Currency/formatting consistency
 // ---------------------------------------------------------------------

@@ -53,6 +53,14 @@ export interface ReadOnlyDraftRecoveryProps {
    * caller's own comment for which screens currently have one.
    */
   onExportPdf?: () => void;
+  /**
+   * [Bug fix — silent PDF download failure] When set (non-null), shown
+   * as an inline error banner near the export button — the caller is
+   * responsible for catching exportReportPdf's own rejection and
+   * passing the resulting message here; this component itself performs
+   * no export logic and has no way to detect a failure on its own.
+   */
+  exportPdfError?: string | null;
 }
 
 // [Decision 41E §5/§6] One shared component covers both Periodic
@@ -67,6 +75,7 @@ export const ReadOnlyDraftRecovery: React.FC<ReadOnlyDraftRecoveryProps> = ({
   rows,
   currencySymbol,
   onExportPdf,
+  exportPdfError,
 }) => {
   return (
     <div className="max-w-5xl mx-auto pb-12 space-y-6">
@@ -99,6 +108,12 @@ export const ReadOnlyDraftRecovery: React.FC<ReadOnlyDraftRecoveryProps> = ({
             </button>
           )}
         </div>
+
+        {exportPdfError && (
+          <div className="bg-rose-50 border border-rose-200 rounded-xl px-3.5 py-2.5 text-[13px] font-medium text-rose-700">
+            {exportPdfError}
+          </div>
+        )}
 
         <div className="bg-amber-50 border border-amber-200 rounded-xl px-3.5 py-2.5 text-[12px] leading-relaxed text-amber-800">
           Está a ver os dados já guardados deste rascunho. Enquanto a subscrição estiver bloqueada, não é possível
