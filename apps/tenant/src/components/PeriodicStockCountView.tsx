@@ -8453,7 +8453,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 ['/', 'Focar a pesquisa de produtos'],
                 ['↑ / ↓', 'Navegar na lista de produtos'],
                 ['Esc', 'Fechar/cancelar/voltar'],
-                ['N', 'Adicionar produto que não está no catálogo'],
+                ['N', 'Adicionar um produto novo'],
                 ['?', 'Mostrar/ocultar esta ajuda'],
               ].map(([key, desc]) => (
                 <div key={key} className="flex items-center justify-between gap-3">
