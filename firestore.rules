@@ -1528,6 +1528,26 @@ service cloud.firestore {
         allow delete: if isMemberOf(businessId) && request.auth.uid == draftId;
       }
 
+      // [Decision 60 §13.B — Sort-Mode Persistence; §13.A item 10 —
+      // Working-Position Recovery] Per-user, per-business preference
+      // document for the Periodic Contagem view — display/navigation
+      // state ONLY (sort mode, last-open product pointer), never
+      // quantities, observations, conflicts, or any other authoritative
+      // Contagem data (that remains exclusively in
+      // stockCountDrafts/periodic and its items subcollection, above,
+      // completely untouched by this collection). Scoped per-user via
+      // the document ID itself, identical in shape to purchaseDrafts
+      // immediately above — uid MUST equal the caller's own uid, so
+      // two different users' preferences are two different documents
+      // by construction; no ownership field needed, and no cross-user
+      // read is possible even on a shared device, since a different
+      // authenticated session simply has a different uid and
+      // therefore a different document path. Never subscription-gated
+      // — this is pure UI preference, not a business record.
+      match /periodicContagemUserPrefs/{uid} {
+        allow read, create, update, delete: if isMemberOf(businessId) && request.auth.uid == uid;
+      }
+
       // [Initial Stock Valuation History] Immutable, append-only audit
       // trail of price changes affecting units still remaining from the
       // original 'initial' StockCount — NEVER an edit to that StockCount

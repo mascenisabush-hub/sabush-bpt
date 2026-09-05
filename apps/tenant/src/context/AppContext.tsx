@@ -67,6 +67,7 @@ import {
   ContagemAuthority,
   PurchaseDraft,
   PurchaseDraftLineItem,
+  PeriodicContagemUserPrefs,
   SupplierRecord,
   Withdrawal,
   Closing,
@@ -869,6 +870,15 @@ interface AppContextType {
     purchaseEventId?: string
   ) => Promise<void>;
   clearPurchaseDraft: () => Promise<void>;
+  // [Decision 60 §13.B/§13.A item 10] Per-user, per-business Periodic
+  // Contagem display/navigation preference — null until the current
+  // user has ever set a sort mode or opened a workspace this business.
+  // Display state only; never a source of truth for Contagem data.
+  periodicContagemUserPrefs: PeriodicContagemUserPrefs | null;
+  periodicContagemUserPrefsLoaded: boolean;
+  savePeriodicContagemUserPrefs: (
+    updates: Partial<Pick<PeriodicContagemUserPrefs, 'sortMode' | 'lastWorkspaceProductKey'>>
+  ) => Promise<void>;
   // [Smart Stock Entry — Tier 1] Calls the server's extraction route for
   // one photographed purchase document. Returns a transient proposal
   // ONLY — this function never writes to purchaseDrafts, never creates a
@@ -1245,6 +1255,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // not per-business, but the race is identical.
   const [purchaseDraft, setPurchaseDraft] = useState<PurchaseDraft | null>(null);
   const [purchaseDraftLoaded, setPurchaseDraftLoaded] = useState(false);
+  // [Decision 60 §13.B/§13.A item 10] Per-user, per-business Periodic
+  // Contagem display/navigation preference (sort mode, last-open
+  // product pointer) — same per-(businessId, uid) shape and race
+  // consideration as purchaseDraft immediately above, deliberately
+  // isolated into its own effect below for the identical reason
+  // (user-specific, not tenant-wide).
+  const [periodicContagemUserPrefs, setPeriodicContagemUserPrefs] = useState<PeriodicContagemUserPrefs | null>(null);
+  const [periodicContagemUserPrefsLoaded, setPeriodicContagemUserPrefsLoaded] = useState(false);
   const [withdrawals, setWithdrawals] = useState<Withdrawal[]>([]);
   const [payments, setPayments] = useState<Payment[]>([]);
   const [closings, setClosings] = useState<Closing[]>([]);
@@ -2692,6 +2710,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
 
     return () => unsubPurchaseDraft();
+  }, [activeBusinessId, currentUser]);
+
+  // [Decision 60 §13.B/§13.A item 10] Isolated, per-(businessId, uid)
+  // effect — same reasoning as purchaseDraft's own effect immediately
+  // above: keying this into the tenant-wide listener block would tear
+  // down unrelated collections on every staff quick-login switch.
+  useEffect(() => {
+    setPeriodicContagemUserPrefs(null);
+    setPeriodicContagemUserPrefsLoaded(false);
+
+    const uid = currentUser?.uid;
+    if (!activeBusinessId || !uid) {
+      return;
+    }
+
+    const prefsRef = doc(db, 'businesses', activeBusinessId, 'periodicContagemUserPrefs', uid);
+    const unsubPeriodicContagemUserPrefs = onSnapshot(
+      prefsRef,
+      (snap) => {
+        setPeriodicContagemUserPrefs(snap.exists() ? (snap.data() as PeriodicContagemUserPrefs) : null);
+        setPeriodicContagemUserPrefsLoaded(true);
+      },
+      () => {
+        setPeriodicContagemUserPrefs(null);
+        setPeriodicContagemUserPrefsLoaded(true);
+      }
+    );
+
+    return () => unsubPeriodicContagemUserPrefs();
   }, [activeBusinessId, currentUser]);
 
   // Actions
@@ -7109,6 +7156,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'purchaseDrafts', currentUser.uid));
   };
 
+  // [Decision 60 §13.B — Sort-Mode Persistence; §13.A item 10 —
+  // Working-Position Recovery] A partial-update merge, not a full
+  // `savePurchaseDraft`-style overwrite — the two fields this
+  // preference doc holds (`sortMode`, `lastWorkspaceProductKey`) are
+  // set independently, from different UI moments (changing the sort
+  // control vs. opening/leaving a product's workspace), and neither
+  // should ever be silently blanked by the other's own write. Never
+  // wrapped in the heavier readback-uncertain-error discipline every
+  // durable business-data write in this file uses (savePurchaseDraft,
+  // savePeriodicStockDraftItem, etc.) — deliberately: this is pure,
+  // low-stakes UI preference, trivially re-suppliable on the next
+  // change, never a source of truth for anything about the count
+  // itself (Decision 60's own explicit "never a second source of
+  // truth" requirement). A failed write here costs nothing more than
+  // the display reverting to its default next time; it can never lose
+  // or corrupt Contagem data, so it does not warrant the same
+  // durability guarantees.
+  const savePeriodicContagemUserPrefs = async (
+    updates: Partial<Pick<PeriodicContagemUserPrefs, 'sortMode' | 'lastWorkspaceProductKey'>>
+  ) => {
+    if (!activeBusinessId || !currentUser) return;
+    const prefsRef = doc(db, 'businesses', activeBusinessId, 'periodicContagemUserPrefs', currentUser.uid);
+    await setDoc(
+      prefsRef,
+      {
+        ...updates,
+        updatedAt: new Date().toISOString(),
+      },
+      { merge: true }
+    );
+  };
+
   // [Smart Stock Entry — Tier 1] See the interface's own comment above —
   // this NEVER touches purchaseDrafts and NEVER writes anything. It is a
   // thin wrapper around one privileged server call, following the exact
@@ -8232,6 +8311,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         purchaseDraftLoaded,
         savePurchaseDraft,
         clearPurchaseDraft,
+        periodicContagemUserPrefs,
+        periodicContagemUserPrefsLoaded,
+        savePeriodicContagemUserPrefs,
         scanPurchaseDocument,
         findSemanticSupplierWordingCandidates,
         expectedCurrentStockValue,

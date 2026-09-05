@@ -1610,6 +1610,24 @@ export interface PurchaseDraft {
   updatedAt: string; // ISO string
 }
 
+// [Decision 60 §13.B — Sort-Mode Persistence; §13.A item 10 —
+// Working-Position Recovery] Per-user, per-business preference
+// document for the Periodic Contagem view. Display/navigation state
+// ONLY — never quantities, observations, conflicts, validation state,
+// or authority. `lastWorkspaceProductKey` is a pure pointer (the same
+// `productKeyFor(...)`-shaped string `activeWorkspaceKey` already
+// uses) — it is never read as a source of quantity/state anywhere;
+// the authoritative Contagem data model
+// (`periodicStockDraftItemsByKey`/`catalogRows`/`manualRows`) remains
+// the sole source of truth for that. A stale/since-removed pointer
+// must degrade gracefully (simply fails to match anything current),
+// never error.
+export interface PeriodicContagemUserPrefs {
+  sortMode?: 'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc';
+  lastWorkspaceProductKey?: string | null;
+  updatedAt: string; // ISO string
+}
+
 // ============================================================
 // INITIAL STOCK PRICE CHANGE EVENTS
 // ============================================================

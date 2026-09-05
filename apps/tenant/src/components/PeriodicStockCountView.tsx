@@ -686,6 +686,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     resolvePeriodicConflict,
     staffMembers,
     currentUser,
+    // [Decision 60 §13.B/§13.A item 10] Per-user, per-business
+    // Periodic Contagem display/navigation preference (sort mode,
+    // last-open product pointer) — display state only.
+    periodicContagemUserPrefs,
+    periodicContagemUserPrefsLoaded,
+    savePeriodicContagemUserPrefs,
   } = useApp();
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
@@ -1067,6 +1073,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [validatedSortMode, setValidatedSortMode] = useState<
     'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc'
   >('name-asc');
+  // [Decision 60 §13.B — Sort-Mode Persistence] Guards the one-time
+  // restore below so it applies exactly once per mount, never
+  // repeatedly overriding a later in-session change the operator makes
+  // (e.g. if the preference doc's own listener happens to re-deliver a
+  // snapshot after the operator has already picked a different mode
+  // this session).
+  const sortModeRestoredRef = useRef(false);
+  useEffect(() => {
+    if (sortModeRestoredRef.current) return;
+    if (!periodicContagemUserPrefsLoaded) return;
+    sortModeRestoredRef.current = true;
+    if (periodicContagemUserPrefs?.sortMode) {
+      setValidatedSortMode(periodicContagemUserPrefs.sortMode);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodicContagemUserPrefsLoaded]);
+  // [Decision 60 §13.B] Persists every SUBSEQUENT change — never the
+  // restore-effect's own initial programmatic set, immediately above
+  // (guarded by the same ref), so restoring a saved preference never
+  // immediately writes that exact same value straight back.
+  useEffect(() => {
+    if (!sortModeRestoredRef.current) return;
+    if (validatedSortMode === periodicContagemUserPrefs?.sortMode) return;
+    savePeriodicContagemUserPrefs({ sortMode: validatedSortMode }).catch(() => {
+      // Best-effort, same reasoning as the working-position effect
+      // above — never surfaced, never retried, never Contagem data.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [validatedSortMode]);
   // [Picker — table view with sorting] UI-only, ephemeral, never
   // persisted — same discipline as validatedSortMode immediately
   // above, applied to the NOT-YET-ACTIVE product picker list instead
@@ -3495,6 +3530,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const isWorkspaceActive = activeWorkspaceKey !== null || activeNewManualRowIndex !== null;
 
+  // [Decision 60 §13.A item 10 — Working-Position Recovery] Persists
+  // ONLY the navigation pointer (which product's workspace was open),
+  // never a value — the authoritative quantity/state remains
+  // exclusively in catalogRows/manualRows/periodicStockDraftItemsByKey,
+  // completely untouched by this effect. Fires only when a workspace
+  // genuinely OPENS for an existing/real product key (never on close,
+  // and never for a manual row still mid-naming, whose key would be
+  // null per activeWorkspaceProductKey's own definition above) — so a
+  // later interruption mid-edit leaves the LAST real product pointer
+  // in place for the operator to find on return, rather than being
+  // silently cleared the moment they finish or navigate away.
+  useEffect(() => {
+    if (activeWorkspaceProductKey === null) return;
+    if (activeWorkspaceProductKey === periodicContagemUserPrefs?.lastWorkspaceProductKey) return;
+    savePeriodicContagemUserPrefs({ lastWorkspaceProductKey: activeWorkspaceProductKey }).catch(() => {
+      // [Decision 60 §13.B's own reasoning] Best-effort — a failed
+      // preference write costs nothing beyond the hint not updating
+      // this time; never surfaced as an error, never retried, never
+      // capable of affecting Contagem data.
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [activeWorkspaceProductKey]);
+
   // [Implementation Authorization — Single-Product Workspace] THE
   // active-workspace view of catalog rows — deliberately named
   // `visibleCatalogEntries` (reusing the exact name every existing
@@ -3965,6 +4023,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }));
     return [...catalogEntries, ...manualEntries];
   }, [catalogRows, manualRows, periodicStockDraftItemsByKey]);
+
+  // [Decision 60 §13.A item 10 — Working-Position Recovery] A pure
+  // navigation lookup — resolves the persisted pointer to a currently-
+  // real entry, so a stale pointer (the product was removed, or its
+  // count already finalized) simply resolves to `undefined` and the
+  // hint below renders nothing, degrading gracefully rather than
+  // erroring. Never itself a source of quantity/state — only used to
+  // render a clickable label and to re-invoke the SAME existing
+  // `handleUnifiedEntryClick` every ordinary row click already uses.
+  const lastWorkspaceEntry = useMemo(() => {
+    if (!periodicContagemUserPrefs?.lastWorkspaceProductKey) return undefined;
+    return unifiedListEntries.find((entry) => entry.activationKey === periodicContagemUserPrefs.lastWorkspaceProductKey);
+  }, [unifiedListEntries, periodicContagemUserPrefs?.lastWorkspaceProductKey]);
 
   // Search — reuses the exact same `productSearch` state the old picker
   // already read, applied the same way (trim + lowercase substring
@@ -6344,6 +6415,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               editable form immediately below (unchanged). */}
           {!isWorkspaceActive && (
             <>
+              {/* [Decision 60 §13.A item 10 — Working-Position
+                  Recovery] Pure navigation hint — clicking it does
+                  nothing more than the exact same
+                  `handleUnifiedEntryClick` every ordinary row click in
+                  the unified list already invokes; no separate
+                  activation path, no field values read from anywhere
+                  but the authoritative row itself. Renders nothing
+                  when there is no persisted pointer, or when it no
+                  longer resolves to a real, current entry (removed
+                  product, already-finalized count, etc.) —
+                  degrades silently, never an error. */}
+              {lastWorkspaceEntry && (
+                <button
+                  type="button"
+                  onClick={() => handleUnifiedEntryClick(lastWorkspaceEntry)}
+                  className="w-full py-2 px-3 rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/[0.06] hover:bg-[#D4AF37]/[0.12] text-[13px] text-[#0B1F3A] font-semibold text-left transition-colors duration-150 flex items-center gap-2"
+                >
+                  <Circle className="w-3 h-3 text-[#D4AF37] shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                  <span className="truncate">Continuar de onde ficou: {lastWorkspaceEntry.productName}</span>
+                </button>
+              )}
               <p className="text-[13px] text-gray-500 italic">
                 Escolha um produto na lista à direita para começar a contar, ou adicione um novo abaixo.
               </p>
