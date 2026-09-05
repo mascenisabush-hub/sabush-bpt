@@ -58,9 +58,14 @@ describe('A — Clicking an existing counted (catalog) product opens its existin
     assert.match(reopenBody, /setActiveNewManualRowIndex\(null\)/);
   });
 
-  it('the activated key resolves back to the SAME existing row via the unmodified visibleCatalogEntries filter (productKeyFor(row.productName) === activeWorkspaceProductKey) — proving this opens the existing row, not a placeholder', () => {
+  it('reopenExistingProductForEditing captures the STABLE row identity (catalog ids / manual indices) belonging to this key at the moment it opens, alongside activating the workspace — never re-derived from the row\'s live name afterward (Bug fix — "editing a name, everything disappears")', () => {
+    assert.match(reopenBody, /setActiveWorkspaceRowIdentity\(computeWorkspaceRowIdentity\(key\)\)/);
+  });
+
+  it('the activated key resolves back to the SAME existing row via the STABLE identity snapshot (activeWorkspaceRowIdentity.catalogIds), never by re-matching the row\'s current name against the key — proving this opens the existing row, not a placeholder, and stays open even if its name is edited afterward', () => {
     const visibleCatalogBody = extractFunctionBody(periodicSrc, 'const visibleCatalogEntries = useMemo(() => {');
-    assert.match(visibleCatalogBody, /productKeyFor\(row\.productName\) === activeWorkspaceProductKey/);
+    assert.match(visibleCatalogBody, /const catalogIdSet = new Set\(activeWorkspaceRowIdentity\.catalogIds\);/);
+    assert.match(visibleCatalogBody, /catalogIdSet\.has\(id\)/);
   });
 });
 
@@ -70,9 +75,10 @@ describe('B — Clicking an existing counted (manual) product opens its existing
     assert.match(editManualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
   });
 
-  it('the activated key resolves back to the SAME existing manual-row group via the unmodified visibleManualRowGroups filter (group.key === activeWorkspaceProductKey)', () => {
+  it('the activated key resolves back to the SAME existing manual-row group via the STABLE identity snapshot (activeWorkspaceRowIdentity.manualIndices), never by re-matching each group\'s current name against the key — same fix, same reasoning, as the catalog-row case above', () => {
     const visibleManualBody = extractFunctionBody(periodicSrc, 'const visibleManualRowGroups = useMemo(() => {');
-    assert.match(visibleManualBody, /group\.key === activeWorkspaceProductKey/);
+    assert.match(visibleManualBody, /const idxSet = new Set\(activeWorkspaceRowIdentity\.manualIndices\);/);
+    assert.match(visibleManualBody, /idxSet\.has\(r\.idx\)/);
   });
 });
 

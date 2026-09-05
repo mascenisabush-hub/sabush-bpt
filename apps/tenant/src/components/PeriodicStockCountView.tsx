@@ -1007,6 +1007,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the handlers below, never by a runtime assertion.
   const [activeWorkspaceKey, setActiveWorkspaceKey] = useState<string | null>(null);
   const [activeNewManualRowIndex, setActiveNewManualRowIndex] = useState<number | null>(null);
+  // [Bug fix — reported live, "editing a name, one letter, everything
+  // disappears"] `activeWorkspaceKey`/`activeWorkspaceProductKey` are
+  // themselves derived from a product's own NAME — the exact field the
+  // workspace lets the operator edit. Every row's *membership* in the
+  // active workspace used to be re-derived on every render by matching
+  // each row's CURRENT name against that key (`visibleCatalogEntries`/
+  // `visibleManualRowGroups`, below) — so typing even one character
+  // into the name field changed that row's own computed key, made it
+  // stop matching itself, and dropped it out of its own workspace
+  // instantly; the auto-close safety-net effect (further below) then
+  // saw an empty workspace and closed it outright, exactly matching
+  // the reported symptom. Fixed by tracking membership as a STABLE
+  // snapshot of row identity (catalog ids / manual row indices),
+  // captured the moment the workspace opens (or a portion is added to
+  // it) — never re-derived from whatever the name field currently
+  // says. `productKeyFor` matching is still used, exactly once, at
+  // each of those capture moments, to find every row that belongs to
+  // this product's opening set — never afterward, on every render.
+  const [activeWorkspaceRowIdentity, setActiveWorkspaceRowIdentity] = useState<{
+    catalogIds: string[];
+    manualIndices: number[];
+  }>({ catalogIds: [], manualIndices: [] });
   // [Existing-Product Edit/Confirm Workflow] UI-only, ephemeral, never
   // persisted — same discipline as activeWorkspaceKey/
   // activeNewManualRowIndex, immediately above. Set ONLY by
@@ -2382,6 +2404,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const productKeyFor = (name: string) => name.trim().toLowerCase();
 
+  // [Bug fix — companion to activeWorkspaceRowIdentity, above] The one
+  // place `productKeyFor` name-matching is still used to determine
+  // workspace membership — at the moment a workspace opens (or a
+  // portion is added to one), never afterward. Reads `catalogRows`/
+  // `manualRows` live (a plain function call, not a memo), so it
+  // always captures whatever rows currently share this key at the
+  // exact instant it's called.
+  const computeWorkspaceRowIdentity = (key: string): { catalogIds: string[]; manualIndices: number[] } => ({
+    catalogIds: Object.entries(catalogRows)
+      .filter(([, row]) => !row.removed && productKeyFor(row.productName) === key)
+      .map(([id]) => id),
+    manualIndices: manualRows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => !row.removed && productKeyFor(row.productName) === key)
+      .map(({ index }) => index),
+  });
+
   // [Business Worth Evolution — Decision 37, B.1: Product-Level
   // First-Time Contagem Information Panel; B.2: Arbitrary-Length
   // Unit-Relationship Entry] Product-level first-time information —
@@ -3251,6 +3290,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
     const nextManualRows = [...manualRows, newRow];
     setManualRows(nextManualRows);
+    // [Bug fix] A portion added to an already-open workspace must join
+    // it immediately, by its own new stable index — never rely on a
+    // later re-derivation from its (shared) name, which is exactly the
+    // mechanism the rest of this fix removes.
+    setActiveWorkspaceRowIdentity((prev) => ({ ...prev, manualIndices: [...prev.manualIndices, nextManualRows.length - 1] }));
     // [Decision 39a] Structural add — '__meta__', matching handleAddManualRow.
     scheduleRowDraftSave('__meta__');
   };
@@ -3617,10 +3661,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // workspace is empty, with no change to those guards themselves.
   const visibleCatalogEntries = useMemo(() => {
     if (activeWorkspaceProductKey === null) return [];
-    return Object.entries(catalogRows).filter(
-      ([, row]) => !row.removed && !row.validated && productKeyFor(row.productName) === activeWorkspaceProductKey
-    );
-  }, [catalogRows, activeWorkspaceProductKey]);
+    // [Bug fix — "editing a name, one letter, everything disappears"]
+    // Membership is the STABLE identity snapshot captured when this
+    // workspace opened (activeWorkspaceRowIdentity, above) — never a
+    // live re-match of the row's CURRENT name against the key. Catalog
+    // rows have no editable name field in this view, so this specific
+    // filter was never the one causing the reported symptom, but it is
+    // switched to the same stable mechanism for consistency with
+    // visibleManualRowGroups, below, and so a future catalog-row rename
+    // affordance could not silently reintroduce the same class of bug.
+    const catalogIdSet = new Set(activeWorkspaceRowIdentity.catalogIds);
+    return Object.entries(catalogRows).filter(([id, row]) => !row.removed && !row.validated && catalogIdSet.has(id));
+  }, [catalogRows, activeWorkspaceProductKey, activeWorkspaceRowIdentity]);
 
   // The full working list — every catalog row (visible, removed,
   // validated, or still-blank alike) plus every manual row — is what
@@ -3898,10 +3950,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return manualRowGroups.filter((group) => group.rows.some((r) => r.idx === activeNewManualRowIndex));
     }
     if (activeWorkspaceProductKey !== null) {
-      return manualRowGroups.filter((group) => group.key === activeWorkspaceProductKey);
+      // [Bug fix — "editing a name, one letter, everything disappears"]
+      // Was `group.key === activeWorkspaceProductKey` — re-matching
+      // EVERY row's CURRENT name, on every render, against the key
+      // captured when the workspace opened. Since `manualRowGroups`
+      // itself is recomputed fresh from `manualRows` by CURRENT name on
+      // every render, typing even one character into a row's own name
+      // field moved it into a different (or brand-new) group, so the
+      // OLD group keyed by `activeWorkspaceProductKey` came back empty
+      // — the row vanished from its own open workspace, and the
+      // auto-close safety-net effect (below) then closed the whole
+      // workspace outright, seeing nothing left in it. Fixed by
+      // filtering each group's ROWS by the STABLE index snapshot
+      // (`activeWorkspaceRowIdentity`, captured once when the
+      // workspace opened or a portion was added to it — see that
+      // state's own declaration) rather than re-matching groups by
+      // name — a row keeps its place in the open workspace no matter
+      // what its name currently says, exactly like every other field.
+      const idxSet = new Set(activeWorkspaceRowIdentity.manualIndices);
+      return manualRowGroups
+        .map((group) => ({ ...group, rows: group.rows.filter((r) => idxSet.has(r.idx)) }))
+        .filter((group) => group.rows.length > 0);
     }
     return [];
-  }, [manualRowGroups, activeNewManualRowIndex, activeWorkspaceProductKey]);
+  }, [manualRowGroups, activeNewManualRowIndex, activeWorkspaceProductKey, activeWorkspaceRowIdentity]);
 
   // [Implementation Authorization — Single-Product Workspace] Safety
   // net for two edge cases, neither of which changes any business
@@ -3925,6 +3997,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (rows.length === 0 || rows.every((row) => row.validated)) {
       setActiveWorkspaceKey(null);
       setActiveNewManualRowIndex(null);
+      // [Bug fix] Cleared alongside the two writes above — nothing
+      // left open to track membership for.
+      setActiveWorkspaceRowIdentity({ catalogIds: [], manualIndices: [] });
       // [Existing-Product Edit/Confirm Workflow] Cleared alongside the
       // two pre-existing writes above — the product just left the
       // workspace via ordinary validation (the SAME Validar path this
@@ -3985,6 +4060,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const handleSelectExistingProductForWorkspace = (key: string) => {
     setActiveWorkspaceKey(key);
     setActiveNewManualRowIndex(null);
+    // [Bug fix] Snapshot which rows belong to this workspace right now
+    // — see activeWorkspaceRowIdentity's own declaration for why this
+    // must never be re-derived from the live name afterward.
+    setActiveWorkspaceRowIdentity(computeWorkspaceRowIdentity(key));
     // [Existing-Product Edit/Confirm Workflow] Picking an ordinary,
     // not-yet-validated product from the picker table is never a
     // "reopen an already-counted product" action — clears any stale
@@ -4183,6 +4262,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // state. This early return means even a stale/rapid click can
     // never activate a second independent product.
     if (isWorkspaceActive && activeWorkspaceProductKey !== key) return;
+    // [Bug fix] Snapshot which rows belong to this workspace right now
+    // — ALL rows sharing this name (validated or not), not only the
+    // validated ones the block below separately tracks for Voltar's
+    // own purposes. See activeWorkspaceRowIdentity's own declaration
+    // for why this must never be re-derived from the live name
+    // afterward — this is the one fix for "editing the name makes the
+    // whole workspace disappear."
+    setActiveWorkspaceRowIdentity(computeWorkspaceRowIdentity(key));
     // [Voltar edge-case fix] Snapshot WHICH rows are validated for this
     // product right now — BEFORE the un-validation below touches
     // anything — by their stable identity only (catalog row id / manual
@@ -4349,6 +4436,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setReopenedValidatedManualRowIndices(null);
     setActiveWorkspaceKey(null);
     setActiveNewManualRowIndex(null);
+    // [Bug fix] Nothing left open to track membership for.
+    setActiveWorkspaceRowIdentity({ catalogIds: [], manualIndices: [] });
   };
 
   // [Owner-requested — picker as a sortable, scrollable table with
@@ -4440,6 +4529,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     handleAddManualRow();
     setActiveWorkspaceKey(null);
     setActiveNewManualRowIndex(newIndex);
+    // [Bug fix] A brand-new, still-blank row has no name to match by
+    // yet — tracked directly by its own stable index, consistent with
+    // activeNewManualRowIndex's own existing convention.
+    setActiveWorkspaceRowIdentity({ catalogIds: [], manualIndices: [newIndex] });
     // [Existing-Product Edit/Confirm Workflow] A brand-new manual row
     // is never a reopened, already-validated product — see
     // `handleSelectExistingProductForWorkspace`'s own identical clear,
