@@ -4219,15 +4219,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         if (productKeyFor(row.productName) === key && row.validated) {
           next[id] = { ...row, validated: false };
           changed = true;
+          // [Bug fix — reported live, "clicking Editar on a validated
+          // product, the single-product screen does not appear"] This
+          // un-validation is a genuine local change the server does
+          // not yet know about — only a generic '__meta__' timestamp
+          // is scheduled below, never a per-row save carrying this
+          // row's own new `validated: false`. Without this protection,
+          // the live-adoption effect (above) runs again on this exact
+          // `setCatalogRows` call (`catalogRows` is in its own
+          // dependency array), sees this row's local copy now differs
+          // from the still-unchanged server copy (which still says
+          // `validated: true`), and "adopts" the server's value right
+          // back — reverting this un-validation before the workspace
+          // ever renders, since `visibleCatalogEntries` filters on
+          // `!row.validated`. Marking the row protected here, exactly
+          // like `scheduleRowDraftSave` already does for an ordinary
+          // typed edit, closes that race the same way.
+          rowHasUnsavedLocalEditRef.current[`catalog:${id}`] = true;
         }
       }
       return changed ? next : prev;
     });
     setManualRows((prev) => {
       let changed = false;
-      const next = prev.map((row) => {
+      const next = prev.map((row, index) => {
         if (productKeyFor(row.productName) === key && row.validated) {
           changed = true;
+          // Same protection, same reasoning, for the manual-row half —
+          // see the catalog-row comment immediately above.
+          rowHasUnsavedLocalEditRef.current[`manual:${index}`] = true;
           return { ...row, validated: false };
         }
         return row;
@@ -4306,6 +4326,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         });
         return changed ? next : prev;
       });
+      // [Bug fix — companion to reopenExistingProductForEditing's own
+      // fix, above] Voltar restores `validated: true`, which — for
+      // every row in these two sets — now matches the server's own
+      // still-unchanged copy exactly (it was never told about the
+      // un-validation in the first place). Local state and server
+      // state agree again, so the protection set when this product was
+      // reopened is no longer needed; clearing it here (rather than
+      // leaving it set forever) ensures this product keeps receiving
+      // ordinary live updates from other editors after this inspect-
+      // only visit, instead of being silently frozen out of them.
+      for (const id of catalogIdsToRestore) {
+        delete rowHasUnsavedLocalEditRef.current[`catalog:${id}`];
+      }
+      for (const index of manualIndicesToRestore) {
+        delete rowHasUnsavedLocalEditRef.current[`manual:${index}`];
+      }
       scheduleRowDraftSave('__meta__');
     }
     setReopenedExistingProductKey(null);
