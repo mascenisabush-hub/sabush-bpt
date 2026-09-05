@@ -977,6 +977,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [catalogRowSaveError, setCatalogRowSaveError] = useState<Record<string, string>>({});
   const [manualRowSaveError, setManualRowSaveError] = useState<Record<number, string>>({});
   const [productSearch, setProductSearch] = useState('');
+  // [Implementation Authorization — Periodic Contagem Keyboard
+  // Shortcuts, docs/engineering/periodic-contagem-keyboard-shortcuts-
+  // implementation-authorization.md, §10 Focus Architecture] UI-only
+  // state/refs for the counting-loop keyboard shortcuts (Enter,
+  // Ctrl/Cmd+Enter, /, arrows, Esc, N, ?). None of these is read by any
+  // Firestore write path, tally, or business-logic function — every one
+  // only drives focus/highlight/visibility of existing, unmodified UI.
+  // See the effects declared just above the `pendingTally` review-screen
+  // branch, below, for the shared document-level listener and the
+  // focus-management effect that consume them.
+  const searchInputRef = useRef<HTMLInputElement | null>(null);
+  const activeQuantityInputRef = useRef<HTMLInputElement | null>(null);
+  const activeNameInputRef = useRef<HTMLInputElement | null>(null);
+  const rowRefsMapRef = useRef<Map<string, HTMLDivElement>>(new Map());
+  const [highlightedRowKey, setHighlightedRowKey] = useState<string | null>(null);
+  const [showShortcutHelp, setShowShortcutHelp] = useState(false);
+  // [Implementation Authorization §4.2 / Implementation Plan Area B /
+  // Rule 8 finding 2.B-1] The accepted Option (b) success-detection
+  // mechanism — never a changed return value on `handleSaveCatalogRow`/
+  // `handleSaveManualRow`. `ctrlEnterRequestedRef` records WHICH row a
+  // Ctrl/Cmd+Enter press targeted (never a boolean alone, since the
+  // effect below needs to look that exact row back up); `wasValidatedBeforeRef`
+  // is the pre-Validar snapshot the effect compares against, so the
+  // effect only advances on a genuine false→true transition, never on
+  // a row that was already validated. The effect that consumes both is
+  // declared further below (immediately after `advanceAfterValidation`),
+  // and clears `ctrlEnterRequestedRef` SYNCHRONOUSLY at the start of its
+  // own body, per Rule 8 finding 2.B-1 — before doing anything else —
+  // so a request can never be read/consumed twice.
+  const ctrlEnterRequestedRef = useRef<{
+    kind: 'catalog' | 'manual';
+    catalogProductId: string | null;
+    manualRowIndex: number | null;
+  } | null>(null);
+  const wasValidatedBeforeRef = useRef(false);
   // [Implementation Authorization — Single-Product Workspace] UI-only,
   // ephemeral, never persisted to the draft (autosave already saves
   // the entire catalogRows/manualRows tree regardless of what's
@@ -4264,6 +4299,203 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     handleSelectExistingProductForWorkspace(entry.activationKey);
   };
 
+  // [Implementation Authorization — Periodic Contagem Keyboard
+  // Shortcuts, §4.2] Ctrl/Cmd+Enter's "next eligible unvalidated entry"
+  // lookup. Reads `visibleUnifiedListEntries` exclusively — never
+  // `unifiedListEntries`/`sortedUnifiedListEntries` — so the operator's
+  // active `productSearch` filter and current `validatedSortMode`
+  // remain authoritative, exactly as specified. Skips any entry whose
+  // corresponding draft item is in `CONFLICT`, using the identical key
+  // convention and sentinel the render-site `isRowConflicted` check
+  // (below, in the JSX) already uses — this is the exact fix for the
+  // gap the specification's own §4.2 and the Rule 8 Assessment's §2.C
+  // identified: a keyboard-triggered advance must never open a
+  // conflicted row the way `handleUnifiedEntryClick` alone would.
+  const findNextUnvalidatedEntry = (): (typeof visibleUnifiedListEntries)[number] | null => {
+    for (const entry of visibleUnifiedListEntries) {
+      if (entry.validated) continue;
+      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : `manual:${entry.manualRowIndex}`;
+      if (periodicStockDraftItemsByKey[key]?.state === 'CONFLICT') continue;
+      return entry;
+    }
+    return null;
+  };
+
+  // True only when every remaining unvalidated entry is itself
+  // conflicted — the "route toward the conflict panel rather than
+  // opening a conflict row" case from §4.2.
+  const hasOnlyConflictedUnvalidatedEntries = (): boolean =>
+    visibleUnifiedListEntries.some((entry) => {
+      if (entry.validated) return false;
+      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : `manual:${entry.manualRowIndex}`;
+      return periodicStockDraftItemsByKey[key]?.state === 'CONFLICT';
+    });
+
+  // [Implementation Authorization §4.2] Ctrl/Cmd+Enter's advance step —
+  // called only after a genuine, successful Validar transition has
+  // already been observed (see the quantity inputs' own `onKeyDown`,
+  // below). Never sets `pendingTally`, never calls
+  // `handleRequestConfirmation`/`handleConfirmSave` — its only three
+  // possible outcomes are: open the next unvalidated entry via the
+  // existing `handleUnifiedEntryClick` (no second activation
+  // mechanism); defer to the existing `scrollToConflictPanel` if only
+  // conflicts remain; or, if the list is genuinely exhausted, return
+  // focus to the search input — the natural next place to type, per
+  // the accepted Implementation Plan.
+  const advanceAfterValidation = () => {
+    const next = findNextUnvalidatedEntry();
+    if (next) {
+      handleUnifiedEntryClick(next);
+      return;
+    }
+    if (hasOnlyConflictedUnvalidatedEntries()) {
+      scrollToConflictPanel();
+      return;
+    }
+    searchInputRef.current?.focus();
+  };
+
+  // [Implementation Authorization §4.2 / Rule 8 finding 2.B-1] The
+  // accepted Option (b) mechanism itself: fires on every
+  // `catalogRows`/`manualRows` change (the only two pieces of state
+  // `handleSaveCatalogRow`/`handleSaveManualRow` can ever write to on
+  // success), reads whichever row a prior Ctrl/Cmd+Enter press targeted
+  // via `ctrlEnterRequestedRef`, and clears that ref SYNCHRONOUSLY as
+  // the very first thing it does — before any other logic — so a
+  // request can never be read/consumed more than once. Advances only
+  // when `wasValidatedBeforeRef` recorded `false` immediately before the
+  // press AND the row's `validated` field now reads `true` — a genuine
+  // false→true transition. A failed `validateWorkingRowForSave` or a
+  // cancelled zero-quantity `window.confirm` both leave `validated`
+  // unchanged, so this effect correctly advances nothing for either.
+  // This closes over the CURRENT render's `advanceAfterValidation`
+  // (itself closing over the current `visibleUnifiedListEntries`/
+  // `periodicStockDraftItemsByKey`) because a plain `useEffect` is torn
+  // down and recreated on every dependency change — no separate "latest
+  // ref" indirection is needed the way a `requestAnimationFrame`
+  // callback would have required.
+  useEffect(() => {
+    const request = ctrlEnterRequestedRef.current;
+    if (!request) return;
+    ctrlEnterRequestedRef.current = null;
+    const row =
+      request.kind === 'catalog'
+        ? request.catalogProductId
+          ? catalogRows[request.catalogProductId]
+          : undefined
+        : request.manualRowIndex !== null
+        ? manualRows[request.manualRowIndex]
+        : undefined;
+    if (wasValidatedBeforeRef.current === false && row?.validated === true) {
+      advanceAfterValidation();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [catalogRows, manualRows]);
+
+  // [Implementation Authorization §4.1/§4.2] Shared Enter/Ctrl+Enter
+  // handler for both quantity inputs (catalog and every manual
+  // portion). `preventDefault()` unconditionally stops the pre-existing
+  // accidental-submit behavior (the form's only `type="submit"` element
+  // is the final "Rever e Confirmar Contagem" button, far below — see
+  // that button's own comment); Ctrl/Cmd+Enter additionally records a
+  // request for the `useEffect` above to observe, per the accepted
+  // Option (b) design — never a changed return value on
+  // `handleSaveCatalogRow`/`handleSaveManualRow`.
+  const handleQuantityKeyDown = (
+    e: React.KeyboardEvent<HTMLInputElement>,
+    kind: 'catalog' | 'manual',
+    catalogProductId: string | null,
+    manualRowIndexArg: number | null
+  ) => {
+    if (e.key !== 'Enter') return;
+    e.preventDefault();
+    const isCtrlOrCmd = e.ctrlKey || e.metaKey;
+    if (isCtrlOrCmd) {
+      const currentRow = kind === 'catalog' ? (catalogProductId ? catalogRows[catalogProductId] : undefined) : manualRowIndexArg !== null ? manualRows[manualRowIndexArg] : undefined;
+      wasValidatedBeforeRef.current = currentRow?.validated === true;
+      ctrlEnterRequestedRef.current = { kind, catalogProductId, manualRowIndex: manualRowIndexArg };
+    }
+    if (kind === 'catalog' && catalogProductId) {
+      handleSaveCatalogRow(catalogProductId);
+    } else if (kind === 'manual' && manualRowIndexArg !== null) {
+      handleSaveManualRow(manualRowIndexArg);
+    } else {
+      ctrlEnterRequestedRef.current = null;
+    }
+  };
+
+  // [Implementation Authorization §4.1] Shared suppression for every
+  // other in-form text/number input this feature touches (product
+  // search additionally needs arrow-key handling, so it uses its own,
+  // separate handler below rather than this one) — `preventDefault()`
+  // only, no business action, per the specification's field-by-field
+  // table.
+  const suppressEnterSubmit = (e: React.KeyboardEvent) => {
+    if (e.key === 'Enter') e.preventDefault();
+  };
+
+  // [Implementation Authorization §4.4] ↑/↓ navigation from the search
+  // input — moves a highlighted pointer over `visibleUnifiedListEntries`
+  // (the same array Ctrl/Cmd+Enter's own lookup uses, so both stay
+  // consistent with the operator's current search/sort state), with no
+  // wraparound at either boundary. Activation itself is never
+  // duplicated here — Enter on a highlighted row is handled by that
+  // row's own existing `onKeyDown` (below, in the JSX), unchanged.
+  const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
+    if (e.key === 'Enter') {
+      e.preventDefault();
+      return;
+    }
+    if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+    if (visibleUnifiedListEntries.length === 0) return;
+    e.preventDefault();
+    const currentIndex = highlightedRowKey ? visibleUnifiedListEntries.findIndex((en) => en.rowKey === highlightedRowKey) : -1;
+    const nextIndex =
+      e.key === 'ArrowDown'
+        ? currentIndex === -1
+          ? 0
+          : Math.min(currentIndex + 1, visibleUnifiedListEntries.length - 1)
+        : currentIndex === -1
+        ? 0
+        : Math.max(currentIndex - 1, 0);
+    const nextEntry = visibleUnifiedListEntries[nextIndex];
+    if (!nextEntry) return;
+    setHighlightedRowKey(nextEntry.rowKey);
+    rowRefsMapRef.current.get(nextEntry.rowKey)?.focus();
+  };
+
+  // [Implementation Authorization §4.2/§4.6 — Focus Architecture] A
+  // single focus-management effect, reused by BOTH Ctrl/Cmd+Enter's
+  // advance step (Area B) and N's new-product creation (Area F), per
+  // the Implementation Plan's own instruction not to build a second
+  // implementation per shortcut. Fires whenever the active workspace
+  // product changes to a real product; waits one animation frame for
+  // React to have committed the new workspace's own JSX before
+  // querying either ref (both refs are only ever attached to the ONE
+  // currently-rendered element of their kind, under the existing
+  // Single-Product Workspace rule, so there is never ambiguity about
+  // which element `.focus()` targets). Prefers the new manual-row name
+  // field when one is genuinely present (a brand-new, still-nameless
+  // manual row — N's own case); otherwise focuses the quantity input.
+  useEffect(() => {
+    if (activeWorkspaceProductKey === null) return;
+    const frame = requestAnimationFrame(() => {
+      if (activeNameInputRef.current) {
+        activeNameInputRef.current.focus();
+        return;
+      }
+      activeQuantityInputRef.current?.focus();
+    });
+    return () => cancelAnimationFrame(frame);
+  }, [activeWorkspaceProductKey]);
+
+  // [Implementation Authorization §4.3/§4.5/§4.6/§4.7 — Shared
+  // document-level listener, Implementation Plan Area H] Declared below,
+  // after `handleLeaveWorkspaceUnchanged` and
+  // `handleAddNewProductToWorkspace` are both in scope (both are `const`
+  // declarations further down this same function body — referencing
+  // either one here, before its own declaration, would fail).
+
   // [Existing-Product Edit/Confirm Workflow — investigation finding]
   // The counted list's own "Editar" buttons (the accumulated/
   // validated area, below — handleEditCatalogRow/handleEditManualRow,
@@ -4579,6 +4811,95 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setReopenedValidatedCatalogRowIds(null);
     setReopenedValidatedManualRowIndices(null);
   };
+
+  // [Implementation Authorization §4.3/§4.5/§4.6/§4.7 — Shared
+  // document-level listener, Implementation Plan Area H] ONE listener
+  // for `/`, `N`, `?`, and Esc — never four competing ones, and never
+  // the mechanism for Enter/Ctrl+Enter or the arrow keys, both of which
+  // stay scoped to their own specific elements (per the plan's own
+  // explicit instruction not to prescribe a global listener for Enter,
+  // and Area D's own requirement that arrows stay locally scoped so
+  // native number-input/`<select>` behavior is never touched). Esc's
+  // five-step priority chain is evaluated first, and unconditionally —
+  // even while a field has focus — since leaving a modal/confirmation/
+  // workspace via Esc must work regardless of which field the operator
+  // was last typing in. Every other branch is suppressed while
+  // `viewingCount`/`discardConfirmState` has priority, or while the
+  // keydown target is itself a text/number/select field (so a literal
+  // "/", "n", or "?" can still be typed into a product name or search
+  // term). Depends on every piece of state/every function its body
+  // reads, including the two non-memoized handlers
+  // (`handleAddNewProductToWorkspace`, `handleLeaveWorkspaceUnchanged`,
+  // both declared above, in scope) — per the Implementation Plan's own
+  // §4/Area H reasoning, this means the listener is torn down and
+  // recreated slightly more often than the bare minimum, which is a
+  // negligible cost for one document `keydown` listener and the only
+  // way to guarantee it never reads a stale closure without wrapping
+  // either existing function in `useCallback` merely for this
+  // feature's own convenience.
+  useEffect(() => {
+    const handleKeyDown = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') {
+        if (showShortcutHelp) {
+          setShowShortcutHelp(false);
+          return;
+        }
+        if (viewingCount !== null) {
+          setViewingCount(null);
+          return;
+        }
+        if (discardConfirmState === 'confirming') {
+          setDiscardConfirmState('idle');
+          return;
+        }
+        if (isWorkspaceActive) {
+          handleLeaveWorkspaceUnchanged();
+          return;
+        }
+        return;
+      }
+
+      if (viewingCount !== null || discardConfirmState === 'confirming') return;
+
+      const target = e.target as HTMLElement | null;
+      const isTypingTarget = !!target && ['INPUT', 'TEXTAREA', 'SELECT'].includes(target.tagName);
+
+      if (e.key === '/') {
+        if (isTypingTarget) return;
+        e.preventDefault();
+        searchInputRef.current?.focus();
+        return;
+      }
+
+      if (e.key === '?') {
+        if (isTypingTarget) return;
+        e.preventDefault();
+        setShowShortcutHelp((prev) => !prev);
+        return;
+      }
+
+      if (e.key.toLowerCase() === 'n') {
+        if (isTypingTarget) return;
+        if (!isActiveContagemEditor) return;
+        if (isWorkspaceActive) return;
+        if (subscriptionBlocksNewRecords) return;
+        e.preventDefault();
+        handleAddNewProductToWorkspace();
+        return;
+      }
+    };
+    document.addEventListener('keydown', handleKeyDown);
+    return () => document.removeEventListener('keydown', handleKeyDown);
+  }, [
+    showShortcutHelp,
+    viewingCount,
+    discardConfirmState,
+    isWorkspaceActive,
+    isActiveContagemEditor,
+    subscriptionBlocksNewRecords,
+    handleLeaveWorkspaceUnchanged,
+    handleAddNewProductToWorkspace,
+  ]);
 
   // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
   // (the live cost-basis trend indicator's own computation) are removed
@@ -6377,6 +6698,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 required
                 value={date}
                 onChange={(e) => handleDateChange(e.target.value)}
+                onKeyDown={suppressEnterSubmit}
                 className={`${fieldClass} font-mono tabular-nums w-[150px]`}
               />
             </div>
@@ -6392,6 +6714,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   placeholder="Ex: Antes do Natal"
                   value={label}
                   onChange={(e) => handleLabelChange(e.target.value)}
+                  onKeyDown={suppressEnterSubmit}
                   className={`${fieldClass} w-[200px]`}
                 />
               </div>
@@ -6912,6 +7235,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             placeholder="Ainda não contado"
                             value={row.quantity}
                             onChange={(e) => updateCatalogRow(productId, { quantity: e.target.value })}
+                            onKeyDown={(e) => handleQuantityKeyDown(e, 'catalog', productId, null)}
+                            ref={!isConfirmed ? activeQuantityInputRef : undefined}
                             disabled={isConfirmed}
                             className={`${fieldClass} font-mono tabular-nums ${isBlank ? 'placeholder:text-amber-500/70' : ''} ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
@@ -6955,6 +7280,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 placeholder="un"
                                 value={row.unit}
                                 onChange={(e) => updateCatalogRow(productId, { unit: e.target.value })}
+                                onKeyDown={suppressEnterSubmit}
                                 disabled={isConfirmed}
                                 className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                               />
@@ -6988,6 +7314,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             step="0.01"
                             value={row.sellingPrice}
                             onChange={(e) => updateCatalogRow(productId, { sellingPrice: e.target.value })}
+                            onKeyDown={suppressEnterSubmit}
                             disabled={isConfirmed}
                             className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                           />
@@ -7230,6 +7557,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           onChange={(e) =>
                             group.key ? handleRenameManualGroup(group.key, e.target.value) : updateManualRow(firstIdx, { productName: e.target.value })
                           }
+                          onKeyDown={suppressEnterSubmit}
+                          ref={activeNewManualRowIndex === firstIdx ? activeNameInputRef : undefined}
                           className={`${fieldClass} font-semibold`}
                         />
                       </div>
@@ -7415,6 +7744,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   placeholder="Ainda não contado"
                                   value={row.quantity}
                                   onChange={(e) => updateManualRow(idx, { quantity: e.target.value })}
+                                  onKeyDown={(e) => handleQuantityKeyDown(e, 'manual', null, idx)}
+                                  ref={!isConfirmed ? activeQuantityInputRef : undefined}
                                   disabled={isConfirmed}
                                   className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
@@ -7458,6 +7789,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       type="text"
                                       value={row.unit}
                                       onChange={(e) => updateManualRow(idx, { unit: e.target.value })}
+                                      onKeyDown={suppressEnterSubmit}
                                       disabled={isConfirmed}
                                       className={`${fieldClass} font-mono text-center ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                     />
@@ -7486,6 +7818,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   step="0.01"
                                   value={row.sellingPrice}
                                   onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
+                                  onKeyDown={suppressEnterSubmit}
                                   disabled={isConfirmed}
                                   className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
                                 />
@@ -7690,10 +8023,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               <div className="relative flex-1">
                 <Search className="w-3.5 h-3.5 text-gray-400 absolute left-2.5 top-1/2 -translate-y-1/2" strokeWidth={2.25} />
                 <input
+                  ref={searchInputRef}
                   type="text"
                   placeholder="Procurar um produto..."
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
+                  onKeyDown={handleSearchKeyDown}
                   className={`${fieldClass} pl-8`}
                 />
               </div>
@@ -7799,16 +8134,45 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                       }
                       handleUnifiedEntryClick(entry);
                     };
+                    // [Implementation Authorization §4.4] ↑/↓ moves the
+                    // highlighted pointer to the previous/next entry in
+                    // this SAME `visibleUnifiedListEntries` array — no
+                    // wraparound, no second ordering system. Enter/Space
+                    // activation below is completely unmodified.
+                    const handleRowArrowKey = (e: React.KeyboardEvent) => {
+                      if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
+                      e.preventDefault();
+                      const currentIndex = visibleUnifiedListEntries.findIndex((en) => en.rowKey === entry.rowKey);
+                      const nextIndex =
+                        e.key === 'ArrowDown'
+                          ? Math.min(currentIndex + 1, visibleUnifiedListEntries.length - 1)
+                          : Math.max(currentIndex - 1, 0);
+                      const nextEntry = visibleUnifiedListEntries[nextIndex];
+                      if (!nextEntry) return;
+                      setHighlightedRowKey(nextEntry.rowKey);
+                      rowRefsMapRef.current.get(nextEntry.rowKey)?.focus();
+                    };
                     return (
                       <div
                         key={entry.rowKey}
+                        ref={(el) => {
+                          if (el) rowRefsMapRef.current.set(entry.rowKey, el);
+                          else rowRefsMapRef.current.delete(entry.rowKey);
+                        }}
                         role="button"
                         tabIndex={disabled ? -1 : 0}
                         onClick={handleEntryActivation}
+                        onFocus={() => setHighlightedRowKey(entry.rowKey)}
                         onKeyDown={(e) => {
-                          if (!disabled && (e.key === 'Enter' || e.key === ' ')) handleEntryActivation();
+                          if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
+                            handleEntryActivation();
+                            return;
+                          }
+                          handleRowArrowKey(e);
                         }}
                         className={`${unifiedRowGridClass} border rounded-xl px-3 py-2 transition-colors duration-150 ${
+                          highlightedRowKey === entry.rowKey ? 'ring-2 ring-[#D4AF37]' : ''
+                        } ${
                           disabled
                             ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed'
                             : isRowConflicted
@@ -8044,6 +8408,65 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           every item that reached `items[]` at confirmation time was,
           by construction, already counted/finished — there is no
           "still in progress" state left to represent historically. */}
+      {/* [Implementation Authorization §4.7 — Periodic Contagem
+          Keyboard Shortcuts] Non-persisted, display-only shortcut-help
+          panel — `showShortcutHelp` is local UI state only, read/written
+          nowhere else, never part of any draft/tally/finalization
+          payload. Structurally mirrors the historical-count modal
+          immediately below (dimmed backdrop, `onClick` closes,
+          inner-panel `stopPropagation`) for visual/behavioral
+          consistency with this file's one other overlay pattern, with
+          `role="dialog"`/`aria-modal="true"` added — an accessibility
+          property the historical modal itself does not yet carry; per
+          the Implementation Authorization, that gap is left alone here,
+          not retrofitted. Esc closes this with the highest priority of
+          any shortcut in this feature (see the shared keydown listener,
+          above) — evaluated before the historical-modal/discard-
+          confirm/workspace chain. */}
+      {showShortcutHelp && (
+        <div
+          className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
+          onClick={() => setShowShortcutHelp(false)}
+          role="dialog"
+          aria-modal="true"
+          aria-label="Atalhos de teclado"
+        >
+          <div
+            className="bg-white rounded-t-3xl sm:rounded-3xl w-full sm:max-w-md shadow-[0_24px_64px_-16px_rgba(11,31,58,0.35)]"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <div className="flex items-center justify-between gap-3 px-5 sm:px-6 pt-5 sm:pt-6 pb-4 border-b border-[#F0EEE4]">
+              <h3 className="type-title text-[#111827]">Atalhos de teclado</h3>
+              <button
+                type="button"
+                onClick={() => setShowShortcutHelp(false)}
+                className="p-1.5 rounded-lg text-gray-400 hover:text-[#0B1F3A] hover:bg-gray-50 transition-colors duration-150"
+                aria-label="Fechar"
+              >
+                <X className="w-4 h-4" strokeWidth={2.5} />
+              </button>
+            </div>
+            <div className="px-5 sm:px-6 py-4 space-y-2.5 text-[13px]">
+              {[
+                ['Enter', 'Validar a quantidade atual'],
+                ['Ctrl/Cmd + Enter', 'Validar e avançar para o próximo produto'],
+                ['/', 'Focar a pesquisa de produtos'],
+                ['↑ / ↓', 'Navegar na lista de produtos'],
+                ['Esc', 'Fechar/cancelar/voltar'],
+                ['N', 'Adicionar produto que não está no catálogo'],
+                ['?', 'Mostrar/ocultar esta ajuda'],
+              ].map(([key, desc]) => (
+                <div key={key} className="flex items-center justify-between gap-3">
+                  <span className="text-gray-600">{desc}</span>
+                  <kbd className="px-2 py-1 rounded-md bg-gray-100 border border-gray-200 font-mono text-[11px] text-[#0B1F3A] whitespace-nowrap">
+                    {key}
+                  </kbd>
+                </div>
+              ))}
+            </div>
+          </div>
+        </div>
+      )}
       {viewingCount && (
         <div
           className="fixed inset-0 bg-black/40 z-50 flex items-end sm:items-center justify-center p-0 sm:p-4"
