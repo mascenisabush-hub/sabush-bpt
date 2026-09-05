@@ -1085,13 +1085,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // in-session integer counter (see that field's own comment,
   // stockCount.ts), not a timestamp — an intentional, signed amendment
   // to that prior decision, not a silent reversal of it.
-  // [Entry-Order Sort Mode Amendment §6; Decision 60 §5/§13.C] `'time-
+  // [Entry-Order Sort Mode Amendment §6; Decision 60 §5/§13.C; bug fix
+  // — Product Architect correction, 5 September 2026: originally
+  // implemented sorting by `lastWriteAt` (time of last EDIT), which
+  // the Product Architect explicitly corrected — "I asked sorting up
+  // by time of ENTRY... you implemented time of EDIT: wrong"] `'time-
   // desc'`/`'time-asc'` are the two NEW, separate, timestamp-based
   // modes that amendment authorizes — sorting by each entry's own
-  // `lastWriteAt` (an authoritative, server-set timestamp already in
-  // the schema), never by `entrySequence` and never conflated with
-  // it. `'entry-order'` itself is UNCHANGED by this addition — it
-  // remains available, still ordinal, still not time-based.
+  // `firstWriteAt` (an authoritative, server-set timestamp, set once
+  // on a row's genuine first write and never touched again by any
+  // later edit or same-writer correction — deliberately distinct from
+  // `lastWriteAt`, which does update on every write), never by
+  // `entrySequence` and never conflated with either. `'entry-order'`
+  // itself is UNCHANGED by this addition — it remains available,
+  // still ordinal, still not time-based.
   const [validatedSortMode, setValidatedSortMode] = useState<
     'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc'
   >('name-asc');
@@ -3883,13 +3890,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           if (seqA !== seqB) return seqA - seqB;
           return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
         }
-        // [Entry-Order Sort Mode Amendment §6; Decision 60 §5/§13.C]
-        // Genuine wall-clock ordering by each row's own authoritative
-        // `lastWriteAt` — never `entrySequence`, never conflated with
-        // it (see that mode's own case, immediately above, which this
-        // one deliberately does not touch or share logic with beyond
-        // the same missing-value/tie-break shape). A row with no
-        // `lastWriteAt` yet (never saved this session) sorts last
+        // [Entry-Order Sort Mode Amendment §6; Decision 60 §5/§13.C;
+        // bug fix — Product Architect correction, 5 September 2026:
+        // "I asked sorting up by time of ENTRY... you implemented time
+        // of EDIT: wrong"] Genuine wall-clock ordering by each row's
+        // own authoritative `firstWriteAt` — the moment this row was
+        // FIRST entered, set once and never touched again by any later
+        // edit or correction. Deliberately NOT `lastWriteAt` (which
+        // would move a row to the top merely because it was corrected
+        // just now, even though it was originally entered long ago),
+        // and never `entrySequence`, never conflated with either (see
+        // that mode's own case, immediately above, which this one
+        // deliberately does not touch or share logic with beyond the
+        // same missing-value/tie-break shape). A row with no
+        // `firstWriteAt` yet (never saved this session) sorts last
         // regardless of direction — mirroring 'entry-order's own
         // missing-sequence convention exactly, for the same reason: an
         // unsaved row has no genuine position in either time order.
@@ -4115,18 +4129,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validated: row.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
-        // [Decision 60 §6/§13.C; Entry-Order Sort Mode Amendment §6]
-        // The authoritative, server-assigned timestamp of this row's
-        // latest genuine write — already present in the schema
-        // (AppContext.tsx's savePeriodicStockDraftItem sets it on
-        // every accepted write, including the same-writer branch
-        // above). Read directly from the live, authoritative
+        // [Bug fix — Product Architect correction, 5 September 2026:
+        // "I asked sorting up by time of ENTRY... you implemented time
+        // of EDIT: wrong"] `firstWriteAt` — set once, on this row's
+        // genuine first write, and never touched again by any
+        // subsequent edit or same-writer correction (AppContext.tsx's
+        // savePeriodicStockDraftItem). Deliberately NOT `lastWriteAt`,
+        // which updates on every write — a product entered an hour ago
+        // and merely corrected just now must still sort as "entered an
+        // hour ago" for these two modes, not jump to the top as if it
+        // were new. Read directly from the live, authoritative
         // `periodicStockDraftItemsByKey` map — never from local
-        // component state, which carries no timestamp of its own —
-        // so a row never yet saved this session (no entry in that map
-        // yet) simply has `lastWriteAt: undefined` here, handled
-        // explicitly (sorted last) by `sortByValidatedMode`, below.
-        lastWriteAt: periodicStockDraftItemsByKey[`catalog:${productId}`]?.lastWriteAt,
+        // component state, which carries no timestamp of its own — so
+        // a row never yet saved this session simply has
+        // `firstWriteAt: undefined` here, handled explicitly (sorted
+        // last) by `sortByValidatedMode`, below.
+        firstWriteAt: periodicStockDraftItemsByKey[`catalog:${productId}`]?.firstWriteAt,
       }));
     const manualEntries = manualRows
       .map((row, idx) => ({ row, idx }))
@@ -4143,7 +4161,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validated: row.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
-        lastWriteAt: periodicStockDraftItemsByKey[`manual:${idx}`]?.lastWriteAt,
+        firstWriteAt: periodicStockDraftItemsByKey[`manual:${idx}`]?.firstWriteAt,
       }));
     return [...catalogEntries, ...manualEntries];
   }, [catalogRows, manualRows, periodicStockDraftItemsByKey]);
@@ -4184,7 +4202,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         (entry) => (entry.quantity.trim() === '' ? 0 : Number(entry.quantity) || 0) * (Number(entry.sellingPrice) || 0),
         validatedSortMode,
         (entry) => entry.entrySequence,
-        (entry) => entry.lastWriteAt
+        (entry) => entry.firstWriteAt
       ),
     [filteredUnifiedListEntries, validatedSortMode]
   );
@@ -7681,13 +7699,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <option value="value-desc">Maior valor</option>
                 <option value="value-asc">Menor valor</option>
                 {/* [Entry-Order Sort Mode Amendment §6; Decision 60
-                    §5/§13.C] The two new, authoritative-timestamp-based
-                    modes — sorted by lastWriteAt, never entrySequence.
-                    'entry-order' (below) is preserved unchanged,
-                    alongside these, per that amendment's own explicit
-                    "not removed, replaced, or redefined" requirement. */}
-                <option value="time-desc">Edição mais recente</option>
-                <option value="time-asc">Edição mais antiga</option>
+                    §5/§13.C; bug fix — Product Architect correction,
+                    5 September 2026: sorts by firstWriteAt (time of
+                    ENTRY, set once, never touched by a later
+                    correction), never lastWriteAt (time of last EDIT)
+                    and never entrySequence. 'entry-order' (below) is
+                    preserved unchanged, alongside these, per that
+                    amendment's own explicit "not removed, replaced, or
+                    redefined" requirement. */}
+                <option value="time-desc">Entrada mais recente</option>
+                <option value="time-asc">Entrada mais antiga</option>
                 <option value="entry-order">Ordem de registo</option>
               </select>
             </div>

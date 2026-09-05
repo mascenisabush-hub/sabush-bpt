@@ -1437,6 +1437,15 @@ export interface PeriodicStockDraftItem {
   lastWriterUid?: string;
   lastWriterRole?: 'owner' | 'delegate';
   lastWriteAt?: string; // ISO string, client-set at write time
+  // [Bug fix — Product Architect correction, 5 September 2026: "I asked
+  // sorting up by time of ENTRY... you implemented time of EDIT:
+  // wrong"] Set ONCE, on this row's very first write, and never
+  // overwritten by any write after that — deliberately distinct from
+  // `lastWriteAt`, which updates on every write including a later
+  // same-writer correction. A product entered an hour ago and merely
+  // corrected just now must still sort as "entered an hour ago" for
+  // the entry-time sort modes, not jump to the top as if it were new.
+  firstWriteAt?: string; // ISO string, client-set at this row's first write, immutable thereafter
   // [Decision 55] Present only while, or after, this row has genuinely
   // conflicted. Deliberately retained (never deleted) even once
   // resolved — Decision 55 §6 item 1 requires both original

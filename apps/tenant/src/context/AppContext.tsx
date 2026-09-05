@@ -6655,6 +6655,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       lastWriterUid: _ignoredWriterUid,
       lastWriterRole: _ignoredWriterRole,
       lastWriteAt: _ignoredWriteAt,
+      firstWriteAt: _ignoredFirstWriteAt,
       conflict: _ignoredConflict,
       ...content
     } = item;
@@ -6708,6 +6709,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastWriterUid: currentUser.uid,
           lastWriterRole: writerRole,
           lastWriteAt: nowIso,
+          // [Bug fix — "time of entry" sort correction] Set exactly
+          // once, here, on this row's genuine first write. Every other
+          // branch below preserves whatever value `current` already
+          // has — never overwritten again, no matter how many times
+          // this row is subsequently edited or corrected.
+          firstWriteAt: nowIso,
         });
         return;
       }
@@ -6726,6 +6733,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastWriterUid: currentUser.uid,
           lastWriterRole: writerRole,
           lastWriteAt: nowIso,
+          // [Bug fix — "time of entry" sort correction] Preserved,
+          // never overwritten — see the first-write branch's own
+          // comment, above, for why.
+          firstWriteAt: current.firstWriteAt,
         });
         return;
       }
@@ -6762,6 +6773,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastWriterUid: currentUser.uid,
           lastWriterRole: writerRole,
           lastWriteAt: nowIso,
+          // [Bug fix — "time of entry" sort correction] THE case this
+          // fix exists for: a same-writer correction must keep sorting
+          // by when this row was first entered, not jump to the top as
+          // if it were a brand-new entry.
+          firstWriteAt: current.firstWriteAt,
         });
         return;
       }
