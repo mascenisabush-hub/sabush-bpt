@@ -87,8 +87,17 @@ describe('PeriodicStockCountView.tsx — Decision 41E blocked render gate (§4/�
   it("branches on periodicStockDraftListenerState inside the subscriptionBlocksNewRecords guard — loading, load-error, draft-exists, and a confirmed-no-draft fallback all handled", () => {
     const guardIdx = periodicSrc.indexOf('if (subscriptionBlocksNewRecords) {');
     assert.notEqual(guardIdx, -1);
-    const nextTopLevelGuardIdx = periodicSrc.indexOf('if (draftDecisionPending && periodicStockDraft) {');
-    assert.notEqual(nextTopLevelGuardIdx, -1, 'Could not locate the resume/discard banner branch that follows the whole blocked guard block.');
+    // [Decision 60 §13.A — Resume/Re-Entry Behavior] The full-screen
+    // resume/discard banner this boundary marker used to anchor on is
+    // removed entirely (resume is now automatic — see
+    // periodic-contagem-discard-confirmation-safety.test.ts §4). The
+    // subscriptionBlocksNewRecords guard block is now immediately
+    // followed by the component's own main return statement.
+    const nextTopLevelGuardIdx = periodicSrc.indexOf(
+      'return (\n    <div className="max-w-7xl mx-auto pb-12 space-y-4">',
+      guardIdx
+    );
+    assert.notEqual(nextTopLevelGuardIdx, -1, 'Could not locate the main return statement that follows the whole blocked guard block.');
     assert.ok(guardIdx < nextTopLevelGuardIdx);
     const guardedBlock = periodicSrc.slice(guardIdx, nextTopLevelGuardIdx);
     assert.match(guardedBlock, /periodicStockDraftListenerState === 'loading'/);

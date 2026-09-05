@@ -296,19 +296,24 @@ describe('PeriodicStockCountView.tsx — Decision 41D consuming gate', () => {
     assert.match(periodicSrc, /if \(periodicStockDraftListenerState === 'loading'\) \{/);
   });
 
-  it("test 8 (periodic view half) / core UI proof — a dedicated 'load-error' branch exists, placed BEFORE the stale-draft resume banner (draftDecisionPending), so an Owner listener error can never fall through into that banner's own null-draft-tolerant logic and be silently skipped", () => {
+  it("test 8 (periodic view half) / core UI proof — a dedicated 'load-error' branch exists, placed BEFORE the main editing UI, so an Owner listener error can never fall through into it and be silently skipped", () => {
     const loadingIdx = periodicSrc.indexOf("if (periodicStockDraftListenerState === 'loading') {");
     const errorIdx = periodicSrc.indexOf("if (periodicStockDraftListenerState === 'load-error') {");
-    const bannerIdx = periodicSrc.indexOf('if (draftDecisionPending && periodicStockDraft) {');
+    // [Decision 60 §13.A — Resume/Re-Entry Behavior] The stale-draft
+    // resume/discard banner this boundary marker used to anchor on
+    // (draftDecisionPending) is removed entirely — resume is now
+    // automatic. The load-error branch is now immediately followed by
+    // the component's own main return statement.
+    const mainReturnIdx = periodicSrc.indexOf('return (\n    <div className="max-w-7xl mx-auto pb-12 space-y-4">');
     assert.notEqual(loadingIdx, -1);
     assert.notEqual(errorIdx, -1);
-    assert.notEqual(bannerIdx, -1);
-    assert.ok(loadingIdx < errorIdx && errorIdx < bannerIdx, 'Expected the order: loading branch, then load-error branch, then the resume/discard banner — never skipping straight from loading past load-error into the banner logic.');
+    assert.notEqual(mainReturnIdx, -1);
+    assert.ok(loadingIdx < errorIdx && errorIdx < mainReturnIdx, 'Expected the order: loading branch, then load-error branch, then the main editing UI — never skipping straight from loading past load-error.');
   });
 
   it('the load-error branch never mentions periodicStockDraft, catalogRows, or any write function — it is a read-only notice, never a recovery/write action (41D is listener-state hardening only, not 41E recovery)', () => {
     const errorIdx = periodicSrc.indexOf("if (periodicStockDraftListenerState === 'load-error') {");
-    const nextIdx = periodicSrc.indexOf('if (draftDecisionPending && periodicStockDraft) {');
+    const nextIdx = periodicSrc.indexOf('return (\n    <div className="max-w-7xl mx-auto pb-12 space-y-4">');
     const errorBlock = periodicSrc.slice(errorIdx, nextIdx);
     assert.doesNotMatch(errorBlock, /savePeriodicStockDraftItem|savePeriodicStockDraftMeta|flushPeriodicStockDraftRows|clearPeriodicStockDraft/);
   });

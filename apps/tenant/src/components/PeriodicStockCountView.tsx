@@ -3425,6 +3425,51 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setDraftBannerDismissed(true);
   };
 
+  // [Decision 60 §13.A — Resume/Re-Entry Behavior, Product Architect
+  // decision 5 September 2026] "No forced restart" means the operator
+  // must never be routed through an explicit "Retomar/Descartar"
+  // decision merely because the component remounted. This effect
+  // auto-invokes the exact same handleResumeDraft immediately above —
+  // previously reachable only via an explicit button click — the
+  // moment a meaningful existing draft is confirmed loaded. Guarded by
+  // `autoResumedRef` so it fires EXACTLY once per mount: a later,
+  // unrelated `periodicStockDraft` update (e.g. another editor's live
+  // change arriving afterward) must never re-trigger a fresh "resume,"
+  // which could silently overwrite whatever the operator has been
+  // typing since. The system must never silently discard the active
+  // Contagem (§13.A item 4) — this effect never discards anything; a
+  // genuinely new count (no meaningful content to resume) is simply
+  // marked handled with no further action, leaving the ordinary blank/
+  // auto-populated catalog rows already in place exactly as they are.
+  // Authoritative shared state itself is never at risk here — this
+  // only decides WHETHER to call the existing, unmodified
+  // handleResumeDraft; that function's own body is what actually reads
+  // the live, always-current `periodicStockDraft` (Rule 8 Assessment
+  // §2.B: the underlying listener never stopped running while this
+  // component was unmounted, so this is already the latest
+  // authoritative shared state, not a stale snapshot).
+  const autoResumedRef = useRef(false);
+  useEffect(() => {
+    if (autoResumedRef.current) return;
+    if (!periodicStockDraftLoaded) return;
+    if (!periodicStockDraft) {
+      autoResumedRef.current = true;
+      return;
+    }
+    // Deliberately duplicates draftHasMeaningfulContent's own one-line
+    // check (defined further below, out of hook-ordering reach from
+    // here) — same reasoning as the remote-update-notice effect's own
+    // identical duplication, above.
+    const hasMeaningfulContent = periodicStockDraft.items.some(
+      (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
+    );
+    autoResumedRef.current = true;
+    if (hasMeaningfulContent) {
+      handleResumeDraft();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [periodicStockDraftLoaded, periodicStockDraft]);
+
   // Começar de novo — explicit "start over" path (Implementation Task,
   // Section 5), distinct from finalization's own automatic cleanup
   // inside recordStockCount.
@@ -5614,8 +5659,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // resolve. `periodicStockDraftLoaded` disambiguates "we don't know
   // yet" (still waiting on Firestore's first snapshot) from "confirmed:
   // no draft," same reasoning as initialStockDraftLoaded.
-  const draftDecisionPending =
-    periodicStockDraftLoaded && draftHasMeaningfulContent(periodicStockDraft) && !draftBannerDismissed;
+  // [Decision 60 §13.A — Resume/Re-Entry Behavior] No longer gates
+  // rendering of the whole form (the full-screen resume/discard
+  // decision this used to gate is removed — see autoResumedRef's own
+  // effect, above). Repurposed as the one thing still needed: whether
+  // there is currently a real, existing draft worth offering a
+  // "Começar Nova Contagem" action for at all, in the relocated,
+  // always-reachable toolbar entry point further below.
+  const hasMeaningfulExistingDraft = draftHasMeaningfulContent(periodicStockDraft);
 
   if (subscriptionBlocksNewRecords) {
     // [Decision 41E — Subscription-Blocked Draft Access / Read-Only
@@ -5754,108 +5805,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               ligação — esta página tentará novamente automaticamente. Por segurança, o formulário não fica
               disponível até confirmarmos se existe ou não uma contagem por terminar.
             </p>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  if (draftDecisionPending && periodicStockDraft) {
-    // [Discard-Confirmation Safety Fix — Rule 8 Finding 1, Implementation
-    // Authorization §1 item 1] The 'confirming'/'discarding' states
-    // render a second card in place of the original banner — never
-    // both at once, and "Começar de Novo" (idle) never itself calls
-    // handleDiscardDraft. Retomar Contagem remains directly reachable
-    // from every state, per the signed Implementation Plan.
-    if (discardConfirmState !== 'idle') {
-      return (
-        <div className="max-w-2xl mx-auto py-16 space-y-5">
-          <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-5">
-            <div className="flex items-center gap-3">
-              <div className="w-10 h-10 rounded-xl bg-rose-50 flex items-center justify-center text-rose-600 shrink-0">
-                <AlertTriangle className="w-5 h-5" strokeWidth={2} />
-              </div>
-              <div>
-                <h2 className="type-title">Descartar Contagem por Terminar?</h2>
-                <p className="text-[13px] text-gray-500 mt-0.5">
-                  A contagem {TYPE_LABELS[periodicStockDraft.type]} de {formatDate(periodicStockDraft.date)} ainda
-                  não terminou.
-                </p>
-              </div>
-            </div>
-            <p className="text-[13px] text-gray-600 leading-relaxed">
-              Se continuar, todos os dados desta contagem por terminar serão descartados permanentemente. Esta
-              ação não pode ser desfeita.
-            </p>
-            <div className="flex flex-col sm:flex-row items-stretch sm:items-center gap-3">
-              <button
-                type="button"
-                onClick={() => setDiscardConfirmState('idle')}
-                disabled={discardConfirmState === 'discarding'}
-                className="btn-secondary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span>Cancelar</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleResumeDraft}
-                disabled={discardConfirmState === 'discarding'}
-                className="btn-secondary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
-              >
-                <span>Retomar Contagem</span>
-              </button>
-              <button
-                type="button"
-                onClick={handleDiscardDraft}
-                disabled={discardConfirmState === 'discarding'}
-                className="flex-1 py-3 px-4 text-sm rounded-xl font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed flex items-center justify-center gap-1.5"
-              >
-                <span>{discardConfirmState === 'discarding' ? 'A descartar...' : 'Começar Nova Contagem'}</span>
-              </button>
-            </div>
-          </div>
-        </div>
-      );
-    }
-    return (
-      <div className="max-w-2xl mx-auto py-16 space-y-5">
-        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-5">
-          <div className="flex items-center gap-3">
-            <div className="w-10 h-10 rounded-xl bg-amber-50 flex items-center justify-center text-amber-600 shrink-0">
-              <Undo2 className="w-5 h-5" strokeWidth={2} />
-            </div>
-            <div>
-              <h2 className="type-title">Contagem por Terminar Encontrada</h2>
-              <p className="text-[13px] text-gray-500 mt-0.5">
-                Existe uma contagem {TYPE_LABELS[periodicStockDraft.type]} por terminar de{' '}
-                {formatDate(periodicStockDraft.date)}.
-              </p>
-            </div>
-          </div>
-          <p className="text-[13px] text-gray-600 leading-relaxed">
-            Pode retomar de onde parou, ou começar uma contagem nova a partir do zero.
-          </p>
-          <div className="flex items-center gap-3">
-            {/* [Discard-Confirmation Safety Fix — Rule 8 Finding 1]
-                No longer calls handleDiscardDraft directly — a single
-                click here can never discard anything. It only opens
-                the confirmation step above, which is the sole path to
-                handleDiscardDraft. */}
-            <button
-              type="button"
-              onClick={() => setDiscardConfirmState('confirming')}
-              className="btn-secondary flex-1 py-3 px-4 text-sm"
-            >
-              <span>Começar de Novo</span>
-            </button>
-            <button
-              type="button"
-              onClick={handleResumeDraft}
-              className="btn-primary flex-1 py-3 px-4 text-sm"
-            >
-              <span>Retomar Contagem</span>
-              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
-            </button>
           </div>
         </div>
       </div>
@@ -6281,6 +6230,54 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   onChange={(e) => handleLabelChange(e.target.value)}
                   className={`${fieldClass} w-[200px]`}
                 />
+              </div>
+            )}
+
+            {/* [Decision 60 §13.A — Resume/Re-Entry Behavior] Relocated
+                from the removed full-screen resume/discard gate — the
+                exact same two-step safety chain (idle trigger never
+                itself discards; a separate, distinctly-labeled confirm
+                action is the only path to handleDiscardDraft) is
+                preserved, only its ENTRY POINT moved from a forced
+                first screen to an always-reachable toolbar action,
+                since the draft itself is now resumed automatically
+                (autoResumedRef's own effect, above) rather than
+                requiring this decision merely to see the Contagem
+                again. Gated on isActiveContagemEditor — a Viewer
+                should never see a destructive action it cannot use. */}
+            {hasMeaningfulExistingDraft && isActiveContagemEditor && (
+              <div className="flex items-center gap-2 shrink-0">
+                {discardConfirmState === 'idle' ? (
+                  <button
+                    type="button"
+                    onClick={() => setDiscardConfirmState('confirming')}
+                    className="btn-secondary py-1.5 px-3 text-[12px] whitespace-nowrap"
+                  >
+                    <span>Começar de Novo</span>
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 bg-rose-50 border border-rose-200 rounded-xl px-3 py-1.5">
+                    <span className="text-[12px] text-rose-700 font-medium whitespace-nowrap">
+                      Descartar esta contagem por terminar?
+                    </span>
+                    <button
+                      type="button"
+                      onClick={() => setDiscardConfirmState('idle')}
+                      disabled={discardConfirmState === 'discarding'}
+                      className="btn-secondary py-1 px-2 text-[11px] disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      <span>Cancelar</span>
+                    </button>
+                    <button
+                      type="button"
+                      onClick={handleDiscardDraft}
+                      disabled={discardConfirmState === 'discarding'}
+                      className="py-1 px-2 text-[11px] rounded-lg font-bold text-white bg-rose-600 hover:bg-rose-700 transition-colors duration-150 disabled:opacity-60 disabled:cursor-not-allowed whitespace-nowrap"
+                    >
+                      <span>{discardConfirmState === 'discarding' ? 'A descartar...' : 'Começar Nova Contagem'}</span>
+                    </button>
+                  </div>
+                )}
               </div>
             )}
 

@@ -77,15 +77,28 @@ describe('§2/§3 — "Cancelar" leaves the draft completely intact', () => {
   });
 });
 
-describe('§4 — "Retomar Contagem" is unaffected and reachable from both banner states', () => {
+describe('§4 — Retomar Contagem is now automatic (Decision 60 §13.A), not button-gated', () => {
   it('handleResumeDraft itself is untouched — still exists, still keyed off periodicStockDraft', () => {
     assert.match(source, /const handleResumeDraft = \(\) => \{/);
     assert.match(source, /if \(!periodicStockDraft\) return;/);
   });
 
-  it('"Retomar Contagem" is wired to handleResumeDraft in both the idle banner and the confirmation step', () => {
+  // [Decision 60 §13.A — Resume/Re-Entry Behavior, Product Architect
+  // decision 5 September 2026] "No forced restart" means the operator
+  // must never be routed through an explicit Retomar/Descartar
+  // decision merely because the component remounted. The full-screen
+  // banner this suite originally tested is removed entirely;
+  // handleResumeDraft is now invoked automatically, exactly once per
+  // mount, by a dedicated effect — never by a button click.
+  it('handleResumeDraft is invoked automatically, exactly once, by a dedicated effect guarded against re-firing', () => {
+    assert.match(source, /const autoResumedRef = useRef\(false\);/);
+    const effectMatch = source.match(/useEffect\(\(\) => \{\s*if \(autoResumedRef\.current\) return;[\s\S]*?handleResumeDraft\(\);[\s\S]*?\}, \[periodicStockDraftLoaded, periodicStockDraft\]\);/);
+    assert.ok(effectMatch, 'Expected a dedicated effect that calls handleResumeDraft() exactly once, guarded by autoResumedRef.');
+  });
+
+  it('no button in this component is wired directly to handleResumeDraft anymore — the full-screen banner it used to live in is removed', () => {
     const retomarWiringCount = (source.match(/onClick=\{handleResumeDraft\}/g) || []).length;
-    assert.equal(retomarWiringCount, 2, 'Expected "Retomar Contagem" to be directly reachable from both the idle and confirming states.');
+    assert.equal(retomarWiringCount, 0, 'Expected no remaining button wiring — resume is automatic now.');
   });
 });
 
@@ -117,7 +130,11 @@ describe('§6 — handleDiscardDraft awaits the delete before revealing the blan
 
   it('the confirming/discarding action buttons are disabled while discardConfirmState is \'discarding\', preventing a second concurrent delete call', () => {
     const discardingDisableCount = (source.match(/disabled=\{discardConfirmState === 'discarding'\}/g) || []).length;
-    assert.equal(discardingDisableCount, 3, 'Expected all three confirmation-step buttons (Cancelar, Retomar Contagem, Começar Nova Contagem) to disable during discarding.');
+    // [Decision 60 §13.A] Only two buttons remain in the relocated,
+    // inline confirmation (Cancelar, Começar Nova Contagem) — Retomar
+    // Contagem no longer exists as a button anywhere (resume is
+    // automatic; see §4, above).
+    assert.equal(discardingDisableCount, 2, 'Expected both remaining confirmation buttons (Cancelar, Começar Nova Contagem) to disable during discarding.');
   });
 });
 
