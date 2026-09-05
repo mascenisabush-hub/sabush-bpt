@@ -6733,10 +6733,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastWriterUid: currentUser.uid,
           lastWriterRole: writerRole,
           lastWriteAt: nowIso,
-          // [Bug fix — "time of entry" sort correction] Preserved,
-          // never overwritten — see the first-write branch's own
-          // comment, above, for why.
-          firstWriteAt: current.firstWriteAt,
+          // [Bug fix — "sorting seems to call nothing" follow-up]
+          // `current.firstWriteAt ?? current.lastWriteAt ?? nowIso`,
+          // not a bare preserve: this field did not exist on any row
+          // created before this feature shipped, so every pre-existing
+          // product would otherwise carry `firstWriteAt: undefined`
+          // forever — every row tying, no visible ordering difference
+          // from any other sort mode, exactly the reported symptom.
+          // `current.lastWriteAt` (this row's own prior write) is a
+          // materially better one-time approximation of "roughly when
+          // this was entered" than `nowIso` would be — the true
+          // original entry moment before this field existed was never
+          // recorded and cannot be recovered, but this backfill is
+          // opportunistic and one-time: never overwrites an
+          // already-set value, self-heals on this row's own next real
+          // write.
+          firstWriteAt: current.firstWriteAt ?? current.lastWriteAt ?? nowIso,
         });
         return;
       }
@@ -6773,11 +6785,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           lastWriterUid: currentUser.uid,
           lastWriterRole: writerRole,
           lastWriteAt: nowIso,
-          // [Bug fix — "time of entry" sort correction] THE case this
-          // fix exists for: a same-writer correction must keep sorting
-          // by when this row was first entered, not jump to the top as
-          // if it were a brand-new entry.
-          firstWriteAt: current.firstWriteAt,
+          // [Bug fix — "time of entry" sort correction, then "sorting
+          // seems to call nothing" follow-up] THE case this field
+          // exists for: a same-writer correction must keep sorting by
+          // when this row was first entered, not jump to the top as
+          // if it were a brand-new entry. For a row that predates this
+          // field entirely (`current.firstWriteAt` missing), the true
+          // original entry moment was never recorded and cannot be
+          // recovered — but falling back to `nowIso` here specifically
+          // would recreate a milder version of the exact bug this
+          // fix corrects (a correction making an old row look freshly
+          // entered). `current.lastWriteAt` — this row's own PRIOR
+          // write, from before this correction — is a materially
+          // better approximation of "roughly when this was entered"
+          // than the instant of the correction itself.
+          firstWriteAt: current.firstWriteAt ?? current.lastWriteAt ?? nowIso,
         });
         return;
       }

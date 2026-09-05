@@ -4140,11 +4140,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // hour ago" for these two modes, not jump to the top as if it
         // were new. Read directly from the live, authoritative
         // `periodicStockDraftItemsByKey` map — never from local
-        // component state, which carries no timestamp of its own — so
-        // a row never yet saved this session simply has
+        // component state, which carries no timestamp of its own.
+        // [Bug fix — "sorting seems to call nothing" follow-up] `??
+        // ...lastWriteAt`: `firstWriteAt` did not exist on any row
+        // created before this feature shipped, so every already-
+        // existing product would otherwise have NO timestamp at all
+        // here — every row tying under these two sort modes, with no
+        // visible ordering difference from any other mode, exactly the
+        // reported symptom. Falling back to this same row's own
+        // `lastWriteAt` (already populated for any row ever saved
+        // before today) gives every existing product a usable,
+        // reasonable timestamp immediately; AppContext.tsx's own
+        // opportunistic backfill converges each row to a real,
+        // dedicated `firstWriteAt` the next time it is genuinely
+        // touched, so this fallback is a one-time transitional
+        // measure, not a permanent substitute. A row never yet saved
+        // at all (neither field exists) still simply has
         // `firstWriteAt: undefined` here, handled explicitly (sorted
         // last) by `sortByValidatedMode`, below.
-        firstWriteAt: periodicStockDraftItemsByKey[`catalog:${productId}`]?.firstWriteAt,
+        firstWriteAt:
+          periodicStockDraftItemsByKey[`catalog:${productId}`]?.firstWriteAt ??
+          periodicStockDraftItemsByKey[`catalog:${productId}`]?.lastWriteAt,
       }));
     const manualEntries = manualRows
       .map((row, idx) => ({ row, idx }))
@@ -4161,7 +4177,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         validated: row.validated === true,
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
-        firstWriteAt: periodicStockDraftItemsByKey[`manual:${idx}`]?.firstWriteAt,
+        firstWriteAt:
+          periodicStockDraftItemsByKey[`manual:${idx}`]?.firstWriteAt ?? periodicStockDraftItemsByKey[`manual:${idx}`]?.lastWriteAt,
       }));
     return [...catalogEntries, ...manualEntries];
   }, [catalogRows, manualRows, periodicStockDraftItemsByKey]);
