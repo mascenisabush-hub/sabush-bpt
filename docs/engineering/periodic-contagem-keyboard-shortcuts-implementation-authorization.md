@@ -1,22 +1,23 @@
-Implementation Authorization Proposal — DRAFT
+Implementation Authorization
 
 # Implementation Authorization — Periodic Contagem Keyboard Shortcut Feature
 
 **Type:** Governance bridge document — the formal record that
-engineering governance is complete and implementation would be
-authorized to begin, strictly within the scope defined below, **once
-signed**. Does not itself perform implementation and does not modify
-code, `firestore.rules`, schema, UI, or tests.
+engineering governance is complete and implementation is authorized to
+begin, per this signature, strictly within the scope defined below.
+Does not itself perform implementation and does not modify code,
+`firestore.rules`, schema, UI, or tests.
 
 ## 1. Authorization Status
 
-**DRAFT — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
-
-This is not yet an authorization. No code change is permitted on the
-basis of this document until §9's signature block is completed by the
-Product Architect. Prior to that signature, no code, `firestore.rules`,
-schema, UI, or test file has been created, modified, or committed to
-produce this document.
+**✅ IMPLEMENTATION AUTHORIZED — WITHIN DEFINED SCOPE.** Signed 5
+September 2026 by SABUSHIMIKE MASCENI, Product Architect. See §10 for
+the signed acceptance record. Authorization is valid only for the
+exact scope defined in §4 of this document; anything outside that
+scope remains unauthorized and requires the appropriate governance
+process (a new or amended Decision, Rule 8 Assessment, Implementation
+Plan, and Implementation Authorization, as applicable) before any code
+implementing it may be written.
 
 **Repository state at drafting:** `main = origin/main = 3787604`
 ("governance(keyboard-shortcuts): Specification, Implementation Plan,
@@ -347,12 +348,27 @@ implementation exists.
 
 ## 10. Acceptance
 
-**No implementation may begin until the Product Architect accepts and
-signs this authorization.**
+**✅ ACCEPTED AND SIGNED.** Implementation may now begin, strictly
+within the exact scope defined in §4, subject to §5's technical
+boundaries, §6's Finding K boundary, §7's authorized files, §8's
+testing authorization, and §9's completion criteria — all unchanged by
+this signature.
 
 > I accept this Implementation Authorization and authorize
 > implementation within the exact scope defined above.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** *[to be recorded upon acceptance]*
+**Acceptance:** ACCEPTED
+
+**Date:** 2026-09-05
+
+**IMPLEMENTATION AUTHORIZED — WITHIN DEFINED SCOPE.** Anything outside
+the exact scope §4 defines — including, without limitation, every item
+named in §5's Technical Boundaries — remains unauthorized and requires
+its own governance process (Decision, Rule 8 Assessment, Implementation
+Plan, and Implementation Authorization, as applicable) before any code
+implementing it may be written. Esc's exclusion from the finalization
+review branch (§4.5) remains exactly as written — this signature does
+not extend authorization to that behavior; a separate governance
+process would be required before it could be implemented.
