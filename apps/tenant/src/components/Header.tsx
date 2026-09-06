@@ -135,7 +135,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
   return (
     <>
-      <header className="bg-white">
+      <header className="text-white" style={{ background: 'linear-gradient(135deg, #0B1F3A 0%, #132A4A 100%)' }}>
         <div className="max-w-7xl mx-auto px-4 sm:px-8 pt-4 pb-2">
           {/* Single unified row: business info (left) · action icons (center) ·
               profile (right). If the icon row doesn't fit next to the other
@@ -155,41 +155,41 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                     {ownedBusinesses.length > 1 && (
                       <button
                         onClick={() => setShowOwnerPortfolio(true)}
-                        className="text-[10px] font-bold uppercase tracking-wider text-gray-500 hover:text-[#0B1F3A] transition-colors mb-0.5"
+                        className="text-[10px] font-bold uppercase tracking-wider text-white/50 hover:text-white transition-colors mb-0.5"
                       >
                         Portefólio
                       </button>
                     )}
                   </div>
                 ) : (
-                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#8A6D1F] mb-1">
+                  <p className="text-[10px] font-bold uppercase tracking-[0.08em] text-[#E8C65C] mb-1">
                     {t('header.myBusiness')}
                   </p>
                 )}
-                <h1 className="font-display font-semibold text-[26px] sm:text-[30px] leading-[1.08] tracking-tight text-[#0B1F3A] truncate">
+                <h1 className="font-display font-semibold text-[26px] sm:text-[30px] leading-[1.08] tracking-tight text-white truncate">
                   {business.name}
                 </h1>
                 <p
-                  className="text-[11px] text-gray-500 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
+                  className="text-[11px] text-white/50 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
                   title={business?.contact ? t('header.contactTitle', { contact: business.contact }) : undefined}
                 >
-                  <span className="truncate text-gray-600 font-bold">
+                  <span className="truncate text-white/75 font-bold">
                     {businessCategory || t('header.registeredBusiness')}
                   </span>
                   {business?.location && (
                     <>
-                      <span className="text-gray-300">·</span>
-                      <span className="truncate text-gray-500">{business.location}</span>
+                      <span className="text-white/25">·</span>
+                      <span className="truncate text-white/50">{business.location}</span>
                     </>
                   )}
                 </p>
               </div>
             ) : (
               <div className="flex items-center gap-2.5 shrink-0">
-                <div className="w-9 h-9 rounded-full bg-[#F7F8FA] text-gray-400 flex items-center justify-center shrink-0">
+                <div className="w-9 h-9 rounded-full bg-white/10 text-white/40 flex items-center justify-center shrink-0">
                   <Store className="w-4 h-4" />
                 </div>
-                <span className="text-[13px] font-bold text-gray-400">{t('header.profileNotSet')}</span>
+                <span className="text-[13px] font-bold text-white/40">{t('header.profileNotSet')}</span>
               </div>
             )}
 
@@ -249,7 +249,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
               <button
                 onClick={() => setShowNotifications(v => !v)}
                 title={t('header.notifications')}
-                className="relative w-9 h-9 rounded-full bg-[#F5F7FA] hover:bg-[#D4AF37]/10 flex items-center justify-center text-gray-500 hover:text-[#0B1F3A] transition"
+                className="relative w-9 h-9 rounded-full bg-white/10 hover:bg-white/20 flex items-center justify-center text-white/70 hover:text-white transition"
               >
                 <Bell className="w-4 h-4" />
                 {unreadCount > 0 && (
@@ -304,20 +304,20 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
             <div className="relative shrink-0" ref={profileMenuRef}>
               <button
                 onClick={() => setShowProfileMenu(v => !v)}
-                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-[#F7F8FA] hover:bg-[#D4AF37]/10 transition"
+                className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-white/10 hover:bg-white/20 transition"
               >
-                <div className="w-8 h-8 rounded-full bg-[#0B1F3A] text-white flex items-center justify-center shrink-0">
+                <div className="w-8 h-8 rounded-full bg-[#D4AF37] text-[#0B1F3A] flex items-center justify-center shrink-0">
                   <User className="w-4 h-4" />
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
-                  <span className="text-xs font-bold text-[#0B1F3A] leading-tight">
+                  <span className="text-xs font-bold text-white leading-tight">
                     {userProfile?.name || t('header.userFallback')}
                   </span>
                   <span className="text-[10px] uppercase tracking-wide text-[#D4AF37] font-bold">
                     {isOwner ? t('header.roleOwner') : t('header.roleStaff')}
                   </span>
                 </div>
-                <ChevronDown className={`w-3.5 h-3.5 text-gray-400 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
+                <ChevronDown className={`w-3.5 h-3.5 text-white/50 transition-transform ${showProfileMenu ? 'rotate-180' : ''}`} />
               </button>
 
               {showProfileMenu && (
@@ -393,12 +393,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
                     isActive
                       ? 'bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
-                      : 'bg-transparent text-gray-600 hover:bg-[#0B1F3A]/[0.05] hover:text-[#0B1F3A]'
+                      : 'bg-transparent text-white/55 hover:bg-white/10 hover:text-white/85'
                   }`}
                 >
                   <span
                     className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 transition-colors duration-150 ${
-                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-[#F5F7FA] text-[#0B1F3A]'
+                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-white/10 text-white'
                     }`}
                   >
                     <Icon className="w-4 h-4" strokeWidth={2.25} />
@@ -420,12 +420,12 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   new CustomEvent('open-settings', { detail: { openProfileEdit: true } })
                 )
               }
-              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#D4AF37] hover:text-[#B8952F] transition"
+              className="group flex items-center gap-1.5 pt-2.5 text-[11.5px] text-[#D4AF37] hover:text-[#E8C65C] transition"
             >
               <HelpCircle className="w-3.5 h-3.5" />
               <span className="font-bold">{t('header.completeProfile')}</span>
               <X
-                className="w-3 h-3 ml-1 text-gray-300 group-hover:text-gray-500"
+                className="w-3 h-3 ml-1 text-white/30 group-hover:text-white/60"
                 onClick={(e) => { e.stopPropagation(); setReminderDismissed(true); }}
               />
             </button>
