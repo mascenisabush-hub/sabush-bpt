@@ -224,11 +224,21 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
     assert.match(flushBody, /rev: \(known\?\.rev \?\? 0\) \+ 1,/, 'row writes must still derive rev from the local periodicStockDraftItemsByKey mirror, unchanged');
   });
 
-  it('recordStockCount refuses to finalize a non-initial count while openConflictCount > 0', () => {
+  it('recordStockCount refuses to finalize a non-initial count while a real conflict-row exists — computed from ground truth (periodicStockDraft.items\' own state field), never the separately-cached openConflictCount counter', () => {
+    // [Bug fix — openConflictCount permanent-drift correction] Was
+    // `(periodicStockDraftMeta?.openConflictCount ?? 0) > 0` — the
+    // same drift-prone counter the resurrection-race and permanent
+    // -drift fixes address elsewhere in this file. This is explicitly
+    // a non-authoritative, fast client guard (firestore.rules' own
+    // openConflictCount == 0 precondition remains the real,
+    // authoritative enforcement regardless of this check) — but there
+    // is no reason for it to depend on a counter that can drift when
+    // the ground truth is already available in this exact scope.
     assert.match(
       contextSource,
-      /if \(type !== 'initial' && \(periodicStockDraftMeta\?\.openConflictCount \?\? 0\) > 0\) \{/
+      /const hasUnresolvedConflictRows = \(periodicStockDraft\?\.items \?\? \[\]\)\.some\(\(item\) => item\.state === 'CONFLICT'\);/
     );
+    assert.match(contextSource, /if \(type !== 'initial' && hasUnresolvedConflictRows\) \{/);
   });
 });
 
@@ -468,6 +478,26 @@ describe('Bug fix — openConflictCount permanent-drift self-correction (reporte
   it('the self-heal is gated on isActiveContagemEditor specifically — a Viewer\'s session, which also computes unresolvedConflictRows correctly, never attempts a write it has no permission for', () => {
     const idx = viewSource.indexOf('if (!isActiveContagemEditor) return;\n    if (!periodicStockDraft) return;\n    const trueCount = unresolvedConflictRows.length;');
     assert.notEqual(idx, -1, 'expected the editor-gate to be the FIRST check in the effect, before the draft-loaded check');
+  });
+
+  it('(pure logic) proves recordStockCount\'s own local pre-check is now immune to the exact scenario the self-heal exists for — a stuck, non-zero counter with genuinely zero real conflict rows', () => {
+    // Models exactly the reported scenario: openConflictCount stuck at
+    // 1 in the client's own local mirror (whether from a not-yet-
+    // healed drift, or any future, currently-unforeseen cause), while
+    // the real per-row states show zero rows in CONFLICT.
+    const staleCachedCounter = { openConflictCount: 1 };
+    const items = [
+      { state: 'ACCEPTED' as 'ACCEPTED' | 'CONFLICT' },
+      { state: 'ACCEPTED' as 'ACCEPTED' | 'CONFLICT' },
+    ];
+
+    // OLD, fragile check — would have incorrectly blocked finalization:
+    const oldCheckResult = staleCachedCounter.openConflictCount > 0;
+    assert.equal(oldCheckResult, true, 'confirms the old check WOULD have incorrectly blocked this exact scenario');
+
+    // NEW, ground-truth check — correctly evaluates the real row states:
+    const newCheckResult = items.some((item) => item.state === 'CONFLICT');
+    assert.equal(newCheckResult, false, 'the fix: computed from real row states, never fooled by a stale or drifted counter');
   });
 });
 

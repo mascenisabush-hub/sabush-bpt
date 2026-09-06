@@ -5136,10 +5136,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // non-authoritative client guard — firestore.rules' own
     // `openConflictCount == 0` precondition on the `stockCounts`
     // create rule is the actual, authoritative enforcement regardless
-    // of this check; this only avoids a doomed round-trip when the
-    // already-live `periodicStockDraftMeta` mirror already shows an
-    // unresolved conflict.
-    if (type !== 'initial' && (periodicStockDraftMeta?.openConflictCount ?? 0) > 0) {
+    // of this check; this only avoids a doomed round-trip.
+    //
+    // [Bug fix — openConflictCount permanent-drift correction] Was
+    // `(periodicStockDraftMeta?.openConflictCount ?? 0) > 0` — the
+    // same separately-cached, drift-prone counter the resurrection
+    // -race and permanent-drift fixes address elsewhere in this file.
+    // There is no reason for even a best-effort local guard to depend
+    // on a counter that can drift when the ground truth
+    // (periodicStockDraft.items' own per-row `state` field) is already
+    // available in this exact scope — computed directly from the real,
+    // live item states, exactly like PeriodicStockCountView.tsx's own
+    // unresolvedConflictRows, never the separately-cached counter, for
+    // this specific purpose. This makes even the "avoid a doomed
+    // round-trip" optimization itself immune to the counter drifting
+    // again for any future, currently-unforeseen reason.
+    const hasUnresolvedConflictRows = (periodicStockDraft?.items ?? []).some((item) => item.state === 'CONFLICT');
+    if (type !== 'initial' && hasUnresolvedConflictRows) {
       throw new Error(
         'Existem linhas em conflito por resolver nesta Contagem. Resolva todos os conflitos antes de finalizar.'
       );
