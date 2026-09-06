@@ -23,8 +23,39 @@ export default function SignIn() {
     try {
       await signInWithEmailAndPassword(auth, email.trim(), password);
       // App.tsx's onAuthStateChanged listener takes it from here.
-    } catch {
-      setError('Email ou palavra-passe inválidos.');
+    } catch (err: any) {
+      // [Bug fix — sign-in failing for genuinely correct credentials
+      // with no way to tell why] Mirrors apps/tenant's own established
+      // convention (AuthView.tsx): log the raw error for devtools, map
+      // the common credential-related codes to a friendly message, but
+      // ALWAYS include the raw Firebase error code in the displayed
+      // string. Previously every failure — wrong password, but also a
+      // misconfigured API key/project, email/password sign-in disabled
+      // in the Firebase console, a network error, an account disabled,
+      // rate-limiting, etc. — showed the identical "invalid
+      // credentials" message, making it impossible to distinguish a
+      // real credential mistake from a configuration/infrastructure
+      // problem that would fail even for a correct password.
+      console.error('[SuperAdmin Login Auth Error]:', err);
+      let userMsg: string;
+      if (err?.code === 'auth/user-not-found' || err?.code === 'auth/wrong-password' || err?.code === 'auth/invalid-credential') {
+        userMsg = 'Email ou palavra-passe inválidos.';
+      } else if (err?.code === 'auth/user-disabled') {
+        userMsg = 'Esta conta foi desativada.';
+      } else if (err?.code === 'auth/invalid-email') {
+        userMsg = 'Formato de email inválido.';
+      } else if (err?.code === 'auth/too-many-requests') {
+        userMsg = 'Demasiadas tentativas. Aguarde um momento e tente novamente.';
+      } else if (err?.code === 'auth/network-request-failed') {
+        userMsg = 'Erro de rede. Verifique a sua ligação à internet.';
+      } else if (err?.code === 'auth/api-key-not-valid' || err?.code === 'auth/invalid-api-key') {
+        userMsg = 'Erro de configuração (chave de API inválida). Contacte o suporte técnico.';
+      } else if (err?.code === 'auth/operation-not-allowed') {
+        userMsg = 'A autenticação por email/palavra-passe não está ativada neste projeto. Contacte o suporte técnico.';
+      } else {
+        userMsg = err?.message || 'Ocorreu um erro ao autenticar.';
+      }
+      setError(`${userMsg}${err?.code ? ` [${err.code}]` : ''}`);
     } finally {
       setSubmitting(false);
     }
