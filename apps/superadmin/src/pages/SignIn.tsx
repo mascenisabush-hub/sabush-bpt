@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { signInWithEmailAndPassword } from 'firebase/auth';
+import { Lock, Mail, ShieldAlert } from 'lucide-react';
 import { auth } from '../lib/firebase';
 
 // FR-1 — SuperAdmin authentication. No self-service signup exists here
@@ -62,55 +63,70 @@ export default function SignIn() {
   }
 
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', alignItems: 'center', justifyContent: 'center' }}>
-      <form onSubmit={handleSubmit} style={{ width: 320, padding: 32, background: '#1e293b', borderRadius: 8 }}>
-        <h1 style={{ fontSize: 18, marginBottom: 4 }}>Sabush — SuperAdmin</h1>
-        <p style={{ fontSize: 13, color: '#94a3b8', marginBottom: 24 }}>Operações de Pagamento</p>
+    // Full-screen dark surface — deliberately the AuthView/AppLoadingScreen
+    // near-black system (DESIGN_SYSTEM.md's "two separate dark-surface
+    // systems, do not merge" rule), not .card-dark-gradient's navy
+    // gradient, since this is a full-screen auth background rather than a
+    // flagship metric card.
+    <div
+      className="flex min-h-screen items-center justify-center p-4"
+      style={{ background: '#00020F' }}
+    >
+      <form
+        onSubmit={handleSubmit}
+        className="card-premium elevation-3 w-full max-w-sm p-8"
+      >
+        <div className="mb-1 flex items-center gap-2.5">
+          <span
+            className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl"
+            style={{ background: 'var(--gold-soft)' }}
+          >
+            <Lock className="h-4.5 w-4.5" style={{ color: 'var(--gold-hover)' }} strokeWidth={2.25} />
+          </span>
+          <h1 className="font-display type-title-lg">Sabush SuperAdmin</h1>
+        </div>
+        <p className="type-label mb-7 ml-[46px]">Operações de Pagamento</p>
 
-        <label style={{ display: 'block', fontSize: 13, marginBottom: 4 }}>Email</label>
-        <input
-          type="email"
-          value={email}
-          onChange={(e) => setEmail(e.target.value)}
-          required
-          style={inputStyle}
-        />
+        <label className="type-label mb-1.5 block">Email</label>
+        <div className="relative mb-4">
+          <Mail className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
+          <input
+            type="email"
+            value={email}
+            onChange={(e) => setEmail(e.target.value)}
+            required
+            autoComplete="username"
+            className="input-base type-body w-full py-2.5 pl-9 pr-3"
+          />
+        </div>
 
-        <label style={{ display: 'block', fontSize: 13, margin: '12px 0 4px' }}>Palavra-passe</label>
-        <input
-          type="password"
-          value={password}
-          onChange={(e) => setPassword(e.target.value)}
-          required
-          style={inputStyle}
-        />
+        <label className="type-label mb-1.5 block">Palavra-passe</label>
+        <div className="relative mb-2">
+          <Lock className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
+          <input
+            type="password"
+            value={password}
+            onChange={(e) => setPassword(e.target.value)}
+            required
+            autoComplete="current-password"
+            className="input-base type-body w-full py-2.5 pl-9 pr-3"
+          />
+        </div>
 
-        {error && <p style={{ color: '#f87171', fontSize: 13, marginTop: 12 }}>{error}</p>}
+        {error && (
+          <div
+            className="mt-4 flex items-start gap-2 rounded-lg border p-3"
+            style={{ background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }}
+          >
+            <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+            <p className="text-[13px] leading-snug" style={{ color: 'var(--error)' }}>{error}</p>
+          </div>
+        )}
 
-        <button type="submit" disabled={submitting} style={buttonStyle}>
+        <button type="submit" disabled={submitting} className="btn-primary lift mt-6 w-full py-2.5 text-sm">
           {submitting ? 'A entrar…' : 'Entrar'}
         </button>
       </form>
     </div>
   );
 }
-
-const inputStyle: React.CSSProperties = {
-  width: '100%',
-  padding: '8px 10px',
-  borderRadius: 4,
-  border: '1px solid #334155',
-  background: '#0f172a',
-  color: '#e2e8f0',
-};
-
-const buttonStyle: React.CSSProperties = {
-  width: '100%',
-  marginTop: 20,
-  padding: '10px 0',
-  borderRadius: 4,
-  border: 'none',
-  background: '#2563eb',
-  color: 'white',
-  fontWeight: 600,
-};

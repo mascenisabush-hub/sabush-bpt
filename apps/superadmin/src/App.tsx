@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react';
 import { onAuthStateChanged, signOut, type User } from 'firebase/auth';
 import { doc, getDoc } from 'firebase/firestore';
+import { LogOut, ShieldOff, Wallet, ScrollText, Users, Building2, Compass } from 'lucide-react';
 import { auth, db } from './lib/firebase';
 import SignIn from './pages/SignIn';
 import PendingPaymentsQueue from './pages/PendingPaymentsQueue';
@@ -63,7 +64,11 @@ export default function App() {
   }, []);
 
   if (phase.kind === 'loading') {
-    return <Centered>A verificar sessão…</Centered>;
+    return (
+      <Centered>
+        <p className="type-body" style={{ color: 'var(--muted-foreground)' }}>A verificar sessão…</p>
+      </Centered>
+    );
   }
   if (phase.kind === 'signed-out') {
     return <SignIn />;
@@ -71,7 +76,8 @@ export default function App() {
   if (phase.kind === 'not-platform-operator') {
     return (
       <Centered>
-        <p>Esta conta não é uma conta de operador de plataforma.</p>
+        <ShieldOff className="h-8 w-8" style={{ color: 'var(--error)' }} />
+        <p className="type-body max-w-sm">Esta conta não é uma conta de operador de plataforma.</p>
         <SignOutButton />
       </Centered>
     );
@@ -79,9 +85,10 @@ export default function App() {
   if (phase.kind === 'not-superadmin') {
     return (
       <Centered>
-        <p>
-          Esta conta tem a função <strong>{phase.platformRole}</strong>, mas a Operação de Pagamentos está limitada a
-          contas SuperAdmin nesta versão.
+        <ShieldOff className="h-8 w-8" style={{ color: 'var(--warning)' }} />
+        <p className="type-body max-w-sm">
+          Esta conta tem a função <strong className="font-bold">{phase.platformRole}</strong>, mas a Operação de
+          Pagamentos está limitada a contas SuperAdmin nesta versão.
         </p>
         <SignOutButton />
       </Centered>
@@ -89,20 +96,47 @@ export default function App() {
   }
 
   // phase.kind === 'superadmin'
+  const NAV_ITEMS: { id: View['name']; label: string; icon: typeof Wallet }[] = [
+    { id: 'queue', label: 'Fila de Pagamentos', icon: Wallet },
+    { id: 'audit', label: 'Auditoria', icon: ScrollText },
+    { id: 'operators', label: 'Operadores', icon: Users },
+    { id: 'businesses', label: 'Negócios', icon: Building2 },
+    { id: 'directory', label: 'Directório', icon: Compass },
+  ];
+  const isNavActive = (id: View['name']) =>
+    view.name === id || (view.name === 'businessDetail' && view.from === (id === 'businesses' ? 'businesses' : id === 'directory' ? 'directory' : undefined));
+
   return (
-    <div style={{ minHeight: '100vh' }}>
-      <header style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', padding: '12px 24px', borderBottom: '1px solid #1e293b' }}>
-        <div style={{ display: 'flex', gap: 20, alignItems: 'center' }}>
-          <strong>Sabush SuperAdmin</strong>
-          <NavLink active={view.name === 'queue'} onClick={() => setView({ name: 'queue' })}>Fila de Pagamentos</NavLink>
-          <NavLink active={view.name === 'audit'} onClick={() => setView({ name: 'audit' })}>Auditoria</NavLink>
-          <NavLink active={view.name === 'operators'} onClick={() => setView({ name: 'operators' })}>Operadores</NavLink>
-          <NavLink active={view.name === 'businesses' || (view.name === 'businessDetail' && view.from === 'businesses')} onClick={() => setView({ name: 'businesses' })}>Negócios</NavLink>
-          <NavLink active={view.name === 'directory' || (view.name === 'businessDetail' && view.from === 'directory')} onClick={() => setView({ name: 'directory' })}>Directório</NavLink>
+    <div className="min-h-screen" style={{ background: 'var(--muted)' }}>
+      <header className="text-white" style={{ background: 'linear-gradient(135deg, #0B1F3A 0%, #132A4A 100%)' }}>
+        <div className="mx-auto flex max-w-7xl flex-wrap items-center justify-between gap-4 px-4 py-4 sm:px-8">
+          <div className="flex items-center gap-6">
+            <h1 className="font-display text-xl font-semibold tracking-tight text-white">Sabush SuperAdmin</h1>
+            <nav className="flex flex-wrap items-center gap-2">
+              {NAV_ITEMS.map(({ id, label, icon: Icon }) => {
+                const active = isNavActive(id);
+                return (
+                  <button
+                    key={id}
+                    type="button"
+                    onClick={() => setView({ name: id } as View)}
+                    className={`flex items-center gap-1.5 rounded-2xl border px-3 py-1.5 text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
+                      active
+                        ? 'border-transparent bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
+                        : 'border-white/[0.14] bg-white/[0.05] text-white/80 hover:border-white/25 hover:bg-white/10 hover:text-white'
+                    }`}
+                  >
+                    <Icon className="h-3.5 w-3.5" strokeWidth={2.25} />
+                    {label}
+                  </button>
+                );
+              })}
+            </nav>
+          </div>
+          <SignOutButton />
         </div>
-        <SignOutButton />
       </header>
-      <main style={{ padding: 24 }}>
+      <main className="mx-auto max-w-7xl px-4 py-6 sm:px-8">
         {view.name === 'queue' && (
           <PendingPaymentsQueue onOpenPayment={(businessId, paymentId) => setView({ name: 'detail', businessId, paymentId })} />
         )}
@@ -130,7 +164,10 @@ export default function App() {
 
 function Centered({ children }: { children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', minHeight: '100vh', flexDirection: 'column', alignItems: 'center', justifyContent: 'center', gap: 12, textAlign: 'center', padding: 24 }}>
+    <div
+      className="flex min-h-screen flex-col items-center justify-center gap-3 p-6 text-center"
+      style={{ background: '#00020F' }}
+    >
       {children}
     </div>
   );
@@ -140,28 +177,10 @@ function SignOutButton() {
   return (
     <button
       onClick={() => signOut(auth)}
-      style={{ background: 'none', border: '1px solid #334155', color: '#94a3b8', borderRadius: 4, padding: '6px 12px', fontSize: 13 }}
+      className="flex items-center gap-1.5 rounded-lg border border-white/20 px-3 py-1.5 text-[13px] font-semibold text-white/80 transition-colors hover:border-white/35 hover:text-white"
     >
+      <LogOut className="h-3.5 w-3.5" />
       Sair
-    </button>
-  );
-}
-
-function NavLink({ active, onClick, children }: { active: boolean; onClick: () => void; children: React.ReactNode }) {
-  return (
-    <button
-      onClick={onClick}
-      style={{
-        background: 'none',
-        border: 'none',
-        color: active ? '#e2e8f0' : '#64748b',
-        fontWeight: active ? 600 : 400,
-        cursor: 'pointer',
-        padding: 0,
-        fontSize: 14,
-      }}
-    >
-      {children}
     </button>
   );
 }

@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ArrowLeft, CheckCircle2, ShieldAlert, TriangleAlert, XCircle } from 'lucide-react';
 import {
   fetchPaymentDetail,
   confirmPaymentAction,
@@ -86,42 +87,72 @@ export default function PaymentDetail({ businessId, paymentId, onBack }: Props) 
 
   return (
     <div>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', marginBottom: 16, cursor: 'pointer', padding: 0 }}>
-        ← Voltar à fila
+      <button onClick={onBack} className="btn-ghost lift mb-4 px-2 py-1.5 text-[13px]">
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Voltar à fila
       </button>
 
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
+      {error && (
+        <div
+          className="mb-4 flex items-start gap-2 rounded-lg border p-3"
+          style={{ background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }}
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+          <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{error}</p>
+        </div>
+      )}
 
       {data && (
-        <div style={{ background: '#1e293b', borderRadius: 8, padding: 24, maxWidth: 520 }}>
-          <h2 style={{ fontSize: 16, marginTop: 0 }}>{data.businessName ?? '(sem nome)'}</h2>
-          <p style={{ fontSize: 12, color: '#64748b', marginTop: -8 }}>{businessId}</p>
+        <div className="card-premium max-w-xl p-6">
+          <h2 className="type-title-lg font-display">{data.businessName ?? '(sem nome)'}</h2>
+          <p className="type-label mb-4" style={{ color: 'var(--muted-foreground)' }}>{businessId}</p>
 
-          <dl style={{ fontSize: 14 }}>
-            <Row label="Valor" value={`${data.payment.amount} ${data.payment.currency}`} />
+          <dl>
+            <Row label="Valor" value={`${data.payment.amount} ${data.payment.currency}`} isNumber />
             <Row label="Método" value={data.payment.method} />
             <Row label="Referência" value={data.payment.reference} />
             <Row label="Submetido por" value={data.payment.submittedBy} />
             <Row label="Submetido em" value={new Date(data.payment.submittedAt).toLocaleString('pt-PT')} />
             <Row label="Estado do pagamento" value={data.payment.status} />
-            <Row label="Estado da subscrição" value={data.subscriptionStatus ?? '—'} />
+            <Row label="Estado da subscrição" value={data.subscriptionStatus ?? '—'} last />
           </dl>
 
           {result && (
-            <div style={{ marginTop: 16, padding: 12, borderRadius: 6, background: result.kind === 'confirmed' ? '#14532d' : '#3f1d1d' }}>
-              {result.kind === 'confirmed' ? (
-                <>
-                  <p style={{ margin: 0 }}>Pagamento confirmado. {result.transitionReason}</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#a7f3d0' }}>Estado atual da subscrição: {result.subscriptionStatus ?? '—'}</p>
-                </>
-              ) : (
-                <>
-                  <p style={{ margin: 0 }}>Pagamento rejeitado. A subscrição não foi alterada.</p>
-                  <p style={{ margin: '4px 0 0', fontSize: 13, color: '#fca5a5' }}>Estado atual da subscrição: {result.subscriptionStatus ?? '—'}</p>
-                </>
-              )}
+            <div
+              className="mt-4 rounded-lg border p-3.5"
+              style={
+                result.kind === 'confirmed'
+                  ? { background: 'rgba(5,150,105,0.08)', borderColor: 'rgba(5,150,105,0.3)' }
+                  : { background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }
+              }
+            >
+              <div className="flex items-start gap-2">
+                {result.kind === 'confirmed' ? (
+                  <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--success)' }} />
+                ) : (
+                  <XCircle className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+                )}
+                <div>
+                  {result.kind === 'confirmed' ? (
+                    <>
+                      <p className="type-body text-[13px]">Pagamento confirmado. {result.transitionReason}</p>
+                      <p className="type-label mt-1 normal-case tracking-normal" style={{ color: 'var(--success)' }}>
+                        Estado atual da subscrição: {result.subscriptionStatus ?? '—'}
+                      </p>
+                    </>
+                  ) : (
+                    <>
+                      <p className="type-body text-[13px]">Pagamento rejeitado. A subscrição não foi alterada.</p>
+                      <p className="type-label mt-1 normal-case tracking-normal" style={{ color: 'var(--error)' }}>
+                        Estado atual da subscrição: {result.subscriptionStatus ?? '—'}
+                      </p>
+                    </>
+                  )}
+                </div>
+              </div>
               {result.auditLogged === false && (
-                <p style={{ margin: '8px 0 0', fontSize: 12, color: '#fbbf24' }}>
+                <p className="type-body mt-2 flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--warning)' }}>
+                  <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
                   Aviso: a ação foi aplicada, mas o registo de auditoria falhou ao gravar. Reporte isto à equipa técnica.
                 </p>
               )}
@@ -129,42 +160,75 @@ export default function PaymentDetail({ businessId, paymentId, onBack }: Props) 
           )}
 
           {data.payment.status === 'pending' && !result && (
-            <div style={{ marginTop: 20 }}>
+            <div className="mt-5">
               {pendingAction === null && (
-                <div style={{ display: 'flex', gap: 8 }}>
-                  <button onClick={() => setPendingAction('confirm')} style={confirmBtn}>Confirmar Pagamento</button>
-                  <button onClick={() => setPendingAction('reject')} style={rejectBtn}>Rejeitar Pagamento</button>
+                <div className="flex gap-2.5">
+                  <button onClick={() => setPendingAction('confirm')} className="btn-primary lift px-4 py-2.5 text-sm">
+                    Confirmar Pagamento
+                  </button>
+                  <button
+                    onClick={() => setPendingAction('reject')}
+                    className="lift rounded-[10px] bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_-8px_rgba(225,29,72,0.55)] hover:bg-rose-500"
+                  >
+                    Rejeitar Pagamento
+                  </button>
                 </div>
               )}
 
               {pendingAction === 'confirm' && (
-                <div style={dialogBox}>
-                  <p style={{ marginTop: 0 }}>
-                    Confirmar pagamento de <strong>{data.payment.amount} {data.payment.currency}</strong> ({data.payment.method}, ref. {data.payment.reference}) para <strong>{data.businessName ?? businessId}</strong>?
+                <div className="card-premium is-action p-4">
+                  <p className="type-body">
+                    Confirmar pagamento de{' '}
+                    <strong className="font-bold">{data.payment.amount} {data.payment.currency}</strong>{' '}
+                    ({data.payment.method}, ref. {data.payment.reference}) para{' '}
+                    <strong className="font-bold">{data.businessName ?? businessId}</strong>?
                   </p>
-                  <p style={{ fontSize: 13, color: '#94a3b8' }}>Esta ação ativa a subscrição através do motor de subscrições existente e não pode ser desfeita nesta tela.</p>
-                  {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button onClick={handleConfirm} disabled={busy} style={confirmBtn}>{busy ? 'A confirmar…' : 'Sim, confirmar'}</button>
-                    <button onClick={() => { setPendingAction(null); setActionError(null); }} style={cancelBtn}>Cancelar</button>
+                  <p className="type-body mt-1.5 text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
+                    Esta ação ativa a subscrição através do motor de subscrições existente e não pode ser desfeita nesta tela.
+                  </p>
+                  {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+                  <div className="mt-3 flex gap-2.5">
+                    <button onClick={handleConfirm} disabled={busy} className="btn-primary lift px-4 py-2 text-sm">
+                      {busy ? 'A confirmar…' : 'Sim, confirmar'}
+                    </button>
+                    <button
+                      onClick={() => { setPendingAction(null); setActionError(null); }}
+                      className="btn-secondary lift px-4 py-2 text-sm"
+                    >
+                      Cancelar
+                    </button>
                   </div>
                 </div>
               )}
 
+              {/* Destructive confirmation per DESIGN_SYSTEM.md → Dialogs &
+                  modals: rose-tinted banner, rose confirm button. */}
               {pendingAction === 'reject' && (
-                <div style={dialogBox}>
-                  <p style={{ marginTop: 0 }}>Rejeitar este pagamento? É obrigatório indicar um motivo.</p>
+                <div className="rounded-[10px] border border-rose-500/30 bg-rose-500/10 p-4">
+                  <p className="type-body text-rose-700">Rejeitar este pagamento? É obrigatório indicar um motivo.</p>
                   <textarea
                     value={rejectReason}
                     onChange={(e) => setRejectReason(e.target.value)}
                     placeholder="Motivo da rejeição…"
                     rows={3}
-                    style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8 }}
+                    className="input-base type-body mt-2 w-full p-2.5"
+                    style={{ borderColor: 'rgba(225,29,72,0.35)' }}
                   />
-                  {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
-                  <div style={{ display: 'flex', gap: 8, marginTop: 8 }}>
-                    <button onClick={handleReject} disabled={busy} style={rejectBtn}>{busy ? 'A rejeitar…' : 'Sim, rejeitar'}</button>
-                    <button onClick={() => { setPendingAction(null); setActionError(null); }} style={cancelBtn}>Cancelar</button>
+                  {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+                  <div className="mt-3 flex gap-2.5">
+                    <button
+                      onClick={handleReject}
+                      disabled={busy}
+                      className="lift rounded-[10px] bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-[0_8px_20px_-8px_rgba(225,29,72,0.55)] hover:bg-rose-500"
+                    >
+                      {busy ? 'A rejeitar…' : 'Sim, rejeitar'}
+                    </button>
+                    <button
+                      onClick={() => { setPendingAction(null); setActionError(null); }}
+                      className="btn-secondary lift px-4 py-2 text-sm"
+                    >
+                      Cancelar
+                    </button>
                   </div>
                 </div>
               )}
@@ -172,8 +236,8 @@ export default function PaymentDetail({ businessId, paymentId, onBack }: Props) 
           )}
 
           {data.payment.status !== 'pending' && !result && (
-            <p style={{ marginTop: 16, fontSize: 13, color: '#94a3b8' }}>
-              Este pagamento já está <strong>{data.payment.status}</strong> — nenhuma ação disponível.
+            <p className="type-body mt-4 text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
+              Este pagamento já está <strong className="font-bold">{data.payment.status}</strong> — nenhuma ação disponível.
             </p>
           )}
         </div>
@@ -182,16 +246,11 @@ export default function PaymentDetail({ businessId, paymentId, onBack }: Props) 
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, isNumber, last }: { label: string; value: string; isNumber?: boolean; last?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0f172a' }}>
-      <dt style={{ color: '#94a3b8' }}>{label}</dt>
-      <dd style={{ margin: 0 }}>{value}</dd>
+    <div className={`flex items-center justify-between py-2 ${last ? '' : 'border-b'}`} style={{ borderColor: 'var(--border)' }}>
+      <dt className="type-label" style={{ color: 'var(--muted-foreground)' }}>{label}</dt>
+      <dd className={`m-0 ${isNumber ? 'type-number' : 'type-body'} text-[13.5px]`}>{value}</dd>
     </div>
   );
 }
-
-const confirmBtn: React.CSSProperties = { background: '#16a34a', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
-const rejectBtn: React.CSSProperties = { background: '#dc2626', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
-const cancelBtn: React.CSSProperties = { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 14px', borderRadius: 4 };
-const dialogBox: React.CSSProperties = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: 16 };

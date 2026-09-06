@@ -1,4 +1,5 @@
 import react from '@vitejs/plugin-react';
+import tailwindcss from '@tailwindcss/vite';
 import path from 'path';
 import { defineConfig } from 'vite';
 
@@ -16,7 +17,12 @@ import { defineConfig } from 'vite';
 export default defineConfig(() => {
   return {
     root: __dirname,
-    plugins: [react()],
+    // Tailwind here is a deliberate, independent addition — same v4 plugin
+    // apps/tenant/vite.config.ts uses, applied to this app's own build only.
+    // This does not cross the NFR-1 boundary: it's a separate plugin
+    // instance compiling this app's own src/index.css, not a shared import
+    // of anything under apps/tenant/src.
+    plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
         '@sabush/shared-types': path.resolve(__dirname, '../../packages/shared-types/index.ts'),

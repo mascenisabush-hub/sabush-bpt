@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ShieldAlert, UserPlus } from 'lucide-react';
 import { auth } from '../lib/firebase';
 import {
   fetchOperators,
@@ -80,71 +81,107 @@ export default function Operators() {
 
   return (
     <div>
-      <h2 style={{ fontSize: 16, marginBottom: 16 }}>Operadores</h2>
+      <h2 className="type-title-lg font-display mb-5">Operadores</h2>
 
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-      {!error && operators === null && <p style={{ color: '#94a3b8' }}>A carregar…</p>}
-
-      {operators !== null && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14, marginBottom: 24 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid #334155' }}>
-              <th style={th}>uid</th>
-              <th style={th}>Função</th>
-              <th style={th}></th>
-            </tr>
-          </thead>
-          <tbody>
-            {operators.map((op) => (
-              <tr key={op.uid} style={{ borderBottom: '1px solid #1e293b' }}>
-                <td style={td}>{op.uid} {selfUid === op.uid && <span style={{ color: '#64748b' }}>(você)</span>}</td>
-                <td style={td}>{op.platformRole}</td>
-                <td style={td}>
-                  {selfUid !== op.uid && (
-                    pendingRevokeUid === op.uid ? (
-                      <span style={{ display: 'flex', gap: 8, alignItems: 'center' }}>
-                        <span style={{ color: '#94a3b8' }}>Revogar?</span>
-                        <button onClick={() => handleRevoke(op.uid)} disabled={busy} style={rejectBtn}>{busy ? 'A revogar…' : 'Sim'}</button>
-                        <button onClick={() => setPendingRevokeUid(null)} style={cancelBtn}>Cancelar</button>
-                      </span>
-                    ) : (
-                      <button onClick={() => setPendingRevokeUid(op.uid)} style={cancelBtn}>Revogar</button>
-                    )
-                  )}
-                </td>
-              </tr>
-            ))}
-          </tbody>
-        </table>
+      {error && (
+        <div
+          className="mb-4 flex items-start gap-2 rounded-lg border p-3"
+          style={{ background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }}
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+          <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{error}</p>
+        </div>
+      )}
+      {!error && operators === null && (
+        <div className="card-premium mb-6 p-6 text-center">
+          <p className="type-body" style={{ color: 'var(--muted-foreground)' }}>A carregar…</p>
+        </div>
       )}
 
-      {revokeError && <p style={{ color: '#f87171' }}>{revokeError}</p>}
+      {operators !== null && (
+        <div className="card-premium mb-6 overflow-hidden">
+          <table className="table-clean w-full text-left">
+            <thead>
+              <tr>
+                <th className="type-label px-5 py-3">uid</th>
+                <th className="type-label px-5 py-3">Função</th>
+                <th className="px-5 py-3"></th>
+              </tr>
+            </thead>
+            <tbody>
+              {operators.map((op) => (
+                <tr key={op.uid}>
+                  <td className="type-body px-5 py-3.5">
+                    {op.uid} {selfUid === op.uid && <span style={{ color: 'var(--muted-foreground)' }}>(você)</span>}
+                  </td>
+                  <td className="px-5 py-3.5">
+                    <span className="badge-soft" style={{ background: 'var(--gold-soft)', color: 'var(--gold-hover)' }}>
+                      {op.platformRole}
+                    </span>
+                  </td>
+                  <td className="px-5 py-3.5">
+                    {selfUid !== op.uid && (
+                      pendingRevokeUid === op.uid ? (
+                        <span className="flex items-center gap-2">
+                          <span className="type-body text-[13px]" style={{ color: 'var(--muted-foreground)' }}>Revogar?</span>
+                          <button
+                            onClick={() => handleRevoke(op.uid)}
+                            disabled={busy}
+                            className="lift rounded-lg bg-rose-600 px-2.5 py-1.5 text-[13px] font-bold text-white hover:bg-rose-500"
+                          >
+                            {busy ? 'A revogar…' : 'Sim'}
+                          </button>
+                          <button onClick={() => setPendingRevokeUid(null)} className="btn-secondary lift px-2.5 py-1.5 text-[13px]">
+                            Cancelar
+                          </button>
+                        </span>
+                      ) : (
+                        <button onClick={() => setPendingRevokeUid(op.uid)} className="btn-secondary lift px-2.5 py-1.5 text-[13px]">
+                          Revogar
+                        </button>
+                      )
+                    )}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      )}
 
-      <div style={{ background: '#1e293b', borderRadius: 8, padding: 24, maxWidth: 420 }}>
-        <h3 style={{ fontSize: 14, marginTop: 0 }}>Provisionar novo operador</h3>
-        <div style={{ display: 'flex', flexDirection: 'column', gap: 8 }}>
+      {revokeError && (
+        <div
+          className="mb-4 flex items-start gap-2 rounded-lg border p-3"
+          style={{ background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }}
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+          <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{revokeError}</p>
+        </div>
+      )}
+
+      <div className="card-premium max-w-md p-6">
+        <h3 className="type-title mb-3 flex items-center gap-2">
+          <UserPlus className="h-4 w-4" style={{ color: 'var(--gold-hover)' }} />
+          Provisionar novo operador
+        </h3>
+        <div className="flex flex-col gap-3">
           <input
             value={newUid}
             onChange={(e) => setNewUid(e.target.value)}
             placeholder="uid (Firebase Auth)"
-            style={inputStyle}
+            className="input-base type-body px-3 py-2.5"
           />
-          <select value={newRole} onChange={(e) => setNewRole(e.target.value as PlatformRole)} style={inputStyle}>
+          <select value={newRole} onChange={(e) => setNewRole(e.target.value as PlatformRole)} className="input-base type-body px-3 py-2.5">
             <option value="support">support</option>
             <option value="developer">developer</option>
             <option value="superadmin">superadmin</option>
           </select>
-          {formError && <p style={{ color: '#f87171', margin: 0 }}>{formError}</p>}
-          <button onClick={handleProvision} disabled={busy} style={confirmBtn}>{busy ? 'A provisionar…' : 'Provisionar'}</button>
+          {formError && <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{formError}</p>}
+          <button onClick={handleProvision} disabled={busy} className="btn-primary lift py-2.5 text-sm">
+            {busy ? 'A provisionar…' : 'Provisionar'}
+          </button>
         </div>
       </div>
     </div>
   );
 }
-
-const th: React.CSSProperties = { padding: '8px 12px' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const inputStyle: React.CSSProperties = { borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, fontSize: 14 };
-const confirmBtn: React.CSSProperties = { background: '#16a34a', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
-const rejectBtn: React.CSSProperties = { background: '#dc2626', border: 'none', color: 'white', padding: '6px 10px', borderRadius: 4, fontWeight: 600, fontSize: 13 };
-const cancelBtn: React.CSSProperties = { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '6px 10px', borderRadius: 4, fontSize: 13 };

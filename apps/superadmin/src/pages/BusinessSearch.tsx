@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Search, ShieldAlert } from 'lucide-react';
 import { searchBusinesses, type BusinessSearchRow, SuperAdminApiError } from '../lib/superadminApi';
 
 interface Props {
@@ -30,45 +31,64 @@ export default function BusinessSearch({ onOpenBusiness }: Props) {
 
   return (
     <div>
-      <h2 style={{ fontSize: 16, marginBottom: 16 }}>Negócios</h2>
+      <h2 className="type-title-lg font-display mb-5">Negócios</h2>
 
-      <div style={{ display: 'flex', gap: 8, marginBottom: 16, maxWidth: 420 }}>
-        <input
-          value={q}
-          onChange={(e) => setQ(e.target.value)}
-          onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
-          placeholder="Nome ou ID do negócio…"
-          style={inputStyle}
-        />
-        <button onClick={handleSearch} disabled={busy} style={confirmBtn}>{busy ? 'A pesquisar…' : 'Pesquisar'}</button>
+      <div className="mb-5 flex max-w-md gap-2">
+        <div className="relative flex-1">
+          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2" style={{ color: 'var(--muted-foreground)' }} />
+          <input
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
+            placeholder="Nome ou ID do negócio…"
+            className="input-base type-body w-full py-2.5 pl-9 pr-3"
+          />
+        </div>
+        <button onClick={handleSearch} disabled={busy} className="btn-primary lift px-4 py-2.5 text-sm">
+          {busy ? 'A pesquisar…' : 'Pesquisar'}
+        </button>
       </div>
 
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-      {results !== null && results.length === 0 && !error && <p style={{ color: '#94a3b8' }}>Nenhum negócio encontrado.</p>}
+      {error && (
+        <div
+          className="mb-4 flex items-start gap-2 rounded-lg border p-3"
+          style={{ background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }}
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+          <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{error}</p>
+        </div>
+      )}
+      {results !== null && results.length === 0 && !error && (
+        <div className="card-premium flex flex-col items-center gap-2 p-10 text-center">
+          <Search className="h-7 w-7" style={{ color: 'var(--muted-foreground)' }} />
+          <p className="type-body" style={{ color: 'var(--muted-foreground)' }}>Nenhum negócio encontrado.</p>
+        </div>
+      )}
 
       {results !== null && results.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid #334155' }}>
-              <th style={th}>Nome</th>
-              <th style={th}>ID</th>
-            </tr>
-          </thead>
-          <tbody>
-            {results.map((r) => (
-              <tr key={r.businessId} onClick={() => onOpenBusiness(r.businessId)} style={{ cursor: 'pointer', borderBottom: '1px solid #1e293b' }}>
-                <td style={td}>{r.name || <span style={{ color: '#64748b' }}>(sem nome)</span>}</td>
-                <td style={{ ...td, color: '#64748b', fontSize: 12 }}>{r.businessId}</td>
+        <div className="card-premium overflow-hidden">
+          <table className="table-clean w-full text-left">
+            <thead>
+              <tr>
+                <th className="type-label px-5 py-3">Nome</th>
+                <th className="type-label px-5 py-3">ID</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {results.map((r) => (
+                <tr key={r.businessId} onClick={() => onOpenBusiness(r.businessId)} className="cursor-pointer">
+                  <td className="type-body px-5 py-3.5">
+                    {r.name || <span style={{ color: 'var(--muted-foreground)' }}>(sem nome)</span>}
+                  </td>
+                  <td className="type-label px-5 py-3.5 normal-case tracking-normal" style={{ color: 'var(--muted-foreground)' }}>
+                    {r.businessId}
+                  </td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
     </div>
   );
 }
-
-const th: React.CSSProperties = { padding: '8px 12px' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const inputStyle: React.CSSProperties = { flex: 1, borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, fontSize: 14 };
-const confirmBtn: React.CSSProperties = { background: '#16a34a', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };

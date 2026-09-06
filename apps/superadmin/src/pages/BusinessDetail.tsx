@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { ArrowLeft, CheckCircle2, ShieldAlert, TriangleAlert } from 'lucide-react';
 import {
   fetchBusinessDetail,
   suspendBusiness,
@@ -203,15 +204,16 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
 
   return (
     <div>
-      <button onClick={onBack} style={{ background: 'none', border: 'none', color: '#94a3b8', marginBottom: 16, cursor: 'pointer', padding: 0 }}>
-        ← Voltar à pesquisa
+      <button onClick={onBack} className="btn-ghost lift mb-2 px-2 py-1.5 text-[13px]">
+        <ArrowLeft className="h-3.5 w-3.5" />
+        Voltar à pesquisa
       </button>
 
-      <p style={{ fontSize: 12, color: '#94a3b8', marginTop: -8 }}>{businessId}</p>
+      <p className="type-label mb-4" style={{ color: 'var(--muted-foreground)' }}>{businessId}</p>
 
       {!data && (
-        <div style={{ background: '#1e293b', borderRadius: 8, padding: 24, maxWidth: 480 }}>
-          <p style={{ marginTop: 0, fontSize: 13, color: '#94a3b8' }}>
+        <div className="card-premium max-w-lg p-6">
+          <p className="type-body mb-3 text-[13px]" style={{ color: 'var(--muted-foreground)' }}>
             É obrigatório indicar uma justificação para consultar os dados deste negócio. Esta ação fica registada no registo de auditoria.
           </p>
           <textarea
@@ -219,169 +221,197 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
             onChange={(e) => setJustification(e.target.value)}
             placeholder="Motivo da consulta…"
             rows={3}
-            style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+            className="input-base type-body mb-2 w-full p-2.5"
           />
-          {error && <p style={{ color: '#f87171' }}>{error}</p>}
-          <button onClick={handleLoad} disabled={busy} style={confirmBtn}>{busy ? 'A carregar…' : 'Consultar negócio'}</button>
+          {error && <p className="type-body mb-2 text-[13px]" style={{ color: 'var(--error)' }}>{error}</p>}
+          <button onClick={handleLoad} disabled={busy} className="btn-primary lift px-4 py-2.5 text-sm">
+            {busy ? 'A carregar…' : 'Consultar negócio'}
+          </button>
         </div>
       )}
 
       {data && (
-        <div style={{ background: '#1e293b', borderRadius: 8, padding: 24, maxWidth: 560 }}>
-          <h2 style={{ fontSize: 16, marginTop: 0, display: 'flex', alignItems: 'center', gap: 10 }}>
+        <div className="card-premium max-w-2xl p-6">
+          <h2 className="type-title-lg font-display flex items-center gap-2.5">
             {data.name ?? '(sem nome)'}
             <span
-              style={{
-                fontSize: 11,
-                fontWeight: 600,
-                padding: '2px 8px',
-                borderRadius: 4,
-                background: data.suspended ? '#7f1d1d' : '#14532d',
-                color: data.suspended ? '#fca5a5' : '#a7f3d0',
-              }}
+              className="badge-soft"
+              style={
+                data.suspended
+                  ? { background: 'rgba(220,38,38,0.12)', color: 'var(--error)' }
+                  : { background: 'rgba(5,150,105,0.12)', color: 'var(--success)' }
+              }
             >
               {data.suspended ? 'SUSPENSO' : 'ATIVO'}
             </span>
           </h2>
 
           {data.auditLogged === false && (
-            <p style={{ fontSize: 12, color: '#fbbf24' }}>
+            <p className="type-body mt-2 flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--warning)' }}>
+              <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
               Aviso: os dados foram consultados, mas o registo de auditoria falhou ao gravar. Reporte isto à equipa técnica.
             </p>
           )}
 
-          <dl style={{ fontSize: 14 }}>
+          <dl className="mt-3">
             <Row label="Categoria" value={data.category ?? '—'} />
             <Row label="Moeda" value={data.currencySymbol ?? '—'} />
             <Row label="Criado em" value={data.createdAt ? new Date(data.createdAt).toLocaleString('pt-PT') : '—'} />
-            <Row label="Estado da subscrição" value={data.subscriptionStatus ?? '—'} />
+            <Row label="Estado da subscrição" value={data.subscriptionStatus ?? '—'} last />
           </dl>
 
-          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 4 }}>Dono</h3>
-          <dl style={{ fontSize: 14 }}>
+          <h3 className="type-title mt-6 mb-2">Dono</h3>
+          <dl>
             <Row label="Nome" value={data.owner?.name ?? '—'} />
-            <Row label="Email" value={data.owner?.email ?? '—'} />
+            <Row label="Email" value={data.owner?.email ?? '—'} last />
           </dl>
 
-          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 4 }}>Equipa ({data.staff.length})</h3>
-          {data.staff.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>Sem funcionários.</p>}
+          <h3 className="type-title mt-6 mb-2">Equipa ({data.staff.length})</h3>
+          {data.staff.length === 0 && <p className="type-body text-[13px]" style={{ color: 'var(--muted-foreground)' }}>Sem funcionários.</p>}
           {data.staff.length > 0 && (
-            <ul style={{ fontSize: 13, paddingLeft: 18, margin: 0 }}>
+            <ul className="m-0 list-disc space-y-1 pl-[18px]">
               {data.staff.map((s, i) => (
-                <li key={i} style={{ color: s.suspended ? '#f87171' : '#e2e8f0' }}>
+                <li key={i} className="type-body text-[13px]" style={{ color: s.suspended ? 'var(--error)' : 'var(--foreground)' }}>
                   {s.name} {s.suspended && '(suspenso)'}
                 </li>
               ))}
             </ul>
           )}
 
-          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 4 }}>Pagamentos recentes ({data.recentPayments.length})</h3>
-          {data.recentPayments.length === 0 && <p style={{ fontSize: 13, color: '#94a3b8' }}>Sem pagamentos.</p>}
+          <h3 className="type-title mt-6 mb-2">Pagamentos recentes ({data.recentPayments.length})</h3>
+          {data.recentPayments.length === 0 && <p className="type-body text-[13px]" style={{ color: 'var(--muted-foreground)' }}>Sem pagamentos.</p>}
           {data.recentPayments.length > 0 && (
-            <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
-              <thead>
-                <tr style={{ textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid #334155' }}>
-                  <th style={th}>Valor</th>
-                  <th style={th}>Estado</th>
-                  <th style={th}>Submetido em</th>
-                </tr>
-              </thead>
-              <tbody>
-                {data.recentPayments.map((p, i) => (
-                  <tr key={i} style={{ borderBottom: '1px solid #0f172a' }}>
-                    <td style={td}>{p.amount ?? '—'} {p.currency ?? ''}</td>
-                    <td style={td}>{p.status ?? '—'}</td>
-                    <td style={td}>{p.submittedAt ? new Date(p.submittedAt).toLocaleString('pt-PT') : '—'}</td>
+            <div className="overflow-hidden rounded-xl border" style={{ borderColor: 'var(--border)' }}>
+              <table className="table-clean w-full text-left">
+                <thead>
+                  <tr>
+                    <th className="type-label px-3.5 py-2.5">Valor</th>
+                    <th className="type-label px-3.5 py-2.5">Estado</th>
+                    <th className="type-label px-3.5 py-2.5">Submetido em</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {data.recentPayments.map((p, i) => (
+                    <tr key={i}>
+                      <td className="type-number px-3.5 py-2.5 text-[13px]">{p.amount ?? '—'} {p.currency ?? ''}</td>
+                      <td className="type-body px-3.5 py-2.5 text-[13px]">{p.status ?? '—'}</td>
+                      <td className="type-body px-3.5 py-2.5 text-[13px]">{p.submittedAt ? new Date(p.submittedAt).toLocaleString('pt-PT') : '—'}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
 
-          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>Suspensão</h3>
+          <h3 className="type-title mt-6 mb-2.5">Suspensão</h3>
 
           {actionResult && (
-            <p style={{ fontSize: 13, color: '#a7f3d0', background: '#14532d', padding: 10, borderRadius: 6, marginBottom: 8 }}>
-              {actionResult}
-            </p>
+            <div className="mb-3 flex items-start gap-2 rounded-lg border p-3" style={{ background: 'rgba(5,150,105,0.08)', borderColor: 'rgba(5,150,105,0.3)' }}>
+              <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--success)' }} />
+              <p className="type-body text-[13px]">{actionResult}</p>
+            </div>
           )}
 
           {pendingAction === null && (
-            <button
-              onClick={() => { setPendingAction(data.suspended ? 'reactivate' : 'suspend'); setActionError(null); setActionResult(null); }}
-              style={data.suspended ? confirmBtn : rejectBtn}
-            >
-              {data.suspended ? 'Reativar negócio' : 'Suspender negócio'}
-            </button>
+            data.suspended ? (
+              <button
+                onClick={() => { setPendingAction('reactivate'); setActionError(null); setActionResult(null); }}
+                className="btn-primary lift px-4 py-2.5 text-sm"
+              >
+                Reativar negócio
+              </button>
+            ) : (
+              <button
+                onClick={() => { setPendingAction('suspend'); setActionError(null); setActionResult(null); }}
+                className="lift rounded-[10px] bg-rose-600 px-4 py-2.5 text-sm font-bold text-white shadow-[0_8px_20px_-8px_rgba(225,29,72,0.55)] hover:bg-rose-500"
+              >
+                Suspender negócio
+              </button>
+            )
           )}
 
+          {/* Destructive confirmation per DESIGN_SYSTEM.md → Dialogs &
+              modals: rose-tinted banner, rose confirm button. */}
           {pendingAction === 'suspend' && (
-            <div style={dialogBox}>
-              <p style={{ marginTop: 0 }}>
-                Suspender <strong>{data.name ?? businessId}</strong>? O dono e a equipa deixarão de conseguir ler ou escrever dados do negócio de imediato. É obrigatório indicar uma justificação.
+            <div className="rounded-[10px] border border-rose-500/30 bg-rose-500/10 p-4">
+              <p className="type-body text-rose-700">
+                Suspender <strong className="font-bold">{data.name ?? businessId}</strong>? O dono e a equipa deixarão de conseguir ler ou escrever dados do negócio de imediato. É obrigatório indicar uma justificação.
               </p>
               <textarea
                 value={actionJustification}
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da suspensão…"
                 rows={3}
-                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+                className="input-base type-body mt-2 w-full p-2.5"
+                style={{ borderColor: 'rgba(225,29,72,0.35)' }}
               />
-              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleSuspend} disabled={actionBusy} style={rejectBtn}>{actionBusy ? 'A suspender…' : 'Sim, suspender'}</button>
-                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} style={cancelBtn}>Cancelar</button>
+              {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+              <div className="mt-3 flex gap-2.5">
+                <button
+                  onClick={handleSuspend}
+                  disabled={actionBusy}
+                  className="lift rounded-[10px] bg-rose-600 px-4 py-2 text-sm font-bold text-white shadow-[0_8px_20px_-8px_rgba(225,29,72,0.55)] hover:bg-rose-500"
+                >
+                  {actionBusy ? 'A suspender…' : 'Sim, suspender'}
+                </button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} className="btn-secondary lift px-4 py-2 text-sm">
+                  Cancelar
+                </button>
               </div>
             </div>
           )}
 
           {pendingAction === 'reactivate' && (
-            <div style={dialogBox}>
-              <p style={{ marginTop: 0 }}>
-                Reativar <strong>{data.name ?? businessId}</strong>? O acesso normal será restaurado de imediato. É obrigatório indicar uma justificação.
+            <div className="card-premium is-action p-4">
+              <p className="type-body">
+                Reativar <strong className="font-bold">{data.name ?? businessId}</strong>? O acesso normal será restaurado de imediato. É obrigatório indicar uma justificação.
               </p>
               <textarea
                 value={actionJustification}
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da reativação…"
                 rows={3}
-                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+                className="input-base type-body mt-2 w-full p-2.5"
               />
-              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleReactivate} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A reativar…' : 'Sim, reativar'}</button>
-                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} style={cancelBtn}>Cancelar</button>
+              {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+              <div className="mt-3 flex gap-2.5">
+                <button onClick={handleReactivate} disabled={actionBusy} className="btn-primary lift px-4 py-2 text-sm">
+                  {actionBusy ? 'A reativar…' : 'Sim, reativar'}
+                </button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); }} className="btn-secondary lift px-4 py-2 text-sm">
+                  Cancelar
+                </button>
               </div>
             </div>
           )}
 
-          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>Recuperação de Capital Inicial</h3>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: -4, marginBottom: 8 }}>
+          <h3 className="type-title mt-6 mb-2">Recuperação de Capital Inicial</h3>
+          <p className="type-body mb-2.5 text-[12.5px]" style={{ color: 'var(--muted-foreground)' }}>
             Concede ao dono uma janela de 48 horas para recuperar uma confirmação de Capital Inicial acidental ou legada, através do fluxo normal de Anular &amp; Refazer. O SuperAdmin apenas autoriza — quem executa a recuperação é sempre o dono do negócio.
           </p>
 
           {pendingAction === null && (
             <button
               onClick={() => { setPendingAction('authorize-recovery'); setActionError(null); setActionResult(null); }}
-              style={confirmBtn}
+              className="btn-primary lift px-4 py-2.5 text-sm"
             >
               Autorizar recuperação de Capital Inicial
             </button>
           )}
 
           {pendingAction === 'authorize-recovery' && (
-            <div style={dialogBox}>
-              <p style={{ marginTop: 0 }}>
-                Autorizar recuperação para <strong>{data.name ?? businessId}</strong>? Isto concede ao dono uma janela de <strong>48 horas</strong> para executar a recuperação — o SuperAdmin não realiza a recuperação em si. Só pode existir uma autorização ativa por negócio. É obrigatório indicar uma justificação.
+            <div className="card-premium is-action p-4">
+              <p className="type-body">
+                Autorizar recuperação para <strong className="font-bold">{data.name ?? businessId}</strong>? Isto concede ao dono uma janela de <strong className="font-bold">48 horas</strong> para executar a recuperação — o SuperAdmin não realiza a recuperação em si. Só pode existir uma autorização ativa por negócio. É obrigatório indicar uma justificação.
               </p>
 
               {!useAdvancedTarget ? (
-                <div style={{ background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: 10, marginBottom: 8 }}>
-                  <p style={{ fontSize: 12, color: '#94a3b8', margin: '0 0 4px 0' }}>A autorizar:</p>
-                  <p style={{ fontSize: 14, fontWeight: 600, margin: 0, color: '#e2e8f0' }}>
-                    Confirmação original de Capital Inicial <span style={{ fontFamily: 'monospace', color: '#a7f3d0' }}>(&quot;initial&quot;)</span>
+                <div className="mb-2 mt-2 rounded-lg border p-2.5" style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}>
+                  <p className="type-label mb-1" style={{ color: 'var(--muted-foreground)' }}>A autorizar:</p>
+                  <p className="type-body m-0 font-bold">
+                    Confirmação original de Capital Inicial <span className="font-mono" style={{ color: 'var(--success)' }}>(&quot;initial&quot;)</span>
                   </p>
-                  <p style={{ fontSize: 11.5, color: '#64748b', margin: '4px 0 0 0' }}>
+                  <p className="type-body mt-1 text-[11.5px]" style={{ color: 'var(--muted-foreground)' }}>
                     Cobre o caso mais comum — confirmações legadas (anteriores a esta funcionalidade) ou confirmações
                     cuja janela normal de 12 horas já expirou. O servidor confirma automaticamente que esta é a
                     confirmação atual do negócio antes de conceder qualquer autorização.
@@ -389,15 +419,17 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                   <button
                     type="button"
                     onClick={() => setUseAdvancedTarget(true)}
-                    style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: 11.5, padding: 0, marginTop: 8, cursor: 'pointer', textDecoration: 'underline' }}
+                    className="mt-2 text-[11.5px] font-semibold underline"
+                    style={{ color: 'var(--gold-hover)' }}
                   >
                     Avançado: autorizar outra confirmação (raro)
                   </button>
                 </div>
               ) : (
-                <div style={{ marginBottom: 8 }}>
-                  <label style={{ fontSize: 12, color: '#fbbf24', display: 'block', marginBottom: 4 }}>
-                    ⚠ Avançado — identificador exato da confirmação (ex: &quot;initial-2&quot;). Só use isto se souber
+                <div className="mb-2 mt-2">
+                  <label className="type-body mb-1 flex items-center gap-1.5 text-[12px]" style={{ color: 'var(--warning)' }}>
+                    <TriangleAlert className="h-3.5 w-3.5 shrink-0" />
+                    Avançado — identificador exato da confirmação (ex: &quot;initial-2&quot;). Só use isto se souber
                     concretamente que não é a confirmação original — um valor incorreto será rejeitado pelo servidor,
                     nunca aceite às cegas.
                   </label>
@@ -406,12 +438,14 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                     value={recoveryTargetStockCountId}
                     onChange={(e) => setRecoveryTargetStockCountId(e.target.value)}
                     placeholder="initial-2"
-                    style={{ width: '100%', borderRadius: 4, border: '1px solid #d97706', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 4 }}
+                    className="input-base type-body mb-1 w-full p-2.5"
+                    style={{ borderColor: 'var(--warning)' }}
                   />
                   <button
                     type="button"
                     onClick={() => { setUseAdvancedTarget(false); setRecoveryTargetStockCountId('initial'); }}
-                    style={{ background: 'none', border: 'none', color: '#818cf8', fontSize: 11.5, padding: 0, cursor: 'pointer', textDecoration: 'underline' }}
+                    className="text-[11.5px] font-semibold underline"
+                    style={{ color: 'var(--gold-hover)' }}
                   >
                     Voltar ao caso comum (&quot;initial&quot;)
                   </button>
@@ -423,12 +457,19 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da recuperação (ex: cliente confirmou Capital Inicial por engano)…"
                 rows={3}
-                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+                className="input-base type-body mb-2 w-full p-2.5"
               />
-              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleAuthorizeRecovery} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A autorizar…' : 'Sim, autorizar (48h)'}</button>
-                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setUseAdvancedTarget(false); setRecoveryTargetStockCountId('initial'); }} style={cancelBtn}>Cancelar</button>
+              {actionError && <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+              <div className="flex gap-2.5">
+                <button onClick={handleAuthorizeRecovery} disabled={actionBusy} className="btn-primary lift px-4 py-2 text-sm">
+                  {actionBusy ? 'A autorizar…' : 'Sim, autorizar (48h)'}
+                </button>
+                <button
+                  onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setUseAdvancedTarget(false); setRecoveryTargetStockCountId('initial'); }}
+                  className="btn-secondary lift px-4 py-2 text-sm"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           )}
@@ -439,28 +480,28 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
               never sharing state, a route, or a collection with it
               (FR-43). Same justification-required, same error/result
               pattern as every other SuperAdmin action on this page. */}
-          <h3 style={{ fontSize: 14, marginTop: 20, marginBottom: 8 }}>Recuperação de Valor do Negócio</h3>
-          <p style={{ fontSize: 12, color: '#94a3b8', marginTop: -4, marginBottom: 8 }}>
+          <h3 className="type-title mt-6 mb-2">Recuperação de Valor do Negócio</h3>
+          <p className="type-body mb-2.5 text-[12.5px]" style={{ color: 'var(--muted-foreground)' }}>
             Concede ao dono uma janela de 72 horas para corrigir/recuperar um registo de valor do negócio (Contagem) fora do prazo normal de 3 horas. O SuperAdmin apenas autoriza — quem executa a correção é sempre o dono do negócio, através do fluxo normal de Contagem.
           </p>
 
           {pendingAction === null && (
             <button
               onClick={() => { setPendingAction('authorize-business-worth-recovery'); setActionError(null); setActionResult(null); }}
-              style={confirmBtn}
+              className="btn-primary lift px-4 py-2.5 text-sm"
             >
               Autorizar recuperação de Valor do Negócio
             </button>
           )}
 
           {pendingAction === 'authorize-business-worth-recovery' && (
-            <div style={dialogBox}>
-              <p style={{ marginTop: 0 }}>
-                Autorizar recuperação para <strong>{data.name ?? businessId}</strong>? Isto concede ao dono uma janela de <strong>72 horas</strong> para executar a correção — o SuperAdmin não realiza a correção em si. Só pode existir uma autorização ativa por negócio. É obrigatório indicar uma justificação.
+            <div className="card-premium is-action p-4">
+              <p className="type-body">
+                Autorizar recuperação para <strong className="font-bold">{data.name ?? businessId}</strong>? Isto concede ao dono uma janela de <strong className="font-bold">72 horas</strong> para executar a correção — o SuperAdmin não realiza a correção em si. Só pode existir uma autorização ativa por negócio. É obrigatório indicar uma justificação.
               </p>
 
-              <div style={{ marginBottom: 8 }}>
-                <label style={{ fontSize: 12, color: '#94a3b8', display: 'block', marginBottom: 4 }}>
+              <div className="mb-2 mt-2">
+                <label className="type-body mb-1 block text-[12px]" style={{ color: 'var(--muted-foreground)' }}>
                   Identificador exato do registo de valor do negócio (obtenha-o junto do dono — visível no histórico de Valor do Negócio no Painel do negócio). Um valor incorreto ou já não-atual será rejeitado pelo servidor, nunca aceite às cegas.
                 </label>
                 <input
@@ -468,7 +509,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                   value={businessWorthTargetSnapshotId}
                   onChange={(e) => setBusinessWorthTargetSnapshotId(e.target.value)}
                   placeholder="bws-stockcount-periodic-..."
-                  style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 4, fontFamily: 'monospace' }}
+                  className="input-base type-body w-full p-2.5 font-mono"
                 />
               </div>
 
@@ -477,12 +518,19 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da recuperação (ex: cliente contactou o suporte após o prazo de 3 horas)…"
                 rows={3}
-                style={{ width: '100%', borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, marginBottom: 8 }}
+                className="input-base type-body mb-2 w-full p-2.5"
               />
-              {actionError && <p style={{ color: '#f87171' }}>{actionError}</p>}
-              <div style={{ display: 'flex', gap: 8 }}>
-                <button onClick={handleAuthorizeBusinessWorthRecovery} disabled={actionBusy} style={confirmBtn}>{actionBusy ? 'A autorizar…' : 'Sim, autorizar (72h)'}</button>
-                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setBusinessWorthTargetSnapshotId(''); }} style={cancelBtn}>Cancelar</button>
+              {actionError && <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+              <div className="flex gap-2.5">
+                <button onClick={handleAuthorizeBusinessWorthRecovery} disabled={actionBusy} className="btn-primary lift px-4 py-2 text-sm">
+                  {actionBusy ? 'A autorizar…' : 'Sim, autorizar (72h)'}
+                </button>
+                <button
+                  onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setBusinessWorthTargetSnapshotId(''); }}
+                  className="btn-secondary lift px-4 py-2 text-sm"
+                >
+                  Cancelar
+                </button>
               </div>
             </div>
           )}
@@ -492,18 +540,11 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
   );
 }
 
-function Row({ label, value }: { label: string; value: string }) {
+function Row({ label, value, last }: { label: string; value: string; last?: boolean }) {
   return (
-    <div style={{ display: 'flex', justifyContent: 'space-between', padding: '6px 0', borderBottom: '1px solid #0f172a' }}>
-      <dt style={{ color: '#94a3b8' }}>{label}</dt>
-      <dd style={{ margin: 0 }}>{value}</dd>
+    <div className={`flex items-center justify-between py-2 ${last ? '' : 'border-b'}`} style={{ borderColor: 'var(--border)' }}>
+      <dt className="type-label" style={{ color: 'var(--muted-foreground)' }}>{label}</dt>
+      <dd className="type-body m-0 text-[13.5px]">{value}</dd>
     </div>
   );
 }
-
-const th: React.CSSProperties = { padding: '6px 8px' };
-const td: React.CSSProperties = { padding: '6px 8px' };
-const confirmBtn: React.CSSProperties = { background: '#16a34a', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
-const rejectBtn: React.CSSProperties = { background: '#dc2626', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
-const cancelBtn: React.CSSProperties = { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 14px', borderRadius: 4 };
-const dialogBox: React.CSSProperties = { background: '#0f172a', border: '1px solid #334155', borderRadius: 6, padding: 16, marginTop: 8 };

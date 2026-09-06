@@ -1,4 +1,5 @@
 import { useEffect, useState } from 'react';
+import { ScrollText, ShieldAlert } from 'lucide-react';
 import { fetchAuditLog, KNOWN_ACTION_TYPES, type AuditLogEntryRow, type AuditLogFilters, SuperAdminApiError } from '../lib/superadminApi';
 
 // SuperAdmin V1 Operational Control Plane — Phase D (ADR-0006). FR-D1/D2.
@@ -72,15 +73,15 @@ export default function AuditTrail() {
 
   return (
     <div>
-      <h2 style={{ fontSize: 16, marginBottom: 16 }}>Registo de Auditoria</h2>
+      <h2 className="type-title-lg font-display mb-5">Registo de Auditoria</h2>
 
-      <div style={{ display: 'flex', flexWrap: 'wrap', gap: 8, marginBottom: 16, alignItems: 'flex-end' }}>
+      <div className="card-premium mb-5 flex flex-wrap items-end gap-3 p-4">
         <Field label="Negócio (ID)">
           <input
             value={filters.businessId}
             onChange={(e) => setFilters((f) => ({ ...f, businessId: e.target.value }))}
             placeholder="businessId"
-            style={inputStyle}
+            className="input-base type-body px-2.5 py-2"
           />
         </Field>
         <Field label="Operador (UID)">
@@ -88,14 +89,14 @@ export default function AuditTrail() {
             value={filters.actorUid}
             onChange={(e) => setFilters((f) => ({ ...f, actorUid: e.target.value }))}
             placeholder="actorUid"
-            style={inputStyle}
+            className="input-base type-body px-2.5 py-2"
           />
         </Field>
         <Field label="Ação">
           <select
             value={filters.actionType}
             onChange={(e) => setFilters((f) => ({ ...f, actionType: e.target.value }))}
-            style={inputStyle}
+            className="input-base type-body px-2.5 py-2"
           >
             <option value="">Todas</option>
             {KNOWN_ACTION_TYPES.map((a) => (
@@ -108,7 +109,7 @@ export default function AuditTrail() {
             type="datetime-local"
             value={filters.from}
             onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
-            style={inputStyle}
+            className="input-base type-body px-2.5 py-2"
           />
         </Field>
         <Field label="Até">
@@ -116,46 +117,71 @@ export default function AuditTrail() {
             type="datetime-local"
             value={filters.to}
             onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
-            style={inputStyle}
+            className="input-base type-body px-2.5 py-2"
           />
         </Field>
-        <button onClick={handleApply} disabled={busy} style={confirmBtn}>{busy ? 'A aplicar…' : 'Aplicar'}</button>
-        <button onClick={handleClear} disabled={busy} style={cancelBtn}>Limpar</button>
+        <button onClick={handleApply} disabled={busy} className="btn-primary lift px-4 py-2 text-sm">
+          {busy ? 'A aplicar…' : 'Aplicar'}
+        </button>
+        <button onClick={handleClear} disabled={busy} className="btn-secondary lift px-4 py-2 text-sm">
+          Limpar
+        </button>
       </div>
 
-      {error && <p style={{ color: '#f87171' }}>{error}</p>}
-      {!error && entries === null && <p style={{ color: '#94a3b8' }}>A carregar…</p>}
-      {entries !== null && entries.length === 0 && <p style={{ color: '#94a3b8' }}>Nenhuma ação encontrada para os filtros indicados.</p>}
+      {error && (
+        <div
+          className="mb-4 flex items-start gap-2 rounded-lg border p-3"
+          style={{ background: 'rgba(220,38,38,0.06)', borderColor: 'rgba(220,38,38,0.25)' }}
+        >
+          <ShieldAlert className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--error)' }} />
+          <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{error}</p>
+        </div>
+      )}
+      {!error && entries === null && (
+        <div className="card-premium p-6 text-center">
+          <p className="type-body" style={{ color: 'var(--muted-foreground)' }}>A carregar…</p>
+        </div>
+      )}
+      {entries !== null && entries.length === 0 && (
+        <div className="card-premium flex flex-col items-center gap-2 p-10 text-center">
+          <ScrollText className="h-7 w-7" style={{ color: 'var(--muted-foreground)' }} />
+          <p className="type-body" style={{ color: 'var(--muted-foreground)' }}>Nenhuma ação encontrada para os filtros indicados.</p>
+        </div>
+      )}
 
       {entries !== null && entries.length > 0 && (
-        <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 14 }}>
-          <thead>
-            <tr style={{ textAlign: 'left', color: '#94a3b8', borderBottom: '1px solid #334155' }}>
-              <th style={th}>Quando</th>
-              <th style={th}>Ação</th>
-              <th style={th}>Operador</th>
-              <th style={th}>Negócio</th>
-              <th style={th}>Alvo (UID)</th>
-              <th style={th}>Justificação</th>
-            </tr>
-          </thead>
-          <tbody>
-            {entries.map((e) => (
-              <tr key={e.id} style={{ borderBottom: '1px solid #1e293b' }}>
-                <td style={td}>{new Date(e.timestamp).toLocaleString('pt-PT')}</td>
-                <td style={td}>{actionLabel(e.actionType)}</td>
-                <td style={td}>{e.actorUid} <span style={{ color: '#94a3b8' }}>({e.actorRole})</span></td>
-                <td style={td}>{e.targetBusinessId ?? '—'}</td>
-                <td style={td}>{e.targetUid ?? '—'}</td>
-                <td style={td}>{e.justification ?? '—'}</td>
+        <div className="card-premium overflow-x-auto">
+          <table className="table-clean w-full text-left">
+            <thead>
+              <tr>
+                <th className="type-label whitespace-nowrap px-5 py-3">Quando</th>
+                <th className="type-label whitespace-nowrap px-5 py-3">Ação</th>
+                <th className="type-label whitespace-nowrap px-5 py-3">Operador</th>
+                <th className="type-label whitespace-nowrap px-5 py-3">Negócio</th>
+                <th className="type-label whitespace-nowrap px-5 py-3">Alvo (UID)</th>
+                <th className="type-label px-5 py-3">Justificação</th>
               </tr>
-            ))}
-          </tbody>
-        </table>
+            </thead>
+            <tbody>
+              {entries.map((e) => (
+                <tr key={e.id}>
+                  <td className="type-body whitespace-nowrap px-5 py-3">{new Date(e.timestamp).toLocaleString('pt-PT')}</td>
+                  <td className="type-body whitespace-nowrap px-5 py-3">{actionLabel(e.actionType)}</td>
+                  <td className="type-body whitespace-nowrap px-5 py-3">
+                    {e.actorUid} <span style={{ color: 'var(--muted-foreground)' }}>({e.actorRole})</span>
+                  </td>
+                  <td className="type-body whitespace-nowrap px-5 py-3">{e.targetBusinessId ?? '—'}</td>
+                  <td className="type-body whitespace-nowrap px-5 py-3">{e.targetUid ?? '—'}</td>
+                  <td className="type-body px-5 py-3">{e.justification ?? '—'}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
       )}
 
       {entries !== null && entries.length === 100 && (
-        <p style={{ fontSize: 12, color: '#94a3b8', marginTop: 8 }}>
+        <p className="type-label mt-3 normal-case tracking-normal" style={{ color: 'var(--muted-foreground)' }}>
           A mostrar as 100 entradas mais recentes que correspondem aos filtros. Use os filtros para restringir os resultados.
         </p>
       )}
@@ -165,15 +191,9 @@ export default function AuditTrail() {
 
 function Field({ label, children }: { label: string; children: React.ReactNode }) {
   return (
-    <div style={{ display: 'flex', flexDirection: 'column', gap: 4 }}>
-      <label style={{ fontSize: 12, color: '#94a3b8' }}>{label}</label>
+    <div className="flex flex-col gap-1">
+      <label className="type-label" style={{ color: 'var(--muted-foreground)' }}>{label}</label>
       {children}
     </div>
   );
 }
-
-const th: React.CSSProperties = { padding: '8px 12px' };
-const td: React.CSSProperties = { padding: '10px 12px' };
-const inputStyle: React.CSSProperties = { borderRadius: 4, border: '1px solid #334155', background: '#0f172a', color: '#e2e8f0', padding: 8, fontSize: 13 };
-const confirmBtn: React.CSSProperties = { background: '#16a34a', border: 'none', color: 'white', padding: '8px 14px', borderRadius: 4, fontWeight: 600 };
-const cancelBtn: React.CSSProperties = { background: 'none', border: '1px solid #334155', color: '#94a3b8', padding: '8px 14px', borderRadius: 4 };
