@@ -225,11 +225,17 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
   background: linear-gradient(135deg, #0B1F3A 0%, #132A4A 100%);
 }
 .kpi-label {
-  color: #6B7280;
-  font-weight: 600;
-  font-size: 10px;
+  /* Was #6B7280 @ 10px/600 — read as faint/washed-out next to the strong
+     header. Bumped per Dashboard Readability Refinement: strong navy,
+     13px, 700 weight. Still uppercase; letter-spacing eased slightly so
+     it doesn't feel loud at the larger size. Drives both KPI-card labels
+     and the "OUTROS INDICADORES" section heading (same faintness issue,
+     same fix). */
+  color: var(--title);
+  font-weight: 700;
+  font-size: 0.8125rem; /* 13px */
   text-transform: uppercase;
-  letter-spacing: 0.07em;
+  letter-spacing: 0.045em;
 }
 
 /* ==========================================================================

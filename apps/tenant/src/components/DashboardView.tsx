@@ -140,7 +140,12 @@ const KpiCard: React.FC<KpiCardProps> = ({
         {value}
       </p>
 
-      <p className={`relative text-[11px] leading-snug mt-auto pt-1 font-medium ${isDark ? 'text-white/70' : 'text-gray-500'}`}>
+      {/* Was text-[11px] text-gray-500 — read as placeholder text next to
+          the bold KPI number above it. Bumped per Dashboard Readability
+          Refinement: 13px, #374151 (existing secondary-text token),
+          looser line-height — stays visually secondary to the number,
+          but no longer illegible. */}
+      <p className={`relative text-[13px] leading-[1.45] mt-auto pt-1 font-medium ${isDark ? 'text-white/70' : 'text-[#374151]'}`}>
         {description}
       </p>
     </button>
@@ -447,7 +452,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           surface (not a gray fill) so the primary 6 above keep focus while
           the page stays on the white/navy/gold palette. */}
       <div className="bg-white border border-[var(--border)] rounded-2xl p-6">
-        <p className="kpi-label mb-4 px-1">
+        <p className="kpi-label mb-5 px-1">
           {t('dashboard.otherIndicators')}
         </p>
         <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
@@ -603,7 +608,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            <p className="text-[11px] text-gray-500 -mt-1">
+            <p className="text-[13px] text-[#374151] -mt-1">
               {t('dashboard.breakdownModal.explanation')}
             </p>
 
@@ -671,7 +676,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            <p className="text-[11px] text-gray-500 -mt-1">
+            <p className="text-[13px] text-[#374151] -mt-1">
               {t('dashboard.worthModal.explanation')}
             </p>
 
@@ -891,7 +896,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
               </button>
             </div>
 
-            <p className="text-[11px] text-gray-500 -mt-1">
+            <p className="text-[13px] text-[#374151] -mt-1">
               {t('dashboard.historyModal.subtitle')}
             </p>
 
