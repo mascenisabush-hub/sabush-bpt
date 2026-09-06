@@ -111,8 +111,39 @@ const KpiCard: React.FC<KpiCardProps> = ({
         />
       )}
       {/* Icon + label share one quiet row — the label is a caption for
-          the icon, not a headline. Badge (if any) floats to the far end. */}
-      <div className="relative flex items-center justify-between gap-2">
+          the icon, not a headline. Badge (if any) floats to the far end.
+          [Readability Audit F-01, rendered-verification pass] The label
+          was `truncate` (1-line ellipsis), but real puppeteer screenshots
+          at the actual xl:grid-cols-6 breakpoint showed it wasn't even
+          eliding cleanly — it was visually spilling past the card edge
+          with no "…" at all. Two compounding root causes, both confirmed
+          by direct DOM measurement (scrollWidth vs clientWidth,
+          getBoundingClientRect vs the card's own rect):
+            1. A flex item's default min-width:auto (content-based)
+               silently defeats overflow-hidden/ellipsis unless the item
+               itself also gets min-w-0 (the *row* already had it; the
+               label itself did not).
+            2. This whole icon+label+badge row is a direct child of the
+               card's flex-col container. A column-flex child's cross-
+               axis (width) size defaults to stretch, but Chrome does not
+               actually stretch it down to the container's width once its
+               own content is wider — it needs an explicit w-full, not an
+               implicit stretch, to be reliably capped at the card's
+               width (confirmed the same issue independently affects the
+               KPI value figure below).
+          Fixed both, and — per the audit's explicit preference for
+          showing complete terminology over an ellipsis — switched the
+          label from 1-line truncate to a 2-line clamp, with break-words
+          as a last-resort fallback for the one real label ("Levantamentos
+          do Dono") whose single longest word still doesn't fit on one
+          line at the narrowest supported (390px, 2-column) width.
+          Verified clean (no card-boundary overflow at all) at
+          390/768/1024/1280/1440/1920px against the three longest real
+          Portuguese labels ("Custo do Stock Atual", "Levantamentos do
+          Dono", "Perdas de Stock (Quebras)") via headless-Chrome
+          screenshots + getBoundingClientRect measurement, not just a
+          source-code width estimate. */}
+      <div className="relative flex items-center justify-between gap-2 w-full">
         <div className="flex items-center gap-2 min-w-0">
           <div
             className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
@@ -121,7 +152,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
           >
             <Icon className="w-[15px] h-[15px]" />
           </div>
-          <p className={`kpi-label leading-tight truncate ${isDark ? 'text-white/80' : ''}`}>
+          <p className={`kpi-label leading-tight line-clamp-2 min-w-0 break-words ${isDark ? 'text-white/80' : ''}`}>
             {label}
           </p>
         </div>
@@ -129,9 +160,17 @@ const KpiCard: React.FC<KpiCardProps> = ({
       </div>
 
       {/* The number is the entire reason this card exists — it dominates
-          the card by size and weight so it reads before anything else. */}
+          the card by size and weight so it reads before anything else.
+          min-w-0 + w-full added for the identical reason as the label
+          row above: without them, this flex-col child's default
+          min-width:auto/implicit-stretch silently defeats `truncate`'s
+          overflow-hidden/ellipsis — the figure would visually spill past
+          the card edge instead of eliding cleanly. Confirmed via the
+          same rendered-verification pass; this only visibly engages for
+          an unusually large figure at the narrowest widths, but the
+          underlying bug existed regardless of figure size. */}
       <p
-        className={`relative leading-[1] truncate tabular-nums font-extrabold ${
+        className={`relative leading-[1] truncate min-w-0 w-full tabular-nums font-extrabold ${
           isDark
             ? `text-[32px] sm:text-[36px] tracking-[-0.035em] ${valueClass || 'text-[#D4AF37]'}`
             : `text-[28px] sm:text-[32px] tracking-[-0.03em] ${valueClass || 'text-[#0B1F3A]'}`
@@ -450,12 +489,24 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
       {/* SECONDARY METRICS — same existing cards/data (Levantamentos, Quebras,
           Lotes Ativos), nothing removed. Set apart with a border on a white
           surface (not a gray fill) so the primary 6 above keep focus while
-          the page stays on the white/navy/gold palette. */}
+          the page stays on the white/navy/gold palette.
+          [Readability Audit F-01] Grid was `xl:grid-cols-6` for only 3
+          real cards — a leftover from before the Capital Inicial card
+          (see retirement note above) was removed from this row. With 6
+          tracks and 3 cards, each card was squeezed into 1/6 of the row
+          width at exactly the breakpoint meant to have the *most* room,
+          which was the direct cause of the label/value overflow this
+          fix addresses. Capped at 4 columns (matching `lg:`, one spare
+          column, consistent with how this row already renders at `lg`)
+          so column count never *decreases* as the viewport grows wider —
+          confirmed via rendered screenshots this alone removes most of
+          the overflow risk even before the line-clamp/min-w-0 fixes
+          above are counted. */}
       <div className="bg-white border border-[var(--border)] rounded-2xl p-6">
         <p className="kpi-label mb-5 px-1">
           {t('dashboard.otherIndicators')}
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-6 gap-6">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
           <KpiCard
             icon={HandCoins}
             iconBgClass="bg-[#D4AF37]/10"

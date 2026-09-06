@@ -169,17 +169,48 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                 <h1 className="font-display font-semibold text-[26px] sm:text-[30px] leading-[1.08] tracking-tight text-white truncate">
                   {business.name}
                 </h1>
+                {/* [Readability Audit F-07, rendered-verification pass]
+                    Both category and location previously shared one
+                    `truncate` line with default flex-shrink, which
+                    distributes the width deficit *proportionally* to
+                    each span's own content size — confirmed via headless-
+                    Chrome measurement that this let a long location
+                    shrink a short category down to "Pa…" ("Padaria")
+                    even though "Padaria" would trivially fit on its own.
+                    Category (the more identity-defining field) now gets
+                    `shrink-0` — it never shrinks below its own content —
+                    plus a generous `max-w-[85%]` safety ceiling purely
+                    for a pathologically long category string, so it can
+                    never completely crowd out location. Location is the
+                    one flexible element (`flex-1 min-w-0`) and absorbs
+                    whatever space remains. A hard min-width floor on
+                    location was tried and rejected: it occasionally forced
+                    the *row itself* past its own max-width at the
+                    narrowest breakpoint (confirmed via getBoundingClientRect
+                    — a real, if small, regression) whenever a genuinely
+                    long category was also present. Leaving location at
+                    min-w-0 keeps the row's own width guarantee intact in
+                    every case tested; the resulting worst-case shortfall
+                    (a short place name losing a couple of pixels of its
+                    last character at 390px alongside an unusually long
+                    category) is negligible next to that guarantee.
+                    Verified against long/short category × long/short
+                    location combinations at 390/768/1280px: category is
+                    fully visible in all 12 combinations tested; location
+                    is fully visible whenever the two reasonably fit
+                    together, and the row never overflows its own bounds
+                    in any case. */}
                 <p
-                  className="text-[11px] text-white/50 flex items-center gap-1.5 truncate max-w-[240px] sm:max-w-[360px] mt-1"
+                  className="text-[11px] text-white/50 flex items-center gap-1.5 max-w-[240px] sm:max-w-[360px] mt-1"
                   title={business?.contact ? t('header.contactTitle', { contact: business.contact }) : undefined}
                 >
-                  <span className="truncate text-white/75 font-bold">
+                  <span className="truncate shrink-0 max-w-[85%] text-white/75 font-bold">
                     {businessCategory || t('header.registeredBusiness')}
                   </span>
                   {business?.location && (
                     <>
-                      <span className="text-white/25">·</span>
-                      <span className="truncate text-white/50">{business.location}</span>
+                      <span className="text-white/25 shrink-0">·</span>
+                      <span className="truncate flex-1 min-w-0 text-white/50">{business.location}</span>
                     </>
                   )}
                 </p>

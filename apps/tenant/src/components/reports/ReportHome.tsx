@@ -81,7 +81,17 @@ export const ReportHome: React.FC<ReportHomeProps> = ({ onSelect }) => {
       {/* Hero stat row — live figures read straight from AppContext's
           already-computed totals (never recalculated here). Business
           Worth is the one flagship metric on this screen, so it's the
-          only card using .card-dark-gradient; the rest stay light. */}
+          only card using .card-dark-gradient; the rest stay light.
+          [Readability Audit F-01 follow-up] This is a hand-rolled
+          duplicate of DashboardView.tsx's KpiCard, not the shared
+          component, so it did not automatically inherit that file's
+          min-w-0/w-full/line-clamp-2 fix for the identical truncate-
+          inside-flex-column bug. Rendered verification (headless-Chrome
+          screenshots + getBoundingClientRect against the real
+          formatCurrency-shaped values) confirmed this file's KPI value
+          figures were *currently* overflowing their card at the lg
+          (1024px, 4-column) breakpoint — not just a latent risk. Applied
+          the identical fix here. */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3">
         <button
           type="button"
@@ -92,16 +102,16 @@ export const ReportHome: React.FC<ReportHomeProps> = ({ onSelect }) => {
             aria-hidden="true"
             className="pointer-events-none absolute -right-8 -top-10 w-32 h-32 rounded-full bg-[#D4AF37]/[0.08] blur-2xl opacity-60 transition-opacity duration-300 group-hover:opacity-100"
           />
-          <div className="relative flex items-center justify-between gap-2">
+          <div className="relative flex items-center justify-between gap-2 w-full">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-white/10 text-[#D4AF37]">
                 <Gem className="w-[15px] h-[15px]" />
               </div>
-              <p className="kpi-label leading-tight truncate text-white/65">{t('reports.categories.businessWorth.title')}</p>
+              <p className="kpi-label leading-tight line-clamp-2 min-w-0 break-words text-white/65">{t('reports.categories.businessWorth.title')}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-white/30 shrink-0" />
           </div>
-          <p className="relative leading-[1] truncate tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-[#D4AF37]">
+          <p className="relative leading-[1] truncate min-w-0 w-full tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-[#D4AF37]">
             {formatCurrency(businessWorth, currencySymbol)}
           </p>
           <p className="relative text-[11px] leading-snug mt-auto pt-1 font-medium text-white/60">
@@ -114,16 +124,16 @@ export const ReportHome: React.FC<ReportHomeProps> = ({ onSelect }) => {
           onClick={() => onSelect('inventory-valuation')}
           className="text-left card-premium is-interactive cursor-pointer active:scale-[0.99] rounded-2xl p-6 flex flex-col gap-4"
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 w-full">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-indigo-50 text-indigo-600">
                 <Boxes className="w-[15px] h-[15px]" />
               </div>
-              <p className="kpi-label leading-tight truncate">{t('reports.categories.inventoryValuation.title')}</p>
+              <p className="kpi-label leading-tight line-clamp-2 min-w-0 break-words">{t('reports.categories.inventoryValuation.title')}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
           </div>
-          <p className="leading-[1] truncate tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-[#0B1F3A]">
+          <p className="leading-[1] truncate min-w-0 w-full tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-[#0B1F3A]">
             {formatCurrency(totalMarketValueAllTime, currencySymbol)}
           </p>
           <p className="text-[11px] leading-snug mt-auto pt-1 font-medium text-gray-500">
@@ -132,18 +142,18 @@ export const ReportHome: React.FC<ReportHomeProps> = ({ onSelect }) => {
         </button>
 
         <div className="card-premium rounded-2xl p-6 flex flex-col gap-4 cursor-default">
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 w-full">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-emerald-50 text-emerald-600">
                 <TrendingUp className="w-[15px] h-[15px]" />
               </div>
-              <p className="kpi-label leading-tight truncate">{t('reports.home.embeddedProfitLabel')}</p>
+              <p className="kpi-label leading-tight line-clamp-2 min-w-0 break-words">{t('reports.home.embeddedProfitLabel')}</p>
             </div>
             <span title={t('reports.home.embeddedProfitHint')}>
               <Info className="w-3.5 h-3.5 text-gray-300" />
             </span>
           </div>
-          <p className={`leading-[1] truncate tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+          <p className={`leading-[1] truncate min-w-0 w-full tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] ${totalEmbeddedProfitAllTime >= 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
             {formatCurrency(totalEmbeddedProfitAllTime, currencySymbol)}
           </p>
           <p className="text-[11px] leading-snug mt-auto pt-1 font-medium text-gray-500">
@@ -156,16 +166,16 @@ export const ReportHome: React.FC<ReportHomeProps> = ({ onSelect }) => {
           onClick={() => onSelect('expenses')}
           className="text-left card-premium is-interactive cursor-pointer active:scale-[0.99] rounded-2xl p-6 flex flex-col gap-4"
         >
-          <div className="flex items-center justify-between gap-2">
+          <div className="flex items-center justify-between gap-2 w-full">
             <div className="flex items-center gap-2 min-w-0">
               <div className="w-8 h-8 rounded-full flex items-center justify-center shrink-0 bg-rose-50 text-rose-600">
                 <Receipt className="w-[15px] h-[15px]" />
               </div>
-              <p className="kpi-label leading-tight truncate">{t('reports.categories.expenses.title')}</p>
+              <p className="kpi-label leading-tight line-clamp-2 min-w-0 break-words">{t('reports.categories.expenses.title')}</p>
             </div>
             <ChevronRight className="w-4 h-4 text-gray-300 shrink-0" />
           </div>
-          <p className="leading-[1] truncate tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-rose-600">
+          <p className="leading-[1] truncate min-w-0 w-full tabular-nums font-extrabold text-[28px] sm:text-[32px] tracking-[-0.03em] text-rose-600">
             {formatCurrency(totalExpensesAllTime, currencySymbol)}
           </p>
           <p className="text-[11px] leading-snug mt-auto pt-1 font-medium text-gray-500">
