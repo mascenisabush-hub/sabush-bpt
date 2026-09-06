@@ -10,6 +10,22 @@ export default defineConfig(() => {
     // this config via `--config apps/tenant/vite.config.ts` from the repo
     // root, or index.html (which lives alongside this file) is never found.
     root: __dirname,
+    // [Bug fix — branding/favicon assets missing from every production
+    // build] Vite's `publicDir` defaults to `<root>/public` — since
+    // `root` is `apps/tenant` (above), that resolved to
+    // `apps/tenant/public/`, which has never existed; the actual
+    // static assets (branding/, favicons, loading/) live at the
+    // REPO-ROOT `public/`, exactly like `build.outDir` below is
+    // already explicitly resolved back to the repo root for its own,
+    // analogous reason. Confirmed directly: a real `vite build` before
+    // this fix produced a `dist/` containing only `assets/` and
+    // `index.html` — no branding folder, no favicons, no loading
+    // background at all. Every <img>/CSS reference to these paths
+    // (AppLoadingScreen.tsx, AuthView.tsx, index.html's own favicon
+    // links) was correctly written; the files simply never reached the
+    // server that serves them, so every one of these requests 404'd in
+    // production.
+    publicDir: path.resolve(__dirname, '../../public'),
     plugins: [react(), tailwindcss()],
     resolve: {
       alias: {
