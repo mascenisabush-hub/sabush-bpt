@@ -3,9 +3,12 @@ import { fetchAuditLog, KNOWN_ACTION_TYPES, type AuditLogEntryRow, type AuditLog
 
 // SuperAdmin V1 Operational Control Plane — Phase D (ADR-0006). FR-D1/D2.
 // Extends the original payment-only, unfiltered screen into a
-// filterable view across all seven known action types. Read-only —
-// no edit/delete control of any kind, matching every prior phase's
-// treatment of the audit trail as an append-only record.
+// filterable view across every known action type (initially seven;
+// widened to eleven by the SuperAdmin Audit Center Action-Type
+// Allowlist Correction, 2026-09-06 — see
+// SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_IMPLEMENTATION_AUTHORIZATION.md).
+// Read-only — no edit/delete control of any kind, matching every
+// prior phase's treatment of the audit trail as an append-only record.
 
 const ACTION_LABELS: Record<string, string> = {
   'payment.confirmed': 'Pagamento confirmado',
@@ -15,6 +18,10 @@ const ACTION_LABELS: Record<string, string> = {
   'business.viewed': 'Negócio consultado',
   'business.suspended': 'Negócio suspenso',
   'business.reactivated': 'Negócio reativado',
+  'initial_stock_recovery.authorized': 'Recuperação de Capital Inicial autorizada',
+  'initial_stock_recovery.consumed': 'Recuperação de Capital Inicial executada',
+  'business_worth_recovery.authorized': 'Recuperação de Valor do Negócio autorizada',
+  'business_worth_recovery.expired': 'Recuperação de Valor do Negócio expirada',
 };
 
 // A safe fallback for any action type not in the known list above —

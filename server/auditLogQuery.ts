@@ -53,6 +53,17 @@ export const KNOWN_ACTION_TYPES = [
   'business.viewed',
   'business.suspended',
   'business.reactivated',
+  // [SuperAdmin Audit Center Action-Type Allowlist Correction —
+  // Implementation Authorization, 2026-09-06] These four action types
+  // were already being written to platform_audit_log by their own,
+  // separately-governed capabilities (BDR-0016/POL-0009; Business
+  // Worth Evolution Increments 8-9) before this correction — this is
+  // a maintenance addition to an existing allowlist, not a new audit
+  // event. See SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_INVESTIGATION.md.
+  'initial_stock_recovery.authorized',
+  'initial_stock_recovery.consumed',
+  'business_worth_recovery.authorized',
+  'business_worth_recovery.expired',
 ] as const;
 
 export type KnownActionType = (typeof KNOWN_ACTION_TYPES)[number];

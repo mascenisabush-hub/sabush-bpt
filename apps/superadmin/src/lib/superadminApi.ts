@@ -378,6 +378,15 @@ export const KNOWN_ACTION_TYPES = [
   'business.viewed',
   'business.suspended',
   'business.reactivated',
+  // [SuperAdmin Audit Center Action-Type Allowlist Correction —
+  // Implementation Authorization, 2026-09-06] Kept in sync with
+  // server/auditLogQuery.ts's own KNOWN_ACTION_TYPES by hand, per the
+  // accepted Implementation Plan's explicit decision not to
+  // consolidate these two lists for this correction.
+  'initial_stock_recovery.authorized',
+  'initial_stock_recovery.consumed',
+  'business_worth_recovery.authorized',
+  'business_worth_recovery.expired',
 ] as const;
 
 export interface AuditLogFilters {

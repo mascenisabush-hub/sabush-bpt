@@ -345,3 +345,128 @@ describe('queryAuditLog — regression', () => {
     assert.deepEqual(result.entries.map((e) => e.id), ['e1']);
   });
 });
+
+// ------------------------------------------------------------------
+// [SuperAdmin Audit Center Action-Type Allowlist Correction —
+// Implementation Authorization, 2026-09-06] The four action types
+// that were already written to platform_audit_log by their own,
+// separately-governed capabilities (BDR-0016/POL-0009;
+// Business Worth Evolution Increments 8-9) before this correction,
+// now added to KNOWN_ACTION_TYPES. Deliberately a SEPARATE fixture
+// set, not appended to FIXTURES above — several existing tests in
+// this file assert an exact count/id list against FIXTURES (e.g.
+// 'returns every action type... assert.equal(result.entries.length, 5)'),
+// which must remain untouched and passing unmodified.
+// ------------------------------------------------------------------
+const RECOVERY_FIXTURES: FakeEntry[] = [
+  {
+    id: 'r1',
+    actorUid: 'op-1',
+    actorRole: 'superadmin',
+    actionType: 'initial_stock_recovery.authorized',
+    targetBusinessId: 'biz-3',
+    justification: 'legacy confirmation, owner request',
+    timestamp: '2026-02-01T00:00:00.000Z',
+  },
+  {
+    id: 'r2',
+    // [PlatformAuditLogEntry.actorRole, packages/shared-types/index.ts]
+    // The ONE audited action where the actor is a tenant Owner, not a
+    // platform operator — actorRole: 'owner' is the already-governed
+    // value for exactly this event.
+    actorUid: 'owner-1',
+    actorRole: 'owner',
+    actionType: 'initial_stock_recovery.consumed',
+    targetBusinessId: 'biz-3',
+    justification: 'legacy confirmation, owner request',
+    timestamp: '2026-02-02T00:00:00.000Z',
+  },
+  {
+    id: 'r3',
+    actorUid: 'op-2',
+    actorRole: 'superadmin',
+    actionType: 'business_worth_recovery.authorized',
+    targetBusinessId: 'biz-4',
+    justification: 'owner-reported entry error',
+    timestamp: '2026-02-03T00:00:00.000Z',
+  },
+  {
+    id: 'r4',
+    // [PlatformAuditLogEntry.actorRole] The ONE audited action with no
+    // human/tenant actor at all — the automated unconsumed-expiry
+    // sweep (server/businessWorthRecoveryExpiryAudit.ts).
+    actorUid: 'system',
+    actorRole: 'system',
+    actionType: 'business_worth_recovery.expired',
+    targetBusinessId: 'biz-4',
+    justification: 'Automated expiry sweep — Authorization was never consumed within the 72-hour ceiling.',
+    timestamp: '2026-02-04T00:00:00.000Z',
+  },
+];
+
+describe('queryAuditLog — SuperAdmin Audit Center Action-Type Allowlist Correction (4 newly-allowlisted types)', () => {
+  it('filters by initial_stock_recovery.authorized', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, { actionType: 'initial_stock_recovery.authorized' });
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    assert.deepEqual(result.entries.map((e) => e.id), ['r1']);
+    assert.equal(result.entries[0].actorRole, 'superadmin');
+  });
+
+  it('filters by initial_stock_recovery.consumed — actorRole "owner" (the tenant Owner, not a platform operator) is returned untouched', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, { actionType: 'initial_stock_recovery.consumed' });
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    assert.deepEqual(result.entries.map((e) => e.id), ['r2']);
+    assert.equal(result.entries[0].actorRole, 'owner');
+    assert.equal(result.entries[0].actorUid, 'owner-1');
+  });
+
+  it('filters by business_worth_recovery.authorized', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, { actionType: 'business_worth_recovery.authorized' });
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    assert.deepEqual(result.entries.map((e) => e.id), ['r3']);
+  });
+
+  it('filters by business_worth_recovery.expired — actorRole "system" (no human actor) is returned untouched', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, { actionType: 'business_worth_recovery.expired' });
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    assert.deepEqual(result.entries.map((e) => e.id), ['r4']);
+    assert.equal(result.entries[0].actorRole, 'system');
+  });
+
+  it('an unfiltered query still returns all four alongside each other, correctly ordered newest-first', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, {});
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    assert.deepEqual(result.entries.map((e) => e.id), ['r4', 'r3', 'r2', 'r1']);
+  });
+
+  it('combines with businessId, matching the existing Decision A multi-filter architecture unchanged', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, { businessId: 'biz-3', actionType: 'initial_stock_recovery.consumed' });
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    assert.deepEqual(result.entries.map((e) => e.id), ['r2']);
+  });
+
+  it('every entry for the four new types still contains exactly the existing approved field set — no response-shape change', async () => {
+    const db = makeFakeDb(RECOVERY_FIXTURES);
+    const result = await queryAuditLog(db, {});
+    assert.equal(result.outcome, 'ok');
+    if (result.outcome !== 'ok') return;
+    for (const entry of result.entries) {
+      assert.deepEqual(
+        Object.keys(entry).sort(),
+        ['actionType', 'actorRole', 'actorUid', 'id', 'justification', 'targetBusinessId', 'targetUid', 'timestamp'].sort()
+      );
+    }
+  });
+});
