@@ -6961,25 +6961,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
-    // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
-    // 55 §5 items 7-10] This function does a plain (non-merge)
-    // `setDoc` — a deliberate, pre-existing full-replace, relied upon
-    // elsewhere to CLEAR `submissionId`/`newProductInfo` when a caller
-    // omits them (see buildPeriodicDraftMeta's own field-omission
-    // shape immediately above). `openConflictCount` is not one of this
-    // function's own concerns at all — a meta-only save (type/label/
-    // date change) must never silently reset the Decision 55
-    // finalization-blocking counter to 0 as an accidental side effect
-    // of that unrelated full-replace behavior, which is exactly what
-    // would happen without this line (a wiped counter would silently
-    // UNBLOCK finalization while a real conflict is still open).
-    // Sourced from `periodicStockDraftMeta`, the already-live in-memory
-    // mirror of this same document (kept current by its own listener),
-    // not a fresh read — no extra round trip needed.
-    const preservedOpenConflictCount = periodicStockDraftMeta?.openConflictCount ?? 0;
-    await setDoc(metaRef, {
-      ...meta,
-      ...(preservedOpenConflictCount > 0 ? { openConflictCount: preservedOpenConflictCount } : {}),
+    // [Bug fix — openConflictCount resurrection race] The prior version
+    // read openConflictCount from `periodicStockDraftMeta`, this
+    // client's own LOCAL, live-subscribed mirror of this document —
+    // not its true value on the server at write time. If a conflict
+    // was JUST resolved (resolvePeriodicConflict's own transaction
+    // correctly decrements this field on the server) but this
+    // client's own listener hadn't yet caught up when THIS save
+    // fired — a realistic window given how frequently ordinary
+    // autosave activity happens around the same time as resolving a
+    // conflict — this function would "preserve" and rewrite the
+    // STALE, now-incorrect higher count, resurrecting a phantom open
+    // conflict that blocks finalization (Decision 55 §5 items 7-10)
+    // even though every row is genuinely resolved. Fixed by reading
+    // the CURRENT value fresh, from the server, inside a transaction:
+    // Firestore guarantees this read reflects whatever the latest
+    // committed write actually is, and automatically retries this
+    // whole transaction if metaRef changes again between this read
+    // and its own commit — eliminating the race entirely, not merely
+    // narrowing it. Every other field/behavior (the full-replace
+    // shape that clears submissionId/newProductInfo when omitted,
+    // exactly as `meta` already encodes) is completely unchanged.
+    await runTransaction(db, async (tx) => {
+      const metaSnap = await tx.get(metaRef);
+      const currentOpenConflictCount = metaSnap.exists() ? (metaSnap.data().openConflictCount ?? 0) : 0;
+      tx.set(metaRef, {
+        ...meta,
+        ...(currentOpenConflictCount > 0 ? { openConflictCount: currentOpenConflictCount } : {}),
+      });
     });
     // [Decision 41C §2] Same readback-uncertain wrapping as
     // saveInitialStockDraft above.
@@ -7017,66 +7026,78 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) throw new Error('Sessão não autenticada.');
     const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
-    const fsBatch = createFirestoreBatch(db);
-    // [Decisions 44-56; Decision 55 §5 items 7-10] Same
-    // openConflictCount-preservation fix as savePeriodicStockDraftMeta
-    // immediately above — this batch's own meta write is the same
-    // full-replace shape and would otherwise silently wipe the
-    // Decision 55 finalization-blocking counter on every interruption
-    // flush.
-    const preservedOpenConflictCount = periodicStockDraftMeta?.openConflictCount ?? 0;
-    fsBatch.set(metaRef, {
-      ...meta,
-      ...(preservedOpenConflictCount > 0 ? { openConflictCount: preservedOpenConflictCount } : {}),
-    });
     // [Decisions 44-56 — Periodic Contagem Shared Live Data;
     // Implementation Authorization §2 item 6] This is a best-effort,
     // interruption-driven emergency save (Decision 38-41: pagehide/
     // visibilitychange flush, and the pre-business-switch/pre-logout
-    // flush) writing potentially many rows in one atomic batch — not
-    // the same code path as the live, single-row transactional save
-    // (savePeriodicStockDraftItem, above). It must still satisfy
+    // flush) writing potentially many rows in one atomic operation —
+    // not the same code path as the live, single-row transactional
+    // save (savePeriodicStockDraftItem, above). It must still satisfy
     // firestore.rules' own ordinary-write shape (a bare `setDoc`-style
     // payload with no `rev`/`lastWriterUid` would now be REJECTED
     // outright), so each row's `rev` is advanced from the last value
     // this session actually observed (`periodicStockDraftItemsByKey`,
     // kept current by the live listener). Note the explicit, narrower
-    // scope this implies: unlike the live path, a batch commit is not
-    // itself a per-row read-compare-write — if a row has genuinely
-    // gone stale relative to the server since this session last
-    // observed it, firestore.rules' own `rev == resource.rev + 1`
-    // check correctly rejects the ENTIRE batch (Firestore batches are
-    // atomic), which surfaces through this function's own existing
-    // `ReadbackUnconfirmedError`/thrown-error path exactly like any
-    // other failed flush already does — never a silent, partial
-    // overwrite. A genuine same-row collision occurring in the exact
-    // narrow window of an interruption flush is not separately
-    // conflict-detected here; this is an explicit, acknowledged,
-    // narrower guarantee than the live editing path's own full
-    // Decision 55 conflict semantics, not an oversight.
+    // scope this implies: unlike the live path, this is not itself a
+    // per-row read-compare-write for the ROW documents — if a row has
+    // genuinely gone stale relative to the server since this session
+    // last observed it, firestore.rules' own `rev == resource.rev + 1`
+    // check correctly rejects the ENTIRE transaction (atomic exactly
+    // like the batch this replaces), which surfaces through this
+    // function's own existing `ReadbackUnconfirmedError`/thrown-error
+    // path exactly like any other failed flush already does — never a
+    // silent, partial overwrite. A genuine same-row collision occurring
+    // in the exact narrow window of an interruption flush is not
+    // separately conflict-detected here; this is an explicit,
+    // acknowledged, narrower guarantee than the live editing path's own
+    // full Decision 55 conflict semantics, not an oversight.
+    //
+    // [Bug fix — openConflictCount resurrection race] Converted from a
+    // plain WriteBatch to a transaction specifically so the meta write
+    // below can read openConflictCount's true, current server value
+    // immediately before writing it back, rather than trusting this
+    // client's own local listener mirror (periodicStockDraftMeta),
+    // which can be stale relative to a just-resolved conflict by the
+    // time this flush fires — the same race
+    // savePeriodicStockDraftMeta's own fix above addresses, for the
+    // same reason. Firestore transactions support every write a
+    // WriteBatch does (tx.set for the meta doc AND every row below,
+    // completely unchanged in shape) plus this one additional read —
+    // the row-writing loop's own deliberate, already-documented
+    // behavior described above (blind overwrite based on the local rev
+    // mirror, relying on firestore.rules' own rev check to reject a
+    // genuinely stale write) is entirely unaffected; the only read
+    // this transaction performs is the single metaRef read below.
     const writerRole: 'owner' | 'delegate' = isOwner ? 'owner' : 'delegate';
     const nowIso = new Date().toISOString();
-    for (const [rowKey, item] of Object.entries(rowsByKey)) {
-      const known = periodicStockDraftItemsByKey[rowKey];
-      const {
-        rev: _ignoredRev,
-        state: _ignoredState,
-        lastWriterUid: _ignoredWriterUid,
-        lastWriterRole: _ignoredWriterRole,
-        lastWriteAt: _ignoredWriteAt,
-        conflict: _ignoredConflict,
-        ...content
-      } = item;
-      fsBatch.set(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey), {
-        ...content,
-        rev: (known?.rev ?? 0) + 1,
-        state: 'ACCEPTED',
-        lastWriterUid: currentUser.uid,
-        lastWriterRole: writerRole,
-        lastWriteAt: nowIso,
+    await runTransaction(db, async (tx) => {
+      const metaSnap = await tx.get(metaRef);
+      const currentOpenConflictCount = metaSnap.exists() ? (metaSnap.data().openConflictCount ?? 0) : 0;
+      tx.set(metaRef, {
+        ...meta,
+        ...(currentOpenConflictCount > 0 ? { openConflictCount: currentOpenConflictCount } : {}),
       });
-    }
-    await fsBatch.commit();
+      for (const [rowKey, item] of Object.entries(rowsByKey)) {
+        const known = periodicStockDraftItemsByKey[rowKey];
+        const {
+          rev: _ignoredRev,
+          state: _ignoredState,
+          lastWriterUid: _ignoredWriterUid,
+          lastWriterRole: _ignoredWriterRole,
+          lastWriteAt: _ignoredWriteAt,
+          conflict: _ignoredConflict,
+          ...content
+        } = item;
+        tx.set(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey), {
+          ...content,
+          rev: (known?.rev ?? 0) + 1,
+          state: 'ACCEPTED',
+          lastWriterUid: currentUser.uid,
+          lastWriterRole: writerRole,
+          lastWriteAt: nowIso,
+        });
+      }
+    });
     // [Decision 41C §2] Same readback-uncertain wrapping as
     // saveInitialStockDraft above.
     try {

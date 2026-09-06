@@ -77,15 +77,34 @@ describe('AppContext.tsx — getDocFromServer imported and used by all three dra
     assert.match(body, /await getDocFromServer\(itemRef\);/);
   });
 
-  it('savePeriodicStockDraftMeta calls getDocFromServer after setDoc — header fields only, never row content', () => {
+  it('savePeriodicStockDraftMeta commits its write via a transaction (needed to read openConflictCount fresh — see the bug fix for the resurrection race) then calls getDocFromServer afterward', () => {
+    // [Bug fix — openConflictCount resurrection race] Was a plain
+    // `await setDoc(metaRef, meta);` — now a runTransaction, so the
+    // meta write can read openConflictCount's true, current server
+    // value first rather than trusting this client's own local
+    // listener mirror, which could be stale relative to a just-
+    // resolved conflict. The "don't report saved before the server
+    // actually has it" guarantee this test protects is unaffected —
+    // getDocFromServer still runs after the write completes, unchanged.
     const body = extractFunctionBody(appContextSrc, 'const savePeriodicStockDraftMeta = async (');
-    assert.match(body, /await setDoc\(metaRef, meta\);/);
+    assert.match(body, /await runTransaction\(db, async \(tx\) => \{/);
+    assert.match(body, /tx\.set\(metaRef, \{/);
     assert.match(body, /await getDocFromServer\(metaRef\);/);
   });
 
-  it('flushPeriodicStockDraftRows calls getDocFromServer after its batch commit — the single most consequential instance, since Contagem is the primary path to establishing Business Worth', () => {
+  it('flushPeriodicStockDraftRows commits its write via a transaction (converted from a WriteBatch for the same openConflictCount-freshness reason) then calls getDocFromServer afterward', () => {
+    // [Bug fix — openConflictCount resurrection race] Was
+    // `createFirestoreBatch`/`fsBatch.set`/`await fsBatch.commit();` —
+    // converted to runTransaction so the same meta write above can
+    // read openConflictCount fresh; every row write moved to the same
+    // transaction (tx.set), preserving the identical atomicity
+    // guarantee a WriteBatch provided. The "don't report saved before
+    // the server actually has it" guarantee this test protects is
+    // unaffected — getDocFromServer still runs after the transaction
+    // resolves, unchanged.
     const body = extractFunctionBody(appContextSrc, 'const flushPeriodicStockDraftRows = async (');
-    assert.match(body, /await fsBatch\.commit\(\);/);
+    assert.match(body, /await runTransaction\(db, async \(tx\) => \{/);
+    assert.doesNotMatch(body, /createFirestoreBatch|fsBatch/, 'must no longer use a WriteBatch');
     assert.match(body, /await getDocFromServer\(metaRef\);/);
   });
 });

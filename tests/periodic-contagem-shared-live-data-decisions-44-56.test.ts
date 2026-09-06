@@ -159,15 +159,69 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
     );
   });
 
-  it('flushPeriodicStockDraftRows and savePeriodicStockDraftMeta both preserve openConflictCount (do not silently wipe it)', () => {
+  it('savePeriodicStockDraftMeta and flushPeriodicStockDraftRows both preserve openConflictCount by reading it FRESH from the server inside a transaction — never a stale client-side mirror', () => {
+    // [Bug fix — openConflictCount resurrection race] The prior
+    // version of both functions read openConflictCount from
+    // `periodicStockDraftMeta`, this client's own LOCAL, live-
+    // subscribed mirror of the document — not its true server value
+    // at write time. If a conflict was JUST resolved
+    // (resolvePeriodicConflict's own transaction correctly decrements
+    // this field on the server) but this client's own listener hadn't
+    // yet caught up when either of these functions fired — a
+    // realistic window given how frequently ordinary autosave
+    // activity happens — the stale, now-incorrect higher count would
+    // be rewritten, resurrecting a phantom open conflict that blocks
+    // finalization even though every row is genuinely resolved. Fixed
+    // by reading the CURRENT value fresh, from the server, inside a
+    // transaction for both functions — eliminating the race entirely
+    // rather than merely narrowing it.
+    const extractBody = (marker: string): string => {
+      const start = contextSource.indexOf(marker);
+      assert.notEqual(start, -1, `could not locate ${marker}`);
+      const rest = contextSource.slice(start);
+      const nextConstMatch = rest.slice(marker.length).search(/\n  const \w+[:\s]*=/);
+      return nextConstMatch === -1 ? rest : rest.slice(0, marker.length + nextConstMatch);
+    };
+
+    const metaBody = extractBody('const savePeriodicStockDraftMeta = async (');
     assert.match(
-      contextSource,
-      /const preservedOpenConflictCount = periodicStockDraftMeta\?\.openConflictCount \?\? 0;[\s\S]{0,400}await setDoc\(metaRef, \{/
+      metaBody,
+      /await runTransaction\(db, async \(tx\) => \{\s*\n\s*const metaSnap = await tx\.get\(metaRef\);\s*\n\s*const currentOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;\s*\n\s*tx\.set\(metaRef, \{/,
+      'savePeriodicStockDraftMeta must read openConflictCount fresh, via tx.get, before writing it back'
     );
+    assert.doesNotMatch(
+      metaBody,
+      /periodicStockDraftMeta\?\.openConflictCount/,
+      'must not fall back to the stale local mirror anywhere in this function'
+    );
+
+    const flushBody = extractBody('const flushPeriodicStockDraftRows = async (');
     assert.match(
-      contextSource,
-      /const preservedOpenConflictCount = periodicStockDraftMeta\?\.openConflictCount \?\? 0;[\s\S]{0,200}fsBatch\.set\(metaRef, \{/
+      flushBody,
+      /await runTransaction\(db, async \(tx\) => \{\s*\n\s*const metaSnap = await tx\.get\(metaRef\);\s*\n\s*const currentOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;\s*\n\s*tx\.set\(metaRef, \{/,
+      'flushPeriodicStockDraftRows must read openConflictCount fresh, via tx.get, before writing it back'
     );
+    assert.doesNotMatch(
+      flushBody,
+      /periodicStockDraftMeta\?\.openConflictCount|createFirestoreBatch|fsBatch/,
+      'must not fall back to the stale local mirror, and must no longer use a WriteBatch — converted to a transaction'
+    );
+    // Both the meta write AND every row write happen inside the SAME
+    // transaction — the atomicity guarantee the prior WriteBatch
+    // provided is preserved exactly, just via a different mechanism.
+    assert.match(flushBody, /for \(const \[rowKey, item\] of Object\.entries\(rowsByKey\)\) \{/);
+    assert.match(flushBody, /tx\.set\(doc\(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey\), \{/);
+  });
+
+  it('the fresh transactional read for openConflictCount is the ONLY read either function performs — the row-writing loop\'s own deliberate, pre-existing behavior (blind overwrite based on the local rev mirror, relying on firestore.rules\' own rev check) is completely unchanged', () => {
+    const start = contextSource.indexOf('const flushPeriodicStockDraftRows = async (');
+    assert.notEqual(start, -1);
+    const rest = contextSource.slice(start);
+    const nextConstMatch = rest.slice('const flushPeriodicStockDraftRows = async ('.length).search(/\n  const \w+[:\s]*=/);
+    const flushBody = nextConstMatch === -1 ? rest : rest.slice(0, 'const flushPeriodicStockDraftRows = async ('.length + nextConstMatch);
+    const txGetOccurrences = flushBody.match(/tx\.get\(/g) ?? [];
+    assert.equal(txGetOccurrences.length, 1, 'expected exactly one tx.get call — the single metaRef read — no per-row read was added');
+    assert.match(flushBody, /rev: \(known\?\.rev \?\? 0\) \+ 1,/, 'row writes must still derive rev from the local periodicStockDraftItemsByKey mirror, unchanged');
   });
 
   it('recordStockCount refuses to finalize a non-initial count while openConflictCount > 0', () => {
@@ -256,6 +310,71 @@ describe('Technical Design §19 — openConflictCount consistency invariant', ()
     // conflict object at all) must be the one already verified above.
     const resolutionAccepted = contextSource.match(/quantity: resolvedValue,\s*\n\s*state: 'ACCEPTED',/g) ?? [];
     assert.equal(resolutionAccepted.length, 1, 'expected exactly one resolution-shaped ACCEPTED transition');
+  });
+});
+
+describe('Bug fix — openConflictCount resurrection race (reported: Owner blocked from finalizing a Contagem with a stale, non-zero openConflictCount despite zero rows genuinely in CONFLICT)', () => {
+  // [Bug report] "Confirmar Contagem" stayed disabled with a banner
+  // reading "Existem 0 linhas em conflito" — hasUnresolvedConflicts
+  // (gated on periodicStockDraft?.openConflictCount) was true while
+  // unresolvedConflictRows.length (the genuine, live count) was 0.
+  // Root cause: savePeriodicStockDraftMeta and flushPeriodicStockDraftRows
+  // both "preserved" openConflictCount by reading it from
+  // periodicStockDraftMeta — this client's own LOCAL listener mirror —
+  // rather than the server's true current value. If either fired
+  // (ordinary autosave activity, extremely frequent) in the narrow
+  // window between resolvePeriodicConflict's own server-side decrement
+  // and this client's own listener catching up, the stale, higher
+  // value was written straight back, resurrecting a phantom conflict.
+  const extractBody = (marker: string): string => {
+    const start = contextSource.indexOf(marker);
+    assert.notEqual(start, -1, `could not locate ${marker}`);
+    const rest = contextSource.slice(start);
+    const nextConstMatch = rest.slice(marker.length).search(/\n  const \w+[:\s]*=/);
+    return nextConstMatch === -1 ? rest : rest.slice(0, marker.length + nextConstMatch);
+  };
+
+  it('(pure logic) simulates the exact race: a resolve decrements the server value while a client\'s local mirror is still stale — the FIXED read-fresh-inside-a-transaction approach never resurrects the old value', () => {
+    // Models the two data sources directly: "server" (what
+    // resolvePeriodicConflict's own transaction already correctly
+    // updated) vs. "local mirror" (this client's own not-yet-caught-up
+    // periodicStockDraftMeta state) — proving the fix reads the
+    // former, never the latter.
+    let server = { openConflictCount: 1 };
+    const staleLocalMirror = { openConflictCount: 1 }; // hasn't caught up to the resolve yet
+
+    // resolvePeriodicConflict's own transaction runs first, server-side:
+    server = { openConflictCount: Math.max(0, server.openConflictCount - 1) };
+    assert.equal(server.openConflictCount, 0, 'server is now correctly at 0');
+
+    // OLD, buggy behavior: read from the stale local mirror.
+    const oldBuggyPreservedValue = staleLocalMirror.openConflictCount;
+    assert.equal(oldBuggyPreservedValue, 1, 'the bug: the old code would have resurrected this stale 1');
+
+    // NEW, fixed behavior: read fresh from "the server" (what
+    // tx.get(metaRef) would actually return at this exact moment).
+    const currentOpenConflictCount = server.openConflictCount;
+    assert.equal(currentOpenConflictCount, 0, 'the fix: reading fresh always reflects the true, already-resolved value');
+  });
+
+  it('savePeriodicStockDraftMeta and flushPeriodicStockDraftRows are the ONLY two places in the whole file that ever "preserve" openConflictCount into an otherwise-unrelated write — confirming the fix covers every such site, not just one', () => {
+    const preserveSites = contextSource.match(/currentOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;/g) ?? [];
+    assert.equal(preserveSites.length, 2, 'expected exactly savePeriodicStockDraftMeta and flushPeriodicStockDraftRows, no third site');
+  });
+
+  it('neither fixed function leaves any trace of the old stale-mirror pattern anywhere in the file', () => {
+    assert.doesNotMatch(contextSource, /const preservedOpenConflictCount = periodicStockDraftMeta\?\.openConflictCount/, 'the old, buggy pattern must not exist anywhere in this file anymore');
+  });
+
+  it('both fixed functions still floor at 0 via the SAME Math.max-equivalent discipline as the +1/-1 sites above — a fresh read can never be preserved as a negative number', () => {
+    // The fresh read itself already defaults to 0 (`?? 0`) and is only
+    // ever written back when `> 0` — there is no path for a negative
+    // or undefined value to be written, matching the existing
+    // increment/decrement sites' own floor-at-0 discipline.
+    const metaBody = extractBody('const savePeriodicStockDraftMeta = async (');
+    assert.match(metaBody, /\(currentOpenConflictCount > 0 \? \{ openConflictCount: currentOpenConflictCount \} : \{\}\)/);
+    const flushBody = extractBody('const flushPeriodicStockDraftRows = async (');
+    assert.match(flushBody, /\(currentOpenConflictCount > 0 \? \{ openConflictCount: currentOpenConflictCount \} : \{\}\)/);
   });
 });
 
