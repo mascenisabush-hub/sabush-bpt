@@ -237,19 +237,17 @@ export const fr: TranslationDict = {
       stockCount: { label: 'Comptage de Stock', shortLabel: 'Comptage' },
       declareWorth: { label: 'Déclarer la Valeur', shortLabel: 'Déclarer' },
       addQuebra: { label: 'Ajouter une Perte', shortLabel: '+ Perte' },
-      addExpense: { label: 'Ajouter une Dépense', shortLabel: '+ Dépense' },
-      addWithdrawal: { label: 'Enregistrer un Retrait', shortLabel: '+ Retrait' },
       closing: { label: 'Clôture Mensuelle/Annuelle', shortLabel: 'Clôture' },
-      debts: { label: 'Dettes', shortLabel: 'Dettes' },
+      cashFlow: { label: 'Flux de Trésorerie', shortLabel: 'Trésorerie' },
       startupInvestment: { label: 'Investissement Initial', shortLabel: 'Invest. Initial' },
       reports: { label: 'Rapports', shortLabel: 'Rapports' },
       timeline: { label: 'Chronologie', shortLabel: 'Historique' },
     },
     initialStockTitle: 'Comptage de Stock Initial',
   },
-  debts: {
-    title: 'Dettes',
-    subtitle: 'Argent que votre entreprise doit recevoir ou payer.',
+  cashFlow: {
+    title: 'Flux de Trésorerie',
+    subtitle: "Argent que votre entreprise doit recevoir, payer, ou a déjà dépensé/retiré.",
     receivablesSection: {
       title: 'À Recevoir (Clients)',
       addButton: '+ Nouvelle Dette',
@@ -280,6 +278,16 @@ export const fr: TranslationDict = {
       updateButton: 'Mettre à Jour',
       empty: "Vous n'avez pas encore enregistré de position de trésorerie.",
       history: 'Historique',
+    },
+    expensesSection: {
+      title: 'Dépenses',
+      subtitle: "Coûts de l'entreprise comme le loyer, l'eau/l'électricité, le transport, ou d'autres dépenses opérationnelles.",
+      addButton: '+ Dépense',
+    },
+    withdrawalsSection: {
+      title: 'Retraits du Propriétaire',
+      subtitle: "Argent retiré de l'entreprise pour usage personnel, salaire, famille, ou un autre besoin.",
+      addButton: '+ Retrait',
     },
     form: {
       amountLabel: 'Montant',

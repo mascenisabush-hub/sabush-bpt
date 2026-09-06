@@ -8,15 +8,13 @@ import { DashboardView } from './components/DashboardView';
 import { StocksView } from './components/StocksView';
 import { AddStockView } from './components/AddStockView';
 import { AddQuebraView } from './components/AddQuebraView';
-import { AddExpenseView } from './components/AddExpenseView';
-import { AddWithdrawalView } from './components/AddWithdrawalView';
+import { CashFlowView } from './components/CashFlowView';
 import { ReportsView } from './components/ReportsView';
 import { InitialStockCountView } from './components/InitialStockCountView';
 import { PeriodicStockCountView } from './components/PeriodicStockCountView';
 import { DeclareBusinessWorthView } from './components/DeclareBusinessWorthView';
 import { ClosingView } from './components/ClosingView';
 import { BusinessTimelineView } from './components/timeline/BusinessTimelineView';
-import { DebtsView } from './components/DebtsView';
 import { StartupInvestmentView } from './components/StartupInvestmentView';
 import { ProductDetailModal } from './components/ProductDetailModal';
 import { AuthView } from './components/AuthView';
@@ -45,7 +43,7 @@ function MainApp() {
 
   // Restrict staff users to allowed tabs
   useEffect(() => {
-    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'add-withdrawal' || activeTab === 'stock-count' || activeTab === 'closing' || activeTab === 'timeline' || activeTab === 'debts' || activeTab === 'startup-investment')) {
+    if (isStaff && (activeTab === 'dashboard' || activeTab === 'stocks' || activeTab === 'reports' || activeTab === 'initial-stock' || activeTab === 'stock-count' || activeTab === 'closing' || activeTab === 'timeline' || activeTab === 'cash-flow' || activeTab === 'startup-investment')) {
       setActiveTab('add-stock');
     }
   }, [isStaff, activeTab]);
@@ -54,7 +52,7 @@ function MainApp() {
     const handleCustomNav = (e: Event) => {
       const customEvent = e as CustomEvent<TabType>;
       if (customEvent.detail) {
-        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'add-withdrawal' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing' || customEvent.detail === 'timeline' || customEvent.detail === 'debts' || customEvent.detail === 'startup-investment')) {
+        if (isStaff && (customEvent.detail === 'dashboard' || customEvent.detail === 'stocks' || customEvent.detail === 'reports' || customEvent.detail === 'initial-stock' || customEvent.detail === 'stock-count' || customEvent.detail === 'closing' || customEvent.detail === 'timeline' || customEvent.detail === 'cash-flow' || customEvent.detail === 'startup-investment')) {
           setActiveTab('add-stock');
         } else {
           setActiveTab(customEvent.detail);
@@ -163,20 +161,6 @@ function MainApp() {
           />
         )}
 
-        {activeTab === 'add-expense' && (
-          <AddExpenseView
-            onComplete={() => {
-              setActiveTab(isStaff ? 'add-expense' : 'dashboard');
-            }}
-          />
-        )}
-
-        {!isStaff && activeTab === 'add-withdrawal' && (
-          <AddWithdrawalView
-            onComplete={() => setActiveTab('dashboard')}
-          />
-        )}
-
         {!isStaff && activeTab === 'closing' && (
           <ClosingView onComplete={() => setActiveTab('dashboard')} />
         )}
@@ -185,10 +169,13 @@ function MainApp() {
 
         {!isStaff && activeTab === 'timeline' && <BusinessTimelineView />}
 
-        {/* [Business Worth Evolution — Implementation Authorization,
-            Increment 3; Specification §11, §12, §33] Owner-only, same
-            gating as add-withdrawal/closing above. */}
-        {!isStaff && activeTab === 'debts' && <DebtsView />}
+        {/* [Cash Flow consolidation — Product Architect decision] Formerly
+            three separate tabs (add-expense, add-withdrawal, debts) — see
+            CashFlowView.tsx's own header comment for the full rationale.
+            Owner-only, same gating debts/add-withdrawal already had;
+            add-expense was previously available to Staff too — an
+            explicit, accepted trade-off of this consolidation. */}
+        {!isStaff && activeTab === 'cash-flow' && <CashFlowView />}
 
         {/* [Business Worth Evolution — Implementation Authorization,
             Increment 5; Specification §13, §33] Owner-only, same gating

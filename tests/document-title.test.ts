@@ -20,8 +20,8 @@ import { tabTitleKey } from '../apps/tenant/src/hooks/useDocumentTitle';
 import { NAV_TABS, TabType } from '../apps/tenant/src/data/navigationTabs';
 
 const ALL_TAB_TYPES: TabType[] = [
-  'dashboard', 'stocks', 'add-stock', 'add-quebra', 'add-expense',
-  'add-withdrawal', 'reports', 'initial-stock', 'stock-count', 'closing',
+  'dashboard', 'stocks', 'add-stock', 'add-quebra', 'cash-flow',
+  'reports', 'initial-stock', 'stock-count', 'closing',
   'timeline',
 ];
 

@@ -233,12 +233,11 @@ export interface TranslationDict {
       // Increment 10 (Revision 3)]
       declareWorth: { label: string; shortLabel: string };
       addQuebra: { label: string; shortLabel: string };
-      addExpense: { label: string; shortLabel: string };
-      addWithdrawal: { label: string; shortLabel: string };
       closing: { label: string; shortLabel: string };
-      // [Business Worth Evolution — Implementation Authorization,
-      // Increment 3; Specification §11, §12]
-      debts: { label: string; shortLabel: string };
+      // [Cash Flow consolidation — Product Architect decision] Formerly
+      // three separate entries (addExpense, addWithdrawal, debts) — see
+      // CashFlowView.tsx's own header comment for the full rationale.
+      cashFlow: { label: string; shortLabel: string };
       // [Business Worth Evolution — Implementation Authorization,
       // Increment 5; Specification §13]
       startupInvestment: { label: string; shortLabel: string };
@@ -249,12 +248,13 @@ export interface TranslationDict {
      * one of the 11 NAV_TABS bar entries, so it lives outside `tabs`. */
     initialStockTitle: string;
   };
-  // [Business Worth Evolution — Implementation Authorization, Increment 3;
-  // Specification §11, §12] Minimal screen for the Owner to record
-  // debts owed to the business (Receivables) and view/settle supplier
-  // debts (Payables, created automatically by a supplier-credit +Stock
-  // purchase).
-  debts: {
+  // [Cash Flow consolidation — Product Architect decision] Formerly
+  // "debts" — Receivables/Payables/Cash Position (Implementation
+  // Authorization Increment 3; Specification §11, §12), now also
+  // embedding the Expenses and Withdrawals sections below (formerly
+  // their own separate top-nav tabs) — see CashFlowView.tsx's own
+  // header comment for the full rationale.
+  cashFlow: {
     title: string;
     subtitle: string;
     receivablesSection: {
@@ -287,6 +287,23 @@ export interface TranslationDict {
       updateButton: string;
       empty: string;
       history: string;
+    };
+    // [Cash Flow consolidation] Wrapper text only — the embedded
+    // AddExpenseView itself supplies its own full title/subtitle
+    // (addExpense.title/subtitle, below) once expanded; this is just
+    // the collapsed section's own header + toggle button + one-line
+    // description.
+    expensesSection: {
+      title: string;
+      subtitle: string;
+      addButton: string;
+    };
+    // [Cash Flow consolidation] Same reasoning as expensesSection above,
+    // for the embedded AddWithdrawalView.
+    withdrawalsSection: {
+      title: string;
+      subtitle: string;
+      addButton: string;
     };
     form: {
       amountLabel: string;
@@ -1392,19 +1409,17 @@ export const pt: TranslationDict = {
       stockCount: { label: 'Contagem de Stock', shortLabel: 'Contagem' },
       declareWorth: { label: 'Declarar Valor do Negócio', shortLabel: 'Declarar' },
       addQuebra: { label: 'Adicionar Quebra', shortLabel: '+ Quebra' },
-      addExpense: { label: 'Adicionar Despesa', shortLabel: '+ Despesa' },
-      addWithdrawal: { label: 'Registar Levantamento', shortLabel: '+ Levant.' },
       closing: { label: 'Fecho Mensal/Anual', shortLabel: 'Fecho' },
-      debts: { label: 'Dívidas', shortLabel: 'Dívidas' },
+      cashFlow: { label: 'Fluxo de Caixa', shortLabel: 'Caixa' },
       startupInvestment: { label: 'Investimento Inicial', shortLabel: 'Invest. Inicial' },
       reports: { label: 'Relatórios', shortLabel: 'Relatórios' },
       timeline: { label: 'Linha do Tempo', shortLabel: 'Histórico' },
     },
     initialStockTitle: 'Contagem de Stock Inicial',
   },
-  debts: {
-    title: 'Dívidas',
-    subtitle: 'Dinheiro que a sua empresa deve receber ou pagar.',
+  cashFlow: {
+    title: 'Fluxo de Caixa',
+    subtitle: 'Dinheiro que a sua empresa deve receber, pagar, ou já gastou/retirou.',
     receivablesSection: {
       title: 'A Receber (Clientes)',
       addButton: '+ Nova Dívida',
@@ -1435,6 +1450,16 @@ export const pt: TranslationDict = {
       updateButton: 'Atualizar',
       empty: 'Ainda não registou a posição de caixa.',
       history: 'Histórico',
+    },
+    expensesSection: {
+      title: 'Despesas',
+      subtitle: 'Custos do negócio como renda, água/luz, transporte ou outras despesas operacionais.',
+      addButton: '+ Despesa',
+    },
+    withdrawalsSection: {
+      title: 'Levantamentos do Dono',
+      subtitle: 'Dinheiro retirado do negócio para uso pessoal, salário, família, ou outra necessidade.',
+      addButton: '+ Levantamento',
     },
     form: {
       amountLabel: 'Valor',

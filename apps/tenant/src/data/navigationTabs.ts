@@ -1,6 +1,6 @@
-import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, Receipt, BarChart3, HandCoins, ClipboardList, Lock, History, Landmark, PiggyBank, Gem } from 'lucide-react';
+import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, BarChart3, ClipboardList, Lock, History, Wallet, PiggyBank, Gem } from 'lucide-react';
 
-export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'add-expense' | 'add-withdrawal' | 'reports' | 'initial-stock' | 'stock-count' | 'declare-worth' | 'closing' | 'timeline' | 'debts' | 'startup-investment';
+export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'reports' | 'initial-stock' | 'stock-count' | 'declare-worth' | 'closing' | 'timeline' | 'cash-flow' | 'startup-investment';
 
 export interface NavTabDefinition {
   id: TabType;
@@ -34,16 +34,19 @@ export const NAV_TABS: NavTabDefinition[] = [
   // separate tabs, not a shared one with a switch.
   { id: 'declare-worth', labelKey: 'nav.tabs.declareWorth.label', shortLabelKey: 'nav.tabs.declareWorth.shortLabel', icon: Gem, color: 'sky', ownerOnly: true },
   { id: 'add-quebra', labelKey: 'nav.tabs.addQuebra.label', shortLabelKey: 'nav.tabs.addQuebra.shortLabel', icon: AlertTriangle, color: 'rose', ownerOnly: false },
-  { id: 'add-expense', labelKey: 'nav.tabs.addExpense.label', shortLabelKey: 'nav.tabs.addExpense.shortLabel', icon: Receipt, color: 'purple', ownerOnly: false },
-  { id: 'add-withdrawal', labelKey: 'nav.tabs.addWithdrawal.label', shortLabelKey: 'nav.tabs.addWithdrawal.shortLabel', icon: HandCoins, color: 'orange', ownerOnly: true },
   { id: 'closing', labelKey: 'nav.tabs.closing.label', shortLabelKey: 'nav.tabs.closing.shortLabel', icon: Lock, color: 'teal', ownerOnly: true },
-  // [Business Worth Evolution — Implementation Authorization, Increment 3;
-  // Specification §11, §12, §33] Receivables/Payables — Owner-only, same
-  // tier as add-withdrawal above.
-  { id: 'debts', labelKey: 'nav.tabs.debts.label', shortLabelKey: 'nav.tabs.debts.shortLabel', icon: Landmark, color: 'blue', ownerOnly: true },
+  // [Cash Flow consolidation — Product Architect decision] Formerly
+  // three separate tabs: 'debts' (Receivables/Payables/Cash Position —
+  // Implementation Authorization Increment 3; Specification §11, §12,
+  // §33), 'add-expense', and 'add-withdrawal' — merged into one, per
+  // CashFlowView.tsx's own header comment for the full rationale.
+  // 'add-expense' was previously available to Staff (ownerOnly: false);
+  // this consolidation makes the whole merged screen Owner-only, an
+  // explicit, accepted trade-off, not an oversight.
+  { id: 'cash-flow', labelKey: 'nav.tabs.cashFlow.label', shortLabelKey: 'nav.tabs.cashFlow.shortLabel', icon: Wallet, color: 'blue', ownerOnly: true },
   // [Business Worth Evolution — Implementation Authorization, Increment 5;
   // Specification §13, §33] Startup Investment — Owner-only, same tier as
-  // debts above.
+  // cash-flow above.
   { id: 'startup-investment', labelKey: 'nav.tabs.startupInvestment.label', shortLabelKey: 'nav.tabs.startupInvestment.shortLabel', icon: PiggyBank, color: 'violet', ownerOnly: true },
   { id: 'reports', labelKey: 'nav.tabs.reports.label', shortLabelKey: 'nav.tabs.reports.shortLabel', icon: BarChart3, color: 'indigo', ownerOnly: true },
   { id: 'timeline', labelKey: 'nav.tabs.timeline.label', shortLabelKey: 'nav.tabs.timeline.shortLabel', icon: History, color: 'blue', ownerOnly: true },

@@ -30,7 +30,7 @@ function src(relPath: string): string {
 }
 
 const addStockSrc = src('apps/tenant/src/components/AddStockView.tsx');
-const debtsSrc = src('apps/tenant/src/components/DebtsView.tsx');
+const cashFlowSrc = src('apps/tenant/src/components/CashFlowView.tsx');
 
 describe('AddStockView.tsx — getSupplierOutstandingBalance', () => {
   it('is defined once, reading the live payables array from useApp() — never a second, separately fetched copy', () => {
@@ -84,30 +84,30 @@ describe('AddStockView.tsx — the warning is actually wired next to the credit 
   });
 });
 
-describe('DebtsView.tsx — resolvePayableDisplayName fixes the raw-document-ID display bug', () => {
+describe('CashFlowView.tsx — resolvePayableDisplayName fixes the raw-document-ID display bug', () => {
   it('is defined once and prefers supplierName, then a live suppliers lookup by supplierId, then description, then a translated placeholder — never the raw document id', () => {
-    const start = debtsSrc.indexOf('function resolvePayableDisplayName(');
+    const start = cashFlowSrc.indexOf('function resolvePayableDisplayName(');
     assert.notEqual(start, -1);
-    const end = debtsSrc.indexOf('\n}', start);
-    const body = debtsSrc.slice(start, end);
+    const end = cashFlowSrc.indexOf('\n}', start);
+    const body = cashFlowSrc.slice(start, end);
     assert.match(body, /if \(p\.supplierName\) return p\.supplierName;/);
     assert.match(body, /suppliers\.find\(\(s\) => s\.id === p\.supplierId\)/);
     assert.match(body, /if \(p\.description\) return p\.description;/);
-    assert.match(body, /return t\('debts\.payablesSection\.unknownSupplier'\);/);
+    assert.match(body, /return t\('cashFlow\.payablesSection\.unknownSupplier'\);/);
     assert.doesNotMatch(body, /return p\.id;/);
   });
 
   it('suppliers is destructured from useApp() and passed into the resolver — never a second Firestore read', () => {
-    assert.match(debtsSrc, /suppliers,\n  \} = useApp\(\);/);
-    assert.match(debtsSrc, /resolvePayableDisplayName\(p, suppliers, t\)/);
+    assert.match(cashFlowSrc, /suppliers,\n  \} = useApp\(\);/);
+    assert.match(cashFlowSrc, /resolvePayableDisplayName\(p, suppliers, t\)/);
   });
 
   it('the old fallback chain (p.supplierName || p.description || p.id) is gone from the render — replaced entirely by the resolver', () => {
-    assert.doesNotMatch(debtsSrc, /\{p\.supplierName \|\| p\.description \|\| p\.id\}/);
+    assert.doesNotMatch(cashFlowSrc, /\{p\.supplierName \|\| p\.description \|\| p\.id\}/);
   });
 
   it('the secondary description subtitle only shows when it genuinely differs from the resolved title — never a redundant duplicate line', () => {
-    assert.match(debtsSrc, /const showDescriptionAsSubtitle = !!p\.description && p\.description !== displayName;/);
+    assert.match(cashFlowSrc, /const showDescriptionAsSubtitle = !!p\.description && p\.description !== displayName;/);
   });
 });
 

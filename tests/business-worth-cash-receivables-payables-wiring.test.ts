@@ -19,7 +19,7 @@ import { readFileSync } from 'node:fs';
 const appContextSrc = readFileSync(new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url), 'utf-8');
 const rulesSrc = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf-8');
 const typesSrc = readFileSync(new URL('../apps/tenant/src/types.ts', import.meta.url), 'utf-8');
-const debtsViewSrc = readFileSync(new URL('../apps/tenant/src/components/DebtsView.tsx', import.meta.url), 'utf-8');
+const cashFlowViewSrc = readFileSync(new URL('../apps/tenant/src/components/CashFlowView.tsx', import.meta.url), 'utf-8');
 const addStockViewSrc = readFileSync(new URL('../apps/tenant/src/components/AddStockView.tsx', import.meta.url), 'utf-8');
 
 function extractFunctionBody(src: string, signatureMarker: string): string {
@@ -303,22 +303,22 @@ describe('firestore.rules — Increment 3 collections (Specification §33, tenan
   });
 });
 
-describe('DebtsView.tsx / AddStockView.tsx — minimal UI, no redesign', () => {
-  it('DebtsView renders Receivables, Payables, and Cash Position sections, using the existing context functions only', () => {
-    assert.match(debtsViewSrc, /addReceivable/);
-    assert.match(debtsViewSrc, /recordReceivablePayment/);
-    assert.match(debtsViewSrc, /recordPayablePayment/);
+describe('CashFlowView.tsx / AddStockView.tsx — minimal UI, no redesign', () => {
+  it('CashFlowView renders Receivables, Payables, and Cash Position sections, using the existing context functions only', () => {
+    assert.match(cashFlowViewSrc, /addReceivable/);
+    assert.match(cashFlowViewSrc, /recordReceivablePayment/);
+    assert.match(cashFlowViewSrc, /recordPayablePayment/);
     // [Owner-recorded opening-balance debts / cash position] Added
     // alongside this increment's original three — see addPayable's own
     // AppContext.tsx comment and CashPositionDeclaration's own
     // types.ts comment for why these were added and how they differ
     // from the auto-created/governed paths above.
-    assert.match(debtsViewSrc, /addPayable/);
-    assert.match(debtsViewSrc, /addCashPositionDeclaration/);
+    assert.match(cashFlowViewSrc, /addPayable/);
+    assert.match(cashFlowViewSrc, /addCashPositionDeclaration/);
   });
 
   it('each payment submission generates its own fresh submissionId per form instance — never a shared/reused one across different rows', () => {
-    const submissionIdCalls = debtsViewSrc.match(/newSubmissionId\(/g) ?? [];
+    const submissionIdCalls = cashFlowViewSrc.match(/newSubmissionId\(/g) ?? [];
     assert.ok(submissionIdCalls.length >= 2, 'Expected at least one newSubmissionId(...) call site for receivable payments and one for payable payments.');
   });
 

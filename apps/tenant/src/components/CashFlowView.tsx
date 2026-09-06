@@ -1,13 +1,13 @@
-// [Business Worth Evolution — Implementation Authorization, Increment 3;
-// Specification §11, §12] Screen giving the Owner exactly what this
-// increment requires to operate: create a Receivable (a debt owed TO
-// the business), record payments against it, and view/settle supplier
-// Payables (created automatically by a supplier-credit +Stock purchase
-// — AND, per the "Owner-recorded opening-balance debts" addition below,
-// also creatable directly here, for an existing business's pre-system
-// supplier debt). No redesign of the app's navigation/typography —
-// reuses the existing card/button/input styling already established
-// elsewhere (DashboardView, AddExpenseView).
+// [Cash Flow consolidation — Product Architect decision] Screen giving
+// the Owner exactly what this increment requires to operate: create a
+// Receivable (a debt owed TO the business), record payments against
+// it, and view/settle supplier Payables (created automatically by a
+// supplier-credit +Stock purchase — AND, per the "Owner-recorded
+// opening-balance debts" addition below, also creatable directly here,
+// for an existing business's pre-system supplier debt). No redesign of
+// the app's navigation/typography — reuses the existing
+// card/button/input styling already established elsewhere
+// (DashboardView, AddExpenseView).
 //
 // [Owner-recorded cash position] Also adds a third card, entirely new:
 // letting the Owner declare "cash the business currently has," any time
@@ -15,22 +15,50 @@
 // business, so its true starting cash isn't silently treated as zero.
 // See CashPositionDeclaration's own type comment (types.ts) for the full
 // design and how this reaches Business Worth.
+//
+// [Cash Flow consolidation] Formerly DebtsView.tsx ("Dívidas") — renamed
+// and expanded per explicit Product Architect decision: "Dívidas"
+// (Debts) was an inaccurate umbrella term for a screen that already
+// tracked Receivables (money owed TO the business, the opposite of a
+// debt from its own perspective) and Cash Position (unrelated to debt
+// at all), alongside Payables (the one part "Dívidas" did describe).
+// Two more screens — AddExpenseView and AddWithdrawalView, both genuine
+// dated cash-outflow events, formerly their own separate top-nav tabs
+// (add-expense/add-withdrawal) — are now embedded here as two further
+// collapsible sections (EXPENSES, WITHDRAWALS, below), reusing those
+// components' own, unmodified form/submission logic entirely; only the
+// onComplete callback differs (collapses the section here, rather than
+// navigating to a different top-level tab, since there is no longer a
+// separate route to return from). declare-worth (Declarar Valor do
+// Negócio) was deliberately EXCLUDED from this consolidation — it is
+// not a cash movement at all (its own subtitle: an alternative to doing
+// a physical Contagem, not a companion to tracking cash) and remains
+// its own separate tab, unchanged.
+//
+// [Permission note] Merging AddExpenseView in means expense-recording,
+// previously available to Staff as well as Owner, is now reachable only
+// through this Owner-only screen — an explicit, accepted trade-off of
+// this consolidation, not an oversight. A configurable per-staff
+// permission system (rather than the current fixed ownerOnly boolean)
+// was raised as a valuable direction for a future, separate change.
 import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
-import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp } from 'lucide-react';
+import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp, Receipt } from 'lucide-react';
 import { Receivable, Payable, type SupplierRecord } from '../types';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+import { AddExpenseView } from './AddExpenseView';
+import { AddWithdrawalView } from './AddWithdrawalView';
 
 function newSubmissionId(prefix: string): string {
   return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
 }
 
 function statusLabel(status: Receivable['status'] | Payable['status'], t: (key: string) => string): string {
-  if (status === 'unpaid') return t('debts.receivablesSection.statusUnpaid');
-  if (status === 'partially-paid') return t('debts.receivablesSection.statusPartial');
-  return t('debts.receivablesSection.statusPaid');
+  if (status === 'unpaid') return t('cashFlow.receivablesSection.statusUnpaid');
+  if (status === 'partially-paid') return t('cashFlow.receivablesSection.statusPartial');
+  return t('cashFlow.receivablesSection.statusPaid');
 }
 
 function statusBadgeClass(status: Receivable['status'] | Payable['status']): string {
@@ -63,7 +91,7 @@ function resolvePayableDisplayName(p: Payable, suppliers: SupplierRecord[], t: (
   // resolves to any existing SupplierRecord, or an automatic Payable
   // with neither) — an honest, translated placeholder, never the raw
   // document id, which was never meant to be Owner-facing at all.
-  return t('debts.payablesSection.unknownSupplier');
+  return t('cashFlow.payablesSection.unknownSupplier');
 }
 
 // A single row's inline payment-recording form — shared shape for both
@@ -119,7 +147,7 @@ const PaymentForm: React.FC<{
     <form onSubmit={handleSubmit} className="mt-2 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
       <div className="grid grid-cols-2 gap-2">
         <div>
-          <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.paymentAmountLabel')}</label>
+          <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.paymentAmountLabel')}</label>
           <input
             type="number"
             step="0.01"
@@ -131,7 +159,7 @@ const PaymentForm: React.FC<{
           />
         </div>
         <div>
-          <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.paymentDateLabel')}</label>
+          <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.paymentDateLabel')}</label>
           <input
             type="date"
             value={date}
@@ -147,21 +175,21 @@ const PaymentForm: React.FC<{
           disabled={saving}
           className="flex-1 py-1.5 rounded-md bg-[#0B1F3A] text-white text-xs font-bold disabled:opacity-50"
         >
-          {t('debts.form.submitPayment')}
+          {t('cashFlow.form.submitPayment')}
         </button>
         <button
           type="button"
           onClick={onDone}
           className="px-3 py-1.5 rounded-md bg-white border border-gray-300 text-xs font-bold text-gray-700"
         >
-          {t('debts.form.cancel')}
+          {t('cashFlow.form.cancel')}
         </button>
       </div>
     </form>
   );
 };
 
-export const DebtsView: React.FC = () => {
+export const CashFlowView: React.FC = () => {
   const {
     currencySymbol,
     receivables,
@@ -199,6 +227,12 @@ export const DebtsView: React.FC = () => {
   const [payingPayableId, setPayingPayableId] = useState<string | null>(null);
 
   const [showUpdateCash, setShowUpdateCash] = useState(false);
+  // [Cash Flow consolidation] Toggle state for the two embedded
+  // sections below (EXPENSES, WITHDRAWALS) — matching the same
+  // show/hide pattern already used for showAddReceivable/showAddPayable
+  // above, not a new interaction pattern.
+  const [showAddExpense, setShowAddExpense] = useState(false);
+  const [showAddWithdrawal, setShowAddWithdrawal] = useState(false);
   const [showCashHistory, setShowCashHistory] = useState(false);
   const [newCashAmount, setNewCashAmount] = useState('');
   const [newCashDate, setNewCashDate] = useState(getTodayDateString());
@@ -302,25 +336,25 @@ export const DebtsView: React.FC = () => {
   return (
     <div className="max-w-3xl mx-auto pb-12 space-y-6">
       <div>
-        <h1 className="text-xl font-extrabold text-title">{t('debts.title')}</h1>
-        <p className="text-xs text-gray-500 mt-1">{t('debts.subtitle')}</p>
+        <h1 className="text-xl font-extrabold text-title">{t('cashFlow.title')}</h1>
+        <p className="text-xs text-gray-500 mt-1">{t('cashFlow.subtitle')}</p>
       </div>
 
       {/* CASH POSITION */}
       <div className="bg-white rounded-[10px] elevation-1 p-4">
         <div className="flex items-center gap-2 mb-1">
           <Wallet className="w-4 h-4 text-[#0B1F3A]" />
-          <h2 className="text-sm font-bold text-title">{t('debts.cashPositionSection.title')}</h2>
+          <h2 className="text-sm font-bold text-title">{t('cashFlow.cashPositionSection.title')}</h2>
         </div>
-        <p className="text-[10px] text-gray-400 mb-3">{t('debts.cashPositionSection.subtitle')}</p>
+        <p className="text-[10px] text-gray-400 mb-3">{t('cashFlow.cashPositionSection.subtitle')}</p>
 
         {currentCashPosition ? (
           <div className="flex items-center justify-between p-3 rounded-[10px] border border-gray-100 bg-[#0B1F3A]/[0.02]">
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{t('debts.cashPositionSection.currentLabel')}</p>
+              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{t('cashFlow.cashPositionSection.currentLabel')}</p>
               <p className="text-lg font-bold text-[#0B1F3A] type-number">{formatCurrency(currentCashPosition.amount, currencySymbol)}</p>
               <p className="text-[10px] text-gray-400 mt-0.5">
-                {t('debts.cashPositionSection.asOfLabel')} {formatDate(currentCashPosition.declaredAt)}
+                {t('cashFlow.cashPositionSection.asOfLabel')} {formatDate(currentCashPosition.declaredAt)}
               </p>
             </div>
             {!showUpdateCash && (
@@ -331,19 +365,19 @@ export const DebtsView: React.FC = () => {
                 }}
                 className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition shrink-0"
               >
-                {t('debts.cashPositionSection.updateButton')}
+                {t('cashFlow.cashPositionSection.updateButton')}
               </button>
             )}
           </div>
         ) : (
           <div className="flex items-center justify-between p-3 rounded-[10px] border border-dashed border-gray-200">
-            <p className="text-xs text-gray-400">{t('debts.cashPositionSection.empty')}</p>
+            <p className="text-xs text-gray-400">{t('cashFlow.cashPositionSection.empty')}</p>
             {!showUpdateCash && (
               <button
                 onClick={() => setShowUpdateCash(true)}
                 className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition shrink-0"
               >
-                <Plus className="w-3.5 h-3.5" /> {t('debts.cashPositionSection.updateButton')}
+                <Plus className="w-3.5 h-3.5" /> {t('cashFlow.cashPositionSection.updateButton')}
               </button>
             )}
           </div>
@@ -352,14 +386,14 @@ export const DebtsView: React.FC = () => {
         {showUpdateCash && (
           <form onSubmit={handleUpdateCash} className="mt-3 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-700">{t('debts.cashPositionSection.updateButton')}</span>
+              <span className="text-xs font-bold text-gray-700">{t('cashFlow.cashPositionSection.updateButton')}</span>
               <button type="button" onClick={() => setShowUpdateCash(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div className="grid grid-cols-2 gap-2">
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.cashAmountLabel')}</label>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.cashAmountLabel')}</label>
                 <input
                   type="number"
                   step="0.01"
@@ -371,7 +405,7 @@ export const DebtsView: React.FC = () => {
                 />
               </div>
               <div>
-                <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.cashDateLabel')}</label>
+                <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.cashDateLabel')}</label>
                 <input
                   type="date"
                   value={newCashDate}
@@ -387,14 +421,14 @@ export const DebtsView: React.FC = () => {
                 disabled={savingCash}
                 className="flex-1 py-1.5 rounded-md bg-[#0B1F3A] text-white text-xs font-bold disabled:opacity-50"
               >
-                {t('debts.form.submit')}
+                {t('cashFlow.form.submit')}
               </button>
               <button
                 type="button"
                 onClick={() => setShowUpdateCash(false)}
                 className="px-3 py-1.5 rounded-md bg-white border border-gray-300 text-xs font-bold text-gray-700"
               >
-                {t('debts.form.cancel')}
+                {t('cashFlow.form.cancel')}
               </button>
             </div>
           </form>
@@ -408,7 +442,7 @@ export const DebtsView: React.FC = () => {
               className="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-gray-700"
             >
               {showCashHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
-              {t('debts.cashPositionSection.history')}
+              {t('cashFlow.cashPositionSection.history')}
             </button>
             {showCashHistory && (
               <div className="mt-2 space-y-1.5">
@@ -429,14 +463,14 @@ export const DebtsView: React.FC = () => {
         <div className="flex items-center justify-between mb-3">
           <div className="flex items-center gap-2">
             <Landmark className="w-4 h-4 text-[#0B1F3A]" />
-            <h2 className="text-sm font-bold text-title">{t('debts.receivablesSection.title')}</h2>
+            <h2 className="text-sm font-bold text-title">{t('cashFlow.receivablesSection.title')}</h2>
           </div>
           {!showAddReceivable && (
             <button
               onClick={() => setShowAddReceivable(true)}
               className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition"
             >
-              <Plus className="w-3.5 h-3.5" /> {t('debts.receivablesSection.addButton')}
+              <Plus className="w-3.5 h-3.5" /> {t('cashFlow.receivablesSection.addButton')}
             </button>
           )}
         </div>
@@ -444,13 +478,13 @@ export const DebtsView: React.FC = () => {
         {showAddReceivable && (
           <form onSubmit={handleCreateReceivable} className="mb-4 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-700">{t('debts.receivablesSection.addButton')}</span>
+              <span className="text-xs font-bold text-gray-700">{t('cashFlow.receivablesSection.addButton')}</span>
               <button type="button" onClick={() => setShowAddReceivable(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.amountLabel')}</label>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.amountLabel')}</label>
               <input
                 type="number"
                 step="0.01"
@@ -462,7 +496,7 @@ export const DebtsView: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.debtorNameLabel')}</label>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.debtorNameLabel')}</label>
               <input
                 type="text"
                 value={newDebtorName}
@@ -471,7 +505,7 @@ export const DebtsView: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.descriptionLabel')}</label>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.descriptionLabel')}</label>
               <input
                 type="text"
                 value={newDescription}
@@ -486,14 +520,14 @@ export const DebtsView: React.FC = () => {
                 disabled={creating}
                 className="flex-1 py-1.5 rounded-md bg-[#0B1F3A] text-white text-xs font-bold disabled:opacity-50"
               >
-                {t('debts.form.submit')}
+                {t('cashFlow.form.submit')}
               </button>
             </div>
           </form>
         )}
 
         {receivables.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">{t('debts.receivablesSection.empty')}</p>
+          <p className="text-xs text-gray-400 text-center py-6">{t('cashFlow.receivablesSection.empty')}</p>
         ) : (
           <div className="space-y-2">
             {receivables.map((r) => (
@@ -509,10 +543,10 @@ export const DebtsView: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between mt-2 text-xs">
                   <span className="text-gray-500">
-                    {t('debts.receivablesSection.totalLabel')}: <span className="type-number text-gray-800">{formatCurrency(r.totalAmount, currencySymbol)}</span>
+                    {t('cashFlow.receivablesSection.totalLabel')}: <span className="type-number text-gray-800">{formatCurrency(r.totalAmount, currencySymbol)}</span>
                   </span>
                   <span className="text-gray-500">
-                    {t('debts.receivablesSection.remainingLabel')}: <span className="type-number font-bold text-[#8A6D1F]">{formatCurrency(r.amountRemaining, currencySymbol)}</span>
+                    {t('cashFlow.receivablesSection.remainingLabel')}: <span className="type-number font-bold text-[#8A6D1F]">{formatCurrency(r.amountRemaining, currencySymbol)}</span>
                   </span>
                 </div>
                 {r.status !== 'paid' && (
@@ -534,7 +568,7 @@ export const DebtsView: React.FC = () => {
                       onClick={() => setPayingReceivableId(r.id)}
                       className="mt-2 text-[11px] font-bold text-[#0B1F3A] underline"
                     >
-                      {t('debts.receivablesSection.recordPayment')}
+                      {t('cashFlow.receivablesSection.recordPayment')}
                     </button>
                   )
                 )}
@@ -549,29 +583,29 @@ export const DebtsView: React.FC = () => {
         <div className="flex items-center justify-between mb-1">
           <div className="flex items-center gap-2">
             <HandCoins className="w-4 h-4 text-[#0B1F3A]" />
-            <h2 className="text-sm font-bold text-title">{t('debts.payablesSection.title')}</h2>
+            <h2 className="text-sm font-bold text-title">{t('cashFlow.payablesSection.title')}</h2>
           </div>
           {!showAddPayable && (
             <button
               onClick={() => setShowAddPayable(true)}
               className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition"
             >
-              <Plus className="w-3.5 h-3.5" /> {t('debts.payablesSection.addButton')}
+              <Plus className="w-3.5 h-3.5" /> {t('cashFlow.payablesSection.addButton')}
             </button>
           )}
         </div>
-        <p className="text-[10px] text-gray-400 mb-3">{t('debts.payablesSection.hint')}</p>
+        <p className="text-[10px] text-gray-400 mb-3">{t('cashFlow.payablesSection.hint')}</p>
 
         {showAddPayable && (
           <form onSubmit={handleCreatePayable} className="mb-4 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
             <div className="flex items-center justify-between">
-              <span className="text-xs font-bold text-gray-700">{t('debts.payablesSection.addButton')}</span>
+              <span className="text-xs font-bold text-gray-700">{t('cashFlow.payablesSection.addButton')}</span>
               <button type="button" onClick={() => setShowAddPayable(false)} className="text-gray-400 hover:text-gray-700">
                 <X className="w-4 h-4" />
               </button>
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.amountLabel')}</label>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.amountLabel')}</label>
               <input
                 type="number"
                 step="0.01"
@@ -583,7 +617,7 @@ export const DebtsView: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.supplierNameLabel')}</label>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.supplierNameLabel')}</label>
               <input
                 type="text"
                 value={newSupplierName}
@@ -592,7 +626,7 @@ export const DebtsView: React.FC = () => {
               />
             </div>
             <div>
-              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('debts.form.descriptionLabel')}</label>
+              <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.descriptionLabel')}</label>
               <input
                 type="text"
                 value={newPayableDescription}
@@ -607,14 +641,14 @@ export const DebtsView: React.FC = () => {
                 disabled={creatingPayable}
                 className="flex-1 py-1.5 rounded-md bg-[#0B1F3A] text-white text-xs font-bold disabled:opacity-50"
               >
-                {t('debts.form.submit')}
+                {t('cashFlow.form.submit')}
               </button>
             </div>
           </form>
         )}
 
         {payables.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">{t('debts.payablesSection.empty')}</p>
+          <p className="text-xs text-gray-400 text-center py-6">{t('cashFlow.payablesSection.empty')}</p>
         ) : (
           <div className="space-y-2">
             {payables.map((p) => {
@@ -639,7 +673,7 @@ export const DebtsView: React.FC = () => {
                   <div className="flex items-center gap-1.5 shrink-0">
                     {p.isManualEntry && (
                       <span className="text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 bg-gray-50 text-gray-500 border-gray-200">
-                        {t('debts.payablesSection.manualBadge')}
+                        {t('cashFlow.payablesSection.manualBadge')}
                       </span>
                     )}
                     <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 ${statusBadgeClass(p.status)}`}>
@@ -649,10 +683,10 @@ export const DebtsView: React.FC = () => {
                 </div>
                 <div className="flex items-center justify-between mt-2 text-xs">
                   <span className="text-gray-500">
-                    {t('debts.payablesSection.totalLabel')}: <span className="type-number text-gray-800">{formatCurrency(p.totalAmount, currencySymbol)}</span>
+                    {t('cashFlow.payablesSection.totalLabel')}: <span className="type-number text-gray-800">{formatCurrency(p.totalAmount, currencySymbol)}</span>
                   </span>
                   <span className="text-gray-500">
-                    {t('debts.payablesSection.remainingLabel')}: <span className="type-number font-bold text-rose-700">{formatCurrency(p.amountRemaining, currencySymbol)}</span>
+                    {t('cashFlow.payablesSection.remainingLabel')}: <span className="type-number font-bold text-rose-700">{formatCurrency(p.amountRemaining, currencySymbol)}</span>
                   </span>
                 </div>
                 {p.status !== 'paid' && (
@@ -674,13 +708,82 @@ export const DebtsView: React.FC = () => {
                       onClick={() => setPayingPayableId(p.id)}
                       className="mt-2 text-[11px] font-bold text-[#0B1F3A] underline"
                     >
-                      {t('debts.payablesSection.recordPayment')}
+                      {t('cashFlow.payablesSection.recordPayment')}
                     </button>
                   )
                 )}
               </div>
               );
             })}
+          </div>
+        )}
+      </div>
+
+      {/* [Cash Flow consolidation] EXPENSES — formerly the standalone
+          "add-expense" tab. AddExpenseView's own form/submission logic
+          is completely unmodified; only onComplete differs (collapses
+          this section instead of navigating to a different top-level
+          tab, since add-expense is no longer a separate route). */}
+      <div className="bg-white rounded-[10px] elevation-1 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <Receipt className="w-4 h-4 text-[#0B1F3A]" />
+            <h2 className="text-sm font-bold text-title">{t('cashFlow.expensesSection.title')}</h2>
+          </div>
+          {!showAddExpense && (
+            <button
+              onClick={() => setShowAddExpense(true)}
+              className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> {t('cashFlow.expensesSection.addButton')}
+            </button>
+          )}
+        </div>
+        {!showAddExpense && (
+          <p className="text-[10px] text-gray-400 mt-1">{t('cashFlow.expensesSection.subtitle')}</p>
+        )}
+        {showAddExpense && (
+          <div className="mt-3">
+            <div className="flex justify-end mb-1">
+              <button type="button" onClick={() => setShowAddExpense(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <AddExpenseView onComplete={() => setShowAddExpense(false)} />
+          </div>
+        )}
+      </div>
+
+      {/* [Cash Flow consolidation] WITHDRAWALS — formerly the standalone
+          "add-withdrawal" tab. Same reasoning as EXPENSES above —
+          AddWithdrawalView's own form/submission logic is completely
+          unmodified. */}
+      <div className="bg-white rounded-[10px] elevation-1 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <HandCoins className="w-4 h-4 text-[#0B1F3A]" />
+            <h2 className="text-sm font-bold text-title">{t('cashFlow.withdrawalsSection.title')}</h2>
+          </div>
+          {!showAddWithdrawal && (
+            <button
+              onClick={() => setShowAddWithdrawal(true)}
+              className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> {t('cashFlow.withdrawalsSection.addButton')}
+            </button>
+          )}
+        </div>
+        {!showAddWithdrawal && (
+          <p className="text-[10px] text-gray-400 mt-1">{t('cashFlow.withdrawalsSection.subtitle')}</p>
+        )}
+        {showAddWithdrawal && (
+          <div className="mt-3">
+            <div className="flex justify-end mb-1">
+              <button type="button" onClick={() => setShowAddWithdrawal(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <AddWithdrawalView onComplete={() => setShowAddWithdrawal(false)} />
           </div>
         )}
       </div>

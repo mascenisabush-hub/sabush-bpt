@@ -1,7 +1,7 @@
 // [Data-entry error-resilience audit] Covers all four findings from
 // the investigation and their fixes:
 //
-// Finding 1 — DebtsView.tsx's PaymentForm declared a stable
+// Finding 1 — CashFlowView.tsx's PaymentForm declared a stable
 // submissionIdRef but never passed it to onSubmit, generating a fresh
 // id on every call instead — silently defeating recordReceivablePayment/
 // recordPayablePayment's own transaction-based idempotency check and
@@ -13,7 +13,7 @@
 // submissionId + deterministic-doc-id + idempotent-no-op pattern
 // already proven in recordStockCount/recordReceivablePayment.
 //
-// Finding 3 — AddExpenseView/AddWithdrawalView/AddQuebraView/DebtsView
+// Finding 3 — AddExpenseView/AddWithdrawalView/AddQuebraView/CashFlowView
 // had no draft recovery and no warning before an accidental tab close
 // mid-entry — added useUnsavedChangesWarning, a lightweight
 // beforeunload-based warning (not full draft persistence, which would
@@ -42,7 +42,7 @@ function src(relPath: string): string {
 
 const appContextSrc = src('apps/tenant/src/context/AppContext.tsx');
 const rulesSrc = src('firestore.rules');
-const debtsViewSrc = src('apps/tenant/src/components/DebtsView.tsx');
+const cashFlowViewSrc = src('apps/tenant/src/components/CashFlowView.tsx');
 const addExpenseSrc = src('apps/tenant/src/components/AddExpenseView.tsx');
 const addWithdrawalSrc = src('apps/tenant/src/components/AddWithdrawalView.tsx');
 const addQuebraSrc = src('apps/tenant/src/components/AddQuebraView.tsx');
@@ -57,31 +57,31 @@ function extractFunctionBody(source: string, signatureMarker: string): string {
   return nextFnMatch === -1 ? rest : rest.slice(0, signatureMarker.length + nextFnMatch);
 }
 
-describe('Finding 1 — DebtsView.tsx payment idempotency actually wired in', () => {
+describe('Finding 1 — CashFlowView.tsx payment idempotency actually wired in', () => {
   it('PaymentForm.onSubmit signature accepts a submissionId parameter', () => {
-    assert.match(debtsViewSrc, /onSubmit: \(amount: number, date: string, submissionId: string\) => Promise/);
+    assert.match(cashFlowViewSrc, /onSubmit: \(amount: number, date: string, submissionId: string\) => Promise/);
   });
 
   it('handleSubmit passes submissionIdRef.current, never a freshly generated id, to onSubmit', () => {
-    const start = debtsViewSrc.indexOf('const handleSubmit = async (e: React.FormEvent) => {');
-    const end = debtsViewSrc.indexOf('\n  return (', start);
-    const body = debtsViewSrc.slice(start, end);
+    const start = cashFlowViewSrc.indexOf('const handleSubmit = async (e: React.FormEvent) => {');
+    const end = cashFlowViewSrc.indexOf('\n  return (', start);
+    const body = cashFlowViewSrc.slice(start, end);
     assert.match(body, /onSubmit\(numAmount, date, submissionIdRef\.current\)/);
     assert.doesNotMatch(body, /onSubmit\(numAmount, date, newSubmissionId\(/);
   });
 
   it('the dead "void submissionIdRef" statement is gone — the ref is actually consumed now', () => {
-    assert.doesNotMatch(debtsViewSrc, /void submissionIdRef;/);
+    assert.doesNotMatch(cashFlowViewSrc, /void submissionIdRef;/);
   });
 
   it('both payment call sites (receivable, payable) forward the id received from PaymentForm — neither generates its own', () => {
-    const receivableCallIdx = debtsViewSrc.indexOf('recordReceivablePayment({');
-    const receivableCall = debtsViewSrc.slice(receivableCallIdx, receivableCallIdx + 200);
+    const receivableCallIdx = cashFlowViewSrc.indexOf('recordReceivablePayment({');
+    const receivableCall = cashFlowViewSrc.slice(receivableCallIdx, receivableCallIdx + 200);
     assert.match(receivableCall, /submissionId,/);
     assert.doesNotMatch(receivableCall, /submissionId: newSubmissionId\(/);
 
-    const payableCallIdx = debtsViewSrc.indexOf('recordPayablePayment({');
-    const payableCall = debtsViewSrc.slice(payableCallIdx, payableCallIdx + 200);
+    const payableCallIdx = cashFlowViewSrc.indexOf('recordPayablePayment({');
+    const payableCall = cashFlowViewSrc.slice(payableCallIdx, payableCallIdx + 200);
     assert.match(payableCall, /submissionId,/);
     assert.doesNotMatch(payableCall, /submissionId: newSubmissionId\(/);
   });
@@ -145,7 +145,7 @@ describe('Finding 3 — unsaved-changes warning added to the four previously-unp
     { label: 'AddExpenseView', view: addExpenseSrc },
     { label: 'AddWithdrawalView', view: addWithdrawalSrc },
     { label: 'AddQuebraView', view: addQuebraSrc },
-    { label: 'DebtsView', view: debtsViewSrc },
+    { label: 'CashFlowView', view: cashFlowViewSrc },
   ]) {
     it(`${label} imports and calls useUnsavedChangesWarning`, () => {
       assert.match(view, /import \{ useUnsavedChangesWarning \} from '..\/hooks\/useUnsavedChangesWarning';/);
@@ -153,10 +153,10 @@ describe('Finding 3 — unsaved-changes warning added to the four previously-unp
     });
   }
 
-  it('DebtsView\'s PaymentForm also warns while a payment amount is being typed, not just the three quick-add forms', () => {
-    const start = debtsViewSrc.indexOf('const PaymentForm: React.FC<{');
-    const end = debtsViewSrc.indexOf('\n  return (', start);
-    const body = debtsViewSrc.slice(start, end);
+  it('CashFlowView\'s PaymentForm also warns while a payment amount is being typed, not just the three quick-add forms', () => {
+    const start = cashFlowViewSrc.indexOf('const PaymentForm: React.FC<{');
+    const end = cashFlowViewSrc.indexOf('\n  return (', start);
+    const body = cashFlowViewSrc.slice(start, end);
     assert.match(body, /useUnsavedChangesWarning\(amount\.trim\(\) !== ''\)/);
   });
 });

@@ -237,19 +237,17 @@ export const en: TranslationDict = {
       stockCount: { label: 'Stock Count', shortLabel: 'Count' },
       declareWorth: { label: 'Declare Business Worth', shortLabel: 'Declare' },
       addQuebra: { label: 'Add Loss', shortLabel: '+ Loss' },
-      addExpense: { label: 'Add Expense', shortLabel: '+ Expense' },
-      addWithdrawal: { label: 'Record Withdrawal', shortLabel: '+ Withdraw.' },
       closing: { label: 'Monthly/Yearly Closing', shortLabel: 'Closing' },
-      debts: { label: 'Debts', shortLabel: 'Debts' },
+      cashFlow: { label: 'Cash Flow', shortLabel: 'Cash' },
       startupInvestment: { label: 'Startup Investment', shortLabel: 'Startup Inv.' },
       reports: { label: 'Reports', shortLabel: 'Reports' },
       timeline: { label: 'Timeline', shortLabel: 'History' },
     },
     initialStockTitle: 'Initial Stock Count',
   },
-  debts: {
-    title: 'Debts',
-    subtitle: 'Money your business is owed, or owes.',
+  cashFlow: {
+    title: 'Cash Flow',
+    subtitle: 'Money your business is owed, owes, or has already spent/withdrawn.',
     receivablesSection: {
       title: 'Receivable (Customers)',
       addButton: '+ New Debt',
@@ -280,6 +278,16 @@ export const en: TranslationDict = {
       updateButton: 'Update',
       empty: 'You haven\'t recorded a cash position yet.',
       history: 'History',
+    },
+    expensesSection: {
+      title: 'Expenses',
+      subtitle: 'Business costs like rent, utilities, transport, or other operating expenses.',
+      addButton: '+ Expense',
+    },
+    withdrawalsSection: {
+      title: 'Owner Withdrawals',
+      subtitle: 'Money taken out of the business for personal use, salary, family, or another need.',
+      addButton: '+ Withdrawal',
     },
     form: {
       amountLabel: 'Amount',
