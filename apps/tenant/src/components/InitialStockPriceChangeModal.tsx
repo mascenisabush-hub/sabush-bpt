@@ -166,12 +166,12 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
               <p className="text-sm font-mono font-bold text-gray-900 mt-0.5">
                 {formatCurrency(initialCapitalValue, currencySymbol)}
               </p>
-              <p className="text-[10px] text-gray-400 mt-0.5">Valor histórico — nunca é alterado</p>
+              <p className="text-[10px] text-gray-500 mt-0.5">Valor histórico — nunca é alterado</p>
             </div>
             <div className="border border-[#D4AF37]/30 rounded-xl p-3 bg-[#D4AF37]/5">
               <p className="text-[10px] font-semibold uppercase text-gray-500">Valorização Atual do Stock Inicial</p>
               <p className="text-sm font-mono font-bold text-[#0B1F3A] mt-0.5">
-                {formatCurrency(initialStockCurrentValuation.totalInvestmentValue, currencySymbol)} <span className="text-gray-400 font-normal">custo</span>
+                {formatCurrency(initialStockCurrentValuation.totalInvestmentValue, currencySymbol)} <span className="text-gray-500 font-normal">custo</span>
               </p>
               <p className="text-[10px] text-gray-500 mt-0.5">
                 {formatCurrency(initialStockCurrentValuation.totalMarketValue, currencySymbol)} valor de venda
@@ -367,8 +367,8 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
                       );
                     })}
                   </div>
-                  <p className="text-[10px] text-gray-400 mt-1.5 flex items-start gap-1">
-                    <Info className="w-3 h-3 shrink-0 mt-0.5" />
+                  <p className="text-[13px] text-[#374151] mt-1.5 flex items-start gap-1.5 leading-relaxed">
+                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
                     Estas são alterações de valorização — não são lucro, venda, compra, despesa ou levantamento.
                   </p>
                 </div>

@@ -1,8 +1,19 @@
 import { formatDate } from '../../../utils/formatters';
 
-const ORANGE: [number, number, number] = [234, 88, 12]; // #EA580C
-const DARK: [number, number, number] = [17, 17, 17];
-const GRAY: [number, number, number] = [107, 114, 128];
+// [Readability Audit F-13] Was ORANGE = [234, 88, 12] (#EA580C) — an
+// off-brand color used nowhere else in the product (DESIGN_SYSTEM.md's
+// actual --orange token is #FF8C42, and the real brand accent is gold).
+// It also failed contrast for its own white header-row text (~3.56:1,
+// computed). Replaced with the app's real navy structural color
+// (#0B1F3A), paired with white text exactly as every other navy surface
+// in the product already does (~16.5:1, safe) — no new design decision,
+// just bringing this one shared PDF builder into line with tokens
+// already used everywhere else. DARK corrected from #111111 to the
+// documented #111827 foreground token (functionally identical, now
+// exact).
+const NAVY: [number, number, number] = [11, 31, 58]; // #0B1F3A — was ORANGE
+const DARK: [number, number, number] = [17, 24, 39]; // #111827 — was #111111
+const GRAY: [number, number, number] = [107, 114, 128]; // #6B7280 — unchanged, already the documented --muted-foreground token
 
 export interface ExportKpi {
   label: string;
@@ -44,10 +55,10 @@ async function buildReportPdfDocument(
   const marginX = 40;
   let y = 48;
 
-  doc.setFillColor(...ORANGE);
+  doc.setFillColor(...NAVY);
   doc.rect(0, 0, pageWidth, 6, 'F');
 
-  doc.setFontSize(9);
+  doc.setFontSize(10); // [F-13] was 9pt — print-readability floor
   doc.setTextColor(...GRAY);
   doc.text(businessName || 'Sabush', marginX, y);
   doc.text(new Date().toLocaleDateString('pt-PT'), pageWidth - marginX, y, { align: 'right' });
@@ -78,7 +89,7 @@ async function buildReportPdfDocument(
       margin: { left: marginX, right: marginX },
       body: kpis.map(k => [k.label, k.value]),
       theme: 'plain',
-      bodyStyles: { fontSize: 9, textColor: DARK },
+      bodyStyles: { fontSize: 10, textColor: DARK }, // [F-13] was 9pt
       columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
     });
     // @ts-ignore
@@ -103,8 +114,8 @@ async function buildReportPdfDocument(
       margin: { left: marginX, right: marginX },
       head: [table.columns],
       body: table.rows,
-      headStyles: { fillColor: ORANGE, textColor: [255, 255, 255], fontSize: 8 },
-      bodyStyles: { fontSize: 8, textColor: DARK },
+      headStyles: { fillColor: NAVY, textColor: [255, 255, 255], fontSize: 9 }, // [F-13] was ORANGE @ 8pt — off-brand, ~3.56:1 contrast; navy @ 9pt is ~16.5:1
+      bodyStyles: { fontSize: 9, textColor: DARK }, // [F-13] was 8pt
       alternateRowStyles: { fillColor: [249, 250, 251] },
     });
     // @ts-ignore

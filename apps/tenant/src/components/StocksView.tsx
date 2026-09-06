@@ -425,7 +425,7 @@ export const StocksView: React.FC = () => {
                   <div className="min-w-0">
                     <div className="flex items-center gap-2 text-[11px] font-bold text-[#0B1F3A]">
                       <Calendar className="w-3.5 h-3.5" /> {formatDate(group.date)}
-                      <span className="text-gray-400 font-semibold">
+                      <span className="text-gray-500 font-semibold">
                         {group.summaries.length === 1
                           ? t('stocksView.event.batchCountOne', { count: group.summaries.length })
                           : t('stocksView.event.batchCountOther', { count: group.summaries.length })}
@@ -507,7 +507,7 @@ export const StocksView: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <Truck className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.supplier')}</span>
+                    <span className="text-gray-500 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.supplier')}</span>
                     <span className="text-[#111827] font-semibold">{selectedSummary.purchaseBatch.supplier.name}</span>
                     {selectedSummary.purchaseBatch.supplier.phone && (
                       <span className="text-gray-500 block">{selectedSummary.purchaseBatch.supplier.phone}</span>
@@ -517,7 +517,7 @@ export const StocksView: React.FC = () => {
                 <div className="flex items-start gap-2">
                   <User className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                   <div>
-                    <span className="text-gray-400 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.createdBy')}</span>
+                    <span className="text-gray-500 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.createdBy')}</span>
                     <span className="text-[#111827] font-semibold">{selectedSummary.purchaseBatch.createdByName || '—'}</span>
                   </div>
                 </div>
@@ -525,7 +525,7 @@ export const StocksView: React.FC = () => {
                   <div className="sm:col-span-2 flex items-start gap-2">
                     <FileText className="w-3.5 h-3.5 text-gray-400 mt-0.5 shrink-0" />
                     <div>
-                      <span className="text-gray-400 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.notes')}</span>
+                      <span className="text-gray-500 block text-[10px] uppercase font-semibold tracking-wide">{t('stocksView.modal.notes')}</span>
                       <span className="text-[#111827]">{selectedSummary.purchaseBatch.notes}</span>
                     </div>
                   </div>

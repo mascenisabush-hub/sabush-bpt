@@ -145,13 +145,13 @@ export const OwnerPortfolioModal: React.FC<OwnerPortfolioModalProps> = ({ onClos
                           desatualizado — em {formatCalculatedAt(cached.calculatedAt)}
                         </span>
                       ) : (
-                        <span className="text-[10px] text-gray-400">
+                        <span className="text-[10px] text-gray-500">
                           em {formatCalculatedAt(cached.calculatedAt)}
                         </span>
                       )}
                     </div>
                   ) : (
-                    <p className="text-[11px] text-gray-400 mt-0.5 flex items-center gap-1">
+                    <p className="text-[11px] text-gray-500 mt-0.5 flex items-center gap-1">
                       <AlertCircle className="w-3 h-3 shrink-0" />
                       Ainda não calculado
                     </p>

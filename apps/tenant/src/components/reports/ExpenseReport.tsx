@@ -221,7 +221,7 @@ export const ExpenseReport: React.FC<Props> = ({ onBack }) => {
                       gap BDS #7/#8 flagged for Quebras/Expenses before
                       this amendment existed). */}
                   {exp.closingId ? (
-                    <span className="flex items-center gap-1 text-[10px] text-gray-400" title={t('reports.common.locked')}>
+                    <span className="flex items-center gap-1 text-[10px] text-gray-500" title={t('reports.common.locked')}>
                       <Lock className="w-3 h-3" /> {t('reports.common.locked')}
                     </span>
                   ) : (
@@ -231,7 +231,7 @@ export const ExpenseReport: React.FC<Props> = ({ onBack }) => {
                           deleteExpense(exp.id).catch((err: any) => alert(err?.message || 'Erro ao remover.'));
                         }
                       }}
-                      className="text-[10px] text-gray-400 hover:text-rose-600 transition"
+                      className="text-[10px] text-gray-500 hover:text-rose-600 transition"
                     >
                       {t('reports.common.delete')}
                     </button>

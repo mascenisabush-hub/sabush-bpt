@@ -215,7 +215,7 @@ export const QuickLoginScreen: React.FC<QuickLoginScreenProps> = ({ onUseOwnerLo
               </button>
             </div>
 
-            <p className="flex items-center justify-center gap-1 text-[10px] text-gray-400 mt-5">
+            <p className="flex items-center justify-center gap-1 text-[10px] text-gray-500 mt-5">
               <KeyRound className="w-3 h-3" /> {t('quickLogin.pinDigits')}
             </p>
           </>

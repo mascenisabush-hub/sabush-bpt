@@ -626,7 +626,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         placeholder="Ex: 483920"
                         className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-xs text-gray-900 placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tracking-widest"
                       />
-                      <p className="text-[10px] text-gray-400 mt-1">
+                      <p className="text-[11px] text-gray-500 mt-1 leading-snug">
                         O funcionário usa este PIN para entrar — tanto no login normal como no login rápido de um dispositivo partilhado.
                       </p>
                     </div>

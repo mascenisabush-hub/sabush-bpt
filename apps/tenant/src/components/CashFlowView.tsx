@@ -346,14 +346,14 @@ export const CashFlowView: React.FC = () => {
           <Wallet className="w-4 h-4 text-[#0B1F3A]" />
           <h2 className="text-sm font-bold text-title">{t('cashFlow.cashPositionSection.title')}</h2>
         </div>
-        <p className="text-[10px] text-gray-400 mb-3">{t('cashFlow.cashPositionSection.subtitle')}</p>
+        <p className="text-[10px] text-gray-500 mb-3">{t('cashFlow.cashPositionSection.subtitle')}</p>
 
         {currentCashPosition ? (
           <div className="flex items-center justify-between p-3 rounded-[10px] border border-gray-100 bg-[#0B1F3A]/[0.02]">
             <div>
-              <p className="text-[10px] font-bold text-gray-400 uppercase tracking-wide">{t('cashFlow.cashPositionSection.currentLabel')}</p>
+              <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">{t('cashFlow.cashPositionSection.currentLabel')}</p>
               <p className="text-lg font-bold text-[#0B1F3A] type-number">{formatCurrency(currentCashPosition.amount, currencySymbol)}</p>
-              <p className="text-[10px] text-gray-400 mt-0.5">
+              <p className="text-[10px] text-gray-500 mt-0.5">
                 {t('cashFlow.cashPositionSection.asOfLabel')} {formatDate(currentCashPosition.declaredAt)}
               </p>
             </div>
@@ -371,7 +371,7 @@ export const CashFlowView: React.FC = () => {
           </div>
         ) : (
           <div className="flex items-center justify-between p-3 rounded-[10px] border border-dashed border-gray-200">
-            <p className="text-xs text-gray-400">{t('cashFlow.cashPositionSection.empty')}</p>
+            <p className="text-xs text-gray-500">{t('cashFlow.cashPositionSection.empty')}</p>
             {!showUpdateCash && (
               <button
                 onClick={() => setShowUpdateCash(true)}
@@ -448,7 +448,7 @@ export const CashFlowView: React.FC = () => {
               <div className="mt-2 space-y-1.5">
                 {cashPositionDeclarations.slice(1).map((entry) => (
                   <div key={entry.id} className="flex items-center justify-between px-3 py-1.5 rounded-md border border-gray-100 text-xs">
-                    <span className="text-gray-400">{formatDate(entry.declaredAt)}</span>
+                    <span className="text-gray-500">{formatDate(entry.declaredAt)}</span>
                     <span className="type-number text-gray-600">{formatCurrency(entry.amount, currencySymbol)}</span>
                   </div>
                 ))}
@@ -527,7 +527,7 @@ export const CashFlowView: React.FC = () => {
         )}
 
         {receivables.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">{t('cashFlow.receivablesSection.empty')}</p>
+          <p className="text-xs text-gray-500 text-center py-6">{t('cashFlow.receivablesSection.empty')}</p>
         ) : (
           <div className="space-y-2">
             {receivables.map((r) => (
@@ -535,7 +535,7 @@ export const CashFlowView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-gray-800">{r.debtorName || r.description || r.id}</p>
-                    {r.debtorName && r.description && <p className="text-[10px] text-gray-400">{r.description}</p>}
+                    {r.debtorName && r.description && <p className="text-[10px] text-gray-500">{r.description}</p>}
                   </div>
                   <span className={`text-[10px] font-bold uppercase tracking-wide border rounded-full px-2 py-0.5 ${statusBadgeClass(r.status)}`}>
                     {statusLabel(r.status, t)}
@@ -594,7 +594,7 @@ export const CashFlowView: React.FC = () => {
             </button>
           )}
         </div>
-        <p className="text-[10px] text-gray-400 mb-3">{t('cashFlow.payablesSection.hint')}</p>
+        <p className="text-[10px] text-gray-500 mb-3">{t('cashFlow.payablesSection.hint')}</p>
 
         {showAddPayable && (
           <form onSubmit={handleCreatePayable} className="mb-4 p-3 bg-gray-50 rounded-[10px] border border-gray-200 space-y-2">
@@ -648,7 +648,7 @@ export const CashFlowView: React.FC = () => {
         )}
 
         {payables.length === 0 ? (
-          <p className="text-xs text-gray-400 text-center py-6">{t('cashFlow.payablesSection.empty')}</p>
+          <p className="text-xs text-gray-500 text-center py-6">{t('cashFlow.payablesSection.empty')}</p>
         ) : (
           <div className="space-y-2">
             {payables.map((p) => {
@@ -668,7 +668,7 @@ export const CashFlowView: React.FC = () => {
                 <div className="flex items-center justify-between">
                   <div>
                     <p className="text-xs font-bold text-gray-800">{displayName}</p>
-                    {showDescriptionAsSubtitle && <p className="text-[10px] text-gray-400">{p.description}</p>}
+                    {showDescriptionAsSubtitle && <p className="text-[10px] text-gray-500">{p.description}</p>}
                   </div>
                   <div className="flex items-center gap-1.5 shrink-0">
                     {p.isManualEntry && (
@@ -740,7 +740,7 @@ export const CashFlowView: React.FC = () => {
           )}
         </div>
         {!showAddExpense && (
-          <p className="text-[10px] text-gray-400 mt-1">{t('cashFlow.expensesSection.subtitle')}</p>
+          <p className="text-[10px] text-gray-500 mt-1">{t('cashFlow.expensesSection.subtitle')}</p>
         )}
         {showAddExpense && (
           <div className="mt-3">
@@ -774,7 +774,7 @@ export const CashFlowView: React.FC = () => {
           )}
         </div>
         {!showAddWithdrawal && (
-          <p className="text-[10px] text-gray-400 mt-1">{t('cashFlow.withdrawalsSection.subtitle')}</p>
+          <p className="text-[10px] text-gray-500 mt-1">{t('cashFlow.withdrawalsSection.subtitle')}</p>
         )}
         {showAddWithdrawal && (
           <div className="mt-3">

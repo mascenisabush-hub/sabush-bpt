@@ -569,7 +569,7 @@ const ExistingProductSummary: React.FC<{
   // call sites below need no change.
   return (
     <div className="col-span-2 sm:col-span-5 -mt-1 mb-1 flex flex-wrap items-center gap-x-1.5 gap-y-0.5 text-[11.5px] text-gray-500">
-      <span className="shrink-0 font-bold uppercase tracking-wide text-gray-400 text-[10px]">Memória</span>
+      <span className="shrink-0 font-bold uppercase tracking-wide text-gray-500 text-[10px]">Memória</span>
       {hasCostBasis && (
         <span>
           Custo original:{' '}
@@ -8736,7 +8736,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   {formatCurrency(viewingCount.totalSellingValue, currencySymbol)}
                 </span>
               ) : (
-                <span className="text-[12px] text-gray-400 italic">
+                <span className="text-[12px] text-gray-500 italic">
                   Não disponível para esta contagem (registada antes desta funcionalidade existir)
                 </span>
               )}

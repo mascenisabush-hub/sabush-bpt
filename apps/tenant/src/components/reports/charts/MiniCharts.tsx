@@ -69,7 +69,7 @@ export const LineChartSimple: React.FC<LineChartProps> = ({ data, currencySymbol
   const { t } = useLanguage();
   if (data.length < 2) {
     return (
-      <div className="text-[11px] text-gray-400 text-center py-8">
+      <div className="text-[11px] text-gray-500 text-center py-8">
         {t('reports.common.insufficientTrendData')}
       </div>
     );
@@ -133,7 +133,7 @@ export const DonutChart: React.FC<DonutChartProps> = ({ data, currencySymbol }) 
   const filtered = data.filter(d => d.value > 0);
   const total = filtered.reduce((s, d) => s + d.value, 0);
   if (!filtered.length || total <= 0) {
-    return <div className="text-[11px] text-gray-400 text-center py-8">{t('reports.common.insufficientChartData')}</div>;
+    return <div className="text-[11px] text-gray-500 text-center py-8">{t('reports.common.insufficientChartData')}</div>;
   }
 
   const R = 60;

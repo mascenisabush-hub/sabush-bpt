@@ -265,7 +265,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
         </div>
 
         {periodType === 'custom' && (
-          <p className="text-[10.5px] leading-relaxed text-gray-400">
+          <p className="text-[13px] leading-relaxed text-[#374151]">
             O início do Fecho é sempre a última base ativa (a Contagem mais recente, ou o Capital Inicial histórico) —
             nunca uma data escolhida pelo dono. Apenas a data final é escolhida acima.
           </p>
@@ -329,7 +329,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                 : formatCurrency(businessWorth, currencySymbol)}
             </span>
           </div>
-          <p className="text-[10.5px] leading-relaxed text-gray-400">
+          <p className="text-[13px] leading-relaxed text-[#374151]">
             {periodType === 'custom'
               ? 'Este é o Valor Estimado do Negócio à data final escolhida — o mesmo cálculo usado em qualquer outra leitura do Valor do Negócio, desde a última base ativa. Nenhuma venda é registada nesta app, por isso este número nunca representa dinheiro em caixa.'
               : `Este é o valor que fica gravado como fotografia (snapshot) ao fechar o período — Valor de Mercado do Stock ${formatCurrency(totalMarketValueAllTime, currencySymbol)} − Despesas − Levantamentos. Nenhuma venda é registada nesta app, por isso este número nunca representa dinheiro em caixa.`}
@@ -411,7 +411,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                             <Lock className="w-3 h-3 text-[#B8952F]" strokeWidth={2.25} />
                           )}
                           {c.periodLabel}
-                          <span className="text-[10px] font-normal text-gray-400">
+                          <span className="text-[10px] font-normal text-gray-500">
                             ({c.periodType === 'monthly' ? 'Mensal' : c.periodType === 'yearly' ? 'Anual' : 'Fecho'})
                           </span>
                           {isReopened && (
@@ -479,7 +479,7 @@ export const ClosingView: React.FC<ClosingViewProps> = ({ onComplete }) => {
                     </div>
 
                     {diff !== null && (
-                      <div className={`flex items-center justify-end gap-1 text-[10px] font-semibold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-400'}`}>
+                      <div className={`flex items-center justify-end gap-1 text-[10px] font-semibold ${diff > 0 ? 'text-emerald-600' : diff < 0 ? 'text-rose-600' : 'text-gray-500'}`}>
                         {diff > 0 ? <TrendingUp className="w-3 h-3" /> : diff < 0 ? <TrendingDown className="w-3 h-3" /> : <Minus className="w-3 h-3" />}
                         <span>{diff >= 0 ? '+' : ''}{formatCurrency(diff, currencySymbol)} vs. fecho anterior</span>
                       </div>

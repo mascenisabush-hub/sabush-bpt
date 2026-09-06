@@ -168,7 +168,7 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
               />
 
               <div className="flex flex-wrap gap-1.5 mt-2 items-center">
-                <span className="text-[11px] text-gray-400 mr-1">{t('addWithdrawal.quickSuggestions')}</span>
+                <span className="text-[11px] text-gray-500 mr-1">{t('addWithdrawal.quickSuggestions')}</span>
                 {COMMON_REASON_KEYS.map(key => {
                   const label = t(key);
                   return (

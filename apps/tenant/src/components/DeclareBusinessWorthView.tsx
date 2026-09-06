@@ -230,7 +230,7 @@ export const DeclareBusinessWorthView: React.FC<DeclareBusinessWorthViewProps> =
             </div>
 
             {currentValue === null && (
-              <p className="text-[11px] text-gray-400 italic">{t('declareWorth.currentValueUnknownNote')}</p>
+              <p className="text-[11px] text-gray-500 italic">{t('declareWorth.currentValueUnknownNote')}</p>
             )}
 
             {/* [Manual data-entry error investigation, Finding 1] Warn,

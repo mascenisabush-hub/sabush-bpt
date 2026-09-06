@@ -246,10 +246,10 @@ export const StockVerificationReport: React.FC<Props> = ({ onBack }) => {
                               <td className="py-2 pr-2 font-semibold text-gray-800">{d.productName}</td>
                               <td className="py-2 pr-2 text-right font-mono text-gray-600">{d.before}</td>
                               <td className="py-2 pr-2 text-right font-mono text-gray-600">{d.after}</td>
-                              <td className={`py-2 pr-2 text-right type-number ${d.diffQty === 0 ? 'text-gray-400' : d.diffQty > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              <td className={`py-2 pr-2 text-right type-number ${d.diffQty === 0 ? 'text-gray-500' : d.diffQty > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {d.diffQty > 0 ? '+' : ''}{d.diffQty}
                               </td>
-                              <td className={`py-2 pr-2 text-right type-number ${d.diffValue === 0 ? 'text-gray-400' : d.diffValue > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
+                              <td className={`py-2 pr-2 text-right type-number ${d.diffValue === 0 ? 'text-gray-500' : d.diffValue > 0 ? 'text-emerald-600' : 'text-rose-600'}`}>
                                 {formatCurrency(d.diffValue, currencySymbol)}
                               </td>
                             </tr>

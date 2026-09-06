@@ -133,7 +133,7 @@ export const StartupInvestmentView: React.FC = () => {
           </div>
         </div>
         {!investmentWindow && (
-          <p className="text-[11px] text-gray-400">{t('startupInvestment.reportSection.noBaselineYet')}</p>
+          <p className="text-[11px] text-gray-500">{t('startupInvestment.reportSection.noBaselineYet')}</p>
         )}
       </div>
 
@@ -220,14 +220,14 @@ export const StartupInvestmentView: React.FC = () => {
         )}
 
         {startupInvestmentEntries.length === 0 ? (
-          <p className="text-xs text-gray-400">{t('startupInvestment.entriesSection.empty')}</p>
+          <p className="text-xs text-gray-500">{t('startupInvestment.entriesSection.empty')}</p>
         ) : (
           <div className="space-y-2">
             {startupInvestmentEntries.map((entry) => (
               <div key={entry.id} className="flex items-center justify-between p-2 rounded-md border border-gray-100">
                 <div>
                   <div className="text-xs font-semibold text-gray-700">{t(`startupInvestment.categories.${entry.category}`)}</div>
-                  {entry.description && <div className="text-[11px] text-gray-400">{entry.description}</div>}
+                  {entry.description && <div className="text-[11px] text-gray-500">{entry.description}</div>}
                 </div>
                 <div className="text-xs font-bold text-gray-700">{formatCurrency(entry.amount, currencySymbol)}</div>
               </div>

@@ -164,7 +164,7 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
                   {/* [Closing Integrity Amendment v1.0] Same lock display
                       as ExpenseReport — see that comment. */}
                   {w.closingId ? (
-                    <span className="flex items-center gap-1 text-[10px] text-gray-400" title={t('reports.common.locked')}>
+                    <span className="flex items-center gap-1 text-[10px] text-gray-500" title={t('reports.common.locked')}>
                       <Lock className="w-3 h-3" /> {t('reports.common.locked')}
                     </span>
                   ) : (
@@ -174,7 +174,7 @@ export const WithdrawalReport: React.FC<Props> = ({ onBack }) => {
                           deleteWithdrawal(w.id).catch((err: any) => alert(err?.message || 'Erro ao remover.'));
                         }
                       }}
-                      className="text-[10px] text-gray-400 hover:text-rose-600 transition"
+                      className="text-[10px] text-gray-500 hover:text-rose-600 transition"
                     >
                       {t('reports.common.delete')}
                     </button>

@@ -87,7 +87,7 @@ export const TimelineDetailModal: React.FC<TimelineDetailModalProps> = ({ event,
                 <Icon className="w-5 h-5" />
               </div>
               <div>
-                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{ACTIVITY_LABEL[event.type]}</p>
+                <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{ACTIVITY_LABEL[event.type]}</p>
                 <h3 className="font-bold text-base text-gray-900 leading-tight mt-0.5">{event.title}</h3>
               </div>
             </div>
@@ -117,7 +117,7 @@ export const TimelineDetailModal: React.FC<TimelineDetailModalProps> = ({ event,
             <div className="grid grid-cols-2 gap-3">
               {event.financialImpact.map((fi, i) => (
                 <div key={i} className="bg-white border border-gray-200 rounded-xl p-3">
-                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-400">{fi.label}</p>
+                  <p className="text-[10px] font-bold uppercase tracking-wider text-gray-500">{fi.label}</p>
                   <p className={`text-base type-number mt-0.5 ${IMPACT_TONE_CLASSES[fi.tone]}`}>
                     {fi.amount < 0 ? '−' : ''}{formatCurrency(Math.abs(fi.amount), currencySymbol)}
                   </p>

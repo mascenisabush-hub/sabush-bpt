@@ -335,6 +335,10 @@ non-negotiable rather than a nice-to-have on this product specifically.
 | `.card-premium.is-action` | Light gold-tint background — an action the user needs to notice |
 | `.card-dark-gradient` | Navy gradient, white text, gold value — reserved for **the single flagship metric** on a screen (Business Worth, Embedded Profit). Never more than one per screen. |
 
+**Text color on `.card-dark-gradient` (added after a real regression — Readability Audit F-06).** Always express text color on this surface via a Tailwind opacity utility (`text-white/70`, `text-white/40`, etc.), never via a custom CSS class. A custom class (e.g. a shared label class also used on light cards) is emitted after Tailwind's utility layer in the compiled stylesheet, so on this dark surface it silently wins over an equal-specificity `text-white/NN` utility on the same element — this is exactly what caused the Dashboard's "Valor do Negócio"/"Lucro Embutido" titles to render as invisible navy-on-navy in an earlier pass. If a shared label class must be reused here, add a scoped override (`.card-dark-gradient .that-class { color: ... }`), never assume the inline utility wins.
+
+**Two separate dark-surface systems exist, deliberately — do not merge them.** `.card-dark-gradient`'s navy gradient (this section) and `AuthView`/`AppLoadingScreen`'s near-black full-screen background (`#00020F`/`#0d0806`) are two unrelated dark treatments, each internally consistent and each independently verified for contrast. A new dark surface should pick one of these two existing systems rather than inventing a third.
+
 ---
 
 ## Forms & inputs
