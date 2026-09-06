@@ -12,6 +12,77 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** SuperAdmin Audit Center Action-Type Allowlist Correction
+— **implemented, reviewed, tested, typechecked, and pushed to `main`
+at `9be8f9d`.** **Nothing mid-flight; working tree clean.**
+
+**Full governance chain executed this session, gate by gate, each
+producing its own artifact under `docs/engineering/`:**
+`SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
+(broad SuperAdmin audit) →
+`SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_INVESTIGATION.md` (focused,
+CONFIRMED IMPLEMENTATION DEFECT) →
+`SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_IMPLEMENTATION_PLAN.md`
+(ACCEPTED, Product Architect Acceptance recorded in-document,
+SABUSHIMIKE MASCENI, 2026-09-06) →
+`SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_IMPLEMENTATION_PLAN_GOVERNANCE_REVIEW.md`
+(zero corrections required) →
+`SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_IMPLEMENTATION_AUTHORIZATION.md`
+(AUTHORIZED) → implementation →
+`SUPERADMIN_AUDIT_CENTER_ACTION_TYPE_IMPLEMENTATION_REVIEW.md`
+(independent post-implementation verification, verdict CONFORMS —
+READY FOR COMMIT).
+
+**What shipped:** four already-authorized `platform_audit_log` action
+types (`initial_stock_recovery.authorized`/`.consumed`,
+`business_worth_recovery.authorized`/`.expired` — from BDR-0016/
+POL-0009 and Business Worth Evolution Increments 8–9) were correctly
+written but absent from the Audit Center's two action-type allowlists
+(`server/auditLogQuery.ts`'s `KNOWN_ACTION_TYPES` and
+`apps/superadmin/src/lib/superadminApi.ts`'s own duplicate), making
+them unfilterable in the SuperAdmin UI. Root cause, confirmed via git
+history: three independently-governed commits each correctly added a
+new action type without updating Phase D's own allowlist. Fixed by
+appending the four strings to both allowlists (kept deliberately
+duplicated, not consolidated into `packages/shared-types`, per the
+accepted plan's explicit scope boundary) and adding four
+`ACTION_LABELS` entries to `AuditTrail.tsx`, reusing terminology
+already live in `BusinessDetail.tsx`.
+
+**Explicitly out of scope, confirmed untouched throughout:**
+`targetStockCountId`/`authorizationId` response-shape expansion (a
+separate, already-schema-governed but not-yet-curated field pair,
+named but deliberately not pursued this session), any audit producer
+or write-path behavior, `firestore.rules`/indexes, SuperAdmin
+authorization, tenant isolation, retention policy, and shared-type
+consolidation.
+
+**Tests:** `tests/superadmin-audit-log-query.test.ts` extended
+additively (zero existing lines edited/removed — a new, separate
+`RECOVERY_FIXTURES` array was used rather than appending to the
+existing `FIXTURES` array, which several tests assert an exact count
+against) with 7 new tests. New file
+`tests/superadmin-audit-log-ui.test.ts` (12 tests), mirroring the
+established `superadmin-business-directory-ui.test.ts` source-scan
+convention — proves both `KNOWN_ACTION_TYPES` copies stay in sync
+(the exact failure mode the investigation found), and that the
+response-shape/authorization boundaries are unchanged.
+
+**Verified this session:** `npx tsc --noEmit -p apps/superadmin`
+clean; `npx tsc --noEmit -p tsconfig.json` shows the same 15
+pre-existing, unrelated errors confirmed byte-identical against a
+fresh `git stash` baseline; 173/173 across every directly-related
+SuperAdmin test file; `npm run test:all` clean; full diff/scope audit
+confirms only the five authorized files changed.
+
+**If the next session's task is something else entirely:** verify
+`docs/specs/README.md` and `git log` directly — the section below
+(the prior "Right now," Periodic Contagem Shared Live Data / Decisions
+44–56) is now historical context only, kept for continuity, not
+current status.
+
+## Prior status — SuperAdmin Panel Investigation / Audit Center Correction predecessor (superseded above, kept for continuity)
+
 **Status:** Product Identity Existing/New Resolution (Checkpoints A/B/C)
 — **implemented, tested, typechecked, built, and pushed to `main` at
 `0f479f2`.** **Nothing mid-flight; working tree clean.**
@@ -101,6 +172,7 @@ wanted, but it is not a gap in the governing behavioral guarantee.
 prior "Right now," Periodic Contagem Shared Live Data / Decisions
 44–56) is now historical context only, kept for continuity, not
 current status.
+
 
 ## Prior status — Periodic Contagem Shared Live Data (Decisions 44–56) (superseded above, kept for continuity)
 
