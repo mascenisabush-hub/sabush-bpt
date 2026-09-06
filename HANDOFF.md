@@ -12,6 +12,98 @@ here. This file is short-term memory only.
 
 ## Right now
 
+**Status:** Product Identity Existing/New Resolution (Checkpoints A/B/C)
+— **implemented, tested, typechecked, built, and pushed to `main` at
+`0f479f2`.** **Nothing mid-flight; working tree clean.**
+
+**Governing chain:** Recognition/Cost-Selling-Unit architecture
+decisions → Specification Amendment (§4a/§7a) → Rule 8 → Implementation
+Plan (`docs/engineering/product-identity-existing-new-resolution-implementation-plan.md`,
+ACCEPTED) → Implementation Plan Governance Review (PASSED) → Product
+Architect Acceptance → **Implementation Authorization**
+(`docs/engineering/product-identity-existing-new-resolution-implementation-authorization.md`,
+AUTHORIZED, SABUSHIMIKE MASCENI, 2026-09-06) → implementation
+(this session).
+
+**What shipped:**
+
+- **Checkpoint A — Add Stock / Smart Stock Entry** (`AddStockView.tsx`,
+  `AppContext.tsx` `addMultipleStockBatches`): new `identityConfirmedNew`
+  row signal, set only by explicit owner action — the existing "create
+  new product" dropdown option now has real teeth, plus a new
+  standalone always-visible banner for when the dropdown was never
+  opened. `handleSubmit` re-checks every row; `addMultipleStockBatches`
+  independently re-verifies via `AddStockParams.confirmedNewProduct`
+  before ever creating a Product.
+- **Checkpoint B — `addStockBatch`**: defensive safety-boundary only
+  (no live caller exists in the codebase; no new UI built for it).
+- **Checkpoint C — Periodic Contagem** (`PeriodicStockCountView.tsx`,
+  `AppContext.tsx` `recordStockCount`): new `manualIdentityConfirmedNew`
+  component-level state (mirrors the existing `newProductInfo`
+  pattern — not a `StockCountWorkingRow` field); new blocking
+  resolution panel reusing `findSimilarProducts` strictly as candidate
+  generation (never auto-selects, never assigns a `productId`);
+  `NewProductInfoPanel` now only renders after explicit New
+  confirmation. `handleConfirmSave` re-checks every counted item,
+  scoped to `type !== 'initial'` — Initial Stock is untouched.
+  `recordStockCount` independently re-verifies via
+  `RecordStockCountItemInput.confirmedNewProduct`.
+
+**Central invariant enforced at every write path, independently of the
+UI:** an unresolved product identity can never silently create a
+Product — only explicit owner-confirmed New, or resolution to a
+specific Existing Product, may proceed.
+
+**Regression-safe (verified, not assumed):** automatic recognition,
+Supplier-Wording in Add Stock, Product Memory retrieval, B2 Reading 2,
+Concept C, and Business Worth are all unchanged. Supplier-Wording
+Recognition remains excluded from Contagem. No schema change, no
+`firestore.rules` change, no new Firestore query. `confirmedNewProduct`/
+`identityConfirmedNew`/`manualIdentityConfirmedNew` are all confirmed
+transient — checked directly against every `newProd`/`countItems`
+Firestore-write literal and against `workingRowToDraftItem`/
+`draftItemToWorkingRow`'s own closed type signatures (neither function's
+parameter nor return type has anywhere to carry the new field) — none
+of the three can reach a persisted document or a saved draft.
+
+**New test coverage:** `tests/product-identity-existing-new-resolution.test.ts`
+(31 tests, mapped 1:1 to the Implementation Authorization's §5 binding
+acceptance table, rows A–J). Also widened three pre-existing
+fixed-window source-scan test assertions
+(`business-worth-correction-recovery-ui.test.ts`,
+`periodic-contagem-shared-live-data-decisions-44-56.test.ts`,
+`periodic-stock-existing-product-summary.test.ts`) whose scanned
+function/render bodies legitimately grew — same "window widened X->Y"
+precedent already established in those files' own prior comments; no
+assertion content changed. Confirmed via `git stash` diffing against
+baseline that every one of these three, and every other failure seen
+across the full ~160-file suite, was either pre-existing (byte-identical
+failure count/name on baseline) or this sandbox's lack of Firestore-
+emulator network access — zero new regressions.
+
+**Verified this session:** `npx tsc --noEmit -p apps/tenant` clean
+(only the pre-existing, unrelated `reportExport.ts` URL/string error,
+confirmed present on baseline too); `npm run test:all` clean; `npm run
+build` succeeds (only pre-existing CSS/chunk-size/dynamic-import
+warnings).
+
+**Known, explicitly-flagged deferral (not silently resolved):**
+`receiptSequencing.ts`'s per-row queue-blocking (Add Stock's
+one-at-a-time unresolved-row display) was NOT extended to the new
+identity-unresolved state — outside the authorized file list (plan
+§6) and not required for correctness, since the always-visible banner
++ `handleSubmit`'s defensive block already fully satisfy the
+invariant. A future session could extend it as a UX polish pass if
+wanted, but it is not a gap in the governing behavioral guarantee.
+
+**If the next session's task is something else entirely:** verify
+`docs/specs/README.md` and `git log` directly — the section below (the
+prior "Right now," Periodic Contagem Shared Live Data / Decisions
+44–56) is now historical context only, kept for continuity, not
+current status.
+
+## Prior status — Periodic Contagem Shared Live Data (Decisions 44–56) (superseded above, kept for continuity)
+
 **Status:** Periodic Contagem Shared Live Data (Decisions 44–56 +
 Finding K) — Areas A–G of the Implementation Plan are **implemented,
 tested (module-level, `tsx --test`), typechecked, and pushed to
@@ -92,6 +184,7 @@ including this one.**
 **If the next session's task is something else entirely:** verify
 `docs/specs/README.md` and `git log` directly — this file drifts, as
 demonstrated by its own history below.
+
 
 ## Prior status — SuperAdmin V1 (superseded above, kept for continuity)
 
