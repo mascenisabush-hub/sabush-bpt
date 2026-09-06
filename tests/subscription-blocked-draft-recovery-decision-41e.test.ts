@@ -118,11 +118,17 @@ describe('PeriodicStockCountView.tsx — Decision 41E blocked render gate (§4/�
     assert.doesNotMatch(block, /<SubscriptionBlockedNotice/);
   });
 
-  it('test 12 — passes onExportPdf, reusing the SAME exportReportPdf helper the rest of this file already uses (no new export architecture)', () => {
+  it('test 12 — passes onExportPdf, reusing the SAME generateReportPdfPreview helper the rest of this file already uses (no new export architecture)', () => {
+    // [Owner-requested — preview before download, mechanical
+    // regression fix] Updated from exportReportPdf (direct download)
+    // to generateReportPdfPreview (opens PdfPreviewModal first) — both
+    // exported by the SAME reportExport.ts module, sharing the
+    // identical buildReportPdfDocument builder internally, so this
+    // remains "no new export architecture."
     const idx = periodicSrc.indexOf("if (periodicStockDraftListenerState === 'draft-exists' && periodicStockDraft) {");
     const nextGuardIdx = periodicSrc.indexOf("// 'confirmed-no-draft' (or the defensive draft-exists-but-null");
     const block = periodicSrc.slice(idx, nextGuardIdx);
-    assert.match(block, /exportReportPdf\(/);
+    assert.match(block, /generateReportPdfPreview\(/);
     assert.match(block, /onExportPdf=\{handleExportBlockedDraftPdf\}/);
   });
 
@@ -390,11 +396,18 @@ describe('Decision 41E §19 — THE core zero-write proof: viewing/recovering/ex
     assert.doesNotMatch(stripLineComments(reportExportSrc), /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(|writeBatch\(/);
   });
 
-  it("PeriodicStockCountView's blocked-branch export adapter (handleExportBlockedDraftPdf) calls ONLY exportReportPdf — reading, never writing, periodicStockDraft", () => {
+  it("PeriodicStockCountView's blocked-branch export adapter (handleExportBlockedDraftPdf) calls ONLY generateReportPdfPreview — reading, never writing, periodicStockDraft", () => {
+    // [Owner-requested — preview before download, mechanical
+    // regression fix] Same update as test 12 above — the zero-write
+    // guarantee this test protects is unaffected either way:
+    // generateReportPdfPreview performs no Firestore write, exactly
+    // like exportReportPdf never did (both share the same
+    // buildReportPdfDocument builder, asserted zero-write two tests
+    // above).
     const idx = periodicSrc.indexOf('const handleExportBlockedDraftPdf = () => {');
     const body = extractFunctionBody(periodicSrc, 'const handleExportBlockedDraftPdf = () => {');
     assert.notEqual(idx, -1);
-    assert.match(body, /exportReportPdf\(/);
+    assert.match(body, /generateReportPdfPreview\(/);
     assert.doesNotMatch(stripLineComments(body), /setDoc\(|updateDoc\(|addDoc\(|deleteDoc\(|savePeriodicStockDraft|flushPeriodicStockDraftRows/);
   });
 

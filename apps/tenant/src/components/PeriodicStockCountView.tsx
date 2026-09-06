@@ -51,7 +51,8 @@ import { buildProductCostBasisMap, type ProductCostBasis } from '../lib/fr67Cost
 // Owner actually clicks a download button. No new export logic is
 // introduced; this file only supplies the data (savedTally, savedTotal,
 // savedSellingTotal) and calls the existing, already-tested engine.
-import { exportReportPdf, exportReportExcel } from './reports/shared/reportExport';
+import { exportReportExcel, generateReportPdfPreview, type ReportPdfPreview } from './reports/shared/reportExport';
+import { PdfPreviewModal } from './reports/shared/PdfPreviewModal';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { ReadOnlyDraftRecovery } from './ReadOnlyDraftRecovery';
 import {
@@ -1704,6 +1705,28 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // shared `error` state is never rendered on this subscription
   // -blocked branch at all.
   const [blockedDraftPdfError, setBlockedDraftPdfError] = useState<string | null>(null);
+  // [Owner-requested — preview before download] One shared piece of
+  // state for all four Stock Count PDF export points — only one
+  // preview can meaningfully be open at a time, regardless of which
+  // button triggered it. `revoke` MUST be called (see
+  // handleClosePdfPreview, below) whenever this is cleared, or the
+  // underlying blob URL leaks for the rest of the session.
+  const [pdfPreview, setPdfPreview] = useState<(ReportPdfPreview & { title: string }) | null>(null);
+  // [Owner-requested — preview before download, unmount safety] If the
+  // operator navigates away from this screen entirely while a preview
+  // is open (never clicking the modal's own close button), nothing
+  // would otherwise ever call revoke() and the blob URL would leak for
+  // the rest of the session. A ref mirrors the current value so this
+  // cleanup — registered once, on mount/unmount only — always reads
+  // whatever pdfPreview holds at the moment of unmount, never a stale
+  // snapshot from whichever render first registered the effect.
+  const pdfPreviewRef = useRef<typeof pdfPreview>(null);
+  pdfPreviewRef.current = pdfPreview;
+  useEffect(() => {
+    return () => {
+      pdfPreviewRef.current?.revoke();
+    };
+  }, []);
 
   // [Bug fix — Owner-reported, real client complaint] Correction mode
   // previously opened a BLANK Contagem screen (every row auto-populated
@@ -5675,18 +5698,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const handleDownloadPreConfirmPdf = () => {
     const content = buildPreConfirmExportContent();
-    // [Bug fix — silent PDF download failure] exportReportPdf is async
-    // (dynamically imports jspdf/jspdf-autotable before building the
-    // document); every call site here previously fired it with no
-    // await and no .catch(), so a failed import, a transient network
-    // issue, or any error while building the document rejected into
-    // the void — the button appeared to simply do nothing, with no
-    // visible error at all. Every call site below now surfaces a real
-    // failure via the same setError(...) state this screen already
-    // uses everywhere else.
-    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables).catch(
-      (err: any) => setError(err?.message || 'Erro ao gerar o PDF da lista de contagem.')
-    );
+    // [Owner-requested — preview before download] Generates the same
+    // document exportReportPdf would, but opens it in PdfPreviewModal
+    // first rather than saving immediately — the operator reviews
+    // exactly what will be downloaded, then confirms via the modal's
+    // own "Descarregar" button. Failure handling unchanged from the
+    // prior bug fix — still surfaces via the shared setError(...) state.
+    generateReportPdfPreview(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables)
+      .then((preview) => setPdfPreview({ ...preview, title: content.reportTitle }))
+      .catch((err: any) => setError(err?.message || 'Erro ao gerar o PDF da lista de contagem.'));
   };
 
   const handleDownloadReceiptPdf = () => {
@@ -5696,9 +5716,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
     const content = buildReceiptContent();
     if (!content) return;
-    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables).catch(
-      (err: any) => setError(err?.message || 'Erro ao gerar o PDF do comprovativo.')
-    );
+    generateReportPdfPreview(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables)
+      .then((preview) => setPdfPreview({ ...preview, title: content.reportTitle }))
+      .catch((err: any) => setError(err?.message || 'Erro ao gerar o PDF do comprovativo.'));
+  };
+
+  // [Owner-requested — preview before download] Shared close handler
+  // for all four Stock Count PDF preview points — revokes the blob URL
+  // (the modal itself never does; it doesn't own this lifecycle) before
+  // clearing the state that renders the modal.
+  const handleClosePdfPreview = () => {
+    pdfPreview?.revoke();
+    setPdfPreview(null);
   };
 
   const handleDownloadReceiptExcel = () => {
@@ -5767,9 +5796,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (!viewingCount) return;
     setHistoricalPdfError(null);
     const content = buildHistoricalExportContent(viewingCount);
-    exportReportPdf(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables).catch(
-      (err: any) => setHistoricalPdfError(err?.message || 'Erro ao gerar o PDF desta contagem.')
-    );
+    generateReportPdfPreview(content.reportTitle, business?.name || 'Meu Negócio', content.periodLabel, content.kpis, content.tables)
+      .then((preview) => setPdfPreview({ ...preview, title: content.reportTitle }))
+      .catch((err: any) => setHistoricalPdfError(err?.message || 'Erro ao gerar o PDF desta contagem.'));
   };
 
   if (savedMessage) {
@@ -6313,9 +6342,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             ]),
           },
         ];
-        exportReportPdf(reportTitle, business?.name || 'Meu Negócio', periodLabel, kpis, tables).catch(
-          (err: any) => setBlockedDraftPdfError(err?.message || 'Erro ao gerar o PDF deste rascunho.')
-        );
+        generateReportPdfPreview(reportTitle, business?.name || 'Meu Negócio', periodLabel, kpis, tables)
+          .then((preview) => setPdfPreview({ ...preview, title: reportTitle }))
+          .catch((err: any) => setBlockedDraftPdfError(err?.message || 'Erro ao gerar o PDF deste rascunho.'));
       };
       return (
         <ReadOnlyDraftRecovery
@@ -8687,6 +8716,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
           </div>
         </div>
+      )}
+      {/* [Owner-requested — preview before download] Rendered AFTER
+          (later in the DOM than) the historical modal above, so it
+          stacks visually on top on the rare occasion both happen to be
+          open (exporting from within the historical modal) — both are
+          fixed inset-0 z-50 overlays, and DOM order decides the
+          stacking order between two elements sharing the same z-index. */}
+      {pdfPreview && (
+        <PdfPreviewModal
+          title={pdfPreview.title}
+          blobUrl={pdfPreview.blobUrl}
+          onDownload={pdfPreview.download}
+          onClose={handleClosePdfPreview}
+        />
       )}
     </div>
   );

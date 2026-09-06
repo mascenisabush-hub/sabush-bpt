@@ -174,13 +174,19 @@ describe('D — Historical PDF export reuses the existing exportReportPdf helper
     assert.match(body, /label: 'Valor de Venda Total', value: formatCurrency\(count\.totalSellingValue, currencySymbol\)/);
   });
 
-  it('handleDownloadHistoricalPdf calls the EXISTING exportReportPdf — the same function the receipt and pre-confirmation exports already call — never a new PDF library or export architecture', () => {
+  it('handleDownloadHistoricalPdf calls the EXISTING generateReportPdfPreview — the same function the receipt and pre-confirmation exports now call — never a new PDF library or export architecture', () => {
+    // [Owner-requested — preview before download] Updated from
+    // exportReportPdf (direct download) to generateReportPdfPreview
+    // (opens PdfPreviewModal first) — both are exported by the SAME
+    // reportExport.ts module and share the identical
+    // buildReportPdfDocument builder internally, so this remains "one
+    // shared export architecture," not a new one.
     const handlerBody = extractFunctionBody(periodicSrc, 'const handleDownloadHistoricalPdf = () => {');
-    assert.match(handlerBody, /exportReportPdf\(content\.reportTitle, business\?\.name \|\| 'Meu Negócio', content\.periodLabel, content\.kpis, content\.tables\)/);
+    assert.match(handlerBody, /generateReportPdfPreview\(content\.reportTitle, business\?\.name \|\| 'Meu Negócio', content\.periodLabel, content\.kpis, content\.tables\)/);
     // Confirms this is the SAME call signature already used by the two
     // sibling adapters, not a new/different one.
-    const allExportReportPdfCalls = periodicSrc.match(/exportReportPdf\(content\.reportTitle, business\?\.name \|\| 'Meu Negócio', content\.periodLabel, content\.kpis, content\.tables\)/g) ?? [];
-    assert.ok(allExportReportPdfCalls.length >= 2, 'Expected the historical adapter to reuse the exact same call shape as the pre-existing receipt/pre-confirmation adapters.');
+    const allGeneratePreviewCalls = periodicSrc.match(/generateReportPdfPreview\(content\.reportTitle, business\?\.name \|\| 'Meu Negócio', content\.periodLabel, content\.kpis, content\.tables\)/g) ?? [];
+    assert.ok(allGeneratePreviewCalls.length >= 2, 'Expected the historical adapter to reuse the exact same call shape as the pre-existing receipt/pre-confirmation adapters.');
   });
 
   it('handleDownloadHistoricalPdf is a no-op when no count is being viewed (defensive guard, matching this file\'s own established "return if !X" convention)', () => {
@@ -194,7 +200,7 @@ describe('D — Historical PDF export reuses the existing exportReportPdf helper
 
   it('no new PDF library was imported for this feature — jspdf/jspdf-autotable usage is confined to the existing reportExport.ts module, unchanged', () => {
     assert.doesNotMatch(periodicSrc, /from 'jspdf'|from 'jspdf-autotable'/);
-    assert.match(periodicSrc, /import \{ exportReportPdf, exportReportExcel \} from '\.\/reports\/shared\/reportExport';/);
+    assert.match(periodicSrc, /import \{ exportReportExcel, generateReportPdfPreview, type ReportPdfPreview \} from '\.\/reports\/shared\/reportExport';/);
   });
 });
 
@@ -276,6 +282,112 @@ describe('D2 — Bug fix: silent PDF download failure now surfaces a visible err
         'a PDF-export failure handler must never touch persistence — only report the error'
       );
     }
+  });
+});
+
+describe('D3 — Owner-requested: preview before download, for all four PDF export points', () => {
+  const previewSrc = readFileSync(
+    new URL('../apps/tenant/src/components/reports/shared/reportExport.ts', import.meta.url),
+    'utf-8'
+  );
+  const modalSrc = readFileSync(
+    new URL('../apps/tenant/src/components/reports/shared/PdfPreviewModal.tsx', import.meta.url),
+    'utf-8'
+  );
+
+  it('exportReportPdf (still used by every OTHER report app-wide) and generateReportPdfPreview both call the SAME internal buildReportPdfDocument — a preview and its resulting download can never render different content', () => {
+    assert.match(previewSrc, /async function buildReportPdfDocument\(/);
+    const exportBody = previewSrc.slice(
+      previewSrc.indexOf('export async function exportReportPdf('),
+      previewSrc.indexOf('export async function exportReportPdf(') + 400
+    );
+    assert.match(exportBody, /buildReportPdfDocument\(reportTitle, businessName, periodLabel, kpis, tables\)/);
+    const previewBody = previewSrc.slice(
+      previewSrc.indexOf('export async function generateReportPdfPreview('),
+      previewSrc.indexOf('export async function generateReportPdfPreview(') + 500
+    );
+    assert.match(previewBody, /buildReportPdfDocument\(reportTitle, businessName, periodLabel, kpis, tables\)/);
+  });
+
+  it('generateReportPdfPreview never calls doc.save() itself — only the returned download() does, on demand, so nothing downloads merely by opening the preview', () => {
+    const previewBody = previewSrc.slice(
+      previewSrc.indexOf('export async function generateReportPdfPreview('),
+      previewSrc.indexOf('export async function generateReportPdfPreview(') + 600
+    );
+    assert.doesNotMatch(previewBody.split('download: () =>')[0], /doc\.save\(/, 'must not save before returning — only the download() callback may');
+    assert.match(previewBody, /download: \(\) => doc\.save\(fileName\)/);
+  });
+
+  it('generateReportPdfPreview returns a real revoke() that calls URL.revokeObjectURL on the exact blob URL it produced', () => {
+    assert.match(previewSrc, /const blobUrl: string = doc\.output\('bloburl'\);/);
+    assert.match(previewSrc, /revoke: \(\) => URL\.revokeObjectURL\(blobUrl\)/);
+  });
+
+  it('every one of the four Stock Count PDF handlers now calls generateReportPdfPreview, never exportReportPdf directly — exportReportPdf is no longer imported into this file at all, since every call site here goes through the preview first', () => {
+    assert.doesNotMatch(periodicSrc, /import \{ exportReportPdf[,\s]/, 'exportReportPdf must no longer be imported — every Stock Count export now previews first');
+    for (const marker of [
+      'const handleDownloadPreConfirmPdf = () => {',
+      'const handleDownloadReceiptPdf = () => {',
+      'const handleDownloadHistoricalPdf = () => {',
+    ]) {
+      const body = extractFunctionBody(periodicSrc, marker);
+      assert.match(body, /generateReportPdfPreview\(/, `${marker} must call generateReportPdfPreview`);
+      assert.doesNotMatch(body, /exportReportPdf\(/, `${marker} must not call exportReportPdf directly`);
+    }
+    const blockedBody = extractFunctionBody(periodicSrc, 'const handleExportBlockedDraftPdf = () => {');
+    assert.match(blockedBody, /generateReportPdfPreview\(/);
+  });
+
+  it('a successful preview sets pdfPreview state carrying blobUrl/fileName/download/revoke plus a title, for all four call sites', () => {
+    const occurrences = periodicSrc.match(/setPdfPreview\(\{ \.\.\.preview, title: \w+(\.\w+)? \}\)/g) ?? [];
+    assert.ok(occurrences.length >= 4, `expected all four handlers to set pdfPreview on success, found ${occurrences.length}`);
+  });
+
+  it('closing the preview (handleClosePdfPreview) always revokes the blob URL before clearing state — never leaves it dangling', () => {
+    const body = extractFunctionBody(periodicSrc, 'const handleClosePdfPreview = () => {');
+    const revokeIdx = body.indexOf('pdfPreview?.revoke();');
+    const clearIdx = body.indexOf('setPdfPreview(null);');
+    assert.notEqual(revokeIdx, -1);
+    assert.notEqual(clearIdx, -1);
+    assert.ok(revokeIdx < clearIdx, 'must revoke before clearing the state that renders the modal');
+  });
+
+  it('an unmount-safety effect also revokes the blob URL if the operator navigates away without closing the preview — registered once (empty deps), reading the current value via a ref, never a stale closure', () => {
+    const marker = 'const pdfPreviewRef = useRef<typeof pdfPreview>(null);';
+    const idx = periodicSrc.indexOf(marker);
+    assert.notEqual(idx, -1, 'could not locate the unmount-safety ref');
+    const body = periodicSrc.slice(idx, idx + 400);
+    assert.match(body, /pdfPreviewRef\.current = pdfPreview;/);
+    assert.match(body, /return \(\) => \{\s*\n\s*pdfPreviewRef\.current\?\.revoke\(\);\s*\n\s*\};\s*\n\s*\}, \[\]\);/);
+  });
+
+  it('PdfPreviewModal is a purely presentational component — no PDF-generation, no Firestore access, no useApp() call of its own', () => {
+    // Structural guarantee, not a text search: if useApp is never
+    // imported, it cannot be called, regardless of what any comment
+    // says (this file's own header comment mentions "useApp()" by name
+    // while documenting its absence, which a bare text search for that
+    // token would misread as a violation).
+    assert.doesNotMatch(modalSrc, /import\s*\{[^}]*useApp[^}]*\}\s*from/);
+    assert.doesNotMatch(modalSrc, /from 'firebase\/firestore'|collection\(|doc\(|onSnapshot\(|import\('jspdf'\)|buildReportPdfDocument\(/);
+    assert.match(modalSrc, /export interface PdfPreviewModalProps \{/);
+    assert.match(modalSrc, /blobUrl: string;/);
+  });
+
+  it('PdfPreviewModal renders the blob URL directly in an <iframe> — the preview IS the already-built document, never a second independently-rendered representation of it', () => {
+    assert.match(modalSrc, /<iframe src=\{blobUrl\} title=\{title\} className="w-full h-full border-0" \/>/);
+  });
+
+  it('PdfPreviewModal\'s "Descarregar" button calls onDownload and does NOT itself close the modal — closing is a separate, explicit action', () => {
+    const buttonBlock = modalSrc.slice(modalSrc.indexOf('onClick={onDownload}'), modalSrc.indexOf('onClick={onDownload}') + 200);
+    assert.doesNotMatch(buttonBlock, /onClose/, 'the download button must not also close the modal');
+  });
+
+  it('the preview modal is rendered AFTER (later in the JSX than) the historical modal, so it stacks visually on top if both happen to be open at once — both share the same z-50 overlay pattern', () => {
+    const historicalModalIdx = periodicSrc.indexOf('{viewingCount && (');
+    const previewModalIdx = periodicSrc.indexOf('{pdfPreview && (');
+    assert.notEqual(historicalModalIdx, -1);
+    assert.notEqual(previewModalIdx, -1);
+    assert.ok(historicalModalIdx < previewModalIdx, 'the preview modal must appear later in the JSX to stack on top');
   });
 });
 

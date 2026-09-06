@@ -16,12 +16,17 @@ export interface ExportTable {
 }
 
 /**
- * Exports any report to PDF: Header, KPI summary, then one table per
- * section. jsPDF/autotable are loaded dynamically — same pattern as
- * utils/batchPdfExport.ts — so this stays out of the main bundle until
- * someone actually exports a report.
+ * [Owner-requested — preview before download] Builds the exact same
+ * jsPDF document exportReportPdf below builds — same header, same KPI
+ * block, same per-table rendering — but returns the constructed
+ * document and its intended filename WITHOUT saving it. Both
+ * exportReportPdf (direct download, unchanged) and
+ * generateReportPdfPreview (preview-first, below) call this one
+ * shared builder, so a preview and its resulting download can never
+ * drift apart — there is exactly one place this document's content is
+ * ever assembled.
  */
-export async function exportReportPdf(
+async function buildReportPdfDocument(
   reportTitle: string,
   businessName: string,
   periodLabel: string,
@@ -107,7 +112,62 @@ export async function exportReportPdf(
   });
 
   const fileSlug = reportTitle.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '');
-  doc.save(`${fileSlug}-${formatDate(new Date().toISOString().slice(0, 10))}.pdf`.replace(/\s/g, '-'));
+  const fileName = `${fileSlug}-${formatDate(new Date().toISOString().slice(0, 10))}.pdf`.replace(/\s/g, '-');
+
+  return { doc, fileName };
+}
+
+/**
+ * Exports any report to PDF: Header, KPI summary, then one table per
+ * section. jsPDF/autotable are loaded dynamically — same pattern as
+ * utils/batchPdfExport.ts — so this stays out of the main bundle until
+ * someone actually exports a report.
+ */
+export async function exportReportPdf(
+  reportTitle: string,
+  businessName: string,
+  periodLabel: string,
+  kpis: ExportKpi[],
+  tables: ExportTable[]
+) {
+  const { doc, fileName } = await buildReportPdfDocument(reportTitle, businessName, periodLabel, kpis, tables);
+  doc.save(fileName);
+}
+
+/**
+ * [Owner-requested — preview before download] Builds the SAME PDF
+ * exportReportPdf would, via the shared builder above, but returns a
+ * blob URL to render inline (e.g. in an <iframe>) instead of
+ * immediately downloading it. `download()` triggers the actual save,
+ * on demand, using the identical already-built document — never a
+ * second, independently-rebuilt PDF that could drift from what was
+ * previewed. `revoke()` MUST be called once the preview is no longer
+ * shown (e.g. on modal close) to release the blob URL — the caller
+ * owns this lifecycle, since only it knows when the preview UI is
+ * actually done with it.
+ */
+export interface ReportPdfPreview {
+  blobUrl: string;
+  fileName: string;
+  download: () => void;
+  revoke: () => void;
+}
+
+export async function generateReportPdfPreview(
+  reportTitle: string,
+  businessName: string,
+  periodLabel: string,
+  kpis: ExportKpi[],
+  tables: ExportTable[]
+): Promise<ReportPdfPreview> {
+  const { doc, fileName } = await buildReportPdfDocument(reportTitle, businessName, periodLabel, kpis, tables);
+  const blobUrl: string = doc.output('bloburl');
+  return {
+    blobUrl,
+    fileName,
+    download: () => doc.save(fileName),
+    revoke: () => URL.revokeObjectURL(blobUrl),
+  };
 }
 
 /**
