@@ -7,6 +7,15 @@ import { StockCount, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem,
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
+// [Product Identity Existing/New Resolution — Implementation
+// Authorization, Checkpoint C] Reused, UNMODIFIED, exactly as
+// AddStockView.tsx already uses it — supplier-agnostic, operates only
+// against this business's own in-memory `products` array. Strictly
+// candidate generation for the blocking resolution control below; it
+// never assigns a productId on its own. Supplier-Wording Recognition
+// itself (supplierWordingMatching.ts/supplierWordingRecognition.ts)
+// remains explicitly OUT of scope for Contagem — not imported here.
+import { findSimilarProducts } from '../lib/productNameSimilarity';
 // [Manual data-entry error investigation, Finding 3] Shared with Add
 // Stock (AddStockView.tsx) — see that utility's own header comment for
 // why this is a shared utility, not duplicated per screen.
@@ -2564,6 +2573,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[]; sellingUnit?: string }
     >
   >({});
+
+  // [Product Identity Existing/New Resolution — Implementation
+  // Authorization, Checkpoint C] Explicit, owner-confirmed signal that
+  // a manual row's typed product name — which does not exactly match
+  // any existing catalog product (isGenuinelyNewProductName) — was
+  // deliberately confirmed as a NEW product, after the resolution
+  // panel below offered any plausible existing candidates
+  // (findSimilarProducts) and the owner explicitly declined all of
+  // them. Keyed by productKeyFor(name), same convention as
+  // newProductInfo above — deliberately component state, not a
+  // StockCountWorkingRow field (mirrors why newProductInfo itself was
+  // moved off the row type: this is genuinely product-level identity
+  // information, not something a specific row should own or that row
+  // deletion should be able to silently destroy). Never itself
+  // persisted to Firestore — it only unblocks handleConfirmSave and is
+  // forwarded to recordStockCount as RecordStockCountItemInput.
+  // confirmedNewProduct, which independently re-verifies it before
+  // ever creating a Product. Keyed by CURRENT product name at every
+  // read site below, exactly like newProductInfo's own documented
+  // convention (handleRenameManualGroup's comment, above) — a rename
+  // simply changes which key is read/written next; the OLD key
+  // becomes an orphaned, never-read entry, never actively migrated or
+  // cleared. Renaming to a materially different name therefore always
+  // re-requires resolution under its own (different) key — a stale
+  // confirmation can never carry over to a different typed name.
+  const [manualIdentityConfirmedNew, setManualIdentityConfirmedNew] = useState<Set<string>>(new Set());
 
   // [Decision 38 Amendment — Interruption-durability combined
   // mechanism (§5a); Implementation Authorization §2 item 6]
@@ -5284,6 +5319,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // `isOwner` only; touches no draft state, no autosave, no
     // persistence path.
     if (!isOwner) return;
+    // [Product Identity Existing/New Resolution — Implementation
+    // Authorization, Checkpoint C, Required Behavioral Guarantee 1]
+    // Defensive re-check at the actual confirmation point — never
+    // merely trusted from whatever the per-card resolution panel
+    // above showed. Any counted item whose product name still does
+    // not exactly match the catalog AND has not been explicitly
+    // confirmed New by the owner must never reach recordStockCount —
+    // that would silently create a Product for an identity the owner
+    // never actually resolved. Scoped to type !== 'initial' only —
+    // Initial Stock is explicitly out of this authorization's scope.
+    if (type !== 'initial') {
+      const unresolvedItem = pendingTally.countedItems.find(
+        (item) => isGenuinelyNewProductName(item.productName) && !manualIdentityConfirmedNew.has(productKeyFor(item.productName))
+      );
+      if (unresolvedItem) {
+        setError(`Confirme se "${unresolvedItem.productName}" é um produto existente ou um produto novo antes de continuar.`);
+        return;
+      }
+    }
     setIsSaving(true);
     setError(null);
     try {
@@ -5478,6 +5532,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // [Product Memory / UOM — Increment A, Checkpoint 2c]
           ...(unitRelationshipByProductName.has(item.productName.trim().toLowerCase())
             ? { unitRelationship: unitRelationshipByProductName.get(item.productName.trim().toLowerCase())! }
+            : {}),
+          // [Product Identity Existing/New Resolution — Checkpoint C]
+          // Only ever meaningful for an item that does NOT resolve to
+          // an existing product — recordStockCount's own safety
+          // boundary independently re-verifies this, never trusting
+          // the UI alone. Never set for Initial Stock (handleConfirmSave's
+          // own guard above only runs for type !== 'initial'; this
+          // still harmlessly reflects manualIdentityConfirmedNew's
+          // content either way, since recordStockCount itself never
+          // reads this field for type === 'initial').
+          ...(manualIdentityConfirmedNew.has(item.productName.trim().toLowerCase())
+            ? { confirmedNewProduct: true }
             : {}),
           // [Implementation Authorization §14 item 6 — Reference
           // Selling Configuration as the Default Path] Moved from a
@@ -7747,10 +7813,68 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           );
                         })()}
 
+                      {/* [Product Identity Existing/New Resolution —
+                          Implementation Authorization, Checkpoint C]
+                          Shown for a manual row whose typed name does
+                          not exactly match any catalog product
+                          (isNewProduct) and has not yet been explicitly
+                          resolved by the owner. findSimilarProducts is
+                          used STRICTLY as candidate generation — it
+                          never assigns a productId on its own; the
+                          owner must explicitly pick one candidate (which
+                          rewrites this group's name to that product's
+                          exact name, resolving it via the ordinary,
+                          unchanged exact-match path — no new productId
+                          field, no new query) or explicitly confirm New.
+                          Deliberately NOT Supplier-Wording Recognition
+                          (remains out of scope for Contagem) — this is
+                          the same supplier-agnostic mechanism Add Stock
+                          already uses for its own non-blocking "did you
+                          mean" suggestion, reused here as a BLOCKING
+                          resolution step instead. */}
+                      {isNewProduct && !manualIdentityConfirmedNew.has(productKeyFor(group.displayName)) && (
+                        (() => {
+                          const key = productKeyFor(group.displayName);
+                          const candidates = findSimilarProducts(group.displayName, products);
+                          return (
+                            <div className="bg-[#FFFBEA] border border-[#D4AF37]/40 rounded-xl px-3 py-2.5 space-y-2">
+                              <p className="text-[13px] font-bold text-[#0B1F3A]">Produto ainda não confirmado</p>
+                              <p className="text-[13px] text-[#8A6D1F] leading-snug">
+                                Este nome não corresponde exatamente a nenhum produto do catálogo. Escolha um produto já existente, ou confirme que é um produto novo.
+                              </p>
+                              {candidates.length > 0 && (
+                                <div className="flex flex-wrap gap-1.5">
+                                  {candidates.map((p) => (
+                                    <button
+                                      key={p.id}
+                                      type="button"
+                                      onClick={() => handleRenameManualGroup(key, p.name)}
+                                      className="text-[12.5px] font-semibold text-amber-900 bg-white border border-amber-300 rounded-lg px-2.5 py-1.5 hover:bg-amber-100 transition-colors duration-150"
+                                    >
+                                      {p.name}
+                                    </button>
+                                  ))}
+                                </div>
+                              )}
+                              <button
+                                type="button"
+                                onClick={() => setManualIdentityConfirmedNew((prev) => new Set(prev).add(key))}
+                                className="text-[12.5px] font-bold text-white bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 rounded-lg px-2.5 py-1.5 transition-colors duration-150"
+                              >
+                                {`Confirmar "${group.displayName}" como produto novo`}
+                              </button>
+                            </div>
+                          );
+                        })()
+                      )}
+
                       {/* [B.1; extended by B.2] Shown ONLY for a
-                          genuinely-new product, rendered once per CARD.
-                          Data lives in newProductInfo, keyed by name. */}
+                          genuinely-new product, ONLY once the owner has
+                          explicitly confirmed New identity above
+                          (Checkpoint C) — rendered once per CARD. Data
+                          lives in newProductInfo, keyed by name. */}
                       {isNewProduct &&
+                        manualIdentityConfirmedNew.has(productKeyFor(group.displayName)) &&
                         (() => {
                           const key = productKeyFor(group.displayName);
                           const info = newProductInfo[key] ?? { purchaseUnit: '', relationshipSteps: [], sellingUnit: '' };

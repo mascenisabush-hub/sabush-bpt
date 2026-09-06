@@ -411,6 +411,11 @@ export const fr: TranslationDict = {
     similarProduct: {
       warning: "Ce nom ne correspond exactement à aucun produit — pourrait-il s'agir de l'un de ceux-ci déjà existants ?",
     },
+    identityResolution: {
+      unresolvedNotice: "Ce produit n'a pas encore été confirmé. Choisissez un produit existant ci-dessus, ou confirmez qu'il s'agit d'un nouveau produit.",
+      confirmNewButton: 'Confirmer « {{name}} » comme nouveau produit',
+      unresolvedError: 'Ligne {{n}} : confirmez si « {{name}} » est un produit existant ou un nouveau produit avant de continuer.',
+    },
     createNew: '+ Créer un nouveau produit « {{name}} »',
     createNewShort: '+ Créer « {{name}} »',
     unitSuggestionsTitle: 'Suggestions d\u2019unités',

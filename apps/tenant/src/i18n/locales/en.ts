@@ -411,6 +411,11 @@ export const en: TranslationDict = {
     similarProduct: {
       warning: "This name doesn't exactly match any product — could it be one of these already-existing ones?",
     },
+    identityResolution: {
+      unresolvedNotice: "This product hasn't been confirmed yet. Pick an existing product above, or confirm it's a new product.",
+      confirmNewButton: 'Confirm "{{name}}" as a new product',
+      unresolvedError: 'Line {{n}}: confirm whether "{{name}}" is an existing product or a new product before continuing.',
+    },
     createNew: '+ Create new product "{{name}}"',
     createNewShort: '+ Create "{{name}}"',
     unitSuggestionsTitle: 'Unit suggestions',

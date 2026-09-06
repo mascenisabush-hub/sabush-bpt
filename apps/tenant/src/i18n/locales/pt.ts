@@ -432,6 +432,11 @@ export interface TranslationDict {
     similarProduct: {
       warning: string;
     };
+    identityResolution: {
+      unresolvedNotice: string;
+      confirmNewButton: string;
+      unresolvedError: string;
+    };
     createNew: string;
     createNewShort: string;
     unitSuggestionsTitle: string;
@@ -1586,6 +1591,11 @@ export const pt: TranslationDict = {
     maybeTag: 'Talvez',
     similarProduct: {
       warning: 'Este nome não corresponde exatamente a nenhum produto — pode ser um destes já existentes?',
+    },
+    identityResolution: {
+      unresolvedNotice: 'Este produto ainda não foi confirmado. Escolha um produto já existente acima, ou confirme que é um produto novo.',
+      confirmNewButton: 'Confirmar "{{name}}" como produto novo',
+      unresolvedError: 'Linha {{n}}: confirme se "{{name}}" é um produto existente ou um produto novo antes de continuar.',
     },
     createNew: '+ Criar novo produto "{{name}}"',
     createNewShort: '+ Criar "{{name}}"',

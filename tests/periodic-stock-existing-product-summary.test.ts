@@ -139,7 +139,13 @@ describe('PeriodicStockCountView.tsx — ExistingProductSummary is actually wire
     // sibling Mode A block (relationship.sellingUnit two-tier default)
     // pushed ExistingProductSummary's render call slightly further from
     // this anchor. No assertion content below changed.
-    const block = periodicSrc.slice(start, start + 10000);
+    // [Product Identity Existing/New Resolution — Checkpoint C] Widened
+    // again, 10000 -> 13500: this authorization's own blocking
+    // Existing/New resolution panel (findSimilarProducts candidates +
+    // explicit New confirmation) was inserted into this same manual-row
+    // card, immediately before NewProductInfoPanel, pushing the
+    // distance to 12919 chars. No assertion content below changed.
+    const block = periodicSrc.slice(start, start + 13500);
     assert.match(block, /\{isNewProduct &&/);
     assert.match(block, /\{!isNewProduct && cardIsFirstPortionOfMultiPortionGroup && \(\s*<ExistingProductSummary/);
     assert.match(block, /costBasis=\{costBasisByProductName\.get\(productKeyFor\(group\.displayName\)\)\}/);

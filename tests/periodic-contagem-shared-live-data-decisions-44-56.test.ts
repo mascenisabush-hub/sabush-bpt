@@ -694,7 +694,12 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
   it('handleConfirmSave — the finalization action itself — also returns early for a non-Owner, as defense-in-depth (not relying solely on handleRequestConfirmation upstream)', () => {
     const start = viewSource.indexOf('const handleConfirmSave = async () => {');
     assert.notEqual(start, -1, 'could not locate handleConfirmSave');
-    const body = viewSource.slice(start, start + 1600);
+    // [Product Identity Existing/New Resolution — Checkpoint C] Widened
+    // from 1600 to 2600: this authorization's own defensive re-check
+    // (identity resolution, scoped to type !== 'initial') sits between
+    // the Owner guard and setIsSaving(true), pushing the distance to
+    // 2334 chars.
+    const body = viewSource.slice(start, start + 2600);
     assert.match(body, /if \(!pendingTally\) return;/);
     assert.match(body, /if \(subscriptionBlocksNewRecords\) return;/);
     assert.match(body, /if \(!isOwner\) return;/);

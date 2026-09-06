@@ -217,6 +217,19 @@ interface AddStockParams {
   // the new Product (BDR-0012 §5.A Item 6's warn-not-block condition),
   // never a thrown error and never a partial/invalid write.
   unitRelationship?: UnitRelationship;
+  // [Product Identity Existing/New Resolution — Implementation
+  // Authorization, Checkpoints A/B] Explicit, owner-confirmed signal
+  // that this line item's productName was deliberately confirmed as a
+  // NEW product after automatic recognition could not resolve it to
+  // an existing one (AddStockView.tsx's identityConfirmedNew row
+  // field). This is the ONLY thing that may authorize the
+  // new-Product-creation branch below when no existing product
+  // matches by name — a safety boundary, not new business logic:
+  // automatic exact-match/reuse/candidate-confirmed recognition never
+  // needs this field at all (product is already found by name in
+  // those cases). Absent/false on any item whose identity was never
+  // actually unresolved.
+  confirmedNewProduct?: boolean;
 }
 
 interface AddQuebraParams {
@@ -273,6 +286,17 @@ interface RecordStockCountItemInput {
   // BusinessWorthSnapshotProductValuationLine.valuationMode. Never read
   // by any arithmetic in this function.
   valuationMode?: ContagemValuationMode;
+  // [Product Identity Existing/New Resolution — Implementation
+  // Authorization, Checkpoint C] Explicit, owner-confirmed signal
+  // that this line's productName was deliberately confirmed as a NEW
+  // product after the Contagem-specific resolution control
+  // (PeriodicStockCountView.tsx, reusing findSimilarProducts as
+  // candidate generation only) could not resolve it to an existing
+  // one. Same role as AddStockParams.confirmedNewProduct above — a
+  // safety boundary, never read for Initial Stock (type === 'initial'
+  // is explicitly out of this authorization's scope; see
+  // recordStockCount's own guard, below).
+  confirmedNewProduct?: boolean;
 }
 
 // [Feature — reconciliation signal reaching the Owner, Owner-requested]
@@ -3203,7 +3227,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice, previousRemainingQuantity, unitRelationship }: AddStockParams) => {
+  const addStockBatch = async ({ productName, dateEntered, quantity, unit, costPrice, sellingPrice, previousRemainingQuantity, unitRelationship, confirmedNewProduct }: AddStockParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
 
     const businessId = activeBusinessId;
@@ -3212,6 +3236,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     let product = products.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
     let productId = product?.id;
     let isNewProduct = false;
+
+    // [Product Identity Existing/New Resolution — Implementation
+    // Authorization, Checkpoint B] Defensive safety boundary only —
+    // this function has no live caller anywhere in the codebase today
+    // (confirmed by the governance review this authorization sits
+    // atop); no new resolution UI is built for it. Guards against a
+    // future/undiscovered caller silently creating a Product for an
+    // unresolved identity, mirroring addMultipleStockBatches'/
+    // recordStockCount's identical boundary below.
+    if (!product && !confirmedNewProduct) {
+      throw new Error(
+        `Unresolved product identity for "${trimmedName}": explicit Existing/New confirmation is required before this item can be saved.`
+      );
+    }
 
     // [Restock Observation Amendment v1.0] The most recent PRIOR batch
     // for this product (if any) is this restock's "previous cycle" —
@@ -3896,6 +3934,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       let product = tempProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
       let productId = product?.id;
+
+      // [Product Identity Existing/New Resolution — Implementation
+      // Authorization, Checkpoint A, Required Behavioral Guarantee 1]
+      // Safety boundary, re-checked HERE at the actual write path —
+      // never merely trusted from whatever AddStockView.tsx's own UI
+      // gating showed. An item with no existing-product match AND no
+      // explicit owner-confirmed-new signal must never reach Product
+      // creation, regardless of how it got here. This is not new
+      // recognition logic — automatic exact-match/reuse/candidate-
+      // confirmed recognition already resolves `product` above in
+      // every one of those cases; this only refuses the one remaining
+      // path (genuinely unresolved) from proceeding silently.
+      if (!product && !item.confirmedNewProduct) {
+        throw new Error(
+          `Unresolved product identity for "${trimmedName}": explicit Existing/New confirmation is required before this item can be saved.`
+        );
+      }
 
       if (!product) {
         productId = 'prod-' + Date.now() + '-' + idx + '-' + Math.random().toString(36).substr(2, 4);
@@ -5217,6 +5272,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
     }
 
+    // [Product Identity Existing/New Resolution — Implementation
+    // Authorization, Checkpoint C] Same "build a name-keyed map from
+    // the raw caller-supplied items, read it inside the normalized
+    // items loop below" shape as unitRelationshipByProductName,
+    // above — normalizeStockCountItems' own NormalizedStockCountItem
+    // shape is deliberately NOT touched by this feature (kept to
+    // productName/quantity/unit/costPrice/sellingPrice/totalValue,
+    // per that heavily-tested module's existing contract).
+    const confirmedNewProductByName = new Map<string, boolean>();
+    for (const raw of items) {
+      const key = raw.productName.trim().toLowerCase();
+      if (key && raw.confirmedNewProduct) {
+        confirmedNewProductByName.set(key, true);
+      }
+    }
+
     // [§45 Amendment FR-81/FR-82/FR-83; Implementation Authorization §2
     // items 2-3 — REVISED by FR-89–FR-94, Implementation Authorization
     // §2 item 5 / Plan §6.3, Finding 7, Product-Architect-confirmed]
@@ -5368,6 +5439,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // starting to use this system).
       let product = tempProducts.find((p) => p.name.toLowerCase() === norm.productName.toLowerCase());
       let productId = product?.id;
+
+      // [Product Identity Existing/New Resolution — Implementation
+      // Authorization, Checkpoint C, Required Behavioral Guarantee 1]
+      // Safety boundary, re-checked HERE at the actual write path —
+      // never merely trusted from whatever PeriodicStockCountView.tsx's
+      // own UI gating showed. Deliberately scoped to type !== 'initial'
+      // only — Initial Stock/Capital Inicial is explicitly out of this
+      // authorization's scope (per the accepted plan §2/§16); its own
+      // existing first-time-entry behavior is entirely unchanged.
+      if (type !== 'initial' && !product && !confirmedNewProductByName.get(norm.productName.toLowerCase())) {
+        throw new Error(
+          `Unresolved product identity for "${norm.productName}": explicit Existing/New confirmation is required before this item can be saved.`
+        );
+      }
 
       if (!product) {
         productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);

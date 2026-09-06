@@ -154,6 +154,25 @@ interface StockRowItem {
   // exactMatchExists in the row-render closure, below).
   newProductSellingUnit?: string;
   newProductSellingUnitFactor?: string;
+
+  // [Product Identity Existing/New Resolution — Implementation
+  // Authorization, Checkpoint A] Set ONLY by an explicit owner action
+  // (the "create new product" dropdown option, or the standalone
+  // always-visible confirmation below) — never inferred merely from
+  // typing a name that doesn't match anything. Mirrors
+  // pendingSupplierWording/supplierWordingCandidates' own "UI-state
+  // only until finalization" shape (Specification §8 — nothing
+  // persisted before the entry itself is confirmed): this is never
+  // itself written to Firestore; it only unblocks handleSubmit and is
+  // forwarded to addMultipleStockBatches as AddStockParams.confirmed-
+  // NewProduct, which independently re-verifies it before ever
+  // creating a Product. Cleared the moment productName changes again
+  // (applySupplierWordingCheck's own `cleared` object, below) or the
+  // row instead resolves to an existing product (handleSelectProduct-
+  // ForTool / handleConfirmSupplierWordingCandidate) — an unresolved
+  // identity must never silently carry a stale confirmation across a
+  // materially different typed name.
+  identityConfirmedNew?: boolean;
 }
 
 // [Restock Observation Amendment v1.0] The one sentinel value the
@@ -1448,6 +1467,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       supplierWordingDeclined: false,
       supplierWordingConflictPending: false,
       supplierWordingDistinguishingInfo: undefined,
+      // [Product Identity Existing/New Resolution — Checkpoint A]
+      // This row now resolves to an EXISTING product — any prior
+      // New-confirmation no longer applies.
+      identityConfirmedNew: undefined,
     });
   };
 
@@ -1538,6 +1561,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       supplierWordingDeclined: false,
       supplierWordingConflictPending: false,
       supplierWordingDistinguishingInfo: undefined,
+      // [Product Identity Existing/New Resolution — Checkpoint A]
+      identityConfirmedNew: undefined,
     };
 
     // Step 1/2 — immediate, synchronous. An exact match also gets the
@@ -1694,6 +1719,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       },
       supplierWordingCandidates: undefined,
       supplierWordingDeclined: false,
+      // [Product Identity Existing/New Resolution — Checkpoint A]
+      identityConfirmedNew: undefined,
     });
   };
 
@@ -2164,6 +2191,24 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         return;
       }
 
+      // [Product Identity Existing/New Resolution — Implementation
+      // Authorization, Checkpoint A, Required Behavioral Guarantee 1]
+      // Defensive re-check, independent of the render-level
+      // identityUnresolved gating above — mirrors this file's own
+      // established pattern (the supplierWordingCandidates re-check
+      // immediately above). A row whose name resolves to no existing
+      // product AND carries no resolved supplier-wording identity AND
+      // has no explicit owner New-confirmation must never reach
+      // addMultipleStockBatches — that would silently create a Product
+      // for an identity the owner never actually resolved.
+      const identityResolvesToExistingProduct = products.some(
+        (p) => p.name.toLowerCase() === trimmedName.toLowerCase()
+      );
+      if (!identityResolvesToExistingProduct && !row.pendingSupplierWording && !row.identityConfirmedNew) {
+        alert(t('addStock.identityResolution.unresolvedError', { n: i + 1, name: trimmedName }));
+        return;
+      }
+
       // [Product Memory / UOM — Increment A, Checkpoint 2b] Built ONLY
       // when no existing product currently matches this row's name —
       // re-checked HERE at the point of use, not merely trusted from
@@ -2243,6 +2288,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           : {}),
         // [Product Memory / UOM — Increment A, Checkpoint 2b]
         ...(unitRelationship ? { unitRelationship } : {}),
+        // [Product Identity Existing/New Resolution — Checkpoint A]
+        // Only ever meaningful for a row that does NOT resolve to an
+        // existing product — addMultipleStockBatches' own safety
+        // boundary independently re-verifies this, never trusting the
+        // UI alone.
+        ...(row.identityConfirmedNew ? { confirmedNewProduct: true } : {}),
       });
     }
 
@@ -2923,6 +2974,25 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         )
                       : [];
 
+                  // [Product Identity Existing/New Resolution —
+                  // Implementation Authorization, Checkpoint A] True
+                  // exactly when this row's typed name has NOT been
+                  // resolved by any of: an exact match, a supplier-
+                  // wording reuse/candidate-confirmation/owner-initiated
+                  // declaration, a still-pending candidate list (its own
+                  // separate blocking panel handles that case), or an
+                  // explicit owner New-confirmation. This is the render-
+                  // level "Unresolved" state (§4.1 state 2) — decision A
+                  // requires the owner to explicitly resolve it before
+                  // finalization, never silently by simply leaving it
+                  // alone.
+                  const identityUnresolved =
+                    row.productName.trim() !== '' &&
+                    !exactMatchExists &&
+                    !row.pendingSupplierWording &&
+                    !(row.supplierWordingCandidates && row.supplierWordingCandidates.length > 0) &&
+                    !row.identityConfirmedNew;
+
                   return (
                     <div
                       key={row.id}
@@ -3010,6 +3080,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                       updateRow(row.id, {
                                         productName: row.productName.trim(),
                                         isDropdownOpen: false,
+                                        // [Product Identity Existing/New
+                                        // Resolution — Checkpoint A] This
+                                        // click IS the explicit owner
+                                        // confirmation Decision A requires
+                                        // — the only thing that may
+                                        // authorize creating a new Product
+                                        // for an unresolved name.
+                                        identityConfirmedNew: true,
                                       })
                                     }
                                     className="w-full text-left px-3 py-2 hover:bg-[#D4AF37]/[0.06] transition-colors duration-150 flex items-center gap-2 text-xs text-[#B8952F] font-semibold"
@@ -3416,6 +3494,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                         updateRow(row.id, {
                                           productName: row.productName.trim(),
                                           isDropdownOpen: false,
+                                          // [Product Identity Existing/New
+                                          // Resolution — Checkpoint A]
+                                          identityConfirmedNew: true,
                                         })
                                       }
                                       className="w-full text-left px-3 py-2 text-xs text-[#B8952F] font-semibold hover:bg-[#D4AF37]/[0.06] transition-colors duration-150"
@@ -3715,6 +3796,42 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               </button>
                             ))}
                           </div>
+                        </div>
+                      )}
+
+                      {/* [Product Identity Existing/New Resolution —
+                          Implementation Authorization, Checkpoint A]
+                          Deliberately ALWAYS VISIBLE whenever
+                          identityUnresolved — same reasoning as the
+                          "did you mean" banner immediately above: a
+                          receipt-scanned name is pre-filled without ever
+                          being clicked into, so a control that only
+                          shows on focus/dropdown-open would silently
+                          never be seen. Decision A's governing rule:
+                          "an unresolved product identity must NEVER
+                          silently create a Product" — this is the
+                          explicit owner choice that satisfies it. If
+                          similarProducts already offered candidates
+                          above, picking one there resolves this
+                          automatically (identityUnresolved recomputes to
+                          false); this banner's own button is the
+                          explicit "New Product" side of the same
+                          Existing/New choice. */}
+                      {identityUnresolved && (
+                        <div className="mt-2 bg-[#FFFBEA] border border-[#D4AF37]/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                          <div className="flex items-start gap-2">
+                            <Info className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[1px]" strokeWidth={2.25} />
+                            <p className="text-[13px] text-[#8A6D1F] leading-snug">
+                              {t('addStock.identityResolution.unresolvedNotice')}
+                            </p>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => updateRow(row.id, { identityConfirmedNew: true })}
+                            className="text-[12.5px] font-bold text-white bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 rounded-lg px-2.5 py-1.5 transition-colors duration-150"
+                          >
+                            {t('addStock.identityResolution.confirmNewButton', { name: row.productName.trim() })}
+                          </button>
                         </div>
                       )}
 
