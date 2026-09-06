@@ -832,6 +832,7 @@ interface AppContextType {
   // is never reachable merely by continuing to type into a CONFLICT
   // row.
   resolvePeriodicConflict: (rowKey: string, resolvedValue: string) => Promise<void>;
+  correctOpenConflictCountIfDrifted: (trueOpenConflictCount: number) => Promise<void>;
   removePeriodicStockDraftItem: (rowKey: string) => Promise<void>;
   savePeriodicStockDraftMeta: (
     type: StockCountType,
@@ -6920,6 +6921,55 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
   };
 
+  // [Bug fix — openConflictCount permanent-drift correction] The
+  // resurrection-race fix above (savePeriodicStockDraftMeta/
+  // flushPeriodicStockDraftRows reading openConflictCount fresh from
+  // the server) stops the value from being corrupted FURTHER, but does
+  // nothing to correct a value that is ALREADY wrong on the server —
+  // "read fresh" just re-reads whatever's currently stored, right or
+  // wrong, since there is no longer any "more correct" value anywhere
+  // to recover from once a resurrection has already landed. And
+  // firestore.rules' own `stockCounts` finalization precondition reads
+  // this exact same stored field directly — no client-side workaround
+  // (re-triggering a save, refreshing, changing an unrelated field)
+  // can ever unblock a genuinely stuck value, because the SECURITY
+  // RULE itself, not just this app's own JavaScript, rejects the write
+  // until the real stored field reads 0.
+  //
+  // This function is the actual, permanent close: it recomputes the
+  // TRUE count directly from the real per-row `state` fields (the
+  // actual ground truth — a manually-maintained counter is only ever
+  // a cache of what these already say) and corrects the stored value
+  // if it disagrees. Called from a background effect in
+  // PeriodicStockCountView.tsx whenever the live-loaded draft and its
+  // items are both available — self-healing automatically, with no
+  // specific user action required, the moment a business's session
+  // observes a stuck value. Reads the CURRENT server value fresh
+  // (inside the same transaction as the correction) so two sessions
+  // detecting the same drift at once can't double-write or race each
+  // other; a no-op, not an error, if another session already fixed it
+  // first. Never throws — a background self-heal must not surface an
+  // error banner for something the operator did not initiate; a
+  // transient failure here simply means the next render's effect
+  // tries again.
+  const correctOpenConflictCountIfDrifted = async (trueOpenConflictCount: number) => {
+    if (!activeBusinessId) return;
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    try {
+      await runTransaction(db, async (tx) => {
+        const metaSnap = await tx.get(metaRef);
+        if (!metaSnap.exists()) return;
+        const storedOpenConflictCount = metaSnap.data().openConflictCount ?? 0;
+        if (storedOpenConflictCount === trueOpenConflictCount) return;
+        tx.set(metaRef, { openConflictCount: trueOpenConflictCount }, { merge: true });
+      });
+    } catch {
+      // Best-effort — see comment above. Silently retried by the next
+      // render of the calling effect, exactly like any other
+      // background reconciliation in this file.
+    }
+  };
+
   // [Decision 40-equivalent identity churn] Used only when a row's own
   // stable key genuinely stops existing — currently just the manual-row
   // reindex-on-delete path below (handleRemoveManualRow's own tail
@@ -8362,6 +8412,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         periodicStockDraftListenerState,
         savePeriodicStockDraftItem,
         resolvePeriodicConflict,
+        correctOpenConflictCountIfDrifted,
         removePeriodicStockDraftItem,
         savePeriodicStockDraftMeta,
         flushPeriodicStockDraftRows,

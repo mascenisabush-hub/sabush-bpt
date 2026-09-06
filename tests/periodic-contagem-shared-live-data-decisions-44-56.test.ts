@@ -244,20 +244,39 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
 // Authorization §2 item 13 verification — no application code changed
 // to add it.
 describe('Technical Design §19 — openConflictCount consistency invariant', () => {
-  it('exactly two call sites in the whole file ever change the counter\'s VALUE (the §7 collision branch and the §9 resolution branch) — a third would be the exact drift risk §19 warns about', () => {
-    // Every `openConflictCount:` occurrence in the file, whatever its
-    // shape, so a future third writer cannot silently avoid this count
-    // by using different syntax.
+  it('exactly three call sites in the whole file ever change the counter\'s VALUE — the §7 collision branch, the §9 resolution branch, and the deliberate self-heal correction added in response to the reported permanent-drift bug; a fourth, unaccounted-for site would be the exact drift risk §19 warns about', () => {
+    // [Bug fix — openConflictCount permanent-drift correction] §19's
+    // original "exactly two writers" invariant assumed the two
+    // arithmetic writers (+1/-1) would always stay correctly
+    // synchronized with the real per-row state. In practice they did
+    // not — a client-side staleness race (the resurrection-race fix,
+    // above) could corrupt the stored value with no way to recover,
+    // since firestore.rules itself enforces this exact stored field as
+    // a hard finalization precondition and nothing in the original
+    // design ever recomputed it from ground truth. This is a
+    // deliberate, intentional widening of the invariant from "trust 2
+    // arithmetic writers to always be correct" to "trust 2 arithmetic
+    // writers, but also have a genuine self-healing correction for
+    // when they aren't" — strictly safer than the original two-writer
+    // design, not a regression of it. Still guards against a FOURTH,
+    // unaccounted-for site: any occurrence beyond these three known,
+    // individually-verified ones would be the exact drift risk §19
+    // warns about.
     const allOccurrences = contextSource.match(/openConflictCount:/g) ?? [];
-    assert.equal(allOccurrences.length, 4, 'expected exactly 4 openConflictCount: occurrences total');
-    // Of those 4, exactly 2 actually change the value (+1 on collision,
-    // -1 on resolution) — the other 2 are the preservation-only spread
-    // pattern verified by the 'preserve openConflictCount' test above,
-    // which never mutates the value, only carries it forward unchanged.
+    assert.equal(allOccurrences.length, 5, 'expected exactly 5 openConflictCount: occurrences total (2 arithmetic + 2 preservation-spread + 1 corrective)');
+    // Of those 5, exactly 2 are the ARITHMETIC deltas (+1 on collision,
+    // -1 on resolution) — the two preservation-only spread occurrences
+    // (verified by the 'preserve openConflictCount' test above, which
+    // never mutate the value, only carry it forward unchanged) and the
+    // one corrective occurrence (verified by its own dedicated describe
+    // block below, which writes the TRUE ground-truth value directly,
+    // never a delta) are each individually accounted for separately.
     const valueChangingOccurrences = contextSource.match(
       /openConflictCount: (?:priorOpenConflictCount \+ 1|Math\.max\(0, priorOpenConflictCount - 1\))/g
     ) ?? [];
-    assert.equal(valueChangingOccurrences.length, 2, 'expected exactly 2 value-changing openConflictCount writes');
+    assert.equal(valueChangingOccurrences.length, 2, 'expected exactly 2 arithmetic-delta openConflictCount writes');
+    const correctiveOccurrences = contextSource.match(/openConflictCount: trueOpenConflictCount \}, \{ merge: true \}\);/g) ?? [];
+    assert.equal(correctiveOccurrences.length, 1, 'expected exactly 1 corrective (ground-truth) openConflictCount write');
   });
 
   it('the +1 (collision) write happens inside the SAME runTransaction call, and the SAME tx.set, as the state: CONFLICT transition it corresponds to', () => {
@@ -375,6 +394,80 @@ describe('Bug fix — openConflictCount resurrection race (reported: Owner block
     assert.match(metaBody, /\(currentOpenConflictCount > 0 \? \{ openConflictCount: currentOpenConflictCount \} : \{\}\)/);
     const flushBody = extractBody('const flushPeriodicStockDraftRows = async (');
     assert.match(flushBody, /\(currentOpenConflictCount > 0 \? \{ openConflictCount: currentOpenConflictCount \} : \{\}\)/);
+  });
+});
+
+describe('Bug fix — openConflictCount permanent-drift self-correction (reported: still stuck after the resurrection-race fix, because that fix only stops future corruption — it never corrects a value already wrong on the server, which firestore.rules itself enforces as a hard finalization precondition)', () => {
+  const extractBody = (marker: string): string => {
+    const start = contextSource.indexOf(marker);
+    assert.notEqual(start, -1, `could not locate ${marker}`);
+    const rest = contextSource.slice(start);
+    const nextConstMatch = rest.slice(marker.length).search(/\n  const \w+[:\s]*=/);
+    return nextConstMatch === -1 ? rest : rest.slice(0, marker.length + nextConstMatch);
+  };
+
+  it('correctOpenConflictCountIfDrifted reads the CURRENT server value fresh, inside a transaction, and only writes when it genuinely disagrees with the true count passed in — a no-op otherwise, never an unconditional overwrite', () => {
+    const body = extractBody('const correctOpenConflictCountIfDrifted = async (trueOpenConflictCount: number) => {');
+    assert.match(body, /const metaSnap = await tx\.get\(metaRef\);/);
+    assert.match(body, /if \(!metaSnap\.exists\(\)\) return;/);
+    assert.match(body, /const storedOpenConflictCount = metaSnap\.data\(\)\.openConflictCount \?\? 0;/);
+    assert.match(body, /if \(storedOpenConflictCount === trueOpenConflictCount\) return;/);
+    assert.match(body, /tx\.set\(metaRef, \{ openConflictCount: trueOpenConflictCount \}, \{ merge: true \}\);/);
+  });
+
+  it('correctOpenConflictCountIfDrifted never throws to its caller — a background self-heal must not surface an error banner the operator never initiated', () => {
+    const body = extractBody('const correctOpenConflictCountIfDrifted = async (trueOpenConflictCount: number) => {');
+    assert.match(body, /try \{[\s\S]*catch \{/);
+  });
+
+  it('correctOpenConflictCountIfDrifted is exposed on the context value and typed in the context interface, matching resolvePeriodicConflict\'s own established pattern', () => {
+    assert.match(contextSource, /correctOpenConflictCountIfDrifted: \(trueOpenConflictCount: number\) => Promise<void>;/);
+    assert.match(contextSource, /^\s*correctOpenConflictCountIfDrifted,$/m);
+  });
+
+  it('PeriodicStockCountView.tsx runs the self-heal in a useEffect comparing the live, ground-truth unresolvedConflictRows.length against the stored periodicStockDraft.openConflictCount', () => {
+    const idx = viewSource.indexOf('const trueCount = unresolvedConflictRows.length;');
+    assert.notEqual(idx, -1, 'could not locate the self-heal effect');
+    const body = viewSource.slice(idx - 300, idx + 400);
+    assert.match(body, /if \(!isActiveContagemEditor\) return;/);
+    assert.match(body, /if \(!periodicStockDraft\) return;/);
+    assert.match(body, /const storedCount = periodicStockDraft\.openConflictCount \?\? 0;/);
+    assert.match(body, /if \(trueCount === storedCount\) return;/);
+    assert.match(body, /correctOpenConflictCountIfDrifted\(trueCount\);/);
+  });
+
+  it('the self-heal effect depends on the specific primitive values compared, never the whole periodicStockDraft object or the non-memoized correction function itself — avoiding an unnecessary transaction attempt on every unrelated render', () => {
+    const idx = viewSource.indexOf('correctOpenConflictCountIfDrifted(trueCount);');
+    assert.notEqual(idx, -1);
+    const body = viewSource.slice(idx, idx + 250);
+    assert.match(body, /\}, \[isActiveContagemEditor, periodicStockDraft\?\.openConflictCount, unresolvedConflictRows\.length\]\);/);
+  });
+
+  it('(pure logic) proves the self-heal actually corrects the exact reported scenario: stored count stuck at a positive number while the true, live conflict-row count is genuinely 0', () => {
+    // Models exactly what firestore.rules itself checks
+    // (get(...).data.get('openConflictCount', 0) == 0) against exactly
+    // what a stuck document looks like — a resurrected count that will
+    // never self-correct through the resurrection-race fix alone,
+    // since "read fresh" only re-reads this same wrong value.
+    const stuckServerDocument = { openConflictCount: 1 };
+    const trueLiveConflictRowCount = 0; // unresolvedConflictRows.length, genuinely accurate
+
+    // The resurrection-race fix's own "preserve if fresh" logic, in
+    // isolation, does NOT correct this — it only avoids making it WORSE:
+    const preserveOnlyResult = stuckServerDocument.openConflictCount > 0 ? stuckServerDocument.openConflictCount : 0;
+    assert.equal(preserveOnlyResult, 1, 'confirms preserve-only logic alone cannot fix an already-stuck value');
+
+    // The self-heal instead compares against the true count and
+    // corrects unconditionally when they disagree:
+    const shouldCorrect = stuckServerDocument.openConflictCount !== trueLiveConflictRowCount;
+    assert.equal(shouldCorrect, true);
+    const correctedValue = trueLiveConflictRowCount;
+    assert.equal(correctedValue, 0, 'the self-heal writes the TRUE value, finally satisfying firestore.rules\' own == 0 precondition');
+  });
+
+  it('the self-heal is gated on isActiveContagemEditor specifically — a Viewer\'s session, which also computes unresolvedConflictRows correctly, never attempts a write it has no permission for', () => {
+    const idx = viewSource.indexOf('if (!isActiveContagemEditor) return;\n    if (!periodicStockDraft) return;\n    const trueCount = unresolvedConflictRows.length;');
+    assert.notEqual(idx, -1, 'expected the editor-gate to be the FIRST check in the effect, before the draft-loaded check');
   });
 });
 

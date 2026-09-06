@@ -685,6 +685,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     contagemAuthority,
     assignDelegatedEditor,
     resolvePeriodicConflict,
+    correctOpenConflictCountIfDrifted,
     staffMembers,
     currentUser,
     // [Decision 60 §13.B/§13.A item 10] Per-user, per-business
@@ -710,6 +711,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     (item) => item.state === 'CONFLICT'
   );
   const hasUnresolvedConflicts = (periodicStockDraft?.openConflictCount ?? unresolvedConflictRows.length) > 0;
+
+  // [Bug fix — openConflictCount permanent-drift correction] Self-
+  // heals automatically: whenever the live-computed truth
+  // (unresolvedConflictRows.length, from the actual per-row `state`
+  // fields) disagrees with the stored counter firestore.rules' own
+  // finalization precondition reads directly, this corrects it — no
+  // specific user action required, and finalization is never
+  // permanently stuck on a value that has already drifted before this
+  // fix existed. Gated on isActiveContagemEditor to avoid a doomed
+  // round-trip for a Viewer, who has no write permission on this
+  // document regardless (matching this file's own established
+  // discipline for avoiding such attempts elsewhere). Depends on the
+  // specific primitive values actually compared, not the whole
+  // periodicStockDraft object or the non-memoized
+  // correctOpenConflictCountIfDrifted function reference, so this
+  // does not re-fire on every unrelated render — only when the
+  // comparison's own inputs actually change.
+  useEffect(() => {
+    if (!isActiveContagemEditor) return;
+    if (!periodicStockDraft) return;
+    const trueCount = unresolvedConflictRows.length;
+    const storedCount = periodicStockDraft.openConflictCount ?? 0;
+    if (trueCount === storedCount) return;
+    correctOpenConflictCountIfDrifted(trueCount);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isActiveContagemEditor, periodicStockDraft?.openConflictCount, unresolvedConflictRows.length]);
 
   const createManualRow = (): StockCountWorkingRow => ({
     productId: undefined,
