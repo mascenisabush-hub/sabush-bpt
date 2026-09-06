@@ -237,6 +237,18 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
   text-transform: uppercase;
   letter-spacing: 0.045em;
 }
+/* Dark-card contrast fix (Valor do Negócio / Lucro Embutido, and the
+   equivalent flagship card in Reports Home): .kpi-label's navy color
+   above is correct for the white/light cards, but this custom CSS class
+   is emitted after Tailwind's utility layer, so it silently wins over the
+   inline `text-white/NN` opacity utility already applied to the same
+   element on .card-dark-gradient cards — leaving a near-invisible
+   navy-on-navy title. Scoped override here (not a change to the shared
+   .kpi-label color) restores a light, readable title on dark cards only;
+   white/light cards are untouched. */
+.card-dark-gradient .kpi-label {
+  color: rgba(255, 255, 255, 0.82);
+}
 
 /* ==========================================================================
    Typography hierarchy — Inter everywhere; four tiers used consistently
