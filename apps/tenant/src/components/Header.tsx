@@ -390,15 +390,15 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
                   type="button"
                   onClick={() => setActiveTab(tab.id)}
                   title={t(tab.labelKey)}
-                  className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] ${
+                  className={`flex items-center gap-2 pl-2 pr-3 py-1 rounded-2xl text-[12.5px] font-bold tracking-tight transition-all duration-150 active:scale-[0.97] border ${
                     isActive
-                      ? 'bg-[#D4AF37] text-[#0B1F3A] shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
-                      : 'bg-transparent text-white/55 hover:bg-white/10 hover:text-white/85'
+                      ? 'bg-[#D4AF37] text-[#0B1F3A] border-transparent shadow-[0_4px_14px_-4px_rgba(212,175,55,0.55)]'
+                      : 'bg-white/[0.05] text-white/80 border-white/[0.14] hover:bg-white/10 hover:text-white hover:border-white/25'
                   }`}
                 >
                   <span
                     className={`flex items-center justify-center w-7 h-7 rounded-xl shrink-0 transition-colors duration-150 ${
-                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-white/10 text-white'
+                      isActive ? 'bg-[#0B1F3A] text-[#D4AF37]' : 'bg-white/[0.12] text-white'
                     }`}
                   >
                     <Icon className="w-4 h-4" strokeWidth={2.25} />
