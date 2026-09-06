@@ -11,13 +11,29 @@ Business Domain Specification
 > amendment unless and until that amendment is itself separately
 > accepted; read the amendment document for its current status.
 
+> **Amendment ACCEPTED (2026-09-06) — see
+> [product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md](../engineering/product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md).**
+> Two corrections apply, added below as new §4a and §7a rather than by
+> editing §4 or §7 in place: (1) §4's original text treats "no candidate
+> was ever detected" the same as "owner declined a candidate," routing
+> both to silent automatic new-product creation — §4a corrects this,
+> per accepted Product Architect Decision A. (2) §7's "Periodic
+> Contagem: not in scope" line remains true for Supplier-Wording
+> Recognition specifically — §7a adds narrower, separate coverage
+> bringing Periodic Contagem within the general Existing/New
+> identity-resolution principle only, per accepted Decision A-Contagem.
+> §4 and §7's own original text below is preserved unmodified as the
+> historical record of what this Specification originally decided;
+> §4a/§7a state what now additionally governs.
+
 # Supplier-Wording Recognition, Confirmation & Conflict — Specification
 
-**Status:** ✅ Accepted (2026-08-19). See "Product Architect Acceptance," below.
+**Status:** ✅ Accepted (2026-08-19). See "Product Architect Acceptance," below. **Amended (2026-09-06) — see §4a, §7a, and "Product Architect Acceptance" (amendment), below.**
 **Location note:** Filed in `docs/specs/`, unprefixed — this capability is cross-cutting (Product Catalog, Initial Stock, Add Stock, Smart Stock Entry), following the same unprefixed naming pattern already established for this exact governance lineage by `BDR-0013`, `POL-0007`, and the accepted UOM Specification.
 **Depends on:** [`BDR-0013`](./BDR-0013-product-identity-alternative-name-memory.md) (Approved, all nine §5 items ACCEPT), [`POL-0007`](./POL-0007-supplier-wording-recognition-confirmation-conflict-policy.md) (Approved).
-**Scope:** BDR-0013 §5 items 1, 3, 4, 5, 6, 7 only. **Item 8 (surface scope) is respected, not re-decided** — this Specification covers only Initial Stock, Add Stock, and Smart Stock Entry, exactly as item 8 already establishes. **Item 9 (historical duplicates) is explicitly excluded from this Specification's scope** — see §12, below.
-**Followed by:** Not yet drafted — Rule 8 Assessment, per this repository's established governance sequence, once explicitly authorized to begin (not authorized by this acceptance — see "Product Architect Acceptance," below).
+**Amended by:** [`product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md`](../engineering/product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md) (Accepted 2026-09-06) — see §4a, §7a.
+**Scope:** BDR-0013 §5 items 1, 3, 4, 5, 6, 7 only. **Item 8 (surface scope) is respected, not re-decided** — this Specification covers only Initial Stock, Add Stock, and Smart Stock Entry, exactly as item 8 already establishes, **for Supplier-Wording Recognition specifically**. Periodic Contagem is separately, narrowly brought within the general Existing/New identity-resolution principle only (not Supplier-Wording Recognition itself) by the 2026-09-06 amendment — see §7a. **Item 9 (historical duplicates) is explicitly excluded from this Specification's scope** — see §12, below.
+**Followed by:** Not yet drafted — Rule 8 Assessment, per this repository's established governance sequence, once explicitly authorized to begin (not authorized by this acceptance — see "Product Architect Acceptance," below). A **targeted** Rule 8 re-check of the 2026-09-06 amendment specifically is the next required gate for §4a/§7a — see that amendment document.
 
 ---
 
@@ -68,6 +84,27 @@ Per `POL-0007`'s explicit authorization, the owner may, while within the Initial
 
 Per `BDR-0013` item 3 and `POL-0007` Business Requirement 6: when the owner indicates a proposed candidate is not the same product (or declines to declare a relationship at all), the incoming item is treated as an ordinary new product — there is no "reject alias" concept, no separate blocking state, and the owner is never forced to select an existing product. Technically, this means: no supplier-wording relationship is established; the stock entry proceeds exactly as it would for any product with no candidate ever detected, using the wording entered as the new product's `Product.name`. **This Specification does not decide the exact mechanism by which a "not the same product" response transitions the UI from candidate-review back to ordinary new-product entry** — Rule 8/implementation concern; the business/Policy requirement is only that this transition must occur without extra friction or forced selection.
 
+**Preserved above as the original historical record.** §4a, immediately below, is a 2026-09-06 accepted amendment narrowing part of this section — read both together.
+
+## 4a. Amendment (Accepted 2026-09-06) — No-Candidate Result Requires Explicit Owner Resolution
+
+Per accepted Product Architect Decision A (`docs/engineering/product-recognition-and-cost-selling-unit-architecture-product-architect-acceptance.md`) and the amendment recorded at [`product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md`](../engineering/product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md):
+
+§4's own text above, read literally, treats two different situations identically — "the owner reviewed a proposed candidate and said 'not the same product'" and "no candidate was ever proposed at all" — routing both to the same silent, automatic new-product creation. **This equivalence is corrected, for the second situation only:**
+
+- **Owner-declined candidate** (§4's original text, first situation): **unchanged.** An owner who has reviewed and explicitly declined a proposed candidate has, by that very act, already exercised the explicit resolution Decision A requires. No additional confirmation step is introduced for this case.
+- **No candidate ever detected** (§4's original text, second situation): **corrected.** This case must **not** silently proceed to automatic new-product creation. Before the incoming item finalizes as a new Product, the owner must be given an explicit opportunity to resolve it as either an **Existing Product** (via a search/selection mechanism, not limited to whatever candidate mechanism did or did not fire) or an explicitly-confirmed **New Product**.
+
+Three states govern going forward, and must remain distinguishable in whatever mechanism Rule 8/implementation selects:
+
+1. **Automatic confident recognition** — an exact match, a reused confirmed relationship, or an owner-accepted candidate. No new interaction required.
+2. **Unresolved identity** — no confident automatic match, and either no candidate exists or every candidate was declined. Requires the explicit Existing/New resolution step this amendment adds.
+3. **Explicit owner-confirmed New Product** — the outcome of state 2 when the owner selects "New Product." This is the only path that may result in `Product` creation with no prior match, and must be recorded as distinct from state 2 merely never having been reached.
+
+**When the owner resolves to an Existing Product:** applicable canonical Product Memory (`sellingPrice`, `sellingUnit`, `unitRelationship`) is retrieved for that Product exactly as it already is for every other resolution path in this Specification (§4 of `product-memory-purchase-selling-valuation-specification.md`, unaffected) — no new retrieval mechanism is introduced.
+
+**Not decided by this amendment** (left to Rule 8/implementation, per this Specification's own existing discipline in §11): the exact similarity/matching algorithm, model, or confidence threshold; UI design, layout, or interaction flow for the new resolution step; candidate ranking or maximum count; the exact technical mechanism (flag, field, or otherwise) recording state 3 as distinct from state 2. **Not altered by this amendment:** any already-valid automatic recognition path (§3, §6); the conflict-handling/distinguishing-information gate (§5); barcode/SKU behavior (not addressed by this Specification at all).
+
 ## 5. Conflict Handling & Mandatory Distinguishing Information
 
 Per `BDR-0013` item 5 and `POL-0007`'s "Conflicting Supplier Wording — Distinguishing Information: ACCEPT, Mandatory": when a supplier's wording already has a confirmed relationship pointing to Product A, but the owner determines the current occurrence is a genuinely different product:
@@ -88,7 +125,28 @@ Per `BDR-0013` item 3 and `POL-0007`'s "Reuse of an Already-Confirmed Relationsh
 - **Add Stock:** the candidate-recognition flow (§3) applies when a supplier wording is entered for a product being added to existing stock. Owner-initiated declaration (§3a) is available on this surface. Confirmed via code inspection: `AddStockView.tsx` already carries substantial supplier context, consistent with this capability applying here without the open question flagged for Initial Stock, above.
 - **Smart Stock Entry:** extraction behavior is unchanged — OCR continues to extract whatever wording a receipt literally states, per `04-smart-stock-entry-amendment.md`'s existing, unmodified governance. Once extraction completes, the review screen is where candidate-recognition (§3) and owner-initiated declaration (§3a) apply, consistent with `BDR-0013` item 3's trigger ("entering the supplier's receipt"). **The precise integration mechanics — whether candidate detection runs inline during OCR processing or only once the review screen is reached — are not determined by any governing decision and are explicitly left as a Rule 8 gap**, mirroring the identical unresolved question the UOM Specification itself flagged (§3, step 6) for Recognition's own Smart Stock Entry integration.
 - **Product Catalog Editing:** **not in scope for this capability** (`BDR-0013` item 8's exclusion, unaffected by this Specification). The item 9 exception (historical-duplicate review) is a separate capability, explicitly out of this Specification's scope (§12, below).
-- **Periodic Contagem:** **not in scope** (`BDR-0013` item 8's exclusion).
+- **Periodic Contagem:** **not in scope** (`BDR-0013` item 8's exclusion). **Preserved above as the original historical record — this exclusion remains true for Supplier-Wording Recognition specifically. See §7a, immediately below, for a 2026-09-06 accepted amendment adding narrower, separate coverage.**
+
+## 7a. Amendment (Accepted 2026-09-06) — Periodic Contagem Existing/New Identity Resolution
+
+Per accepted Product Architect Decision A-Contagem (`docs/engineering/recognition-and-cost-selling-unit-rule8-decision-clarification-product-architect-acceptance.md`) and the amendment recorded at [`product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md`](../engineering/product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md):
+
+**§7's exclusion of Periodic Contagem, above, is not reversed with respect to Supplier-Wording Recognition.** Periodic Contagem continues to have no supplier concept, and continues not to run this Specification's own candidate-detection or reuse-matching mechanism (§3, §6) — unchanged, for the same reason already established (Rule 8 Finding 10, corrected: no supplier identity exists there to associate a wording with).
+
+**What this amendment adds is narrower and separate.** Periodic Contagem is now within scope of the **general Existing/New identity-resolution principle** established by Decision A and §4a, above, applied through a mechanism that does not depend on supplier identity. When Periodic Contagem cannot establish Product identity with sufficient confidence from information already available within the owner's own business:
+
+- the system must **not** silently create a new Product;
+- the owner must be given an explicit Existing Product / New Product resolution before that count line finalizes as a new Product.
+
+This mechanism:
+
+- must **not** require supplier identity, in any form;
+- must **not** require a cross-business Product query;
+- must **not** automatically select among multiple plausible existing Products — an ambiguous case still requires explicit owner choice.
+
+When the owner resolves to an Existing Product, applicable canonical Product Memory (`sellingPrice`, `sellingUnit`, `unitRelationship`) is retrieved for that Product exactly as it already is for every other resolution path (§4 of `product-memory-purchase-selling-valuation-specification.md`, unaffected) — no new retrieval mechanism is introduced.
+
+**Not decided by this amendment:** which existing or new mechanism (e.g. the already-existing, supplier-agnostic Product Name Similarity capability, or some other design) implements this resolution for Periodic Contagem; the UI; ranking; candidate count; any recognition algorithm or threshold. **Not altered by this amendment:** Initial Stock, which remains outside this addition entirely (Decision A-Contagem addresses Periodic Contagem only); B2, Concept C, `StockBatch` selling-basis semantics, Business Worth, or Closing, all of which the governing Rule 8 assessments found conformant and unaffected.
 
 ## 8. Lifecycle — Pre-Confirmation Editability, Post-Confirmation Immutability
 
@@ -141,3 +199,29 @@ Whatever storage structure Rule 8 selects (§2), any supplier-wording relationsh
 **Status:** ✅ Accepted (2026-08-19).
 
 > This Specification is accepted exactly as corrected following the adversarial governance review and its five MAJOR and two MINOR corrections (array-vs-subcollection reframed as a conceptual model deferred to Rule 8; `confirmedVia` removed from any committed schema and reframed as a conceptual provenance question; §3 step 1's "exactly match" trigger language corrected to no longer pre-decide the reuse-matching question §6 defers to Rule 8; the Initial Stock "applies identically" claim corrected with direct code evidence and reframed as an open technical question, with Initial Stock's BDR-0013 item 8 business inclusion fully preserved; `BDR-0013` item 2's must-match/owner-correction rule explicitly added as new §2a; the illustrative `distinguishingNote?` field removed; and an explicit performance/indexing exclusion added to §11). No further substantive change is made by this acceptance. This acceptance does not authorize Rule 8 Assessment, Rule 8 drafting, technical implementation, code changes, schema implementation, storage-architecture selection, AI/OCR provider or model selection, algorithm implementation, UI implementation, database migration, historical-data backfill, or Implementation Authorization — all remain separate, required gates, per this repository's established governance sequence (`19-governance-bdr-policy-framework.md`).
+
+---
+
+## Product Architect Acceptance — Amendment (2026-09-06)
+
+**Status:** ✅ Accepted (2026-09-06). Covers §4a and §7a, above, only.
+
+> Two amendments to this Specification are accepted: (1) §4a — a plain
+> no-candidate recognition result must route through explicit owner
+> Existing/New resolution before finalizing as a new Product, correcting
+> §4's original equivalence between "owner declined a candidate" and
+> "no candidate ever detected"; and (2) §7a — Periodic Contagem is
+> brought within the general Existing/New identity-resolution principle
+> via a supplier-independent, business-scoped mechanism, with
+> Supplier-Wording Recognition itself remaining out of scope for
+> Contagem per §7's original, unmodified exclusion. Full detail,
+> rationale, and traceability recorded at
+> [`product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md`](../engineering/product-identity-alternative-name-specification-no-candidate-and-contagem-amendment-draft.md).
+> This acceptance does not touch B2, Concept C, `StockBatch`
+> selling-basis semantics, Business Worth, Closing, or any section of
+> this Specification other than §4a/§7a. This acceptance does not
+> authorize Rule 8's own targeted re-check (the next required gate), an
+> Implementation Plan, or an Implementation Authorization.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI.
+> **Date:** 2026-09-06.
