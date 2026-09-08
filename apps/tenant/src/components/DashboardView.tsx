@@ -77,6 +77,18 @@ interface KpiCardProps {
    *  a metric stand out (e.g. Lucro Embutido, Valor do Negócio). Same data,
    *  same click behaviour — only the surface changes. */
   variant?: 'light' | 'dark';
+  /** [Owner-requested — "2 per 2" mobile grid, matching the reference
+   *  screenshot] True for every card that shares a row with another card
+   *  on mobile (i.e. everything except the full-width Business Worth hero,
+   *  which never needs this — it already has the whole phone width to
+   *  itself). Tightens padding/gap/icon/value sizing specifically at the
+   *  narrowest breakpoint so a 2-column mobile card still fits a realistic
+   *  worst-case currency figure (up to ~16 characters, e.g.
+   *  "1.234.567,00 MT") on one line without truncating — see the value
+   *  paragraph's own comment, below, for the exact sizing reasoning.
+   *  Scales back up to the existing, unchanged desktop sizing from `sm:`
+   *  (640px) upward, where a 2-column card already has ample room. */
+  compact?: boolean;
 }
 
 const KpiCard: React.FC<KpiCardProps> = ({
@@ -91,6 +103,7 @@ const KpiCard: React.FC<KpiCardProps> = ({
   badge,
   action,
   variant = 'light',
+  compact = false,
 }) => {
   const isDark = variant === 'dark';
   return (
@@ -98,7 +111,9 @@ const KpiCard: React.FC<KpiCardProps> = ({
       type="button"
       onClick={onClick}
       disabled={!onClick}
-      className={`group h-full text-left p-6 flex flex-col gap-4 rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+      className={`group h-full text-left flex flex-col rounded-2xl transition-all duration-[220ms] ease-[cubic-bezier(0.22,1,0.36,1)] ${
+        compact ? 'p-4 sm:p-6 gap-3 sm:gap-4' : 'p-6 gap-4'
+      } ${
         isDark
           ? 'relative overflow-hidden card-dark-gradient shadow-[var(--shadow-2)]'
           : `card-premium ${action ? 'is-action' : ''}`
@@ -146,13 +161,17 @@ const KpiCard: React.FC<KpiCardProps> = ({
       <div className="relative flex items-center justify-between gap-2 w-full">
         <div className="flex items-center gap-2 min-w-0">
           <div
-            className={`w-8 h-8 rounded-full flex items-center justify-center shrink-0 ${
+            className={`rounded-full flex items-center justify-center shrink-0 ${compact ? 'w-6 h-6 sm:w-8 sm:h-8' : 'w-8 h-8'} ${
               isDark ? 'bg-white/[0.12] text-[#D4AF37] border border-white/[0.14]' : `${iconBgClass} ${iconTextClass}`
             }`}
           >
-            <Icon className="w-[15px] h-[15px]" />
+            <Icon className={compact ? 'w-[12px] h-[12px] sm:w-[15px] sm:h-[15px]' : 'w-[15px] h-[15px]'} />
           </div>
-          <p className={`kpi-label leading-tight line-clamp-2 min-w-0 break-words ${isDark ? 'text-white/80' : ''}`}>
+          <p
+            className={`kpi-label leading-tight line-clamp-2 min-w-0 break-words ${compact ? 'text-[11px] sm:text-[13px]' : ''} ${
+              isDark ? 'text-white/80' : ''
+            }`}
+          >
             {label}
           </p>
         </div>
@@ -168,12 +187,25 @@ const KpiCard: React.FC<KpiCardProps> = ({
           the card edge instead of eliding cleanly. Confirmed via the
           same rendered-verification pass; this only visibly engages for
           an unusually large figure at the narrowest widths, but the
-          underlying bug existed regardless of figure size. */}
+          underlying bug existed regardless of figure size.
+          [Owner-requested — "2 per 2" mobile grid] `compact` sizes the
+          figure down specifically at the narrowest breakpoint: at a real
+          390px phone width, a 2-column `compact` card has roughly
+          150–165px of usable content width after padding/gap (see
+          `compact`'s own prop comment for the arithmetic) — nowhere near
+          enough for a 28px-bold "1.234.567,00 MT" (16 characters), but
+          comfortable at 17px (light) / 19px (dark). Both scale straight
+          back up to the existing, unchanged 28px/32px (light) or
+          32px/36px (dark) sizing from `sm:` (640px) upward, where a
+          2-column card already has ample room — the desktop/tablet look
+          is completely untouched by this. `truncate` remains in place
+          as a last-resort safety net for a business whose figure is
+          larger still, never removed. */}
       <p
         className={`relative leading-[1] truncate min-w-0 w-full tabular-nums font-extrabold ${
           isDark
-            ? `text-[32px] sm:text-[36px] tracking-[-0.035em] ${valueClass || 'text-[#D4AF37]'}`
-            : `text-[28px] sm:text-[32px] tracking-[-0.03em] ${valueClass || 'text-[#0B1F3A]'}`
+            ? `${compact ? 'text-[19px] sm:text-[32px] lg:text-[36px]' : 'text-[32px] sm:text-[36px]'} tracking-[-0.035em] ${valueClass || 'text-[#D4AF37]'}`
+            : `${compact ? 'text-[17px] sm:text-[28px] lg:text-[32px]' : 'text-[28px] sm:text-[32px]'} tracking-[-0.03em] ${valueClass || 'text-[#0B1F3A]'}`
         }`}
       >
         {value}
@@ -183,8 +215,16 @@ const KpiCard: React.FC<KpiCardProps> = ({
           the bold KPI number above it. Bumped per Dashboard Readability
           Refinement: 13px, #374151 (existing secondary-text token),
           looser line-height — stays visually secondary to the number,
-          but no longer illegible. */}
-      <p className={`relative text-[13px] leading-[1.45] mt-auto pt-1 font-medium ${isDark ? 'text-white/70' : 'text-[#374151]'}`}>
+          but no longer illegible. [Owner-requested — "2 per 2" mobile
+          grid] `compact` steps it back down to 11px specifically on
+          mobile — still comfortably legible, but no longer competing
+          with the now-smaller value figure for a 2-column card's limited
+          height; unchanged 13px from `sm:` upward. */}
+      <p
+        className={`relative leading-[1.45] mt-auto pt-1 font-medium ${compact ? 'text-[11px] sm:text-[13px]' : 'text-[13px]'} ${
+          isDark ? 'text-white/70' : 'text-[#374151]'
+        }`}
+      >
         {description}
       </p>
     </button>
@@ -444,7 +484,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           own row above, so a 5-column track would leave a permanent
           empty gap at wide viewports; `lg:grid-cols-4` already fills
           exactly one row and needs no wider variant. */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+      <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
         <KpiCard
           icon={Package}
           iconBgClass="bg-[#0B1F3A]/[0.06]"
@@ -453,6 +493,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           value={formatCurrency(totalInvestmentValueAllTime, currencySymbol)}
           valueClass="text-[#0B1F3A]"
           description={t('dashboard.kpi.stockCost.desc')}
+          compact
         />
 
         <KpiCard
@@ -463,6 +504,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           value={formatCurrency(totalMarketValueAllTime, currencySymbol)}
           valueClass="text-[#0B1F3A]"
           description={t('dashboard.kpi.marketValue.desc')}
+          compact
         />
 
         <KpiCard
@@ -475,6 +517,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           description={t('dashboard.kpi.embeddedProfit.desc')}
           onClick={() => setShowBreakdownModal(true)}
           variant="dark"
+          compact
         />
 
         <KpiCard
@@ -485,6 +528,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           value={formatCurrency(totalExpensesAllTime, currencySymbol)}
           valueClass="text-rose-700"
           description={t('dashboard.kpi.expenses.desc')}
+          compact
         />
       </div>
 
@@ -524,7 +568,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             above (a deliberate, already-reasoned choice to keep the
             column count from ever *decreasing* as the viewport widens,
             not a readability defect this fix needs to touch). */}
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
+        <div className="grid grid-cols-2 lg:grid-cols-4 gap-3 sm:gap-6">
           <KpiCard
             icon={HandCoins}
             iconBgClass="bg-[#D4AF37]/10"
@@ -533,6 +577,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             value={formatCurrency(totalWithdrawalsAllTime, currencySymbol)}
             valueClass="text-[#D4AF37]"
             description={t('dashboard.kpi.withdrawals.desc')}
+            compact
           />
 
           <KpiCard
@@ -543,6 +588,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             value={formatCurrency(totalQuebraValueAllTime, currencySymbol)}
             valueClass="text-rose-700"
             description={t('dashboard.kpi.quebraLoss.desc')}
+            compact
           />
 
           <KpiCard
@@ -553,6 +599,7 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
             value={String(activeBatchCount)}
             valueClass="text-[#0B1F3A]"
             description={t('dashboard.kpi.activeBatches.desc')}
+            compact
           />
         </div>
       </div>
