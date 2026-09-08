@@ -227,6 +227,11 @@ export interface TranslationDict {
     tabs: {
       dashboard: { label: string; shortLabel: string };
       stocks: { label: string; shortLabel: string };
+      // [Owner Product Catalog — Phase 1, Checkpoint A] New tab —
+      // Owner-only, separate from both 'dashboard' and 'stocks' (per
+      // Decision Proposal §5 Decision 1: not a replacement for either,
+      // a dedicated identity/product-information management surface).
+      catalog: { label: string; shortLabel: string };
       addStock: { label: string; shortLabel: string };
       stockCount: { label: string; shortLabel: string };
       // [Business Worth Evolution — Implementation Authorization,
@@ -676,6 +681,16 @@ export interface TranslationDict {
       invalidAmount: string;
       generic: string;
     };
+  };
+  // [Owner Product Catalog — Phase 1, Checkpoint A] Minimal type block —
+  // only what the empty Checkpoint-A screen itself needs (title,
+  // subtitle, empty-state text). Registration-form/search/edit strings
+  // belong to later checkpoints, not added here to avoid pre-declaring
+  // UI this checkpoint does not yet build.
+  productCatalog: {
+    title: string;
+    subtitle: string;
+    emptyState: string;
   };
   stocksView: {
     title: string;
@@ -1418,6 +1433,7 @@ export const pt: TranslationDict = {
     tabs: {
       dashboard: { label: 'Dashboard', shortLabel: 'Dashboard' },
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
+      catalog: { label: 'Catálogo', shortLabel: 'Catálogo' },
       addStock: { label: 'Adicionar Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Contagem de Stock', shortLabel: 'Contagem' },
       declareWorth: { label: 'Declarar Valor do Negócio', shortLabel: 'Declarar' },
@@ -1831,6 +1847,11 @@ export const pt: TranslationDict = {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
       generic: 'Erro ao declarar o Valor do Negócio.',
     },
+  },
+  productCatalog: {
+    title: 'Catálogo de Produtos',
+    subtitle: 'Registe e faça a gestão dos produtos do seu negócio, mesmo antes de os comprar.',
+    emptyState: 'Ainda não tem produtos registados no catálogo.',
   },
   stocksView: {
     title: 'Histórico de Lotes — Registo de Investimento',

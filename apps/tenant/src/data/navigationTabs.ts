@@ -1,6 +1,6 @@
-import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, BarChart3, ClipboardList, Lock, History, Wallet, PiggyBank, Gem } from 'lucide-react';
+import { LayoutDashboard, Boxes, PackagePlus, AlertTriangle, BarChart3, ClipboardList, Lock, History, Wallet, PiggyBank, Gem, BookOpen } from 'lucide-react';
 
-export type TabType = 'dashboard' | 'stocks' | 'add-stock' | 'add-quebra' | 'reports' | 'initial-stock' | 'stock-count' | 'declare-worth' | 'closing' | 'timeline' | 'cash-flow' | 'startup-investment';
+export type TabType = 'dashboard' | 'stocks' | 'catalog' | 'add-stock' | 'add-quebra' | 'reports' | 'initial-stock' | 'stock-count' | 'declare-worth' | 'closing' | 'timeline' | 'cash-flow' | 'startup-investment';
 
 export interface NavTabDefinition {
   id: TabType;
@@ -20,6 +20,15 @@ export interface NavTabDefinition {
 export const NAV_TABS: NavTabDefinition[] = [
   { id: 'dashboard', labelKey: 'nav.tabs.dashboard.label', shortLabelKey: 'nav.tabs.dashboard.shortLabel', icon: LayoutDashboard, color: 'emerald', ownerOnly: true },
   { id: 'stocks', labelKey: 'nav.tabs.stocks.label', shortLabelKey: 'nav.tabs.stocks.shortLabel', icon: Boxes, color: 'amber', ownerOnly: true },
+  // [Owner Product Catalog — Phase 1, Checkpoint A — Decision Proposal
+  // §5 Decision 1] A dedicated, Owner-only identity/product-information
+  // management surface — separate from both 'dashboard' (KPIs) and
+  // 'stocks' (purchase-batch history; confirmed, by direct trace during
+  // this feature's own Rule 8 Assessment, structurally unable to serve
+  // as a product catalog). Checkpoint A wires only the empty
+  // surface/navigation; registration, search, and editing are later
+  // checkpoints (B–E), not implemented by this entry alone.
+  { id: 'catalog', labelKey: 'nav.tabs.catalog.label', shortLabelKey: 'nav.tabs.catalog.shortLabel', icon: BookOpen, color: 'amber', ownerOnly: true },
   { id: 'add-stock', labelKey: 'nav.tabs.addStock.label', shortLabelKey: 'nav.tabs.addStock.shortLabel', icon: PackagePlus, color: 'emerald', ownerOnly: false },
   { id: 'stock-count', labelKey: 'nav.tabs.stockCount.label', shortLabelKey: 'nav.tabs.stockCount.shortLabel', icon: ClipboardList, color: 'indigo', ownerOnly: true },
   // [Business Worth Evolution — Implementation Authorization, Increment

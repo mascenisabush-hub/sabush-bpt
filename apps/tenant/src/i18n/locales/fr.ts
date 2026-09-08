@@ -233,6 +233,7 @@ export const fr: TranslationDict = {
     tabs: {
       dashboard: { label: 'Dashboard', shortLabel: 'Dashboard' },
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
+      catalog: { label: 'Catalogue', shortLabel: 'Catalogue' },
       addStock: { label: 'Ajouter un Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Comptage de Stock', shortLabel: 'Comptage' },
       declareWorth: { label: 'Déclarer la Valeur', shortLabel: 'Déclarer' },
@@ -642,6 +643,11 @@ export const fr: TranslationDict = {
       invalidAmount: 'Veuillez saisir un montant valide supérieur à 0.',
       generic: 'Erreur lors de la déclaration de la Valeur du Négoce.',
     },
+  },
+  productCatalog: {
+    title: 'Catalogue de Produits',
+    subtitle: 'Enregistrez et gérez les produits de votre entreprise, même avant de les acheter.',
+    emptyState: 'Aucun produit enregistré dans le catalogue pour le moment.',
   },
   stocksView: {
     title: 'Historique des Lots — Registre d\\u2019Investissement',

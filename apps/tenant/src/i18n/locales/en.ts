@@ -233,6 +233,7 @@ export const en: TranslationDict = {
     tabs: {
       dashboard: { label: 'Dashboard', shortLabel: 'Dashboard' },
       stocks: { label: 'Stocks', shortLabel: 'Stocks' },
+      catalog: { label: 'Catalog', shortLabel: 'Catalog' },
       addStock: { label: 'Add Stock', shortLabel: '+ Stock' },
       stockCount: { label: 'Stock Count', shortLabel: 'Count' },
       declareWorth: { label: 'Declare Business Worth', shortLabel: 'Declare' },
@@ -642,6 +643,11 @@ export const en: TranslationDict = {
       invalidAmount: 'Please enter a valid amount greater than 0.',
       generic: 'Error declaring Business Worth.',
     },
+  },
+  productCatalog: {
+    title: 'Product Catalog',
+    subtitle: 'Register and manage your business products, even before you buy them.',
+    emptyState: 'No products registered in the catalog yet.',
   },
   stocksView: {
     title: 'Batch History — Investment Ledger',

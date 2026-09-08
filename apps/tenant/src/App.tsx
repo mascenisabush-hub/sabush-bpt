@@ -6,6 +6,7 @@ import { Header } from './components/Header';
 import { NavigationTabs, TabType } from './components/NavigationTabs';
 import { DashboardView } from './components/DashboardView';
 import { StocksView } from './components/StocksView';
+import { ProductCatalogView } from './components/ProductCatalogView';
 import { AddStockView } from './components/AddStockView';
 import { AddQuebraView } from './components/AddQuebraView';
 import { CashFlowView } from './components/CashFlowView';
@@ -132,6 +133,12 @@ function MainApp() {
         )}
 
         {!isStaff && activeTab === 'stocks' && <StocksView />}
+
+        {/* [Owner Product Catalog — Phase 1, Checkpoint A] Zero props —
+            identical mount pattern to StocksView immediately above.
+            Registration/search/edit wiring is Checkpoints B–E, not
+            implemented here. */}
+        {!isStaff && activeTab === 'catalog' && <ProductCatalogView />}
 
         {!isStaff && activeTab === 'stock-count' && (
           <PeriodicStockCountView onComplete={() => setActiveTab('dashboard')} />
