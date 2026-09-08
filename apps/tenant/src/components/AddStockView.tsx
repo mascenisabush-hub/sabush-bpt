@@ -178,6 +178,19 @@ interface StockRowItem {
   // identity must never silently carry a stale confirmation across a
   // materially different typed name.
   identityConfirmedNew?: boolean;
+  // [Bug fix — Owner-reported: OCR-scanned/abbreviated product wording
+  // ("Salt Gross Emb", "ARROZ CORAI 25kg") often falls below
+  // findSimilarProducts' own similarity threshold against the
+  // catalog's full, differently-worded name, leaving "confirm as new"
+  // as the only visible option even when the real product already
+  // exists — no way to manually search from inside the unresolved-
+  // identity banner itself. UI-only, per-row (unlike Contagem's single
+  // shared search field, Add Stock can show this banner on several
+  // rows at once — see the screenshot report), never persisted (see
+  // rowToDraftLineItem, above, which builds an explicit literal that
+  // excludes it by construction, same treatment as isDropdownOpen/
+  // isUnitPopoverOpen).
+  identityResolutionSearchText?: string;
 }
 
 // [Restock Observation Amendment v1.0] The one sentinel value the
@@ -3866,13 +3879,66 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           explicit "New Product" side of the same
                           Existing/New choice. */}
                       {identityUnresolved && (
-                        <div className="mt-2 bg-[#FFFBEA] border border-[#D4AF37]/40 rounded-xl px-3 py-2.5 space-y-1.5">
+                        <div className="mt-2 bg-[#FFFBEA] border border-[#D4AF37]/40 rounded-xl px-3 py-2.5 space-y-2">
                           <div className="flex items-start gap-2">
                             <Info className="w-3.5 h-3.5 text-[#B8952F] shrink-0 mt-[1px]" strokeWidth={2.25} />
                             <p className="text-[13px] text-[#8A6D1F] leading-snug">
                               {t('addStock.identityResolution.unresolvedNotice')}
                             </p>
                           </div>
+                          {/* [Bug fix — see identityResolutionSearchText's
+                              own declaration] A substring search over the
+                              FULL, already-scoped `products` array — never
+                              a new query, never limited by
+                              findSimilarProducts' own threshold/cap. A
+                              selected result reuses the existing, unchanged
+                              handleSelectProductForTool (same mechanism the
+                              dropdown/"did you mean" chips already use), so
+                              it resolves exactly like picking any other
+                              existing-product suggestion — rewrites
+                              productName to the canonical name, clears
+                              identityConfirmedNew, never auto-selects
+                              anything without an explicit click. */}
+                          {(() => {
+                            const searchTerm = (row.identityResolutionSearchText ?? '').trim().toLowerCase();
+                            const searchResults = searchTerm
+                              ? products
+                                  .filter((p) => p.name.toLowerCase().includes(searchTerm))
+                                  .filter((p) => !similarProducts.some((s) => s.id === p.id))
+                                  .slice(0, 8)
+                              : [];
+                            return (
+                              <div>
+                                <input
+                                  type="text"
+                                  value={row.identityResolutionSearchText ?? ''}
+                                  onChange={(e) => updateRow(row.id, { identityResolutionSearchText: e.target.value })}
+                                  placeholder="Procurar produto existente pelo nome..."
+                                  className="w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                                />
+                                {searchResults.length > 0 && (
+                                  <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                    {searchResults.map((p) => (
+                                      <button
+                                        key={p.id}
+                                        type="button"
+                                        onClick={() => {
+                                          handleSelectProductForTool(row.id, p.name);
+                                          updateRow(row.id, { identityResolutionSearchText: '' });
+                                        }}
+                                        className="text-[12.5px] font-semibold text-[#0B1F3A] bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 hover:bg-[#FAFBFC] transition-colors duration-150"
+                                      >
+                                        {p.name}
+                                      </button>
+                                    ))}
+                                  </div>
+                                )}
+                                {searchTerm && searchResults.length === 0 && (
+                                  <p className="mt-1 text-[11px] text-gray-500 italic">Nenhum produto encontrado.</p>
+                                )}
+                              </div>
+                            );
+                          })()}
                           <button
                             type="button"
                             onClick={() => {
