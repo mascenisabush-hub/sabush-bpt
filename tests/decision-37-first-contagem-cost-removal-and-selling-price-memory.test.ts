@@ -61,7 +61,10 @@ describe('AC-01/AC-02 — Custo de Compra Original is fully removed, not merely 
 
   it('purchaseUnit is deliberately preserved — it remains the relationship chain root unit, independent of the removed cost value', () => {
     assert.match(periodicSrc, /purchaseUnit: string/);
-    assert.match(periodicSrc, /<UnitRelationshipChainEditor purchaseUnit=\{purchaseUnit\}/);
+    // [Bug fix — whole-form Enter-submits-finalization coverage] Now
+    // multi-line (a new suppressEnterSubmit prop was added), matched
+    // loosely across the tag's opening rather than as one literal line.
+    assert.match(periodicSrc, /<UnitRelationshipChainEditor\s*\n\s*purchaseUnit=\{purchaseUnit\}/);
   });
 
   it('the draft-persistence type (PeriodicStockDraft.newProductInfo) no longer carries purchaseCost either', () => {

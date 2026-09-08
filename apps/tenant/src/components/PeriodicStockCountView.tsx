@@ -159,7 +159,10 @@ const UnitRelationshipChainEditor: React.FC<{
   purchaseUnit: string;
   steps: { unit: string; factor: string }[];
   onChange: (steps: { unit: string; factor: string }[]) => void;
-}> = ({ purchaseUnit, steps, onChange }) => {
+  // [Bug fix — whole-form Enter-submits-finalization coverage] See
+  // NewProductInfoPanel's identical prop for the full explanation.
+  suppressEnterSubmit: (e: React.KeyboardEvent) => void;
+}> = ({ purchaseUnit, steps, onChange, suppressEnterSubmit }) => {
   const [expanded, setExpanded] = useState(steps.some((s) => s.unit || s.factor));
 
   if (!expanded) {
@@ -231,6 +234,7 @@ const UnitRelationshipChainEditor: React.FC<{
                   inputMode="decimal"
                   value={step.factor}
                   onChange={(e) => updateStep(index, { factor: sanitizeDecimalInput(e.target.value) })}
+                  onKeyDown={suppressEnterSubmit}
                   placeholder="Ex: 4"
                   className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
@@ -241,6 +245,7 @@ const UnitRelationshipChainEditor: React.FC<{
                   type="text"
                   value={step.unit}
                   onChange={(e) => updateStep(index, { unit: e.target.value })}
+                  onKeyDown={suppressEnterSubmit}
                   placeholder="Ex: Emb"
                   className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
@@ -301,7 +306,10 @@ const ModeAValuationControl: React.FC<{
    * fabricated conversion (UOM Specification §4 Item 6). */
   allPortionsConvertible: boolean;
   onChange: (fields: Partial<{ referenceUnit: string; referencePrice: string }>) => void;
-}> = ({ referenceUnitOptions, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onChange }) => {
+  // [Bug fix — whole-form Enter-submits-finalization coverage] See
+  // NewProductInfoPanel's identical prop for the full explanation.
+  suppressEnterSubmit: (e: React.KeyboardEvent) => void;
+}> = ({ referenceUnitOptions, referenceUnit, referencePrice, currencySymbol, allPortionsConvertible, onChange, suppressEnterSubmit }) => {
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
     // col-span-5, matching rowGridClass's corrected five-track
@@ -344,6 +352,7 @@ const ModeAValuationControl: React.FC<{
           inputMode="decimal"
           value={referencePrice}
           onChange={(e) => onChange({ referencePrice: sanitizeDecimalInput(e.target.value) })}
+          onKeyDown={suppressEnterSubmit}
           placeholder="Ex: 1250"
           className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
         />
@@ -429,6 +438,16 @@ const NewProductInfoPanel: React.FC<{
   sellingUnitOptions: string[];
   sellingUnit: string;
   onSellingUnitChange: (value: string) => void;
+  // [Bug fix — "editing a name, one letter, everything disappears"'s
+  // own sibling issue: the whole editable view lives inside a single
+  // form whose submit handler is the finalization-review flow, so
+  // Enter in ANY single-line input here would otherwise trigger it,
+  // exactly like every other in-form field this feature already
+  // protects (`suppressEnterSubmit`, defined once in the parent).
+  // Passed down rather than redefined here, since it is a pure,
+  // stateless function with no dependency on this component's own
+  // props/state — reusing it, not duplicating it.
+  suppressEnterSubmit: (e: React.KeyboardEvent) => void;
 }> = ({
   productName,
   purchaseUnit,
@@ -438,6 +457,7 @@ const NewProductInfoPanel: React.FC<{
   sellingUnitOptions,
   sellingUnit,
   onSellingUnitChange,
+  suppressEnterSubmit,
 }) => {
   return (
     // [Issue 2 — Periodic Contagem Live Selling-Price Readability]
@@ -482,12 +502,18 @@ const NewProductInfoPanel: React.FC<{
           type="text"
           value={purchaseUnit}
           onChange={(e) => onPurchaseUnitChange(e.target.value)}
+          onKeyDown={suppressEnterSubmit}
           placeholder="Ex: Cx"
           className="w-20 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
         />
       </label>
 
-      <UnitRelationshipChainEditor purchaseUnit={purchaseUnit} steps={relationshipSteps} onChange={onRelationshipStepsChange} />
+      <UnitRelationshipChainEditor
+        purchaseUnit={purchaseUnit}
+        steps={relationshipSteps}
+        onChange={onRelationshipStepsChange}
+        suppressEnterSubmit={suppressEnterSubmit}
+      />
 
       {/* [Decision 37 B.2 Selling Unit Capture Extension —
           Implementation Authorization §2 items 2/5] Renders only once
@@ -7435,6 +7461,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                 currencySymbol={currencySymbol}
                                 allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
                                 onChange={(fields) => handleReferenceConfigChange(key, fields)}
+                                suppressEnterSubmit={suppressEnterSubmit}
                               />
                             );
                           })()}
@@ -7829,6 +7856,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               currencySymbol={currencySymbol}
                               allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
                               onChange={(fields) => handleReferenceConfigChange(key, fields)}
+                              suppressEnterSubmit={suppressEnterSubmit}
                             />
                           );
                         })()}
@@ -7901,6 +7929,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       type="text"
                                       value={identityResolutionSearchText}
                                       onChange={(e) => setIdentityResolutionSearchText(e.target.value)}
+                                      onKeyDown={suppressEnterSubmit}
                                       placeholder="Procurar produto existente pelo nome..."
                                       className="w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
                                     />
@@ -7995,6 +8024,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               sellingUnitOptions={sellingUnitOptions}
                               sellingUnit={effectiveSellingUnit}
                               onSellingUnitChange={(value) => setInfo({ sellingUnit: value })}
+                              suppressEnterSubmit={suppressEnterSubmit}
                             />
                           );
                         })()}
