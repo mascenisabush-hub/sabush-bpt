@@ -1022,6 +1022,9 @@ export const fr: TranslationDict = {
         endsOn: 'L\'essai se termine le {{date}}',
         subscribeButton: 'S\'abonner',
       },
+      active: {
+        title: 'Abonnement actif',
+      },
       gracePeriod: {
         title: 'Votre abonnement nécessite votre attention',
         daysRemaining: 'Période de tolérance restante : {{days}} jours',

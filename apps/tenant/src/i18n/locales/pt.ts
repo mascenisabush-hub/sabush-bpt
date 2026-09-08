@@ -1039,6 +1039,14 @@ export interface TranslationDict {
         endsOn: string; // {{date}}
         subscribeButton: string;
       };
+      // [Subscription banner readability/color fix] New — the 'active'
+      // (fully subscribed, healthy) state previously rendered no banner
+      // at all. Owner-requested: a lightweight, informational-only
+      // green indicator, matching Trial Active's own "no action needed"
+      // tone — title only, no button, since there is nothing to do.
+      active: {
+        title: string;
+      };
       gracePeriod: {
         title: string;
         daysRemaining: string; // {{days}}
@@ -2202,6 +2210,9 @@ export const pt: TranslationDict = {
         daysRemaining: 'Dias restantes: {{days}}',
         endsOn: 'O período experimental termina a {{date}}',
         subscribeButton: 'Subscrever',
+      },
+      active: {
+        title: 'Subscrição ativa',
       },
       gracePeriod: {
         title: 'A sua subscrição precisa de atenção',

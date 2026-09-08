@@ -7,17 +7,17 @@ import { SubscriptionContactModal } from './SubscriptionContactModal';
 
 // Release Readiness Audit finding (19-v1-completion-review-and-release-readiness-audit.md,
 // §2a): the client previously had zero in-app visibility of trial or
-// subscription status. This banner is the minimum fix — informational
-// for Trial Active (no urgency yet), warning-tier for Grace Period
-// (DESIGN_SYSTEM.md's --warning/amber, matching the same severity
-// tier Header.tsx's own PRIORITY_BORDER_COLOR already uses for
-// 'timeline'-priority items), error-tier for Expired (--error/rose,
-// matching 'immediate'-priority items). Renders nothing for
-// 'active' — a healthy subscription shouldn't add persistent chrome.
-// Renders nothing at all for Staff (Architecture 6.8 — subscription
-// management is Owner/Manager territory; a Staff account has no
-// action to take here and the [Subscribe]/[Contact Support] button
-// would be a dead end for them).
+// subscription status. This banner is the minimum fix.
+// [Subscription banner color/positioning fix — Owner-requested] Color
+// now follows a simple two-tier read: GREEN for "you're fine" (Trial
+// Active, Active/subscribed), RED for "this needs attention" (Grace
+// Period, Expired) — Grace Period and Expired share the same rose
+// palette, distinguished from each other only by icon (AlertTriangle
+// vs Lock) and their own title/button text, never by color, per this
+// explicit direction. Renders nothing at all for Staff (Architecture
+// 6.8 — subscription management is Owner/Manager territory; a Staff
+// account has no action to take here and the [Subscribe]/[Contact
+// Support] button would be a dead end for them).
 export const SubscriptionStatusBanner: React.FC = () => {
   const {
     subscription,
@@ -33,18 +33,18 @@ export const SubscriptionStatusBanner: React.FC = () => {
   if (subscription.status === 'trial_active') {
     return (
       <>
-        <div className="bg-[#0B1F3A]/[0.04] border-b border-[#0B1F3A]/10">
+        <div className="bg-emerald-50 border-b border-emerald-500/30">
           <div className="max-w-7xl mx-auto px-4 sm:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[13px] text-[#0B1F3A]">
-              <Clock className="w-4 h-4 shrink-0" strokeWidth={2.25} />
+            <div className="flex items-center gap-2 text-[13px] text-emerald-800">
+              <Clock className="w-4 h-4 shrink-0 text-emerald-600" strokeWidth={2.25} />
               <span className="font-bold">{t('subscription.banner.trialActive.title')}</span>
               {subscriptionTrialDaysRemaining != null && (
-                <span className="text-[#0B1F3A]/70">
+                <span className="text-emerald-700">
                   · {t('subscription.banner.trialActive.daysRemaining', { days: subscriptionTrialDaysRemaining })}
                 </span>
               )}
               {subscription.trialEndsAt && (
-                <span className="text-[#0B1F3A]/70 hidden sm:inline">
+                <span className="text-emerald-700 hidden sm:inline">
                   · {t('subscription.banner.trialActive.endsOn', { date: formatDate(subscription.trialEndsAt) })}
                 </span>
               )}
@@ -52,7 +52,7 @@ export const SubscriptionStatusBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowContactModal(true)}
-              className="px-3 py-1 rounded-lg bg-[#0B1F3A] text-white text-[12px] font-bold hover:bg-[#0B1F3A]/90 transition shrink-0"
+              className="px-3 py-1 rounded-lg bg-emerald-600 text-white text-[12px] font-bold hover:bg-emerald-700 transition shrink-0"
             >
               {t('subscription.banner.trialActive.subscribeButton')}
             </button>
@@ -63,16 +63,33 @@ export const SubscriptionStatusBanner: React.FC = () => {
     );
   }
 
+  // [Owner-requested] Previously rendered nothing at all for a healthy,
+  // fully subscribed business — deliberately, to avoid persistent
+  // chrome when nothing needs attention. Now shows the same lightweight
+  // treatment as Trial Active (informational green, no button — there
+  // is nothing to do), so "everything's fine" is visibly confirmed
+  // rather than silently assumed.
+  if (subscription.status === 'active') {
+    return (
+      <div className="bg-emerald-50 border-b border-emerald-500/30">
+        <div className="max-w-7xl mx-auto px-4 sm:px-8 py-2 flex items-center gap-2 text-[13px] text-emerald-800">
+          <Clock className="w-4 h-4 shrink-0 text-emerald-600" strokeWidth={2.25} />
+          <span className="font-bold">{t('subscription.banner.active.title')}</span>
+        </div>
+      </div>
+    );
+  }
+
   if (subscription.status === 'grace_period') {
     return (
       <>
-        <div className="bg-amber-50 border-b border-amber-500/30">
+        <div className="bg-rose-50 border-b border-rose-500/30">
           <div className="max-w-7xl mx-auto px-4 sm:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
-            <div className="flex items-center gap-2 text-[13px] text-amber-800">
-              <AlertTriangle className="w-4 h-4 shrink-0 text-amber-600" strokeWidth={2.25} />
+            <div className="flex items-center gap-2 text-[13px] text-rose-800">
+              <AlertTriangle className="w-4 h-4 shrink-0 text-rose-600" strokeWidth={2.25} />
               <span className="font-bold">{t('subscription.banner.gracePeriod.title')}</span>
               {subscriptionGracePeriodDaysRemaining != null && (
-                <span className="text-amber-700">
+                <span className="text-rose-700">
                   · {t('subscription.banner.gracePeriod.daysRemaining', { days: subscriptionGracePeriodDaysRemaining })}
                 </span>
               )}
@@ -80,7 +97,7 @@ export const SubscriptionStatusBanner: React.FC = () => {
             <button
               type="button"
               onClick={() => setShowContactModal(true)}
-              className="px-3 py-1 rounded-lg bg-amber-600 text-white text-[12px] font-bold hover:bg-amber-700 transition shrink-0"
+              className="px-3 py-1 rounded-lg bg-rose-600 text-white text-[12px] font-bold hover:bg-rose-700 transition shrink-0"
             >
               {t('subscription.banner.gracePeriod.subscribeButton')}
             </button>

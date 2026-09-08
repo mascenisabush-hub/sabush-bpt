@@ -377,64 +377,74 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
           calculateInventoryTotals / AppContext); this is presentation
           only, nothing is recalculated. Color coding: navy = neutral,
           gold = business worth, green = profit, red = expenses. */}
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 xl:grid-cols-5 gap-6">
-        {/* [Owner-requested — replaces the Capital Inicial card] Same
-            underlying displayedBusinessWorth/displayedBusinessWorthValue
-            this card already computed at its old, less prominent slot
-            (further below in git history) — this is purely a position +
-            presentation change, never a second calculation. Before any
-            figure exists at all (displayedBusinessWorthValue === null —
-            State 1, Specification §6: no historical Capital Inicial AND
-            no BusinessWorthSnapshot yet), this card takes over Capital
-            Inicial's own former "action card" nudge treatment
-            (light/gold, is-action pulse). [Capital Inicial Retirement —
-            Implementation Authorization Increment 4] It no longer routes
-            straight to Capital Inicial creation — it opens the
-            establishment chooser (showEstablishWorthChooser) between
-            Contagem and Owner-Declared Business Worth instead. The
-            moment a figure exists (Estimated — State 1a, or Current —
-            State 3), it switches to the dark/gold "Highlight Card"
-            treatment and the existing click-through Business Worth
-            modal, exactly as this card already behaved at its old
-            slot. */}
-        <KpiCard
-          icon={Gem}
-          iconBgClass="bg-[#D4AF37]/10"
-          iconTextClass={displayedBusinessWorthValue === null ? 'text-[#8A6D1F]' : 'text-[#D4AF37]'}
-          label={t('dashboard.kpi.businessWorth.label')}
-          value={
-            displayedBusinessWorthValue === null
-              ? t('dashboard.kpi.businessWorth.unknown')
-              : formatCurrency(displayedBusinessWorthValue, currencySymbol)
-          }
-          valueClass={displayedBusinessWorthValue === null ? 'text-[#8A6D1F]' : 'text-[#D4AF37]'}
-          description={
-            displayedBusinessWorthValue === null
-              ? t('dashboard.kpi.initialCapital.descUnset')
-              : t('dashboard.kpi.businessWorth.desc')
-          }
-          onClick={displayedBusinessWorthValue === null ? () => setShowEstablishWorthChooser(true) : () => setShowWorthModal(true)}
-          action={displayedBusinessWorthValue === null}
-          variant={displayedBusinessWorthValue === null ? 'light' : 'dark'}
-          badge={
-            displayedBusinessWorthValue === null ? undefined : displayedBusinessWorthIsEstimated ? (
-              <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#D4AF37] bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-full px-2 py-0.5">
-                {t('dashboard.kpi.businessWorth.estimatedLabel')}
-              </span>
-            ) : hasInitialStockCount && capitalGrowth !== 0 ? (
-              <span
-                className={`inline-flex items-center gap-1 text-[10px] type-number ${
-                  capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
-                }`}
-              >
-                {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
-                {capitalGrowth >= 0 ? '+' : ''}
-                {capitalGrowthPct.toFixed(1)}%
-              </span>
-            ) : null
-          }
-        />
+      {/* [Readability fix — real business owners reported being unable to
+          read the dashboard on their phones] Traced precisely: this card
+          (Business Worth — the single most important figure on the whole
+          dashboard) was previously just one of five cards squeezed into
+          the SAME `grid-cols-2` grid as every other KPI. At a real
+          390px phone width, after the page's own `px-4` outer padding
+          and this grid's `gap-6`, each card had only ~119px of USABLE
+          content width once its own `p-6` padding was subtracted — far
+          too little for a bold, `text-[32px]` figure like
+          "314.775,00 MT" (14 characters), which `truncate` was
+          therefore very likely eliding with "…" on real phones. Pulled
+          out to its own full-width row, exactly matching the intended
+          "Valor do Negócio" hero-card treatment — the figure that
+          matters most gets the full phone width to render without
+          truncation, never sharing a row with anything else on any
+          screen size. */}
+      <KpiCard
+        icon={Gem}
+        iconBgClass="bg-[#D4AF37]/10"
+        iconTextClass={displayedBusinessWorthValue === null ? 'text-[#8A6D1F]' : 'text-[#D4AF37]'}
+        label={t('dashboard.kpi.businessWorth.label')}
+        value={
+          displayedBusinessWorthValue === null
+            ? t('dashboard.kpi.businessWorth.unknown')
+            : formatCurrency(displayedBusinessWorthValue, currencySymbol)
+        }
+        valueClass={displayedBusinessWorthValue === null ? 'text-[#8A6D1F]' : 'text-[#D4AF37]'}
+        description={
+          displayedBusinessWorthValue === null
+            ? t('dashboard.kpi.initialCapital.descUnset')
+            : t('dashboard.kpi.businessWorth.desc')
+        }
+        onClick={displayedBusinessWorthValue === null ? () => setShowEstablishWorthChooser(true) : () => setShowWorthModal(true)}
+        action={displayedBusinessWorthValue === null}
+        variant={displayedBusinessWorthValue === null ? 'light' : 'dark'}
+        badge={
+          displayedBusinessWorthValue === null ? undefined : displayedBusinessWorthIsEstimated ? (
+            <span className="inline-flex items-center gap-1 text-[10px] font-bold uppercase tracking-wide text-[#D4AF37] bg-[#D4AF37]/10 border border-[#D4AF37]/30 rounded-full px-2 py-0.5">
+              {t('dashboard.kpi.businessWorth.estimatedLabel')}
+            </span>
+          ) : hasInitialStockCount && capitalGrowth !== 0 ? (
+            <span
+              className={`inline-flex items-center gap-1 text-[10px] type-number ${
+                capitalGrowth > 0 ? 'text-emerald-400' : 'text-rose-400'
+              }`}
+            >
+              {capitalGrowth > 0 ? <TrendingUp className="w-3 h-3" /> : <TrendingDown className="w-3 h-3" />}
+              {capitalGrowth >= 0 ? '+' : ''}
+              {capitalGrowthPct.toFixed(1)}%
+            </span>
+          ) : null
+        }
+      />
 
+      {/* [Readability fix, continued] Was `grid-cols-2` unconditionally,
+          including on mobile — the exact same "not enough room for a
+          bold currency figure" problem as the hero card above, just for
+          the remaining four cards. Now 1 column at the narrowest phone
+          width (each card gets the FULL page width — no truncation
+          risk at all), 2 columns from `sm:` (640px) upward, where two
+          cards' worth of padding+gap still leaves ~280px+ per card —
+          comfortably enough for any realistic currency figure — then
+          4 at `lg:` as before. Dropped the old `xl:grid-cols-5` — only
+          FOUR cards remain in this grid now that Business Worth has its
+          own row above, so a 5-column track would leave a permanent
+          empty gap at wide viewports; `lg:grid-cols-4` already fills
+          exactly one row and needs no wider variant. */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
         <KpiCard
           icon={Package}
           iconBgClass="bg-[#0B1F3A]/[0.06]"
@@ -506,7 +516,15 @@ export const DashboardView: React.FC<DashboardViewProps> = ({
         <p className="kpi-label mb-5 px-1">
           {t('dashboard.otherIndicators')}
         </p>
-        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-6">
+        {/* [Readability fix — same "not enough room for a bold currency
+            figure on a real phone" problem as the primary grid above,
+            applied identically here] 1 column at the narrowest phone
+            width, 2 from `sm:` upward — `lg:grid-cols-4` for this
+            three-card row is unchanged from the existing F-01 fix
+            above (a deliberate, already-reasoned choice to keep the
+            column count from ever *decreasing* as the viewport widens,
+            not a readability defect this fix needs to touch). */}
+        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-6">
           <KpiCard
             icon={HandCoins}
             iconBgClass="bg-[#D4AF37]/10"

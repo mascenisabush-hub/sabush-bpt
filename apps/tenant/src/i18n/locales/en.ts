@@ -1022,6 +1022,9 @@ export const en: TranslationDict = {
         endsOn: 'Trial ends on {{date}}',
         subscribeButton: 'Subscribe',
       },
+      active: {
+        title: 'Subscription active',
+      },
       gracePeriod: {
         title: 'Your subscription needs attention',
         daysRemaining: 'Grace period remaining: {{days}} days',
