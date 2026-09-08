@@ -145,7 +145,13 @@ describe('PeriodicStockCountView.tsx — ExistingProductSummary is actually wire
     // explicit New confirmation) was inserted into this same manual-row
     // card, immediately before NewProductInfoPanel, pushing the
     // distance to 12919 chars. No assertion content below changed.
-    const block = periodicSrc.slice(start, start + 13500);
+    // [Bug fix — Contagem's resolution panel had no way to search the
+    // full catalog] Widened again, 13500 -> 17000: the added free-text
+    // substring search (identityResolutionSearchText) was inserted into
+    // the same resolution panel, between the findSimilarProducts
+    // candidates and the "confirm as new" button, pushing the true
+    // distance to 16361 chars. No assertion content below changed.
+    const block = periodicSrc.slice(start, start + 17000);
     assert.match(block, /\{isNewProduct &&/);
     assert.match(block, /\{!isNewProduct && cardIsFirstPortionOfMultiPortionGroup && \(\s*<ExistingProductSummary/);
     assert.match(block, /costBasis=\{costBasisByProductName\.get\(productKeyFor\(group\.displayName\)\)\}/);

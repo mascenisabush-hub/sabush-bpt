@@ -555,6 +555,25 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     r.productName.trim() !== '' || r.quantity !== '50' || r.costPrice !== '' || r.sellingPrice !== '';
 
   const [rows, setRows] = useState<StockRowItem[]>(() => [createEmptyRow(initialProductName || '')]);
+  // [Bug fix — confirming a new product on one row didn't unblock a
+  // second row of the same not-yet-catalogued product] identityConfirmedNew
+  // (StockRowItem, below) is set per-ROW, by design — each explicit
+  // click is its own owner action. But two rows can legitimately share
+  // the same typed name within one submission (two batches/cost lines
+  // of a product never bought before) — Periodic Contagem's own
+  // equivalent (manualIdentityConfirmedNew, PeriodicStockCountView.tsx)
+  // already tracks this at the PRODUCT-NAME level for exactly this
+  // reason. This mirrors that: once ANY row's explicit New-confirmation
+  // click adds this row's CURRENT trimmed, lowercased name here, every
+  // OTHER row sharing that same current name is treated as resolved
+  // too — checked fresh against each row's own current text at every
+  // read site (identityUnresolved below, handleSubmit's re-check), so
+  // it can never go stale the way a row-only flag would. Renaming a
+  // row away from a confirmed name simply stops matching this Set — no
+  // explicit removal needed, same "orphaned entry, never migrated"
+  // convention PeriodicStockCountView.tsx's own manualIdentityConfirmedNew
+  // already documents.
+  const [confirmedNewProductNames, setConfirmedNewProductNames] = useState<Set<string>>(new Set());
   // [Feature — Owner-requested "black list" for discontinued products]
   // Composite `${rowId}:${productId}` keys — a row's reactivation
   // prompt is dismissed (either "Sim, reativar" was clicked, handled
@@ -2204,7 +2223,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       const identityResolvesToExistingProduct = products.some(
         (p) => p.name.toLowerCase() === trimmedName.toLowerCase()
       );
-      if (!identityResolvesToExistingProduct && !row.pendingSupplierWording && !row.identityConfirmedNew) {
+      // [Bug fix — see confirmedNewProductNames' own declaration] A
+      // row is also resolved when ANOTHER row's explicit New-
+      // confirmation already covered this exact current name.
+      if (
+        !identityResolvesToExistingProduct &&
+        !row.pendingSupplierWording &&
+        !row.identityConfirmedNew &&
+        !confirmedNewProductNames.has(trimmedName.toLowerCase())
+      ) {
         alert(t('addStock.identityResolution.unresolvedError', { n: i + 1, name: trimmedName }));
         return;
       }
@@ -2292,8 +2319,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         // Only ever meaningful for a row that does NOT resolve to an
         // existing product — addMultipleStockBatches' own safety
         // boundary independently re-verifies this, never trusting the
-        // UI alone.
-        ...(row.identityConfirmedNew ? { confirmedNewProduct: true } : {}),
+        // UI alone. [Bug fix — see confirmedNewProductNames' own
+        // declaration] Also forwarded when a SIBLING row's explicit
+        // click already confirmed this exact current name — otherwise
+        // AppContext's own independent re-check (which has no
+        // knowledge of sibling rows) would reject this item even
+        // though handleSubmit's gate, above, already let it through.
+        ...(row.identityConfirmedNew || confirmedNewProductNames.has(trimmedName.toLowerCase())
+          ? { confirmedNewProduct: true }
+          : {}),
       });
     }
 
@@ -2986,12 +3020,19 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   // requires the owner to explicitly resolve it before
                   // finalization, never silently by simply leaving it
                   // alone.
+                  // [Bug fix — see confirmedNewProductNames' own
+                  // declaration] A row is ALSO resolved when some other
+                  // row's explicit New-confirmation already covered this
+                  // exact current name — multiple portions/batches of the
+                  // same brand-new product no longer each demand their
+                  // own separate click.
                   const identityUnresolved =
                     row.productName.trim() !== '' &&
                     !exactMatchExists &&
                     !row.pendingSupplierWording &&
                     !(row.supplierWordingCandidates && row.supplierWordingCandidates.length > 0) &&
-                    !row.identityConfirmedNew;
+                    !row.identityConfirmedNew &&
+                    !confirmedNewProductNames.has(row.productName.trim().toLowerCase());
 
                   return (
                     <div
@@ -3076,7 +3117,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 {row.productName.trim() && !exactMatchExists && (
                                   <button
                                     type="button"
-                                    onClick={() =>
+                                    onClick={() => {
+                                      // [Bug fix — see confirmedNewProductNames'
+                                      // own declaration] Resolves every row
+                                      // sharing this same current name, not
+                                      // just this one.
+                                      setConfirmedNewProductNames((prev) => new Set(prev).add(row.productName.trim().toLowerCase()));
                                       updateRow(row.id, {
                                         productName: row.productName.trim(),
                                         isDropdownOpen: false,
@@ -3088,8 +3134,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                         // authorize creating a new Product
                                         // for an unresolved name.
                                         identityConfirmedNew: true,
-                                      })
-                                    }
+                                      });
+                                    }}
                                     className="w-full text-left px-3 py-2 hover:bg-[#D4AF37]/[0.06] transition-colors duration-150 flex items-center gap-2 text-xs text-[#B8952F] font-semibold"
                                   >
                                     <Sparkles className="w-3.5 h-3.5" />
@@ -3490,15 +3536,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                   {row.productName.trim() && !exactMatchExists && (
                                     <button
                                       type="button"
-                                      onClick={() =>
+                                      onClick={() => {
+                                        // [Bug fix — see confirmedNewProductNames'
+                                        // own declaration]
+                                        setConfirmedNewProductNames((prev) => new Set(prev).add(row.productName.trim().toLowerCase()));
                                         updateRow(row.id, {
                                           productName: row.productName.trim(),
                                           isDropdownOpen: false,
                                           // [Product Identity Existing/New
                                           // Resolution — Checkpoint A]
                                           identityConfirmedNew: true,
-                                        })
-                                      }
+                                        });
+                                      }}
                                       className="w-full text-left px-3 py-2 text-xs text-[#B8952F] font-semibold hover:bg-[#D4AF37]/[0.06] transition-colors duration-150"
                                     >
                                       {t('addStock.createNewShort', { name: row.productName.trim() })}
@@ -3827,7 +3876,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
                           <button
                             type="button"
-                            onClick={() => updateRow(row.id, { identityConfirmedNew: true })}
+                            onClick={() => {
+                              // [Bug fix — see confirmedNewProductNames'
+                              // own declaration]
+                              setConfirmedNewProductNames((prev) => new Set(prev).add(row.productName.trim().toLowerCase()));
+                              updateRow(row.id, { identityConfirmedNew: true });
+                            }}
                             className="text-[12.5px] font-bold text-white bg-[#0B1F3A] hover:bg-[#0B1F3A]/90 rounded-lg px-2.5 py-1.5 transition-colors duration-150"
                           >
                             {t('addStock.identityResolution.confirmNewButton', { name: row.productName.trim() })}

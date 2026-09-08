@@ -78,9 +78,15 @@ describe('Requirement A — unresolved identity cannot silently create a Product
   });
 
   it('AddStockView.tsx re-checks identity resolution at handleSubmit (defensive re-check, never trusting render-level state alone)', () => {
+    // [Bug fix — confirmedNewProductNames] Widened to also require the
+    // name-level Set check — a row is resolved when EITHER its own
+    // identityConfirmedNew flag is set OR a sibling row already
+    // confirmed this exact current name. Still a strict AND-of-negations
+    // gate before the alert; still defensive, still independent of the
+    // render-level state.
     assert.match(
       addStockViewSource,
-      /if\s*\(!identityResolvesToExistingProduct && !row\.pendingSupplierWording && !row\.identityConfirmedNew\)\s*\{\s*\n\s*alert/
+      /if\s*\(\s*\n\s*!identityResolvesToExistingProduct &&\s*\n\s*!row\.pendingSupplierWording &&\s*\n\s*!row\.identityConfirmedNew &&\s*\n\s*!confirmedNewProductNames\.has\(trimmedName\.toLowerCase\(\)\)\s*\n\s*\)\s*\{\s*\n\s*alert/
     );
   });
 
@@ -145,9 +151,16 @@ describe('Requirement C — explicit New confirmation is the only thing that aut
   });
 
   it('every identityConfirmedNew: true site is inside an onClick handler, not inside a typing/debounce handler', () => {
+    // [Bug fix — confirmedNewProductNames] Window widened 900 -> 1300:
+    // each site's onClick body now also sets confirmedNewProductNames
+    // (see that field's own declaration comment) before setting
+    // identityConfirmedNew: true, plus its own explanatory comment —
+    // pushing the distance back to the onClick={() => opening slightly
+    // further than before. No assertion content changed; every site
+    // must still be inside an onClick handler.
     const idx = [...addStockViewSource.matchAll(/identityConfirmedNew:\s*true/g)].map((m) => m.index!);
     for (const i of idx) {
-      const windowBefore = addStockViewSource.slice(Math.max(0, i - 900), i);
+      const windowBefore = addStockViewSource.slice(Math.max(0, i - 1300), i);
       assert.match(
         windowBefore,
         /onClick=\{\(\)\s*=>/,
@@ -156,8 +169,11 @@ describe('Requirement C — explicit New confirmation is the only thing that aut
     }
   });
 
-  it('the confirmed-new signal is forwarded to addMultipleStockBatches only when the row actually carries it (never unconditionally true)', () => {
-    assert.match(addStockViewSource, /\.\.\.\(row\.identityConfirmedNew \? \{ confirmedNewProduct: true \} : \{\}\)/);
+  it('the confirmed-new signal is forwarded to addMultipleStockBatches only when the row actually carries it, OR a sibling row already confirmed this exact name (never unconditionally true)', () => {
+    assert.match(
+      addStockViewSource,
+      /\.\.\.\(row\.identityConfirmedNew \|\| confirmedNewProductNames\.has\(trimmedName\.toLowerCase\(\)\)\s*\n\s*\? \{ confirmedNewProduct: true \}\s*\n\s*: \{\}\)/
+    );
   });
 
   it('Periodic Contagem sets manualIdentityConfirmedNew ONLY via the explicit "confirm as new product" button', () => {

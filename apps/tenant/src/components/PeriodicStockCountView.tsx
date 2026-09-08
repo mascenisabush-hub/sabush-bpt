@@ -2600,6 +2600,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // confirmation can never carry over to a different typed name.
   const [manualIdentityConfirmedNew, setManualIdentityConfirmedNew] = useState<Set<string>>(new Set());
 
+  // [Bug fix — Contagem's resolution panel had no way to search the
+  // full catalog] The panel's own `findSimilarProducts` candidates
+  // (below) are threshold-gated (score >= 0.5) and capped at 3 — a
+  // genuinely existing product worded differently enough could clear
+  // neither bar, leaving "confirm as new" as the owner's only visible
+  // option even though the real product was sitting in the catalog.
+  // This free-text query powers a second, unbounded, substring-match
+  // search inside that same panel — the same `filteredProducts`
+  // mechanism AddStockView.tsx's own autocomplete dropdown already
+  // uses, reused here as a query string rather than duplicated as a
+  // second candidate-detection algorithm. A single shared field is
+  // sufficient (not one per product-group) because the Single-Product
+  // Workspace model above only ever renders one manual-row card, and
+  // therefore at most one resolution panel, at a time — never
+  // persisted, cleared on every successful selection (its own click
+  // handler, below).
+  const [identityResolutionSearchText, setIdentityResolutionSearchText] = useState('');
+
   // [Decision 38 Amendment — Interruption-durability combined
   // mechanism (§5a); Implementation Authorization §2 item 6]
   // latestFlushArgs mirrors InitialStockCountView.tsx's own
@@ -7856,6 +7874,57 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                   ))}
                                 </div>
                               )}
+                              {/* [Bug fix — no way to manually find an
+                                  existing product when it fell outside
+                                  findSimilarProducts' own threshold/cap]
+                                  Same reused mechanism as the candidates
+                                  above (handleRenameManualGroup) — a
+                                  substring search over the FULL,
+                                  already-scoped `products` array, never
+                                  a new query. Selecting a result never
+                                  auto-picks anything; the owner must
+                                  still click it explicitly, exactly like
+                                  a candidate chip. */}
+                              {(() => {
+                                const searchTerm = identityResolutionSearchText.trim().toLowerCase();
+                                const searchResults = searchTerm
+                                  ? products
+                                      .filter((p) => p.name.toLowerCase().includes(searchTerm))
+                                      .filter((p) => !candidates.some((c) => c.id === p.id))
+                                      .slice(0, 8)
+                                  : [];
+                                return (
+                                  <div>
+                                    <input
+                                      type="text"
+                                      value={identityResolutionSearchText}
+                                      onChange={(e) => setIdentityResolutionSearchText(e.target.value)}
+                                      placeholder="Procurar produto existente pelo nome..."
+                                      className="w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
+                                    />
+                                    {searchResults.length > 0 && (
+                                      <div className="mt-1.5 flex flex-wrap gap-1.5">
+                                        {searchResults.map((p) => (
+                                          <button
+                                            key={p.id}
+                                            type="button"
+                                            onClick={() => {
+                                              handleRenameManualGroup(key, p.name);
+                                              setIdentityResolutionSearchText('');
+                                            }}
+                                            className="text-[12.5px] font-semibold text-[#0B1F3A] bg-white border border-[#E5E7EB] rounded-lg px-2.5 py-1.5 hover:bg-[#FAFBFC] transition-colors duration-150"
+                                          >
+                                            {p.name}
+                                          </button>
+                                        ))}
+                                      </div>
+                                    )}
+                                    {searchTerm && searchResults.length === 0 && (
+                                      <p className="mt-1 text-[11px] text-gray-500 italic">Nenhum produto encontrado.</p>
+                                    )}
+                                  </div>
+                                );
+                              })()}
                               <button
                                 type="button"
                                 onClick={() => setManualIdentityConfirmedNew((prev) => new Set(prev).add(key))}
