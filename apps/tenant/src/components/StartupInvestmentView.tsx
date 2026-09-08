@@ -18,6 +18,11 @@ import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { resolveStartupInvestmentWindow, computeStartupInvestmentTotal } from '../utils/calculations';
 import { PiggyBank, Plus, X } from 'lucide-react';
 import { StartupInvestmentEntry } from '../types';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied elsewhere in this app.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 
 function newSubmissionId(prefix: string): string {
   return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
@@ -171,11 +176,10 @@ export const StartupInvestmentView: React.FC = () => {
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('startupInvestment.form.amountLabel')}</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={newAmount}
-                  onChange={(e) => setNewAmount(e.target.value)}
+                  onChange={(e) => setNewAmount(sanitizeDecimalInput(e.target.value))}
                   className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
                   placeholder={`0 ${currencySymbol}`}
                 />

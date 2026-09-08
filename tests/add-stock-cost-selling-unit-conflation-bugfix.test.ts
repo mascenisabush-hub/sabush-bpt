@@ -168,8 +168,12 @@ describe('TEST 6 — Owner selling-price override still works, no cost corruptio
     // Confirmed by absence of any change to the row-update handlers
     // (updateRow itself, and the sellingPrice <input>'s own onChange)
     // — this fix only touches the four selling-memory-read call sites,
-    // never the Owner-edit write path.
-    assert.match(addStockSrc, /onChange=\{e => updateRow\(row\.id, \{ sellingPrice: e\.target\.value, sellingPriceAutoFilled: false \}\)\}/);
+    // never the Owner-edit write path. [Bug fix — "digits typed are
+    // hidden" on decimal entry] The input's own value now passes
+    // through sanitizeDecimalInput first (type="number" ->
+    // type="text"/inputMode="decimal") — the *AutoFilled: false pairing
+    // itself is otherwise unchanged.
+    assert.match(addStockSrc, /onChange=\{e => updateRow\(row\.id, \{ sellingPrice: sanitizeDecimalInput\(e\.target\.value\), sellingPriceAutoFilled: false \}\)\}/);
   });
 });
 

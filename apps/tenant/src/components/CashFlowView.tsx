@@ -48,6 +48,11 @@ import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatt
 import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp, Receipt } from 'lucide-react';
 import { Receivable, Payable, type SupplierRecord } from '../types';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied elsewhere in this app.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 import { AddExpenseView } from './AddExpenseView';
 import { AddWithdrawalView } from './AddWithdrawalView';
 
@@ -149,11 +154,10 @@ const PaymentForm: React.FC<{
         <div>
           <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.paymentAmountLabel')}</label>
           <input
-            type="number"
-            step="0.01"
-            min="0"
+            type="text"
+            inputMode="decimal"
             value={amount}
-            onChange={(e) => setAmount(e.target.value)}
+            onChange={(e) => setAmount(sanitizeDecimalInput(e.target.value))}
             className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
             placeholder={`0 ${currencySymbol}`}
           />
@@ -395,11 +399,10 @@ export const CashFlowView: React.FC = () => {
               <div>
                 <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.cashAmountLabel')}</label>
                 <input
-                  type="number"
-                  step="0.01"
-                  min="0"
+                  type="text"
+                  inputMode="decimal"
                   value={newCashAmount}
-                  onChange={(e) => setNewCashAmount(e.target.value)}
+                  onChange={(e) => setNewCashAmount(sanitizeDecimalInput(e.target.value))}
                   className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
                   placeholder={`0 ${currencySymbol}`}
                 />
@@ -486,11 +489,10 @@ export const CashFlowView: React.FC = () => {
             <div>
               <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.amountLabel')}</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={newAmount}
-                onChange={(e) => setNewAmount(e.target.value)}
+                onChange={(e) => setNewAmount(sanitizeDecimalInput(e.target.value))}
                 className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
                 placeholder={`0 ${currencySymbol}`}
               />
@@ -607,11 +609,10 @@ export const CashFlowView: React.FC = () => {
             <div>
               <label className="block text-[10px] font-bold text-gray-500 mb-1">{t('cashFlow.form.amountLabel')}</label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={newPayableAmount}
-                onChange={(e) => setNewPayableAmount(e.target.value)}
+                onChange={(e) => setNewPayableAmount(sanitizeDecimalInput(e.target.value))}
                 className="w-full px-2 py-1.5 text-xs rounded-md border border-gray-300"
                 placeholder={`0 ${currencySymbol}`}
               />

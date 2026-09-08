@@ -6,6 +6,11 @@ import { findLatestRememberedProductMemory } from '../lib/productMemoryPriceReso
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied elsewhere in this app.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 
 interface EditProductModalProps {
   product: Product;
@@ -176,11 +181,10 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
                 Preço de Venda{sellingUnitDisplay ? ` (${currencySymbol}/${sellingUnitDisplay})` : ` (${currencySymbol})`}
               </label>
               <input
-                type="number"
-                step="0.01"
-                min="0"
+                type="text"
+                inputMode="decimal"
                 value={sellingPrice}
-                onChange={(e) => setSellingPrice(e.target.value)}
+                onChange={(e) => setSellingPrice(sanitizeDecimalInput(e.target.value))}
                 className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
               />
             </div>

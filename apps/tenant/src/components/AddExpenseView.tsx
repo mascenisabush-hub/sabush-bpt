@@ -5,6 +5,11 @@ import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { Receipt, CheckCircle2, ArrowRight } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied elsewhere in this app.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 
 // [Bug fix — no duplicate-submission protection] Same small local
 // helper as DebtsView.tsx's/StartupInvestmentView.tsx's own identical
@@ -164,13 +169,12 @@ export const AddExpenseView: React.FC<AddExpenseViewProps> = ({ onComplete }) =>
                   {t('addExpense.amountLabel', { symbol: currencySymbol })}
                 </label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   required
                   placeholder="0.00"
                   value={amount}
-                  onChange={e => setAmount(e.target.value)}
+                  onChange={e => setAmount(sanitizeDecimalInput(e.target.value))}
                   className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-4 py-2.5 text-[#111827] text-sm transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                 />
               </div>

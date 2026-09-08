@@ -3,6 +3,11 @@ import { useApp } from '../context/AppContext';
 import { formatCurrency } from '../utils/formatters';
 import { calculateInitialStockValuationChange } from '../utils/calculations';
 import { X, History, ShieldCheck, Info, TrendingUp, Save, ArrowRight } from 'lucide-react';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied elsewhere in this app.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 
 interface InitialStockPriceChangeModalProps {
   onClose: () => void;
@@ -246,12 +251,11 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
                         Quantidade Restante/Afetada
                       </label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         required
                         value={quantityRemaining}
-                        onChange={(e) => setQuantityRemaining(e.target.value)}
+                        onChange={(e) => setQuantityRemaining(sanitizeDecimalInput(e.target.value))}
                         placeholder={`Máx. ${selectedProduct.quantity}`}
                         className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                       />
@@ -274,12 +278,11 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
                         Novo Custo/Un ({currencySymbol})
                       </label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         required
                         value={newCostPrice}
-                        onChange={(e) => setNewCostPrice(e.target.value)}
+                        onChange={(e) => setNewCostPrice(sanitizeDecimalInput(e.target.value))}
                         className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                       />
                     </div>
@@ -288,12 +291,11 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
                         Novo Preço de Venda/Un ({currencySymbol})
                       </label>
                       <input
-                        type="number"
-                        step="0.01"
-                        min="0"
+                        type="text"
+                        inputMode="decimal"
                         required
                         value={newSellingPrice}
-                        onChange={(e) => setNewSellingPrice(e.target.value)}
+                        onChange={(e) => setNewSellingPrice(sanitizeDecimalInput(e.target.value))}
                         className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                       />
                     </div>

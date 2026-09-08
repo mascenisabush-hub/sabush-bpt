@@ -16,6 +16,11 @@ import { findSimilarProducts } from '../lib/productNameSimilarity';
 // Contagem (PeriodicStockCountView.tsx) — see that file's own header
 // comment for why this is a shared utility, not duplicated per screen.
 import { checkPriceDeviation } from '../lib/priceDeviationCheck';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied to PeriodicStockCountView.tsx.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 import { preprocessSmartStockEntryImage } from '../utils/smartStockEntryImagePreprocessing';
 
@@ -327,11 +332,10 @@ const UnitRelationshipRow: React.FC<{
         <div>
           <label className="block text-[10.5px] font-bold text-gray-500 mb-1">Quantidade</label>
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={factor}
-            onChange={(e) => onChange(sellingUnit, e.target.value)}
+            onChange={(e) => onChange(sellingUnit, sanitizeDecimalInput(e.target.value))}
             placeholder="Ex: 24"
             className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           />
@@ -3161,11 +3165,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         {/* Quantidade */}
                         <div className="col-span-1">
                           <input
-                            type="number"
-                            min="1"
+                            type="text"
+                            inputMode="decimal"
                             required
                             value={row.quantity}
-                            onChange={e => updateRow(row.id, { quantity: e.target.value })}
+                            onChange={e => updateRow(row.id, { quantity: sanitizeDecimalInput(e.target.value) })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
                         </div>
@@ -3261,12 +3265,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         {/* Preço Compra */}
                         <div className="col-span-1.5">
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                            type="text"
+                            inputMode="decimal"
                             required
                             value={row.costPrice}
-                            onChange={e => updateRow(row.id, { costPrice: e.target.value, costPriceAutoFilled: false })}
+                            onChange={e => updateRow(row.id, { costPrice: sanitizeDecimalInput(e.target.value), costPriceAutoFilled: false })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
                           {/* [Manual data-entry error investigation,
@@ -3295,12 +3298,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                         {/* Preço Venda */}
                         <div className="col-span-1.5">
                           <input
-                            type="number"
-                            step="0.01"
-                            min="0"
+                            type="text"
+                            inputMode="decimal"
                             required
                             value={row.sellingPrice}
-                            onChange={e => updateRow(row.id, { sellingPrice: e.target.value, sellingPriceAutoFilled: false })}
+                            onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false })}
                             className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                           />
                           {/* [Fix — resolveUnitAwarePrice] Deliberately a
@@ -3423,9 +3425,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </label>
                           <div className="flex items-center gap-2">
                             <input
-                              type="number"
-                              min="0"
-                              step="1"
+                              type="text"
+                              inputMode="decimal"
                               placeholder={t('addStock.restockObservation.placeholder')}
                               value={
                                 row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING
@@ -3434,7 +3435,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               }
                               disabled={row.previousRemainingQuantity === UNKNOWN_PREVIOUS_REMAINING}
                               onChange={e =>
-                                updateRow(row.id, { previousRemainingQuantity: e.target.value })
+                                updateRow(row.id, { previousRemainingQuantity: sanitizeDecimalInput(e.target.value) })
                               }
                               className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1.5 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums disabled:opacity-50 disabled:bg-[#F5F7FA]"
                             />
@@ -3577,11 +3578,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 {t('addStock.table.quantity')}
                               </label>
                               <input
-                                type="number"
-                                min="1"
+                                type="text"
+                                inputMode="decimal"
                                 required
                                 value={row.quantity}
-                                onChange={e => updateRow(row.id, { quantity: e.target.value })}
+                                onChange={e => updateRow(row.id, { quantity: sanitizeDecimalInput(e.target.value) })}
                                 className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                               />
                             </div>
@@ -3623,12 +3624,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               {t('addStock.fields.costPrice', { symbol: currencySymbol })}
                             </label>
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0"
+                              type="text"
+                              inputMode="decimal"
                               required
                               value={row.costPrice}
-                              onChange={e => updateRow(row.id, { costPrice: e.target.value, costPriceAutoFilled: false })}
+                              onChange={e => updateRow(row.id, { costPrice: sanitizeDecimalInput(e.target.value), costPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
                             {/* [Manual data-entry error investigation,
@@ -3654,12 +3654,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               {t('addStock.fields.sellPrice', { symbol: currencySymbol })}
                             </label>
                             <input
-                              type="number"
-                              step="0.01"
-                              min="0"
+                              type="text"
+                              inputMode="decimal"
                               required
                               value={row.sellingPrice}
-                              onChange={e => updateRow(row.id, { sellingPrice: e.target.value, sellingPriceAutoFilled: false })}
+                              onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false })}
                               className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
                             />
                             {/* [Bug fix — mobile layout never showed

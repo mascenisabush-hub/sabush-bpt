@@ -196,8 +196,12 @@ describe('AddStockView.tsx — handleUnitChange is actually wired in (source-str
   });
 
   it('both price inputs clear their own *AutoFilled flag the moment the Owner types directly — never silently left true after a manual edit', () => {
-    const costOnChangeCount = (addStockSrc.match(/costPrice: e\.target\.value, costPriceAutoFilled: false/g) || []).length;
-    const sellOnChangeCount = (addStockSrc.match(/sellingPrice: e\.target\.value, sellingPriceAutoFilled: false/g) || []).length;
+    // [Bug fix — "digits typed are hidden" on decimal entry] Both
+    // fields now sanitize through sanitizeDecimalInput (type="number"
+    // -> type="text"/inputMode="decimal", see that function's own
+    // header comment) — still the same *AutoFilled: false pairing.
+    const costOnChangeCount = (addStockSrc.match(/costPrice: sanitizeDecimalInput\(e\.target\.value\), costPriceAutoFilled: false/g) || []).length;
+    const sellOnChangeCount = (addStockSrc.match(/sellingPrice: sanitizeDecimalInput\(e\.target\.value\), sellingPriceAutoFilled: false/g) || []).length;
     assert.equal(costOnChangeCount, 2); // desktop + mobile
     assert.equal(sellOnChangeCount, 2);
   });

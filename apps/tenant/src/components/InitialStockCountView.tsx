@@ -12,6 +12,11 @@ import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied to PeriodicStockCountView.tsx/AddStockView.tsx.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 
 interface InitialStockCountViewProps {
   onComplete: () => void;
@@ -236,13 +241,12 @@ const UnitChainSection: React.FC<{
                 <div>
                   <label className="block type-label mb-1">Quantidade</label>
                   <input
-                    type="number"
-                    min="0"
-                    step="0.01"
+                    type="text"
+                    inputMode="decimal"
                     value={hop.factorFromPrevious || ''}
                     onChange={(e) => {
                       const next = [...chain];
-                      next[index] = { ...hop, factorFromPrevious: parseFloat(e.target.value) || 0 };
+                      next[index] = { ...hop, factorFromPrevious: parseFloat(sanitizeDecimalInput(e.target.value)) || 0 };
                       onChainChange(next);
                     }}
                     placeholder="Ex: 4"
@@ -329,11 +333,10 @@ const UnitChainSection: React.FC<{
         <div className="pt-1 border-t border-[#E5E7EB]">
           <label className="block type-label mb-1">Preço de venda por {effectiveSellingUnit}</label>
           <input
-            type="number"
-            min="0"
-            step="0.01"
+            type="text"
+            inputMode="decimal"
             value={sellingRate}
-            onChange={(e) => onSellingRateChange(e.target.value)}
+            onChange={(e) => onSellingRateChange(sanitizeDecimalInput(e.target.value))}
             placeholder="Ex: 100"
             className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
           />
@@ -1770,11 +1773,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       <div>
         <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
         <input
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={row.quantity}
-          onChange={(e) => updateRow(row.id, { quantity: e.target.value })}
+          onChange={(e) => updateRow(row.id, { quantity: sanitizeDecimalInput(e.target.value) })}
           className={`${fieldClass} font-mono tabular-nums`}
         />
       </div>
@@ -1792,11 +1794,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       <div>
         <label className={`${fieldLabelClass} sm:hidden`}>Custo/Un ({currencySymbol})</label>
         <input
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={row.costPrice}
-          onChange={(e) => updateRow(row.id, { costPrice: e.target.value, costManuallySet: true })}
+          onChange={(e) => updateRow(row.id, { costPrice: sanitizeDecimalInput(e.target.value), costManuallySet: true })}
           className={`${fieldClass} font-mono tabular-nums`}
         />
       </div>
@@ -1804,11 +1805,10 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
       <div>
         <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
         <input
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={row.sellingPrice}
-          onChange={(e) => updateRow(row.id, { sellingPrice: e.target.value, sellingManuallySet: true })}
+          onChange={(e) => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingManuallySet: true })}
           className={`${fieldClass} font-mono tabular-nums`}
         />
       </div>

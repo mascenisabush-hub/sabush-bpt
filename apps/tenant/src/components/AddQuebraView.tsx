@@ -7,6 +7,11 @@ import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatt
 import { AlertTriangle, CheckCircle2, Info, ArrowRight, X } from 'lucide-react';
 import { detectShopSwitch, isBusinessDataReady, isSelectionSafeToSubmit } from '../lib/shopSwitchGuard';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
+// [Bug fix — "digits typed are hidden" on decimal entry] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation — reused unmodified from the identical
+// fix already applied elsewhere in this app.
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 
 // [Bug fix — no duplicate-submission protection] Same small local
 // helper as AddExpenseView.tsx's own identical function — see that
@@ -310,11 +315,11 @@ export const AddQuebraView: React.FC<AddQuebraViewProps> = ({ initialProductId, 
                   {t('addQuebra.lossQuantity')}
                 </label>
                 <input
-                  type="number"
-                  min="1"
+                  type="text"
+                  inputMode="decimal"
                   required
                   value={quantityLost}
-                  onChange={e => setQuantityLost(e.target.value)}
+                  onChange={e => setQuantityLost(sanitizeDecimalInput(e.target.value))}
                   className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3.5 py-2.5 text-[#111827] text-sm font-mono tabular-nums transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
               </div>
