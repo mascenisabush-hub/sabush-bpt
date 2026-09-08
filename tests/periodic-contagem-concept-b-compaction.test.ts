@@ -394,15 +394,22 @@ describe('I — multi-portion semantics unchanged', () => {
 // ---------------------------------------------------------------------
 describe('J — catalog and manual paths both retain Qtd/Unid/Venda-Un/Valor', () => {
   it('the catalog loop still binds Qtd/Unid/Venda-Un/Valor to the same update handlers as before', () => {
-    assert.match(periodicSrc, /onChange=\{\(e\) => updateCatalogRow\(productId, \{ quantity: e\.target\.value \}\)\}/);
+    // [Bug fix — "digits typed are hidden"] Qtd/Venda-Un now sanitize
+    // through sanitizeDecimalInput (type="number" -> type="text"/
+    // inputMode="decimal", see that function's own header comment) —
+    // still the same updateCatalogRow call, same field names, unit is
+    // untouched (never numeric).
+    assert.match(periodicSrc, /onChange=\{\(e\) => updateCatalogRow\(productId, \{ quantity: sanitizeDecimalInput\(e\.target\.value\) \}\)\}/);
     assert.match(periodicSrc, /onChange=\{\(e\) => updateCatalogRow\(productId, \{ unit: e\.target\.value \}\)\}/);
-    assert.match(periodicSrc, /onChange=\{\(e\) => updateCatalogRow\(productId, \{ sellingPrice: e\.target\.value \}\)\}/);
+    assert.match(periodicSrc, /onChange=\{\(e\) => updateCatalogRow\(productId, \{ sellingPrice: sanitizeDecimalInput\(e\.target\.value\) \}\)\}/);
   });
 
   it('the manual loop still binds Qtd/Unid/Venda-Un/Valor to the same update handlers as before', () => {
-    assert.match(periodicSrc, /onChange=\{\(e\) => updateManualRow\(idx, \{ quantity: e\.target\.value \}\)\}/);
+    // [Bug fix — "digits typed are hidden"] Same sanitization, manual
+    // row side.
+    assert.match(periodicSrc, /onChange=\{\(e\) => updateManualRow\(idx, \{ quantity: sanitizeDecimalInput\(e\.target\.value\) \}\)\}/);
     assert.match(periodicSrc, /onChange=\{\(e\) => updateManualRow\(idx, \{ unit: e\.target\.value \}\)\}/);
-    assert.match(periodicSrc, /onChange=\{\(e\) => updateManualRow\(idx, \{ sellingPrice: e\.target\.value \}\)\}/);
+    assert.match(periodicSrc, /onChange=\{\(e\) => updateManualRow\(idx, \{ sellingPrice: sanitizeDecimalInput\(e\.target\.value\) \}\)\}/);
   });
 
   it('the Selling Value calculation is unchanged in both loops', () => {

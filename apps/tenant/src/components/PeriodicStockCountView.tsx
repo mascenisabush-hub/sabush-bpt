@@ -20,6 +20,12 @@ import { findSimilarProducts } from '../lib/productNameSimilarity';
 // Stock (AddStockView.tsx) — see that utility's own header comment for
 // why this is a shared utility, not duplicated per screen.
 import { checkPriceDeviation } from '../lib/priceDeviationCheck';
+// [Bug fix — "digits typed are hidden" in the quantity field] See this
+// function's own header comment (decimalInputSanitizer.ts) for the
+// full root-cause explanation and why every decimal-capable text field
+// below pairs it with type="text"/inputMode="decimal" instead of
+// type="number".
+import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanonicalProductSellingMemory } from '../lib/productMemoryPriceResolution';
 // [Business Worth Evolution — Decision 37, B.1 completion] Same import
 // InitialStockCountView.tsx already uses for its own read-only
@@ -221,11 +227,10 @@ const UnitRelationshipChainEditor: React.FC<{
               <div>
                 <label className="block text-[11px] font-bold text-gray-500 mb-1">Quantidade</label>
                 <input
-                  type="number"
-                  min="0"
-                  step="0.01"
+                  type="text"
+                  inputMode="decimal"
                   value={step.factor}
-                  onChange={(e) => updateStep(index, { factor: e.target.value })}
+                  onChange={(e) => updateStep(index, { factor: sanitizeDecimalInput(e.target.value) })}
                   placeholder="Ex: 4"
                   className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
                 />
@@ -335,11 +340,10 @@ const ModeAValuationControl: React.FC<{
       <label className="flex flex-wrap items-center gap-1.5 text-[11px] font-bold text-gray-500 shrink-0">
         Preço/{referenceUnit || 'unidade'} ({currencySymbol}):
         <input
-          type="number"
-          min="0"
-          step="0.01"
+          type="text"
+          inputMode="decimal"
           value={referencePrice}
-          onChange={(e) => onChange({ referencePrice: e.target.value })}
+          onChange={(e) => onChange({ referencePrice: sanitizeDecimalInput(e.target.value) })}
           placeholder="Ex: 1250"
           className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
         />
@@ -7455,12 +7459,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
                           <input
-                            type="number"
-                            min="0"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             placeholder="Ainda não contado"
                             value={row.quantity}
-                            onChange={(e) => updateCatalogRow(productId, { quantity: e.target.value })}
+                            onChange={(e) => updateCatalogRow(productId, { quantity: sanitizeDecimalInput(e.target.value) })}
                             onKeyDown={(e) => handleQuantityKeyDown(e, 'catalog', productId, null)}
                             ref={!isConfirmed ? activeQuantityInputRef : undefined}
                             disabled={isConfirmed}
@@ -7535,11 +7538,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         <div>
                           <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
                           <input
-                            type="number"
-                            min="0"
-                            step="0.01"
+                            type="text"
+                            inputMode="decimal"
                             value={row.sellingPrice}
-                            onChange={(e) => updateCatalogRow(productId, { sellingPrice: e.target.value })}
+                            onChange={(e) => updateCatalogRow(productId, { sellingPrice: sanitizeDecimalInput(e.target.value) })}
                             onKeyDown={suppressEnterSubmit}
                             disabled={isConfirmed}
                             className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
@@ -8073,12 +8075,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               <div>
                                 <label className={`${fieldLabelClass} sm:hidden`}>Qtd</label>
                                 <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   placeholder="Ainda não contado"
                                   value={row.quantity}
-                                  onChange={(e) => updateManualRow(idx, { quantity: e.target.value })}
+                                  onChange={(e) => updateManualRow(idx, { quantity: sanitizeDecimalInput(e.target.value) })}
                                   onKeyDown={(e) => handleQuantityKeyDown(e, 'manual', null, idx)}
                                   ref={!isConfirmed ? activeQuantityInputRef : undefined}
                                   disabled={isConfirmed}
@@ -8148,11 +8149,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               <div>
                                 <label className={`${fieldLabelClass} sm:hidden`}>Venda/Un ({currencySymbol})</label>
                                 <input
-                                  type="number"
-                                  min="0"
-                                  step="0.01"
+                                  type="text"
+                                  inputMode="decimal"
                                   value={row.sellingPrice}
-                                  onChange={(e) => updateManualRow(idx, { sellingPrice: e.target.value })}
+                                  onChange={(e) => updateManualRow(idx, { sellingPrice: sanitizeDecimalInput(e.target.value) })}
                                   onKeyDown={suppressEnterSubmit}
                                   disabled={isConfirmed}
                                   className={`${fieldClass} font-mono tabular-nums ${isConfirmed ? 'opacity-60 cursor-not-allowed' : ''}`}
