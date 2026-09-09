@@ -62,7 +62,9 @@ Each checkpoint requires its own review before the next begins, exactly as the a
 **(c)** within the single existing test `'buildPayload returns name, sellingPrice, and only the four authorized optional fields, conditionally'` (in `describe('C — Payload shape...')`), exactly its two specific checks — the `sellingPrice`-as-unconditional-literal-line check (`assert.match(payload, /sellingPrice: parseFloat\(sellingPrice\),/);`) and the exact-six-non-empty-lines check (`assert.equal(fieldLines.length, 6, ...);`) — **no other check within that same test, including its sibling test `'buildPayload never includes costPrice or any purchase/stock field'` in the same `describe` block, is authorized to change.**
 **No other assertion, helper, fixture, import, or structure in that file is authorized to change under either amendment.**); `apps/tenant/src/i18n/locales/{pt,en,fr}.ts` (**Third Implementation Authorization Amendment, Accepted 2026-09-09 — see §12, below; retrospective governance reconciliation for locale changes already present in commit `3f8676d`, per the accepted third Implementation Plan Amendment (`ef790f7`). Authorized only as to the following nine specific `productCatalog.form.*` keys, verified present in that commit's actual diff:**
 `sellingPriceInvalidError`, `unitRelationshipLabel`, `unitTopLevelPlaceholder`, `unitLevelPlaceholder`, `addUnitLevelButton`, `unitFactorInvalidError`, `sellingUnitLabel`, `sellingUnitPlaceholder`, `sellingUnitRequiredError`.
-**No other locale key, in any of the three files, is authorized to change under this amendment — every other existing key, including `sellingPriceRequiredError`, remains untouched and unauthorized for change here.**); new or extended test files where the accepted Plan §V explicitly requires them.
+**No other locale key, in any of the three files, is authorized to change under this amendment — every other existing key, including `sellingPriceRequiredError`, remains untouched and unauthorized for change here.**); `tests/decision-37-first-contagem-cost-removal-and-selling-price-memory.test.ts` (**Fourth Implementation Authorization Amendment, Accepted 2026-09-09 — see §13, below; the corresponding subsequent gate to the accepted fourth Implementation Plan Amendment ("Checkpoint 3 Contagem Write-Gate Test-Scope Reconciliation," commit `0acc320a861f14b7a23c08b73a2d3f3920ca3a16`). Authorized only as to the single `it()` block under `describe('AC-07/AC-08/AC-09 — selling price and purchase cost are independently write-gated (FR-85)')` whose subject begins "the existing-product selling-price update writes only Product.sellingPrice..." (lines ~114–129). Within that block, the obsolete assertion permitted to change is:**
+`assert.match(block, /if (!sellingPriceChanged && sellingUnitFieldUpdate === undefined) continue;/);`
+**so that it tests the coupled gate accepted Plan §J requires. The block's two sibling assertions (the `sellingPriceChanged` computation check; the `costPrice`-absence check) are included only for sympathetic re-verification and preservation — not independently authorized for unrelated modification. No other `it()` block in that file, no other test file, and no helper, fixture, import, or unrelated assertion in that file is authorized. This entry adds no implementation file to scope, authorizes no change to `PeriodicStockCountView.tsx` beyond what is already authorized for Checkpoint 3, and authorizes no change to `AppContext.tsx` beyond the already-existing Checkpoint 3 authorization.**); new or extended test files where the accepted Plan §V explicitly requires them.
 
 **Protected — MUST NOT change under this authorization:** `apps/tenant/src/utils/calculations.ts` (Business Worth); `apps/tenant/src/lib/productMemoryPriceResolution.ts`; `apps/tenant/src/lib/sellingMemorySelection.ts`; the existing exported function signatures of `apps/tenant/src/lib/unitRelationship.ts` (`isValidUnitRelationship`, `confirmUnitRelationship`); `firestore.rules` (no change authorized — the accepted Plan classified the Add Stock authorization question as resolvable without a rules change, §6 below); any file implementing `SupplierWordingRelationship`/`confirmSupplierWordingRelationship`; any `costPrice`-handling code path.
 
@@ -167,6 +169,50 @@ This authorization exists only because these three files and nine keys were the 
 **Following this acceptance, the locale changes in commit `3f8676d` are treated as fully governance-conforming.**
 
 > This third Implementation Authorization Amendment is accepted exactly as scoped above. The original Implementation Authorization (§1–§9, signed 2026-09-09) and the first and second Implementation Authorization Amendments (§10, §11, both Accepted 2026-09-09) all remain in force, unchanged, in every other respect. This acceptance does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, Decisions 2A/2B, Product Memory governance, `firestore.rules`, or the Implementation Plan (already amended three times, all preserved) beyond this Authorization's own §5 extension. This acceptance authorizes no further implementation — the work it reconciles already exists — and does not authorize Checkpoints 3–5.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Decision:** ACCEPTED / IMPLEMENTATION AUTHORIZATION AMENDED
+
+**Date:** 2026-09-09
+
+## 13. Fourth Implementation Authorization Amendment — Checkpoint 3 Contagem Write-Gate Test-Scope Reconciliation
+
+**Type:** Implementation Authorization Amendment — narrowly amends only §5's file-scope provision, extending it to bring this Authorization into alignment with the already-accepted fourth Implementation Plan Amendment (`docs/engineering/product-catalog-phase-2-implementation-plan.md`, "Product Architect Acceptance of Implementation Plan Amendment — Checkpoint 3 Contagem Write-Gate Test-Scope Reconciliation," Accepted 2026-09-09, commit `0acc320a861f14b7a23c08b73a2d3f3920ca3a16`). **TEST-SCOPE RECONCILIATION — does not introduce new product behavior, does not alter Checkpoint 3's already-authorized implementation behavior, and does not modify the Specification, Rule 8 Assessment, any BDR/Policy/Decision (including Decision 37, the accepted amendment the affected test file exists to protect — only its one obsolete assertion is affected, not the Decision itself), Product Memory governance, `firestore.rules`, the original §1–§9 Authorization content, or the first, second, and third Authorization Amendments (§10, §11, §12, immediately above — all fully preserved, unmodified, unnarrowed).** It only extends the Implementation Authorization's test-file scope so that the one regression assertion directly contradicting accepted Plan §J may be updated when Checkpoint 3 implementation is performed. Does not authorize Checkpoints 4–5 or any implementation file beyond Checkpoint 3's already-accepted scope (`PeriodicStockCountView.tsx`; `recordStockCount` in `AppContext.tsx`, per §4 item 3).
+
+**Status:** ✅ Accepted / IMPLEMENTATION AUTHORIZATION AMENDED (2026-09-09).
+
+**Relation to the accepted Plan Amendment:** (1) the Implementation Plan Amendment was accepted first, commit `0acc320a861f14b7a23c08b73a2d3f3920ca3a16`; (2) this Authorization Amendment is the corresponding subsequent gate; (3) it mirrors the Plan Amendment exactly — same file, same single `it()` block, same exclusions; (4) the test-file addition is retrospective governance reconciliation of a pre-existing test that encoded behavior accepted Plan §J already identifies as superseded — no implementation exists yet, so this is reconciliation of authorized *future* scope, not of already-performed work (unlike the third amendment, §12, which reconciled already-existing locale changes); (5) it does not expand the underlying product behavior; (6) it does not authorize any test change outside the single named `it()` block.
+
+**Amendment content, in full (the only substantive change this amendment makes to this Authorization):**
+
+The §5 addition, above, adding `tests/decision-37-first-contagem-cost-removal-and-selling-price-memory.test.ts` to the file-scope list — authorized **only** as to the single `it()` block under `describe('AC-07/AC-08/AC-09 — selling price and purchase cost are independently write-gated (FR-85)')` (lines ~114–129), and within it, only the obsolete line-127 assertion:
+```
+assert.match(block, /if (!sellingPriceChanged && sellingUnitFieldUpdate === undefined) continue;/);
+```
+— permitted to change so the test verifies the coupled gate accepted Plan §J requires. The block's two sibling assertions (the `sellingPriceChanged` computation check; the `costPrice`-absence check) are authorized only for sympathetic re-verification and preservation when the block is edited, not for independent, unrelated modification.
+
+**Strict non-expansion, explicitly stated:**
+- No other `it()` block in that test file is authorized.
+- No other test file is authorized.
+- No helper, fixture, import, or unrelated assertion in that test file is authorized.
+- No implementation file is added to scope by this amendment.
+- No change to `PeriodicStockCountView.tsx` is authorized by this amendment beyond what §4 item 3 already authorizes.
+- No change to `AppContext.tsx` is authorized by this amendment beyond the already-existing Checkpoint 3 authorization.
+- No change to Product Catalog files (`ProductCatalogView.tsx`, `EditProductModal.tsx`, `registerCatalogProduct`) is authorized.
+- No change to Add Stock files (`AddStockView.tsx`) is authorized.
+- No change to Product Memory protected primitives (`productMemoryPriceResolution.ts`, `sellingMemorySelection.ts`) is authorized.
+- No change to `calculations.ts` is authorized.
+- No change to `firestore.rules` is authorized.
+- No Specification change is authorized.
+- No Rule 8 Assessment change is authorized.
+- No product decision is made or reopened.
+
+**L79–84 watch item, explicitly preserved:** the new-product branch's `type !== 'initial' && sellingMemoryByProductName.has(...)` assertion (`tests/decision-37-first-contagem-cost-removal-and-selling-price-memory.test.ts`, lines ~79–84) remains **NOT authorized** by this amendment — reviewed during the Checkpoint 3 preflight audit and deliberately excluded, since its continued validity depends on an implementation shape not yet written. This amendment does not pre-authorize speculative changes to it.
+
+**Governance sequence:** (1) Plan Amendment — ACCEPTED, commit `0acc320a861f14b7a23c08b73a2d3f3920ca3a16`; (2) this Authorization Amendment — ACCEPTED, Product Architect SABUSHIMIKE MASCENI, 2026-09-09; (3) only after this Authorization Amendment is recorded may the newly authorized `it()` block be modified; (4) Checkpoint 3 implementation may then proceed within the existing implementation scope (Plan §J; Authorization §4 item 3) plus this narrowly reconciled test scope; (5) no other scope is opened — Checkpoints 4–5 remain unauthorized.
+
+> This fourth Implementation Authorization Amendment is accepted exactly as scoped above. The original Implementation Authorization (§1–§9, signed 2026-09-09) and the first, second, and third Implementation Authorization Amendments (§10, §11, §12, all Accepted 2026-09-09) all remain in force, unchanged, in every other respect. This acceptance does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, Decisions 2A/2B, Decision 37, Product Memory governance, `firestore.rules`, or the Implementation Plan (already amended four times, all preserved) beyond this Authorization's own §5 extension. This acceptance authorizes Checkpoint 3 implementation to proceed within its existing scope (§4 item 3; Plan §J) plus this narrowly reconciled test-file scope — it does not authorize Checkpoints 4–5, and does not itself perform any implementation.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
