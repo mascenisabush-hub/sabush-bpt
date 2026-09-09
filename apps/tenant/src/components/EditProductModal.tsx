@@ -193,13 +193,26 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
       // write path (recordStockCount) establishes and governs — the
       // same authority, reached through a second entry point, per
       // FR-88 exactly.
+      // [Bug fix — "Function updateDoc() called with invalid data.
+      // Unsupported field value: undefined" on save] A literal
+      // `field: undefined` still leaves that key present on the object
+      // (unlike an absent key), and Firestore's updateDoc rejects any
+      // payload containing one — so saving with any of these four
+      // fields left blank threw immediately, before the write ever
+      // reached Firestore, for every product missing one of them.
+      // Conditional spread (the same pattern this codebase already
+      // uses everywhere else a field is genuinely optional, e.g.
+      // registerCatalogProduct) omits the key entirely when blank
+      // instead of sending it as undefined — Firestore then simply
+      // leaves that field untouched, exactly this form's original
+      // intent, with no invalid-payload error.
       await updateProduct(product.id, {
         name: trimmedName,
-        category: category.trim() || undefined,
-        supplier: supplier.trim() || undefined,
-        sku: sku.trim() || undefined,
-        barcode: barcode.trim() || undefined,
-        sellingPrice: sellingPrice.trim() ? parseFloat(sellingPrice) : undefined,
+        ...(category.trim() ? { category: category.trim() } : {}),
+        ...(supplier.trim() ? { supplier: supplier.trim() } : {}),
+        ...(sku.trim() ? { sku: sku.trim() } : {}),
+        ...(barcode.trim() ? { barcode: barcode.trim() } : {}),
+        ...(sellingPrice.trim() ? { sellingPrice: parseFloat(sellingPrice) } : {}),
       });
       onClose();
     } catch (err) {
