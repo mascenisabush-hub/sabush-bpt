@@ -165,6 +165,27 @@ const businessWorthRecoveryExpiryAuditSweep = createBusinessWorthRecoveryExpiryA
 
 const expressApp = express();
 
+// [Bug fix — every "Tirar Foto"/"Carregar Documento" scan silently
+// failed as provider_unavailable, with nothing in server logs to point
+// at why] SMART_STOCK_ENTRY_AI_API_KEY missing was previously only
+// ever discovered per-request, deep inside callVisionExtractionProvider
+// (server/smartStockEntry.ts), as a caught ProviderNotConfiguredError
+// that the client only ever sees as a generic graceful failure —
+// nothing surfaced at startup, so a misconfigured/misnamed key (e.g.
+// GEMINI_API_KEY set instead, per the .env.example/README mismatch
+// fixed alongside this) could sit unnoticed indefinitely. This is
+// purely a log line — it does not block startup, does not throw, and
+// changes no runtime behavior; the graceful per-request fallback below
+// is unchanged.
+if (!process.env.SMART_STOCK_ENTRY_AI_API_KEY) {
+  console.warn(
+    '[startup] SMART_STOCK_ENTRY_AI_API_KEY is not set — Smart Stock Entry ' +
+    '("Tirar Foto"/"Carregar Documento") and Product Recognition semantic ' +
+    'matching will gracefully degrade (provider_unavailable) for every ' +
+    'request until this is set.'
+  );
+}
+
 // ------------------------------------------------------------------
 // Service mode — lets this exact server.js run as either the Railway
 // tenant service (today's unchanged default) or a second, separate

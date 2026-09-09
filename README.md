@@ -15,7 +15,7 @@ View your app in AI Studio: https://ai.studio/apps/dbffb79d-6349-486c-9e60-5833e
 
 1. Install dependencies:
    `npm install`
-2. Set the `GEMINI_API_KEY` and `VITE_FIREBASE_*` values in `.env.local` (see `.env.example`)
+2. Set the `SMART_STOCK_ENTRY_AI_API_KEY` and `VITE_FIREBASE_*` values in `.env.local` (see `.env.example`)
 3. Run the app:
    `npm run dev`
 
@@ -71,9 +71,9 @@ Vite proxies `/api/*` requests to the local Express server automatically.
 `npm run build` builds both the SPA (`dist/`) and the server bundle
 (`server.js`); `npm start` runs `node server.js`, which serves the SPA and
 exposes `POST /api/staff/delete`. Set `FIREBASE_SERVICE_ACCOUNT_BASE64` (and
-your usual `VITE_FIREBASE_*` / `GEMINI_API_KEY` vars) in Railway's
-environment variables and it just works — no Google Cloud billing account
-needed anywhere in this flow.
+your usual `VITE_FIREBASE_*` / `SMART_STOCK_ENTRY_AI_API_KEY` vars) in
+Railway's environment variables and it just works — no Google Cloud billing
+account needed anywhere in this flow.
 
 ### CORS / `ALLOWED_ORIGIN`
 
