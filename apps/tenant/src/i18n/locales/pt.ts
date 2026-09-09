@@ -702,9 +702,17 @@ export interface TranslationDict {
       barcodeLabel: string;
       nameRequiredError: string;
       sellingPriceRequiredError: string;
-      notYetAvailableNote: string;
       submitButton: string;
       cancelButton: string;
+      // [Checkpoint D — Identity resolution] New — the resolution
+      // sub-UI's own strings, shown only when findSimilarProducts
+      // returns at least one candidate for the submitted name.
+      similarProductsFound: string;
+      useExistingButton: string;
+      confirmNewButton: string;
+      existingResolvedMessage: string;
+      successMessage: string;
+      genericError: string;
     };
   };
   stocksView: {
@@ -1878,9 +1886,14 @@ export const pt: TranslationDict = {
       barcodeLabel: 'Código de Barras',
       nameRequiredError: 'Por favor introduza o nome do produto.',
       sellingPriceRequiredError: 'Por favor introduza um preço de venda válido.',
-      notYetAvailableNote: 'O registo de produtos estará disponível numa próxima atualização.',
       submitButton: 'Registar',
       cancelButton: 'Cancelar',
+      similarProductsFound: 'Encontrámos produtos parecidos no seu catálogo. Confirme se este é um deles ou se é realmente um produto novo.',
+      useExistingButton: 'Usar este produto existente',
+      confirmNewButton: 'Confirmar como produto novo',
+      existingResolvedMessage: 'Produto já existente no catálogo — não foi criado nenhum produto novo.',
+      successMessage: 'Produto registado no catálogo com sucesso.',
+      genericError: 'Não foi possível registar o produto. Tente novamente.',
     },
   },
   stocksView: {

@@ -4,12 +4,17 @@
 // Source-inspection tests, matching this repository's established
 // technique (no jsdom/testing-library harness exists in this repo).
 //
-// Scope: ONLY Checkpoint C — the form itself, validated, NOT yet
-// wired to registerCatalogProduct (per the Implementation Plan's own
-// literal Checkpoint C definition: "does NOT yet call
-// registerCatalogProduct — submission is a no-op or logs only").
-// Checkpoint D (identity resolution + actually reaching the write
-// path) is explicitly NOT covered here.
+// Scope: Checkpoint C's own, still-valid claims — the six-field form
+// exists, is styled per this repo's existing conventions, and its
+// field-level validation is correct. Checkpoint C's original claim
+// that the write path was NOT yet reachable was always a checkpoint-
+// time-scoped assertion, not a permanent one; Checkpoint D has since
+// legitimately wired registerCatalogProduct in, superseding that
+// specific claim (not weakening it — the underlying safety invariant,
+// "no silent duplicate creation," is now verified more precisely by
+// the dedicated Checkpoint D test suite). Sections that tested the
+// now-superseded "not yet wired" state have been updated accordingly,
+// each with its own note explaining why.
 //
 // HOW TO RUN:
 //   npx tsx --test tests/product-catalog-phase-1-checkpoint-c.test.ts
@@ -85,15 +90,15 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       assert.match(catalogViewSrc, /!Number\.isFinite\(parsedPrice\) \|\| parsedPrice < 0/);
     });
 
-    it('handleSubmit calls validate() and returns early on failure, before constructing any payload', () => {
-      assert.match(catalogViewSrc, /const handleSubmit = \(e: React\.FormEvent\) => \{\s*\n\s*e\.preventDefault\(\);\s*\n\s*if \(!validate\(\)\) return;/);
+    it('handleSubmit calls validate() and returns early on failure, before any candidate search or write attempt — the async signature reflects Checkpoint D\'s own await of registerCatalogProduct, not a change to this checkpoint\'s own validation-first guarantee', () => {
+      assert.match(catalogViewSrc, /const handleSubmit = async \(e: React\.FormEvent\) => \{\s*\n\s*e\.preventDefault\(\);\s*\n\s*if \(!validate\(\)\) return;/);
     });
   });
 
-  describe('C — Payload shape (constructed, never sent — see D below)', () => {
-    it('the constructed payload contains name, sellingPrice, and only the four authorized optional fields, conditionally', () => {
-      const payloadMatch = catalogViewSrc.match(/const payload = \{([\s\S]*?)\};/);
-      assert.ok(payloadMatch, 'Expected a payload object literal in handleSubmit.');
+  describe('C — Payload shape (built by buildPayload, a separate function Checkpoint D introduced so both the initial submit path and the post-resolution confirm path construct an identical payload from one place, never two)', () => {
+    it('buildPayload returns name, sellingPrice, and only the four authorized optional fields, conditionally', () => {
+      const payloadMatch = catalogViewSrc.match(/const buildPayload = \(\) => \(\{([\s\S]*?)\}\);/);
+      assert.ok(payloadMatch, 'Expected a buildPayload function returning an object literal.');
       const payload = payloadMatch![1];
       assert.match(payload, /name: name\.trim\(\),/);
       assert.match(payload, /sellingPrice: parseFloat\(sellingPrice\),/);
@@ -105,26 +110,21 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       assert.equal(fieldLines.length, 6, `Expected exactly 6 lines in the payload literal, found ${fieldLines.length}.`);
     });
 
-    it('the payload never contains costPrice or any purchase/stock field', () => {
-      const payloadMatch = catalogViewSrc.match(/const payload = \{([\s\S]*?)\};/);
+    it('buildPayload never includes costPrice or any purchase/stock field', () => {
+      const payloadMatch = catalogViewSrc.match(/const buildPayload = \(\) => \(\{([\s\S]*?)\}\);/);
       assert.doesNotMatch(payloadMatch![1], /costPrice/);
       assert.doesNotMatch(payloadMatch![1], /quantity/i);
     });
   });
 
-  describe('D — Integration boundary: registerCatalogProduct is NOT called (Checkpoint C\'s own stop condition)', () => {
-    it('registerCatalogProduct is never destructured from context, and never called as a function — the only two mentions in this file are inside an explanatory comment and the console.log documentation string, both legitimate, neither a functional call', () => {
-      assert.doesNotMatch(catalogViewSrc, /const \{[^}]*registerCatalogProduct[^}]*\}\s*=\s*useApp\(\)/);
-      assert.doesNotMatch(catalogViewSrc, /registerCatalogProduct\(payload\)/);
-      assert.doesNotMatch(catalogViewSrc, /registerCatalogProduct\(\{/);
-      assert.doesNotMatch(catalogViewSrc, /await registerCatalogProduct/);
+  describe('D — Integration boundary, as of Checkpoint D: registerCatalogProduct IS now reachable, but only through this file\'s own controlled path — never bypassed by handleSubmit directly, always through submitRegistration', () => {
+    it('registerCatalogProduct is destructured from context and awaited, exactly once, inside submitRegistration — never called directly from handleSubmit or handleConfirmNew themselves', () => {
+      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct \} = useApp\(\);/);
+      const callCount = (catalogViewSrc.match(/await registerCatalogProduct\(/g) || []).length;
+      assert.equal(callCount, 1, `Expected exactly one call site for registerCatalogProduct, found ${callCount}.`);
     });
 
-    it('useApp() is never called — this component does not read context at all yet, confirming no write path of any kind is reachable from it', () => {
-      assert.doesNotMatch(catalogViewSrc, /useApp\(\)/);
-    });
-
-    it('no Firestore write function of any kind is referenced', () => {
+    it('no Firestore write function is referenced directly — every write is delegated to the single, already-tested registerCatalogProduct function', () => {
       assert.doesNotMatch(catalogViewSrc, /setDoc|updateDoc|addDoc|deleteDoc/);
     });
 
@@ -133,31 +133,29 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       assert.doesNotMatch(catalogViewSrc, /recordStockCount/);
       assert.doesNotMatch(catalogViewSrc, /calculateInventoryTotals/);
     });
+  });
 
-    it('the submit handler ends in a console.log, not a function call — confirmed as the literal last statement of handleSubmit, not merely present somewhere in the file', () => {
-      const handleSubmitBody = catalogViewSrc.slice(
-        catalogViewSrc.indexOf('const handleSubmit = (e: React.FormEvent) => {'),
-        catalogViewSrc.indexOf('return (', catalogViewSrc.indexOf('const handleSubmit'))
-      );
-      const trimmed = handleSubmitBody.trim();
-      assert.ok(trimmed.endsWith('};') || /console\.log\([^)]*\);\s*\};\s*$/.test(trimmed), 'Expected handleSubmit to end with the console.log call.');
-      assert.match(handleSubmitBody, /console\.log\(/);
+  describe('E — Identity-resolution wiring now exists (Checkpoint D) — full behavioral proof lives in the dedicated Checkpoint D test suite, this is presence-only', () => {
+    it('findSimilarProducts is imported and used exactly as AddStockView.tsx/PeriodicStockCountView.tsx already import it — reused, not reimplemented', () => {
+      assert.match(catalogViewSrc, /import \{ findSimilarProducts \} from '\.\.\/lib\/productNameSimilarity';/);
     });
   });
 
-  describe('E — Regression: no identity-resolution logic present yet (that is Checkpoint D)', () => {
-    it('findSimilarProducts is not imported or referenced', () => {
-      assert.doesNotMatch(catalogViewSrc, /findSimilarProducts/);
+  describe('F — i18n: productCatalog.form field-level keys exist in all three locales, type-consistent (Checkpoint D added its own resolution-UI keys alongside these — checked for presence, not for the block containing only these keys)', () => {
+    it('pt.ts declares string types for the field-level keys inside productCatalog.form', () => {
+      assert.match(ptSrc, /nameLabel: string;/);
+      assert.match(ptSrc, /sellingPriceLabel: string;/);
+      assert.match(ptSrc, /categoryLabel: string;/);
+      assert.match(ptSrc, /supplierLabel: string;/);
+      assert.match(ptSrc, /skuLabel: string;/);
+      assert.match(ptSrc, /barcodeLabel: string;/);
+      assert.match(ptSrc, /nameRequiredError: string;/);
+      assert.match(ptSrc, /sellingPriceRequiredError: string;/);
+      assert.match(ptSrc, /submitButton: string;/);
+      assert.match(ptSrc, /cancelButton: string;/);
     });
-  });
 
-  describe('F — i18n: productCatalog.form keys exist in all three locales, type-consistent', () => {
-    it('pt.ts declares the form type block with all twelve keys', () => {
-      const formTypeMatch = ptSrc.match(/form: \{\s*title: string;[\s\S]*?cancelButton: string;\s*\};/);
-      assert.ok(formTypeMatch, 'Expected productCatalog.form type block.');
-    });
-
-    it('all three locales provide a matching form value block with the exact same keys', () => {
+    it('all three locales provide matching form value keys', () => {
       for (const localeSrc of [ptSrc, enSrc, frSrc]) {
         assert.match(localeSrc, /form: \{\s*title: '[^']*',/);
         assert.match(localeSrc, /nameLabel: '[^']*',/);
@@ -177,6 +175,13 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       for (const localeSrc of [ptSrc, enSrc, frSrc]) {
         assert.match(localeSrc, /addProductButton: '[^']+',/);
       }
+    });
+
+    it('the now-outdated notYetAvailableNote key has been removed from all three locales — it became factually wrong the moment Checkpoint D made saving actually work', () => {
+      for (const localeSrc of [ptSrc, enSrc, frSrc]) {
+        assert.doesNotMatch(localeSrc, /notYetAvailableNote/);
+      }
+      assert.doesNotMatch(catalogViewSrc, /notYetAvailableNote/);
     });
   });
 

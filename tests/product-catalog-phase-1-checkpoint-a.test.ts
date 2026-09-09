@@ -117,14 +117,13 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
       assert.match(catalogViewSrc, /t\('productCatalog\.emptyState'\)/);
     });
 
-    it('does not reference any Firestore write function directly, and does not call registerCatalogProduct as an actual function invocation — Checkpoint B (the write function itself) now exists in AppContext.tsx, and Checkpoint C (this file\'s own form) legitimately documents that function by name in a comment and a console.log, but never invokes it; see the dedicated Checkpoint B and Checkpoint C test suites for the full, precise proof of each', () => {
+    it('never calls a Firestore write function directly — this remains true even now that Checkpoint D has wired registerCatalogProduct in: this file always delegates to that single, already-tested function (Checkpoint B), never touches setDoc/updateDoc/etc. itself', () => {
       assert.doesNotMatch(catalogViewSrc, /setDoc|updateDoc|addDoc|deleteDoc/);
-      assert.doesNotMatch(catalogViewSrc, /const \{[^}]*registerCatalogProduct[^}]*\}\s*=\s*useApp\(\)/);
-      assert.doesNotMatch(catalogViewSrc, /await registerCatalogProduct/);
     });
 
-    it('does NOT reference findSimilarProducts or any identity-resolution logic — Checkpoint D has not been implemented yet', () => {
-      assert.doesNotMatch(catalogViewSrc, /findSimilarProducts/);
+    it('Checkpoint D has since wired registerCatalogProduct and findSimilarProducts into this file — expected, not a defect of Checkpoint A\'s own original claim (which only ever asserted the state "as of Checkpoint A"); the full, precise, exhaustive proof of correct, safe wiring lives in the dedicated Checkpoint D test suite, not duplicated here', () => {
+      assert.match(catalogViewSrc, /registerCatalogProduct/);
+      assert.match(catalogViewSrc, /findSimilarProducts/);
     });
 
     it('does NOT contain a costPrice field, input, or state variable, checked outside this file\'s own explanatory comments — Checkpoint C (this file\'s own registration form, added since this test was first written) intentionally still excludes it, per its own dedicated, more thorough test suite', () => {
@@ -132,9 +131,8 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
       assert.doesNotMatch(codeOnly, /costPrice/);
     });
 
-    it('does NOT read the `products` array from context — Checkpoint E (list/search) has not been implemented yet; this screen is intentionally, unconditionally empty', () => {
-      assert.doesNotMatch(catalogViewSrc, /useApp\(\)/);
-      assert.doesNotMatch(catalogViewSrc, /\bproducts\b/);
+    it('Checkpoint D now legitimately reads `products` from context (needed for findSimilarProducts) and this screen is no longer unconditionally empty once a registration succeeds — expected, superseding Checkpoint A\'s original "still empty" claim; see the dedicated Checkpoint D suite for the full proof this is done safely', () => {
+      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct \} = useApp\(\);/);
     });
   });
 
