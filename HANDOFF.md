@@ -12,21 +12,70 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** User Profile-Photo Upload (Header avatar, next to
-Notifications) + crop/compress step — **implemented, typechecked,
-built, and pushed to `main`.** **Nothing mid-flight; working tree
-clean.**
+**Status:** Explanatory-banner compaction (collapsed-by-default InfoHint)
+— **implemented, typechecked, built, and pushed to `main`.** **Nothing
+mid-flight; working tree clean.**
 
-**This session's addition (crop + compress, on top of the prior
-session's upload):** `AvatarCropModal.tsx` (new) — a self-contained
-canvas-based square crop (drag to pan, slider to zoom) with no new npm
-dependency. Confirming it rasterizes the visible crop onto a fixed
-512x512 canvas and exports JPEG at quality 0.85 — that's both the crop
-and the compression, done together, before `uploadUserPhoto` is ever
-called. `AppContext.uploadUserPhoto` now takes a `Blob` (the modal's
-output) instead of a raw `File` — it validates and uploads, it doesn't
-crop/compress itself. `Header.tsx`'s file input now opens
-`AvatarCropModal` first; upload only fires after "Guardar Foto".
+**What this was:** the Owner flagged that several always-visible
+"how this works" explanatory paragraphs (e.g. Contagem's "Esta
+contagem regista o que existe fisicamente em stock agora...") were
+permanently occupying layout space. Investigated first — found this is
+a deliberate, recurring pattern across the app (`Info` icon +
+paragraph), and that one specific instance in
+`PeriodicStockCountView.tsx` had an explicit prior decision
+("Information-Preserving Compaction — Alternative A") that REVERSED an
+earlier attempt to hide/collapse it, plus another with a "Deliberately
+NOT made dismissible/collapsible" note. Both were shown to the Owner
+before doing anything; the Owner explicitly chose "collapse into a
+tooltip/expandable '?' (info kept, hidden by default)" — not deletion
+— which preserves every prior decision's actual concern (the
+information itself must never be lost) while addressing the layout
+complaint. Comments at each converted site name this as an explicit,
+dated product decision, not a silent reversal.
+
+**New component:** `InfoHint.tsx` — small "?" button, click/tap to
+open a popover with the original text verbatim, closes on outside
+click or Escape. No layout footprint when collapsed (this is what
+actually reclaims the space — nothing needed to be manually "lifted
+up", removing the fixed-height banner element does that automatically
+in normal document flow).
+
+**Converted (7 files, ~8 sites):** `PeriodicStockCountView.tsx` (both
+banners from the Owner's screenshot — the Contagem "how this works"
+paragraph, now on the page heading, and the per-portion pricing note),
+`InitialStockCountView.tsx` (Capital Inicial explainer, now on the
+subtitle), `AddStockView.tsx` (batch auto-close notice, now next to
+Submit), `InitialStockPriceChangeModal.tsx` (valuation-change
+clarification), `EditProductModal.tsx` (Cost vs Selling Price
+explainer), `DeclareBusinessWorthView.tsx` and `AddWithdrawalView.tsx`
+(both moved onto their form's heading).
+
+**Deliberately NOT converted (left always-visible, on purpose):**
+every conditional/state-dependent notice — active recovery-window
+countdowns, listener load-errors, "did you mean this product"/
+inactive-product-reactivation prompts (explicitly marked "Deliberately
+ALWAYS VISIBLE" in the code — hiding these risks silently creating a
+duplicate product), the irreversible-action confirm modal in Initial
+Stock, empty-states, and the "permanent, cannot be edited" warning in
+`InitialStockPriceChangeModal.tsx`. These are short-lived and
+actionable, not permanent screen-space consumers — collapsing them
+would hide safety-relevant information at the exact moment it matters,
+which is a different problem than the one raised.
+
+**Verification performed:** `npx tsc --noEmit -p .` — zero new errors
+(same 15 pre-existing `tests/*.test.ts` errors as every prior session,
+confirmed unrelated). `npm run build` — succeeds. Not visually
+smoke-tested in a running browser this session — worth a quick visual
+pass next time to confirm the "?" popovers don't clip off-screen on
+narrow/mobile viewports (InfoHint has an `align="right"` prop for
+exactly that, used once so far in `AddStockView.tsx`'s Submit row —
+worth checking the others too).
+
+**Next likely step:** if more of these banners turn up elsewhere in
+the app later, reuse `InfoHint` the same way — attach it next to the
+nearest heading/label rather than leaving a floating block, and check
+the code around each one first for an existing "must stay visible"
+rationale before collapsing it.
 
 **Process note:** this shipped without the full investigation → plan →
 governance-review → authorization → review chain the SuperAdmin Audit

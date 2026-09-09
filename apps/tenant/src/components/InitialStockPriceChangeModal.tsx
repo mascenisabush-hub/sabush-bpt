@@ -8,6 +8,7 @@ import { X, History, ShieldCheck, Info, TrendingUp, Save, ArrowRight } from 'luc
 // full root-cause explanation — reused unmodified from the identical
 // fix already applied elsewhere in this app.
 import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
+import { InfoHint } from './InfoHint';
 
 interface InitialStockPriceChangeModalProps {
   onClose: () => void;
@@ -369,9 +370,11 @@ export const InitialStockPriceChangeModal: React.FC<InitialStockPriceChangeModal
                       );
                     })}
                   </div>
-                  <p className="text-[13px] text-[#374151] mt-1.5 flex items-start gap-1.5 leading-relaxed">
-                    <Info className="w-3.5 h-3.5 shrink-0 mt-0.5" />
-                    Estas são alterações de valorização — não são lucro, venda, compra, despesa ou levantamento.
+                  <p className="text-[13px] text-[#374151] mt-1.5 flex items-center gap-1.5">
+                    <InfoHint>
+                      Estas são alterações de valorização — não são lucro, venda, compra, despesa ou levantamento.
+                    </InfoHint>
+                    <span className="text-gray-500 text-[11px]">O que significam estes valores?</span>
                   </p>
                 </div>
               )}

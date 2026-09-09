@@ -70,13 +70,13 @@ import { exportReportExcel, generateReportPdfPreview, type ReportPdfPreview } fr
 import { PdfPreviewModal } from './reports/shared/PdfPreviewModal';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { ReadOnlyDraftRecovery } from './ReadOnlyDraftRecovery';
+import { InfoHint } from './InfoHint';
 import {
   ClipboardList,
   Plus,
   Trash2,
   ArrowRight,
   ArrowLeft,
-  Info,
   CheckCircle2,
   History,
   ChevronDown,
@@ -357,14 +357,12 @@ const ModeAValuationControl: React.FC<{
           className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
         />
       </label>
-      {/* [Information-Preserving Compaction] Full original sentence
-          restored, always visible — no longer shortened-plus-title. */}
-      <p className="text-[11.5px] text-gray-500 basis-full flex items-start gap-1">
-        <Info className="w-3 h-3 shrink-0 mt-[3px]" strokeWidth={2.25} />
-        <span>
-          O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente.
-        </span>
-      </p>
+      {/* Collapsed by default — see InfoHint. Same sentence as before,
+          just hidden until requested instead of permanently occupying
+          layout space. */}
+      <InfoHint>
+        O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente.
+      </InfoHint>
       {!allPortionsConvertible && (
         <p className="text-[11.5px] text-amber-600 font-semibold basis-full flex items-start gap-1">
           <AlertTriangle className="w-3 h-3 shrink-0 mt-[3px]" strokeWidth={2.25} />
@@ -540,11 +538,10 @@ const NewProductInfoPanel: React.FC<{
               ))}
             </select>
           </label>
-          {/* [Information-Preserving Compaction] Full original sentence
-              restored, always visible — no longer shortened-plus-title. */}
-          <span className="text-[11px] text-gray-500 basis-full">
+          {/* Collapsed by default — see InfoHint. */}
+          <InfoHint>
             A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra.
-          </span>
+          </InfoHint>
         </div>
       )}
     </div>
@@ -6924,6 +6921,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <h2 className="type-title flex items-center gap-2 shrink-0">
               <ClipboardList className="w-4 h-4 text-[#0B1F3A]/70 shrink-0" strokeWidth={2.25} aria-hidden="true" />
               Contagem de Stock Periódica
+              {/* [Explanatory-banner compaction — explicit product decision,
+                  2026-09-09] Reverses the prior "Deliberately NOT made
+                  dismissible/collapsible" note below this component: the
+                  always-visible banner is replaced by this collapsed-by-
+                  default InfoHint, same wording, on the product owner's
+                  explicit direction after being shown the prior decision's
+                  rationale (Information-Preserving Compaction, elsewhere in
+                  this file) — not a silent reversal. */}
+              <InfoHint width={320}>
+                Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
+                <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> —{' '}
+                {hasInitialStockCount
+                  ? 'o Capital Inicial mais o valor (a custo) do stock em lote atualmente registado'
+                  : 'o valor de compras registadas (a custo)'}
+                {' '}— para mostrar se o valor do seu inventário corresponde ao que o sistema esperava.
+              </InfoHint>
             </h2>
 
             <div className="flex items-center gap-2">
@@ -7080,35 +7093,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             )}
           </div>
 
-          {/* [Local layout compaction] Same explanatory content as
-              before — full meaning preserved verbatim, including the
-              conditional hasInitialStockCount copy branch below —
-              only the padding/line-height tightened (py-3.5 → py-2,
-              leading-relaxed → leading-snug) to reduce its vertical
-              footprint without shrinking the font size or deleting any
-              guidance. Deliberately NOT made dismissible/collapsible —
-              no new state was introduced for this. */}
-          <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-3.5 py-2 flex items-start gap-2.5">
-            <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[2px]" strokeWidth={2.25} />
-            <p className="text-[13px] leading-snug text-gray-600">
-              {/* [Capital Inicial Retirement — Implementation Authorization
-                  Increment 6; Specification §44.1/FR-70] Conditional copy
-                  (Implementation Plan §Increment 6, option a) — the exact
-                  prior wording is preserved verbatim for a business that
-                  HAS a preserved historical Capital Inicial record;
-                  generic wording names no retired concept for one that
-                  doesn't. The expectedCurrentStockValue arithmetic itself
-                  (AppContext.tsx, initialCapitalValue +
-                  totalInvestmentValueAllTime) is completely unchanged —
-                  this is copy-only. */}
-              Esta contagem regista o que existe fisicamente em stock agora. Será comparada com o{' '}
-              <strong className="text-[#111827] font-semibold">Valor Esperado de Stock</strong> —{' '}
-              {hasInitialStockCount
-                ? 'o Capital Inicial mais o valor (a custo) do stock em lote atualmente registado'
-                : 'o valor de compras registadas (a custo)'}
-              {' '}— para mostrar se o valor do seu inventário corresponde ao que o sistema esperava.
-            </p>
-          </div>
+          {/* [Explanatory-banner compaction] Content moved into the
+              InfoHint next to the "Contagem de Stock Periódica" heading
+              above — see that InfoHint's own comment for why this
+              banner (previously deliberately non-collapsible) was
+              collapsed here. Nothing removed, only relocated. */}
 
           {/* [Implementation Authorization — Single-Product Workspace §10]
               Responsive two-region layout: a single column (naturally

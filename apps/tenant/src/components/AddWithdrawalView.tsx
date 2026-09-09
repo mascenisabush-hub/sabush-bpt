@@ -2,8 +2,9 @@ import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { HandCoins, CheckCircle2, ArrowRight, Info } from 'lucide-react';
+import { HandCoins, CheckCircle2, ArrowRight } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { InfoHint } from './InfoHint';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 // [Bug fix — "digits typed are hidden" on decimal entry] See this
 // function's own header comment (decimalInputSanitizer.ts) for the
@@ -105,7 +106,12 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
             <HandCoins className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="type-title">{t('addWithdrawal.title')}</h2>
+            <h2 className="type-title flex items-center gap-2">
+              {t('addWithdrawal.title')}
+              <InfoHint width={300}>
+                <span dangerouslySetInnerHTML={{ __html: t('addWithdrawal.infoNote') }} />
+              </InfoHint>
+            </h2>
             <p className="text-[12px] text-gray-500 mt-0.5">
               {t('addWithdrawal.subtitle')}
             </p>
@@ -122,10 +128,8 @@ export const AddWithdrawalView: React.FC<AddWithdrawalViewProps> = ({ onComplete
           </div>
         ) : (
           <form onSubmit={handleSubmit} className="space-y-5 mt-5">
-            <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
-              <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-              <p className="text-[12px] leading-relaxed text-gray-600" dangerouslySetInnerHTML={{ __html: t('addWithdrawal.infoNote') }} />
-            </div>
+            {/* [Explanatory-banner compaction] Content moved into the
+                InfoHint next to the heading above. */}
 
             {/* Date & Amount */}
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

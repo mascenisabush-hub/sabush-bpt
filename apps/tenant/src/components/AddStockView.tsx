@@ -5,6 +5,7 @@ import { formatCurrency, getTodayDateString } from '../utils/formatters';
 import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload, ChevronDown, ChevronUp } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
+import { InfoHint } from './InfoHint';
 import { PurchaseDraft, PurchaseDraftLineItem, UnitRelationship } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 import { type SupplierWordingCandidate, detectSupplierWordingContradictions } from '../lib/supplierWordingMatching';
@@ -4145,19 +4146,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   </div>
                 )}
 
-                {/* Batch Auto-closing Notice */}
-                <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3 flex items-start gap-2.5">
-                  <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-                  <p className="text-[13px] leading-relaxed text-gray-600">
-                    {t('addStock.autoCloseNotice')}
-                  </p>
-                </div>
-
                 {/* Submit Button */}
-                <button
-                  type="submit"
-                  disabled={isSaving}
-                  className="btn-primary w-full py-3 px-4 text-sm disabled:opacity-60"
+                <div className="flex items-center gap-2">
+                  <button
+                    type="submit"
+                    disabled={isSaving}
+                    className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60"
                 >
                   <span>
                     {isSaving
@@ -4168,6 +4162,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   </span>
                   <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
                 </button>
+                  {/* Was the always-visible "Batch Auto-closing Notice"
+                      banner — same wording, collapsed by default. */}
+                  <InfoHint align="right">{t('addStock.autoCloseNotice')}</InfoHint>
+                </div>
               </>
             )}
           </form>

@@ -32,7 +32,8 @@ import React, { useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { Gem, CheckCircle2, ArrowLeft, ArrowRight, Info, AlertTriangle } from 'lucide-react';
+import { Gem, CheckCircle2, ArrowLeft, ArrowRight, AlertTriangle } from 'lucide-react';
+import { InfoHint } from './InfoHint';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 // [Bug fix — "digits typed are hidden" on decimal entry] See this
 // function's own header comment (decimalInputSanitizer.ts) for the
@@ -172,7 +173,10 @@ export const DeclareBusinessWorthView: React.FC<DeclareBusinessWorthViewProps> =
             <Gem className="w-5 h-5" strokeWidth={2} />
           </div>
           <div>
-            <h2 className="type-title">{t('declareWorth.title')}</h2>
+            <h2 className="type-title flex items-center gap-2">
+              {t('declareWorth.title')}
+              <InfoHint width={300}>{t('declareWorth.infoNote')}</InfoHint>
+            </h2>
             <p className="text-[12px] text-gray-500 mt-0.5">{t('declareWorth.subtitle')}</p>
           </div>
         </div>
@@ -280,14 +284,9 @@ export const DeclareBusinessWorthView: React.FC<DeclareBusinessWorthViewProps> =
           </div>
         ) : (
           <form onSubmit={handleRequestReview} className="space-y-5 mt-5">
-            {/* [Specification §42.1, §42.3] Sets clear, honest expectations
-                before submission — this is a declaration, not a count, and
-                it will not carry the same drill-down detail a Contagem
-                produces. */}
-            <div className="bg-[#F5F7FA] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
-              <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-              <p className="text-[12px] leading-relaxed text-gray-600">{t('declareWorth.infoNote')}</p>
-            </div>
+            {/* [Explanatory-banner compaction] Content moved into the
+                InfoHint next to the heading above — see Specification
+                §42.1/§42.3 note relocated with it. */}
 
             {/* [Manual data-entry error investigation, Finding 1] The
                 CURRENT Business Worth, shown here so the Owner has a

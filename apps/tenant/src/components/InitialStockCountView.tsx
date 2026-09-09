@@ -1962,8 +1962,15 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
             <h2 className="type-title">
               Contagem de Stock Inicial <span className="text-gray-400 font-semibold">(Capital Inicial)</span>
             </h2>
-            <p className="text-[12px] text-gray-500 mt-0.5">
+            <p className="text-[12px] text-gray-500 mt-0.5 flex items-center gap-1.5">
               Registe tudo o que já possui no seu negócio — isto NÃO é uma compra.
+              <InfoHint>
+                Esta contagem estabelece o seu <strong className="text-[#111827] font-semibold">Capital Inicial do Negócio</strong> — o
+                ponto de partida contra o qual todo o crescimento (ou perda) de capital será medido a partir de agora. Ao
+                contrário de uma compra de stock (lote), esta contagem{' '}
+                <strong className="text-[#111827] font-semibold">não cria um lote de compra</strong>. Pode editar livremente
+                antes de confirmar — o seu progresso fica guardado. Só pode ser <strong className="text-[#111827] font-semibold">confirmada</strong> uma vez.
+              </InfoHint>
             </p>
           </div>
           {draftSaveState !== 'idle' && (
@@ -2018,17 +2025,8 @@ export const InitialStockCountView: React.FC<InitialStockCountViewProps> = ({ on
           )}
         </div>
 
-        {/* Info box — informs quietly, never dominates */}
-        <div className="bg-[var(--muted)] border border-[#E5E7EB] rounded-xl px-4 py-3.5 flex items-start gap-2.5">
-          <Info className="w-3.5 h-3.5 text-[#0B1F3A]/60 shrink-0 mt-[3px]" strokeWidth={2.25} />
-          <p className="text-[12px] leading-relaxed text-gray-600">
-            Esta contagem estabelece o seu <strong className="text-[#111827] font-semibold">Capital Inicial do Negócio</strong> — o
-            ponto de partida contra o qual todo o crescimento (ou perda) de capital será medido a partir de agora. Ao
-            contrário de uma compra de stock (lote), esta contagem{' '}
-            <strong className="text-[#111827] font-semibold">não cria um lote de compra</strong>. Pode editar livremente
-            antes de confirmar — o seu progresso fica guardado. Só pode ser <strong className="text-[#111827] font-semibold">confirmada</strong> uma vez.
-          </p>
-        </div>
+        {/* [Explanatory-banner compaction] Content moved into the
+            InfoHint next to the heading subtitle above. */}
 
         {error && (
           <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[12.5px] font-medium">

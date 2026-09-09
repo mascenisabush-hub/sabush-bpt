@@ -1,10 +1,11 @@
 import React, { useState } from 'react';
 import { Product } from '../types';
 import { useApp } from '../context/AppContext';
-import { X, Tag, Save, Info } from 'lucide-react';
+import { X, Tag, Save } from 'lucide-react';
 import { findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
+import { InfoHint } from './InfoHint';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 // [Bug fix — "digits typed are hidden" on decimal entry] See this
 // function's own header comment (decimalInputSanitizer.ts) for the
@@ -207,13 +208,13 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
             </div>
           )}
 
-          <div className="bg-blue-50 border border-blue-500/20 rounded-xl p-2.5 flex items-start gap-2 text-[11px] text-gray-700">
-            <Info className="w-3.5 h-3.5 text-blue-600 shrink-0 mt-0.5" />
-            <p>
+          <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
+            <InfoHint>
               O Custo vem da última compra registada (Add Stock / Smart Stock Entry) e não pode ser editado aqui. O
               Preço de Venda é a memória estabelecida na Contagem — edite-o aqui quando o preço real mudar; a
               alteração nunca afeta o custo registado.
-            </p>
+            </InfoHint>
+            <span>Como funcionam o Custo e o Preço de Venda?</span>
           </div>
         </div>
 
