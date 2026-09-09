@@ -2,15 +2,15 @@ import React, { useState, useEffect, useRef } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, getTodayDateString } from '../utils/formatters';
-import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload, ChevronDown, ChevronUp } from 'lucide-react';
+import { PackagePlus, CheckCircle2, ArrowRight, Tag, Plus, Trash2, Search, Sparkles, Info, X, Truck, ScanLine, Loader2, CheckCircle, AlertTriangle, MinusCircle, Camera, Upload, ChevronDown, ChevronUp, Save } from 'lucide-react';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { InfoHint } from './InfoHint';
-import { PurchaseDraft, PurchaseDraftLineItem, UnitRelationship } from '../types';
+import { PurchaseDraft, PurchaseDraftLineItem, UnitRelationship, Product } from '../types';
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 import { type SupplierWordingCandidate, detectSupplierWordingContradictions } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognitionAsync, resolveScanRowSupplierWordingAsync } from '../lib/supplierWordingRecognition';
-import { isValidUnitRelationship } from '../lib/unitRelationship';
+import { isValidUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanonicalProductSellingMemory } from '../lib/productMemoryPriceResolution';
 import { findSimilarProducts } from '../lib/productNameSimilarity';
 // [Manual data-entry error investigation, Finding 3] Shared with
@@ -381,6 +381,359 @@ const UnitRelationshipRow: React.FC<{
 // other pure conversion helper (getConversionFactor, deriveCostContribution,
 // etc.). See that module's own header comment for the full rationale.
 
+// [Product Catalog Phase 2 — Checkpoint 4, Specification §10/§11]
+// Identical, pure, module-level helper to EditProductModal.tsx's own
+// unitRelationshipCandidateEqualsCurrent (Checkpoint 2) — deliberately
+// duplicated here rather than imported, since EditProductModal.tsx is
+// a protected, Catálogo-only file outside Checkpoint 4's authorized
+// scope; extracting a shared module would require touching a file
+// neither checkpoint authorizes changing. Decides whether a candidate
+// unit-relationship (rows + sellingUnit, as entered in the correction
+// form below) is structurally identical to the product's current
+// confirmed relationship — used only to decide whether
+// confirmProductUnitRelationship needs to be called at all ("unchanged
+// relationship: no write occurs," Implementation Plan §M).
+function unitRelationshipCandidateEqualsCurrent(
+  current: Product['unitRelationship'],
+  units: { unit: string; factorFromPrevious: number }[],
+  sellingUnit: string
+): boolean {
+  if (!isValidUnitRelationship(current) || !current) return units.length === 0;
+  if (current.units.length !== units.length) return false;
+  for (let i = 0; i < units.length; i++) {
+    if (current.units[i].unit.trim().toLowerCase() !== units[i].unit.trim().toLowerCase()) return false;
+    if (i > 0 && current.units[i].factorFromPrevious !== units[i].factorFromPrevious) return false;
+  }
+  const currentSellingUnit = (current.sellingUnit || '').trim().toLowerCase();
+  const candidateSellingUnit = (sellingUnit || '').trim().toLowerCase();
+  return currentSellingUnit === candidateSellingUnit;
+}
+
+// [Product Catalog Phase 2 — Checkpoint 4, Specification §7/§9/§10;
+// Implementation Plan §I/§K/§L; Fifth Plan/Authorization Amendments
+// (`2a30b11`/`e7a36ea`)] Add Stock's contextual canonical-Product
+// correction capability — Family 2 architecture, explicitly selected by
+// the Product Architect: reuse the existing `confirmProductUnitRelationship`
+// and `updateProduct` exactly as they already exist (both unmodified),
+// following the already-accepted `EditProductModal.tsx` (Checkpoint 2)
+// precedent almost verbatim — same validate-before-write discipline,
+// same relationship-write-before-remaining-fields ordering, same
+// catch/surface error pattern. Deliberately NOT the same component
+// (EditProductModal.tsx is a protected, Catálogo-only file, out of
+// Checkpoint 4's scope) — a new, self-contained modal, narrowed to
+// exactly the four Specification §7-authorized Add Stock fields (name,
+// sellingPrice, sellingUnit, unitRelationship). Never renders or writes
+// category/supplier/sku/barcode/costPrice/active/supplierWordings —
+// those remain Catálogo-only per Specification §7's explicit exclusion.
+//
+// [Specification §9; Implementation Plan §K] Product.name correction is
+// identity-adjacent and requires a DISTINCT explicit owner confirmation
+// — separate from ordinary field entry, separate from the unrelated
+// `identityConfirmedNew` Existing/New identity-resolution mechanism
+// (Product Identity Existing/New Resolution — a different question:
+// "is this row a new product?", never conflated with "should this
+// already-matched product's canonical name change?"). Implemented as a
+// distinct `pendingRename` state below: submitting the form with a
+// changed name does not itself write anything — it shows a dedicated
+// confirm/cancel step naming the old and new name; only an explicit
+// confirm click proceeds to the actual save.
+const AddStockProductCorrectionModal: React.FC<{
+  product: Product;
+  onClose: () => void;
+}> = ({ product, onClose }) => {
+  const { updateProduct, confirmProductUnitRelationship } = useApp();
+  const { t } = useLanguage();
+
+  const [name, setName] = useState(product.name);
+  const [sellingPrice, setSellingPrice] = useState(product.sellingPrice != null ? String(product.sellingPrice) : '');
+  const [unitRows, setUnitRows] = useState<{ unit: string; factorFromPrevious: string }[]>(
+    isValidUnitRelationship(product.unitRelationship) && product.unitRelationship
+      ? product.unitRelationship.units.map((u, i) => ({ unit: u.unit, factorFromPrevious: i === 0 ? '1' : String(u.factorFromPrevious) }))
+      : [{ unit: '', factorFromPrevious: '1' }]
+  );
+  const [sellingUnit, setSellingUnit] = useState(
+    isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship?.sellingUnit || '' : ''
+  );
+  const [error, setError] = useState<string | null>(null);
+  const [isSaving, setIsSaving] = useState(false);
+  // [Specification §9; Plan §K — distinct from identityConfirmedNew,
+  // never reused for it] Set only by the form's own submit when the
+  // name actually changed; cleared on cancel (canonical name stays
+  // untouched) or after a successful save.
+  const [pendingRename, setPendingRename] = useState<{ oldName: string; newName: string } | null>(null);
+
+  // [Implementation Plan §G, §M, §L — identical discipline to
+  // EditProductModal.tsx's own handleSubmit, narrowed to this
+  // checkpoint's authorized field set] Validates the complete candidate
+  // state, then writes in the governed order: confirmProductUnitRelationship
+  // first (only when the relationship actually changed), updateProduct
+  // second, for name + sellingPrice only — never category/supplier/
+  // sku/barcode/costPrice/active/supplierWordings. If the relationship
+  // write throws, the catch block below is reached immediately and the
+  // subsequent updateProduct call is never made.
+  const performSave = async (finalName: string) => {
+    const filledUnitRows = unitRows.filter((r) => r.unit.trim());
+    const candidateUnits = filledUnitRows.map((r, i) => ({
+      unit: r.unit.trim(),
+      factorFromPrevious: i === 0 ? 1 : parseFloat(r.factorFromPrevious),
+    }));
+    for (let i = 1; i < candidateUnits.length; i++) {
+      if (!Number.isFinite(candidateUnits[i].factorFromPrevious) || candidateUnits[i].factorFromPrevious <= 0) {
+        setError('Introduza um fator de conversão válido (maior que zero) para cada nível.');
+        return;
+      }
+    }
+
+    const trimmedSellingPrice = sellingPrice.trim();
+    if (trimmedSellingPrice !== '') {
+      const parsedSellingPrice = parseFloat(trimmedSellingPrice);
+      if (!Number.isFinite(parsedSellingPrice) || parsedSellingPrice < 0) {
+        setError('O preço de venda deve ser um valor válido.');
+        return;
+      }
+    }
+
+    // [Specification §6/§10, Plan §L — validation-before-write, before
+    // either call below] Determine the sellingUnit that will actually
+    // be in effect once this save completes, and refuse the entire
+    // save, before any write, if a non-null sellingPrice would end up
+    // paired with an absent/invalid sellingUnit. Clearing every unit
+    // row is deliberately never a relationship write — the existing
+    // confirmed relationship is left exactly as it was (Decision 1).
+    const relationshipChanged = !unitRelationshipCandidateEqualsCurrent(product.unitRelationship, candidateUnits, sellingUnit);
+    const willWriteRelationship = relationshipChanged && candidateUnits.length > 0;
+    const effectiveSellingUnit = willWriteRelationship
+      ? candidateUnits.some((u) => u.unit.trim().toLowerCase() === sellingUnit.trim().toLowerCase())
+        ? sellingUnit.trim()
+        : undefined
+      : isValidUnitRelationship(product.unitRelationship)
+        ? product.unitRelationship?.sellingUnit
+        : undefined;
+
+    if (trimmedSellingPrice !== '' && !effectiveSellingUnit) {
+      setError(t('addStock.correction.sellingUnitRequiredError'));
+      return;
+    }
+    setError(null);
+
+    setIsSaving(true);
+    try {
+      if (willWriteRelationship) {
+        await confirmProductUnitRelationship(product.id, {
+          units: candidateUnits,
+          ...(sellingUnit.trim() ? { sellingUnit: sellingUnit.trim() } : {}),
+        } as UnitRelationshipProposal);
+      }
+      await updateProduct(product.id, {
+        name: finalName,
+        sellingPrice: trimmedSellingPrice ? parseFloat(trimmedSellingPrice) : undefined,
+      });
+      onClose();
+    } catch (err) {
+      // [Plan §6, §I — reuses this codebase's existing generic write-
+      // failure surface pattern (handleReactivateProduct), never a new
+      // authorization/error system. A Staff-session denial resolves
+      // here (firestore.rules' unconditional Owner-only products update
+      // rule), surfaced via the authorized saveError string when the
+      // thrown error carries no more specific message of its own —
+      // never a silently-successful UI state.]
+      setError(err instanceof Error ? err.message : t('addStock.correction.saveError'));
+    } finally {
+      setIsSaving(false);
+    }
+  };
+
+  const handleSubmit = (e: React.FormEvent) => {
+    e.preventDefault();
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      setError('Por favor introduza o nome do produto.');
+      return;
+    }
+    if (trimmedName !== product.name) {
+      // [Specification §9; Plan §K] No write yet — the distinct rename
+      // confirmation step (below) is the only path to performSave when
+      // the name has changed.
+      setPendingRename({ oldName: product.name, newName: trimmedName });
+      return;
+    }
+    performSave(trimmedName);
+  };
+
+  if (pendingRename) {
+    return (
+      <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+        <div className="bg-white border border-gray-200 rounded-2xl w-full max-w-sm shadow-2xl text-gray-900 overflow-hidden">
+          <div className="p-5 space-y-3">
+            <h2 className="font-bold text-lg text-gray-900">{t('addStock.correction.nameChangeConfirmTitle')}</h2>
+            <p className="text-sm text-gray-600 leading-relaxed">
+              {t('addStock.correction.nameChangeConfirmBody', { old: pendingRename.oldName, new: pendingRename.newName })}
+            </p>
+            {error && <p className="text-[12px] text-rose-600">{error}</p>}
+          </div>
+          <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => setPendingRename(null)}
+              className="px-4 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-semibold transition disabled:opacity-60"
+            >
+              Cancelar
+            </button>
+            <button
+              type="button"
+              disabled={isSaving}
+              onClick={() => {
+                const confirmedName = pendingRename.newName;
+                setPendingRename(null);
+                performSave(confirmedName);
+              }}
+              className="btn-primary px-4 py-2 text-sm disabled:opacity-60"
+            >
+              {isSaving ? 'A guardar...' : 'Confirmar'}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-xs flex items-center justify-center p-3 sm:p-4">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white border border-gray-200 rounded-2xl w-full max-w-md max-h-[90vh] flex flex-col shadow-2xl text-gray-900 overflow-hidden"
+      >
+        <div className="p-5 border-b border-gray-200 flex items-center justify-between">
+          <div>
+            <h2 className="font-bold text-lg text-gray-900 flex items-center gap-2">
+              <Tag className="w-5 h-5 text-[#D4AF37]" />
+              {t('addStock.correction.editButton')}
+            </h2>
+            <p className="text-xs text-gray-500">Dados do produto — não altera este lançamento de stock</p>
+          </div>
+          <button
+            type="button"
+            onClick={onClose}
+            className="p-2 rounded-xl bg-gray-50 hover:bg-gray-100 border border-gray-300 text-gray-500 hover:text-gray-900 transition"
+          >
+            <X className="w-5 h-5" />
+          </button>
+        </div>
+
+        <div className="p-5 overflow-y-auto space-y-3.5">
+          <div>
+            <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">Nome do Produto</label>
+            <input
+              type="text"
+              required
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+
+          <div>
+            <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">Preço de Venda</label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={sellingPrice}
+              onChange={(e) => setSellingPrice(sanitizeDecimalInput(e.target.value))}
+              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            />
+          </div>
+
+          <div className="space-y-2">
+            <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">Relação de Unidades</label>
+            {unitRows.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={row.unit}
+                  onChange={(e) => {
+                    const next = [...unitRows];
+                    next[idx] = { ...next[idx], unit: e.target.value };
+                    setUnitRows(next);
+                  }}
+                  placeholder={idx === 0 ? 'Ex: Caixa' : 'Ex: Unidade'}
+                  className="flex-1 bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                />
+                {idx > 0 && (
+                  <>
+                    <span className="text-[12px] text-gray-400 shrink-0">=</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={row.factorFromPrevious}
+                      onChange={(e) => {
+                        const next = [...unitRows];
+                        next[idx] = { ...next[idx], factorFromPrevious: sanitizeDecimalInput(e.target.value) };
+                        setUnitRows(next);
+                      }}
+                      placeholder="1"
+                      className="w-16 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setUnitRows(unitRows.filter((_, i) => i !== idx))}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 transition shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setUnitRows([...unitRows, { unit: '', factorFromPrevious: '1' }])}
+              className="text-[12px] font-semibold text-[#0B1F3A] hover:underline"
+            >
+              + Adicionar nível
+            </button>
+
+            {unitRows.some((r) => r.unit.trim()) && (
+              <div>
+                <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1 mt-2">Unidade de Venda</label>
+                <select
+                  value={sellingUnit}
+                  onChange={(e) => setSellingUnit(e.target.value)}
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                >
+                  <option value="">Selecione a unidade de venda</option>
+                  {unitRows
+                    .filter((r) => r.unit.trim())
+                    .map((r) => (
+                      <option key={r.unit} value={r.unit.trim()}>
+                        {r.unit.trim()}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+            {error && <p className="text-[12px] text-rose-600 mt-1">{error}</p>}
+          </div>
+        </div>
+
+        <div className="p-4 border-t border-gray-200 flex justify-end gap-2">
+          <button
+            type="button"
+            onClick={onClose}
+            className="px-4 py-2 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-700 text-sm font-semibold transition"
+          >
+            Cancelar
+          </button>
+          <button type="submit" disabled={isSaving} className="btn-primary px-4 py-2 text-sm disabled:opacity-60">
+            <Save className="w-4 h-4" />
+            {isSaving ? 'A guardar...' : 'Guardar'}
+          </button>
+        </div>
+      </form>
+    </div>
+  );
+};
+
 export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, onComplete }) => {
   const {
     products,
@@ -409,6 +762,13 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     updateProduct,
   } = useApp();
   const { t } = useLanguage();
+  // [Product Catalog Phase 2 — Checkpoint 4] Which matched, existing
+  // Product (if any) the correction modal is currently open for — null
+  // when closed. Deliberately top-level (not per-row) state, mirroring
+  // ProductCatalogView.tsx's own editingProduct pattern for
+  // EditProductModal, since the modal itself is a single, shared
+  // overlay, never one instance per row.
+  const [correctionProduct, setCorrectionProduct] = useState<Product | null>(null);
   const suggestedUnits = getSuggestedUnitsForCategory(businessCategory);
 
   const createEmptyRow = (productName: string = ''): StockRowItem => {
@@ -4091,6 +4451,41 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
                         );
                       })()}
+
+                      {/* [Product Catalog Phase 2 — Checkpoint 4,
+                          Specification §7; Implementation Plan §I]
+                          Contextual canonical-Product correction
+                          affordance — only for an already-matched,
+                          active existing product (never for an
+                          unmatched/new-product row, and never for the
+                          inactive-match case just above, which already
+                          has its own dedicated reactivation flow).
+                          Opens the shared correction modal (mounted
+                          once, at the very end of this component's own
+                          return, mirroring ProductCatalogView.tsx's
+                          identical editingProduct/EditProductModal
+                          pattern) — never a second, per-row modal
+                          instance. */}
+                      {(() => {
+                        const trimmedName = row.productName.trim().toLowerCase();
+                        if (!trimmedName) return null;
+                        const matchedProduct = products.find(
+                          p => p.active !== false && p.name.trim().toLowerCase() === trimmedName
+                        );
+                        if (!matchedProduct) return null;
+                        return (
+                          <div className="mt-2">
+                            <button
+                              type="button"
+                              onClick={() => setCorrectionProduct(matchedProduct)}
+                              className="flex items-center gap-1.5 text-[12px] font-semibold text-[#0B1F3A] hover:underline"
+                            >
+                              <Tag className="w-3 h-3" />
+                              {t('addStock.correction.editButton')}
+                            </button>
+                          </div>
+                        );
+                      })()}
                     </div>
                   );
                 })}
@@ -4190,6 +4585,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           </form>
         )}
       </div>
+      {correctionProduct && (
+        <AddStockProductCorrectionModal product={correctionProduct} onClose={() => setCorrectionProduct(null)} />
+      )}
     </div>
   );
 };

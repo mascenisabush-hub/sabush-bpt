@@ -564,6 +564,17 @@ export interface TranslationDict {
     sequencing: {
       resolveBeforeReview: string;
     };
+    // [Product Catalog Phase 2 — Checkpoint 4, Specification §7/§9/§10;
+    // Implementation Plan §I/§K/§L; Fifth Plan/Authorization Amendments
+    // (`2a30b11`/`e7a36ea`)] Contextual canonical-Product correction
+    // capability, authorized exactly for these five keys.
+    correction: {
+      editButton: string;
+      nameChangeConfirmTitle: string;
+      nameChangeConfirmBody: string;
+      sellingUnitRequiredError: string;
+      saveError: string;
+    };
   };
   addQuebra: {
     title: string;
@@ -1774,6 +1785,22 @@ export const pt: TranslationDict = {
     },
     sequencing: {
       resolveBeforeReview: 'Resolva a linha {n} de {total} antes de rever o recibo completo.',
+    },
+    // [Product Catalog Phase 2 — Checkpoint 4, Specification §7/§9/§10;
+    // Implementation Plan §I/§K/§L; Fifth Plan/Authorization Amendments
+    // (`2a30b11`/`e7a36ea`)] Contextual canonical-Product correction —
+    // exactly these five keys authorized. `{{old}}`/`{{new}}` use this
+    // dictionary's own established double-brace interpolation syntax
+    // (see interpolate() in LanguageContext.tsx, and e.g.
+    // subscription.daysRemaining/endsOn above) — the only functioning
+    // placeholder delimiter t() actually substitutes.
+    correction: {
+      editButton: 'Corrigir dados do produto',
+      nameChangeConfirmTitle: 'Confirmar alteração de nome',
+      nameChangeConfirmBody:
+        'Tem a certeza que quer renomear "{{old}}" para "{{new}}"? Esta alteração afeta o produto em todos os registos futuros.',
+      sellingUnitRequiredError: 'Para definir um preço de venda é necessária uma unidade de venda válida.',
+      saveError: 'Não foi possível guardar as alterações.',
     },
   },
   addQuebra: {

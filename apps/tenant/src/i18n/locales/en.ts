@@ -529,6 +529,19 @@ export const en: TranslationDict = {
     sequencing: {
       resolveBeforeReview: 'Resolve row {n} of {total} before reviewing the full receipt.',
     },
+    // [Product Catalog Phase 2 — Checkpoint 4, Specification §7/§9/§10;
+    // Implementation Plan §I/§K/§L; Fifth Plan/Authorization Amendments
+    // (`2a30b11`/`e7a36ea`)] Contextual canonical-Product correction —
+    // exactly these five keys authorized. `{{old}}`/`{{new}}` use this
+    // dictionary's own established double-brace interpolation syntax.
+    correction: {
+      editButton: 'Correct product details',
+      nameChangeConfirmTitle: 'Confirm name change',
+      nameChangeConfirmBody:
+        'Are you sure you want to rename "{{old}}" to "{{new}}"? This change affects the product in every future record.',
+      sellingUnitRequiredError: 'A valid selling unit is required to set a selling price.',
+      saveError: 'Could not save the changes.',
+    },
   },
   addQuebra: {
     title: 'Record Stock Loss',
