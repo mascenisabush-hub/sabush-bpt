@@ -12,67 +12,60 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Smart Stock Entry ("Tirar Foto"/"Carregar Documento")
-failure — investigated, root cause found and fixed, typechecked,
-built, tested, pushed to `main`. **Nothing mid-flight; working tree
-clean.**
+**Status:** Smart Stock Entry crash investigation — **AI pipeline
+cleared, root crash cause NOT found, pivoted to a diagnosability fix**
+— typechecked, built, pushed to `main`. **Nothing mid-flight; working
+tree clean.**
 
-**Root cause (confirmed, not guessed):** `server/smartStockEntry.ts`
-and `server/productRecognitionSemanticMatch.ts` both read
-`process.env.SMART_STOCK_ENTRY_AI_API_KEY` — but `.env.example` and
-`README.md` (both local-dev and Railway production instructions)
-documented setting `GEMINI_API_KEY` instead, a name **zero code paths
-in this repo ever read** (confirmed via grep across all `.ts` files).
-Anyone configuring a deployment by following this repo's own
-documented instructions would set the wrong variable name. Every scan
-attempt — camera or upload, identical code path via
-`handleFileSelected` — would then hit
-`callVisionExtractionProvider`'s `if (!apiKey) throw
-ProviderNotConfiguredError`, caught in `server/index.ts` and returned
-to the client as a graceful `{ success: false, reason:
-'provider_unavailable' }`, with nothing in server logs pointing at
-why. This matches the reported symptom exactly: failure on both
-"Tirar Foto" and "Carregar Documento", every time.
+**What actually happened:** the reported "failure during Tirar
+Foto/Carregar Documento" was NOT the graceful Smart Stock Entry
+failure banner this file's previous session investigated
+(`SMART_STOCK_ENTRY_AI_API_KEY` docs mismatch, already fixed, commit
+`1972d51`) — it was the app's generic `ErrorBoundary` crash screen
+("Algo correu mal"), meaning a full React render-tree crash, not a
+graceful in-feature failure.
 
-**Also checked and ruled out** (documented here so it isn't
-re-investigated from scratch next time): the model name
-(`gemini-3.5-flash-lite`) is current/GA per Google's own docs as of
-today; `createPartFromBase64`'s signature and the `nullable` JSON
-Schema field are both still valid in the pinned `@google/genai@2.13.0`
-SDK; the Express route's own larger `express.json({ limit: '12mb' })`
-parser is still correctly registered before the app-wide default
-parser (the exact ordering bug a prior session's comment already
-documents fixing once — not regressed). One adjacent, non-blocking
-observation: Gemini 3.x now silently *ignores* the `temperature: 0`
-parameter this code sets (deprecated as of the 3.x model family, per
-Google's current docs) rather than erroring on it — so the
-determinism fix that parameter was added for is quietly no longer in
-effect. Not the cause of today's failure and not touched this
-session; worth a follow-up look if scan-consistency complaints
-resurface.
+**Verified live, via the Owner's own Railway console (not guessed):**
+- `SMART_STOCK_ENTRY_AI_API_KEY` IS correctly set in production.
+- A raw `GET .../models/gemini-3.5-flash-lite?key=...` call succeeds.
+- A full `generateContent` call with the exact schema/config/temperature this code uses succeeds (text-only).
+- The exact SDK call this code makes — `GoogleGenAI` + `createPartFromBase64` with a real image, same schema/config — **succeeds end-to-end**, returning a correct extraction.
 
-**What shipped:**
-- `.env.example` — corrected to document `SMART_STOCK_ENTRY_AI_API_KEY`.
-- `README.md` — both references (local dev, Railway production) corrected to the same name.
-- `server/index.ts` — one new non-blocking startup `console.warn` if `SMART_STOCK_ENTRY_AI_API_KEY` is unset, so this class of misconfiguration is visible in server logs immediately next time, instead of only discoverable per-request. No behavior change, no new failure mode, doesn't block startup.
+**So the entire AI pipeline is confirmed working in production.** The
+crash is somewhere else — most likely in `AddStockView.tsx`'s render
+of a scanned row (`buildRowFromProposalLineItem` / the AI-specific
+status-badge rendering / the mobile card layout), but static reading
+of those paths (including the server's `parseProviderExtractionResponse`,
+which does guarantee every `FieldState` object always exists, never
+undefined) didn't surface an obvious unguarded property access either.
 
-**IMPORTANT — this alone does not fix production.** Correcting the
-repo's docs only prevents the mistake for *future* setups. The live
-Railway deployment's actual environment variable must be checked and
-corrected too — if it currently has `GEMINI_API_KEY` set (per the
-old, wrong docs) instead of `SMART_STOCK_ENTRY_AI_API_KEY`, scanning
-will keep failing until that's added in Railway's dashboard. This
-requires Railway access this session does not have — flagged clearly
-to the Owner, not silently assumed fixed.
+**Why this wasn't resolved further this session:** the crash happened
+on a real client's phone, reported secondhand — no direct DevTools
+access, and deliberately NOT pursued further via the client (Owner's
+explicit call: inconveniencing a new customer to get a browser
+console screenshot isn't acceptable). The one channel that should have
+caught this automatically — `reportClientError` → `POST
+/api/client-error` → Railway logs — **produced zero log entries**,
+confirmed by searching Railway's Deploy Logs for `client-error`. That
+gap is real and is what got fixed this session instead.
+
+**What shipped (a diagnosability fix, not the crash fix itself):**
+- `ErrorBoundary.tsx` — the crash screen now shows the actual error message + stack trace inline, in a collapsed "Detalhes técnicos" section with a copy button. Anyone who hits this screen — including a client — can now screenshot or copy the real error without DevTools or server access.
+- `reportClientError.ts` — now fires BOTH `sendBeacon` and a `keepalive` fetch (previously either/or), since `sendBeacon`'s return value only confirms queuing, not delivery, and it has known silent-failure gaps on some mobile browsers. Worst case: one harmless duplicate log line. Given a real report already went missing once, this is cheap insurance.
 
 **Verification:** `npx tsc --noEmit -p .` and `npm run build` both
-clean. All Smart Stock Entry (3 files) and Product Recognition
-semantic-match (2 files) tests pass.
+clean. Not tested against a live crash (nothing to reproduce it with
+in this sandbox) — this is a genuinely untested-in-anger fix, flagged
+as such.
 
-**Still open from the prior session, unrelated to this fix:** the
+**Next likely step:** if/when this crash recurs, the next report
+(even from a client, even secondhand) should come with a screenshot of
+the "Detalhes técnicos" section already attached — that will very
+likely resolve this in one step instead of the multi-turn live
+diagnostic session this one required. Once that text is available,
+resume investigating the render path it names.
+
+**Still open from before this interrupt, untouched this session:** the
 `periodic-contagem-concept-b-compaction.test.ts` InfoHint-vs-test
-conflict (2 failing tests, already on `main` since commit `8bb980d`)
-still needs the Owner's decision — revert those two banners to
-always-visible, or update the test. Not touched this session either;
-this Smart Stock Entry investigation took priority per explicit
-instruction to stop and investigate it first.
+conflict (2 failing tests, on `main` since commit `8bb980d`) still
+needs the Owner's decision.

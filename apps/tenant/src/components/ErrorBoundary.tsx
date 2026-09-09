@@ -7,6 +7,8 @@ interface Props {
 
 interface State {
   hasError: boolean;
+  error: Error | null;
+  copied: boolean;
 }
 
 /**
@@ -21,6 +23,19 @@ interface State {
  * failures), and shows a minimal recovery screen instead of a blank
  * page.
  *
+ * [Bug fix — a real crash's reportClientError beacon never reached the
+ * server; nothing in Railway's logs, no way to diagnose it without
+ * inconveniencing the customer for browser DevTools access] The error
+ * itself — message and a short stack excerpt — is now also shown
+ * directly on this screen, in a small collapsed "Detalhes técnicos"
+ * section with its own copy button. This does not replace
+ * reportClientError (still called, unchanged, still the first line of
+ * defense) — it's a fallback for exactly the case that already
+ * happened once: the report doesn't arrive, or no one has access to
+ * check server logs. Anyone who hits this screen can now screenshot or
+ * copy the technical details themselves, no DevTools/Railway access
+ * needed.
+ *
  * Deliberately does NOT catch: errors thrown in event handlers, async
  * code, or effects — React Error Boundaries structurally never do.
  * Those are covered separately by the window 'error' and
@@ -28,10 +43,10 @@ interface State {
  * main.tsx.
  */
 export class ErrorBoundary extends Component<Props, State> {
-  state: State = { hasError: false };
+  state: State = { hasError: false, error: null, copied: false };
 
-  static getDerivedStateFromError(): State {
-    return { hasError: true };
+  static getDerivedStateFromError(error: Error): State {
+    return { hasError: true, error, copied: false };
   }
 
   componentDidCatch(error: Error, errorInfo: ErrorInfo): void {
@@ -40,8 +55,23 @@ export class ErrorBoundary extends Component<Props, State> {
     });
   }
 
+  handleCopyDetails = () => {
+    const { error } = this.state;
+    if (!error) return;
+    const details = `${error.message}\n\n${error.stack || ''}`.trim();
+    navigator.clipboard?.writeText(details).then(
+      () => this.setState({ copied: true }),
+      () => {
+        // Clipboard permission denied or unavailable — the text is
+        // still visible on screen to screenshot manually, so this is
+        // never a dead end, just a smaller convenience lost.
+      }
+    );
+  };
+
   render() {
     if (this.state.hasError) {
+      const { error, copied } = this.state;
       return (
         <div className="h-screen w-screen flex items-center justify-center bg-[#0d0806] text-white px-6">
           <div className="max-w-sm text-center flex flex-col items-center gap-4">
@@ -56,6 +86,26 @@ export class ErrorBoundary extends Component<Props, State> {
             >
               Recarregar
             </button>
+            {error && (
+              <details className="mt-2 w-full text-left">
+                <summary className="text-xs text-white/40 cursor-pointer select-none">
+                  Detalhes técnicos
+                </summary>
+                <div className="mt-2 bg-white/5 border border-white/10 rounded-lg p-3 space-y-2">
+                  <p className="text-[11px] font-mono text-white/60 break-words whitespace-pre-wrap max-h-40 overflow-y-auto">
+                    {error.message}
+                    {error.stack ? `\n\n${error.stack}` : ''}
+                  </p>
+                  <button
+                    type="button"
+                    onClick={this.handleCopyDetails}
+                    className="text-[11px] font-medium text-white/70 hover:text-white underline underline-offset-2"
+                  >
+                    {copied ? 'Copiado!' : 'Copiar detalhes'}
+                  </button>
+                </div>
+              </details>
+            )}
           </div>
         </div>
       );

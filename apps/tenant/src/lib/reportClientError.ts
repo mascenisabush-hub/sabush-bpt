@@ -37,24 +37,30 @@ export function reportClientError(error: unknown, source: string, extra: Record<
       ...extra,
     });
 
-    // sendBeacon is preferred: it's designed for exactly this
-    // situation (fire during page unload/navigation/crash recovery,
-    // no response ever read) and works even if the page is about to
-    // be torn down. `keepalive: true` on fetch is the closest
-    // equivalent where sendBeacon isn't available.
+    // [Bug fix — a real crash report never reached the server; nothing
+    // in Railway's logs, no diagnostic signal at all] sendBeacon's
+    // return value only confirms the browser QUEUED the request, never
+    // that it was delivered — and it has known, silent-failure gaps on
+    // some mobile browsers/privacy modes. Since this only ever fires
+    // when something has already gone wrong (never on a hot path),
+    // firing BOTH sendBeacon and a keepalive fetch is cheap insurance:
+    // worst case is one harmless duplicate log line; the alternative
+    // (as already happened once) is zero diagnostic signal at all for
+    // a real production crash. ErrorBoundary.tsx's own "Detalhes
+    // técnicos" section is the other half of this fix — a fallback for
+    // when even both of these somehow fail to reach the server.
     if (navigator.sendBeacon) {
       const blob = new Blob([payload], { type: 'application/json' });
       navigator.sendBeacon('/api/client-error', blob);
-    } else {
-      fetch('/api/client-error', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: payload,
-        keepalive: true,
-      }).catch(() => {
-        // Deliberately swallowed — see the "never throws" constraint above.
-      });
     }
+    fetch('/api/client-error', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: payload,
+      keepalive: true,
+    }).catch(() => {
+      // Deliberately swallowed — see the "never throws" constraint above.
+    });
   } catch {
     // Reporting itself is the last resort; if even this throws, there
     // is nothing further to fall back to.
