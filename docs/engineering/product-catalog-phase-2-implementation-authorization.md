@@ -56,7 +56,7 @@ Each checkpoint requires its own review before the next begins, exactly as the a
 
 ## 5. File Scope
 
-**Authorized for change, only as required by the corresponding checkpoint above — not a blanket permission to touch every listed file:** `apps/tenant/src/context/AppContext.tsx`; `apps/tenant/src/components/ProductCatalogView.tsx`; `apps/tenant/src/components/EditProductModal.tsx`; `apps/tenant/src/components/AddStockView.tsx`; `apps/tenant/src/components/PeriodicStockCountView.tsx`; `tests/product-catalog-phase-1-checkpoint-b.test.ts`; new or extended test files where the accepted Plan §V explicitly requires them.
+**Authorized for change, only as required by the corresponding checkpoint above — not a blanket permission to touch every listed file:** `apps/tenant/src/context/AppContext.tsx`; `apps/tenant/src/components/ProductCatalogView.tsx`; `apps/tenant/src/components/EditProductModal.tsx`; `apps/tenant/src/components/AddStockView.tsx`; `apps/tenant/src/components/PeriodicStockCountView.tsx`; `tests/product-catalog-phase-1-checkpoint-b.test.ts`; `tests/product-catalog-phase-1-checkpoint-c.test.ts` (**Implementation Authorization Amendment, Accepted 2026-09-09 — see §10, below; authorized only as to the two specific assertions the accepted Implementation Plan Amendment identifies — "has exactly six input elements inside the registration form" and "does NOT contain UnitRelationship configuration UI" — no other assertion, helper, fixture, import, or structure in that file is authorized to change**); new or extended test files where the accepted Plan §V explicitly requires them.
 
 **Protected — MUST NOT change under this authorization:** `apps/tenant/src/utils/calculations.ts` (Business Worth); `apps/tenant/src/lib/productMemoryPriceResolution.ts`; `apps/tenant/src/lib/sellingMemorySelection.ts`; the existing exported function signatures of `apps/tenant/src/lib/unitRelationship.ts` (`isValidUnitRelationship`, `confirmUnitRelationship`); `firestore.rules` (no change authorized — the accepted Plan classified the Add Stock authorization question as resolvable without a rules change, §6 below); any file implementing `SupplierWordingRelationship`/`confirmSupplierWordingRelationship`; any `costPrice`-handling code path.
 
@@ -88,3 +88,25 @@ Implementation must: follow the accepted Specification and accepted Implementati
 - No application code, test, schema, or `firestore.rules` file has been modified to produce this document.
 - This document authorizes implementation strictly within §3–§6; it does not authorize Product Merge, Business Worth calculation changes, Product Memory model changes, `SupplierWordingRelationship` changes, `costPrice`/FR-88 boundary changes, unrelated refactoring, or unrelated UI redesign.
 - Implementation itself, once begun, proceeds checkpoint by checkpoint per §4 — this document does not perform, and is not, that implementation.
+
+## 10. Implementation Authorization Amendment — Checkpoint 2 Regression-Assertion Reconciliation
+
+**Type:** Implementation Authorization Amendment — narrowly amends only §5's file-scope provision, to bring this Authorization into alignment with the already-accepted Implementation Plan Amendment (`docs/engineering/product-catalog-phase-2-implementation-plan.md`, "Product Architect Acceptance of Implementation Plan Amendment — Checkpoint 2 Regression-Assertion Reconciliation," Accepted 2026-09-09, commit `54ef1e0`). Authorizes no new product capability; does not modify the Specification, Rule 8 Assessment, the Implementation Plan's substantive implementation scope, or any BDR/Policy/Decision; does not authorize general modification of `checkpoint-c.test.ts`, Checkpoint 3–5, or any implementation itself.
+
+**Status:** ✅ Accepted / IMPLEMENTATION AUTHORIZATION AMENDED (2026-09-09).
+
+**Amendment content, in full (the only substantive change this amendment makes to this Authorization):**
+
+The §5 addition, above, adding `tests/product-catalog-phase-1-checkpoint-c.test.ts` to the file-scope list — authorized **only** as to the two specific assertions the accepted Implementation Plan Amendment identifies:
+1. The assertion requiring exactly six input elements in the Catalog registration form.
+2. The assertion requiring that `ProductCatalogView.tsx` contain no UnitRelationship configuration UI.
+
+This authorization exists only because those two assertions directly encode behavior already superseded by the accepted Phase 2 Specification (§6/§10) and necessarily become obsolete the moment Checkpoint 2 implements the already-authorized Catalog behavior (Plan §H) — it is not a general grant to edit this file, and no other assertion, helper, fixture, import, or test structure within it is authorized to change under this amendment.
+
+> This Implementation Authorization Amendment is accepted exactly as scoped above. The original Implementation Authorization (§1–§9, signed 2026-09-09) remains in force, unchanged, in every other respect — this amendment adds exactly one narrowly scoped test file to §5, limited to the two named assertions; all other original authorization boundaries, protected-file list, checkpoint sequence, and Rule 8 treatment remain exactly as originally signed. This acceptance does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, Decisions 2A/2B, or the Implementation Plan beyond its own already-accepted amendment. This acceptance authorizes implementation to resume Checkpoint 2 strictly within the existing Checkpoint 2 scope (§3–§4, above) plus this §10 amendment — it does not authorize Checkpoints 3–5, and does not itself perform any implementation.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Decision:** ACCEPTED / IMPLEMENTATION AUTHORIZATION AMENDED
+
+**Date:** 2026-09-09
