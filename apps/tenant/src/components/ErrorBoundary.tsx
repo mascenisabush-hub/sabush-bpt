@@ -58,8 +58,7 @@ export class ErrorBoundary extends Component<Props, State> {
   handleCopyDetails = () => {
     const { error } = this.state;
     if (!error) return;
-    const details = `${error.message}\n\n${error.stack || ''}`.trim();
-    navigator.clipboard?.writeText(details).then(
+    navigator.clipboard?.writeText(this.buildDetailsText(error)).then(
       () => this.setState({ copied: true }),
       () => {
         // Clipboard permission denied or unavailable — the text is
@@ -68,6 +67,18 @@ export class ErrorBoundary extends Component<Props, State> {
       }
     );
   };
+
+  // [Addition — browser/OS is a real, common variable for exactly
+  // this class of bug: in-app WebViews (opened from a WhatsApp/
+  // Instagram/Facebook link, not the phone's real browser), iPhone
+  // HEIC photos, and older-Android createImageBitmap gaps all behave
+  // differently by browser. navigator.userAgent was already being
+  // sent to reportClientError's payload but was never shown on this
+  // visible screen — surfaced here now so a screenshot alone answers
+  // "which browser" without needing to separately ask the person who
+  // hit it.
+  buildDetailsText = (error: Error): string =>
+    `${error.message}\n\n${error.stack || ''}\n\nUA: ${navigator.userAgent}`.trim();
 
   render() {
     if (this.state.hasError) {
@@ -93,8 +104,7 @@ export class ErrorBoundary extends Component<Props, State> {
                 </summary>
                 <div className="mt-2 bg-white/5 border border-white/10 rounded-lg p-3 space-y-2">
                   <p className="text-[11px] font-mono text-white/60 break-words whitespace-pre-wrap max-h-40 overflow-y-auto">
-                    {error.message}
-                    {error.stack ? `\n\n${error.stack}` : ''}
+                    {this.buildDetailsText(error)}
                   </p>
                   <button
                     type="button"
