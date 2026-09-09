@@ -2,9 +2,9 @@ Implementation Plan — DRAFT, NOT YET AUTHORIZED
 
 # Product Catalog Phase 2 — Implementation Plan
 
-**STATUS: DRAFT / PROPOSED — NOT YET ACCEPTED.** No code, test, schema, or `firestore.rules` change was made to produce this document. This Plan does not itself authorize implementation — a separate, signed Implementation Authorization remains a required, subsequent gate.
+**STATUS: ✅ ACCEPTED (2026-09-09).** See "Product Architect Acceptance of Implementation Plan," below. No code, test, schema, or `firestore.rules` change was made to produce this document. This acceptance does not itself authorize implementation — a separate, signed Implementation Authorization remains a required, subsequent gate.
 
-**Governing chain:** [Phase 2 BDR](./product-catalog-phase-2-bdr.md) (✅ Accepted, `e9e4297`) → [Policy Amendment](../specs/POL-pending-selling-price-unit-invariant-amendment.md) (✅ Accepted, `d677c82`) → [Decision 1](../specs/product-catalog-phase-2-selling-price-unit-relationship-reconfiguration-decision-amendment.md) (✅ Accepted, `cc09b5c`) → [Decisions 2A/2B](../specs/product-catalog-phase-2-add-stock-correction-scope-and-name-confirmation-decision-amendment.md) (✅ Accepted, `7fe6ac9`) → [Phase 2 Specification](../specs/product-catalog-phase-2-canonical-product-information-multi-door-correction-and-selling-configuration-specification.md) (✅ Accepted, SABUSHIMIKE MASCENI, 2026-09-09, `a488095`) → [Rule 8 Assessment](./product-catalog-phase-2-rule8-assessment.md) (✅ FINAL — READY FOR IMPLEMENTATION PLANNING, `f60f841`) → **this Implementation Plan** → *(next: Product Architect Acceptance of this Plan, then Implementation Authorization — neither performed here)*.
+**Governing chain:** [Phase 2 BDR](./product-catalog-phase-2-bdr.md) (✅ Accepted, `e9e4297`) → [Policy Amendment](../specs/POL-pending-selling-price-unit-invariant-amendment.md) (✅ Accepted, `d677c82`) → [Decision 1](../specs/product-catalog-phase-2-selling-price-unit-relationship-reconfiguration-decision-amendment.md) (✅ Accepted, `cc09b5c`) → [Decisions 2A/2B](../specs/product-catalog-phase-2-add-stock-correction-scope-and-name-confirmation-decision-amendment.md) (✅ Accepted, `7fe6ac9`) → [Phase 2 Specification](../specs/product-catalog-phase-2-canonical-product-information-multi-door-correction-and-selling-configuration-specification.md) (✅ Accepted, SABUSHIMIKE MASCENI, 2026-09-09, `a488095`) → [Rule 8 Assessment](./product-catalog-phase-2-rule8-assessment.md) (✅ FINAL — READY FOR IMPLEMENTATION PLANNING, `f60f841`) → **this Implementation Plan (✅ ACCEPTED, SABUSHIMIKE MASCENI, 2026-09-09)** → *(next: Implementation Authorization — not created here)*.
 
 **Repository state investigated:** `main @ f60f841`, working tree clean, verified via `git fetch`/`git pull` immediately before drafting. Every file/line reference below was re-confirmed fresh this session.
 
@@ -168,6 +168,18 @@ New/updated test coverage required (none of the following currently exists, veri
 
 Each checkpoint requires its own review before the next begins — no checkpoint implies authorization for the next.
 
+## Product Architect Acceptance of Implementation Plan
+
+**Status:** ✅ Accepted (2026-09-09).
+
+> This Implementation Plan is accepted exactly as recorded — its checkpoint structure (§X), scope boundaries (§D–§E), reuse strategy (§G, §5), test strategy (§V), migration assessment (§W), and treatment of both Rule 8 observations (§5, §6) — with no substantive change made by this acceptance. This acceptance approves the Plan as the governing implementation plan for Product Catalog Phase 2. It does not itself authorize source-code implementation, does not create or imply an Implementation Authorization, and does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, or Decisions 2A/2B — a separate, signed Implementation Authorization remains a required, subsequent gate.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Decision:** ACCEPTED
+
+**Date:** 2026-09-09
+
 ## Governance Status
 
-**DRAFT / PROPOSED — NOT YET ACCEPTED.** This Plan does not imply or grant implementation authorization. The next gate is **Product Architect Acceptance of this Implementation Plan** — not performed here. Only after that acceptance should an Implementation Authorization be considered.
+**✅ ACCEPTED.** This acceptance does not imply or grant implementation authorization. The next gate is **Implementation Authorization** — not created here.
