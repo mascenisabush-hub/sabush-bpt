@@ -196,3 +196,115 @@ export function confirmUnitRelationship(
   const withTimestamp: UnitRelationship = { ...candidate, confirmedAt };
   return isValidUnitRelationship(withTimestamp) ? withTimestamp : null;
 }
+
+// [Product Catalog Phase 2 — Implementation Checkpoint 1, Decision 1
+// (docs/specs/product-catalog-phase-2-selling-price-unit-relationship-reconfiguration-decision-amendment.md),
+// Specification §11, Implementation Authorization §3.2(C)/§4/§6.] Pure
+// classification only — no Firestore access, matching this file's own
+// stated scope. Distinguishes an EXTENSION (every previously-confirmed
+// unit token AND its own factorFromPrevious value preserved exactly,
+// with at least one new unit token added, and the top-level/default
+// unit -- units[0] -- unchanged) from a REPLACEMENT/RECONFIGURATION
+// (any other change: an existing unit's factor changed, a unit
+// removed, the top-level unit changed, or any other restructuring).
+// This mirrors the worked example in Decision 1/§11 exactly: extending
+// `1 Cx = 24 Un` with `1 Emb = 6 Un` to `1 Cx = 4 Emb = 24 Un`
+// preserves Un's own factorFromPrevious (24) byte-identical even though
+// a new unit (Emb) was inserted between Cx and Un positionally --
+// factors are never recomputed or treated as "close enough" here.
+// A product with no valid current relationship at all has nothing to
+// extend -- any candidate for it is classified 'replacement' (in the
+// sense of "not an extension"), consistent with confirmProductUnitRelationship's
+// own existing "first confirmation vs later reconfiguration" framing;
+// this classification does not itself gate anything -- see
+// evaluateUnitRelationshipReplacement, below, for the actual
+// selling-unit-preservation gate Decision 1 requires.
+export type UnitRelationshipChangeKind = 'extension' | 'replacement';
+
+export function classifyUnitRelationshipChange(
+  current: UnitRelationship | undefined | null,
+  proposed: UnitRelationshipProposal
+): UnitRelationshipChangeKind {
+  if (!isValidUnitRelationship(current)) return 'replacement';
+  const currentUnits = current!.units;
+  const proposedUnits = proposed.units;
+  if (!Array.isArray(proposedUnits) || proposedUnits.length === 0) return 'replacement';
+
+  // Top-level unit (units[0]) must remain the same unit for this to be
+  // an extension -- changing which unit occupies the default/purchase-
+  // unit role (BDR-0012 §5.A Item 4) is itself a reconfiguration, per
+  // the worked example (Cx stays units[0] throughout).
+  const currentTopLevel = currentUnits[0]?.unit?.trim().toLowerCase();
+  const proposedTopLevel = proposedUnits[0]?.unit?.trim().toLowerCase();
+  if (!currentTopLevel || currentTopLevel !== proposedTopLevel) return 'replacement';
+
+  const proposedByName = new Map(proposedUnits.map((u) => [u.unit.trim().toLowerCase(), u]));
+
+  // Every previously-confirmed unit (except units[0] itself, whose own
+  // factorFromPrevious is explicitly unused/ignored, per isValidUnitRelationship's
+  // own identical treatment) must still be present, with its exact same
+  // factorFromPrevious value -- not merely numerically close, not
+  // recomputed, byte-identical.
+  for (let i = 0; i < currentUnits.length; i++) {
+    const entry = currentUnits[i];
+    const normalizedName = entry.unit.trim().toLowerCase();
+    const match = proposedByName.get(normalizedName);
+    if (!match) return 'replacement';
+    if (i > 0 && match.factorFromPrevious !== entry.factorFromPrevious) return 'replacement';
+  }
+
+  // At least one genuinely new unit token must be present for this to
+  // be an extension rather than merely a no-op resubmission of the
+  // exact same chain.
+  const currentNames = new Set(currentUnits.map((u) => u.unit.trim().toLowerCase()));
+  const hasNewUnit = proposedUnits.some((u) => !currentNames.has(u.unit.trim().toLowerCase()));
+  return hasNewUnit ? 'extension' : 'replacement';
+}
+
+/**
+ * Decision 1's own governing rule, as a pure, directly-testable check:
+ * a proposed UnitRelationship replacement/reconfiguration must not be
+ * confirmed if it would strand the product's current confirmed
+ * `sellingUnit` -- unless the proposed candidate itself already
+ * supplies a valid replacement selling unit (a member of the proposed
+ * relationship's own units[]). Never auto-selects a replacement
+ * (returns `allowed: false` rather than picking one), never implies
+ * `sellingPrice` should be cleared (this function has no awareness of
+ * `sellingPrice` at all -- that remains untouched by design, per
+ * Decision 1's explicit "do not automatically clear sellingPrice"
+ * rule and this file's own single-field, no-cross-field-mutation
+ * discipline). A product with no valid current confirmed sellingUnit
+ * has nothing to strand -- always allowed, regardless of classification.
+ */
+export interface UnitRelationshipReplacementEvaluation {
+  allowed: boolean;
+  reason?: 'requires-new-selling-unit';
+}
+
+export function evaluateUnitRelationshipReplacement(
+  current: UnitRelationship | undefined | null,
+  proposed: UnitRelationshipProposal
+): UnitRelationshipReplacementEvaluation {
+  const currentSellingUnit = isValidUnitRelationship(current) ? current!.sellingUnit : undefined;
+  if (!currentSellingUnit) return { allowed: true };
+
+  const normalizedCurrentSellingUnit = currentSellingUnit.trim().toLowerCase();
+  const proposedUnits = Array.isArray(proposed.units) ? proposed.units : [];
+  const stillMember = proposedUnits.some((u) => u.unit.trim().toLowerCase() === normalizedCurrentSellingUnit);
+  if (stillMember) return { allowed: true };
+
+  // The current sellingUnit is no longer a member of the proposed
+  // relationship. Allowed ONLY if the candidate itself already supplies
+  // a valid replacement -- re-validated here defensively (never trusted
+  // un-checked, matching this file's existing discipline throughout),
+  // never inferred or chosen on the candidate's behalf.
+  if (proposed.sellingUnit) {
+    const normalizedProposedSellingUnit = proposed.sellingUnit.trim().toLowerCase();
+    const proposedSellingUnitIsMember = proposedUnits.some(
+      (u) => u.unit.trim().toLowerCase() === normalizedProposedSellingUnit
+    );
+    if (proposedSellingUnitIsMember) return { allowed: true };
+  }
+
+  return { allowed: false, reason: 'requires-new-selling-unit' };
+}

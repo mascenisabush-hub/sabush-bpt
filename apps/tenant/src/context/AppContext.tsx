@@ -48,7 +48,12 @@ import {
   type CheckedProductWordingSnapshot,
   type FullProductWordingSnapshot,
 } from '../lib/supplierWordingConfirmation';
-import { isValidUnitRelationship, confirmUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
+import {
+  isValidUnitRelationship,
+  confirmUnitRelationship,
+  evaluateUnitRelationshipReplacement,
+  type UnitRelationshipProposal,
+} from '../lib/unitRelationship';
 import { buildDerivedSellingValuationSnapshot } from '../lib/purchaseToSellingConversion';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
@@ -8098,7 +8103,28 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // reconfiguration from an accidental call, so that discipline lives
   // entirely in the caller, exactly as it already does for
   // updateProduct itself.
+  // [Product Catalog Phase 2 — Implementation Checkpoint 1, Decision 1,
+  // Implementation Authorization §3.2(C)/§4/§6] Old-state-aware
+  // extension: before this checkpoint, this function validated only
+  // the submitted candidate in isolation (via confirmUnitRelationship),
+  // with no awareness of the product's PRIOR confirmed sellingUnit --
+  // insufficient for Decision 1's requirement that a replacement which
+  // would strand the current confirmed sellingUnit must be refused
+  // until the owner supplies a valid new one in the same confirmation
+  // action. The added check, below, reads the product's current state
+  // (already held in this file's own `products` array -- no new
+  // Firestore read) and runs evaluateUnitRelationshipReplacement
+  // (lib/unitRelationship.ts) BEFORE the existing validation/write --
+  // never after, never as a follow-up correction. confirmUnitRelationship/
+  // isValidUnitRelationship themselves remain completely unmodified.
   const confirmProductUnitRelationship = async (productId: string, candidate: UnitRelationshipProposal) => {
+    const currentProduct = products.find((p) => p.id === productId);
+    const replacementEvaluation = evaluateUnitRelationshipReplacement(currentProduct?.unitRelationship, candidate);
+    if (!replacementEvaluation.allowed) {
+      throw new Error(
+        'A unidade de venda atual deixaria de existir na nova relação de unidades — selecione uma unidade de venda válida da nova relação antes de confirmar.'
+      );
+    }
     const confirmed = confirmUnitRelationship(candidate);
     if (!confirmed) {
       throw new Error('Relação de unidades inválida — verifique a unidade de venda e a estrutura de unidades.');
