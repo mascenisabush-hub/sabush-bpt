@@ -264,3 +264,27 @@ assert.match(block, /if (!sellingPriceChanged && sellingUnitFieldUpdate === unde
 **Decision:** ACCEPTED / IMPLEMENTATION AUTHORIZATION AMENDED
 
 **Date:** 2026-09-09
+
+## 15. Checkpoint 5 — Explicit Per-Checkpoint Authorization (Plan §X Review Gate)
+
+**Type:** Not an Implementation Plan or Implementation Authorization Amendment — no scope, file list, protected boundary, or product behavior is added, narrowed, or reinterpreted by this section. This is the explicit, checkpoint-specific review/go-ahead record that the accepted Implementation Plan §X's own closing sentence requires before any checkpoint may begin — *"Each checkpoint requires its own review before the next begins — no checkpoint implies authorization for the next"* — restated identically by §4, above (*"Each checkpoint requires its own review before the next begins, exactly as the accepted Plan states"*), and already reaffirmed twice by name for Checkpoint 5 specifically (§13's and §14's governance-sequence items, both stating "Checkpoint 5 remains unauthorized" as of their own acceptance). Checkpoint 4's closure (implementation `c43776a`, closure/evidence record `17918af`, independently audited CLOSED — CONFORMING) does not itself satisfy this requirement — it is a separate, distinct gate, recorded here.
+
+**Governing Checkpoint 5 definition — unchanged, restated exactly, not broadened:** Plan §X — *"Checkpoint 5 — Full regression sweep. Objective: run every existing test file referencing any touched function across all four checkpoints; confirm zero unrelated regressions. Prohibited: any new functional change."* Authorization §4 item 5 — *"Full regression sweep — no new functional change; run every existing test file referencing any file touched by Checkpoints 1–4."* Checkpoint 5 authorizes verification/execution only: no new functionality, no new UI, no new business rule, no new write path, no schema change, no new Product behavior, and no file is added to or removed from Checkpoint 5's scope (it has none of its own — its only "scope" is running the existing suite).
+
+**Plan-vs-Authorization wording note, preserved as reported, not reconciled:** the Plan scopes the sweep by touched *function*; the Authorization scopes it by touched *file*. Neither document is amended here. For execution, per this authorization's own explicit direction, the practical scope is the stricter reading — identify functions actually touched across Checkpoints 1–4 (from `473e26f`, `3f8676d`, `b55dff4`, `c43776a`), find every existing test referencing them, and additionally inspect the test suites already associated with the touched files where useful to avoid missing an unrelated regression. This note does not itself constitute a Plan or Authorization Amendment.
+
+**Explicitly preserved by this record:**
+- Checkpoints 1–4 remain closed, unmodified, unreopened.
+- Checkpoint 5 is full regression verification only — it produces no functional diff.
+- No source, test, or locale modification is authorized by this record.
+- No governance redesign, Specification change, Rule 8 change, or Plan/Authorization scope change is made or implied.
+- This record does not authorize any checkpoint beyond Checkpoint 5.
+- A regression discovered during Checkpoint 5 must be reported, not fixed, under this authorization — resolving it, if ever needed, requires its own separate, subsequent authorization.
+
+> I have reviewed the Checkpoint 5 pre-flight audit's findings: Checkpoint 5 is already fully and unambiguously defined by the accepted Implementation Plan §X and Implementation Authorization §4 item 5, no Specification, Rule 8, Plan Amendment, or Authorization Amendment is required to proceed, and the only outstanding gate is this Plan §X-required, checkpoint-specific review. That review is complete. **CHECKPOINT 5 — AUTHORIZED TO PROCEED**, strictly as full regression-sweep verification, within the exact boundary recorded above — no broader scope, and no future checkpoint, is authorized by this record.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Decision:** CHECKPOINT 5 — AUTHORIZED TO PROCEED
+
+**Date:** 2026-09-10
