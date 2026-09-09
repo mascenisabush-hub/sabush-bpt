@@ -3632,6 +3632,57 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             </div>
                           </div>
 
+                          {/* [UX — Investigations #2/#3: Product
+                              configuration data-entry vs space-
+                              management] RENDER-ORDER CHANGE ONLY —
+                              moved here, verbatim, from directly after
+                              the Identity Resolution panel much lower
+                              in this same row (its position since
+                              Product Memory / UOM — Increment A,
+                              Checkpoint 2b). No condition, prop, or
+                              handler below was altered; same gate
+                              (`row.productName.trim() &&
+                              !exactMatchExists`), same onChange,
+                              same fields.
+                              Investigation #2 found this control
+                              positioned roughly 300 JSX lines below
+                              the purchase-unit field, separated by
+                              several unrelated conditional panels
+                              (supplier-wording confirmation, product-
+                              recognition, identity resolution) — a
+                              real, evidenced "scroll past unrelated
+                              content" problem for the exact dependency
+                              chain Purchase Unit → Unit Relationship
+                              (this component combines relationship AND
+                              selling-unit selection into one control,
+                              per Add Stock's own existing convention —
+                              see the component's own free-text
+                              selling-unit field, deliberately left
+                              unchanged, not converted to the
+                              constrained `<select>` Contagem's
+                              unrelated ModeAValuationControl uses).
+                              Positioned here, immediately after
+                              Purchase Unit, so the two are never split
+                              by any unrelated panel — the one
+                              remaining field between this control and
+                              Selling Price is Cost Price, which was
+                              already immediately adjacent to Selling
+                              Price before this change and is left
+                              exactly where it was; no unrelated
+                              conditional panel of any kind sits
+                              between Purchase Unit/Relationship and
+                              Selling Price after this move. */}
+                          {row.productName.trim() && !exactMatchExists && (
+                            <UnitRelationshipRow
+                              purchaseUnit={row.unit || 'un'}
+                              sellingUnit={row.newProductSellingUnit || ''}
+                              factor={row.newProductSellingUnitFactor || ''}
+                              onChange={(sellingUnit, factor) =>
+                                updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                              }
+                            />
+                          )}
+
                           <div>
                             <label className="block type-label mb-1">
                               {t('addStock.fields.costPrice', { symbol: currencySymbol })}
@@ -3952,29 +4003,6 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             {t('addStock.identityResolution.confirmNewButton', { name: row.productName.trim() })}
                           </button>
                         </div>
-                      )}
-
-                      {/* [Product Memory / UOM — Increment A, Checkpoint
-                          2b] Shown ONLY for a row that does NOT resolve
-                          to an existing product (exactMatchExists,
-                          computed per-row above) — never re-shown, never
-                          re-asked, for an already-known product (UOM
-                          Specification §3 step 5's "never re-run" rule).
-                          Strictly separate from the supplier-wording
-                          blocks immediately above — identifying which
-                          product a wording refers to is not the same
-                          question as establishing a brand-new product's
-                          unit relationship. Entirely optional: leaving
-                          it blank changes nothing from today's behavior. */}
-                      {row.productName.trim() && !exactMatchExists && (
-                        <UnitRelationshipRow
-                          purchaseUnit={row.unit || 'un'}
-                          sellingUnit={row.newProductSellingUnit || ''}
-                          factor={row.newProductSellingUnitFactor || ''}
-                          onChange={(sellingUnit, factor) =>
-                            updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
-                          }
-                        />
                       )}
 
                       {/* [Feature — Owner-requested "black list" for

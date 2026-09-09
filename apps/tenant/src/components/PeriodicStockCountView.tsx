@@ -7818,49 +7818,6 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         />
                       </div>
 
-                      {/* [Business Worth Evolution — Increment 4,
-                          Specification §15] Same control, same
-                          group-key state, as the catalog-row loop above
-                          — rendered here only when this CARD's first
-                          portion happens to be the group's overall
-                          first portion (i.e. no catalog row exists for
-                          this product name yet). Hidden when the
-                          product has no confirmed unitRelationship,
-                          exactly as before B.3. */}
-                      {cardIsFirstPortionOfMultiPortionGroup &&
-                        (() => {
-                          const key = productKeyFor(group.displayName);
-                          // [Bug fix — Mode A unavailable for a
-                          // genuinely new product] See the catalog-row
-                          // loop's identical fix, above, for the full
-                          // explanation — this is precisely the case a
-                          // live screenshot showed: a "PRODUTO NOVO"
-                          // like "Lite 330ml" only ever renders through
-                          // THIS manual-row loop (it has no catalog row
-                          // at all yet), so this call site is the one
-                          // that actually needed the fix for that
-                          // screenshot's own product to get Mode A.
-                          const relationship = getEffectiveUnitRelationshipForProductName(group.displayName);
-                          if (!relationship || !isValidUnitRelationship(relationship)) return null;
-                          // [Implementation Authorization §14 item 2]
-                          // Always available once a valid relationship
-                          // exists — no explicit "activate" step.
-                          const config = getEffectiveReferenceConfig(key);
-                          const referenceUnitOptions = relationship.units.map((u) => u.unit);
-                          const effectiveReferenceUnit = config.referenceUnit;
-                          return (
-                            <ModeAValuationControl
-                              referenceUnitOptions={referenceUnitOptions}
-                              referenceUnit={effectiveReferenceUnit}
-                              referencePrice={config.referencePrice}
-                              currencySymbol={currencySymbol}
-                              allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
-                              onChange={(fields) => handleReferenceConfigChange(key, fields)}
-                              suppressEnterSubmit={suppressEnterSubmit}
-                            />
-                          );
-                        })()}
-
                       {/* [Product Identity Existing/New Resolution —
                           Implementation Authorization, Checkpoint C]
                           Shown for a manual row whose typed name does
@@ -8053,6 +8010,72 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           relationship={getUnitRelationshipForProductName(group.displayName)}
                         />
                       )}
+
+                      {/* [UX — Investigations #2/#3: Product
+                          configuration data-entry vs space-management]
+                          RENDER-ORDER CHANGE ONLY — moved here,
+                          verbatim, from directly after the name field
+                          above (its position since Business Worth
+                          Evolution Increment 4). No condition, prop,
+                          or handler below was altered; this is the
+                          exact same block, same gate
+                          (cardIsFirstPortionOfMultiPortionGroup),
+                          same getEffectiveUnitRelationshipForProductName/
+                          getEffectiveReferenceConfig/
+                          handleReferenceConfigChange calls, same
+                          isValidUnitRelationship check.
+                          Investigation #2 found the previous position
+                          rendered this selling-unit/selling-price
+                          control BEFORE NewProductInfoPanel/
+                          ExistingProductSummary — the very panel(s)
+                          that establish or already hold the
+                          UnitRelationship this control depends on
+                          (confirmed by its own `if (!relationship ||
+                          !isValidUnitRelationship(relationship)) return
+                          null;` guard, unchanged below) — a real
+                          inversion of the dependency order: Purchase
+                          Unit → Unit Relationship → Selling Unit/Price.
+                          Positioned after BOTH NewProductInfoPanel and
+                          its mutually-exclusive sibling
+                          ExistingProductSummary (never renders between
+                          them) since this control's own dependency is
+                          "a relationship now exists," which either one
+                          of those two may have just established or
+                          already held — not specifically tied to one
+                          over the other. */}
+                      {cardIsFirstPortionOfMultiPortionGroup &&
+                        (() => {
+                          const key = productKeyFor(group.displayName);
+                          // [Bug fix — Mode A unavailable for a
+                          // genuinely new product] See the catalog-row
+                          // loop's identical fix, above, for the full
+                          // explanation — this is precisely the case a
+                          // live screenshot showed: a "PRODUTO NOVO"
+                          // like "Lite 330ml" only ever renders through
+                          // THIS manual-row loop (it has no catalog row
+                          // at all yet), so this call site is the one
+                          // that actually needed the fix for that
+                          // screenshot's own product to get Mode A.
+                          const relationship = getEffectiveUnitRelationshipForProductName(group.displayName);
+                          if (!relationship || !isValidUnitRelationship(relationship)) return null;
+                          // [Implementation Authorization §14 item 2]
+                          // Always available once a valid relationship
+                          // exists — no explicit "activate" step.
+                          const config = getEffectiveReferenceConfig(key);
+                          const referenceUnitOptions = relationship.units.map((u) => u.unit);
+                          const effectiveReferenceUnit = config.referenceUnit;
+                          return (
+                            <ModeAValuationControl
+                              referenceUnitOptions={referenceUnitOptions}
+                              referenceUnit={effectiveReferenceUnit}
+                              referencePrice={config.referencePrice}
+                              currencySymbol={currencySymbol}
+                              allPortionsConvertible={canApplyModeA(collectGroupPortions(key), effectiveReferenceUnit, relationship)}
+                              onChange={(fields) => handleReferenceConfigChange(key, fields)}
+                              suppressEnterSubmit={suppressEnterSubmit}
+                            />
+                          );
+                        })()}
 
                       <div className="space-y-1">
                         {/* [Decision 40 — Validar Workflow, FR-N8/FR-N9;
