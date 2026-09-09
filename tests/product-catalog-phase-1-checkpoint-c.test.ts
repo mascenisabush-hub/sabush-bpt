@@ -43,9 +43,14 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       assert.match(catalogViewSrc, /value=\{barcode\}/);
     });
 
-    it('has exactly six input elements in the form — no extra field was added', () => {
-      const inputCount = (catalogViewSrc.match(/<input\b/g) || []).length;
-      assert.equal(inputCount, 6, `Expected exactly 6 <input> elements, found ${inputCount}.`);
+    it('has exactly six input elements inside the registration form itself — no extra field was added to the form (Checkpoint E added a separate, one-input search bar outside the form, for the list below; scoped out of this specific count on purpose)', () => {
+      const formStart = catalogViewSrc.indexOf('{showForm && (');
+      const formEnd = catalogViewSrc.indexOf('</form>');
+      assert.notEqual(formStart, -1);
+      assert.notEqual(formEnd, -1);
+      const formBlock = catalogViewSrc.slice(formStart, formEnd);
+      const inputCount = (formBlock.match(/<input\b/g) || []).length;
+      assert.equal(inputCount, 6, `Expected exactly 6 <input> elements inside the form, found ${inputCount}.`);
     });
 
     it('does NOT contain a purchase-cost field, input, or state variable, in any form (checked outside this file\'s own explanatory comments, which legitimately name the excluded field to document why it is absent)', () => {
@@ -119,7 +124,7 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
 
   describe('D — Integration boundary, as of Checkpoint D: registerCatalogProduct IS now reachable, but only through this file\'s own controlled path — never bypassed by handleSubmit directly, always through submitRegistration', () => {
     it('registerCatalogProduct is destructured from context and awaited, exactly once, inside submitRegistration — never called directly from handleSubmit or handleConfirmNew themselves', () => {
-      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct \} = useApp\(\);/);
+      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct, currencySymbol \} = useApp\(\);/);
       const callCount = (catalogViewSrc.match(/await registerCatalogProduct\(/g) || []).length;
       assert.equal(callCount, 1, `Expected exactly one call site for registerCatalogProduct, found ${callCount}.`);
     });

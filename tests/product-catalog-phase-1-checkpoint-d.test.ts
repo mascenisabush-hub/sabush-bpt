@@ -151,7 +151,8 @@ describe('Product Catalog Phase 1 — Checkpoint D — Identity resolution + wri
       assert.match(submitBody, /setSuccessMessage\(t\('productCatalog\.form\.successMessage'\)\);/);
       assert.match(submitBody, /setShowForm\(false\);/);
       assert.match(submitBody, /resetForm\(\);/);
-      assert.match(catalogViewSrc, /import \{ BookOpen, Plus, X, CheckCircle2 \} from 'lucide-react';/);
+      assert.match(catalogViewSrc, /CheckCircle2/);
+      assert.match(catalogViewSrc, /from 'lucide-react';/);
     });
 
     it('on failure, registerCatalogProduct\'s own thrown error message is surfaced directly to the Owner — never hidden, never replaced with a generic message when a specific one is available', () => {

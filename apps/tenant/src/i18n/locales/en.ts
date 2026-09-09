@@ -649,6 +649,9 @@ export const en: TranslationDict = {
     subtitle: 'Register and manage your business products, even before you buy them.',
     emptyState: 'No products registered in the catalog yet.',
     addProductButton: 'Add Product',
+    searchPlaceholder: 'Search by name, category, supplier, SKU, or barcode...',
+    noSearchResults: 'No products found for this search.',
+    editButton: 'Edit',
     form: {
       title: 'Register Product',
       nameLabel: 'Product Name',

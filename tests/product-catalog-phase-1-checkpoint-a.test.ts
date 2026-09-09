@@ -131,8 +131,8 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
       assert.doesNotMatch(codeOnly, /costPrice/);
     });
 
-    it('Checkpoint D now legitimately reads `products` from context (needed for findSimilarProducts) and this screen is no longer unconditionally empty once a registration succeeds — expected, superseding Checkpoint A\'s original "still empty" claim; see the dedicated Checkpoint D suite for the full proof this is done safely', () => {
-      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct \} = useApp\(\);/);
+    it('Checkpoint D now legitimately reads `products` from context (needed for findSimilarProducts) and this screen is no longer unconditionally empty once a registration succeeds — expected, superseding Checkpoint A\'s original "still empty" claim; see the dedicated Checkpoint D/E suites for the full proof this is done safely', () => {
+      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct, currencySymbol \} = useApp\(\);/);
     });
   });
 

@@ -649,6 +649,9 @@ export const fr: TranslationDict = {
     subtitle: 'Enregistrez et gérez les produits de votre entreprise, même avant de les acheter.',
     emptyState: 'Aucun produit enregistré dans le catalogue pour le moment.',
     addProductButton: 'Ajouter un Produit',
+    searchPlaceholder: 'Rechercher par nom, categorie, fournisseur, SKU ou code-barres...',
+    noSearchResults: 'Aucun produit trouve pour cette recherche.',
+    editButton: 'Modifier',
     form: {
       title: 'Enregistrer un Produit',
       nameLabel: 'Nom du Produit',

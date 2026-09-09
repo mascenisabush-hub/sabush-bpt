@@ -692,6 +692,10 @@ export interface TranslationDict {
     subtitle: string;
     emptyState: string;
     addProductButton: string;
+    // [Checkpoint E — Catalog list/search + edit] New.
+    searchPlaceholder: string;
+    noSearchResults: string;
+    editButton: string;
     form: {
       title: string;
       nameLabel: string;
@@ -1876,6 +1880,9 @@ export const pt: TranslationDict = {
     subtitle: 'Registe e faça a gestão dos produtos do seu negócio, mesmo antes de os comprar.',
     emptyState: 'Ainda não tem produtos registados no catálogo.',
     addProductButton: 'Adicionar Produto',
+    searchPlaceholder: 'Procurar por nome, categoria, fornecedor, SKU ou código de barras...',
+    noSearchResults: 'Nenhum produto encontrado para esta pesquisa.',
+    editButton: 'Editar',
     form: {
       title: 'Registar Produto',
       nameLabel: 'Nome do Produto',

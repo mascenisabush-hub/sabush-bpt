@@ -203,7 +203,7 @@ describe('Product Catalog Phase 1 — Checkpoint B — Product registration writ
 
   describe('H — Not yet wired to any UI, as of Checkpoint B (Checkpoint D has since wired it in — see below)', () => {
     it('Checkpoint D has since destructured and called registerCatalogProduct from ProductCatalogView.tsx — expected, superseding this suite\'s own original Checkpoint-B-time claim; the full, precise, exhaustive proof that this wiring is correct and safe (identity resolution first, exact payload shape, no bypass of this function\'s own safety checks) lives in the dedicated Checkpoint D test suite, not duplicated here', () => {
-      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct \} = useApp\(\);/);
+      assert.match(catalogViewSrc, /const \{ products, registerCatalogProduct, currencySymbol \} = useApp\(\);/);
       assert.match(catalogViewSrc, /await registerCatalogProduct\(/);
     });
 
