@@ -63,6 +63,16 @@ export interface UserProfile {
   // Staff-only (BDS #16). Only meaningful when staffTier === 'manager';
   // ignored otherwise. Set exclusively by the server, same as staffTier.
   managerPermissions?: ManagerPermissions;
+  // Optional profile avatar, set by the user themselves via the Header
+  // profile menu (uploadUserPhoto in AppContext). A Firebase Storage
+  // download URL under Storage path `users/{uid}/avatar/...` — never a
+  // second identity/permission system: Storage Security Rules for that
+  // path derive access from the same `request.auth.uid` Firestore rules
+  // already use for this same users/{uid} document (see storage.rules).
+  // Absent means "no photo uploaded yet" — UI falls back to the
+  // generic user icon, same "missing = default" convention already used
+  // by every other optional field on this type.
+  photoURL?: string;
 }
 
 export interface Business {

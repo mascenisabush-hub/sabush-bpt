@@ -1,5 +1,6 @@
 import { initializeApp, getApps, getApp } from 'firebase/app';
 import { getAuth } from 'firebase/auth';
+import { getStorage } from 'firebase/storage';
 import {
   getFirestore,
   initializeFirestore,
@@ -25,6 +26,13 @@ console.log('[Firebase Init] Config in use:', {
 
 const app = !getApps().length ? initializeApp(firebaseConfig) : getApp();
 export const auth = getAuth(app);
+// Architecture §4.7/§8 fixed constraint: any Storage object must follow
+// the same tenant/identity model as Firestore, enforced via
+// storage.rules deriving access from request.auth.uid — never a second,
+// parallel permission system. First (and, as of this change, only)
+// consumer is the user profile-photo upload (Header.tsx / AppContext's
+// uploadUserPhoto), at Storage path `users/{uid}/avatar/...`.
+export const storage = getStorage(app);
 
 // [Stock Count Data-Loss Resilience — Decision 38, Implementation
 // Authorization §2 item 1] Firestore's own persistent local cache,

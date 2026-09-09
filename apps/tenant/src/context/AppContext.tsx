@@ -26,7 +26,8 @@ import {
   where,
   type WithFieldValue,
 } from 'firebase/firestore';
-import { auth, db, firebaseConfig } from '../lib/firebase';
+import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
+import { auth, db, storage, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
 import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
@@ -714,6 +715,11 @@ interface AppContextType {
   setBusinessCategory: (category: string) => void;
   isBusinessProfileComplete: boolean;
   updateBusinessProfile: (profile: { name: string; category: string; contact: string; location: string; email: string }) => Promise<void>;
+  // Uploads the signed-in user's own avatar to Storage (users/{uid}/avatar/...)
+  // and stores the resulting download URL on their users/{uid} profile
+  // document. Self-upload only, per storage.rules — there is no
+  // owner-uploads-for-staff path in this first version.
+  uploadUserPhoto: (file: File) => Promise<void>;
   addStockBatch: (params: AddStockParams) => Promise<{ productId: string; batchId: string }>;
   // [Durable Purchase Capture Amendment v1.0] supplierId is optional and
   // additive — when provided, the purchase is linked to an existing
@@ -2833,6 +2839,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         email: profile.email.trim(),
       },
     });
+  };
+
+  // Profile-photo upload (self only). Validates client-side for a fast
+  // error message, but the real enforcement is storage.rules — a
+  // client-side-only check is never sufficient (CLAUDE.md hard rule 7).
+  const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
+  const uploadUserPhoto = async (file: File) => {
+    if (!currentUser) throw new Error('É necessário iniciar sessão.');
+    if (!file.type.startsWith('image/')) {
+      throw new Error('Selecione um ficheiro de imagem (JPG, PNG, etc.).');
+    }
+    if (file.size > MAX_AVATAR_BYTES) {
+      throw new Error('A imagem deve ter no máximo 5 MB.');
+    }
+
+    const extension = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+    const path = `users/${currentUser.uid}/avatar/${Date.now()}.${extension}`;
+    const fileRef = storageRef(storage, path);
+    await uploadBytes(fileRef, file, { contentType: file.type });
+    const photoURL = await getDownloadURL(fileRef);
+
+    await updateDoc(doc(db, 'users', currentUser.uid), { photoURL });
+    // Optimistic local update — the users/{uid} onSnapshot listener will
+    // confirm this shortly, but updating here avoids a visible delay
+    // before the new avatar appears in the Header.
+    setUserProfile(prev => (prev ? { ...prev, photoURL } : prev));
   };
 
   // ============================================================
@@ -8603,6 +8635,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         setBusinessCategory,
         isBusinessProfileComplete,
         updateBusinessProfile,
+        uploadUserPhoto,
         addStockBatch,
         addMultipleStockBatches,
         attachPurchaseEventId,

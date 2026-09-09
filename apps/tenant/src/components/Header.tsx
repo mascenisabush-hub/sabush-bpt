@@ -46,6 +46,7 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
     logout,
     ownedBusinesses,
     products,
+    uploadUserPhoto,
   } = useApp();
 
   const { t } = useLanguage();
@@ -65,6 +66,28 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const [reminderDismissed, setReminderDismissed] = useState(false);
   const profileMenuRef = useRef<HTMLDivElement>(null);
   const notificationsRef = useRef<HTMLDivElement>(null);
+
+  // Profile-photo upload (Header's own avatar circle, next to
+  // Notifications). Self-upload only — see AppContext's uploadUserPhoto
+  // and storage.rules.
+  const avatarFileInputRef = useRef<HTMLInputElement>(null);
+  const [avatarUploading, setAvatarUploading] = useState(false);
+  const [avatarError, setAvatarError] = useState<string | null>(null);
+
+  const handleAvatarFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ''; // allow re-selecting the same file next time
+    if (!file) return;
+    setAvatarError(null);
+    setAvatarUploading(true);
+    try {
+      await uploadUserPhoto(file);
+    } catch (err: any) {
+      setAvatarError(err?.message || t('header.avatarUploadError'));
+    } finally {
+      setAvatarUploading(false);
+    }
+  };
 
   // [Fix — global search box was decorative only] A real, controlled
   // search over the product catalog (the one entity meaningful to
@@ -333,12 +356,25 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
             {/* Single profile control — every prior action still lives here, just consolidated */}
             <div className="relative shrink-0" ref={profileMenuRef}>
+              <input
+                ref={avatarFileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleAvatarFileSelected}
+              />
               <button
                 onClick={() => setShowProfileMenu(v => !v)}
                 className="flex items-center gap-2.5 py-1.5 pl-1.5 pr-3 rounded-full bg-white/10 hover:bg-white/20 transition"
               >
-                <div className="w-8 h-8 rounded-full bg-[#D4AF37] text-[#0B1F3A] flex items-center justify-center shrink-0">
-                  <User className="w-4 h-4" />
+                <div className="w-8 h-8 rounded-full bg-[#D4AF37] text-[#0B1F3A] flex items-center justify-center shrink-0 overflow-hidden">
+                  {avatarUploading ? (
+                    <div className="w-3.5 h-3.5 border-2 border-[#0B1F3A]/40 border-t-[#0B1F3A] rounded-full animate-spin" />
+                  ) : userProfile?.photoURL ? (
+                    <img src={userProfile.photoURL} alt="" className="w-full h-full object-cover" referrerPolicy="no-referrer" />
+                  ) : (
+                    <User className="w-4 h-4" />
+                  )}
                 </div>
                 <div className="hidden sm:flex flex-col text-left">
                   <span className="text-xs font-bold text-white leading-tight">
@@ -353,6 +389,17 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
 
               {showProfileMenu && (
                 <div className="absolute right-0 top-full mt-2 w-56 bg-white rounded-xl elevation-2 py-2 z-40">
+                  {avatarError && (
+                    <p className="px-4 pb-2 text-[11px] text-rose-600">{avatarError}</p>
+                  )}
+                  <button
+                    onClick={() => { avatarFileInputRef.current?.click(); setShowProfileMenu(false); }}
+                    disabled={avatarUploading}
+                    className="w-full flex items-center gap-3 px-4 py-2.5 text-sm text-gray-700 hover:bg-gray-50 hover:text-title transition disabled:opacity-60"
+                  >
+                    <User className="w-4 h-4 text-gray-400" />
+                    {avatarUploading ? t('header.avatarUploading') : t('header.changePhoto')}
+                  </button>
                   {(isOwner || canManagerManageStaff) && (
                     <button
                       onClick={() => { setShowSettingsModal(true); setShowProfileMenu(false); }}

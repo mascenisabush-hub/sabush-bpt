@@ -373,6 +373,9 @@ export interface TranslationDict {
     userFallback: string;
     roleOwner: string;
     roleStaff: string;
+    changePhoto: string;
+    avatarUploading: string;
+    avatarUploadError: string;
     settings: string;
     currency: string;
     helpAndConcept: string;
@@ -1575,6 +1578,9 @@ export const pt: TranslationDict = {
     userFallback: 'Utilizador',
     roleOwner: 'Dono',
     roleStaff: 'Staff',
+    changePhoto: 'Alterar Foto',
+    avatarUploading: 'A carregar...',
+    avatarUploadError: 'Não foi possível carregar a foto. Tente novamente.',
     settings: 'Definições',
     currency: 'Moeda',
     helpAndConcept: 'Ajuda e Conceito',

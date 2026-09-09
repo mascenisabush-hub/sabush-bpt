@@ -1,0 +1,52 @@
+rules_version = '2';
+
+// Firebase Storage Security Rules.
+//
+// [Architecture §4.7 / §8 — fixed constraint] Storage was configured
+// (bucket present in firebaseConfig) but unused until this change. Per
+// the constraint recorded there: any Storage object must be secured by
+// Storage Security Rules deriving access from the same `users/{uid}`
+// identity Firestore's own rules already use — never a second, parallel
+// permission system. This file follows that: every path below checks
+// `request.auth.uid` directly, the exact same signal firestore.rules
+// checks for the users/{userId} document.
+//
+// First consumer: the user profile-photo upload (Header.tsx /
+// AppContext's uploadUserPhoto). One user's own avatar is personal
+// identity data, not business-owned tenant data (unlike the deferred
+// product-photo case §8 also names, which will need businessId-scoped
+// paths when it lands) — so this scopes by uid, matching the
+// `users/{uid}` Firestore document it accompanies, one-to-one.
+service firebase.storage {
+  match /b/{bucket}/o {
+    match /users/{uid}/avatar/{fileName} {
+      // Anyone signed in may view any user's avatar — avatars are shown
+      // to other members of the same shop (Header, Staff list, etc.),
+      // the same "any signed-in member can see basic identity info"
+      // posture firestore.rules already allows for names on shared
+      // resources. Never public/unauthenticated.
+      allow read: if request.auth != null;
+
+      // Only the user themself may upload or overwrite their own
+      // avatar — no owner/admin override in this first version (the
+      // "who can upload" question was scoped to self-upload only).
+      // Capped at 5 MB and image/* content-type only, enforced here
+      // (not just in the client) since client-side validation alone is
+      // never sufficient (CLAUDE.md hard rule 7).
+      allow write: if request.auth != null &&
+        request.auth.uid == uid &&
+        request.resource.size < 5 * 1024 * 1024 &&
+        request.resource.contentType.matches('image/.*');
+
+      allow delete: if request.auth != null && request.auth.uid == uid;
+    }
+
+    // Everything else stays closed. Add new scoped matches (e.g. the
+    // deferred businesses/{businessId}/products/{productId}/... case)
+    // explicitly when that module is actually implemented — no
+    // catch-all allow rule.
+    match /{allPaths=**} {
+      allow read, write: if false;
+    }
+  }
+}
