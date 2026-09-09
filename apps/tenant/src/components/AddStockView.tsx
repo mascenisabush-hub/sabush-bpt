@@ -24,6 +24,7 @@ import { checkPriceDeviation } from '../lib/priceDeviationCheck';
 import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 import { preprocessSmartStockEntryImage } from '../utils/smartStockEntryImagePreprocessing';
+import { detectInAppBrowser } from '../lib/inAppBrowserDetection';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -612,6 +613,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // form, exactly per the ADR.
   const [scanState, setScanState] = useState<'idle' | 'processing' | 'error'>('idle');
   const [scanErrorReason, setScanErrorReason] = useState<SmartStockEntryFailureReason | null>(null);
+  // [Bug fix investigation — WhatsApp in-app browser] Computed once
+  // per mount (navigator.userAgent never changes mid-session) — see
+  // inAppBrowserDetection.ts's own header for the crash this addresses.
+  // A false positive is worse than a missed detection, so this only
+  // ever informs a warning banner near the scan buttons below, never
+  // disables or hides them — some in-app browser/OS combinations do
+  // work fine, and this detector is intentionally conservative.
+  const [inAppBrowser] = useState(() => detectInAppBrowser(typeof navigator !== 'undefined' ? navigator.userAgent : undefined));
   // [Bug fix — both scan buttons spun at once] scanState alone can't
   // tell the two buttons apart — "Take Picture" and "Upload" both read
   // the same 'processing' flag, so clicking either one spun BOTH
@@ -2688,6 +2697,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#111827]">{t('addStock.smartEntry.title')}</p>
                   <p className="text-[13px] text-gray-500">{t('addStock.smartEntry.subtitle')}</p>
+                  {/* [Bug fix investigation — WhatsApp in-app browser]
+                      Informational only — never disables the buttons
+                      below, since some in-app browser/OS combinations
+                      do work. See inAppBrowserDetection.ts. */}
+                  {inAppBrowser.detected && (
+                    <p className="text-[12px] text-amber-700 font-semibold mt-1 flex items-center gap-1">
+                      <AlertTriangle className="w-3 h-3 shrink-0" />
+                      {t('addStock.smartEntry.inAppBrowserWarning', { app: inAppBrowser.appName || '' })}
+                    </p>
+                  )}
                 </div>
               </div>
               <div className="flex items-center gap-2 shrink-0 flex-wrap">

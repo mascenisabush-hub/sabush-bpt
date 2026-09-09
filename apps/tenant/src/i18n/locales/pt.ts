@@ -511,6 +511,7 @@ export interface TranslationDict {
       noConfidentMatch: string;
       sellingPriceFromMemory: string;
       sellingPriceNotFound: string;
+      inAppBrowserWarning: string;
       fields: {
         product: string;
         quantity: string;
@@ -1721,6 +1722,7 @@ export const pt: TranslationDict = {
       noConfidentMatch: 'Não foi possível confirmar o produto — escolha um existente ou crie um novo',
       sellingPriceFromMemory: 'Preço da memória do produto — confirme ou ajuste',
       sellingPriceNotFound: 'Sem preço memorizado para esta unidade — indique o preço',
+      inAppBrowserWarning: 'Está a abrir isto dentro do {{app}} — a câmara pode falhar aqui. Se "Tirar Foto" não funcionar, toque em "⋮" ou "Abrir no navegador" e volte a tentar no Chrome/Safari, ou use "Carregar Documento" com uma foto já tirada.',
       fields: {
         product: 'Produto',
         quantity: 'Quantidade',

@@ -487,6 +487,7 @@ export const en: TranslationDict = {
       noConfidentMatch: "Couldn't confidently match this product \u2014 choose an existing one or create a new one",
       sellingPriceFromMemory: 'Price from this product\u2019s memory \u2014 confirm or adjust',
       sellingPriceNotFound: 'No remembered price for this unit \u2014 enter it manually',
+      inAppBrowserWarning: 'You\'re opening this inside {{app}} \u2014 the camera may fail here. If "Take Photo" doesn\'t work, tap "\u22ee" or "Open in browser" and try again in Chrome/Safari, or use "Upload Document" with a photo you already took.',
       fields: {
         product: 'Product',
         quantity: 'Quantity',

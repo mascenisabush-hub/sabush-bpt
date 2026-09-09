@@ -12,58 +12,57 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Smart Stock Entry crash investigation — **AI pipeline
-cleared, root crash cause NOT found, pivoted to a diagnosability fix**
-— typechecked, built, pushed to `main`. **Nothing mid-flight; working
-tree clean.**
+**Status:** Smart Stock Entry crash — added an in-app-browser warning
+(WhatsApp confirmed as the sharing channel) — typechecked, built,
+tested, pushed to `main`. **Still not the confirmed root cause** —
+this is a mitigation based on strong circumstantial evidence, not a
+fix for a diagnosed bug. **Nothing mid-flight; working tree clean.**
 
-**What actually happened:** the reported "failure during Tirar
-Foto/Carregar Documento" was NOT the graceful Smart Stock Entry
-failure banner this file's previous session investigated
-(`SMART_STOCK_ENTRY_AI_API_KEY` docs mismatch, already fixed, commit
-`1972d51`) — it was the app's generic `ErrorBoundary` crash screen
-("Algo correu mal"), meaning a full React render-tree crash, not a
-graceful in-feature failure.
+**New lead, from the Owner directly:** the link that crashed was
+shared via WhatsApp. Researched live: WKWebView (the engine WhatsApp's
+— and Messenger's/Instagram's/Facebook's/Line's/TikTok's — in-app
+browser runs on, on iOS) has multiple documented, version-specific
+bugs and outright crashes specifically when a page's `<input
+type="file" capture>` tries to trigger the native camera — an
+OS/host-app-level failure, not a JS exception this codebase's error
+handling can catch. This is the most likely explanation for the
+crash, but — important — it is NOT confirmed. No stack trace was ever
+obtained (the crash-report gap fixed two commits ago exists precisely
+because of this).
 
-**Verified live, via the Owner's own Railway console (not guessed):**
-- `SMART_STOCK_ENTRY_AI_API_KEY` IS correctly set in production.
-- A raw `GET .../models/gemini-3.5-flash-lite?key=...` call succeeds.
-- A full `generateContent` call with the exact schema/config/temperature this code uses succeeds (text-only).
-- The exact SDK call this code makes — `GoogleGenAI` + `createPartFromBase64` with a real image, same schema/config — **succeeds end-to-end**, returning a correct extraction.
-
-**So the entire AI pipeline is confirmed working in production.** The
-crash is somewhere else — most likely in `AddStockView.tsx`'s render
-of a scanned row (`buildRowFromProposalLineItem` / the AI-specific
-status-badge rendering / the mobile card layout), but static reading
-of those paths (including the server's `parseProviderExtractionResponse`,
-which does guarantee every `FieldState` object always exists, never
-undefined) didn't surface an obvious unguarded property access either.
-
-**Why this wasn't resolved further this session:** the crash happened
-on a real client's phone, reported secondhand — no direct DevTools
-access, and deliberately NOT pursued further via the client (Owner's
-explicit call: inconveniencing a new customer to get a browser
-console screenshot isn't acceptable). The one channel that should have
-caught this automatically — `reportClientError` → `POST
-/api/client-error` → Railway logs — **produced zero log entries**,
-confirmed by searching Railway's Deploy Logs for `client-error`. That
-gap is real and is what got fixed this session instead.
-
-**What shipped (a diagnosability fix, not the crash fix itself):**
-- `ErrorBoundary.tsx` — the crash screen now shows the actual error message + stack trace inline, in a collapsed "Detalhes técnicos" section with a copy button. Anyone who hits this screen — including a client — can now screenshot or copy the real error without DevTools or server access.
-- `reportClientError.ts` — now fires BOTH `sendBeacon` and a `keepalive` fetch (previously either/or), since `sendBeacon`'s return value only confirms queuing, not delivery, and it has known silent-failure gaps on some mobile browsers. Worst case: one harmless duplicate log line. Given a real report already went missing once, this is cheap insurance.
+**What shipped (a mitigation, not a confirmed fix):**
+- `apps/tenant/src/lib/inAppBrowserDetection.ts` (new) — pure,
+  independently tested UA-marker matching for WhatsApp/Facebook/
+  Instagram/Line/WeChat/TikTok. Deliberately conservative — a false
+  positive (warning a real-browser user) is worse than a missed
+  detection, so this only matches specific, documented markers. Notes
+  its own known gap: iOS WhatsApp doesn't reliably self-identify in
+  its UA, so this under-detects that exact case rather than
+  over-detecting.
+- `AddStockView.tsx` — shows a small amber warning next to the Smart
+  Stock Entry buttons when an in-app browser is detected, recommending
+  the person open the link in their real browser (Chrome/Safari)
+  instead, or use "Carregar Documento" with an already-taken photo as
+  a workaround. **Never disables or hides the camera/upload buttons**
+  — some in-app browser/OS combinations do work fine; this is
+  informational only.
+- `tests/in-app-browser-detection.test.ts` (new, 6 tests, all pass).
 
 **Verification:** `npx tsc --noEmit -p .` and `npm run build` both
-clean. Not tested against a live crash (nothing to reproduce it with
-in this sandbox) — this is a genuinely untested-in-anger fix, flagged
-as such.
+clean. All 12 Add Stock test files + the new detection test file pass.
+Not tested against a real WhatsApp in-app browser (no such device in
+this sandbox) — the warning's *trigger condition* is verified (UA
+matching), but whether the underlying camera-crash theory is even
+correct is still unconfirmed.
 
-**Next likely step:** if/when this crash recurs, the next report
-(even from a client, even secondhand) should come with a screenshot of
-the "Detalhes técnicos" section already attached — that will very
-likely resolve this in one step instead of the multi-turn live
-diagnostic session this one required. Once that text is available,
-resume investigating the render path it names.
+**Next likely step — the actual root cause is still open.** If the
+crash recurs even with this warning shown (i.e. the person saw the
+warning, tried a real browser instead, and it still crashed), that
+would rule out the WhatsApp/WKWebView theory entirely and point back
+to something in `AddStockView.tsx`'s own render path for scanned rows,
+worth a fresh look at `buildRowFromProposalLineItem` and the AI-status-
+badge rendering. If it doesn't recur, this mitigation was likely
+sufficient even without ever confirming the exact mechanism.
 
 **Still open from before this interrupt, untouched this session:** the
 `periodic-contagem-concept-b-compaction.test.ts` InfoHint-vs-test
