@@ -60,7 +60,9 @@ Each checkpoint requires its own review before the next begins, exactly as the a
 **(a)** the assertion requiring exactly eight (originally six) input elements inside the registration form — "has exactly six/eight input elements inside the registration form";
 **(b)** the assertion requiring presence (originally absence) of UnitRelationship configuration UI — "does NOT/DOES now contain UnitRelationship configuration UI";
 **(c)** within the single existing test `'buildPayload returns name, sellingPrice, and only the four authorized optional fields, conditionally'` (in `describe('C — Payload shape...')`), exactly its two specific checks — the `sellingPrice`-as-unconditional-literal-line check (`assert.match(payload, /sellingPrice: parseFloat\(sellingPrice\),/);`) and the exact-six-non-empty-lines check (`assert.equal(fieldLines.length, 6, ...);`) — **no other check within that same test, including its sibling test `'buildPayload never includes costPrice or any purchase/stock field'` in the same `describe` block, is authorized to change.**
-**No other assertion, helper, fixture, import, or structure in that file is authorized to change under either amendment.**); new or extended test files where the accepted Plan §V explicitly requires them.
+**No other assertion, helper, fixture, import, or structure in that file is authorized to change under either amendment.**); `apps/tenant/src/i18n/locales/{pt,en,fr}.ts` (**Third Implementation Authorization Amendment, Accepted 2026-09-09 — see §12, below; retrospective governance reconciliation for locale changes already present in commit `3f8676d`, per the accepted third Implementation Plan Amendment (`ef790f7`). Authorized only as to the following nine specific `productCatalog.form.*` keys, verified present in that commit's actual diff:**
+`sellingPriceInvalidError`, `unitRelationshipLabel`, `unitTopLevelPlaceholder`, `unitLevelPlaceholder`, `addUnitLevelButton`, `unitFactorInvalidError`, `sellingUnitLabel`, `sellingUnitPlaceholder`, `sellingUnitRequiredError`.
+**No other locale key, in any of the three files, is authorized to change under this amendment — every other existing key, including `sellingPriceRequiredError`, remains untouched and unauthorized for change here.**); new or extended test files where the accepted Plan §V explicitly requires them.
 
 **Protected — MUST NOT change under this authorization:** `apps/tenant/src/utils/calculations.ts` (Business Worth); `apps/tenant/src/lib/productMemoryPriceResolution.ts`; `apps/tenant/src/lib/sellingMemorySelection.ts`; the existing exported function signatures of `apps/tenant/src/lib/unitRelationship.ts` (`isValidUnitRelationship`, `confirmUnitRelationship`); `firestore.rules` (no change authorized — the accepted Plan classified the Add Stock authorization question as resolvable without a rules change, §6 below); any file implementing `SupplierWordingRelationship`/`confirmSupplierWordingRelationship`; any `costPrice`-handling code path.
 
@@ -132,6 +134,39 @@ This authorization exists only because those two checks directly encode a payloa
 **The resulting Authorization, across both amendments, covers exactly three specific assertion areas in `checkpoint-c.test.ts`:** the input-count assertion; the UnitRelationship-UI assertion; and the two `buildPayload`-shape checks described above. Nothing else in that file is authorized.
 
 > This second Implementation Authorization Amendment is accepted exactly as scoped above. The original Implementation Authorization (§1–§9, signed 2026-09-09) and the first Implementation Authorization Amendment (§10, Accepted 2026-09-09) both remain in force, unchanged, in every other respect. This acceptance does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, Decisions 2A/2B, Product Memory governance, `firestore.rules`, or the Implementation Plan (already amended twice, both preserved) beyond this Authorization's own §5 extension. This acceptance authorizes implementation to resume Checkpoint 2 strictly within the existing Checkpoint 2 scope (§3–§4, above) plus §10 and this §11 — it does not authorize Checkpoints 3–5, and does not itself perform any implementation.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Decision:** ACCEPTED / IMPLEMENTATION AUTHORIZATION AMENDED
+
+**Date:** 2026-09-09
+
+## 12. Third Implementation Authorization Amendment — Locale File Scope Reconciliation
+
+**Type:** Implementation Authorization Amendment — narrowly amends only §5's file-scope provision, extending it to bring this Authorization into alignment with the already-accepted third Implementation Plan Amendment (`docs/engineering/product-catalog-phase-2-implementation-plan.md`, "Product Architect Acceptance of Implementation Plan Amendment — Locale File Scope Reconciliation," Accepted 2026-09-09, commit `ef790f7ea5a29b1067ae8843c043fb222a4c0a50`). Authorizes no new product capability; does not modify the Specification, Rule 8 Assessment, the Implementation Plan's substantive scope (already fixed by its own three accepted amendments), any BDR/Policy/Decision, Product Memory governance, `firestore.rules`, the original §1–§9 Authorization content, or the first and second Authorization Amendments (§10, §11, immediately above — both fully preserved, unmodified, unnarrowed). Does not authorize Checkpoints 3–5 or any implementation file beyond the already-accepted Checkpoint 2 scope.
+
+**Status:** ✅ Accepted / IMPLEMENTATION AUTHORIZATION AMENDED (2026-09-09).
+
+**Retrospective governance reconciliation, not prospective authorization:** the locale changes this amendment authorizes already exist, in commit `3f8676d`, as part of the already-implemented and already-committed Checkpoint 2 work. This amendment does not authorize that implementation retroactively before it occurred — it closes the corresponding Stage 8 file-scope gap the third Implementation Plan Amendment already identified and accepted, so that the governance record accurately reflects the already-implemented work.
+
+**Amendment content, in full (the only substantive change this third amendment makes to this Authorization):**
+
+The §5 addition, above, adding `apps/tenant/src/i18n/locales/{pt,en,fr}.ts` to the file-scope list — authorized **only** as to the nine specific `productCatalog.form.*` keys the accepted third Implementation Plan Amendment identifies, verified present in commit `3f8676d`'s actual diff:
+1. `sellingPriceInvalidError`
+2. `unitRelationshipLabel`
+3. `unitTopLevelPlaceholder`
+4. `unitLevelPlaceholder`
+5. `addUnitLevelButton`
+6. `unitFactorInvalidError`
+7. `sellingUnitLabel`
+8. `sellingUnitPlaceholder`
+9. `sellingUnitRequiredError`
+
+This authorization exists only because these three files and nine keys were the unavoidable, mechanical consequence of implementing the already-authorized `ProductCatalogView.tsx` unit-relationship capture UI and optional-`sellingPrice` validation (Plan §H) — no translated string can exist without a locale file to hold it, in this codebase's own established i18n architecture — and were omitted from this Authorization's original §5 file list, a drafting gap confirmed against Product Catalog Phase 1's own precedent of explicitly naming locale files when genuinely in scope. It is not a general grant to edit these files further, and no other locale key, in any of the three files, is authorized to change under this amendment.
+
+**Following this acceptance, the locale changes in commit `3f8676d` are treated as fully governance-conforming.**
+
+> This third Implementation Authorization Amendment is accepted exactly as scoped above. The original Implementation Authorization (§1–§9, signed 2026-09-09) and the first and second Implementation Authorization Amendments (§10, §11, both Accepted 2026-09-09) all remain in force, unchanged, in every other respect. This acceptance does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, Decisions 2A/2B, Product Memory governance, `firestore.rules`, or the Implementation Plan (already amended three times, all preserved) beyond this Authorization's own §5 extension. This acceptance authorizes no further implementation — the work it reconciles already exists — and does not authorize Checkpoints 3–5.
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
