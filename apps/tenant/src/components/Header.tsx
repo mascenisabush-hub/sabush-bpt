@@ -3,6 +3,7 @@ import { useApp } from '../context/AppContext';
 import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { TrendingUp, DollarSign, HelpCircle, X, Check, Store, LogOut, Settings, User, ChevronDown, Bell, Search, Package } from 'lucide-react';
 import { SettingsModal } from './SettingsModal';
+import { AvatarCropModal } from './AvatarCropModal';
 import { OwnerPortfolioModal } from './OwnerPortfolioModal';
 import { ShopSwitcher } from './ShopSwitcher';
 import { NAV_TABS, TabType } from '../data/navigationTabs';
@@ -73,15 +74,23 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
   const avatarFileInputRef = useRef<HTMLInputElement>(null);
   const [avatarUploading, setAvatarUploading] = useState(false);
   const [avatarError, setAvatarError] = useState<string | null>(null);
+  const [avatarCropFile, setAvatarCropFile] = useState<File | null>(null);
 
-  const handleAvatarFileSelected = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleAvatarFileSelected = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ''; // allow re-selecting the same file next time
     if (!file) return;
     setAvatarError(null);
+    // Crop + compress happens in AvatarCropModal before this ever
+    // reaches uploadUserPhoto — see AvatarCropModal's own comment.
+    setAvatarCropFile(file);
+  };
+
+  const handleAvatarCropConfirm = async (blob: Blob) => {
+    setAvatarCropFile(null);
     setAvatarUploading(true);
     try {
-      await uploadUserPhoto(file);
+      await uploadUserPhoto(blob);
     } catch (err: any) {
       setAvatarError(err?.message || t('header.avatarUploadError'));
     } finally {
@@ -516,6 +525,15 @@ export const Header: React.FC<HeaderProps> = ({ activeTab, setActiveTab }) => {
         <SettingsModal
           onClose={() => setShowSettingsModal(false)}
           autoOpenProfileEdit={settingsAutoOpenProfileEdit}
+        />
+      )}
+
+      {/* Avatar crop/compress step, before uploadUserPhoto ever runs */}
+      {avatarCropFile && (
+        <AvatarCropModal
+          file={avatarCropFile}
+          onCancel={() => setAvatarCropFile(null)}
+          onConfirm={handleAvatarCropConfirm}
         />
       )}
 

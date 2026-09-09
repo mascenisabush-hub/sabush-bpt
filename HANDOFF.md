@@ -13,8 +13,20 @@ here. This file is short-term memory only.
 ## Right now
 
 **Status:** User Profile-Photo Upload (Header avatar, next to
-Notifications) — **implemented, typechecked, built, and pushed to
-`main`.** **Nothing mid-flight; working tree clean.**
+Notifications) + crop/compress step — **implemented, typechecked,
+built, and pushed to `main`.** **Nothing mid-flight; working tree
+clean.**
+
+**This session's addition (crop + compress, on top of the prior
+session's upload):** `AvatarCropModal.tsx` (new) — a self-contained
+canvas-based square crop (drag to pan, slider to zoom) with no new npm
+dependency. Confirming it rasterizes the visible crop onto a fixed
+512x512 canvas and exports JPEG at quality 0.85 — that's both the crop
+and the compression, done together, before `uploadUserPhoto` is ever
+called. `AppContext.uploadUserPhoto` now takes a `Blob` (the modal's
+output) instead of a raw `File` — it validates and uploads, it doesn't
+crop/compress itself. `Header.tsx`'s file input now opens
+`AvatarCropModal` first; upload only fires after "Guardar Foto".
 
 **Process note:** this shipped without the full investigation → plan →
 governance-review → authorization → review chain the SuperAdmin Audit

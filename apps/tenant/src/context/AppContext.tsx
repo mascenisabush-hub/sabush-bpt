@@ -718,8 +718,11 @@ interface AppContextType {
   // Uploads the signed-in user's own avatar to Storage (users/{uid}/avatar/...)
   // and stores the resulting download URL on their users/{uid} profile
   // document. Self-upload only, per storage.rules — there is no
-  // owner-uploads-for-staff path in this first version.
-  uploadUserPhoto: (file: File) => Promise<void>;
+  // owner-uploads-for-staff path in this first version. Takes a Blob,
+  // not a raw File: the caller (Header.tsx, via AvatarCropModal) is
+  // expected to have already cropped and compressed it — this function
+  // does not do that itself, it only validates and uploads.
+  uploadUserPhoto: (blob: Blob) => Promise<void>;
   addStockBatch: (params: AddStockParams) => Promise<{ productId: string; batchId: string }>;
   // [Durable Purchase Capture Amendment v1.0] supplierId is optional and
   // additive — when provided, the purchase is linked to an existing
@@ -2841,23 +2844,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
-  // Profile-photo upload (self only). Validates client-side for a fast
-  // error message, but the real enforcement is storage.rules — a
-  // client-side-only check is never sufficient (CLAUDE.md hard rule 7).
+  // Profile-photo upload (self only). AvatarCropModal has already
+  // cropped to a square and compressed to a capped-size JPEG before
+  // this is ever called — this function validates the *result* of that
+  // (type/size) and uploads it. The 5MB check here is a fast client-side
+  // message; storage.rules is the real enforcement (CLAUDE.md hard rule 7).
   const MAX_AVATAR_BYTES = 5 * 1024 * 1024;
-  const uploadUserPhoto = async (file: File) => {
+  const uploadUserPhoto = async (blob: Blob) => {
     if (!currentUser) throw new Error('É necessário iniciar sessão.');
-    if (!file.type.startsWith('image/')) {
-      throw new Error('Selecione um ficheiro de imagem (JPG, PNG, etc.).');
+    if (!blob.type.startsWith('image/')) {
+      throw new Error('Formato de imagem inválido.');
     }
-    if (file.size > MAX_AVATAR_BYTES) {
+    if (blob.size > MAX_AVATAR_BYTES) {
       throw new Error('A imagem deve ter no máximo 5 MB.');
     }
 
-    const extension = file.name.includes('.') ? file.name.split('.').pop() : 'jpg';
+    const extension = blob.type === 'image/jpeg' ? 'jpg' : (blob.type.split('/')[1] || 'jpg');
     const path = `users/${currentUser.uid}/avatar/${Date.now()}.${extension}`;
     const fileRef = storageRef(storage, path);
-    await uploadBytes(fileRef, file, { contentType: file.type });
+    await uploadBytes(fileRef, blob, { contentType: blob.type });
     const photoURL = await getDownloadURL(fileRef);
 
     await updateDoc(doc(db, 'users', currentUser.uid), { photoURL });
