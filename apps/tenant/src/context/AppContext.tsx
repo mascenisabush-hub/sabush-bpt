@@ -232,6 +232,30 @@ interface AddStockParams {
   confirmedNewProduct?: boolean;
 }
 
+// [Owner Product Catalog — Phase 1, Checkpoint B — Implementation
+// Authorization §3.2, §3.3] Deliberately minimal — only the six
+// fields Decision Proposal §5 Decision 3 authorizes for Catalog
+// registration. No `costPrice`, no `unitRelationship`, no quantity/
+// unit/date fields of any kind — those belong to `AddStockParams`
+// (a purchase) or Contagem's own item shape (a count), never to this
+// identity-only registration path. `confirmedNewProduct` mirrors
+// `AddStockParams`'s own identical field immediately above — the
+// same existing safety-boundary convention (Product Identity
+// Existing/New Resolution), reused here rather than inventing a
+// second one. Checkpoint D (a later, separately-authorized
+// checkpoint) is what will build the UI/search that actually decides
+// this value; this function only enforces that a caller may never
+// omit that decision.
+interface RegisterCatalogProductParams {
+  name: string;
+  sellingPrice: number;
+  category?: string;
+  supplier?: string;
+  sku?: string;
+  barcode?: string;
+  confirmedNewProduct?: boolean;
+}
+
 interface AddQuebraParams {
   productId: string;
   batchId: string;
@@ -975,6 +999,11 @@ interface AppContextType {
   deleteQuebra: (id: string) => Promise<void>;
   deleteExpense: (id: string) => Promise<void>;
   updateProduct: (id: string, updates: Partial<Product>) => Promise<void>;
+  // [Owner Product Catalog — Phase 1, Checkpoint B — Implementation
+  // Authorization §3.2] The registration write path. See the
+  // function's own comment in the provider body for the full
+  // contract, invariants, and why each field is present or absent.
+  registerCatalogProduct: (params: RegisterCatalogProductParams) => Promise<string>;
   // [Product Memory / UOM — Increment A] BDR-0012 Decision 14's explicit
   // owner-reconfiguration action — see the function's own comment in the
   // provider body for the full contract. Throws if `candidate` fails
@@ -7909,6 +7938,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await updateDoc(doc(db, 'businesses', businessId, 'products', id), payload as any);
   };
 
+  // [Owner Product Catalog — Phase 1, Checkpoint B — Implementation
+  // Authorization §3.2, §3.3, §5] The Catalog registration write path.
+  // Not yet called from any UI — Checkpoint C builds the form,
+  // Checkpoint D builds the resolution UI that decides
+  // `confirmedNewProduct`. This function's own job is narrower: given
+  // already-decided, already-validated registration data, write
+  // exactly one Product document and nothing else.
+  //
+  // Invariants this function enforces itself, not merely relies on a
+  // caller to have enforced:
+  //   1. `name` non-empty, `sellingPrice` a valid non-negative number
+  //      — the same numeric-validation shape `addStockBatch`'s own
+  //      costPrice check already uses (Number.isFinite + >= 0),
+  //      reused here, not reinvented.
+  //   2. No silent duplicate creation (Product Identity Existing/New
+  //      Resolution, Requirement 1) — mirrors `addStockBatch`'s own
+  //      identical `confirmedNewProduct` safety boundary, immediately
+  //      reachable a few hundred lines above this function. If a
+  //      product with this exact name already exists and the caller
+  //      has not explicitly confirmed this is deliberately a new one,
+  //      this throws rather than silently creating a duplicate. If a
+  //      match exists AND creation was explicitly confirmed as new
+  //      anyway (a caller-level race, not expected in ordinary use
+  //      once Checkpoint D's own resolution UI is wired in), this
+  //      function still refuses to create a second Product for the
+  //      same name — it returns the existing product's own id
+  //      instead, exactly as harmless/idempotent as it would have
+  //      been had the caller picked "use the Existing Product" to
+  //      begin with.
+  //   3. The written payload contains ONLY `id`, `name`, `createdAt`,
+  //      `sellingPrice`, and whichever of `category`/`supplier`/`sku`/
+  //      `barcode` were actually provided — structurally impossible
+  //      for this function to include `costPrice`, since the object
+  //      literal below never references it, and impossible for it to
+  //      write to `batches`/`stockCounts`, since this function never
+  //      references those collections at all. `active`/
+  //      `unitRelationship` are also never set here, matching
+  //      `addStockBatch`'s own convention for a first-time product
+  //      (their absence is already, universally, treated as "not an
+  //      error state" everywhere they're read).
+  //
+  // Returns the id of the Product that now canonically represents
+  // this name — the newly-created one, or the pre-existing one if a
+  // duplicate name was defensively caught by invariant 2 above.
+  const registerCatalogProduct = async ({
+    name,
+    sellingPrice,
+    category,
+    supplier,
+    sku,
+    barcode,
+    confirmedNewProduct,
+  }: RegisterCatalogProductParams): Promise<string> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    const businessId = activeBusinessId;
+
+    const trimmedName = name.trim();
+    if (!trimmedName) {
+      throw new Error('O nome do produto é obrigatório.');
+    }
+    if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
+      throw new Error('O preço de venda deve ser um valor válido.');
+    }
+
+    const existing = products.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
+    if (existing) {
+      if (!confirmedNewProduct) {
+        throw new Error(
+          `Já existe um produto chamado "${trimmedName}": é necessária confirmação explícita de Produto Existente/Novo antes de registar.`
+        );
+      }
+      // Defensive: even with explicit new-product confirmation, this
+      // function itself never creates a second Product for a name
+      // that already resolves to one — see invariant 2 above.
+      return existing.id;
+    }
+
+    const productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const newProduct: Product = {
+      id: productId,
+      name: trimmedName,
+      createdAt: new Date().toISOString(),
+      sellingPrice: Number(sellingPrice),
+      ...(category?.trim() ? { category: category.trim() } : {}),
+      ...(supplier?.trim() ? { supplier: supplier.trim() } : {}),
+      ...(sku?.trim() ? { sku: sku.trim() } : {}),
+      ...(barcode?.trim() ? { barcode: barcode.trim() } : {}),
+    };
+    await setDoc(doc(db, 'businesses', businessId, 'products', productId), newProduct);
+    return productId;
+  };
+
   // [Product Memory / UOM — Increment A] The single explicit-
   // reconfiguration write path for a product's unit relationship —
   // BDR-0012 Decision 14's "the owner may review or edit any remembered
@@ -8547,6 +8668,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         deleteQuebra,
         deleteExpense,
         updateProduct,
+        registerCatalogProduct,
         confirmProductUnitRelationship,
         removeSupplierWordingRelationship,
         redirectSupplierWordingRelationship,
