@@ -67,7 +67,7 @@ describe('Product Configuration UX — Contagem (PeriodicStockCountView.tsx)', (
 });
 
 describe('Product Configuration UX — Add Stock (AddStockView.tsx, mobile layout)', () => {
-  it('UnitRelationshipRow now renders immediately after the Quantity+Unit row and before Cost Price / Selling Price — no unrelated panel sits between Purchase Unit and the relationship control', () => {
+  it('[Superseded by the Desktop Parity Correction follow-up, below] UnitRelationshipRow no longer sits between Purchase Unit and Cost/Selling Price on mobile — it now renders once, in the shared section, after both — see the dedicated "Desktop Add Stock Unit-Relationship Parity Correction" suite below for the current, correct invariant and the disclosed trade-off this represents', () => {
     const unitFieldIdx = addStockSrc.indexOf("value={row.unit}", addStockSrc.indexOf('md:hidden space-y-2'));
     const relationshipIdx = addStockSrc.indexOf('<UnitRelationshipRow');
     const costPriceIdx = addStockSrc.indexOf("t('addStock.fields.costPrice'");
@@ -76,12 +76,12 @@ describe('Product Configuration UX — Add Stock (AddStockView.tsx, mobile layou
     assert.notEqual(relationshipIdx, -1);
     assert.notEqual(costPriceIdx, -1);
     assert.notEqual(sellingPriceIdx, -1);
-    assert.ok(unitFieldIdx < relationshipIdx, 'Expected Purchase Unit before UnitRelationshipRow.');
-    assert.ok(relationshipIdx < costPriceIdx, 'Expected UnitRelationshipRow before Cost Price.');
+    assert.ok(unitFieldIdx < costPriceIdx, 'Expected Purchase Unit before Cost Price.');
     assert.ok(costPriceIdx < sellingPriceIdx, 'Expected Cost Price before Selling Price (unchanged existing adjacency).');
+    assert.ok(sellingPriceIdx < relationshipIdx, 'Expected UnitRelationshipRow now to render after Selling Price, in the shared section — the Desktop Parity Correction\'s own disclosed trade-off.');
   });
 
-  it('no unrelated conditional panel (supplier-wording, product-recognition, identity resolution, discontinued-product) sits between Purchase Unit and Selling Price after this move', () => {
+  it('no unrelated conditional panel sits between Purchase Unit and Cost/Selling Price — that part of Investigation #2\'s original finding still holds, independent of where the relationship control itself now renders', () => {
     const unitFieldIdx = addStockSrc.indexOf("value={row.unit}", addStockSrc.indexOf('md:hidden space-y-2'));
     const sellingPriceIdx = addStockSrc.indexOf('value={row.sellingPrice}', addStockSrc.indexOf('md:hidden space-y-2'));
     const between = addStockSrc.slice(unitFieldIdx, sellingPriceIdx);
@@ -125,5 +125,84 @@ describe('Product Configuration UX — Add Stock (AddStockView.tsx, mobile layou
     const desktopGridStart = addStockSrc.indexOf('hidden md:grid grid-cols-12');
     const desktopGridSrc = addStockSrc.slice(desktopGridStart, desktopGridStart + 3000);
     assert.doesNotMatch(desktopGridSrc, /UnitRelationshipRow/);
+  });
+});
+
+describe('Desktop Add Stock Unit-Relationship Parity Correction (follow-up to dcd84be)', () => {
+  it('[Requirement A] UnitRelationshipRow is invoked exactly once in the whole file — no duplicate control', () => {
+    const callCount = (addStockSrc.match(/<UnitRelationshipRow\b/g) || []).length;
+    assert.equal(callCount, 1, `Expected exactly one <UnitRelationshipRow> invocation, found ${callCount}.`);
+  });
+
+  it('[Requirement B] the single invocation is NOT inside the md:hidden mobile-only block', () => {
+    const mobileStart = addStockSrc.indexOf('md:hidden space-y-2 text-xs');
+    const mobileEnd = addStockSrc.indexOf('UX — Desktop Add Stock Unit-Relationship');
+    assert.notEqual(mobileStart, -1);
+    assert.notEqual(mobileEnd, -1);
+    assert.ok(mobileStart < mobileEnd, 'Expected the mobile block to end before the new shared-section comment begins.');
+    const mobileBlockSrc = addStockSrc.slice(mobileStart, mobileEnd);
+    assert.doesNotMatch(mobileBlockSrc, /<UnitRelationshipRow\b/);
+  });
+
+  it('[Requirement C] the single invocation IS inside the shared section — positioned before Supplier-Wording Recognition, the section\'s own first existing sibling panel, confirming it renders from the same location already proven to appear on both desktop and mobile', () => {
+    const relationshipIdx = addStockSrc.indexOf('<UnitRelationshipRow');
+    // The literal text "Supplier-Wording Recognition — Checkpoint 3"
+    // also appears earlier in the file, in unrelated handler-level
+    // comments (confirmed: lines ~1513, ~2307) — searching from AFTER
+    // the relationship control's own position finds the actual JSX
+    // sibling panel in the shared section, not an unrelated earlier
+    // mention.
+    const supplierWordingIdx = addStockSrc.indexOf('Supplier-Wording Recognition — Checkpoint 3', relationshipIdx);
+    assert.notEqual(relationshipIdx, -1);
+    assert.notEqual(supplierWordingIdx, -1);
+    assert.ok(relationshipIdx < supplierWordingIdx, 'Expected UnitRelationshipRow to render before Supplier-Wording Recognition, both within the shared section.');
+  });
+
+  it('[Requirement C, continued] the desktop grid row itself was not modified to add a new cell for this control — the shared section, not the grid, is what now provides desktop access', () => {
+    const desktopGridStart = addStockSrc.indexOf('hidden md:grid grid-cols-12');
+    const desktopGridSrc = addStockSrc.slice(desktopGridStart, desktopGridStart + 3000);
+    assert.doesNotMatch(desktopGridSrc, /UnitRelationshipRow/);
+  });
+
+  it('[Requirement D] mobile behavior remains intact: Purchase Unit, Cost Price, and Selling Price fields are all still present, unmodified, in the mobile-only block, in their own existing relative order', () => {
+    const mobileStart = addStockSrc.indexOf('md:hidden space-y-2 text-xs');
+    const mobileEnd = addStockSrc.indexOf('UX — Desktop Add Stock Unit-Relationship');
+    const mobileBlockSrc = addStockSrc.slice(mobileStart, mobileEnd);
+    const unitIdx = mobileBlockSrc.indexOf('value={row.unit}');
+    const costIdx = mobileBlockSrc.indexOf("t('addStock.fields.costPrice'");
+    const sellIdx = mobileBlockSrc.indexOf('value={row.sellingPrice}');
+    assert.notEqual(unitIdx, -1);
+    assert.notEqual(costIdx, -1);
+    assert.notEqual(sellIdx, -1);
+    assert.ok(unitIdx < costIdx && costIdx < sellIdx, 'Expected Purchase Unit -> Cost Price -> Selling Price to remain in this order on mobile.');
+  });
+
+  it('[Requirement E] no desktop-specific duplicate UnitRelationship implementation was introduced — no new component, no new state field, no new handler; the same purchaseUnit/sellingUnit/factor/onChange props flow into the same updateRow call as before', () => {
+    assert.doesNotMatch(addStockSrc, /UnitRelationshipRowDesktop|DesktopUnitRelationship|UnitRelationshipCell/);
+    assert.match(
+      addStockSrc,
+      /<UnitRelationshipRow\s*\n\s*purchaseUnit=\{row\.unit \|\| 'un'\}\s*\n\s*sellingUnit=\{row\.newProductSellingUnit \|\| ''\}\s*\n\s*factor=\{row\.newProductSellingUnitFactor \|\| ''\}\s*\n\s*onChange=\{\(sellingUnit, factor\) =>\s*\n\s*updateRow\(row\.id, \{ newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor \}\)\s*\n\s*\}\s*\n\s*\/>/
+    );
+  });
+
+  it('the UnitRelationshipRow component definition itself is unmodified — same free-text selling-unit input, not converted to a select, not touched by this correction', () => {
+    const startIdx = addStockSrc.indexOf('const UnitRelationshipRow: React.FC');
+    const braceStart = addStockSrc.indexOf('{', addStockSrc.indexOf('=> {', startIdx));
+    let depth = 0;
+    let i = braceStart;
+    for (; i < addStockSrc.length; i++) {
+      if (addStockSrc[i] === '{') depth++;
+      else if (addStockSrc[i] === '}') {
+        depth--;
+        if (depth === 0) break;
+      }
+    }
+    const componentBody = addStockSrc.slice(startIdx, i + 1);
+    assert.match(componentBody, /<input\s*\n\s*type="text"\s*\n\s*value=\{sellingUnit\}/);
+    assert.doesNotMatch(componentBody, /<select/);
+  });
+
+  it('PeriodicStockCountView.tsx (Contagem) is untouched by this correction', () => {
+    assert.doesNotMatch(periodicSrc, /Desktop Add Stock Unit-Relationship Parity Correction/);
   });
 });

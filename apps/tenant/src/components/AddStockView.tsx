@@ -3632,57 +3632,6 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             </div>
                           </div>
 
-                          {/* [UX — Investigations #2/#3: Product
-                              configuration data-entry vs space-
-                              management] RENDER-ORDER CHANGE ONLY —
-                              moved here, verbatim, from directly after
-                              the Identity Resolution panel much lower
-                              in this same row (its position since
-                              Product Memory / UOM — Increment A,
-                              Checkpoint 2b). No condition, prop, or
-                              handler below was altered; same gate
-                              (`row.productName.trim() &&
-                              !exactMatchExists`), same onChange,
-                              same fields.
-                              Investigation #2 found this control
-                              positioned roughly 300 JSX lines below
-                              the purchase-unit field, separated by
-                              several unrelated conditional panels
-                              (supplier-wording confirmation, product-
-                              recognition, identity resolution) — a
-                              real, evidenced "scroll past unrelated
-                              content" problem for the exact dependency
-                              chain Purchase Unit → Unit Relationship
-                              (this component combines relationship AND
-                              selling-unit selection into one control,
-                              per Add Stock's own existing convention —
-                              see the component's own free-text
-                              selling-unit field, deliberately left
-                              unchanged, not converted to the
-                              constrained `<select>` Contagem's
-                              unrelated ModeAValuationControl uses).
-                              Positioned here, immediately after
-                              Purchase Unit, so the two are never split
-                              by any unrelated panel — the one
-                              remaining field between this control and
-                              Selling Price is Cost Price, which was
-                              already immediately adjacent to Selling
-                              Price before this change and is left
-                              exactly where it was; no unrelated
-                              conditional panel of any kind sits
-                              between Purchase Unit/Relationship and
-                              Selling Price after this move. */}
-                          {row.productName.trim() && !exactMatchExists && (
-                            <UnitRelationshipRow
-                              purchaseUnit={row.unit || 'un'}
-                              sellingUnit={row.newProductSellingUnit || ''}
-                              factor={row.newProductSellingUnitFactor || ''}
-                              onChange={(sellingUnit, factor) =>
-                                updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
-                              }
-                            />
-                          )}
-
                           <div>
                             <label className="block type-label mb-1">
                               {t('addStock.fields.costPrice', { symbol: currencySymbol })}
@@ -3760,6 +3709,71 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           </div>
                         </div>
                       </div>
+
+                      {/* [UX — Desktop Add Stock Unit-Relationship
+                          Parity Correction, follow-up to dcd84be]
+                          Moved here, verbatim — same gate
+                          (`row.productName.trim() &&
+                          !exactMatchExists`), same props, same
+                          onChange, same fields — from inside the
+                          `md:hidden` mobile-only block above, where it
+                          was the one remaining control with no desktop
+                          equivalent at all (confirmed by direct trace:
+                          the desktop `hidden md:grid grid-cols-12` row
+                          never contained it, at any point). This
+                          shared section (below) already renders
+                          identically on both desktop and mobile — its
+                          own sibling panels (Supplier-Wording
+                          Recognition, immediately below; Product
+                          Recognition; Identity Resolution;
+                          discontinued-product) already prove that.
+                          Placing the existing, unmodified
+                          UnitRelationshipRow here — rather than
+                          building any new desktop-specific control or
+                          squeezing it into the rigid, narrow-columned
+                          desktop grid — closes the one genuine
+                          responsive-parity gap using a location
+                          already proven safe for exactly this purpose,
+                          with zero new component, zero new state, zero
+                          new handler, and zero change to how a
+                          relationship is validated or persisted.
+                          Positioned first within this shared section,
+                          ahead of supplier-wording/recognition/
+                          identity-resolution, since it is the most
+                          directly product-configuration-relevant of
+                          the group.
+                          Disclosed trade-off, not silently resolved:
+                          because this is now the ONE single render
+                          site for both layouts (no duplicate
+                          permitted), mobile's own field order changes
+                          from dcd84be's own "Purchase Unit →
+                          Relationship → Cost → Selling" to "Purchase
+                          Unit → Cost → Selling → [this shared
+                          section, including Relationship]" — the
+                          shared section's own fixed position, after
+                          both layouts' own Cost/Selling fields, makes
+                          keeping Relationship immediately after
+                          Purchase Unit on mobile specifically
+                          impossible without either a second render
+                          site (explicitly disallowed) or restructuring
+                          the shared section's own position (out of
+                          this correction's scope). Relationship still
+                          renders directly after Purchase Unit
+                          logically has been entered, immediately
+                          visible without further scrolling on both
+                          platforms, just no longer literally adjacent
+                          to the Unit input on mobile as it was
+                          immediately after dcd84be. */}
+                      {row.productName.trim() && !exactMatchExists && (
+                        <UnitRelationshipRow
+                          purchaseUnit={row.unit || 'un'}
+                          sellingUnit={row.newProductSellingUnit || ''}
+                          factor={row.newProductSellingUnitFactor || ''}
+                          onChange={(sellingUnit, factor) =>
+                            updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                          }
+                        />
+                      )}
 
                       {/* [Supplier-Wording Recognition — Checkpoint 3]
                           One shared panel for both the desktop and mobile
