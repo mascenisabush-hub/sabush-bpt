@@ -12,93 +12,93 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Catalog Phase 2, **Checkpoint 4 (Add Stock
-correction — canonical Product Information) — implemented, tested,
-typechecked, built, committed, and pushed** (commit `c43776a`).
+**Status:** Product Catalog Phase 2 is **fully shipped — all five
+checkpoints closed**. **Checkpoint 5 (full regression sweep) — executed
+and CLOSED — CONFORMING** (authorization commit `abeeed3`; the sweep
+itself produced zero functional diff, as its own definition requires).
 **Nothing mid-flight; working tree clean.**
 
-**What shipped (Checkpoint 4):**
-- `AddStockView.tsx`: new `AddStockProductCorrectionModal` — a
-  contextual correction affordance for an already-matched, active
-  existing Product row, scoped to exactly the Specification §7-
-  authorized fields (`name`, `sellingPrice`, `sellingUnit`,
-  `unitRelationship`). Family 2 architecture (Product Architect's
-  explicit selection): reuses `confirmProductUnitRelationship` and
-  `updateProduct` exactly as they already exist — `AppContext.tsx`
-  untouched, zero diff since Checkpoint 3.
-- Distinct, explicit rename confirmation (Specification §9; Plan §K):
-  a separate `pendingRename` state — changing the name never writes
-  immediately; requires an explicit confirm naming old/new; cancel
-  leaves the canonical name untouched; structurally distinct from
-  `identityConfirmedNew` (never reused for it).
-- sellingPrice/sellingUnit invariant (Specification §10; Plan §L):
-  refuses to proceed, before any write, if a non-null sellingPrice
-  would end up paired with an absent/invalid sellingUnit.
-- Write ordering: `confirmProductUnitRelationship` first (only when the
-  relationship changed), `updateProduct` second, for `name` +
-  `sellingPrice` only — never `category`/`supplier`/`sku`/`barcode`/
-  `costPrice`/`active`/`supplierWordings`. A thrown relationship-write
-  error skips the Product update entirely.
-- Authorization denial: reuses the existing `handleReactivateProduct`
-  catch/rollback pattern — `onClose()` (the only success signal) is
-  reachable only from the try block's success path.
-- i18n: exactly five new `addStock.correction.*` keys (`editButton`,
-  `nameChangeConfirmTitle`, `nameChangeConfirmBody`,
-  `sellingUnitRequiredError`, `saveError`) in pt/en/fr — nothing else
-  touched. **Known, disclosed deviation:** the governance text specified
-  `{old}`/`{new}` single-brace placeholders for `nameChangeConfirmBody`;
-  this codebase's actual `interpolate()` (`LanguageContext.tsx`) only
-  substitutes `{{param}}` double braces — confirmed against the
-  dominant, working convention used throughout both locale files. Used
-  `{{old}}`/`{{new}}` so the key actually substitutes at runtime; the
-  human-readable wording, key name, and key count are all unchanged —
-  a syntax-level correctness fix, not a content or scope change. Does
-  not require a further governance amendment (the Authorization's own
-  binding text authorizes the five *key names*, not a byte-exact
-  interpolation delimiter).
-- Tests: new dedicated `tests/add-stock-product-correction.test.ts` (25
-  tests, all passing) — source-text/structural technique, same
-  established convention as every other checkpoint in this Phase (no
-  DOM/React render harness exists in this repo) and at parity with its
-  closest precedent (`product-catalog-phase-2-checkpoint-2-unit-
-  relationship-reconfiguration.test.ts`, which is likewise 100%
-  structural). Not runtime/DOM-execution behavioral coverage — genuinely
-  equivalent in rigor to, not weaker than, this repo's own accepted
-  standard for UI-component logic in untested-by-harness files. No
-  existing test file modified.
-- Verification: `tsc --noEmit -p apps/tenant` and `vite build` both
-  clean (identical pre-existing 2-error/warning baseline, zero new).
-  `npm run test:all` — 0 failures. Full regression sweep green across
-  every AddStockView/Product-Catalog-adjacent suite, including the two
-  files flagged as placement-sensitive watch items during the
-  Checkpoint 4 preflight (`product-configuration-ux-render-order.test.ts`,
-  `product-name-similarity.test.ts`) — confirmed unaffected.
-- Scope: exactly the five Checkpoint-4-authorized paths changed —
-  `AddStockView.tsx`, the three locale files, and the one new test
-  file. `AppContext.tsx` and every other protected file untouched.
+**Checkpoint 5 — what was verified (pure verification, zero product
+change, per its own "Prohibited: any new functional change" boundary):**
+- Touched-function inventory reconstructed from git history:
+  Checkpoint 1 (`473e26f`) — `confirmProductUnitRelationship` (extended),
+  `classifyUnitRelationshipChange`/`evaluateUnitRelationshipReplacement`
+  (new, `lib/unitRelationship.ts`); Checkpoint 2 (`3f8676d`) —
+  `registerCatalogProduct`, `EditProductModal.tsx`'s `handleSubmit`/new
+  `unitRelationshipCandidateEqualsCurrent`, `ProductCatalogView.tsx`'s
+  `buildUnitRelationshipPayload`/registration form; Checkpoint 3
+  (`b55dff4`) — `recordStockCount` (both write branches); Checkpoint 4
+  (`c43776a`) — new `AddStockProductCorrectionModal` +
+  `unitRelationshipCandidateEqualsCurrent` (`AddStockView.tsx`).
+- Ran the complete regression surface for all four checkpoints: both
+  `product-catalog-phase-2-checkpoint-{1,2}-unit-relationship-
+  reconfiguration` suites, `product-catalog-phase-1-checkpoint-{b,c,d,e}`,
+  `decision-37-first-contagem-cost-removal-and-selling-price-memory`,
+  `add-stock-product-correction`, every `add-stock-*`/Contagem-adjacent
+  suite, `product-identity-existing-new-resolution`,
+  `product-name-similarity`, `product-configuration-ux-render-order`,
+  `product-memory-price-resolution`, and more — all passing, 0 failures,
+  except the 2 already-known, already-documented, pre-existing failures
+  in `periodic-contagem-concept-b-compaction.test.ts` (present since
+  commit `8bb980d`, predating all of Checkpoints 1–4, unrelated to any
+  file/function these checkpoints touched — same finding independently
+  confirmed three times now, across the Checkpoint 3 closure audit, the
+  Checkpoint 4 preflight, and this sweep).
+- `npm run test:all`: 1168/1168 tests passing, 0 failures.
+- `tsc --noEmit -p apps/tenant`: identical pre-existing 3-error baseline
+  (2× `InfoHint` in `InitialStockCountView.tsx`, 1× `URL` type in
+  `reportExport.ts`), 0 new errors.
+- `vite build`: succeeds, same pre-existing CSS/chunk-size warnings, no
+  new failures.
+- Zero-diff confirmed throughout: `git status --short`/`git diff
+  --name-only` empty before, during, and after the sweep. (One
+  transient incident during execution: a `git checkout <commit> -- .`
+  used to cross-check a pre-existing-failure baseline accidentally
+  dirtied the working tree; caught immediately and reverted via `git
+  checkout HEAD -- .` before proceeding — confirmed clean again, HEAD
+  unchanged throughout, no commit ever touched by it.)
 
-**Governance trail for Checkpoint 4** (all in
-`docs/engineering/product-catalog-phase-2-implementation-plan.md` and
-`...-implementation-authorization.md`):
-1. Original Plan (`6d8bd5a`) + Authorization (`69aaea9`) — Checkpoint 4
-   scoped to `AddStockView.tsx` only, per Plan §I/§K.
-2. Checkpoint 4 preflight audit found a Plan §D-vs-§X file-scope
-   ambiguity (did Add Stock's correction need a new `AppContext.tsx`
-   helper?) plus a foreseeable locale-file gap.
-3. Read-only architecture investigation found `EditProductModal.tsx`
-   (Checkpoint 2) already demonstrates the safe, reuse-only resolution
-   — no new helper needed.
-4. Product Architect selected **Family 2 — reuse existing write
-   functions**.
-5. Fifth Plan Amendment (`2a30b11`) + Fifth Authorization Amendment
-   (`e7a36ea`) — recorded that decision, explicitly excluded
-   `AppContext.tsx` from Checkpoint 4 scope, extended scope to the
-   three locale files (five named keys) and the one new test file.
-6. Implementation commit `c43776a`.
+**Governance trail for Checkpoint 5** (all in
+`docs/engineering/product-catalog-phase-2-implementation-authorization.md`):
+1. Original Authorization (`69aaea9`) §4 item 5 — Checkpoint 5 defined
+   as "full regression sweep... no new functional change."
+2. Checkpoint 5 preflight/governance audit (chat-recorded) — confirmed
+   the definition needs no amendment; the only outstanding gate was the
+   Plan §X-required, checkpoint-specific review.
+3. §15 — Checkpoint 5 explicit Product Architect authorization
+   (`abeeed3`) — not a Plan/Authorization Amendment, a pure review-gate
+   record: "CHECKPOINT 5 — AUTHORIZED TO PROCEED."
+4. This regression sweep, executed per that authorization — zero
+   functional diff, as required.
 
-**Not started:** Checkpoint 5 (full Phase 2 regression sweep — no new
-functional change; run every existing test file referencing any file
-touched by Checkpoints 1–4). Checkpoints 1–4 are all closed.
+**What Checkpoints 1–4 shipped (condensed — see prior HANDOFF revisions
+in git history, and each checkpoint's own governance trail in the Plan/
+Authorization docs, for full detail):**
+- **Checkpoint 1** (`473e26f`): `confirmProductUnitRelationship`
+  extended with an old-state-aware replacement check (Decision 1),
+  additive-only — `isValidUnitRelationship`/`confirmUnitRelationship`
+  themselves untouched.
+- **Checkpoint 2** (`3f8676d`): Catálogo creation (`registerCatalogProduct`)
+  and edit (`EditProductModal.tsx`) — `sellingPrice` now optional,
+  `unitRelationship` now capturable/editable, sellingPrice/sellingUnit
+  pairing invariant enforced before every write.
+- **Checkpoint 3** (`b55dff4`): Contagem's `recordStockCount` — both the
+  existing-product and new-product branches now couple the sellingPrice
+  write to a valid sellingUnit, closing the write-gate identified in
+  Checkpoint 3's own preflight.
+- **Checkpoint 4** (`c43776a`): Add Stock's new `AddStockProductCorrectionModal`
+  — contextual canonical-Product correction (name/sellingPrice/
+  sellingUnit/unitRelationship) for an already-matched product, reusing
+  `confirmProductUnitRelationship`/`updateProduct` exactly as they exist
+  (Family 2 architecture — `AppContext.tsx` untouched since Checkpoint 3),
+  distinct explicit rename confirmation, relationship-before-price write
+  ordering, authorization-denial handling reusing the existing
+  `handleReactivateProduct` pattern.
+
+**Not started:** none — Product Catalog Phase 2's authorized checkpoint
+sequence (1–5) is complete. Any further work on this module requires a
+fresh Specification/Plan/Authorization cycle, not an extension of this
+one.
 
 **Still open from before this work, untouched this session:** the
 `periodic-contagem-concept-b-compaction.test.ts` InfoHint-vs-test
