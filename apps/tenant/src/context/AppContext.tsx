@@ -5543,13 +5543,26 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // (!product)`) — an existing product's unitRelationship is
         // never read or touched here, matching addStockBatch's and
         // addMultipleStockBatches's identical guarantee.
+        const newProdUnitRelationship = unitRelationshipByProductName.has(norm.productName.toLowerCase())
+          ? unitRelationshipByProductName.get(norm.productName.toLowerCase())!
+          : undefined;
+        // [Checkpoint 3 — Plan §J] sellingPrice and unitRelationship.sellingUnit
+        // are written from two independently-populated maps
+        // (unitRelationshipByProductName, sellingMemoryByProductName), so
+        // without this check a product could be created with a sellingPrice
+        // but no (or no valid) sellingUnit — same invariant §J couples below
+        // for the existing-product branch. `isValidUnitRelationship` already
+        // requires a member sellingUnit when one is set (unitRelationship.ts),
+        // so this alone is sufficient to guarantee a valid pair.
+        const newProdSellingUnitValid =
+          !!newProdUnitRelationship &&
+          isValidUnitRelationship(newProdUnitRelationship) &&
+          newProdUnitRelationship.sellingUnit != null;
         const newProd: Product = {
           id: productId,
           name: norm.productName,
           createdAt: new Date().toISOString(),
-          ...(unitRelationshipByProductName.has(norm.productName.toLowerCase())
-            ? { unitRelationship: unitRelationshipByProductName.get(norm.productName.toLowerCase())! }
-            : {}),
+          ...(newProdUnitRelationship ? { unitRelationship: newProdUnitRelationship } : {}),
           // [§45 Amendment FR-81; Implementation Authorization §2 item
           // 2] Durable selling-price memory established from this
           // product's first Contagem. Never fires for Initial Stock
@@ -5557,7 +5570,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // new-product-creation branch would otherwise silently
           // extend this memory-establishment behavior to Initial
           // Stock, which §45's own §6/§12 explicitly excludes.
-          ...(type !== 'initial' && sellingMemoryByProductName.has(norm.productName.toLowerCase())
+          ...(newProdSellingUnitValid && type !== 'initial' && sellingMemoryByProductName.has(norm.productName.toLowerCase())
             ? { sellingPrice: sellingMemoryByProductName.get(norm.productName.toLowerCase())!.sellingPrice }
             : {}),
         };
@@ -5652,9 +5665,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
             sellingUnitFieldUpdate = memory.sellingUnit;
           }
         }
-        if (!sellingPriceChanged && sellingUnitFieldUpdate === undefined) continue; // neither half changed — no write
+        // [Checkpoint 3 — Plan §J] Price write requires a valid unit
+        // post-write: sellingUnitFieldUpdate defined, or current unit
+        // already valid. Never blocks sellingUnitFieldUpdate itself.
+        const sellingUnitValidPostWrite =
+          sellingUnitFieldUpdate !== undefined ||
+          (isValidUnitRelationship(product.unitRelationship) && product.unitRelationship!.sellingUnit != null);
+        const priceWriteAllowed = sellingPriceChanged && sellingUnitValidPostWrite;
+        if (!priceWriteAllowed && sellingUnitFieldUpdate === undefined) continue; // neither half changed — no write
         fsBatch.update(doc(db, 'businesses', businessId, 'products', product.id), {
-          ...(sellingPriceChanged ? { sellingPrice: memory.sellingPrice } : {}),
+          ...(priceWriteAllowed ? { sellingPrice: memory.sellingPrice } : {}),
           ...(sellingUnitFieldUpdate !== undefined ? { 'unitRelationship.sellingUnit': sellingUnitFieldUpdate } : {}),
           updatedAt: new Date().toISOString(),
         });

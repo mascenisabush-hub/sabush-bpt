@@ -124,7 +124,23 @@ describe('AC-07/AC-08/AC-09 — selling price and purchase cost are independentl
     // independently — either can trigger the write, and each is
     // computed by its own dedicated comparison, both still present.
     assert.match(block, /product\.sellingPrice !== memory\.sellingPrice/);
-    assert.match(block, /if \(!sellingPriceChanged && sellingUnitFieldUpdate === undefined\) continue;/);
+    // [Checkpoint 3 — Plan §J; Implementation Plan Amendment — Checkpoint
+    // 3 Contagem Write-Gate Test-Scope Reconciliation, Accepted
+    // 2026-09-09] The old skip-gate this assertion previously checked
+    // (`if (!sellingPriceChanged && sellingUnitFieldUpdate === undefined)
+    // continue;`) is superseded: a sellingPriceChanged-only write may now
+    // proceed only when sellingUnitFieldUpdate is defined or the
+    // product's unitRelationship.sellingUnit is already valid
+    // post-write — this couples the price write to a valid unit,
+    // preventing a canonical Product with sellingPrice set but no valid
+    // sellingUnit. Checked in two parts: the derived `priceWriteAllowed`
+    // gate itself, and the skip-continue that now reads it instead of
+    // the raw `sellingPriceChanged`.
+    assert.match(
+      block,
+      /const sellingUnitValidPostWrite =\s*\n\s*sellingUnitFieldUpdate !== undefined \|\|\s*\n\s*\(isValidUnitRelationship\(product\.unitRelationship\) && product\.unitRelationship!\.sellingUnit != null\);\s*\n\s*const priceWriteAllowed = sellingPriceChanged && sellingUnitValidPostWrite;/
+    );
+    assert.match(block, /if \(!priceWriteAllowed && sellingUnitFieldUpdate === undefined\) continue;/);
     assert.equal(block.includes('costPrice'), false);
   });
 
