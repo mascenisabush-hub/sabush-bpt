@@ -236,7 +236,7 @@ const UnitRelationshipChainEditor: React.FC<{
                   onChange={(e) => updateStep(index, { factor: sanitizeDecimalInput(e.target.value) })}
                   onKeyDown={suppressEnterSubmit}
                   placeholder="Ex: 4"
-                  className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                  className="w-24 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
                 />
               </div>
               <div>
@@ -247,7 +247,7 @@ const UnitRelationshipChainEditor: React.FC<{
                   onChange={(e) => updateStep(index, { unit: e.target.value })}
                   onKeyDown={suppressEnterSubmit}
                   placeholder="Ex: Emb"
-                  className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                  className="w-28 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
                 />
               </div>
               <button
@@ -336,7 +336,7 @@ const ModeAValuationControl: React.FC<{
         <select
           value={referenceUnit}
           onChange={(e) => onChange({ referenceUnit: e.target.value })}
-          className="bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          className="bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
         >
           {referenceUnitOptions.map((u) => (
             <option key={u} value={u}>
@@ -354,7 +354,7 @@ const ModeAValuationControl: React.FC<{
           onChange={(e) => onChange({ referencePrice: sanitizeDecimalInput(e.target.value) })}
           onKeyDown={suppressEnterSubmit}
           placeholder="Ex: 1250"
-          className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          className="w-24 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal tabular-nums focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
         />
       </label>
       {/* Collapsed by default — see InfoHint. Same sentence as before,
@@ -502,7 +502,7 @@ const NewProductInfoPanel: React.FC<{
           onChange={(e) => onPurchaseUnitChange(e.target.value)}
           onKeyDown={suppressEnterSubmit}
           placeholder="Ex: Cx"
-          className="w-20 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal text-center focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+          className="w-20 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal text-center focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
         />
       </label>
 
@@ -528,7 +528,7 @@ const NewProductInfoPanel: React.FC<{
             <select
               value={sellingUnit}
               onChange={(e) => onSellingUnitChange(e.target.value)}
-              className="bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+              className="bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-1 text-[13px] font-mono font-normal focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
             >
               <option value="">Selecionar...</option>
               {sellingUnitOptions.map((u) => (
@@ -6334,9 +6334,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   // Shared field treatment — identical to Initial Stock Count so the two
   // counting screens read as one consistent system.
+  // [Data-Entry Visual Legibility — Option C, Product Architect
+  // Implementation Authorization] Background/border/placeholder/focus
+  // updated per the approved spec; layout, radius, and padding
+  // unchanged.
   const fieldClass =
-    'w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 ' +
-    'transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20';
+    'w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-[#7C8695] ' +
+    'transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30';
   const fieldLabelClass = 'block type-label mb-1';
   // [Issue 2 — Periodic Contagem Live Selling-Price Readability] Five
   // tracks, matching the row's actual five top-level grid children

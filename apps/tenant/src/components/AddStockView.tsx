@@ -351,7 +351,7 @@ const UnitRelationshipRow: React.FC<{
             value={factor}
             onChange={(e) => onChange(sellingUnit, sanitizeDecimalInput(e.target.value))}
             placeholder="Ex: 24"
-            className="w-24 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            className="w-24 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
           />
         </div>
         <div>
@@ -361,7 +361,7 @@ const UnitRelationshipRow: React.FC<{
             value={sellingUnit}
             onChange={(e) => onChange(e.target.value, factor)}
             placeholder="Ex: Un"
-            className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+            className="w-28 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
           />
         </div>
       </div>
@@ -2825,7 +2825,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             setSupplierName(e.target.value);
                             setIsSupplierDropdownOpen(true);
                           }}
-                          className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 pr-7"
+                          className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-[#7C8695] transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 pr-7"
                         />
                         <Search className="w-3 h-3 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                       </div>
@@ -2878,10 +2878,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                     value={supplierPhone}
                     disabled={!!supplierId}
                     onChange={e => setSupplierPhone(e.target.value)}
-                    className={`w-full border rounded-[10px] px-2.5 py-2 text-[13px] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 ${
+                    className={`w-full border-[1.5px] rounded-[10px] px-2.5 py-2 text-[13px] placeholder-[#7C8695] transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 ${
                       supplierId
                         ? 'bg-[#F5F7FA] border-[#E5E7EB] text-gray-500 cursor-not-allowed'
-                        : 'bg-white border-[#E5E7EB] text-[#111827]'
+                        : 'bg-[#E4E8ED] border-[#9AA6B5] text-[#111827]'
                     }`}
                   />
                 </div>
@@ -2900,7 +2900,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   placeholder={t('addStock.supplier.notesPlaceholder')}
                   value={batchNotes}
                   onChange={e => setBatchNotes(e.target.value)}
-                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                  className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-[#7C8695] transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
                 />
               </div>
               {/* [Business Worth Evolution — Implementation Authorization,
@@ -3078,7 +3078,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               value={row.productName}
                               onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
                               onChange={e => applySupplierWordingCheck(row.id, e.target.value)}
-                              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs placeholder-gray-400 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-medium pr-7"
+                              className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs placeholder-[#7C8695] transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-medium pr-7"
                             />
                             <Search className="w-3 h-3 text-gray-400 absolute right-2.5 top-1/2 -translate-y-1/2 pointer-events-none" />
                           </div>
@@ -3172,7 +3172,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.dateEntered}
                             onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                            className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
+                            className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono"
                           />
                         </div>
 
@@ -3184,7 +3184,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.quantity}
                             onChange={e => updateRow(row.id, { quantity: sanitizeDecimalInput(e.target.value) })}
-                            className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
+                            className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold text-right transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                           />
                         </div>
 
@@ -3197,7 +3197,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               placeholder="un"
                               value={row.unit}
                               onChange={e => handleUnitChange(row.id, e.target.value)}
-                              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-1.5 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
+                              className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-1.5 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono"
                             />
                             <button
                               type="button"
@@ -3284,7 +3284,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.costPrice}
                             onChange={e => updateRow(row.id, { costPrice: sanitizeDecimalInput(e.target.value), costPriceAutoFilled: false })}
-                            className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
+                            className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold text-right transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                           />
                           {/* [Manual data-entry error investigation,
                               Finding 3] Live-computed, never stored
@@ -3317,7 +3317,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             required
                             value={row.sellingPrice}
                             onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false })}
-                            className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs text-right transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
+                            className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold text-right transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                           />
                           {/* [Fix — resolveUnitAwarePrice] Deliberately a
                               SEPARATE, differently-worded indicator from
@@ -3451,7 +3451,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               onChange={e =>
                                 updateRow(row.id, { previousRemainingQuantity: sanitizeDecimalInput(e.target.value) })
                               }
-                              className="w-28 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-1.5 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums disabled:opacity-50 disabled:bg-[#F5F7FA]"
+                              className="w-28 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-1.5 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums disabled:opacity-50 disabled:bg-[#F5F7FA]"
                             />
                             <button
                               type="button"
@@ -3516,7 +3516,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               value={row.productName}
                               onFocus={() => updateRow(row.id, { isDropdownOpen: true })}
                               onChange={e => applySupplierWordingCheck(row.id, e.target.value)}
-                              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                              className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
                             />
                             {row.isDropdownOpen && (
                               <>
@@ -3582,7 +3582,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               value={row.dateEntered}
                               onChange={e => updateRow(row.id, { dateEntered: e.target.value })}
-                              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
+                              className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono"
                             />
                           </div>
 
@@ -3597,7 +3597,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 required
                                 value={row.quantity}
                                 onChange={e => updateRow(row.id, { quantity: sanitizeDecimalInput(e.target.value) })}
-                                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
+                                className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                               />
                             </div>
                             <div className="w-16">
@@ -3609,7 +3609,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                                 required
                                 value={row.unit}
                                 onChange={e => handleUnitChange(row.id, e.target.value)}
-                                className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-1 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono"
+                                className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-1 py-2 text-[#111827] text-xs text-center transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono"
                               />
                               {/* [Feature — unit-aware price
                                   re-derivation] Same live-computed
@@ -3643,7 +3643,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               value={row.costPrice}
                               onChange={e => updateRow(row.id, { costPrice: sanitizeDecimalInput(e.target.value), costPriceAutoFilled: false })}
-                              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
+                              className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                             />
                             {/* [Manual data-entry error investigation,
                                 Finding 3] Same check as the desktop
@@ -3673,7 +3673,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                               required
                               value={row.sellingPrice}
                               onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false })}
-                              className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-[#111827] text-xs transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 font-mono tabular-nums"
+                              className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                             />
                             {/* [Bug fix — mobile layout never showed
                                 whether the selling price came from

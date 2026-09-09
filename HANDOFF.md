@@ -12,70 +12,73 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Explanatory-banner compaction (collapsed-by-default InfoHint)
-— **implemented, typechecked, built, and pushed to `main`.** **Nothing
-mid-flight; working tree clean.**
+**Status:** Data-Entry Field Visibility — Option C (Product Architect
+Implementation Authorization) — **implemented, typechecked, built,
+tested, and pushed to `main`.** **Nothing mid-flight; working tree
+clean.**
 
-**What this was:** the Owner flagged that several always-visible
-"how this works" explanatory paragraphs (e.g. Contagem's "Esta
-contagem regista o que existe fisicamente em stock agora...") were
-permanently occupying layout space. Investigated first — found this is
-a deliberate, recurring pattern across the app (`Info` icon +
-paragraph), and that one specific instance in
-`PeriodicStockCountView.tsx` had an explicit prior decision
-("Information-Preserving Compaction — Alternative A") that REVERSED an
-earlier attempt to hide/collapse it, plus another with a "Deliberately
-NOT made dismissible/collapsible" note. Both were shown to the Owner
-before doing anything; the Owner explicitly chose "collapse into a
-tooltip/expandable '?' (info kept, hidden by default)" — not deletion
-— which preserves every prior decision's actual concern (the
-information itself must never be lost) while addressing the layout
-complaint. Comments at each converted site name this as an explicit,
-dated product decision, not a silent reversal.
+**What shipped:** the approved visual spec, applied exactly as
+authorized, to Periodic Contagem's and Add Stock's editable
+inputs/selects only:
+- Normal: `#E4E8ED` background, `1.5px #9AA6B5` border, placeholder `#7C8695`.
+- Focus: `#F6EFD9` background (existing `--gold-soft` token), `2px #D4AF37` border, `3px` gold ring at 30%.
+- Add Stock's Quantidade/Preço Compra/Preço Venda: `text-xs` (12px) → `text-[13px] font-semibold`, matching the Design System's 13px financial-figure floor. Date/Unidade fields got the color treatment only, per the authorization's explicit scope (typography fix named only those three fields).
 
-**New component:** `InfoHint.tsx` — small "?" button, click/tap to
-open a popover with the original text verbatim, closes on outside
-click or Escape. No layout footprint when collapsed (this is what
-actually reclaims the space — nothing needed to be manually "lifted
-up", removing the fixed-height banner element does that automatically
-in normal document flow).
+**Where applied:** Periodic Contagem's shared `fieldClass` constant
+(propagates to its ~15 call sites) plus 6 sub-component-local inline
+duplicates of the same string (not reachable from `fieldClass`, so
+edited individually); Add Stock's 17 inline occurrences plus one
+conditional-template field (Supplier Phone, disabled-state branch
+left untouched — still visually distinct from active/editable, as it
+should be).
 
-**Converted (7 files, ~8 sites):** `PeriodicStockCountView.tsx` (both
-banners from the Owner's screenshot — the Contagem "how this works"
-paragraph, now on the page heading, and the per-portion pricing note),
-`InitialStockCountView.tsx` (Capital Inicial explainer, now on the
-subtitle), `AddStockView.tsx` (batch auto-close notice, now next to
-Submit), `InitialStockPriceChangeModal.tsx` (valuation-change
-clarification), `EditProductModal.tsx` (Cost vs Selling Price
-explainer), `DeclareBusinessWorthView.tsx` and `AddWithdrawalView.tsx`
-(both moved onto their form's heading).
+**Deliberately left untouched, per the documented "semantic state
+beats default styling" exception:** the amber-bordered product-identity
+search field (Periodic Contagem) and the rose-bordered delete-reason
+field (Add Stock) — both already carry a different, intentional
+semantic color tied to their warning/error context, not the default
+data-entry treatment.
 
-**Deliberately NOT converted (left always-visible, on purpose):**
-every conditional/state-dependent notice — active recovery-window
-countdowns, listener load-errors, "did you mean this product"/
-inactive-product-reactivation prompts (explicitly marked "Deliberately
-ALWAYS VISIBLE" in the code — hiding these risks silently creating a
-duplicate product), the irreversible-action confirm modal in Initial
-Stock, empty-states, and the "permanent, cannot be edited" warning in
-`InitialStockPriceChangeModal.tsx`. These are short-lived and
-actionable, not permanent screen-space consumers — collapsing them
-would hide safety-relevant information at the exact moment it matters,
-which is a different problem than the one raised.
+**Testing:** ran every Add Stock test (12 files, all pass), every
+Periodic Contagem/Stock test (29 files), Product Catalog/Memory/
+Identity tests (8 files). Typecheck and build both clean.
 
-**Verification performed:** `npx tsc --noEmit -p .` — zero new errors
-(same 15 pre-existing `tests/*.test.ts` errors as every prior session,
-confirmed unrelated). `npm run build` — succeeds. Not visually
-smoke-tested in a running browser this session — worth a quick visual
-pass next time to confirm the "?" popovers don't clip off-screen on
-narrow/mobile viewports (InfoHint has an `align="right"` prop for
-exactly that, used once so far in `AddStockView.tsx`'s Submit row —
-worth checking the others too).
+**Pre-existing failures found while testing (NOT caused by this
+change — confirmed via `git stash` against the commit before this
+one):**
+1. `periodic-stock-count-detail-and-correction-prefill.test.ts` (1 of
+   14) and `periodic-stock-shop-switch-guard.test.ts` (1 of 6) — both
+   fail identically with this session's changes stashed out, so predate
+   Option C entirely. Not investigated further this session (out of
+   this task's scope).
+2. **`periodic-contagem-concept-b-compaction.test.ts` (2 of 49) — a
+   real regression, already on `main`, introduced by the "collapse
+   explanatory banners into InfoHint" work earlier in this
+   conversation (commit `8bb980d`).** The test asserts the exact two
+   sentences that commit moved into `InfoHint` must render as visible
+   `<span>` text, never tooltip-only — the same product decision
+   ("Information-Preserving Compaction — Alternative A") flagged to
+   the Owner before that change was made. Confirmed via `git stash`
+   that this fails on `main` independent of anything in this session's
+   Option C diff. **Not fixed here — out of Option C's scope, and
+   reverting/adjusting the InfoHint decision needs the Owner's call,
+   not a unilateral fix bundled into an unrelated visual-styling
+   commit.** Needs a follow-up decision: revert those two banners back
+   to always-visible, or update the test to match the (now
+   Owner-authorized) InfoHint decision.
+3. Two files (`periodic-stock-finalization.test.ts`,
+   `periodic-contagem-shared-live-data-decisions-44-56-emulator.test.ts`)
+   fully cancelled — Firebase emulator/network dependent, not run in
+   this sandboxed environment. Expected, not a failure.
 
-**Next likely step:** if more of these banners turn up elsewhere in
-the app later, reuse `InfoHint` the same way — attach it next to the
-nearest heading/label rather than leaving a floating block, and check
-the code around each one first for an existing "must stay visible"
-rationale before collapsing it.
+**Visual verification:** none performed — no browser/dev-server
+rendering tool available in this session. This is CSS-class-level
+verification only (grep + diff review), consistent with what was
+disclosed throughout the investigation/preview rounds.
+
+**Next likely step:** resolve the InfoHint-vs-test conflict named
+above (item 2) — that's the one open item actually blocking a clean
+test suite, unrelated to this change.
 
 **Process note:** this shipped without the full investigation → plan →
 governance-review → authorization → review chain the SuperAdmin Audit
