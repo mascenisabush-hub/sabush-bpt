@@ -26,6 +26,7 @@ Every requirement cited below traces to Specification §4–§17 (as summarized 
 - **Shared primitives:** `isValidUnitRelationship`/`confirmUnitRelationship` (`unitRelationship.ts`) — pure, single-candidate validation, no prior-state awareness. `confirmProductUnitRelationship` (`AppContext.tsx:8101`) — writes `unitRelationship` only, zero callers anywhere.
 - **`firestore.rules:484-508`:** `products/{productId}` — `allow create: if isMemberOf(businessId)`; `allow update, delete: if isOwnerOf(businessId)`. No new field requires a rules change (§S, §T).
 - **Test debt:** `product-catalog-phase-1-checkpoint-b.test.ts` asserts `registerCatalogProduct` "never sets `unitRelationship`" — will require updating.
+- **Additional test debt (Implementation Plan Amendment, Accepted 2026-09-09 — see "Product Architect Acceptance of Implementation Plan Amendment," below):** identified during Checkpoint 2 pre-implementation investigation, not identified at original Plan-acceptance time. `tests/product-catalog-phase-1-checkpoint-c.test.ts` contains two assertions — "has exactly six input elements inside the registration form" and "does NOT contain UnitRelationship configuration UI" — that are directly and exclusively contradicted by Specification §6/§10 and by this Plan's own §H. Checkpoint 2 is authorized to update only these two specific assertions, so that they test the newly governing behavior rather than the Checkpoint-C-era behavior the Specification has already superseded. No other assertion in this file, and no other legacy checkpoint test file, is authorized for change by this amendment.
 
 ## D. Files/Components/Services Expected to Change
 
@@ -158,7 +159,7 @@ New/updated test coverage required (none of the following currently exists, veri
 
 **Checkpoint 1 — UnitRelationship old-state-aware extension.** Objective: implement §5's extension to `confirmProductUnitRelationship`. Scope: `AppContext.tsx` only (the one function, additive). Files: `AppContext.tsx`. Tests: new relationship-replacement test suite (§V). Result: function is extended, still has zero UI callers (no behavior change visible anywhere yet). Prohibited: touching `isValidUnitRelationship`/`confirmUnitRelationship`; any UI change.
 
-**Checkpoint 2 — Catálogo creation/edit.** Objective: §H. Scope: `registerCatalogProduct`, `ProductCatalogView.tsx`, `EditProductModal.tsx`. Tests: creation/edit invariant tests, checkpoint-b regression update. Prohibited: touching Add Stock or Contagem files.
+**Checkpoint 2 — Catálogo creation/edit.** Objective: §H. Scope: `registerCatalogProduct`, `ProductCatalogView.tsx`, `EditProductModal.tsx`. Tests: creation/edit invariant tests, checkpoint-b regression update, **and the two specific `checkpoint-c.test.ts` assertions identified in §C's test-debt note (Implementation Plan Amendment, Accepted 2026-09-09) — no broader edit to `checkpoint-c.test.ts`.** Prohibited: touching Add Stock or Contagem files.
 
 **Checkpoint 3 — Contagem coupling fix.** Objective: §J. Scope: `PeriodicStockCountView.tsx`, `recordStockCount` in `AppContext.tsx`. Tests: existing-product/new-product invariant tests for Contagem. Prohibited: touching Catálogo or Add Stock files.
 
@@ -180,6 +181,26 @@ Each checkpoint requires its own review before the next begins — no checkpoint
 
 **Date:** 2026-09-09
 
+## Product Architect Acceptance of Implementation Plan Amendment — Checkpoint 2 Regression-Assertion Reconciliation
+
+**Type:** Implementation Plan Amendment — narrowly scoped to a single, mechanical governance-chain conflict discovered during Checkpoint 2 pre-implementation investigation. Not a Specification Amendment, not a Decision, not a BDR, not a Policy — decides no new business rule and reopens no accepted product decision. Amends only this Implementation Plan; does not modify, reinterpret, or reopen the accepted Phase 2 Specification, the Phase 2 BDR, the Selling Price/Unit Policy Amendment, Decision 1, Decisions 2A/2B, `BDR-0012`, `BDR-0013`, `POL-0005`, `POL-0007`, the Rule 8 Assessment, or the Implementation Authorization.
+
+**Status:** ✅ Accepted (2026-09-09).
+
+**Amendment content, in full (the only substantive change this amendment makes to the Plan):**
+
+1. The addition to §C's "Test debt" bullet list (above), identifying `tests/product-catalog-phase-1-checkpoint-c.test.ts` as containing exactly two assertions — "has exactly six input elements inside the registration form" and "does NOT contain UnitRelationship configuration UI" — directly and exclusively contradicted by the already-accepted Phase 2 Specification §6/§10.
+2. The corresponding clarification to §X's Checkpoint 2 entry (above), authorizing Checkpoint 2 to update only those two specific assertions as part of its already-authorized test scope.
+3. The explicit limitation, stated in both insertions, that no other assertion in `checkpoint-c.test.ts`, and no other legacy checkpoint test file, is authorized for change by this amendment.
+
+> This Implementation Plan Amendment is accepted exactly as proposed — limited strictly to the two insertions in §C and §X, above. This acceptance authorizes no other change to this Implementation Plan, does not itself authorize modification of `tests/product-catalog-phase-1-checkpoint-c.test.ts` (a corresponding Implementation Authorization amendment, adding that file to the existing §5 file-scope list with the identical narrow limitation, remains a separate, required, subsequent gate — not created by this acceptance), does not authorize resumption of Checkpoint 2 implementation, and does not modify the accepted Phase 2 Specification, Rule 8 Assessment, BDR, Policy Amendment, Decision 1, Decisions 2A/2B, or the existing Implementation Authorization in any way.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+
+**Decision:** ACCEPTED
+
+**Date:** 2026-09-09
+
 ## Governance Status
 
-**✅ ACCEPTED.** This acceptance does not imply or grant implementation authorization. The next gate is **Implementation Authorization** — not created here.
+**✅ ACCEPTED** (original Plan, 2026-09-09) **— AMENDED ✅ ACCEPTED** (Checkpoint 2 Regression-Assertion Reconciliation, 2026-09-09, see immediately above). This acceptance, and the amendment acceptance above, do not imply or grant implementation authorization. The next gate is **Implementation Authorization** (original scope, already signed) **and a corresponding, separately signed Implementation Authorization Amendment** (for the narrow §5 file-scope addition this Plan amendment now requires) — neither the original Authorization nor an amendment to it is created or modified here.
