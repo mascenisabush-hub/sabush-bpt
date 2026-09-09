@@ -682,15 +682,30 @@ export interface TranslationDict {
       generic: string;
     };
   };
-  // [Owner Product Catalog — Phase 1, Checkpoint A] Minimal type block —
-  // only what the empty Checkpoint-A screen itself needs (title,
-  // subtitle, empty-state text). Registration-form/search/edit strings
-  // belong to later checkpoints, not added here to avoid pre-declaring
-  // UI this checkpoint does not yet build.
+  // [Owner Product Catalog — Phase 1, Checkpoint A/C] Checkpoint A's
+  // own minimal block (title, subtitle, emptyState), extended by
+  // Checkpoint C with exactly the registration-form strings that
+  // checkpoint's own scope authorizes. Search/list/edit strings
+  // still belong to later checkpoints, not added here.
   productCatalog: {
     title: string;
     subtitle: string;
     emptyState: string;
+    addProductButton: string;
+    form: {
+      title: string;
+      nameLabel: string;
+      sellingPriceLabel: string;
+      categoryLabel: string;
+      supplierLabel: string;
+      skuLabel: string;
+      barcodeLabel: string;
+      nameRequiredError: string;
+      sellingPriceRequiredError: string;
+      notYetAvailableNote: string;
+      submitButton: string;
+      cancelButton: string;
+    };
   };
   stocksView: {
     title: string;
@@ -1852,6 +1867,21 @@ export const pt: TranslationDict = {
     title: 'Catálogo de Produtos',
     subtitle: 'Registe e faça a gestão dos produtos do seu negócio, mesmo antes de os comprar.',
     emptyState: 'Ainda não tem produtos registados no catálogo.',
+    addProductButton: 'Adicionar Produto',
+    form: {
+      title: 'Registar Produto',
+      nameLabel: 'Nome do Produto',
+      sellingPriceLabel: 'Preço de Venda',
+      categoryLabel: 'Categoria',
+      supplierLabel: 'Fornecedor',
+      skuLabel: 'SKU',
+      barcodeLabel: 'Código de Barras',
+      nameRequiredError: 'Por favor introduza o nome do produto.',
+      sellingPriceRequiredError: 'Por favor introduza um preço de venda válido.',
+      notYetAvailableNote: 'O registo de produtos estará disponível numa próxima atualização.',
+      submitButton: 'Registar',
+      cancelButton: 'Cancelar',
+    },
   },
   stocksView: {
     title: 'Histórico de Lotes — Registo de Investimento',

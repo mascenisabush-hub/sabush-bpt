@@ -202,8 +202,10 @@ describe('Product Catalog Phase 1 — Checkpoint B — Product registration writ
   });
 
   describe('H — Not yet wired to any UI (Checkpoint B\'s own stop condition)', () => {
-    it('ProductCatalogView.tsx (Checkpoint C\'s own file) does not call registerCatalogProduct — the function exists in isolation, unconnected to any screen', () => {
-      assert.doesNotMatch(catalogViewSrc, /registerCatalogProduct/);
+    it('ProductCatalogView.tsx (Checkpoint C\'s own file) never destructures or calls registerCatalogProduct as an actual function — the function exists in isolation, unconnected to any screen. Checkpoint C legitimately documents it by name in an explanatory comment and a console.log message (a deliberate, honest note that saving is not yet wired in), which is why this checks for an actual call site rather than the bare identifier\'s complete absence — see the dedicated Checkpoint C test suite for the precise, exhaustive proof of this same boundary', () => {
+      assert.doesNotMatch(catalogViewSrc, /const \{[^}]*registerCatalogProduct[^}]*\}\s*=\s*useApp\(\)/);
+      assert.doesNotMatch(catalogViewSrc, /await registerCatalogProduct/);
+      assert.doesNotMatch(catalogViewSrc, /registerCatalogProduct\(\{/);
     });
 
     it('no other component in the tenant app calls registerCatalogProduct either', () => {

@@ -25,6 +25,37 @@ function src(relPath: string): string {
   return readFileSync(new URL(`../${relPath}`, import.meta.url), 'utf-8');
 }
 
+// Balanced-brace extraction, not a plain regex — a plain non-greedy
+// regex has no notion of nesting depth and can easily latch onto an
+// unrelated, much-later closing brace at the same indentation level
+// (this exact bug was hit and fixed while writing this suite: a
+// `[\s\S]*?\n  },` search for the VALUE block matched clear across
+// the file, from the TYPE block's own opening brace to some entirely
+// unrelated interface's closing brace hundreds of lines later).
+// `occurrence` selects which match of `startMarker` to extract from,
+// since `productCatalog: {` legitimately appears twice per locale
+// file (once in the TranslationDict type, once in the value object).
+function extractBlock(source: string, startMarker: string, occurrence: 1 | 2 = 1): string {
+  let searchFrom = 0;
+  let startIdx = -1;
+  for (let n = 0; n < occurrence; n++) {
+    startIdx = source.indexOf(startMarker, searchFrom);
+    assert.notEqual(startIdx, -1, `Could not locate occurrence ${n + 1} of "${startMarker}".`);
+    searchFrom = startIdx + startMarker.length;
+  }
+  const braceStart = source.indexOf('{', startIdx);
+  let depth = 0;
+  let i = braceStart;
+  for (; i < source.length; i++) {
+    if (source[i] === '{') depth++;
+    else if (source[i] === '}') {
+      depth--;
+      if (depth === 0) break;
+    }
+  }
+  return source.slice(braceStart, i + 1);
+}
+
 const appSrc = src('apps/tenant/src/App.tsx');
 const navTabsSrc = src('apps/tenant/src/data/navigationTabs.ts');
 const catalogViewSrc = src('apps/tenant/src/components/ProductCatalogView.tsx');
@@ -86,18 +117,19 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
       assert.match(catalogViewSrc, /t\('productCatalog\.emptyState'\)/);
     });
 
-    it('does NOT call registerCatalogProduct, or any Firestore write function — Checkpoint B has not been implemented yet', () => {
-      assert.doesNotMatch(catalogViewSrc, /registerCatalogProduct/);
+    it('does not reference any Firestore write function directly, and does not call registerCatalogProduct as an actual function invocation — Checkpoint B (the write function itself) now exists in AppContext.tsx, and Checkpoint C (this file\'s own form) legitimately documents that function by name in a comment and a console.log, but never invokes it; see the dedicated Checkpoint B and Checkpoint C test suites for the full, precise proof of each', () => {
       assert.doesNotMatch(catalogViewSrc, /setDoc|updateDoc|addDoc|deleteDoc/);
+      assert.doesNotMatch(catalogViewSrc, /const \{[^}]*registerCatalogProduct[^}]*\}\s*=\s*useApp\(\)/);
+      assert.doesNotMatch(catalogViewSrc, /await registerCatalogProduct/);
     });
 
     it('does NOT reference findSimilarProducts or any identity-resolution logic — Checkpoint D has not been implemented yet', () => {
       assert.doesNotMatch(catalogViewSrc, /findSimilarProducts/);
     });
 
-    it('does NOT render a registration form (no name/sellingPrice/costPrice input fields) — Checkpoint C has not been implemented yet', () => {
-      assert.doesNotMatch(catalogViewSrc, /<input/);
-      assert.doesNotMatch(catalogViewSrc, /costPrice/);
+    it('does NOT contain a costPrice field, input, or state variable, checked outside this file\'s own explanatory comments — Checkpoint C (this file\'s own registration form, added since this test was first written) intentionally still excludes it, per its own dedicated, more thorough test suite', () => {
+      const codeOnly = catalogViewSrc.split('\n').filter((line) => !line.trim().startsWith('//')).join('\n');
+      assert.doesNotMatch(codeOnly, /costPrice/);
     });
 
     it('does NOT read the `products` array from context — Checkpoint E (list/search) has not been implemented yet; this screen is intentionally, unconditionally empty', () => {
@@ -107,14 +139,23 @@ describe('Product Catalog Phase 1 — Checkpoint A — Catalog surface/navigatio
   });
 
   describe('D — i18n: productCatalog keys exist in all three locales, type-consistent', () => {
-    it('pt.ts declares the productCatalog type block (title, subtitle, emptyState) and its value block', () => {
-      assert.match(ptSrc, /productCatalog: \{\s*title: string;\s*subtitle: string;\s*emptyState: string;\s*\};/);
-      assert.match(ptSrc, /productCatalog: \{\s*title: '[^']+',\s*subtitle: '[^']+',\s*emptyState: '[^']+',\s*\}/);
+    it('pt.ts declares the productCatalog type block containing title, subtitle, emptyState (Checkpoint C has since extended this same block with its own form keys — checked for presence via balanced-brace extraction, not a plain regex, since a plain non-greedy search across a file this size can latch onto an unrelated, far-later closing brace)', () => {
+      const typeBlock = extractBlock(ptSrc, 'productCatalog: {', 1);
+      assert.match(typeBlock, /title: string;/);
+      assert.match(typeBlock, /subtitle: string;/);
+      assert.match(typeBlock, /emptyState: string;/);
+      const valueBlock = extractBlock(ptSrc, 'productCatalog: {', 2);
+      assert.match(valueBlock, /title: '[^']+',/);
+      assert.match(valueBlock, /subtitle: '[^']+',/);
+      assert.match(valueBlock, /emptyState: '[^']+',/);
     });
 
-    it('en.ts and fr.ts each provide a matching productCatalog value block', () => {
+    it('en.ts and fr.ts each provide a matching productCatalog value block containing title, subtitle, emptyState', () => {
       for (const localeSrc of [enSrc, frSrc]) {
-        assert.match(localeSrc, /productCatalog: \{\s*title: '[^']+',\s*subtitle: '[^']+',\s*emptyState: '[^']+',\s*\}/);
+        const valueBlock = extractBlock(localeSrc, 'productCatalog: {', 1);
+        assert.match(valueBlock, /title: '[^']+',/);
+        assert.match(valueBlock, /subtitle: '[^']+',/);
+        assert.match(valueBlock, /emptyState: '[^']+',/);
       }
     });
 
