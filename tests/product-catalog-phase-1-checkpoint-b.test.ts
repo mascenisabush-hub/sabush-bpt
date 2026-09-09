@@ -63,18 +63,18 @@ const catalogViewSrc = src('apps/tenant/src/components/ProductCatalogView.tsx');
 const fnBody = extractFunctionBody(appContextSrc, 'const registerCatalogProduct = async ({');
 
 describe('Product Catalog Phase 1 — Checkpoint B — Product registration write path', () => {
-  describe('A — RegisterCatalogProductParams: exactly the six authorized fields, no more', () => {
-    it('the interface declares name, sellingPrice, category, supplier, sku, barcode, confirmedNewProduct — and nothing else', () => {
+  describe('A — RegisterCatalogProductParams: exactly the seven authorized fields, no more [Product Catalog Phase 2 — Checkpoint 2, Specification §6: sellingPrice is now optional, unitRelationship is newly authorized]', () => {
+    it('the interface declares name, sellingPrice (optional), unitRelationship (optional), category, supplier, sku, barcode, confirmedNewProduct — and nothing else', () => {
       const ifaceBody = extractFunctionBody(appContextSrc, 'interface RegisterCatalogProductParams');
       assert.match(ifaceBody, /name: string;/);
-      assert.match(ifaceBody, /sellingPrice: number;/);
+      assert.match(ifaceBody, /sellingPrice\?: number;/);
+      assert.match(ifaceBody, /unitRelationship\?: UnitRelationshipProposal;/);
       assert.match(ifaceBody, /category\?: string;/);
       assert.match(ifaceBody, /supplier\?: string;/);
       assert.match(ifaceBody, /sku\?: string;/);
       assert.match(ifaceBody, /barcode\?: string;/);
       assert.match(ifaceBody, /confirmedNewProduct\?: boolean;/);
       assert.doesNotMatch(ifaceBody, /costPrice/);
-      assert.doesNotMatch(ifaceBody, /unitRelationship/);
       assert.doesNotMatch(ifaceBody, /quantity/);
     });
 
@@ -93,22 +93,68 @@ describe('Product Catalog Phase 1 — Checkpoint B — Product registration writ
       assert.match(fnBody, /const trimmedName = name\.trim\(\);\s*\n\s*if \(!trimmedName\) \{\s*\n\s*throw new Error\(/);
     });
 
-    it('rejects a missing/invalid/negative sellingPrice using the same Number.isFinite + >= 0 shape addStockBatch already uses for costPrice, before any Firestore write', () => {
-      const priceCheckIdx = fnBody.indexOf('if (!Number.isFinite(sellingPrice)');
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §10] sellingPrice
+    // validation is now CONDITIONAL — only runs `if (sellingPrice != null)`,
+    // since a Product may legitimately be registered with no sellingPrice at
+    // all. The unconditional Checkpoint 1 (Phase 1) shape is superseded.
+    it('when sellingPrice is supplied, rejects an invalid/negative value using the same Number.isFinite + >= 0 shape addStockBatch already uses for costPrice, before any Firestore write — but does NOT require sellingPrice at all', () => {
+      const priceCheckIdx = fnBody.indexOf('if (sellingPrice != null) {');
       const firstWriteIdx = fnBody.indexOf('await setDoc(');
-      assert.notEqual(priceCheckIdx, -1);
+      assert.notEqual(priceCheckIdx, -1, 'Expected sellingPrice validation to be gated on sellingPrice != null (optional).');
       assert.ok(priceCheckIdx < firstWriteIdx);
       assert.match(fnBody, /if \(!Number\.isFinite\(sellingPrice\) \|\| sellingPrice < 0\) \{\s*\n\s*throw new Error\(/);
     });
 
-    it('a valid name + sellingPrice reaches the actual Product write (no further gate blocks the happy path)', () => {
-      // Exactly four throw sites in the whole function: no active
-      // business, empty name, invalid price, and unresolved identity —
-      // confirmed by an exhaustive count, not merely individual
-      // presence checks. No other gate exists between validation and
-      // the write.
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §6, §11]
+    // unitRelationship, when supplied, is validated via confirmUnitRelationship
+    // (the same pure function Checkpoint 1's confirmProductUnitRelationship
+    // already uses) before any write — never a second validation rule.
+    it('when unitRelationship is supplied, rejects an invalid candidate via confirmUnitRelationship before any Firestore write', () => {
+      const relCheckIdx = fnBody.indexOf('if (unitRelationship) {');
+      const firstWriteIdx = fnBody.indexOf('await setDoc(');
+      assert.notEqual(relCheckIdx, -1);
+      assert.ok(relCheckIdx < firstWriteIdx);
+      assert.match(fnBody, /const built = confirmUnitRelationship\(unitRelationship\);\s*\n\s*if \(!built\) \{\s*\n\s*throw new Error\(/);
+    });
+
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §10/§16 — the
+    // single governing invariant] A supplied sellingPrice must never be
+    // persisted without a resulting valid unitRelationship.sellingUnit — the
+    // pairing is checked, and refused, BEFORE any Firestore write.
+    it('rejects a supplied sellingPrice when no valid sellingUnit resulted from the (optional) unitRelationship candidate — the core Specification §10 invariant, enforced before any write', () => {
+      const pairingCheckIdx = fnBody.indexOf('if (!confirmedRelationship?.sellingUnit) {');
+      const firstWriteIdx = fnBody.indexOf('await setDoc(');
+      assert.notEqual(pairingCheckIdx, -1, 'Expected an explicit sellingPrice/sellingUnit pairing guard.');
+      assert.ok(pairingCheckIdx < firstWriteIdx);
+      // Nested inside the `if (sellingPrice != null)` block — never evaluated
+      // when no sellingPrice was supplied at all (§10: sellingPrice is optional).
+      const priceBlockStart = fnBody.indexOf('if (sellingPrice != null) {');
+      const priceBlockEnd = fnBody.indexOf('const existing = products.find');
+      assert.ok(pairingCheckIdx > priceBlockStart && pairingCheckIdx < priceBlockEnd, 'The pairing check must be nested inside the sellingPrice != null block.');
+    });
+
+    it('never auto-selects a sellingUnit and never auto-clears sellingPrice to make an invalid combination succeed — the function only ever throws or writes the caller-supplied values verbatim (Decision 1\'s discipline, applied to creation)', () => {
+      // Defensive structural check: the only assignment to sellingUnit
+      // anywhere in this function is confirmUnitRelationship's own return
+      // value (from the caller-supplied candidate) — no code path invents
+      // or substitutes one, and no code path clears sellingPrice before
+      // the write; an invalid pairing always reaches a throw instead.
+      assert.doesNotMatch(fnBody, /sellingUnit\s*=\s*['"`]/);
+      assert.doesNotMatch(fnBody, /sellingPrice\s*=\s*undefined/);
+    });
+
+    it('a valid name, with no sellingPrice and no unitRelationship at all, reaches the actual Product write — sellingPrice/unitRelationship are both genuinely optional, not merely defaulted', () => {
+      // Exactly six throw sites in the whole function: no active business,
+      // empty name, invalid unitRelationship candidate, invalid sellingPrice,
+      // sellingPrice-without-valid-sellingUnit, and unresolved identity —
+      // confirmed by an exhaustive count, not merely individual presence
+      // checks. No other gate exists between validation and the write.
       const throwCount = (fnBody.match(/throw new Error\(/g) || []).length;
-      assert.equal(throwCount, 4, 'Expected exactly four throw sites: no active business, empty name, invalid price, unresolved identity.');
+      assert.equal(
+        throwCount,
+        6,
+        'Expected exactly six throw sites: no active business, empty name, invalid unitRelationship, invalid sellingPrice, sellingPrice-without-sellingUnit, unresolved identity.'
+      );
     });
   });
 
@@ -133,28 +179,29 @@ describe('Product Catalog Phase 1 — Checkpoint B — Product registration writ
       assert.doesNotMatch(fnBody, /costPrice/);
     });
 
-    it('the written Product object literal contains exactly: id, name, createdAt, sellingPrice, and conditionally category/supplier/sku/barcode — nothing else', () => {
+    it('the written Product object literal contains exactly: id, name, createdAt, and conditionally sellingPrice/unitRelationship/category/supplier/sku/barcode — nothing else [Product Catalog Phase 2 — Checkpoint 2: sellingPrice and unitRelationship are now BOTH conditional, matching their newly optional status, Specification §10]', () => {
       const literalMatch = fnBody.match(/const newProduct: Product = \{([\s\S]*?)\};/);
       assert.ok(literalMatch, 'Expected the newProduct object literal.');
       const literal = literalMatch![1];
       assert.match(literal, /id: productId,/);
       assert.match(literal, /name: trimmedName,/);
       assert.match(literal, /createdAt: new Date\(\)\.toISOString\(\),/);
-      assert.match(literal, /sellingPrice: Number\(sellingPrice\),/);
+      assert.match(literal, /\.\.\.\(sellingPrice != null \? \{ sellingPrice: Number\(sellingPrice\) \} : \{\}\),/);
+      assert.match(literal, /\.\.\.\(confirmedRelationship \? \{ unitRelationship: confirmedRelationship \} : \{\}\),/);
       assert.match(literal, /\.\.\.\(category\?\.trim\(\) \? \{ category: category\.trim\(\) \} : \{\}\),/);
       assert.match(literal, /\.\.\.\(supplier\?\.trim\(\) \? \{ supplier: supplier\.trim\(\) \} : \{\}\),/);
       assert.match(literal, /\.\.\.\(sku\?\.trim\(\) \? \{ sku: sku\.trim\(\) \} : \{\}\),/);
       assert.match(literal, /\.\.\.\(barcode\?\.trim\(\) \? \{ barcode: barcode\.trim\(\) \} : \{\}\),/);
-      // Exactly 4 conditional spreads + 4 unconditional fields = 8 own
+      // Exactly 6 conditional spreads + 3 unconditional fields = 9 own
       // lines inside the literal — a stronger, exhaustive count, not
       // merely a set of individual presence checks.
       const fieldLines = literal.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-      assert.equal(fieldLines.length, 8, `Expected exactly 8 lines in the object literal, found ${fieldLines.length}: ${JSON.stringify(fieldLines)}`);
+      assert.equal(fieldLines.length, 9, `Expected exactly 9 lines in the object literal, found ${fieldLines.length}: ${JSON.stringify(fieldLines)}`);
     });
 
-    it('never sets active or unitRelationship — matching addStockBatch\'s own convention for a first-time product (absence is not an error state)', () => {
+    it('never sets active — unitRelationship IS now conditionally set (Checkpoint 2, Specification §6), but only ever from the already-validated `confirmedRelationship` variable, never a raw/unchecked value', () => {
       assert.doesNotMatch(fnBody, /active:/);
-      assert.doesNotMatch(fnBody, /unitRelationship/);
+      assert.match(fnBody, /unitRelationship: confirmedRelationship/);
     });
   });
 

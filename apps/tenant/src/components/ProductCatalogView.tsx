@@ -7,6 +7,7 @@ import { findSimilarProducts } from '../lib/productNameSimilarity';
 import { EditProductModal } from './EditProductModal';
 import { formatCurrency } from '../utils/formatters';
 import { Product } from '../types';
+import type { UnitRelationshipProposal } from '../lib/unitRelationship';
 
 // [Owner Product Catalog — Phase 1, Checkpoint E — Implementation
 // Authorization §3.2] Catalog list/search + Edit wiring, per the
@@ -45,6 +46,21 @@ export const ProductCatalogView: React.FC = () => {
   const [nameError, setNameError] = useState<string | null>(null);
   const [sellingPriceError, setSellingPriceError] = useState<string | null>(null);
 
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6] New —
+  // the optional unit-relationship capture UI's own state. `unitRows[0]`
+  // is the top-level/default unit (its own factorFromPrevious is
+  // unused/ignored, per isValidUnitRelationship); each subsequent row
+  // adds one more level to the chain, with its own factor relative to
+  // the previous level — supporting the "full chain" Specification §6
+  // requires, not merely a single unit. Kept as strings in state
+  // (sanitizeDecimalInput'd on change) matching this codebase's
+  // existing decimal-input convention (see sellingPrice, above) rather
+  // than storing raw numbers directly.
+  const [unitRows, setUnitRows] = useState<{ unit: string; factorFromPrevious: string }[]>([{ unit: '', factorFromPrevious: '1' }]);
+  const [sellingUnit, setSellingUnit] = useState('');
+  const [unitRelationshipError, setUnitRelationshipError] = useState<string | null>(null);
+  const [sellingUnitError, setSellingUnitError] = useState<string | null>(null);
+
   // [Checkpoint D] Non-empty only while an unresolved near-duplicate
   // name is awaiting explicit Owner resolution — the exact invariant
   // this checkpoint protects: a near-duplicate name may never reach
@@ -67,6 +83,10 @@ export const ProductCatalogView: React.FC = () => {
     setBarcode('');
     setNameError(null);
     setSellingPriceError(null);
+    setUnitRows([{ unit: '', factorFromPrevious: '1' }]);
+    setSellingUnit('');
+    setUnitRelationshipError(null);
+    setSellingUnitError(null);
     setCandidates([]);
     setSubmitError(null);
   };
@@ -91,10 +111,38 @@ export const ProductCatalogView: React.FC = () => {
     );
   });
 
-  // [Checkpoint C — validation, unmodified] Reuses the exact same
-  // finite/non-negative convention `registerCatalogProduct` itself
-  // already enforces server-side (Checkpoint B) — never a different
-  // or stricter client-side rule.
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6] Builds
+  // the unit-relationship candidate from unitRows/sellingUnit, or
+  // undefined if no unit was ever entered — a Product may legitimately
+  // have no unit relationship at all (Specification §10). Mirrors
+  // registerCatalogProduct's/confirmUnitRelationship's own shape
+  // exactly (units[] + optional sellingUnit) so the payload this
+  // builds is validated the identical way server-side, never a
+  // different or looser client-side shape.
+  const buildUnitRelationshipPayload = (): UnitRelationshipProposal | undefined => {
+    const filled = unitRows.filter((r) => r.unit.trim());
+    if (filled.length === 0) return undefined;
+    return {
+      units: filled.map((r, i) => ({
+        unit: r.unit.trim(),
+        factorFromPrevious: i === 0 ? 1 : parseFloat(r.factorFromPrevious),
+      })),
+      ...(sellingUnit.trim() ? { sellingUnit: sellingUnit.trim() } : {}),
+    };
+  };
+
+  // [Checkpoint C — validation] [Product Catalog Phase 2 — Checkpoint 2,
+  // Specification §6/§10, Implementation Plan Amendment §C] `sellingPrice`
+  // is now OPTIONAL — reuses the exact same finite/non-negative
+  // convention `registerCatalogProduct` itself already enforces
+  // server-side (Checkpoint B) only when a price was actually entered,
+  // never a different or stricter client-side rule. When a price IS
+  // entered, a valid selling unit (a member of the entered chain) is
+  // now also required — the same sellingPrice/sellingUnit pairing
+  // invariant `registerCatalogProduct` enforces server-side,
+  // surfaced here as a clear field-level error before any write is
+  // attempted, matching this checkpoint's own validation-before-write
+  // discipline (Plan §L).
   const validate = (): boolean => {
     let valid = true;
     const trimmedName = name.trim();
@@ -105,20 +153,61 @@ export const ProductCatalogView: React.FC = () => {
       setNameError(null);
     }
 
-    const parsedPrice = parseFloat(sellingPrice);
-    if (sellingPrice.trim() === '' || !Number.isFinite(parsedPrice) || parsedPrice < 0) {
-      setSellingPriceError(t('productCatalog.form.sellingPriceRequiredError'));
+    const filledUnitRows = unitRows.filter((r) => r.unit.trim());
+    let unitFactorsValid = true;
+    for (let i = 1; i < filledUnitRows.length; i++) {
+      const factor = parseFloat(filledUnitRows[i].factorFromPrevious);
+      if (!Number.isFinite(factor) || factor <= 0) {
+        unitFactorsValid = false;
+        break;
+      }
+    }
+    if (!unitFactorsValid) {
+      setUnitRelationshipError(t('productCatalog.form.unitFactorInvalidError'));
       valid = false;
     } else {
+      setUnitRelationshipError(null);
+    }
+
+    const trimmedPrice = sellingPrice.trim();
+    if (trimmedPrice !== '') {
+      const parsedPrice = parseFloat(trimmedPrice);
+      if (!Number.isFinite(parsedPrice) || parsedPrice < 0) {
+        setSellingPriceError(t('productCatalog.form.sellingPriceInvalidError'));
+        valid = false;
+      } else {
+        setSellingPriceError(null);
+      }
+
+      // [Specification §10/§16] A supplied sellingPrice must arrive
+      // alongside a valid sellingUnit — a member of the entered chain
+      // — or registration must be blocked before it ever reaches
+      // registerCatalogProduct.
+      if (unitFactorsValid) {
+        const isMember = filledUnitRows.some((r) => r.unit.trim().toLowerCase() === sellingUnit.trim().toLowerCase());
+        if (!sellingUnit.trim() || !isMember) {
+          setSellingUnitError(t('productCatalog.form.sellingUnitRequiredError'));
+          valid = false;
+        } else {
+          setSellingUnitError(null);
+        }
+      }
+    } else {
       setSellingPriceError(null);
+      setSellingUnitError(null);
     }
 
     return valid;
   };
 
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6/§10]
+  // sellingPrice/unitRelationship are now conditionally included —
+  // never sent as an invalid/empty value, matching registerCatalogProduct's
+  // own optional-field conventions.
   const buildPayload = () => ({
     name: name.trim(),
-    sellingPrice: parseFloat(sellingPrice),
+    ...(sellingPrice.trim() !== '' ? { sellingPrice: parseFloat(sellingPrice) } : {}),
+    ...(buildUnitRelationshipPayload() ? { unitRelationship: buildUnitRelationshipPayload() } : {}),
     ...(category.trim() ? { category: category.trim() } : {}),
     ...(supplier.trim() ? { supplier: supplier.trim() } : {}),
     ...(sku.trim() ? { sku: sku.trim() } : {}),
@@ -268,12 +357,11 @@ export const ProductCatalogView: React.FC = () => {
 
           <div>
             <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">
-              {t('productCatalog.form.sellingPriceLabel')} <span className="text-rose-600">*</span>
+              {t('productCatalog.form.sellingPriceLabel')}
             </label>
             <input
               type="text"
               inputMode="decimal"
-              required
               disabled={isSubmitting}
               value={sellingPrice}
               onChange={(e) => setSellingPrice(sanitizeDecimalInput(e.target.value))}
@@ -282,6 +370,93 @@ export const ProductCatalogView: React.FC = () => {
               }`}
             />
             {sellingPriceError && <p className="text-[12px] text-rose-600 mt-1">{sellingPriceError}</p>}
+          </div>
+
+          {/* [Product Catalog Phase 2 — Checkpoint 2, Specification §6]
+              Optional unit-relationship capture — a chain of one or
+              more units, each level's factor relative to the previous
+              one, plus a selling-unit selector scoped to whichever
+              units have actually been entered. Entirely optional: a
+              Product may be registered with no relationship at all
+              (Specification §10). Required only when sellingPrice is
+              supplied (validate(), above). */}
+          <div className="space-y-2">
+            <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">{t('productCatalog.form.unitRelationshipLabel')}</label>
+            {unitRows.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  disabled={isSubmitting}
+                  value={row.unit}
+                  onChange={(e) => {
+                    const next = [...unitRows];
+                    next[idx] = { ...next[idx], unit: e.target.value };
+                    setUnitRows(next);
+                  }}
+                  placeholder={idx === 0 ? t('productCatalog.form.unitTopLevelPlaceholder') : t('productCatalog.form.unitLevelPlaceholder')}
+                  className="flex-1 bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 disabled:opacity-60"
+                />
+                {idx > 0 && (
+                  <>
+                    <span className="text-[12px] text-gray-400 shrink-0">=</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      disabled={isSubmitting}
+                      value={row.factorFromPrevious}
+                      onChange={(e) => {
+                        const next = [...unitRows];
+                        next[idx] = { ...next[idx], factorFromPrevious: sanitizeDecimalInput(e.target.value) };
+                        setUnitRows(next);
+                      }}
+                      placeholder="1"
+                      className="w-16 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20 disabled:opacity-60"
+                    />
+                    <button
+                      type="button"
+                      disabled={isSubmitting}
+                      onClick={() => setUnitRows(unitRows.filter((_, i) => i !== idx))}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 transition shrink-0 disabled:opacity-60"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              disabled={isSubmitting}
+              onClick={() => setUnitRows([...unitRows, { unit: '', factorFromPrevious: '1' }])}
+              className="text-[12px] font-semibold text-[#0B1F3A] hover:underline disabled:opacity-60"
+            >
+              + {t('productCatalog.form.addUnitLevelButton')}
+            </button>
+            {unitRelationshipError && <p className="text-[12px] text-rose-600 mt-1">{unitRelationshipError}</p>}
+
+            {unitRows.some((r) => r.unit.trim()) && (
+              <div>
+                <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1 mt-2">{t('productCatalog.form.sellingUnitLabel')}</label>
+                <select
+                  disabled={isSubmitting}
+                  value={sellingUnit}
+                  onChange={(e) => setSellingUnit(e.target.value)}
+                  className={`w-full bg-white border rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:ring-2 disabled:opacity-60 ${
+                    sellingUnitError ? 'border-rose-400 focus:border-rose-500 focus:ring-rose-200' : 'border-[#E5E7EB] focus:border-[#D4AF37] focus:ring-[#D4AF37]/20'
+                  }`}
+                >
+                  <option value="">{t('productCatalog.form.sellingUnitPlaceholder')}</option>
+                  {unitRows
+                    .filter((r) => r.unit.trim())
+                    .map((r) => (
+                      <option key={r.unit} value={r.unit.trim()}>
+                        {r.unit.trim()}
+                      </option>
+                    ))}
+                </select>
+                {sellingUnitError && <p className="text-[12px] text-rose-600 mt-1">{sellingUnitError}</p>}
+              </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-3">

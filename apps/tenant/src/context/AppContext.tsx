@@ -254,7 +254,18 @@ interface AddStockParams {
 // omit that decision.
 interface RegisterCatalogProductParams {
   name: string;
-  sellingPrice: number;
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6/§10] Now
+  // optional: "a Product MAY exist with no sellingPrice." When supplied,
+  // registerCatalogProduct enforces the pairing invariant below —
+  // never persisted without a resulting valid unitRelationship.sellingUnit.
+  sellingPrice?: number;
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6] New —
+  // an optional unit-relationship candidate, structurally identical to
+  // confirmProductUnitRelationship's own UnitRelationshipProposal
+  // parameter (Checkpoint 1), reused here rather than inventing a
+  // second shape. Validated via the same confirmUnitRelationship pure
+  // function before any write — never trusted un-checked.
+  unitRelationship?: UnitRelationshipProposal;
   category?: string;
   supplier?: string;
   sku?: string;
@@ -7982,19 +7993,39 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
   // [Owner Product Catalog — Phase 1, Checkpoint B — Implementation
   // Authorization §3.2, §3.3, §5] The Catalog registration write path.
-  // Not yet called from any UI — Checkpoint C builds the form,
-  // Checkpoint D builds the resolution UI that decides
-  // `confirmedNewProduct`. This function's own job is narrower: given
-  // already-decided, already-validated registration data, write
-  // exactly one Product document and nothing else.
+  //
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6/§10,
+  // Implementation Authorization §3.2(B)/§4] Extended, not rewritten:
+  // `sellingPrice` is now OPTIONAL ("a Product MAY exist with no
+  // sellingPrice," §10) and an optional `unitRelationship` candidate may
+  // now be supplied. The Phase 1 behavior that could write a
+  // `sellingPrice` with no unit context at all is exactly what the
+  // Phase 2 Specification identifies as superseded (Plan §11) — this
+  // checkpoint brings Catálogo's creation path into compliance with the
+  // accepted invariant, the smallest correction required, nothing more.
   //
   // Invariants this function enforces itself, not merely relies on a
   // caller to have enforced:
-  //   1. `name` non-empty, `sellingPrice` a valid non-negative number
-  //      — the same numeric-validation shape `addStockBatch`'s own
-  //      costPrice check already uses (Number.isFinite + >= 0),
+  //   1. `name` non-empty.
+  //   2. If `sellingPrice` is supplied, it must be a valid non-negative
+  //      number — the same numeric-validation shape `addStockBatch`'s
+  //      own costPrice check already uses (Number.isFinite + >= 0),
   //      reused here, not reinvented.
-  //   2. No silent duplicate creation (Product Identity Existing/New
+  //   3. If `unitRelationship` is supplied, it is validated via the
+  //      same `confirmUnitRelationship` pure function Checkpoint 1's
+  //      `confirmProductUnitRelationship` already uses — never trusted
+  //      un-checked, never a second validation rule.
+  //   4. [Specification §10/§16's single governing rule] A supplied
+  //      `sellingPrice` may never be persisted without a resulting
+  //      valid `unitRelationship.sellingUnit` in the SAME write —
+  //      checked here, before the payload is constructed, never as a
+  //      follow-up correction. This function never invents a
+  //      `sellingUnit` on the caller's behalf and never silently drops
+  //      a supplied `sellingPrice` to make an otherwise-invalid
+  //      combination succeed — it refuses the whole registration
+  //      instead, exactly as Decision 1's "never auto-select, never
+  //      auto-clear" discipline requires for the reconfiguration case.
+  //   5. No silent duplicate creation (Product Identity Existing/New
   //      Resolution, Requirement 1) — mirrors `addStockBatch`'s own
   //      identical `confirmedNewProduct` safety boundary, immediately
   //      reachable a few hundred lines above this function. If a
@@ -8009,24 +8040,25 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   //      instead, exactly as harmless/idempotent as it would have
   //      been had the caller picked "use the Existing Product" to
   //      begin with.
-  //   3. The written payload contains ONLY `id`, `name`, `createdAt`,
-  //      `sellingPrice`, and whichever of `category`/`supplier`/`sku`/
-  //      `barcode` were actually provided — structurally impossible
-  //      for this function to include `costPrice`, since the object
-  //      literal below never references it, and impossible for it to
-  //      write to `batches`/`stockCounts`, since this function never
-  //      references those collections at all. `active`/
-  //      `unitRelationship` are also never set here, matching
+  //   6. The written payload contains ONLY `id`, `name`, `createdAt`,
+  //      and whichever of `sellingPrice`/`unitRelationship`/
+  //      `category`/`supplier`/`sku`/`barcode` were actually provided
+  //      (and valid) — structurally impossible for this function to
+  //      include `costPrice`, since the object literal below never
+  //      references it, and impossible for it to write to
+  //      `batches`/`stockCounts`, since this function never references
+  //      those collections at all. `active` is never set here, matching
   //      `addStockBatch`'s own convention for a first-time product
-  //      (their absence is already, universally, treated as "not an
-  //      error state" everywhere they're read).
+  //      (its absence is already, universally, treated as "not an
+  //      error state" everywhere it's read).
   //
   // Returns the id of the Product that now canonically represents
   // this name — the newly-created one, or the pre-existing one if a
-  // duplicate name was defensively caught by invariant 2 above.
+  // duplicate name was defensively caught by invariant 5 above.
   const registerCatalogProduct = async ({
     name,
     sellingPrice,
+    unitRelationship,
     category,
     supplier,
     sku,
@@ -8040,8 +8072,40 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!trimmedName) {
       throw new Error('O nome do produto é obrigatório.');
     }
-    if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
-      throw new Error('O preço de venda deve ser um valor válido.');
+
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §6, §11]
+    // Validate the optional unit-relationship candidate BEFORE
+    // validating sellingPrice's pairing against it — reuses
+    // confirmUnitRelationship exactly as Checkpoint 1's
+    // confirmProductUnitRelationship does, never a second validation
+    // rule. A brand-new Product has no prior confirmed relationship to
+    // strand, so no old-state-aware check (evaluateUnitRelationshipReplacement)
+    // applies here — that check exists specifically for RECONFIGURING
+    // an EXISTING Product's already-confirmed relationship (Decision 1),
+    // not for a first-time confirmation during creation.
+    let confirmedRelationship: UnitRelationship | undefined;
+    if (unitRelationship) {
+      const built = confirmUnitRelationship(unitRelationship);
+      if (!built) {
+        throw new Error('Relação de unidades inválida — verifique a unidade de venda e a estrutura de unidades.');
+      }
+      confirmedRelationship = built;
+    }
+
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §6/§10]
+    // sellingPrice is now optional. When supplied, it must itself be
+    // valid AND must arrive alongside a valid sellingUnit in this same
+    // call — never persisted out of pair. Validation-before-write,
+    // matching the accepted Implementation Plan §L exactly.
+    if (sellingPrice != null) {
+      if (!Number.isFinite(sellingPrice) || sellingPrice < 0) {
+        throw new Error('O preço de venda deve ser um valor válido.');
+      }
+      if (!confirmedRelationship?.sellingUnit) {
+        throw new Error(
+          'Para definir um preço de venda é necessário indicar uma unidade de venda válida — configure a relação de unidades e selecione a unidade de venda.'
+        );
+      }
     }
 
     const existing = products.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
@@ -8053,7 +8117,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
       // Defensive: even with explicit new-product confirmation, this
       // function itself never creates a second Product for a name
-      // that already resolves to one — see invariant 2 above.
+      // that already resolves to one — see invariant 5 above.
       return existing.id;
     }
 
@@ -8062,7 +8126,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       id: productId,
       name: trimmedName,
       createdAt: new Date().toISOString(),
-      sellingPrice: Number(sellingPrice),
+      ...(sellingPrice != null ? { sellingPrice: Number(sellingPrice) } : {}),
+      ...(confirmedRelationship ? { unitRelationship: confirmedRelationship } : {}),
       ...(category?.trim() ? { category: category.trim() } : {}),
       ...(supplier?.trim() ? { supplier: supplier.trim() } : {}),
       ...(sku?.trim() ? { sku: sku.trim() } : {}),

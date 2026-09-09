@@ -43,14 +43,14 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       assert.match(catalogViewSrc, /value=\{barcode\}/);
     });
 
-    it('has exactly six input elements inside the registration form itself — no extra field was added to the form (Checkpoint E added a separate, one-input search bar outside the form, for the list below; scoped out of this specific count on purpose)', () => {
+    it('has exactly eight input elements inside the registration form itself — the original six (name/sellingPrice/category/supplier/sku/barcode) plus exactly two more from the Checkpoint 2 unit-relationship capture UI (Implementation Plan Amendment, Accepted 2026-09-09; Specification §6 requires "unitRelationship (full chain, sellingUnit)" support in Catálogo, which this checkpoint\'s unit-row template — a top-level unit <input> and a per-level factor <input>, both counted once in source regardless of how many rows render at runtime — adds; Checkpoint E\'s separate one-input search bar outside the form remains scoped out of this count, unchanged)', () => {
       const formStart = catalogViewSrc.indexOf('{showForm && (');
       const formEnd = catalogViewSrc.indexOf('</form>');
       assert.notEqual(formStart, -1);
       assert.notEqual(formEnd, -1);
       const formBlock = catalogViewSrc.slice(formStart, formEnd);
       const inputCount = (formBlock.match(/<input\b/g) || []).length;
-      assert.equal(inputCount, 6, `Expected exactly 6 <input> elements inside the form, found ${inputCount}.`);
+      assert.equal(inputCount, 8, `Expected exactly 8 <input> elements inside the form (6 original + 2 unit-relationship), found ${inputCount}.`);
     });
 
     it('does NOT contain a purchase-cost field, input, or state variable, in any form (checked outside this file\'s own explanatory comments, which legitimately name the excluded field to document why it is absent)', () => {
@@ -71,9 +71,11 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
       assert.doesNotMatch(codeOnly, /purchaseUnit/i);
     });
 
-    it('does NOT contain UnitRelationship configuration UI', () => {
-      assert.doesNotMatch(catalogViewSrc, /unitRelationship/i);
-      assert.doesNotMatch(catalogViewSrc, /UnitRelationshipChainEditor/);
+    it('DOES now contain UnitRelationship configuration UI — superseded by Checkpoint 2 (Implementation Plan Amendment, Accepted 2026-09-09; Specification §6 explicitly requires Catálogo to allow creating/correcting "unitRelationship (full chain, sellingUnit)"). Asserts presence of the unit-relationship capture UI\'s own state/handlers and the selling-unit <select>, not merely the word "unitRelationship" appearing anywhere', () => {
+      assert.match(catalogViewSrc, /const \[unitRows, setUnitRows\] = useState/);
+      assert.match(catalogViewSrc, /const \[sellingUnit, setSellingUnit\] = useState/);
+      assert.match(catalogViewSrc, /buildUnitRelationshipPayload/);
+      assert.match(catalogViewSrc, /<select/);
     });
 
     it('does NOT contain Merge controls', () => {
@@ -101,18 +103,19 @@ describe('Product Catalog Phase 1 — Checkpoint C — Registration form + valid
   });
 
   describe('C — Payload shape (built by buildPayload, a separate function Checkpoint D introduced so both the initial submit path and the post-resolution confirm path construct an identical payload from one place, never two)', () => {
-    it('buildPayload returns name, sellingPrice, and only the four authorized optional fields, conditionally', () => {
+    it('buildPayload returns name, and conditionally sellingPrice/unitRelationship, and the four authorized optional fields, all conditionally [Second Implementation Authorization Amendment, Accepted 2026-09-09 — superseded by Specification §10: sellingPrice MAY be absent, so it is now a conditional line, not unconditional; unitRelationship is newly authorized (§6), also conditional]', () => {
       const payloadMatch = catalogViewSrc.match(/const buildPayload = \(\) => \(\{([\s\S]*?)\}\);/);
       assert.ok(payloadMatch, 'Expected a buildPayload function returning an object literal.');
       const payload = payloadMatch![1];
       assert.match(payload, /name: name\.trim\(\),/);
-      assert.match(payload, /sellingPrice: parseFloat\(sellingPrice\),/);
+      assert.match(payload, /\.\.\.\(sellingPrice\.trim\(\) !== '' \? \{ sellingPrice: parseFloat\(sellingPrice\) \} : \{\}\),/);
+      assert.match(payload, /\.\.\.\(buildUnitRelationshipPayload\(\) \? \{ unitRelationship: buildUnitRelationshipPayload\(\) \} : \{\}\),/);
       assert.match(payload, /\.\.\.\(category\.trim\(\) \? \{ category: category\.trim\(\) \} : \{\}\),/);
       assert.match(payload, /\.\.\.\(supplier\.trim\(\) \? \{ supplier: supplier\.trim\(\) \} : \{\}\),/);
       assert.match(payload, /\.\.\.\(sku\.trim\(\) \? \{ sku: sku\.trim\(\) \} : \{\}\),/);
       assert.match(payload, /\.\.\.\(barcode\.trim\(\) \? \{ barcode: barcode\.trim\(\) \} : \{\}\),/);
       const fieldLines = payload.split('\n').map((l) => l.trim()).filter((l) => l.length > 0);
-      assert.equal(fieldLines.length, 6, `Expected exactly 6 lines in the payload literal, found ${fieldLines.length}.`);
+      assert.equal(fieldLines.length, 7, `Expected exactly 7 lines in the payload literal (name + 6 conditional fields), found ${fieldLines.length}.`);
     });
 
     it('buildPayload never includes costPrice or any purchase/stock field', () => {

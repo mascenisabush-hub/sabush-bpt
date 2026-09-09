@@ -3,8 +3,7 @@ import { Product } from '../types';
 import { useApp } from '../context/AppContext';
 import { X, Tag, Save } from 'lucide-react';
 import { findLatestRememberedProductMemory } from '../lib/productMemoryPriceResolution';
-import { isValidUnitRelationship } from '../lib/unitRelationship';
-import { getConversionFactor } from '../lib/purchaseToSellingConversion';
+import { isValidUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
 import { InfoHint } from './InfoHint';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 // [Bug fix — "digits typed are hidden" on decimal entry] See this
@@ -18,6 +17,31 @@ interface EditProductModalProps {
   onClose: () => void;
 }
 
+// [Product Catalog Phase 2 — Checkpoint 2, Specification §11] Pure,
+// module-level helper — whether a candidate unit-relationship (rows +
+// sellingUnit, as entered in this form) is structurally identical to
+// the product's current confirmed relationship. Used only to decide
+// whether confirmProductUnitRelationship needs to be called at all —
+// "unchanged relationship: no write occurs" (Implementation Plan §M).
+// An empty candidate against a valid current relationship is NOT
+// treated as equal — see handleSubmit's own comment for why clearing
+// the rows is deliberately a no-op, never a silent deletion.
+function unitRelationshipCandidateEqualsCurrent(
+  current: Product['unitRelationship'],
+  units: { unit: string; factorFromPrevious: number }[],
+  sellingUnit: string
+): boolean {
+  if (!isValidUnitRelationship(current) || !current) return units.length === 0;
+  if (current.units.length !== units.length) return false;
+  for (let i = 0; i < units.length; i++) {
+    if (current.units[i].unit.trim().toLowerCase() !== units[i].unit.trim().toLowerCase()) return false;
+    if (i > 0 && current.units[i].factorFromPrevious !== units[i].factorFromPrevious) return false;
+  }
+  const currentSellingUnit = (current.sellingUnit || '').trim().toLowerCase();
+  const candidateSellingUnit = (sellingUnit || '').trim().toLowerCase();
+  return currentSellingUnit === candidateSellingUnit;
+}
+
 // ============================================================
 // Edits catalog metadata only: name, category, supplier, SKU,
 // barcode, and a REFERENCE cost/selling price. This never creates or
@@ -28,7 +52,7 @@ interface EditProductModalProps {
 // having to log a new stock entry.
 // ============================================================
 export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onClose }) => {
-  const { updateProduct, currencySymbol, batches, stockCounts } = useApp();
+  const { updateProduct, confirmProductUnitRelationship, currencySymbol, batches, stockCounts } = useApp();
 
   const [name, setName] = useState(product.name);
   const [category, setCategory] = useState(product.category || '');
@@ -37,6 +61,23 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
   const [barcode, setBarcode] = useState(product.barcode || '');
   const [sellingPrice, setSellingPrice] = useState(product.sellingPrice != null ? String(product.sellingPrice) : '');
   const [isSaving, setIsSaving] = useState(false);
+
+  // [Product Catalog Phase 2 — Checkpoint 2, Specification §6] New —
+  // editable unit-relationship state, prefilled from the product's own
+  // already-confirmed relationship (if valid), or a single empty row
+  // if the product has none yet. Editing (not merely displaying) this
+  // is exactly what Checkpoint 2 authorizes for Catálogo (Plan §H) —
+  // routed through the Checkpoint-1-extended confirmProductUnitRelationship
+  // on submit, never a second, parallel confirmation mechanism.
+  const [unitRows, setUnitRows] = useState<{ unit: string; factorFromPrevious: string }[]>(
+    isValidUnitRelationship(product.unitRelationship) && product.unitRelationship
+      ? product.unitRelationship.units.map((u, i) => ({ unit: u.unit, factorFromPrevious: i === 0 ? '1' : String(u.factorFromPrevious) }))
+      : [{ unit: '', factorFromPrevious: '1' }]
+  );
+  const [sellingUnit, setSellingUnit] = useState(
+    isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship?.sellingUnit || '' : ''
+  );
+  const [unitRelationshipError, setUnitRelationshipError] = useState<string | null>(null);
 
   // [§45 Amendment FR-88; Implementation Authorization §2 item 8]
   // Read-only Cost/Cost Unit/Selling Unit resolution, mirroring
@@ -65,8 +106,85 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
       return;
     }
 
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §11]
+    // Factor validation for any level beyond the top-level/default
+    // unit — mirrors isValidUnitRelationship's own finite/positive
+    // check, surfaced here as a clear client-side error before any
+    // write is attempted.
+    const filledUnitRows = unitRows.filter((r) => r.unit.trim());
+    const candidateUnits = filledUnitRows.map((r, i) => ({
+      unit: r.unit.trim(),
+      factorFromPrevious: i === 0 ? 1 : parseFloat(r.factorFromPrevious),
+    }));
+    for (let i = 1; i < candidateUnits.length; i++) {
+      if (!Number.isFinite(candidateUnits[i].factorFromPrevious) || candidateUnits[i].factorFromPrevious <= 0) {
+        setUnitRelationshipError('Introduza um fator de conversão válido (maior que zero) para cada nível.');
+        return;
+      }
+    }
+
+    const trimmedSellingPrice = sellingPrice.trim();
+    if (trimmedSellingPrice !== '') {
+      const parsedSellingPrice = parseFloat(trimmedSellingPrice);
+      if (!Number.isFinite(parsedSellingPrice) || parsedSellingPrice < 0) {
+        alert('O preço de venda deve ser um valor válido.');
+        return;
+      }
+    }
+
+    // [Product Catalog Phase 2 — Checkpoint 2, Specification §6/§10,
+    // Implementation Authorization §3.2(B)] Determine the sellingUnit
+    // that will actually be in effect once this submit completes —
+    // either the newly-confirmed candidate's own sellingUnit (only
+    // when the relationship is actually about to be written) or the
+    // product's already-confirmed one (when the relationship is left
+    // untouched) — and refuse the entire submit, before any write, if
+    // a non-null sellingPrice would end up paired with an absent or
+    // invalid sellingUnit. Validation-before-write, matching the
+    // accepted Implementation Plan §L exactly. [Not an authorized
+    // capability of this checkpoint: clearing an existing confirmed
+    // relationship entirely — if the owner empties every unit row, the
+    // relationship write is simply skipped (below), leaving the
+    // existing confirmed relationship exactly as it was, never
+    // silently discarded (Decision 1; Authorization §3.2(C)).]
+    const relationshipChanged = !unitRelationshipCandidateEqualsCurrent(product.unitRelationship, candidateUnits, sellingUnit);
+    const willWriteRelationship = relationshipChanged && candidateUnits.length > 0;
+    const effectiveSellingUnit = willWriteRelationship
+      ? candidateUnits.some((u) => u.unit.trim().toLowerCase() === sellingUnit.trim().toLowerCase())
+        ? sellingUnit.trim()
+        : undefined
+      : isValidUnitRelationship(product.unitRelationship)
+        ? product.unitRelationship?.sellingUnit
+        : undefined;
+
+    if (trimmedSellingPrice !== '' && !effectiveSellingUnit) {
+      setUnitRelationshipError(
+        'Para definir um preço de venda é necessária uma unidade de venda válida — configure a relação de unidades e selecione a unidade de venda acima.'
+      );
+      return;
+    }
+    setUnitRelationshipError(null);
+
     setIsSaving(true);
     try {
+      // [Implementation Plan §G, §M] unitRelationship changes route
+      // through the Checkpoint-1-extended confirmProductUnitRelationship
+      // — the one function already built and old-state-aware for
+      // exactly this action — never a second, parallel confirmation
+      // mechanism. Its own pre-write check (evaluateUnitRelationshipReplacement)
+      // refuses the write if this would strand the product's current
+      // sellingUnit without the owner having supplied a valid
+      // replacement in this same candidate (Decision 1) — surfaced to
+      // the owner via the catch block below, exactly as
+      // handleReactivateProduct's own reused error-handling pattern
+      // does elsewhere in this codebase (Plan §I, §6).
+      if (willWriteRelationship) {
+        await confirmProductUnitRelationship(product.id, {
+          units: candidateUnits,
+          ...(sellingUnit.trim() ? { sellingUnit: sellingUnit.trim() } : {}),
+        } as UnitRelationshipProposal);
+      }
+
       // [§45 Amendment FR-88; Implementation Authorization §2 item 8]
       // costPrice is deliberately never sent from this form — Cost/Cost
       // Unit are purchase-workflow-owned (Add Stock/Smart Stock Entry,
@@ -84,6 +202,8 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
         sellingPrice: sellingPrice.trim() ? parseFloat(sellingPrice) : undefined,
       });
       onClose();
+    } catch (err) {
+      setUnitRelationshipError(err instanceof Error ? err.message : 'Não foi possível guardar as alterações.');
     } finally {
       setIsSaving(false);
     }
@@ -191,22 +311,85 @@ export const EditProductModal: React.FC<EditProductModalProps> = ({ product, onC
             </div>
           </div>
 
-          {isValidUnitRelationship(product.unitRelationship) && product.unitRelationship!.units.length > 1 && (
-            <div>
-              <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">Relação de Unidades</label>
-              <p className="text-sm text-gray-700 font-mono">
-                1 {product.unitRelationship!.units[0].unit}
-                {product.unitRelationship!.units.slice(1).map((u, i) => {
-                  const factor = getConversionFactor(product.unitRelationship!, product.unitRelationship!.units[0].unit, u.unit);
-                  return (
-                    <span key={i}>
-                      {' '}= {factor ?? '?'} {u.unit}
-                    </span>
-                  );
-                })}
-              </p>
-            </div>
-          )}
+          {/* [Product Catalog Phase 2 — Checkpoint 2, Specification §6,
+              Implementation Plan §H] Editable, not merely displayed —
+              a chain of one or more units, each level's factor
+              relative to the previous one, plus a selling-unit
+              selector scoped to whichever units are currently entered.
+              Prefilled from the product's existing confirmed
+              relationship, if any; always rendered (not gated behind
+              an existing relationship) so a product with none yet can
+              have one configured here too. */}
+          <div className="space-y-2">
+            <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1">Relação de Unidades</label>
+            {unitRows.map((row, idx) => (
+              <div key={idx} className="flex items-center gap-2">
+                <input
+                  type="text"
+                  value={row.unit}
+                  onChange={(e) => {
+                    const next = [...unitRows];
+                    next[idx] = { ...next[idx], unit: e.target.value };
+                    setUnitRows(next);
+                  }}
+                  placeholder={idx === 0 ? 'Ex: Caixa' : 'Ex: Unidade'}
+                  className="flex-1 bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                />
+                {idx > 0 && (
+                  <>
+                    <span className="text-[12px] text-gray-400 shrink-0">=</span>
+                    <input
+                      type="text"
+                      inputMode="decimal"
+                      value={row.factorFromPrevious}
+                      onChange={(e) => {
+                        const next = [...unitRows];
+                        next[idx] = { ...next[idx], factorFromPrevious: sanitizeDecimalInput(e.target.value) };
+                        setUnitRows(next);
+                      }}
+                      placeholder="1"
+                      className="w-16 bg-white border border-[#E5E7EB] rounded-[10px] px-2 py-2 text-sm text-gray-900 font-mono transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                    />
+                    <button
+                      type="button"
+                      onClick={() => setUnitRows(unitRows.filter((_, i) => i !== idx))}
+                      className="p-1.5 text-gray-400 hover:text-rose-600 transition shrink-0"
+                    >
+                      <X className="w-3.5 h-3.5" />
+                    </button>
+                  </>
+                )}
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() => setUnitRows([...unitRows, { unit: '', factorFromPrevious: '1' }])}
+              className="text-[12px] font-semibold text-[#0B1F3A] hover:underline"
+            >
+              + Adicionar nível
+            </button>
+
+            {unitRows.some((r) => r.unit.trim()) && (
+              <div>
+                <label className="block text-[11px] text-gray-500 font-semibold uppercase mb-1 mt-2">Unidade de Venda</label>
+                <select
+                  value={sellingUnit}
+                  onChange={(e) => setSellingUnit(e.target.value)}
+                  className="w-full bg-white border border-[#E5E7EB] rounded-[10px] px-3 py-2 text-sm text-gray-900 transition-all duration-150 focus:outline-none focus:border-[#D4AF37] focus:ring-2 focus:ring-[#D4AF37]/20"
+                >
+                  <option value="">Selecione a unidade de venda</option>
+                  {unitRows
+                    .filter((r) => r.unit.trim())
+                    .map((r) => (
+                      <option key={r.unit} value={r.unit.trim()}>
+                        {r.unit.trim()}
+                      </option>
+                    ))}
+                </select>
+              </div>
+            )}
+            {unitRelationshipError && <p className="text-[12px] text-rose-600 mt-1">{unitRelationshipError}</p>}
+          </div>
 
           <div className="flex items-center gap-1.5 text-[11px] text-gray-500">
             <InfoHint>

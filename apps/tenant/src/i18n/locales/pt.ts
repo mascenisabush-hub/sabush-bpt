@@ -710,6 +710,17 @@ export interface TranslationDict {
       barcodeLabel: string;
       nameRequiredError: string;
       sellingPriceRequiredError: string;
+      // [Product Catalog Phase 2 — Checkpoint 2] New — optional
+      // sellingPrice validation + unit-relationship capture UI strings.
+      sellingPriceInvalidError: string;
+      unitRelationshipLabel: string;
+      unitTopLevelPlaceholder: string;
+      unitLevelPlaceholder: string;
+      addUnitLevelButton: string;
+      unitFactorInvalidError: string;
+      sellingUnitLabel: string;
+      sellingUnitPlaceholder: string;
+      sellingUnitRequiredError: string;
       submitButton: string;
       cancelButton: string;
       // [Checkpoint D — Identity resolution] New — the resolution
@@ -1901,6 +1912,15 @@ export const pt: TranslationDict = {
       barcodeLabel: 'Código de Barras',
       nameRequiredError: 'Por favor introduza o nome do produto.',
       sellingPriceRequiredError: 'Por favor introduza um preço de venda válido.',
+      sellingPriceInvalidError: 'Por favor introduza um preço de venda válido.',
+      unitRelationshipLabel: 'Relação de Unidades (opcional)',
+      unitTopLevelPlaceholder: 'Ex: Caixa',
+      unitLevelPlaceholder: 'Ex: Unidade',
+      addUnitLevelButton: 'Adicionar nível',
+      unitFactorInvalidError: 'Introduza um fator de conversão válido (maior que zero) para cada nível.',
+      sellingUnitLabel: 'Unidade de Venda',
+      sellingUnitPlaceholder: 'Selecione a unidade de venda',
+      sellingUnitRequiredError: 'Para definir um preço de venda é necessária uma unidade de venda válida.',
       submitButton: 'Registar',
       cancelButton: 'Cancelar',
       similarProductsFound: 'Encontrámos produtos parecidos no seu catálogo. Confirme se este é um deles ou se é realmente um produto novo.',
