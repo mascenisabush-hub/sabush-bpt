@@ -12,90 +12,77 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Track A — Existing-Product Stock Entry Purchase Authority —
-implemented, verified, **ready to commit**. Working tree currently
-holds the full implementation (not yet committed as of this HANDOFF
-revision; commit this alongside it).
+**Status:** Clear-Data Password gate on "Limpar Todos os Dados" —
+implemented, typecheck + build verified, **committed and pushed**
+(`43f720f`, on top of `9195507`). Nothing mid-flight.
 
-**Governance trail (full chain, all in `docs/specs/`/`docs/engineering/`):**
-1. Policy — `docs/specs/POL-pending-existing-product-stock-entry-purchase-authority.md`
-   (Accepted, Product Architect SABUSHIMIKE MASCENI, 2026-09-10), operationalizing
-   `BDR-0012` §3 for Add Stock's existing-product screen.
-2. Rule 8 Assessment — chat-recorded, result: `READY FOR IMPLEMENTATION PLANNING`.
-3. Implementation Plan — `docs/engineering/track-a-existing-product-stock-entry-purchase-authority-implementation-plan.md`.
-4. Implementation Authorization — `docs/engineering/track-a-existing-product-stock-entry-purchase-authority-implementation-authorization.md`
-   (signed, `APPROVED FOR IMPLEMENTATION`, scope strictly `AddStockView.tsx`'s
-   five named functions + the two previously-identified test files).
-5. **This implementation**, executed strictly within that authorized scope.
+**Note on process:** this shipped directly from a product-owner
+request in-session (owner: only-owner/admin can see the button, in
+Settings, production-visible, dedicated password) rather than through
+the usual Policy → Rule 8 Assessment → Implementation Plan →
+Implementation Authorization chain the rest of this repo's recent
+history (Track A/B, etc.) follows. Flagging this per CLAUDE.md Rule 2
+("never invent new business rules... flag it, don't quietly route
+around it") — there is no `docs/specs/POL-*` or `docs/engineering/*-
+implementation-authorization.md` backing this change. If this repo's
+process is meant to be followed strictly going forward, this change
+should get a retroactive spec entry; flagging as an open item rather
+than assuming.
 
-**What changed (`apps/tenant/src/components/AddStockView.tsx` only):**
-- `buildProductMemoryAutofill`, `createEmptyRow` (row-creation site): purchase
-  unit/cost no longer default from `findLatestRememberedProductMemory` or
-  `Product.costPrice` — both stay at the generic default/blank until the
-  current purchase actually supplies them. Selling-price resolution
-  (canonical Product Memory first, historical fallback otherwise) is
+**What changed:**
+- `apps/tenant/src/components/SettingsModal.tsx` — "Limpar Todos os
+  Dados" no longer gated behind `demoToolsEnabled` (dev/demo builds
+  only); now visible in production to `isOwner` (role `owner`/`admin`)
+  only, same tier as every other owner-only action in this modal.
+  `window.confirm()` replaced with two in-app modals (set-password
+  flow, confirm-password flow), matching the codebase's own stated
+  convention against `confirm()`/`alert()` for destructive actions.
+- `apps/tenant/src/context/AppContext.tsx` — added
+  `getClearDataPasswordStatus`, `setClearDataPassword`,
+  `verifyClearDataPassword`, following the exact fetch/idToken pattern
+  `deleteStaffMember` already uses. `clearAllData()` itself is
   byte-for-byte unchanged.
-- `handleConfirmSupplierWordingCandidate`, `buildRowFromProposalLineItem`:
-  same purchase-side defaulting removed; `buildRowFromProposalLineItem`'s
-  OCR-silence unit fallback (defaulting to the latest StockBatch's own unit
-  when OCR supplied none) also removed, per explicit Product Architect
-  direction. OCR's own initial-value priority is untouched.
-- `handleUnitChange`: the cost-conversion branch is removed entirely — a
-  purchase cost is never re-derived on a unit change. This closes the
-  specific fabrication risk identified in the Rule 8 Assessment (R8-E): an
-  OCR-supplied, unconfirmed cost (e.g. `2 Un @ 1,000 MZN/Un`, unit corrected
-  to `Cx`) previously got silently converted through the product's confirmed
-  relationship into a fabricated new figure (`24,000`); it now stays exactly
-  as OCR read it, visibly wrong, until the operator retypes it from the
-  receipt. The selling-price re-derivation branch is untouched.
+- `server/index.ts` — three new owner/admin-only endpoints under
+  `/api/business/clear-data-password/` (`status`, `set`, `verify`).
+  Password hashed with Node's built-in `crypto.scrypt` + random salt,
+  constant-time compare (`crypto.timingSafeEqual`), 5-failed-attempt
+  lockout for 15 minutes. Authorization re-derived server-side from
+  `users/{uid}` (owner/admin only, no Manager path, regardless of
+  `managerPermissions`) — never trusted from the client.
+- `firestore.rules` — new `businesses/{businessId}/private/{docId}`
+  path (holds the password hash + lockout state), `allow read, write:
+  if false` unconditionally — server (Admin SDK) only, unreachable
+  from any client including the owner's own session.
 
-**Explicitly NOT touched** (per the Authorization's own boundary,
-confirmed by `git diff --stat`): `purchaseToSellingConversion.ts`,
-`productMemoryPriceResolution.ts` (only its consumption at the five
-AddStockView sites changed, not its own implementation), `AppContext.tsx`
-(`addMultipleStockBatches`, `StockBatch` persistence, and the FR-86
-`Product.costPrice` forward-maintenance mechanism are all unmodified —
-confirmed present and unchanged by a dedicated new test), `StockCountItem`,
-Contagem, Catalog, Product Recognition, SupplierWordingRelationship,
-Business Worth formulas, `firestore.rules`.
+**What this does NOT change:** `clearAllData()`'s own scope is
+untouched — it still cannot delete `stockCounts`, `Closings`, or
+`ClosedPeriods` (those `firestore.rules` denials are unconditional and
+predate this change, per Decision 57 / Closing Integrity Amendment).
+The new password is a UX confirmation step in front of an action the
+owner already has full Firestore-level authorization to perform
+(`isOwnerOf`), not a new access-control boundary.
 
-**Verification performed this session:**
-- `npx tsc --noEmit -p apps/tenant`: identical pre-existing 3-error baseline
-  (2× `InfoHint` in `InitialStockCountView.tsx`, 1× `URL` type in
-  `reportExport.ts`), 0 new errors.
-- Direct run of every relevant test file (`add-stock-cost-selling-unit-
-  conflation-bugfix`, `add-stock-mobile-caption-and-candidate-price-fill`,
-  `add-stock-similar-product-suggestions`, `add-stock-typing-and-autofill-
-  bugfix`, `add-stock-unit-aware-price-rederivation`, `price-deviation-
-  check`, `product-memory-price-resolution`, `supplier-wording-add-stock`):
-  128/128 passing after updating four assertions in three files that
-  directly encoded the now-removed purchase-side defaulting (Track A's own
-  intended behavior change, not a regression).
-- `price-deviation-warning-wiring.test.ts`: 2 failures, confirmed
-  **pre-existing and unrelated** — reproduced identically via `git stash`
-  against the unmodified baseline; both concern `PeriodicStockCountView.tsx`
-  (Contagem), a file this change never touches.
-- New dedicated suite added: `tests/track-a-existing-product-purchase-
-  authority.test.ts` (10 tests) — proves purchase unit/cost are never
-  sourced from historical memory/`Product.costPrice` at any of the five
-  sites, `handleUnitChange` never re-derives cost, the selling-side
-  conversion engine still produces the exact worked example (`2 Cx`,
-  `1 Cx = 24 Un`, `65 MZN/Un` → `3,120 MZN` via the real `calculateBatch`),
-  and FR-86's forward write is untouched while the reverse read is gone.
-- `npm run test:all`: 63/63 suites, 0 failures.
-- `npm run build`: succeeds, same pre-existing CSS/chunk-size warnings, no
-  new failures.
-- `git diff --stat` reviewed against the Authorization's file list: exactly
-  `AddStockView.tsx` + three updated test files + one new test file — no
-  unlisted file touched.
+**Verification done:** `npx tsc --noEmit -p .` and `npm run build` both
+clean on the 4 changed files (remaining tsc errors are pre-existing,
+confirmed identical via `git stash` before/after in unrelated test
+files: `add-stock-product-correction.test.ts`,
+`add-stock-typing-and-autofill-bugfix.test.ts`,
+`fecho-baseline-anchored-closing.test.ts`,
+`startup-investment.test.ts`). No Firestore emulator was available in
+this environment, so `tests/firestore-rules.test.ts` was **not** run
+against the new `private/{docId}` rule — worth running that
+specifically before this reaches real users, since it's the actual
+security boundary for the password hash.
 
-**Not started:** none for Track A — all twelve acceptance criteria from the
-Implementation Authorization are satisfied by this implementation. Track B
-(New Product / first-time Product creation, its own unresolved FR-85
-question) remains a separate, not-yet-started track.
+## Next session should
 
-**Still open from before this work, untouched this session:** the
-`periodic-contagem-concept-b-compaction.test.ts`/`price-deviation-warning-
-wiring.test.ts` `PeriodicStockCountView.tsx` pre-existing failures — the
-Owner was mid-decision on this (always-visible text vs. `InfoHint`) before
-this session; still needs a final answer, unrelated to Track A.
+1. Decide whether this change needs a retroactive spec/decision doc to
+   stay consistent with this repo's own governance process (see "Note
+   on process" above) — flagged, not decided.
+2. Run `npm run test:rules` (or the full Firestore emulator suite) to
+   confirm the new `private/{docId}` rule behaves as written — this
+   was verified only by reading, not by emulator test, in this session.
+3. Otherwise: no other module is mid-flight. Check
+   `docs/specs/README.md` for the next item in the Module Order table
+   in `CLAUDE.md` (Multi-Shop #17, SuperAdmin #18 remainder,
+   Subscriptions #19, Notifications #20).
