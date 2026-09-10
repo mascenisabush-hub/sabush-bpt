@@ -68,20 +68,25 @@ confirmed identical via `git stash` before/after in unrelated test
 files: `add-stock-product-correction.test.ts`,
 `add-stock-typing-and-autofill-bugfix.test.ts`,
 `fecho-baseline-anchored-closing.test.ts`,
-`startup-investment.test.ts`). No Firestore emulator was available in
-this environment, so `tests/firestore-rules.test.ts` was **not** run
-against the new `private/{docId}` rule — worth running that
-specifically before this reaches real users, since it's the actual
-security boundary for the password hash.
+`startup-investment.test.ts`). Rules coverage added to
+`tests/firestore-rules.test.ts` (`03ccc83`) for the new
+`businesses/{businessId}/private/{docId}` path — 3 cases confirming
+Owner, Staff, and non-members are all denied read/write/delete on it.
+**Not run end-to-end**: `npx firebase emulators:exec` needs
+`storage.googleapis.com` to fetch the emulator jar, which is outside
+this sandbox's network allowlist (confirmed by attempting the download
+directly, matching the limitation this test file's own top comment
+already documented for the rest of the suite). Typechecked clean only.
 
 ## Next session should
 
 1. Decide whether this change needs a retroactive spec/decision doc to
    stay consistent with this repo's own governance process (see "Note
    on process" above) — flagged, not decided.
-2. Run `npm run test:rules` (or the full Firestore emulator suite) to
-   confirm the new `private/{docId}` rule behaves as written — this
-   was verified only by reading, not by emulator test, in this session.
+2. Run `npm run test:rules:emulator` with normal network access to
+   confirm the new rules-test cases (and the whole existing suite)
+   actually pass against a real emulator — this was only typechecked
+   in this session, never executed.
 3. Otherwise: no other module is mid-flight. Check
    `docs/specs/README.md` for the next item in the Module Order table
    in `CLAUDE.md` (Multi-Shop #17, SuperAdmin #18 remainder,
