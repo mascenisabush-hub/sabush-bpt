@@ -12,82 +12,64 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Clear-Data Password gate on "Limpar Todos os Dados" —
-implemented, typecheck + build verified, **committed and pushed**
-(`43f720f`, on top of `9195507`). Nothing mid-flight.
+**Status:** SuperAdmin Agent investigation complete — audit-only,
+**committed and pushed** (`4ff863a`). No code, schema, or governance
+artifact was created or modified by this work. Nothing mid-flight.
 
-**Note on process:** this shipped directly from a product-owner
-request in-session (owner: only-owner/admin can see the button, in
-Settings, production-visible, dedicated password) rather than through
-the usual Policy → Rule 8 Assessment → Implementation Plan →
-Implementation Authorization chain the rest of this repo's recent
-history (Track A/B, etc.) follows. Flagging this per CLAUDE.md Rule 2
-("never invent new business rules... flag it, don't quietly route
-around it") — there is no `docs/specs/POL-*` or `docs/engineering/*-
-implementation-authorization.md` backing this change. If this repo's
-process is meant to be followed strictly going forward, this change
-should get a retroactive spec entry; flagging as an open item rather
-than assuming.
+**What this session did:** produced
+`docs/engineering/SUPERADMIN_AGENT_CAPABILITY_AND_AUTHORITY_INVESTIGATION.md`,
+answering the product-direction question "how should SuperAdmin become
+an operational Agent that assists SABUSH customers" — grounded entirely
+in existing repository evidence, not invented scope. Key findings, for
+whoever picks this up next:
 
-**What changed:**
-- `apps/tenant/src/components/SettingsModal.tsx` — "Limpar Todos os
-  Dados" no longer gated behind `demoToolsEnabled` (dev/demo builds
-  only); now visible in production to `isOwner` (role `owner`/`admin`)
-  only, same tier as every other owner-only action in this modal.
-  `window.confirm()` replaced with two in-app modals (set-password
-  flow, confirm-password flow), matching the codebase's own stated
-  convention against `confirm()`/`alert()` for destructive actions.
-- `apps/tenant/src/context/AppContext.tsx` — added
-  `getClearDataPasswordStatus`, `setClearDataPassword`,
-  `verifyClearDataPassword`, following the exact fetch/idToken pattern
-  `deleteStaffMember` already uses. `clearAllData()` itself is
-  byte-for-byte unchanged.
-- `server/index.ts` — three new owner/admin-only endpoints under
-  `/api/business/clear-data-password/` (`status`, `set`, `verify`).
-  Password hashed with Node's built-in `crypto.scrypt` + random salt,
-  constant-time compare (`crypto.timingSafeEqual`), 5-failed-attempt
-  lockout for 15 minutes. Authorization re-derived server-side from
-  `users/{uid}` (owner/admin only, no Manager path, regardless of
-  `managerPermissions`) — never trusted from the client.
-- `firestore.rules` — new `businesses/{businessId}/private/{docId}`
-  path (holds the password hash + lockout state), `allow read, write:
-  if false` unconditionally — server (Admin SDK) only, unreachable
-  from any client including the owner's own session.
+- **"Agent" is best evidenced as a human Support-tier operator**, not
+  an AI system — zero AI-agent/chatbot/LLM/automated-support
+  architecture exists anywhere in this repository in connection with
+  SuperAdmin (searched exhaustively; every "AI" reference belongs to
+  the separate, tenant-facing Section 10 / Module #15 domain).
+- The mechanism that would give that operator real assistance
+  authority — **Support Session** — is already fully specified
+  (Architecture §9.7/§6.5) but was **explicitly evaluated and deferred
+  once already**, in favor of the narrower, already-built Business
+  Visibility curated read
+  (`docs/engineering/18-superadmin-v1-architecture-gap-resolutions.md`,
+  Gap 2). Any Agent work needs to either revisit that specific decision
+  or build on top of what Gap 2 chose instead — not silently bypass it.
+- Highest-value, lowest-risk next item identified: surfacing a
+  business-suspension's `justification` text in the already-built,
+  already-audited Business Visibility read (§16 item 1 of the
+  investigation doc) — a small extension of an already-authorized
+  capability, not new scope.
+- A real, evidenced gap with **zero existing mechanism for anyone**:
+  there is no tenant Admin password-reset path anywhere in this
+  repository, agent-assisted or self-service (`/api/staff/reset-pin`
+  is a different, owner-acting-on-staff action, not reachable by
+  SuperAdmin or by the Owner for themselves).
+- No agent-to-customer communication channel exists at all — Module
+  #20's in-app Notifications are system-triggered/templated by design,
+  not operator-composable; email/WhatsApp/SMS are explicitly deferred.
 
-**What this does NOT change:** `clearAllData()`'s own scope is
-untouched — it still cannot delete `stockCounts`, `Closings`, or
-`ClosedPeriods` (those `firestore.rules` denials are unconditional and
-predate this change, per Decision 57 / Closing Integrity Amendment).
-The new password is a UX confirmation step in front of an action the
-owner already has full Firestore-level authorization to perform
-(`isOwnerOf`), not a new access-control boundary.
-
-**Verification done:** `npx tsc --noEmit -p .` and `npm run build` both
-clean on the 4 changed files (remaining tsc errors are pre-existing,
-confirmed identical via `git stash` before/after in unrelated test
-files: `add-stock-product-correction.test.ts`,
-`add-stock-typing-and-autofill-bugfix.test.ts`,
-`fecho-baseline-anchored-closing.test.ts`,
-`startup-investment.test.ts`). Rules coverage added to
-`tests/firestore-rules.test.ts` (`03ccc83`) for the new
-`businesses/{businessId}/private/{docId}` path — 3 cases confirming
-Owner, Staff, and non-members are all denied read/write/delete on it.
-**Not run end-to-end**: `npx firebase emulators:exec` needs
-`storage.googleapis.com` to fetch the emulator jar, which is outside
-this sandbox's network allowlist (confirmed by attempting the download
-directly, matching the limitation this test file's own top comment
-already documented for the rest of the suite). Typechecked clean only.
+**Next governance step (per the investigation's own §17):** Product
+Architect review of the investigation — specifically its §4
+interpretation finding and §16 prioritized list — before any BDR,
+Policy, Specification, Rule 8 Assessment, or Implementation
+Authorization work begins. Per this document's own operating
+instructions, no such artifact should be started until that review
+happens.
 
 ## Next session should
 
-1. Decide whether this change needs a retroactive spec/decision doc to
-   stay consistent with this repo's own governance process (see "Note
-   on process" above) — flagged, not decided.
-2. Run `npm run test:rules:emulator` with normal network access to
-   confirm the new rules-test cases (and the whole existing suite)
-   actually pass against a real emulator — this was only typechecked
-   in this session, never executed.
-3. Otherwise: no other module is mid-flight. Check
-   `docs/specs/README.md` for the next item in the Module Order table
-   in `CLAUDE.md` (Multi-Shop #17, SuperAdmin #18 remainder,
-   Subscriptions #19, Notifications #20).
+1. Await Product Architect direction on the SuperAdmin Agent
+   investigation above — do not begin drafting a BDR/Policy/Spec for
+   it unprompted.
+2. Otherwise, the still-open items from the prior SuperAdmin panel
+   investigation remain open (see
+   `docs/engineering/SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
+   §22): the stale audit-log action-type allowlist, the two pre-
+   existing `superadmin-assisted-initial-stock-recovery.test.ts`
+   failures, and the still-pending emulator-backed test run for the
+   Clear-Data password rules (see prior HANDOFF revision / commit
+   `03ccc83`) — none of these block or depend on this session's work.
+3. Check `docs/specs/README.md` for the next item in the Module Order
+   table in `CLAUDE.md` if no SuperAdmin-related direction is given.
