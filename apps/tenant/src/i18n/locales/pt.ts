@@ -450,6 +450,7 @@ export interface TranslationDict {
     unitSuggestionsTitle: string;
     unitSuggestionsLabel: string;
     unitOutsideRelationshipWarning: string;
+    newProductSellingUnitSameAsCostUnitWarning: string;
     priceDeviationWarningAbove: string;
     priceDeviationWarningBelow: string;
     totalProfitTitle: string;
@@ -1683,6 +1684,8 @@ export const pt: TranslationDict = {
     unitSuggestionsLabel: 'Unidades:',
     unitOutsideRelationshipWarning:
       'Esta unidade não faz parte da relação de unidades confirmada deste produto — o preço não foi alterado; confirme ou ajuste manualmente.',
+    newProductSellingUnitSameAsCostUnitWarning:
+      'A unidade de venda não pode ser igual à unidade de compra ("{{unit}}") acima — verifique se a unidade de compra está correta, ou escolha uma unidade de venda diferente. Sem essa distinção, a relação de unidades não pode ser guardada.',
     priceDeviationWarningAbove:
       'Este preço é {{percent}}% acima do último preço registado para este produto — confirme que não é um erro de digitação.',
     priceDeviationWarningBelow:

@@ -341,7 +341,21 @@ const UnitRelationshipRow: React.FC<{
   sellingUnitPrice?: string;
   onSellingUnitPriceChange?: (price: string) => void;
 }> = ({ purchaseUnit, sellingUnit, factor, onChange, sellingUnitPrice, onSellingUnitPriceChange }) => {
+  const { t } = useLanguage();
   const [expanded, setExpanded] = useState(!!(sellingUnit || factor || sellingUnitPrice));
+  // [Bug fix — silently-discarded conversion factor when the purchase
+  // unit and the selling unit collide] See isValidUnitRelationship's
+  // own header comment (unitRelationship.ts) for the full root-cause
+  // explanation. Live-computed, never stored state — mirrors this
+  // file's own established "warn, don't silently fail" pattern
+  // (unitOutsideRelationshipWarning, priceDeviationWarning below).
+  // Surfaced HERE, at the moment the collision actually occurs, so the
+  // Owner understands immediately why a relationship they just typed
+  // isn't being saved — rather than the previous behavior of no
+  // feedback at all.
+  const purchaseUnitNormalized = (purchaseUnit || 'un').trim().toLowerCase();
+  const sellingUnitNormalized = sellingUnit.trim().toLowerCase();
+  const unitsCollide = !!sellingUnitNormalized && sellingUnitNormalized === purchaseUnitNormalized;
 
   if (!expanded) {
     return (
@@ -407,6 +421,11 @@ const UnitRelationshipRow: React.FC<{
           </div>
         )}
       </div>
+      {unitsCollide && (
+        <p className="text-[13px] text-amber-600 font-medium leading-snug">
+          {t('addStock.newProductSellingUnitSameAsCostUnitWarning', { unit: purchaseUnit || 'un' })}
+        </p>
+      )}
       <p className="text-[13px] text-gray-500 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
       </p>

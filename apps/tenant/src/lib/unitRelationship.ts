@@ -60,6 +60,37 @@ export function isValidUnitRelationship(candidate: UnitRelationship | undefined 
   // chains only; a non-positive or non-finite factor cannot express an
   // ordered relationship and is rejected here rather than silently
   // accepted and left to fail unpredictably wherever it is later read.
+  //
+  // [Bug fix — silently-discarded conversion factor when the purchase
+  // unit and a later unit in the chain collide] Two entries in the same
+  // chain that normalize (trim + lowercase) to the SAME unit string —
+  // most commonly units[0] (the purchase/cost unit) and the intended
+  // selling unit, when an Owner never actually changed the purchase
+  // unit away from its generic default (e.g. "un") while typing a
+  // selling unit of "Un" — were previously accepted as "valid" by this
+  // function: `sellingUnit`'s own membership check below only asks
+  // "does SOME entry normalize to this string," which a duplicate
+  // trivially satisfies. But getConversionFactor
+  // (purchaseToSellingConversion.ts) resolves each side via
+  // `findIndex`, which returns the FIRST matching entry for BOTH the
+  // "from" and "to" unit whenever they collide — silently returning
+  // conversion factor 1 (as if the two units were the very same
+  // measure) and discarding whatever real factor (e.g. 24) the Owner
+  // had actually typed, with no error or warning shown anywhere. A
+  // relationship is only meaningful when every unit in its chain names
+  // a genuinely distinct measure; rejecting the collision HERE — the
+  // single source of truth every write path already routes through —
+  // fixes every consumer at once, rather than patching each of the
+  // dozen or so read sites individually.
+  const normalizedUnitStrings = new Set<string>();
+  for (const entry of candidate.units) {
+    if (entry && typeof entry.unit === 'string' && entry.unit.trim()) {
+      const normalized = entry.unit.trim().toLowerCase();
+      if (normalizedUnitStrings.has(normalized)) return false;
+      normalizedUnitStrings.add(normalized);
+    }
+  }
+
   for (let i = 0; i < candidate.units.length; i++) {
     const entry = candidate.units[i];
     if (!entry || typeof entry.unit !== 'string' || !entry.unit.trim()) return false;

@@ -426,6 +426,8 @@ export const en: TranslationDict = {
     unitSuggestionsLabel: 'Units:',
     unitOutsideRelationshipWarning:
       "This unit isn't part of this product's confirmed unit relationship — the price was left unchanged; confirm or adjust it manually.",
+    newProductSellingUnitSameAsCostUnitWarning:
+      'The selling unit can\'t be the same as the purchase unit ("{{unit}}") above — check that the purchase unit is correct, or choose a different selling unit. Without that distinction, the unit relationship can\'t be saved.',
     priceDeviationWarningAbove:
       'This price is {{percent}}% above the last recorded price for this product — confirm this isn\'t a typo.',
     priceDeviationWarningBelow:
