@@ -802,16 +802,18 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           stockCounts,
           isValidUnitRelationship(match.unitRelationship) ? match.unitRelationship?.sellingUnit : undefined
         );
+        // [Track A — Existing-Product Stock Entry Purchase Authority,
+        // POL-pending-existing-product-stock-entry-purchase-authority.md
+        // §A/§C/§D, BDR-0012 §3] initialCost/initialUnit are current-purchase
+        // facts and must never be defaulted from historical memory or from
+        // Product.costPrice — both removed here; initialUnit stays at the
+        // generic default, initialCost stays blank, until the current
+        // purchase actually supplies them. initialSell remains a legitimate
+        // Product-Memory concern (§E), unaffected.
         if (memory) {
-          initialCost = String(memory.costPrice);
           initialSell = String(memory.sellingPrice);
-          initialUnit = memory.unit;
-        } else if (match.costPrice != null || match.sellingPrice != null) {
-          // No batch and no priced Contagem entry — fall back to the
-          // product's own reference price (set via "Editar Detalhes")
-          // instead of the generic defaults.
-          if (match.costPrice != null) initialCost = String(match.costPrice);
-          if (match.sellingPrice != null) initialSell = String(match.sellingPrice);
+        } else if (match.sellingPrice != null) {
+          initialSell = String(match.sellingPrice);
         }
         // [Bug fix — Finding C regression, fresh audit] Canonical
         // Product selling memory (Product.sellingPrice +
@@ -1604,13 +1606,22 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     let newCost = '';
     let newSell = '';
     let newUnit = suggestedUnits[0] || 'un';
+    // [Track A — Existing-Product Stock Entry Purchase Authority,
+    // POL-pending-existing-product-stock-entry-purchase-authority.md §A/§C/§D,
+    // BDR-0012 §3] Purchase unit and purchase cost are current-transaction
+    // facts, supplied by the current receipt/operator entry — never by
+    // historical memory (findLatestRememberedProductMemory) or by
+    // Product.costPrice. Both removed here; newUnit/newCost stay at their
+    // blank/generic defaults until the current purchase actually supplies
+    // them. Selling price remains a legitimate Product-Memory concern (§E),
+    // unaffected: memory.sellingPrice is still the pre-canonical-correction
+    // fallback, immediately superseded by canonical Product selling memory
+    // below whenever that exists — byte-for-byte the same selling-side
+    // behavior as before this change.
     if (memory) {
-      newCost = String(memory.costPrice);
       newSell = String(memory.sellingPrice);
-      newUnit = memory.unit;
-    } else if (product.costPrice != null || product.sellingPrice != null) {
-      if (product.costPrice != null) newCost = String(product.costPrice);
-      if (product.sellingPrice != null) newSell = String(product.sellingPrice);
+    } else if (product.sellingPrice != null) {
+      newSell = String(product.sellingPrice);
     }
     // [Bug fix — Finding C regression, fresh audit] Canonical Product
     // selling memory supplies newSell whenever it exists, CONVERTED into
@@ -1677,28 +1688,26 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     const relationship = matched?.unitRelationship;
     const updates: Partial<StockRowItem> = { unit: newUnit };
 
-    if (row.costPriceAutoFilled && row.costPrice !== '') {
-      // Converts from the price's own recorded TRUE basis unit — never
-      // from `row.unit` directly, which may itself already be a
-      // previously-typed, unconvertible unit that was never the
-      // price's real origin (see costPriceBasisUnit's own comment).
-      // Falls back to row.unit only for a row created before this
-      // field existed.
-      const basisUnit = row.costPriceBasisUnit ?? row.unit;
-      const resolved = resolveUnitAwarePrice(parseFloat(row.costPrice) || 0, basisUnit, newUnit, relationship);
-      if (resolved !== '') {
-        updates.costPrice = resolved;
-        updates.costPriceAutoFilled = true;
-        updates.costPriceBasisUnit = newUnit;
-      }
-      // resolved === '' (new unit outside the confirmed chain, or no
-      // relationship at all): costPrice AND costPriceBasisUnit are
-      // both left completely untouched — never cleared, never
-      // fabricated. A later switch to a THIRD unit that IS
-      // convertible still re-derives correctly from this same
-      // known-good price and its own true basis, not from the
-      // unconvertible unit that was just rejected.
-    }
+    // [Track A — Existing-Product Stock Entry Purchase Authority,
+    // POL-pending-existing-product-stock-entry-purchase-authority.md §F,
+    // Rule 8 Assessment R8-E] Purchase cost is NEVER re-derived on a
+    // purchase-unit change. This branch previously converted row.costPrice
+    // through the product's confirmed unit relationship whenever
+    // costPriceAutoFilled was true — safe only when that price was a
+    // confirmed historical fact (Product Memory), which is no longer a
+    // source for costPriceAutoFilled anywhere in this file (see
+    // buildProductMemoryAutofill, the row-creation site,
+    // handleConfirmSupplierWordingCandidate, and buildRowFromProposalLineItem,
+    // all amended under this same Track A change). The only remaining
+    // producer of costPriceAutoFilled=true is OCR's own initial read — an
+    // unconfirmed value that must never be silently transformed into a
+    // fabricated new cost merely because the operator corrected the unit
+    // (the exact "2 Un @ 1,000/Un" -> "Cx" -> silently-computed "24,000"
+    // failure this Track A change exists to close). Removing this branch
+    // leaves an OCR-supplied cost visibly unconverted after a unit
+    // correction — the operator sees it, notices it no longer matches the
+    // receipt, and retypes it from the receipt directly. costPrice/
+    // costPriceBasisUnit are otherwise untouched by a unit change.
     if (row.sellingPriceAutoFilled && row.sellingPrice !== '') {
       const basisUnit = row.sellingPriceBasisUnit ?? row.unit;
       const resolvedSell = resolveUnitAwarePrice(parseFloat(row.sellingPrice) || 0, basisUnit, newUnit, relationship);
@@ -2070,14 +2079,15 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     let sellingPriceAutoFilled = row.sellingPriceAutoFilled;
     let costPriceBasisUnit = row.costPriceBasisUnit;
     let sellingPriceBasisUnit = row.sellingPriceBasisUnit;
+    // [Track A — Existing-Product Stock Entry Purchase Authority,
+    // POL-pending-existing-product-stock-entry-purchase-authority.md §A/§C,
+    // BDR-0012 §3] costPrice is a current-purchase fact and must never be
+    // defaulted from historical memory or from Product.costPrice — both
+    // removed here. Whatever the receipt/OCR/operator has already placed in
+    // costPrice (or left blank) is left exactly as is. Selling-price
+    // resolution (canonical Product Memory first, historical memory
+    // fallback otherwise) remains completely unaffected.
     if (memory) {
-      // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical
-      // Product selling memory is the SOURCE for the selling-price
-      // conversion into row.unit whenever it exists — never the
-      // possibly-disagreeing historical `memory.sellingPrice`/`.unit`.
-      // Cost conversion below is untouched, still sourced from `memory`
-      // — cost has its own, entirely separate governance this
-      // correction does not touch.
       const canonicalSellingMemory = resolveCanonicalProductSellingMemory(matchedProduct);
       const sellSource = canonicalSellingMemory ?? { sellingPrice: memory.sellingPrice, unit: memory.unit };
       const resolvedSell = resolveUnitAwarePrice(sellSource.sellingPrice, sellSource.unit, row.unit, matchedProduct.unitRelationship);
@@ -2086,25 +2096,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         sellingPriceAutoFilled = true;
         sellingPriceBasisUnit = row.unit;
       }
-      if (!costPrice) {
-        const resolvedCost = resolveUnitAwarePrice(memory.costPrice, memory.unit, row.unit, matchedProduct.unitRelationship);
-        if (resolvedCost !== '') {
-          costPrice = resolvedCost;
-          costPriceAutoFilled = true;
-          costPriceBasisUnit = row.unit;
-        }
-      }
-    } else {
-      if (!costPrice && matchedProduct.costPrice != null) {
-        costPrice = String(matchedProduct.costPrice);
-        costPriceAutoFilled = true;
-        costPriceBasisUnit = row.unit;
-      }
-      if (matchedProduct.sellingPrice != null) {
-        sellingPrice = String(matchedProduct.sellingPrice);
-        sellingPriceAutoFilled = true;
-        sellingPriceBasisUnit = row.unit;
-      }
+    } else if (matchedProduct.sellingPrice != null) {
+      sellingPrice = String(matchedProduct.sellingPrice);
+      sellingPriceAutoFilled = true;
+      sellingPriceBasisUnit = row.unit;
     }
     updateRow(rowId, {
       productName: matchedProduct.name,
@@ -2222,7 +2217,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         const productBatches = batches.filter(b => b.productId === matched.id);
         if (productBatches.length > 0) previousCycleQuantity = productBatches[0].quantity;
 
-        if (!item.unit.value && productBatches.length > 0) unit = productBatches[0].unit || unit;
+        // [Track A — Existing-Product Stock Entry Purchase Authority,
+        // POL-pending-existing-product-stock-entry-purchase-authority.md §D,
+        // BDR-0012 §3] Purchase unit is a current-transaction fact. When
+        // OCR supplies no unit reading, this row falls through to the
+        // generic default set above (suggestedUnits[0] || 'un') — it no
+        // longer defaults to the latest StockBatch's own historical unit.
 
         // [Owner-requested — "auto-fill from memory in Contagem or old
         // Capital Inicial"] Widened from batches-only to also search
@@ -2243,19 +2243,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           stockCounts,
           isValidUnitRelationship(matched.unitRelationship) ? matched.unitRelationship?.sellingUnit : undefined
         );
+        // [Track A — Existing-Product Stock Entry Purchase Authority,
+        // POL-pending-existing-product-stock-entry-purchase-authority.md
+        // §A/§C, BDR-0012 §3] costPrice is a current-purchase fact and must
+        // never be defaulted from historical memory or Product.costPrice —
+        // both removed here. Whatever OCR read for costPrice (or left
+        // blank) above is left exactly as is. Selling-price resolution
+        // (canonical Product Memory first, historical memory fallback
+        // otherwise) remains completely unaffected.
         if (memory) {
-          // [Bug fix — Finding C, fresh audit, FR-89–FR-94] Canonical
-          // Product selling memory is the SOURCE for the selling-price
-          // conversion whenever it exists — never the possibly-
-          // disagreeing historical `memory.sellingPrice`/`.unit`. Cost
-          // conversion below is untouched, still sourced from `memory`.
           const canonicalSellingMemory = resolveCanonicalProductSellingMemory(matched);
           const sellSource = canonicalSellingMemory ?? { sellingPrice: memory.sellingPrice, unit: memory.unit };
           sellingPrice = resolveUnitAwarePrice(sellSource.sellingPrice, sellSource.unit, unit, matched.unitRelationship);
-          if (!costPrice) costPrice = resolveUnitAwarePrice(memory.costPrice, memory.unit, unit, matched.unitRelationship);
-        } else {
-          if (!costPrice && matched.costPrice != null) costPrice = String(matched.costPrice);
-          if (matched.sellingPrice != null) sellingPrice = String(matched.sellingPrice);
+        } else if (matched.sellingPrice != null) {
+          sellingPrice = String(matched.sellingPrice);
         }
       }
     }

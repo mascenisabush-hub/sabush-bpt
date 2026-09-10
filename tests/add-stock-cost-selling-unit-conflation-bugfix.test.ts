@@ -180,13 +180,14 @@ describe('TEST 6 — Owner selling-price override still works, no cost corruptio
 // ==================================================================
 // TEST 7 — Owner selling-unit override via handleUnitChange
 // ==================================================================
-describe('TEST 7 — Owner deliberately changes the unit: cost and selling both re-derive independently from their OWN basis unit', () => {
-  it('structural: handleUnitChange converts cost from costPriceBasisUnit and selling from sellingPriceBasisUnit independently — never from a shared conflated source', () => {
+describe('TEST 7 — Owner deliberately changes the unit: selling re-derives from its own basis unit; cost is never re-derived (Track A, POL-pending-existing-product-stock-entry-purchase-authority.md §F)', () => {
+  it('structural: handleUnitChange converts selling price from sellingPriceBasisUnit — cost is NEVER re-derived on a unit change, only left exactly as it was (an OCR-supplied cost must never be silently converted; see Rule 8 R8-E)', () => {
     const fnMatch = addStockSrc.match(/const handleUnitChange = \([\s\S]*?\n  \};/);
     assert.ok(fnMatch, 'expected to find handleUnitChange');
     const body = fnMatch![0];
-    assert.match(body, /const basisUnit = row\.costPriceBasisUnit \?\? row\.unit;/);
     assert.match(body, /const basisUnit = row\.sellingPriceBasisUnit \?\? row\.unit;/);
+    assert.doesNotMatch(body, /const basisUnit = row\.costPriceBasisUnit \?\? row\.unit;/);
+    assert.doesNotMatch(body, /row\.costPriceAutoFilled/);
   });
 
   it('changing the unit correctly re-converts a deliberately-set cost price without touching selling, and vice versa', () => {
@@ -209,11 +210,12 @@ describe('TEST 8 — no canonical selling memory: existing historical/manual beh
     assert.equal(resolveCanonicalProductSellingMemory({ sellingPrice: undefined, unitRelationship: CX_UN }), null);
   });
 
-  it('structural: both fixed call sites fall through to their existing memory/product fallback when canonical memory is null', () => {
+  it('structural: the row-creation fallback still falls through to the Product\'s own static reference SELLING price when canonical memory is null — cost is never defaulted from Product.costPrice (Track A §C)', () => {
     const createEmptyRowMatch = addStockSrc.match(/const createEmptyRow = \([\s\S]*?\n  \};/);
     assert.ok(createEmptyRowMatch);
     assert.match(createEmptyRowMatch![0], /if \(memory\) \{/);
-    assert.match(createEmptyRowMatch![0], /else if \(match\.costPrice != null \|\| match\.sellingPrice != null\)/);
+    assert.match(createEmptyRowMatch![0], /else if \(match\.sellingPrice != null\)/);
+    assert.doesNotMatch(createEmptyRowMatch![0], /match\.costPrice != null/);
   });
 });
 

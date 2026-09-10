@@ -12,96 +12,90 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Product Catalog Phase 2 is **fully shipped — all five
-checkpoints closed**. **Checkpoint 5 (full regression sweep) — executed
-and CLOSED — CONFORMING** (authorization commit `abeeed3`; the sweep
-itself produced zero functional diff, as its own definition requires).
-**Nothing mid-flight; working tree clean.**
+**Status:** Track A — Existing-Product Stock Entry Purchase Authority —
+implemented, verified, **ready to commit**. Working tree currently
+holds the full implementation (not yet committed as of this HANDOFF
+revision; commit this alongside it).
 
-**Checkpoint 5 — what was verified (pure verification, zero product
-change, per its own "Prohibited: any new functional change" boundary):**
-- Touched-function inventory reconstructed from git history:
-  Checkpoint 1 (`473e26f`) — `confirmProductUnitRelationship` (extended),
-  `classifyUnitRelationshipChange`/`evaluateUnitRelationshipReplacement`
-  (new, `lib/unitRelationship.ts`); Checkpoint 2 (`3f8676d`) —
-  `registerCatalogProduct`, `EditProductModal.tsx`'s `handleSubmit`/new
-  `unitRelationshipCandidateEqualsCurrent`, `ProductCatalogView.tsx`'s
-  `buildUnitRelationshipPayload`/registration form; Checkpoint 3
-  (`b55dff4`) — `recordStockCount` (both write branches); Checkpoint 4
-  (`c43776a`) — new `AddStockProductCorrectionModal` +
-  `unitRelationshipCandidateEqualsCurrent` (`AddStockView.tsx`).
-- Ran the complete regression surface for all four checkpoints: both
-  `product-catalog-phase-2-checkpoint-{1,2}-unit-relationship-
-  reconfiguration` suites, `product-catalog-phase-1-checkpoint-{b,c,d,e}`,
-  `decision-37-first-contagem-cost-removal-and-selling-price-memory`,
-  `add-stock-product-correction`, every `add-stock-*`/Contagem-adjacent
-  suite, `product-identity-existing-new-resolution`,
-  `product-name-similarity`, `product-configuration-ux-render-order`,
-  `product-memory-price-resolution`, and more — all passing, 0 failures,
-  except the 2 already-known, already-documented, pre-existing failures
-  in `periodic-contagem-concept-b-compaction.test.ts` (present since
-  commit `8bb980d`, predating all of Checkpoints 1–4, unrelated to any
-  file/function these checkpoints touched — same finding independently
-  confirmed three times now, across the Checkpoint 3 closure audit, the
-  Checkpoint 4 preflight, and this sweep).
-- `npm run test:all`: 1168/1168 tests passing, 0 failures.
-- `tsc --noEmit -p apps/tenant`: identical pre-existing 3-error baseline
+**Governance trail (full chain, all in `docs/specs/`/`docs/engineering/`):**
+1. Policy — `docs/specs/POL-pending-existing-product-stock-entry-purchase-authority.md`
+   (Accepted, Product Architect SABUSHIMIKE MASCENI, 2026-09-10), operationalizing
+   `BDR-0012` §3 for Add Stock's existing-product screen.
+2. Rule 8 Assessment — chat-recorded, result: `READY FOR IMPLEMENTATION PLANNING`.
+3. Implementation Plan — `docs/engineering/track-a-existing-product-stock-entry-purchase-authority-implementation-plan.md`.
+4. Implementation Authorization — `docs/engineering/track-a-existing-product-stock-entry-purchase-authority-implementation-authorization.md`
+   (signed, `APPROVED FOR IMPLEMENTATION`, scope strictly `AddStockView.tsx`'s
+   five named functions + the two previously-identified test files).
+5. **This implementation**, executed strictly within that authorized scope.
+
+**What changed (`apps/tenant/src/components/AddStockView.tsx` only):**
+- `buildProductMemoryAutofill`, `createEmptyRow` (row-creation site): purchase
+  unit/cost no longer default from `findLatestRememberedProductMemory` or
+  `Product.costPrice` — both stay at the generic default/blank until the
+  current purchase actually supplies them. Selling-price resolution
+  (canonical Product Memory first, historical fallback otherwise) is
+  byte-for-byte unchanged.
+- `handleConfirmSupplierWordingCandidate`, `buildRowFromProposalLineItem`:
+  same purchase-side defaulting removed; `buildRowFromProposalLineItem`'s
+  OCR-silence unit fallback (defaulting to the latest StockBatch's own unit
+  when OCR supplied none) also removed, per explicit Product Architect
+  direction. OCR's own initial-value priority is untouched.
+- `handleUnitChange`: the cost-conversion branch is removed entirely — a
+  purchase cost is never re-derived on a unit change. This closes the
+  specific fabrication risk identified in the Rule 8 Assessment (R8-E): an
+  OCR-supplied, unconfirmed cost (e.g. `2 Un @ 1,000 MZN/Un`, unit corrected
+  to `Cx`) previously got silently converted through the product's confirmed
+  relationship into a fabricated new figure (`24,000`); it now stays exactly
+  as OCR read it, visibly wrong, until the operator retypes it from the
+  receipt. The selling-price re-derivation branch is untouched.
+
+**Explicitly NOT touched** (per the Authorization's own boundary,
+confirmed by `git diff --stat`): `purchaseToSellingConversion.ts`,
+`productMemoryPriceResolution.ts` (only its consumption at the five
+AddStockView sites changed, not its own implementation), `AppContext.tsx`
+(`addMultipleStockBatches`, `StockBatch` persistence, and the FR-86
+`Product.costPrice` forward-maintenance mechanism are all unmodified —
+confirmed present and unchanged by a dedicated new test), `StockCountItem`,
+Contagem, Catalog, Product Recognition, SupplierWordingRelationship,
+Business Worth formulas, `firestore.rules`.
+
+**Verification performed this session:**
+- `npx tsc --noEmit -p apps/tenant`: identical pre-existing 3-error baseline
   (2× `InfoHint` in `InitialStockCountView.tsx`, 1× `URL` type in
   `reportExport.ts`), 0 new errors.
-- `vite build`: succeeds, same pre-existing CSS/chunk-size warnings, no
+- Direct run of every relevant test file (`add-stock-cost-selling-unit-
+  conflation-bugfix`, `add-stock-mobile-caption-and-candidate-price-fill`,
+  `add-stock-similar-product-suggestions`, `add-stock-typing-and-autofill-
+  bugfix`, `add-stock-unit-aware-price-rederivation`, `price-deviation-
+  check`, `product-memory-price-resolution`, `supplier-wording-add-stock`):
+  128/128 passing after updating four assertions in three files that
+  directly encoded the now-removed purchase-side defaulting (Track A's own
+  intended behavior change, not a regression).
+- `price-deviation-warning-wiring.test.ts`: 2 failures, confirmed
+  **pre-existing and unrelated** — reproduced identically via `git stash`
+  against the unmodified baseline; both concern `PeriodicStockCountView.tsx`
+  (Contagem), a file this change never touches.
+- New dedicated suite added: `tests/track-a-existing-product-purchase-
+  authority.test.ts` (10 tests) — proves purchase unit/cost are never
+  sourced from historical memory/`Product.costPrice` at any of the five
+  sites, `handleUnitChange` never re-derives cost, the selling-side
+  conversion engine still produces the exact worked example (`2 Cx`,
+  `1 Cx = 24 Un`, `65 MZN/Un` → `3,120 MZN` via the real `calculateBatch`),
+  and FR-86's forward write is untouched while the reverse read is gone.
+- `npm run test:all`: 63/63 suites, 0 failures.
+- `npm run build`: succeeds, same pre-existing CSS/chunk-size warnings, no
   new failures.
-- Zero-diff confirmed throughout: `git status --short`/`git diff
-  --name-only` empty before, during, and after the sweep. (One
-  transient incident during execution: a `git checkout <commit> -- .`
-  used to cross-check a pre-existing-failure baseline accidentally
-  dirtied the working tree; caught immediately and reverted via `git
-  checkout HEAD -- .` before proceeding — confirmed clean again, HEAD
-  unchanged throughout, no commit ever touched by it.)
+- `git diff --stat` reviewed against the Authorization's file list: exactly
+  `AddStockView.tsx` + three updated test files + one new test file — no
+  unlisted file touched.
 
-**Governance trail for Checkpoint 5** (all in
-`docs/engineering/product-catalog-phase-2-implementation-authorization.md`):
-1. Original Authorization (`69aaea9`) §4 item 5 — Checkpoint 5 defined
-   as "full regression sweep... no new functional change."
-2. Checkpoint 5 preflight/governance audit (chat-recorded) — confirmed
-   the definition needs no amendment; the only outstanding gate was the
-   Plan §X-required, checkpoint-specific review.
-3. §15 — Checkpoint 5 explicit Product Architect authorization
-   (`abeeed3`) — not a Plan/Authorization Amendment, a pure review-gate
-   record: "CHECKPOINT 5 — AUTHORIZED TO PROCEED."
-4. This regression sweep, executed per that authorization — zero
-   functional diff, as required.
-
-**What Checkpoints 1–4 shipped (condensed — see prior HANDOFF revisions
-in git history, and each checkpoint's own governance trail in the Plan/
-Authorization docs, for full detail):**
-- **Checkpoint 1** (`473e26f`): `confirmProductUnitRelationship`
-  extended with an old-state-aware replacement check (Decision 1),
-  additive-only — `isValidUnitRelationship`/`confirmUnitRelationship`
-  themselves untouched.
-- **Checkpoint 2** (`3f8676d`): Catálogo creation (`registerCatalogProduct`)
-  and edit (`EditProductModal.tsx`) — `sellingPrice` now optional,
-  `unitRelationship` now capturable/editable, sellingPrice/sellingUnit
-  pairing invariant enforced before every write.
-- **Checkpoint 3** (`b55dff4`): Contagem's `recordStockCount` — both the
-  existing-product and new-product branches now couple the sellingPrice
-  write to a valid sellingUnit, closing the write-gate identified in
-  Checkpoint 3's own preflight.
-- **Checkpoint 4** (`c43776a`): Add Stock's new `AddStockProductCorrectionModal`
-  — contextual canonical-Product correction (name/sellingPrice/
-  sellingUnit/unitRelationship) for an already-matched product, reusing
-  `confirmProductUnitRelationship`/`updateProduct` exactly as they exist
-  (Family 2 architecture — `AppContext.tsx` untouched since Checkpoint 3),
-  distinct explicit rename confirmation, relationship-before-price write
-  ordering, authorization-denial handling reusing the existing
-  `handleReactivateProduct` pattern.
-
-**Not started:** none — Product Catalog Phase 2's authorized checkpoint
-sequence (1–5) is complete. Any further work on this module requires a
-fresh Specification/Plan/Authorization cycle, not an extension of this
-one.
+**Not started:** none for Track A — all twelve acceptance criteria from the
+Implementation Authorization are satisfied by this implementation. Track B
+(New Product / first-time Product creation, its own unresolved FR-85
+question) remains a separate, not-yet-started track.
 
 **Still open from before this work, untouched this session:** the
-`periodic-contagem-concept-b-compaction.test.ts` InfoHint-vs-test
-conflict (2 failing tests, on `main` since commit `8bb980d`) — the Owner
-was mid-decision on this (always-visible text vs. InfoHint) when the
-Product Catalog Phase 2 work interrupted; still needs a final answer.
+`periodic-contagem-concept-b-compaction.test.ts`/`price-deviation-warning-
+wiring.test.ts` `PeriodicStockCountView.tsx` pre-existing failures — the
+Owner was mid-decision on this (always-visible text vs. `InfoHint`) before
+this session; still needs a final answer, unrelated to Track A.

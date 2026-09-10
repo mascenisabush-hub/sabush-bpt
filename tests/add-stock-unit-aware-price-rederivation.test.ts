@@ -174,7 +174,7 @@ describe('handleUnitChange — Owner decision 2: an unrelated unit leaves the pr
 });
 
 describe('AddStockView.tsx — handleUnitChange is actually wired in (source-structure checks)', () => {
-  it('is defined once, built on the real resolveUnitAwarePrice — no second, independently-invented conversion', () => {
+  it('is defined once, built on the real resolveUnitAwarePrice — no second, independently-invented conversion; cost is never re-derived on a unit change (Track A, POL-pending-existing-product-stock-entry-purchase-authority.md §F)', () => {
     assert.match(addStockSrc, /const handleUnitChange = \(rowId: string, newUnit: string\) => \{/);
     const defCount = (addStockSrc.match(/const handleUnitChange = \(rowId: string, newUnit: string\) => \{/g) || []).length;
     assert.equal(defCount, 1);
@@ -182,9 +182,12 @@ describe('AddStockView.tsx — handleUnitChange is actually wired in (source-str
     const end = addStockSrc.indexOf('\n  };', start);
     const body = addStockSrc.slice(start, end);
     assert.match(body, /resolveUnitAwarePrice\(/);
-    // Never overwrites a manually-edited price.
-    assert.match(body, /row\.costPriceAutoFilled/);
+    // Never overwrites a manually-edited selling price.
     assert.match(body, /row\.sellingPriceAutoFilled/);
+    // Cost is never re-derived here at all — an OCR-supplied cost must
+    // stay exactly as OCR read it after a unit correction, never silently
+    // converted through the product's confirmed relationship (Rule 8 R8-E).
+    assert.doesNotMatch(body, /row\.costPriceAutoFilled/);
   });
 
   it('all four unit-change UI sites (desktop input, desktop popover, mobile input) call handleUnitChange, not a raw updateRow({ unit })', () => {

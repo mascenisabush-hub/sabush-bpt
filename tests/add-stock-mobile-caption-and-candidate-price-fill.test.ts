@@ -80,29 +80,27 @@ describe('Bug fix 2 — confirming a supplier-wording candidate now fills price 
     assert.match(body, /resolveUnitAwarePrice\(sellSource\.sellingPrice, sellSource\.unit, row\.unit, matchedProduct\.unitRelationship\)/);
   });
 
-  it('costPrice only fills from memory when the row does not already have one — the receipt\'s own reading keeps priority, matching every other fill site in this file', () => {
+  it('costPrice is NEVER filled from historical memory or Product.costPrice here — a current-purchase fact, left exactly as the receipt/operator set it (Track A, POL-pending-existing-product-stock-entry-purchase-authority.md §C)', () => {
     const start = addStockSrc.indexOf('const handleConfirmSupplierWordingCandidate = (rowId: string, productId: string) => {');
     const end = addStockSrc.indexOf('\n  };', start);
     const body = addStockSrc.slice(start, end);
-    assert.match(body, /if \(!costPrice\) \{\s*const resolvedCost = resolveUnitAwarePrice\(memory\.costPrice,/);
+    assert.doesNotMatch(body, /resolveUnitAwarePrice\(memory\.costPrice,/);
+    assert.doesNotMatch(body, /matchedProduct\.costPrice != null/);
   });
 
-  it('falls back to the Product\'s own static reference price when no batch/StockCount memory exists, matching the other two fill sites\' own fallback tier', () => {
+  it('falls back to the Product\'s own static reference SELLING price when no batch/StockCount memory exists — selling-side fallback only, cost is untouched', () => {
     const start = addStockSrc.indexOf('const handleConfirmSupplierWordingCandidate = (rowId: string, productId: string) => {');
     const end = addStockSrc.indexOf('\n  };', start);
     const body = addStockSrc.slice(start, end);
-    assert.match(body, /matchedProduct\.costPrice != null/);
     assert.match(body, /matchedProduct\.sellingPrice != null/);
   });
 
-  it('sets the AutoFilled/BasisUnit tracking fields when a fill happens — so a later unit change still re-derives correctly, and the price-deviation check still recognizes this as memory-sourced', () => {
+  it('sets the sellingPriceAutoFilled/BasisUnit tracking fields when a selling-price fill happens — so a later unit change still re-derives correctly; cost tracking fields are never set here, since cost is never memory-filled', () => {
     const start = addStockSrc.indexOf('const handleConfirmSupplierWordingCandidate = (rowId: string, productId: string) => {');
     const end = addStockSrc.indexOf('\n  };', start);
     const body = addStockSrc.slice(start, end);
     assert.match(body, /sellingPriceAutoFilled = true;/);
-    assert.match(body, /costPriceAutoFilled = true;/);
     assert.match(body, /sellingPriceBasisUnit = row\.unit;/);
-    assert.match(body, /costPriceBasisUnit = row\.unit;/);
   });
 
   it('updateRow\'s call still sets productName/previousCycleQuantity/pendingSupplierWording — the pre-existing behavior is preserved, not replaced', () => {
