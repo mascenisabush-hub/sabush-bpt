@@ -477,6 +477,24 @@ service cloud.firestore {
         request.resource.data.get('suspended', false) == resource.data.get('suspended', false);
       allow delete: if false;
 
+      // [Clear-Data Password — owner-set password gate in front of
+      // "Limpar Todos os Dados"] Holds only the salted/hashed password
+      // (never plaintext) plus a failed-attempt counter for lockout.
+      // Deliberately unreadable and unwritable by ANY client, including
+      // the owner themselves — set/verify only ever happen through
+      // server/index.ts's /api/business/clear-data-password/* routes
+      // via the Admin SDK, which bypasses these rules entirely, exactly
+      // like every other server-only privileged write in this file
+      // (suspended, staffTier, managerPermissions, etc.). This is a
+      // UX confirmation step in front of an action the owner is already
+      // fully authorized to perform (clearAllData's underlying deletes
+      // are already gated by isOwnerOf on each collection below) — not
+      // an additional access-control boundary — but the hash itself
+      // still must never be client-readable.
+      match /private/{docId} {
+        allow read, write: if false;
+      }
+
       // ----------------------------------------------------------
       // Operational data any team member (owner or staff) can read
       // and create, but only the owner can edit/delete.

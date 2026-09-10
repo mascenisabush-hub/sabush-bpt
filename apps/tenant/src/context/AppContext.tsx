@@ -1140,6 +1140,14 @@ interface AppContextType {
   logout: () => Promise<void>;
   loadSampleData: () => Promise<void>;
   clearAllData: () => Promise<void>;
+  // Clear-Data Password gate (Settings → "Limpar Todos os Dados").
+  // A dedicated password, separate from the owner's login password,
+  // required before clearAllData() above may be invoked. Server-backed
+  // (see /api/business/clear-data-password/* in server/index.ts) — the
+  // hash itself is never readable client-side.
+  getClearDataPasswordStatus: () => Promise<{ configured: boolean }>;
+  setClearDataPassword: (password: string) => Promise<void>;
+  verifyClearDataPassword: (password: string) => Promise<{ valid: boolean; attemptsRemaining?: number }>;
 }
 
 const AppContext = createContext<AppContextType | undefined>(undefined);
@@ -8695,6 +8703,64 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await fsBatch.commit();
   };
 
+  // Clear-Data Password — three thin server-backed calls following the
+  // exact same fetch/idToken pattern as deleteStaffMember above. None of
+  // these three touch actual business data; clearAllData() below is the
+  // only function that does, and is only ever called by the UI after
+  // verifyClearDataPassword() resolves { valid: true }.
+  const _clearDataPasswordRequest = async (
+    endpoint: 'status' | 'set' | 'verify',
+    body: Record<string, unknown> = {}
+  ): Promise<any> => {
+    if (!activeBusinessId || !isOwner) {
+      throw new Error('Apenas o dono pode realizar esta ação.');
+    }
+    if (!currentUser) {
+      throw new Error('A sua sessão expirou. Inicie sessão novamente.');
+    }
+
+    const idToken = await currentUser.getIdToken();
+
+    let response: Response;
+    try {
+      response = await fetch(`/api/business/clear-data-password/${endpoint}`, {
+        method: 'POST',
+        headers: {
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${idToken}`,
+        },
+        body: JSON.stringify({ businessId: activeBusinessId, ...body }),
+      });
+    } catch {
+      throw new Error('Sem ligação ao servidor. Verifique a sua internet e tente novamente.');
+    }
+
+    let responseBody: any = null;
+    try {
+      responseBody = await response.json();
+    } catch {
+      // no JSON body — fall through to the generic message below
+    }
+
+    if (!response.ok) {
+      throw new Error(responseBody?.message || 'Erro ao comunicar com o servidor. Tente novamente.');
+    }
+
+    return responseBody;
+  };
+
+  const getClearDataPasswordStatus = async (): Promise<{ configured: boolean }> => {
+    return await _clearDataPasswordRequest('status');
+  };
+
+  const setClearDataPassword = async (password: string): Promise<void> => {
+    await _clearDataPasswordRequest('set', { password });
+  };
+
+  const verifyClearDataPassword = async (password: string): Promise<{ valid: boolean; attemptsRemaining?: number }> => {
+    return await _clearDataPasswordRequest('verify', { password });
+  };
+
   const clearAllData = async () => {
     if (!activeBusinessId || !isOwner) return;
     const businessId = activeBusinessId;
@@ -8927,6 +8993,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         logout,
         loadSampleData,
         clearAllData,
+        getClearDataPasswordStatus,
+        setClearDataPassword,
+        verifyClearDataPassword,
       }}
     >
       {children}

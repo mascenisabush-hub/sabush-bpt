@@ -17,6 +17,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
 import { getAuth } from 'firebase-admin/auth';
@@ -632,6 +633,225 @@ async function verifyStaffManagementAction(
 
   return null;
 }
+
+// ------------------------------------------------------------------
+// Clear-Data Password (owner/admin-only gate in front of "Limpar Todos
+// os Dados" in Settings). A dedicated password, separate from the
+// owner's login password, that must be set once and then re-entered
+// each time before clearAllData() is allowed to run client-side.
+//
+// This is a UX confirmation step, not an additional Firestore access-
+// control boundary — the owner already has full delete rights on every
+// collection clearAllData() touches (isOwnerOf in firestore.rules,
+// unchanged). Its purpose is to prevent an accidental/impulsive click
+// from wiping real business data, not to gate access that isn't
+// already theirs. The hash itself is still never client-readable
+// (firestore.rules: businesses/{businessId}/private/{docId} denies
+// all client read/write) — only this server, via the Admin SDK, ever
+// touches it.
+//
+// Hashing: Node's built-in crypto.scrypt (no new dependency), random
+// 16-byte salt per password, 64-byte derived key, constant-time
+// comparison via crypto.timingSafeEqual. Lockout: 5 consecutive failed
+// attempts locks verification for 15 minutes, reset on any successful
+// verify or on setting a new password.
+// ------------------------------------------------------------------
+const CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS = 5;
+const CLEAR_DATA_LOCKOUT_DURATION_MS = 15 * 60 * 1000;
+
+function hashClearDataPassword(password: string): { hash: string; salt: string } {
+  const salt = crypto.randomBytes(16).toString('hex');
+  const hash = crypto.scryptSync(password, salt, 64).toString('hex');
+  return { hash, salt };
+}
+
+function verifyClearDataPasswordHash(password: string, hash: string, salt: string): boolean {
+  const candidate = crypto.scryptSync(password, salt, 64);
+  const stored = Buffer.from(hash, 'hex');
+  if (candidate.length !== stored.length) return false;
+  return crypto.timingSafeEqual(candidate, stored);
+}
+
+// Owner/admin-only authorization check, re-read from Firestore, never
+// trusted from the client — same shape as verifyStaffManagementAction's
+// isAdmin branch above, but intentionally has no Manager branch: per
+// the product decision behind this feature, only the Admin/Owner
+// themselves may set or use the Clear-Data password, never a granted
+// Manager, regardless of any managerPermissions they hold.
+async function verifyOwnerOnlyAction(
+  requesterUid: string,
+  businessId: string
+): Promise<{ status: number; body: { error: string; message: string } } | null> {
+  const requesterSnap = await db.collection('users').doc(requesterUid).get();
+  const requesterProfile = requesterSnap.data();
+
+  if (!requesterSnap.exists || !requesterProfile) {
+    return { status: 403, body: { error: 'permission-denied', message: 'Perfil do utilizador não encontrado.' } };
+  }
+
+  const ownedBusinessIds: string[] =
+    Array.isArray(requesterProfile.businessIds) && requesterProfile.businessIds.length > 0
+      ? requesterProfile.businessIds
+      : requesterProfile.businessId
+        ? [requesterProfile.businessId]
+        : [];
+  const isAdmin =
+    (requesterProfile.role === 'owner' || requesterProfile.role === 'admin') &&
+    ownedBusinessIds.includes(businessId);
+
+  if (!isAdmin) {
+    return { status: 403, body: { error: 'permission-denied', message: 'Apenas o dono pode realizar esta ação.' } };
+  }
+
+  return null;
+}
+
+// ------------------------------------------------------------------
+// POST /api/business/clear-data-password/status
+// Body: { businessId: string }
+// Returns whether a Clear-Data password has already been configured
+// for this business, so the client knows whether to show "Definir
+// Password" or "Introduzir Password" first.
+// ------------------------------------------------------------------
+expressApp.post('/api/business/clear-data-password/status', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+
+  if (!businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+    return;
+  }
+
+  const permissionError = await verifyOwnerOnlyAction(requesterUid, businessId);
+  if (permissionError) {
+    res.status(permissionError.status).json(permissionError.body);
+    return;
+  }
+
+  try {
+    const authDoc = await db.collection('businesses').doc(businessId).collection('private').doc('clearDataAuth').get();
+    res.json({ configured: authDoc.exists && !!authDoc.data()?.passwordHash });
+  } catch (err) {
+    console.error('[clear-data-password/status] failed', { requesterUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível verificar o estado da password.' });
+  }
+});
+
+// ------------------------------------------------------------------
+// POST /api/business/clear-data-password/set
+// Body: { businessId: string, password: string }
+// Sets (or overwrites) the Clear-Data password. No "old password"
+// required to overwrite — the owner is already authenticated via their
+// real Firebase session, which is the actual authorization boundary
+// here (identical reasoning to why deleteStaffMember etc. don't
+// require re-entering the caller's own login password).
+// ------------------------------------------------------------------
+expressApp.post('/api/business/clear-data-password/set', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+  const password = String(req.body?.password || '');
+
+  if (!businessId) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+    return;
+  }
+  if (password.length < 6) {
+    res.status(400).json({ error: 'invalid-argument', message: 'A password deve ter pelo menos 6 caracteres.' });
+    return;
+  }
+
+  const permissionError = await verifyOwnerOnlyAction(requesterUid, businessId);
+  if (permissionError) {
+    res.status(permissionError.status).json(permissionError.body);
+    return;
+  }
+
+  try {
+    const { hash, salt } = hashClearDataPassword(password);
+    await db.collection('businesses').doc(businessId).collection('private').doc('clearDataAuth').set({
+      passwordHash: hash,
+      salt,
+      updatedAt: new Date().toISOString(),
+      updatedBy: requesterUid,
+      failedAttempts: 0,
+      lockedUntil: null,
+    });
+    res.json({ success: true });
+  } catch (err) {
+    console.error('[clear-data-password/set] failed', { requesterUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível definir a password.' });
+  }
+});
+
+// ------------------------------------------------------------------
+// POST /api/business/clear-data-password/verify
+// Body: { businessId: string, password: string }
+// Verifies the Clear-Data password. Does NOT perform the clear itself
+// — clearAllData() remains a separate, client-side call (unchanged,
+// still isOwner-gated and still bound by firestore.rules' existing
+// immutability guards on stockCounts/closings/etc.) that the client
+// only invokes after this returns { valid: true }.
+// ------------------------------------------------------------------
+expressApp.post('/api/business/clear-data-password/verify', tenantOnly, requireAuth, async (req: AuthedRequest, res: Response) => {
+  const requesterUid = req.callerUid!;
+  const businessId = String(req.body?.businessId || '').trim();
+  const password = String(req.body?.password || '');
+
+  if (!businessId || !password) {
+    res.status(400).json({ error: 'invalid-argument', message: 'businessId e password são obrigatórios.' });
+    return;
+  }
+
+  const permissionError = await verifyOwnerOnlyAction(requesterUid, businessId);
+  if (permissionError) {
+    res.status(permissionError.status).json(permissionError.body);
+    return;
+  }
+
+  try {
+    const authDocRef = db.collection('businesses').doc(businessId).collection('private').doc('clearDataAuth');
+    const authDoc = await authDocRef.get();
+    const authData = authDoc.data();
+
+    if (!authDoc.exists || !authData?.passwordHash) {
+      res.status(409).json({ error: 'not-configured', message: 'Nenhuma password de limpeza foi definida ainda.' });
+      return;
+    }
+
+    const now = Date.now();
+    const lockedUntil = authData.lockedUntil ? new Date(authData.lockedUntil).getTime() : 0;
+    if (lockedUntil && now < lockedUntil) {
+      const minutesLeft = Math.ceil((lockedUntil - now) / 60000);
+      res.status(423).json({
+        error: 'locked',
+        message: `Demasiadas tentativas falhadas. Tente novamente em ${minutesLeft} minuto(s).`,
+        lockedUntil: authData.lockedUntil,
+      });
+      return;
+    }
+
+    const isValid = verifyClearDataPasswordHash(password, authData.passwordHash, authData.salt);
+
+    if (isValid) {
+      await authDocRef.update({ failedAttempts: 0, lockedUntil: null });
+      res.json({ valid: true });
+      return;
+    }
+
+    const failedAttempts = (authData.failedAttempts || 0) + 1;
+    const update: Record<string, unknown> = { failedAttempts };
+    let attemptsRemaining = Math.max(0, CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS - failedAttempts);
+    if (failedAttempts >= CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS) {
+      update.lockedUntil = new Date(now + CLEAR_DATA_LOCKOUT_DURATION_MS).toISOString();
+      attemptsRemaining = 0;
+    }
+    await authDocRef.update(update);
+    res.json({ valid: false, attemptsRemaining });
+  } catch (err) {
+    console.error('[clear-data-password/verify] failed', { requesterUid, businessId, error: err instanceof Error ? err.message : String(err) });
+    res.status(500).json({ error: 'internal', message: 'Não foi possível verificar a password.' });
+  }
+});
 
 // ------------------------------------------------------------------
 // POST /api/staff/delete

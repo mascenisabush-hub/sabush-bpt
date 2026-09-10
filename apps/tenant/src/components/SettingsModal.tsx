@@ -62,6 +62,9 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     activeBusinessId,
     loadSampleData,
     clearAllData,
+    getClearDataPasswordStatus,
+    setClearDataPassword,
+    verifyClearDataPassword,
     closings,
     backfillClosingLocks,
     products,
@@ -109,6 +112,94 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   const [backfillLoading, setBackfillLoading] = useState(false);
   const [backfillResult, setBackfillResult] = useState<string | null>(null);
   const [backfillError, setBackfillError] = useState<string | null>(null);
+
+  // Clear-Data Password — owner/admin-only gate in front of "Limpar
+  // Todos os Dados". 'set' = no password configured yet for this
+  // business, owner must create one before the first clear. 'confirm' =
+  // a password already exists, owner must re-enter it to proceed.
+  const [clearDataFlow, setClearDataFlow] = useState<'none' | 'set' | 'confirm'>('none');
+  const [clearDataFlowLoading, setClearDataFlowLoading] = useState(false); // status check only
+  const [clearDataPasswordDraft, setClearDataPasswordDraft] = useState('');
+  const [clearDataPasswordConfirmDraft, setClearDataPasswordConfirmDraft] = useState('');
+  const [clearDataEnteredPassword, setClearDataEnteredPassword] = useState('');
+  const [clearDataSubmitLoading, setClearDataSubmitLoading] = useState(false);
+  const [clearDataError, setClearDataError] = useState<string | null>(null);
+  const [clearDataDone, setClearDataDone] = useState(false);
+
+  const closeClearDataFlow = () => {
+    setClearDataFlow('none');
+    setClearDataPasswordDraft('');
+    setClearDataPasswordConfirmDraft('');
+    setClearDataEnteredPassword('');
+    setClearDataError(null);
+    setClearDataDone(false);
+  };
+
+  const openClearDataFlow = async () => {
+    setClearDataError(null);
+    setClearDataFlowLoading(true);
+    try {
+      const { configured } = await getClearDataPasswordStatus();
+      setClearDataFlow(configured ? 'confirm' : 'set');
+    } catch (err: any) {
+      setClearDataError(err?.message || 'Erro ao verificar a password de limpeza.');
+      setClearDataFlow('confirm'); // surfaces the error state inside a modal rather than failing silently
+    } finally {
+      setClearDataFlowLoading(false);
+    }
+  };
+
+  const handleSetClearDataPassword = async () => {
+    setClearDataError(null);
+    if (clearDataPasswordDraft.length < 6) {
+      setClearDataError('A password deve ter pelo menos 6 caracteres.');
+      return;
+    }
+    if (clearDataPasswordDraft !== clearDataPasswordConfirmDraft) {
+      setClearDataError('As passwords não coincidem.');
+      return;
+    }
+    setClearDataSubmitLoading(true);
+    try {
+      await setClearDataPassword(clearDataPasswordDraft);
+      // Proceed straight into the actual clear-data confirmation using
+      // the password just set — no need to make the owner re-type it
+      // a second time in the same flow.
+      await clearAllData();
+      setClearDataDone(true);
+    } catch (err: any) {
+      setClearDataError(err?.message || 'Erro ao definir a password de limpeza.');
+    } finally {
+      setClearDataSubmitLoading(false);
+    }
+  };
+
+  const handleConfirmClearData = async () => {
+    setClearDataError(null);
+    if (!clearDataEnteredPassword) {
+      setClearDataError('Introduza a password de limpeza.');
+      return;
+    }
+    setClearDataSubmitLoading(true);
+    try {
+      const { valid, attemptsRemaining } = await verifyClearDataPassword(clearDataEnteredPassword);
+      if (!valid) {
+        setClearDataError(
+          typeof attemptsRemaining === 'number'
+            ? `Password incorreta. Tentativas restantes: ${attemptsRemaining}.`
+            : 'Password incorreta.'
+        );
+        setClearDataEnteredPassword('');
+        return;
+      }
+      await clearAllData();
+      setClearDataDone(true);
+    } catch (err: any) {
+      setClearDataError(err?.message || 'Erro ao limpar os dados.');
+    } finally {
+      setClearDataSubmitLoading(false);
+    }
+  };
 
   const handleBackfillClosingLocks = async () => {
     setBackfillLoading(true);
@@ -442,21 +533,25 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                         {backfillLoading ? 'A aplicar...' : 'Aplicar Bloqueio a Fechos Anteriores'}
                       </button>
                     )}
-                    {/* [Pilot safety hardening] Demo-only, and destructive —
-                        see demoToolsEnabled above. Never shown in a real
-                        production/pilot build, regardless of how much real
-                        business data exists. */}
-                    {demoToolsEnabled && products.length > 0 && (
+                    {/* Owner/Admin-only (isOwner is checked above via the
+                        surrounding "Ações de Dados" wrapper), production-
+                        visible — no longer gated by demoToolsEnabled. A
+                        dedicated Clear-Data password (separate from the
+                        login password) is required every time before this
+                        actually runs; see openClearDataFlow / the modal
+                        below. Destructive but not a true "factory reset":
+                        clearAllData() still cannot touch stockCounts,
+                        Closings, or ClosedPeriods — firestore.rules denies
+                        deleting those unconditionally regardless of this
+                        password. */}
+                    {products.length > 0 && (
                       <button
                         type="button"
-                        onClick={async () => {
-                          if (confirm('Tem a certeza que deseja limpar TODOS os produtos e lotes? Esta ação não pode ser desfeita. (Fechos permanentes não são removidos por esta ação.)')) {
-                            await clearAllData();
-                          }
-                        }}
-                        className="px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-700 text-xs font-semibold transition flex items-center gap-1.5"
+                        onClick={openClearDataFlow}
+                        disabled={clearDataFlowLoading}
+                        className="px-3 py-2 rounded-xl bg-rose-600/20 hover:bg-rose-600/30 border border-rose-500/40 text-rose-700 text-xs font-semibold transition flex items-center gap-1.5 disabled:opacity-50"
                       >
-                        <Trash2 className="w-3.5 h-3.5" />
+                        {clearDataFlowLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
                         Limpar Todos os Dados
                       </button>
                     )}
@@ -1090,6 +1185,174 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                 {tierLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <ShieldCheck className="w-3.5 h-3.5" />}
                 {tierLoading ? 'A guardar...' : 'Guardar'}
               </button>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear-Data Password — "Set" flow. Shown the first time an owner
+          clicks "Limpar Todos os Dados" for a business that has no
+          Clear-Data password configured yet. Setting the password and
+          confirming the clear happen in the same submit, since there's
+          nothing meaningful about making the owner re-type a password
+          they just chose seconds ago. */}
+      {clearDataFlow === 'set' && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <KeyRound className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Definir Password de Limpeza</h3>
+                <p className="text-[11px] text-gray-500">Necessária antes de limpar os dados pela primeira vez.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {clearDataDone ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 flex gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-emerald-700 leading-relaxed">
+                    Password definida e todos os dados foram limpos com sucesso.
+                  </p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 flex gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-rose-700 leading-relaxed">
+                      Esta password é independente da sua password de login e será pedida sempre que quiser limpar os dados no futuro. Guarde-a bem — não há forma de a recuperar, só de a redefinir.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-600 mb-1 block">Nova Password (mín. 6 caracteres)</label>
+                    <input
+                      type="password"
+                      value={clearDataPasswordDraft}
+                      onChange={e => setClearDataPasswordDraft(e.target.value)}
+                      autoFocus
+                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-600 mb-1 block">Confirmar Password</label>
+                    <input
+                      type="password"
+                      value={clearDataPasswordConfirmDraft}
+                      onChange={e => setClearDataPasswordConfirmDraft(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleSetClearDataPassword()}
+                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+
+                  {clearDataError && (
+                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {clearDataError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={closeClearDataFlow}
+                disabled={clearDataSubmitLoading}
+                className="px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition disabled:opacity-50"
+              >
+                {clearDataDone ? 'Fechar' : 'Cancelar'}
+              </button>
+              {!clearDataDone && (
+                <button
+                  type="button"
+                  onClick={handleSetClearDataPassword}
+                  disabled={clearDataSubmitLoading}
+                  className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {clearDataSubmitLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {clearDataSubmitLoading ? 'A processar...' : 'Definir e Limpar Dados'}
+                </button>
+              )}
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* Clear-Data Password — "Confirm" flow. Shown when a Clear-Data
+          password already exists for this business; the owner must
+          re-enter it every time before clearAllData() runs. */}
+      {clearDataFlow === 'confirm' && (
+        <div className="fixed inset-0 z-[60] bg-black/80 backdrop-blur-sm flex items-center justify-center p-4">
+          <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-md shadow-2xl overflow-hidden">
+            <div className="p-5 border-b border-gray-200 flex items-center gap-3">
+              <div className="w-10 h-10 rounded-2xl bg-rose-500/10 border border-rose-500/30 flex items-center justify-center shrink-0">
+                <Lock className="w-5 h-5 text-rose-600" />
+              </div>
+              <div>
+                <h3 className="text-sm font-bold text-gray-900">Limpar Todos os Dados</h3>
+                <p className="text-[11px] text-gray-500">Esta ação é permanente e imediata.</p>
+              </div>
+            </div>
+
+            <div className="p-5 space-y-4">
+              {clearDataDone ? (
+                <div className="bg-emerald-500/10 border border-emerald-500/30 rounded-2xl p-3 flex gap-2">
+                  <Check className="w-4 h-4 text-emerald-600 shrink-0 mt-0.5" />
+                  <p className="text-[11px] text-emerald-700 leading-relaxed">Todos os dados foram limpos com sucesso.</p>
+                </div>
+              ) : (
+                <>
+                  <div className="bg-rose-500/10 border border-rose-500/30 rounded-2xl p-3 flex gap-2">
+                    <AlertCircle className="w-4 h-4 text-rose-600 shrink-0 mt-0.5" />
+                    <p className="text-[11px] text-rose-700 leading-relaxed">
+                      Isto remove permanentemente todos os produtos, lotes, despesas, retiradas e quebras deste negócio. Fechos e Contagens finalizadas não são removidos por esta ação. Não pode ser desfeita.
+                    </p>
+                  </div>
+
+                  <div>
+                    <label className="text-[11px] font-bold text-gray-600 mb-1 block">Password de Limpeza</label>
+                    <input
+                      type="password"
+                      value={clearDataEnteredPassword}
+                      onChange={e => setClearDataEnteredPassword(e.target.value)}
+                      onKeyDown={e => e.key === 'Enter' && handleConfirmClearData()}
+                      autoFocus
+                      className="w-full bg-white border border-gray-200 rounded-xl px-3 py-2 text-xs text-gray-900 placeholder-gray-400 focus:outline-none focus:border-rose-500"
+                    />
+                  </div>
+
+                  {clearDataError && (
+                    <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-2.5 flex items-center gap-2 text-[11px] text-rose-700">
+                      <AlertCircle className="w-3.5 h-3.5 shrink-0" /> {clearDataError}
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+
+            <div className="p-4 border-t border-gray-200 flex gap-2 justify-end">
+              <button
+                type="button"
+                onClick={closeClearDataFlow}
+                disabled={clearDataSubmitLoading}
+                className="px-4 py-2.5 rounded-xl bg-gray-50 hover:bg-gray-100 text-gray-800 text-xs font-bold transition disabled:opacity-50"
+              >
+                {clearDataDone ? 'Fechar' : 'Cancelar'}
+              </button>
+              {!clearDataDone && (
+                <button
+                  type="button"
+                  onClick={handleConfirmClearData}
+                  disabled={clearDataSubmitLoading}
+                  className="px-4 py-2.5 rounded-xl bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition disabled:opacity-50 flex items-center gap-1.5"
+                >
+                  {clearDataSubmitLoading ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Trash2 className="w-3.5 h-3.5" />}
+                  {clearDataSubmitLoading ? 'A limpar...' : 'Confirmar Limpeza'}
+                </button>
+              )}
             </div>
           </div>
         </div>
