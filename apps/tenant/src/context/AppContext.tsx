@@ -54,7 +54,7 @@ import {
   evaluateUnitRelationshipReplacement,
   type UnitRelationshipProposal,
 } from '../lib/unitRelationship';
-import { buildDerivedSellingValuationSnapshot } from '../lib/purchaseToSellingConversion';
+import { buildDerivedSellingValuationSnapshot, type ProductMemorySnapshot } from '../lib/purchaseToSellingConversion';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -223,6 +223,22 @@ interface AddStockParams {
   // the new Product (BDR-0012 §5.A Item 6's warn-not-block condition),
   // never a thrown error and never a partial/invalid write.
   unitRelationship?: UnitRelationship;
+  // [§47 — New-Product First-Creation Selling Configuration Amendment,
+  // FR-95/FR-98; Track B Implementation Authorization §6] The
+  // canonical initial selling price for a genuinely NEW product,
+  // explicitly denominated in `unitRelationship.sellingUnit` above —
+  // deliberately a SEPARATE field from `sellingPrice` above (this same
+  // interface), which remains this Stock Entry's own transaction
+  // selling price for the purchase, denominated in `unit`/purchase
+  // terms, completely unaffected by this field (FR-97: purchase/
+  // selling facts stay independently supplied, never merged/derived
+  // from one another). Only ever read inside the brand-new-product
+  // creation branch, below — never for an existing product (FR-96).
+  // Absent, or paired with no valid `unitRelationship.sellingUnit`,
+  // simply results in no Product.sellingPrice being set on the new
+  // Product (the same warn-not-block discipline `unitRelationship`
+  // above already follows) — never a thrown error.
+  newProductSellingUnitPrice?: number;
   // [Product Identity Existing/New Resolution — Implementation
   // Authorization, Checkpoints A/B] Explicit, owner-confirmed signal
   // that this line item's productName was deliberately confirmed as a
@@ -4016,6 +4032,19 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
       let product = tempProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
       let productId = product?.id;
+      // [§47/FR-95/FR-99; Track B Implementation Authorization §6]
+      // Populated ONLY inside the genuinely-new-product creation branch
+      // below, and ONLY when this item's own newly-established selling
+      // configuration is valid — carries that SAME configuration
+      // forward to this loop iteration's own derivedSellingValuation
+      // call, further down, so a brand-new product's first Stock Entry
+      // can compute its own selling-side result immediately (FR-99),
+      // without a second, independently-derived source of truth for it
+      // (Authorization §8). `product` itself is deliberately left
+      // untouched/undefined for a new product (unchanged from before
+      // this amendment) — every other consumer of `product` below
+      // (previousBatchForProduct, etc.) keeps its existing behavior.
+      let newlyEstablishedProductMemory: ProductMemorySnapshot | undefined;
 
       // [Product Identity Existing/New Resolution — Implementation
       // Authorization, Checkpoint A, Required Behavioral Guarantee 1]
@@ -4039,17 +4068,52 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // [Product Memory / UOM — Increment A] Same "genuinely new
         // product only, re-validated at the actual write path" rule as
         // addStockBatch's own product-creation branch, above.
+        const newProdUnitRelationshipValid =
+          !!item.unitRelationship && isValidUnitRelationship(item.unitRelationship);
+        // [§47/FR-95/FR-98; Track B Implementation Authorization §6]
+        // Re-validated HERE, at the actual write path, mirroring this
+        // codebase's own established pairing-invariant guard pattern
+        // (recordStockCount's `newProdSellingUnitValid`, above in this
+        // file — reused as a reference pattern only, never itself
+        // modified). `Product.sellingPrice` may only be created
+        // together with a valid, required `unitRelationship.sellingUnit`
+        // on the SAME write — never independently.
+        const newProdSellingPriceValid =
+          newProdUnitRelationshipValid &&
+          item.unitRelationship!.sellingUnit != null &&
+          typeof item.newProductSellingUnitPrice === 'number' &&
+          Number.isFinite(item.newProductSellingUnitPrice) &&
+          item.newProductSellingUnitPrice >= 0;
         const newProd: Product = {
           id: productId,
           name: trimmedName,
           createdAt: new Date().toISOString(),
-          ...(item.unitRelationship && isValidUnitRelationship(item.unitRelationship) ? { unitRelationship: item.unitRelationship } : {}),
+          ...(newProdUnitRelationshipValid ? { unitRelationship: item.unitRelationship } : {}),
           // [§45 Amendment FR-86; Implementation Authorization §2 item
           // 7] Same purchase cost/cost-unit memory seeding as
           // addStockBatch's own single-item path — never touches
           // sellingPrice/unitRelationship.sellingUnit (FR-85).
           ...(Number.isFinite(item.costPrice) && item.costPrice >= 0 ? { costPrice: Number(item.costPrice) } : {}),
+          // [§47 FR-95; Track B Implementation Authorization §6] The
+          // one narrow exception FR-95 authorizes — establishing the
+          // Product's canonical initial selling price at the exact
+          // moment of its own first creation. Independent of the
+          // costPrice line immediately above (FR-97) — never derived
+          // from it, never derives it.
+          ...(newProdSellingPriceValid ? { sellingPrice: item.newProductSellingUnitPrice } : {}),
         };
+        if (newProdSellingPriceValid) {
+          // [FR-99; Authorization §6/§8] Carried forward to this SAME
+          // iteration's derivedSellingValuation call below — the one
+          // and only authoritative source for both the persisted
+          // Product.sellingPrice above and this Stock Entry's own
+          // immediate selling-side calculation (never two
+          // independently-derived figures).
+          newlyEstablishedProductMemory = {
+            unitRelationship: item.unitRelationship,
+            sellingPrice: item.newProductSellingUnitPrice,
+          };
+        }
         const prodRef = doc(db, 'businesses', businessId, 'products', productId);
         fsBatch.set(prodRef, newProd);
         tempProducts.push(newProd);
@@ -4143,10 +4207,22 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // function call — never a stale earlier read). `product` is
       // `undefined` here for a brand-new product created earlier in
       // THIS SAME loop iteration (the `!product` branch, above) — a
-      // brand-new product has no Product.sellingPrice yet, so
-      // derivation correctly does not fire for a product's own very
-      // first batch (BDR-0012 §5.A Item 6's ordinary warn-not-block
-      // case, never an error).
+      // brand-new product has no PRE-EXISTING Product.sellingPrice, so
+      // derivation from `product` correctly does not fire for it here.
+      //
+      // [§47/FR-99; Track B Implementation Authorization §6] For that
+      // same brand-new-product case, `newlyEstablishedProductMemory`
+      // (populated just above, this SAME iteration, only when this
+      // item's own new selling configuration is valid) is supplied
+      // instead — the one narrow, explicitly-scoped exception FR-99
+      // requires, so the configuration a new Product is establishing
+      // right now is usable for its OWN first Stock Entry's selling-
+      // side result, rather than only becoming available starting with
+      // that product's second purchase. Still `undefined` whenever no
+      // valid new selling configuration was established (an ordinary
+      // new product with no selling configuration entered at all) —
+      // never a fabricated valuation (BDR-0012 §5.A Item 6's ordinary
+      // warn-not-block case, never an error).
       //
       // PURCHASE FACTS ARE NEVER TOUCHED BY THIS: item.quantity/
       // batchUnit/item.costPrice above (and newBatch.sellingPrice,
@@ -4158,7 +4234,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // price, §4/§13 — conflating the two is exactly the error this
       // Increment's governance chain exists to prevent).
       const derivedSellingValuation = buildDerivedSellingValuationSnapshot(
-        product ? { unitRelationship: product.unitRelationship, sellingPrice: product.sellingPrice } : undefined,
+        product
+          ? { unitRelationship: product.unitRelationship, sellingPrice: product.sellingPrice }
+          : newlyEstablishedProductMemory,
         batchUnit
       );
 

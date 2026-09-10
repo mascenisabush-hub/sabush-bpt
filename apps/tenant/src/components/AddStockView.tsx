@@ -161,6 +161,19 @@ interface StockRowItem {
   // exactMatchExists in the row-render closure, below).
   newProductSellingUnit?: string;
   newProductSellingUnitFactor?: string;
+  // [§47 — New-Product First-Creation Selling Configuration Amendment,
+  // FR-95/FR-98/FR-99; Track B Implementation Authorization §6] The
+  // canonical initial selling price for this brand-new product,
+  // explicitly denominated in `newProductSellingUnit` above — kept
+  // strictly distinct from `sellingPrice` above (this row's own
+  // transaction selling price for this purchase, denominated in
+  // `unit`). Same UI-only, never-persisted-to-draft treatment as
+  // `newProductSellingUnit`/`newProductSellingUnitFactor` immediately
+  // above (rowToDraftLineItem/draftLineItemToRow, below, deliberately
+  // exclude all three identically). Only ever read/sent for a row that
+  // is NOT resolving to an existing product (see exactMatchExists,
+  // below) — never read for an existing product's row.
+  newProductSellingUnitPrice?: string;
 
   // [Product Identity Existing/New Resolution — Implementation
   // Authorization, Checkpoint A] Set ONLY by an explicit owner action
@@ -314,8 +327,21 @@ const UnitRelationshipRow: React.FC<{
   sellingUnit: string;
   factor: string;
   onChange: (sellingUnit: string, factor: string) => void;
-}> = ({ purchaseUnit, sellingUnit, factor, onChange }) => {
-  const [expanded, setExpanded] = useState(!!(sellingUnit || factor));
+  // [§47/FR-95/FR-98/FR-99; Track B Implementation Authorization §6]
+  // The smallest possible extension to this existing component's own
+  // configuration surface — one additional field, the new product's
+  // canonical selling price denominated in `sellingUnit` above.
+  // Deliberately a separate prop/handler pair from `onChange` above
+  // (never merged into the same callback), keeping this new value
+  // structurally distinct from the unit-relationship candidate exactly
+  // as it is distinct in StockRowItem/AddStockParams. Optional so
+  // every other existing caller of this component (none currently,
+  // but the contract stays backward-compatible) continues to compile
+  // unchanged.
+  sellingUnitPrice?: string;
+  onSellingUnitPriceChange?: (price: string) => void;
+}> = ({ purchaseUnit, sellingUnit, factor, onChange, sellingUnitPrice, onSellingUnitPriceChange }) => {
+  const [expanded, setExpanded] = useState(!!(sellingUnit || factor || sellingUnitPrice));
 
   if (!expanded) {
     return (
@@ -365,6 +391,21 @@ const UnitRelationshipRow: React.FC<{
             className="w-28 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
           />
         </div>
+        {onSellingUnitPriceChange && (
+          <div>
+            <label className="block text-[10.5px] font-bold text-gray-500 mb-1">
+              Preço de venda {sellingUnit ? `(por ${sellingUnit})` : '(por unidade de venda)'}
+            </label>
+            <input
+              type="text"
+              inputMode="decimal"
+              value={sellingUnitPrice || ''}
+              onChange={(e) => onSellingUnitPriceChange(sanitizeDecimalInput(e.target.value))}
+              placeholder="Ex: 65"
+              className="w-28 bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-1.5 text-[13px] font-mono tabular-nums focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30"
+            />
+          </div>
+        )}
       </div>
       <p className="text-[13px] text-gray-500 leading-relaxed">
         Deixe em branco se não quiser configurar agora — pode fazê-lo mais tarde na ficha do produto.
@@ -2637,6 +2678,11 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       // Checkpoint 1) for the backend guarantee that this is never read
       // for an existing product's creation branch.
       let unitRelationship: UnitRelationship | undefined;
+      // [§47/FR-95/FR-98; Track B Implementation Authorization §6] Set
+      // only alongside a valid `unitRelationship` candidate (below),
+      // mirroring the pairing invariant this same block already
+      // enforces for the relationship itself — never independently.
+      let newProductSellingUnitPrice: number | undefined;
       const rowResolvesToExistingProduct = products.some((p) => p.name.toLowerCase() === trimmedName.toLowerCase());
       if (!rowResolvesToExistingProduct) {
         const sellingUnit = (row.newProductSellingUnit || '').trim();
@@ -2652,6 +2698,14 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           };
           if (isValidUnitRelationship(candidate)) {
             unitRelationship = candidate;
+            // [FR-98 pairing invariant] Only captured once the
+            // relationship candidate above is itself confirmed valid —
+            // a price typed without a valid relationship is simply not
+            // sent, exactly like `unitRelationship` itself above.
+            const rawSellPrice = parseFloat(row.newProductSellingUnitPrice || '');
+            if (Number.isFinite(rawSellPrice) && rawSellPrice >= 0) {
+              newProductSellingUnitPrice = rawSellPrice;
+            }
           }
         }
       }
@@ -2703,6 +2757,12 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
           : {}),
         // [Product Memory / UOM — Increment A, Checkpoint 2b]
         ...(unitRelationship ? { unitRelationship } : {}),
+        // [§47/FR-95/FR-98; Track B Implementation Authorization §6]
+        // Only ever sent alongside a valid `unitRelationship` above —
+        // never independently (mirrors the pairing-invariant gate
+        // that already produced `newProductSellingUnitPrice` itself,
+        // above).
+        ...(newProductSellingUnitPrice != null ? { newProductSellingUnitPrice } : {}),
         // [Product Identity Existing/New Resolution — Checkpoint A]
         // Only ever meaningful for a row that does NOT resolve to an
         // existing product — addMultipleStockBatches' own safety
@@ -4152,6 +4212,10 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           factor={row.newProductSellingUnitFactor || ''}
                           onChange={(sellingUnit, factor) =>
                             updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                          }
+                          sellingUnitPrice={row.newProductSellingUnitPrice || ''}
+                          onSellingUnitPriceChange={(price) =>
+                            updateRow(row.id, { newProductSellingUnitPrice: price })
                           }
                         />
                       )}
