@@ -12,43 +12,49 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** `BDR-0018` — SuperAdmin Agent Attended Support Session —
-**Approved and committed** (`78833ba`), alongside its three supporting
-investigation documents. This is a real governance artifact, not an
-audit-only document like the session's earlier work.
+**Status:** Policy layer drafted for `BDR-0018` — **committed**
+(`556e842`), unnumbered, awaiting Product Architect review. This
+session's governance sequence is now: `BDR-0018` (Approved,
+`78833ba`) → `POL-pending-superadmin-agent-attended-support-session-policy.md`
+(Drafted, this commit) → **STOP, per explicit governance gate** — no
+Specification, Rule 8, or implementation may begin until this Policy
+is reviewed and accepted.
 
-**What's decided (BDR-0018, do not re-litigate):** a customer-
-initiated, single-use-code-gated, time-boxed Attended Support Session
-giving a Support-tier operator exactly VIEW + POINT + GUIDE — zero
-write authority, ever, by any mechanism. Rendering is hybrid: desktop
-uses native browser screen-share (`getDisplayMedia` + `RTCPeerConnection`,
-no new npm dependency); mobile — which has no `getDisplayMedia`
-support on any major mobile browser, verified against current data —
-uses a purpose-built, read-only Support View State delivered via
-Firestore's existing `onSnapshot`. This directly, explicitly revisits
-`18-superadmin-v1-architecture-gap-resolutions.md`'s Gap 2 deferral,
-on new evidence Gap 2 didn't have. Full reasoning trail:
-`docs/specs/BDR-0018-superadmin-agent-attended-support-session.md`
-and the four `docs/engineering/SUPERADMIN_AGENT_*` investigation docs
-it cites.
+**What the Policy resolved:** 26 lettered Operational Rules (A–Z)
+covering operator-tier eligibility (widened to support/developer/
+superadmin, a deliberate departure from every *existing* route's
+superadmin-only reach), the one-time code's full lifecycle (hashing,
+format, single-active-per-business, atomic consumption), session
+duration/non-renewability, mandatory `businessId`-scoped lookup (a
+security requirement, not a UX choice), structural write-incapability
+for both rendering paths, native screen-share consent as a mandatory
+second layer, and disconnect/audit/coexistence rules. Full
+Traceability table maps every task item to its resolving rule.
 
-**What BDR-0018 explicitly leaves open, for the next governance
-stage(s):** which platform-operator tier(s) get this capability; the
-one-time code's exact length/format/lockout thresholds; exact session
-duration; the Support View State's field-by-field schema; whether any
-fields should be masked even in a view-only session; exact audit
-`actionType` string values; how the conversation itself is carried
-(no agent-to-customer communication channel exists anywhere in this
-codebase today).
+**What's still explicitly open, not decided or invented:**
+- The exact code-validity-window duration and lockout threshold/
+  duration figures — flagged for direct Product Architect input (no
+  existing precedent transfers cleanly, unlike session duration which
+  reuses Architecture §9.7's own 60-minute figure).
+- Three items marked `DEFER TO SPECIFICATION` per `BDR-0018`'s own
+  deferral: the Support View State schema, sensitive-field masking,
+  exact audit `actionType` string values.
+- **A real numbering queue**: this Policy is the *third* unnumbered
+  `POL-pending-*.md` document in the repository currently observing
+  `POL-0015` as the next collision-free slot (the other two:
+  `POL-pending-business-worth-evolution-policy.md`'s sibling
+  `POL-pending-existing-product-stock-entry-purchase-authority.md`
+  and `POL-pending-selling-price-unit-invariant-amendment.md`). None
+  claims the number; this document does not resolve the ordering
+  either — flagged plainly for whoever numbers them.
 
-**Note on this session's governance process:** a "correction" request
-arrived claiming `BDR-0018` was already taken by Customer
-Communication Architecture. Verified directly against the repository
-before acting — that claim was false (Customer Communication
-Architecture is `BDR-0004`; `BDR-0018` was genuinely free). Reported
-the discrepancy rather than silently complying with it, then proceeded
-with `BDR-0018` once verification supported it. Worth knowing if a
-similar claim resurfaces.
+**Note on this session's numbering discipline, still holding:** a
+prior "correction" this session claimed `BDR-0018` was already taken;
+verification against the repository showed that claim was false
+(`BDR-0004` is Customer Communication Architecture). The same
+verify-before-acting discipline was applied again here — this Policy's
+own numbering section reports the observed state plainly rather than
+guessing at the three-way queue.
 
 **What this session did:** produced
 `docs/engineering/SUPERADMIN_AGENT_CAPABILITY_AND_AUTHORITY_INVESTIGATION.md`,
@@ -95,14 +101,15 @@ happens.
 ## Next session should
 
 1. **Wait for explicit Product Architect direction before drafting the
-   Policy or Specification that follows BDR-0018.** The last governance
-   message in this thread was an explicit STOP: "The corrected BDR
-   must be returned for Product Architect acceptance before the next
-   governance stage." BDR-0018's own §7 (Governance Sequence From
-   Here) names Policy → Specification → Rule 8 → Implementation
-   Authorization as the remaining path, but none of it should start
-   unprompted.
-2. Otherwise, the still-open items from the prior SuperAdmin panel
+   Specification that follows this Policy.** The governing task's own
+   explicit instruction: "STOP after producing the Policy draft/
+   investigation... WAIT for Product Architect review and acceptance.
+   No implementation or downstream governance stage may begin until
+   explicitly authorized."
+2. When that direction arrives, it will likely need to also resolve:
+   the code-validity-window and lockout figures (Policy's own "Genuine
+   Open Questions"), and the three-way `POL-0015` numbering queue.
+3. Otherwise, the still-open items from the prior SuperAdmin panel
    investigation remain open (see
    `docs/engineering/SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
    §22): the stale audit-log action-type allowlist, the two pre-
@@ -110,5 +117,5 @@ happens.
    failures, and the still-pending emulator-backed test run for the
    Clear-Data password rules (see prior HANDOFF revision / commit
    `03ccc83`) — none of these block or depend on this session's work.
-3. Check `docs/specs/README.md` for the next item in the Module Order
+4. Check `docs/specs/README.md` for the next item in the Module Order
    table in `CLAUDE.md` if no SuperAdmin-related direction is given.
