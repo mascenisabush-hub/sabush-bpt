@@ -92,8 +92,21 @@ describe('Product Configuration UX — Add Stock (AddStockView.tsx, mobile layou
     assert.doesNotMatch(between, /black list|blacklisted/i);
   });
 
-  it('the moved UnitRelationshipRow block is, in its core props/logic, unchanged from before — same gate, same onChange, only its position changed and (Track B, §47 FR-95/FR-99) one additional, independent sellingUnitPrice/onSellingUnitPriceChange prop pair', () => {
-    assert.match(addStockSrc, /\{row\.productName\.trim\(\) && !exactMatchExists && \(\s*\n\s*<UnitRelationshipRow\s*\n\s*purchaseUnit=\{row\.unit \|\| 'un'\}\s*\n\s*sellingUnit=\{row\.newProductSellingUnit \|\| ''\}\s*\n\s*factor=\{row\.newProductSellingUnitFactor \|\| ''\}\s*\n\s*onChange=\{\(sellingUnit, factor\) =>\s*\n\s*updateRow\(row\.id, \{ newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor \}\)\s*\n\s*\}\s*\n\s*sellingUnitPrice=\{row\.newProductSellingUnitPrice \|\| ''\}\s*\n\s*onSellingUnitPriceChange=\{\(price\) =>\s*\n\s*updateRow\(row\.id, \{ newProductSellingUnitPrice: price \}\)\s*\n\s*\}\s*\n\s*\/>\s*\n\s*\)\}/);
+  it('the moved UnitRelationshipRow block retains its core props/logic from before — same gate, same purchaseUnit/sellingUnit/factor wiring into the same updateRow-driving fields, only its position changed, plus (Track B §47, and this bugfix) the independent sellingUnitPrice pairing and the applyNewProductRelationshipChange wrapper that keeps VENDA in sync — checked structurally rather than as one brittle byte-exact block, since this component legitimately keeps growing new, independently-scoped props', () => {
+    const relIdx = addStockSrc.indexOf('<UnitRelationshipRow');
+    const gateIdx = addStockSrc.lastIndexOf('{row.productName.trim() && !exactMatchExists && (', relIdx);
+    assert.notEqual(gateIdx, -1);
+    assert.notEqual(relIdx, -1);
+    assert.ok(relIdx > gateIdx && relIdx - gateIdx < 200, 'Expected <UnitRelationshipRow> to render immediately inside the same identity/exact-match gate as before.');
+
+    const closeIdx = addStockSrc.indexOf('/>', relIdx);
+    const block = addStockSrc.slice(relIdx, closeIdx);
+    assert.match(block, /purchaseUnit=\{row\.unit \|\| 'un'\}/);
+    assert.match(block, /sellingUnit=\{row\.newProductSellingUnit \|\| ''\}/);
+    assert.match(block, /factor=\{row\.newProductSellingUnitFactor \|\| ''\}/);
+    assert.match(block, /newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor \}/);
+    assert.match(block, /sellingUnitPrice=\{row\.newProductSellingUnitPrice \|\| ''\}/);
+    assert.match(block, /newProductSellingUnitPrice: price \}/);
   });
 
   it('the UnitRelationshipRow component itself (its own free-text selling-unit input, not a <select>) is unmodified — this task never unifies it with Contagem\'s constrained dropdown', () => {
@@ -177,12 +190,15 @@ describe('Desktop Add Stock Unit-Relationship Parity Correction (follow-up to dc
     assert.ok(unitIdx < costIdx && costIdx < sellIdx, 'Expected Purchase Unit -> Cost Price -> Selling Price to remain in this order on mobile.');
   });
 
-  it('[Requirement E] no desktop-specific duplicate UnitRelationship implementation was introduced — no new component, no new state field, no new handler; the same purchaseUnit/sellingUnit/factor/onChange props flow into the same updateRow call as before, plus (Track B, §47) one additional, independent sellingUnitPrice/onSellingUnitPriceChange prop pair', () => {
+  it('[Requirement E] no desktop-specific duplicate UnitRelationship implementation was introduced — no new component, no new state field, no new handler; the same purchaseUnit/sellingUnit/factor props flow into the same row fields as before, plus (Track B §47, and this bugfix) the independent sellingUnitPrice pairing and the applyNewProductRelationshipChange wrapper — checked structurally, not as one brittle byte-exact block', () => {
     assert.doesNotMatch(addStockSrc, /UnitRelationshipRowDesktop|DesktopUnitRelationship|UnitRelationshipCell/);
-    assert.match(
-      addStockSrc,
-      /<UnitRelationshipRow\s*\n\s*purchaseUnit=\{row\.unit \|\| 'un'\}\s*\n\s*sellingUnit=\{row\.newProductSellingUnit \|\| ''\}\s*\n\s*factor=\{row\.newProductSellingUnitFactor \|\| ''\}\s*\n\s*onChange=\{\(sellingUnit, factor\) =>\s*\n\s*updateRow\(row\.id, \{ newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor \}\)\s*\n\s*\}\s*\n\s*sellingUnitPrice=\{row\.newProductSellingUnitPrice \|\| ''\}\s*\n\s*onSellingUnitPriceChange=\{\(price\) =>\s*\n\s*updateRow\(row\.id, \{ newProductSellingUnitPrice: price \}\)\s*\n\s*\}\s*\n\s*\/>/
-    );
+    const relIdx = addStockSrc.indexOf('<UnitRelationshipRow');
+    const closeIdx = addStockSrc.indexOf('/>', relIdx);
+    const block = addStockSrc.slice(relIdx, closeIdx);
+    assert.match(block, /purchaseUnit=\{row\.unit \|\| 'un'\}/);
+    assert.match(block, /sellingUnit=\{row\.newProductSellingUnit \|\| ''\}/);
+    assert.match(block, /factor=\{row\.newProductSellingUnitFactor \|\| ''\}/);
+    assert.match(block, /newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor \}/);
   });
 
   it('the UnitRelationshipRow component definition itself is unmodified — same free-text selling-unit input, not converted to a select, not touched by this correction', () => {

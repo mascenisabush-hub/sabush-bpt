@@ -11,6 +11,7 @@ import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } fr
 import { type SupplierWordingCandidate, detectSupplierWordingContradictions } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognitionAsync, resolveScanRowSupplierWordingAsync } from '../lib/supplierWordingRecognition';
 import { isValidUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
+import { computeRatePerPurchaseUnit } from '../lib/purchaseToSellingConversion';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanonicalProductSellingMemory } from '../lib/productMemoryPriceResolution';
 import { findSimilarProducts } from '../lib/productNameSimilarity';
 // [Manual data-entry error investigation, Finding 3] Shared with
@@ -467,6 +468,54 @@ function unitRelationshipCandidateEqualsCurrent(
   const currentSellingUnit = (current.sellingUnit || '').trim().toLowerCase();
   const candidateSellingUnit = (sellingUnit || '').trim().toLowerCase();
   return currentSellingUnit === candidateSellingUnit;
+}
+
+// [Bug fix — Owner-reported: "having cost price autofilled by OCR, and
+// quantity autofilled, unit and selling price/selected unit, the total
+// can be auto-calculated"] For a genuinely new product, the operator
+// previously had to fill in TWO separate selling-price concepts that
+// were never reconciled with each other: the row's own transaction
+// VENDA field (denominated in the purchase unit, e.g. per "emb") and
+// this new product's canonical "Preço de venda (por un)" (denominated
+// in the selling unit) inside the relationship panel — leaving VENDA
+// blank, and the row's own Lucro Estimado showing a confusing, fully
+// negative figure, even once a complete, valid relationship and price
+// had been entered. This computes exactly what VENDA (per the
+// PURCHASE unit) must be, from that same relationship+price, reusing
+// the existing, unmodified Concept C rate arithmetic
+// (computeRatePerPurchaseUnit, purchaseToSellingConversion.ts) — the
+// identical formula the worked example (§47/FR-99) already uses to
+// turn "1 Cx = 24 Un, 65 MZN/Un" into "1,560 MZN/Cx". Never invents a
+// number: returns undefined whenever the relationship+price aren't
+// yet a complete, valid configuration (factor missing/non-positive,
+// selling unit blank, price missing/negative, or a purchase/selling
+// unit collision — isValidUnitRelationship's own guard, unchanged).
+function computeNewProductRowSellingPrice(
+  purchaseUnit: string,
+  sellingUnit: string,
+  factor: string,
+  sellingUnitPrice: string
+): string | undefined {
+  const trimmedPurchaseUnit = (purchaseUnit || 'un').trim();
+  const trimmedSellingUnit = sellingUnit.trim();
+  const numFactor = parseFloat(factor);
+  const numPrice = parseFloat(sellingUnitPrice);
+  if (!trimmedSellingUnit || !Number.isFinite(numFactor) || numFactor <= 0) return undefined;
+  if (sellingUnitPrice.trim() === '' || !Number.isFinite(numPrice) || numPrice < 0) return undefined;
+
+  const candidate: UnitRelationship = {
+    units: [
+      { unit: trimmedPurchaseUnit, factorFromPrevious: 0 },
+      { unit: trimmedSellingUnit, factorFromPrevious: numFactor },
+    ],
+    sellingUnit: trimmedSellingUnit,
+    confirmedAt: new Date().toISOString(),
+  };
+  if (!isValidUnitRelationship(candidate)) return undefined;
+
+  const rate = computeRatePerPurchaseUnit(candidate, trimmedPurchaseUnit, trimmedSellingUnit, numPrice);
+  if (rate === null) return undefined;
+  return rate.toFixed(2);
 }
 
 // [Product Catalog Phase 2 — Checkpoint 4, Specification §7/§9/§10;
@@ -1630,6 +1679,46 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     );
   };
 
+  // [Bug fix — Owner-reported: "having cost price autofilled by OCR,
+  // and quantity autofilled, unit and selling price/selected unit, the
+  // total can be auto-calculated"] Thin wrapper around updateRow used
+  // ONLY by the new-product relationship panel's own three inputs
+  // (factor, selling unit, price-per-selling-unit) and by
+  // handleUnitChange's own new-product branch, below — never by
+  // anything else. Whenever the resulting purchase-unit/selling-unit/
+  // factor/price combination is complete and valid,
+  // computeNewProductRowSellingPrice (pure, above) supplies the row's
+  // own VENDA (transaction selling price, denominated in the PURCHASE
+  // unit) — the exact figure Lucro Estimado already reads — so the
+  // Owner is never left reconciling two differently-denominated prices
+  // by hand. Respects the row's own existing "leave my manual price
+  // alone" rule (sellingPriceAutoFilled === false means the Owner has
+  // since typed directly into VENDA) — this never overwrites a
+  // manually-entered VENDA. Marks a freshly-computed VENDA as
+  // sellingPriceAutoFilled: true (not false, not left unset) so it
+  // keeps re-syncing as the Owner keeps adjusting the relationship,
+  // exactly like every other auto-filled price field in this file.
+  const applyNewProductRelationshipChange = (
+    rowId: string,
+    purchaseUnit: string,
+    sellingUnit: string,
+    factor: string,
+    sellingUnitPrice: string,
+    fieldUpdates: Partial<StockRowItem>
+  ) => {
+    const row = rows.find((r) => r.id === rowId);
+    const updates: Partial<StockRowItem> = { ...fieldUpdates };
+    if (row && row.sellingPriceAutoFilled !== false) {
+      const computedSell = computeNewProductRowSellingPrice(purchaseUnit, sellingUnit, factor, sellingUnitPrice);
+      if (computedSell !== undefined) {
+        updates.sellingPrice = computedSell;
+        updates.sellingPriceAutoFilled = true;
+        updates.sellingPriceBasisUnit = (purchaseUnit || 'un').trim();
+      }
+    }
+    updateRow(rowId, updates);
+  };
+
   // [Bug fix — urgent, Owner-reported: typing/renaming a product name
   // felt impossible, and cost price stopped auto-filling] Mirrors the
   // live `rows` state into a ref, read only inside the DEBOUNCED
@@ -1773,6 +1862,32 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       const resolvedSell = resolveUnitAwarePrice(parseFloat(row.sellingPrice) || 0, basisUnit, newUnit, relationship);
       if (resolvedSell !== '') {
         updates.sellingPrice = resolvedSell;
+        updates.sellingPriceAutoFilled = true;
+        updates.sellingPriceBasisUnit = newUnit;
+      }
+    }
+
+    // [Bug fix — Owner-reported: "having cost price autofilled by OCR,
+    // and quantity autofilled, unit and selling price/selected unit,
+    // the total can be auto-calculated"] Scoped strictly to `!matched`
+    // (a genuinely new product, never an existing one — the branch
+    // immediately above already owns the existing-product case
+    // completely) and only when the row's own relationship panel
+    // already carries a complete configuration. Keeps VENDA in sync
+    // with the PURCHASE unit the Owner just changed to, using the same
+    // computeNewProductRowSellingPrice arithmetic the panel's own three
+    // inputs already trigger — never a second, independently-invented
+    // calculation. Same "don't overwrite a manually-typed VENDA" guard
+    // as every other auto-fill in this function.
+    if (!matched && row.sellingPriceAutoFilled !== false) {
+      const computedSell = computeNewProductRowSellingPrice(
+        newUnit,
+        row.newProductSellingUnit || '',
+        row.newProductSellingUnitFactor || '',
+        row.newProductSellingUnitPrice || ''
+      );
+      if (computedSell !== undefined) {
+        updates.sellingPrice = computedSell;
         updates.sellingPriceAutoFilled = true;
         updates.sellingPriceBasisUnit = newUnit;
       }
@@ -4230,11 +4345,25 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                           sellingUnit={row.newProductSellingUnit || ''}
                           factor={row.newProductSellingUnitFactor || ''}
                           onChange={(sellingUnit, factor) =>
-                            updateRow(row.id, { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor })
+                            applyNewProductRelationshipChange(
+                              row.id,
+                              row.unit,
+                              sellingUnit,
+                              factor,
+                              row.newProductSellingUnitPrice || '',
+                              { newProductSellingUnit: sellingUnit, newProductSellingUnitFactor: factor }
+                            )
                           }
                           sellingUnitPrice={row.newProductSellingUnitPrice || ''}
                           onSellingUnitPriceChange={(price) =>
-                            updateRow(row.id, { newProductSellingUnitPrice: price })
+                            applyNewProductRelationshipChange(
+                              row.id,
+                              row.unit,
+                              row.newProductSellingUnit || '',
+                              row.newProductSellingUnitFactor || '',
+                              price,
+                              { newProductSellingUnitPrice: price }
+                            )
                           }
                         />
                       )}
