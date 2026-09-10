@@ -12,9 +12,43 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** SuperAdmin Agent investigation complete — audit-only,
-**committed and pushed** (`4ff863a`). No code, schema, or governance
-artifact was created or modified by this work. Nothing mid-flight.
+**Status:** `BDR-0018` — SuperAdmin Agent Attended Support Session —
+**Approved and committed** (`78833ba`), alongside its three supporting
+investigation documents. This is a real governance artifact, not an
+audit-only document like the session's earlier work.
+
+**What's decided (BDR-0018, do not re-litigate):** a customer-
+initiated, single-use-code-gated, time-boxed Attended Support Session
+giving a Support-tier operator exactly VIEW + POINT + GUIDE — zero
+write authority, ever, by any mechanism. Rendering is hybrid: desktop
+uses native browser screen-share (`getDisplayMedia` + `RTCPeerConnection`,
+no new npm dependency); mobile — which has no `getDisplayMedia`
+support on any major mobile browser, verified against current data —
+uses a purpose-built, read-only Support View State delivered via
+Firestore's existing `onSnapshot`. This directly, explicitly revisits
+`18-superadmin-v1-architecture-gap-resolutions.md`'s Gap 2 deferral,
+on new evidence Gap 2 didn't have. Full reasoning trail:
+`docs/specs/BDR-0018-superadmin-agent-attended-support-session.md`
+and the four `docs/engineering/SUPERADMIN_AGENT_*` investigation docs
+it cites.
+
+**What BDR-0018 explicitly leaves open, for the next governance
+stage(s):** which platform-operator tier(s) get this capability; the
+one-time code's exact length/format/lockout thresholds; exact session
+duration; the Support View State's field-by-field schema; whether any
+fields should be masked even in a view-only session; exact audit
+`actionType` string values; how the conversation itself is carried
+(no agent-to-customer communication channel exists anywhere in this
+codebase today).
+
+**Note on this session's governance process:** a "correction" request
+arrived claiming `BDR-0018` was already taken by Customer
+Communication Architecture. Verified directly against the repository
+before acting — that claim was false (Customer Communication
+Architecture is `BDR-0004`; `BDR-0018` was genuinely free). Reported
+the discrepancy rather than silently complying with it, then proceeded
+with `BDR-0018` once verification supported it. Worth knowing if a
+similar claim resurfaces.
 
 **What this session did:** produced
 `docs/engineering/SUPERADMIN_AGENT_CAPABILITY_AND_AUTHORITY_INVESTIGATION.md`,
@@ -60,9 +94,14 @@ happens.
 
 ## Next session should
 
-1. Await Product Architect direction on the SuperAdmin Agent
-   investigation above — do not begin drafting a BDR/Policy/Spec for
-   it unprompted.
+1. **Wait for explicit Product Architect direction before drafting the
+   Policy or Specification that follows BDR-0018.** The last governance
+   message in this thread was an explicit STOP: "The corrected BDR
+   must be returned for Product Architect acceptance before the next
+   governance stage." BDR-0018's own §7 (Governance Sequence From
+   Here) names Policy → Specification → Rule 8 → Implementation
+   Authorization as the remaining path, but none of it should start
+   unprompted.
 2. Otherwise, the still-open items from the prior SuperAdmin panel
    investigation remain open (see
    `docs/engineering/SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
