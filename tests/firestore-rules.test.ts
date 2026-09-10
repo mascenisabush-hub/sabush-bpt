@@ -491,6 +491,58 @@ describe('businesses', () => {
 });
 
 // ---------------------------------------------------------------------
+// businesses/{businessId}/private/{docId} — Clear-Data Password hash
+// storage. Deliberately unreadable/unwritable by ANY client, including
+// the business's own Owner — set/verify only ever happen through
+// server/index.ts's /api/business/clear-data-password/* routes via the
+// Admin SDK, which bypasses these rules entirely (see
+// testEnv.withSecurityRulesDisabled below, standing in for that).
+// ---------------------------------------------------------------------
+describe('businesses/{businessId}/private', () => {
+  it('The Owner cannot read the Clear-Data password hash doc', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'private', 'clearDataAuth'), {
+        passwordHash: 'irrelevant-for-this-test',
+        salt: 'irrelevant-for-this-test',
+        failedAttempts: 0,
+        lockedUntil: null,
+      });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(getDoc(doc(ownerDb, 'businesses', BIZ, 'private', 'clearDataAuth')));
+  });
+
+  it('Neither the Owner nor Staff can create/update/delete the Clear-Data password hash doc', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'private', 'clearDataAuth'), { passwordHash: 'x', salt: 'y' }));
+
+    const staffDb = ctxFor(STAFF_UID).firestore();
+    await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'private', 'clearDataAuth'), { passwordHash: 'x', salt: 'y' }));
+
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'private', 'clearDataAuth'), { passwordHash: 'x', salt: 'y' });
+    });
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'private', 'clearDataAuth'), { failedAttempts: 1 }));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'private', 'clearDataAuth')));
+  });
+
+  it('A non-member cannot read, write, or delete the Clear-Data password hash doc', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, ownerUid: OWNER_UID, name: 'Biz One' });
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'private', 'clearDataAuth'), { passwordHash: 'x', salt: 'y' });
+    });
+    const otherDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherDb, 'businesses', BIZ, 'private', 'clearDataAuth')));
+    await assertFails(setDoc(doc(otherDb, 'businesses', BIZ, 'private', 'clearDataAuth'), { passwordHash: 'z', salt: 'z' }));
+    await assertFails(deleteDoc(doc(otherDb, 'businesses', BIZ, 'private', 'clearDataAuth')));
+  });
+});
+
+// ---------------------------------------------------------------------
 // Products — any team member reads/creates; only Owner updates/deletes.
 // ---------------------------------------------------------------------
 describe('products', () => {
