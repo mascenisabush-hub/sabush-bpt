@@ -1047,3 +1047,108 @@ This resolution governs the implementation recorded below; it is restated here f
 **Governance compliance re-check against §36's own scope list:** the first-time/subsequent distinction now renders correctly via the existing `isGenuinelyNewProductName` gate, with no new marker or mechanism introduced — met. No change to Mode A/B, portion creation/grouping, valuation, `normalizeStockCountItems`, `StockCount` confirmation, `producesBusinessWorthSnapshot`, or any other Increment 10/Increment 1 item — confirmed by direct inspection, not merely asserted.
 
 **Decision 37 (B.1–B.5) is now fully implemented.** All five items — §37 (B.1, plus its own completion above), §38 (B.2), §39 (B.3), §40 (B.4), and this record (B.5) — are executed and verified. The separately-authorized-pending-execution FR-67 item (§23 item 5, recorded implemented-but-not-yet-committed at §41, above) remains its own distinct item, unaffected by this record.
+
+---
+
+## 43. Product Architect Authorization — CAIXER (BDR Decision 40 / Specification §45) — DRAFT
+
+**Status: 🔶 DRAFT — AWAITING PRODUCT ARCHITECT SIGNATURE.** Drafted below per this document's own established "one umbrella Authorization, extended, not replaced" discipline (§7's own opening statement; §17–§21, §23, §34–§36's own precedent for adding a new dated item) and this repository's established pending-authorization convention (`capital-inicial-retirement-implementation-authorization.md`, "Product Architect Authorization — Amendment 2/3 — Pending"). **Drafting this section authorizes nothing by itself.** No `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or test file is touched to produce it. Signing the blank Formal Acceptance block at the end of this section (§43.7, below) is the sole act that would authorize implementation to be instructed to begin — and even then, per §7's own one-item-at-a-time discipline restated at §43.5 below, signature is the governance gate only, not an instruction to start.
+
+### 43.1 Governing Chain
+
+`BDR-pending-business-worth-evolution-measurement-model.md` Decision 40 (✅ SIGNED, SABUSHIMIKE MASCENI, 11 September 2026; [full decision record](./caixer-multi-method-liquidity-measurement-decision.md)) → Specification §45 (✅ ACCEPTED, 11 September 2026, including §45.13's refinement, FR-73–FR-81, Invariant I-8) → Rule 8 Assessment Addendum — CAIXER (`business-worth-evolution-rule8-assessment.md`, ✅ ACCEPTED, verdict `READY FOR IMPLEMENTATION PLAN`) → Product Architect Acceptance of the Rule 8 gate decisions CX-1, CX-2, CX-6, CX-13, CX-14 (`caixer-rule8-gate-decisions-product-architect-acceptance.md`, ✅ ACCEPTED AND SIGNED, 11 September 2026) → Implementation Plan Amendment — CAIXER (`business-worth-evolution-implementation-plan.md`, ✅ ACCEPTED, 11 September 2026, commit `07cef6e528849a3807dc9d03b53e5f8668bdd26f`; Plan-level acceptance itself recorded at commit `fb55434fef0afa0ac32867c3402091654a8e3552`) → **this draft Authorization item (§43), pending signature.**
+
+**One umbrella Authorization, extended, not replaced** — this section does not create a second, separate Implementation Authorization for CAIXER; it proposes to extend the single existing document with a new dated item, exactly as §17–§21, §23, and §36 already did for Increments 5–9, Increment 10, and Decision 37 respectively.
+
+### 43.2 Scope of This Authorization Item — Exactly the Accepted Plan Amendment's §B–§I, No More
+
+Per the accepted Implementation Plan Amendment's own checkpoints (`business-worth-evolution-implementation-plan.md`, "Implementation Plan Amendment — CAIXER" section):
+
+1. **Plan §B (C.1, C.2) — Data model.** Four new optional `BusinessWorthSnapshot` fields (`cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco`, `apps/tenant/src/types.ts`) and one new optional `PeriodicStockDraft.caixerDraft` field for durable in-progress CAIXER entry.
+2. **Plan §C (C.3–C.5) — CAIXER UI/state flow.** A new `caixerStage` sub-stage inserted at `PeriodicStockCountView.tsx`'s existing `handleRequestConfirmation` entry point, satisfying FR-80's direct-transition requirement; the existing `pendingTally` review screen extended to display all four CAIXER components plus the system-calculated total alongside the already-shown product valuation (FR-81/CX-6); reversible "Corrigir Caixa"/"Voltar" navigation that never clears `caixerDraft` or `pendingTally`.
+3. **Plan §D (C.6–C.8) — Non-destructive validation and write-boundary enforcement.** Client-side blocking validation (`0` valid, blank invalid); a new pure `computeCaixerTotalLiquidity()` function (`calculations.ts`); `RecordStockCountParams`/`recordStockCount` (`AppContext.tsx`) changed to derive `cashPosition` internally from four new parameters rather than accept it directly; new `firestore.rules` conditions on the existing `businessWorthSnapshots` `allow create` Contagem branch enforcing four-field presence/type (CX-2) and aggregate-sum consistency within a fixed tolerance (CX-1).
+4. **Plan §E — Reconciliation.** Confirmed, not newly coded: `computeCashReconciliationDifference` and its call site are unchanged; CX-13's total-only acceptance requires no new function, no per-method ledger.
+5. **Plan §G (C.9) — Standalone declaration gap fix.** Removes the existing silent `ownerConfirmedCashPosition: cashPositionDeclarations[0].amount` reuse (`PeriodicStockCountView.tsx:5649-5651`); the most recent declaration may be shown as a labeled reference/hint only, never pre-filling or auto-submitting a CAIXER value (FR-76, closes Rule 8 Finding CX-8).
+6. **Plan §H — Backward compatibility.** No migration, no backfill; the four new fields remain genuinely absent on every pre-CAIXER snapshot (CX-14).
+7. **Plan §I — Security/tenant isolation.** The two new `firestore.rules` conditions named in item 3, above, are the only new security-rule surface this item introduces; no new collection, no new role, no widened grant.
+
+**No item outside Plan §B–§I is authorized by this section.** In particular, this authorization does **not** cover anything the Plan's own "Explicitly Out of Scope" section already excludes (per-method ledgers/reconciliation, Business Worth Engine redesign, Owner Investment/Levantamento redesign, historical rewriting, background jobs, unrelated UI/Contagem redesign, `firestore.indexes.json` changes) — restated in full at §43.4, below.
+
+### 43.3 Non-Destructive Validation — Mandatory, Binding on Every Checkpoint
+
+**This requirement is not optional implementation guidance — it is a formal Product-Architect-accepted acceptance criterion**, per `caixer-rule8-gate-decisions-product-architect-acceptance.md` §3 and restated at Plan §F ("Critical Data-Preservation Analysis"). It governs Plan §C.3–§C.8 in particular and is binding on implementation of every checkpoint in §43.2 that touches CAIXER input, validation, or the confirmation write path:
+
+If validation fails — because a required CAIXER field is blank/invalid client-side, or because the authoritative server-side check (the new `firestore.rules` conditions, §43.2 item 3) rejects a submission — the implementation MUST:
+
+- preserve every already-entered CAIXER value (never clear the form);
+- preserve all in-progress Stock Count/Contagem data (never discard a stock-count quantity or reset the workflow);
+- never create a partial or invalid `BusinessWorthSnapshot`;
+- identify the exact field(s) in error;
+- keep the operator on the relevant step, able to correct and resubmit;
+- treat a transient network/server failure identically — no code path introduced by this authorization may silently destroy the operator's in-progress work on a failed submission.
+
+**Verification requirement:** the Execution Record for any checkpoint touching validation/the confirmation write path must explicitly test and report on this behavior — a passing test suite that does not exercise at least the "one field blank," "server rejects the aggregate," and "operator navigates backward and corrects" scenarios named at Plan §F does not satisfy this authorization's own completion bar for that checkpoint.
+
+### 43.4 Explicitly Out of Scope (Restated from the Accepted Plan, Binding)
+
+This authorization does **not** cover, and no checkpoint under §43.2 may be used to justify:
+
+- per-method transaction ledgers for eMola, M-Pesa, or Banco, or any change to `CashLedgerEntry`'s schema;
+- per-method reconciliation of any kind (CX-13 fixes total-only, restated §43.2 item 4);
+- any new payment/billing architecture;
+- redesign of Owner Investment (§43 of the Specification) or Levantamento (§19) — neither is reopened, touched, or reinterpreted;
+- rewriting, migrating, or backfilling any historical `BusinessWorthSnapshot`;
+- background liquidity jobs or scheduled liquidity recomputation of any kind — every CAIXER computation is synchronous, inside the existing atomic confirmation write;
+- cross-business queries of any kind;
+- unrelated Contagem redesign — `stockCountPortionGrouping.ts`, `contagemMultiUnitValuation.ts`, and Decision 37's own B.1–B.5 items are untouched;
+- unrelated module changes — Owner-Declared Business Worth, Fecho, Owner Portfolio, receivable reminders, Fecho batch-level profit, and every other Increment 10/Decision 37 item already authorized elsewhere in this document remain exactly as scoped there;
+- unrelated UI redesign — only `PeriodicStockCountView.tsx`'s CAIXER entry/Review sections named at §43.2 item 2 are in scope;
+- `firestore.indexes.json` — no new query pattern is introduced;
+- redesign of `computeMeasuredBusinessWorth`'s signature/formula, or the fresh-remeasurement principle — both unchanged;
+- any product or architectural redesign not contained in the accepted CAIXER Specification (§45) or the accepted Implementation Plan Amendment.
+
+### 43.5 Execution Rule, If Signed (Mirrors §7/§23/§36's Discipline Exactly)
+
+1. Read the item's scope (§43.2, and the Plan Amendment's own §B–§I text) before writing anything.
+2. Verify prerequisites — per the Plan's own "Dependencies" section: types (§B) before the `AppContext.tsx` write payload (§D); the entry-screen state (§C.3) before Review (§C.4); §D's `firestore.rules` change may land independently of, or before, the client-side derivation change.
+3. Implement only that item's own scope — no checkpoint may silently implement a later checkpoint's functionality.
+4. Run the tests the Plan Amendment's own "Tests Anticipated" section names for that checkpoint, including every regression check it lists (byte-identical `computeMeasuredBusinessWorth` behavior where unchanged, existing Go-Back/idempotency coverage, existing tenant-isolation pattern extended, not replaced).
+5. Inspect the diff — confirm no file outside the checkpoint's own named surfaces was touched, unless a genuinely required change is separately identified and justified.
+6. Verify governance compliance against this section's own scope (§43.2) and out-of-scope list (§43.4), and explicitly verify the non-destructive validation requirement (§43.3) for any checkpoint that touches it.
+7. Record the result as its own dated Execution Record section, mirroring §37–§42's format.
+8. Only then proceed to the next checkpoint.
+
+**Implementation remains strictly one checkpoint at a time** — no checkpoint under §43.2 becomes authorized to *begin* merely because this section is signed; each requires its own further, separate, explicit "begin this item" instruction, exactly as §36 already establishes for Decision 37's B.1–B.5.
+
+### 43.6 Acceptance Criteria Governing Completion
+
+Traceable to the Specification (§45, FR-73–FR-81), the Rule 8 gate decisions (CX-1, CX-2, CX-6, CX-13, CX-14), and the accepted Implementation Plan's own Traceability table:
+
+- **AC-CX-1** — all four CAIXER fields (Cash, eMola, M-Pesa, Banco) are mandatory at authoritative submission; blank/null/undefined is rejected at both the UI and `firestore.rules` layer (FR-73).
+- **AC-CX-2** — an explicit `0` is valid and accepted identically to any other numeric value, at every layer, with no falsy-coercion defect (§45.2).
+- **AC-CX-3** — `cashPosition` is never accepted as direct, independently-typed input through any code path; it is always the system-calculated sum of the four components (FR-79, CX-1).
+- **AC-CX-4** — the authoritative write boundary (`firestore.rules`) recomputes/verifies the aggregate-consistency relationship rather than trusting a client-supplied `cashPosition` (CX-1).
+- **AC-CX-5 — NON-DESTRUCTIVE VALIDATION (see §43.3, binding in full).** A validation failure at any layer never clears CAIXER input, never discards Stock Count/Contagem state, never resets the workflow, and never produces a partial `BusinessWorthSnapshot`; the operator can always identify the error, correct it, and resubmit.
+- **AC-CX-6** — the Contagem action concluding physical stock counting transitions directly into CAIXER entry, with no intervening screen or deferral option (FR-80).
+- **AC-CX-7** — the Review step, before final confirmation, displays Cash, eMola, M-Pesa, Banco, the system-calculated Total Liquidity, the measured product/stock valuation, and the complete governed Business Worth calculation (FR-81, CX-6).
+- **AC-CX-8** — before final confirmation, the Owner may move backward from Review to CAIXER, and from CAIXER to Stock Count, correcting any value; no `BusinessWorthSnapshot` exists, and no data is lost, at any point in this reversible flow (Rule 8 Finding CX-5; the "Additional Product Architect Principle").
+- **AC-CX-9** — a `BusinessWorthSnapshot` is created only once, atomically, at successful final confirmation, and is immutable thereafter outside the existing §25/§26 correction/recovery windows.
+- **AC-CX-10** — the existing `submissionId`-keyed idempotency protection continues to prevent a retried or duplicate confirmation from producing more than one snapshot, with CAIXER data present (Rule 8 Finding CX-7).
+- **AC-CX-11** — every pre-CAIXER historical `BusinessWorthSnapshot` remains valid, immutable, and readable without migration, backfill, or fabricated zeros on the four new fields (CX-14).
+- **AC-CX-12** — reconciliation (`computeCashReconciliationDifference`) is performed against the four-method total only; no per-method reconciliation mechanism or per-method ledger is introduced (CX-13).
+- **AC-CX-13** — no cross-business CAIXER read or write is possible; the two new `firestore.rules` conditions apply only within the existing `isMemberOf`/`isOwnerOf`-scoped branch, and aggregate verification is scoped to the single writing business (Rule 8 Finding CX-15).
+- **AC-CX-14** — no unauthorized change to Business Worth economics, Owner Investment, Levantamento, stock/cash conversion semantics, Startup Investment, or historical snapshot economics is introduced by any checkpoint (§45.6, Rule 8 Finding CX-11/CX-12).
+- **AC-CX-15** — no double-counting: money measured through any CAIXER method that is later converted into stock, or transferred between methods, is never attributed to more than one Contagem or more than one of {CAIXER component, physical stock count} within the same Contagem (I-8, FR-77).
+
+### 43.7 Formal Acceptance — PENDING, NOT SIGNED
+
+> I have reviewed §43, "Product Architect Authorization — CAIXER," in full, including its scope (§43.2), the mandatory non-destructive validation requirement (§43.3), its explicit out-of-scope boundaries (§43.4), the execution rule (§43.5), and the acceptance criteria (§43.6). I understand that signing below authorizes, exactly and only, the checkpoints named in §43.2 (Plan §B–§I), to be implemented strictly one checkpoint at a time per §43.5, subject to every boundary in §43.3/§43.4. I understand this does not reopen or reinterpret BDR Decision 40, Specification §45, the Rule 8 Assessment Addendum, the CX-1/CX-2/CX-6/CX-13/CX-14 acceptance, or the accepted Implementation Plan Amendment. I understand this signature is a governance authorization gate only — it does not itself instruct implementation of any checkpoint to begin; a further, separate, explicit per-checkpoint instruction is required before any code, test, or `firestore.rules` change may be made.
+>
+> **Product Architect:** ______________________________
+> **Date:** __________________________________________
+> **Decision:**
+> ☐ AUTHORIZED FOR IMPLEMENTATION
+> ☐ AUTHORIZED WITH MODIFICATIONS (specify)
+> ☐ NOT AUTHORIZED
+
+**Status: 🔶 DRAFT — AWAITING PRODUCT ARCHITECT SIGNATURE.** The Formal Acceptance block above is blank, per this repository's own established pending-authorization convention (`capital-inicial-retirement-implementation-authorization.md`'s "Pending" sections) — it is preserved exactly as circulated for review; a future, separate, dated "§43 — Recorded" section is where an actual signature would be entered, mirroring that document's own Pending → Recorded pattern. **Implementation remains blocked until the Product Architect formally accepts/signs this Implementation Authorization.** No checkpoint in §43.2 is authorized to begin, no code/test/`firestore.rules` file may be modified on the strength of this section, and this document's own §7/§23/§36 precedent for what a signature does and does not authorize applies identically here, once and if signed.
