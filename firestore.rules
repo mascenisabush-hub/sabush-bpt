@@ -365,6 +365,43 @@ service cloud.firestore {
         request.time < get(/databases/$(database)/documents/businesses/$(businessId)/businessWorthRecoveryAuthorizations/$("current")).data.expiresAt;
     }
 
+    // [SuperAdmin Agent Attended Support Session — BDR-0018 / Policy /
+    // Specification (SPEC-1/SPEC-2/SPEC-3, Invariant I-12, FR-63) /
+    // Rule 8 Assessment (CLOSED / PASS, commit 312f64c, Findings
+    // 5-A/5-B/2-B/3-B/10-A/10-B/12-A) / Implementation Authorization
+    // (Signed, §6) / Checkpoint 1 — session-scoped Firestore
+    // authorization] The narrow, session-matched authorization boundary
+    // I-12/FR-63 fix as binding: a platform operator's access to this
+    // capability's tenant-scoped collections (Support View State,
+    // pointer, webrtcSignaling) is NEVER granted by isPlatformOperator()
+    // alone. This mirrors initialStockRecoveryAuthorizationActive()'s
+    // own cross-document get() shape exactly (Rule 8 Finding 5-B), but
+    // matches against the specific supportSessions/{sessionId} document
+    // naming this operator, not a business-wide authorization slot.
+    // Deliberately requires BOTH conditions below, not either:
+    //   (a) the calling uid is a real platform_operators/{uid} identity
+    //       at all (isPlatformOperator()) — the ordinary eligibility
+    //       floor every other SuperAdmin capability in this file uses;
+    //   (b) the specific Session this operator claims names THEM
+    //       (operatorUid == request.auth.uid) AND is currently
+    //       'active' or 'reconnecting' — never 'ended', never absent,
+    //       never a Session belonging to a different operator, and
+    //       never satisfied by platformRole membership on its own.
+    // This is exactly the narrow form Rule 8 Finding 5-A warns must
+    // never be replaced by the broad, one-existing-precedent form
+    // platform_audit_log's own `allow read: if isPlatformOperator()`
+    // rule uses below — that precedent is explicitly NOT reused here
+    // (I-12 names it by name as non-precedent).
+    function isActiveSupportOperatorForSession(businessId, sessionId) {
+      return isPlatformOperator() &&
+        exists(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)) &&
+        get(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)).data.get('operatorUid', null) == request.auth.uid &&
+        (
+          get(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)).data.get('status', null) == 'active' ||
+          get(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)).data.get('status', null) == 'reconnecting'
+        );
+    }
+
     // ==========================================================
     // /users/{userId} - one profile doc per authenticated user
     // ==========================================================
@@ -1746,6 +1783,85 @@ service cloud.firestore {
         allow create: if isMemberOf(businessId);
         allow update: if false;
         allow delete: if isOwnerOf(businessId);
+      }
+
+      // ==========================================================
+      // SuperAdmin Agent Attended Support Session — Checkpoint 1
+      // (BDR-0018 / Policy / Specification SPEC-1/SPEC-2/SPEC-3 / Rule 8
+      // CLOSED-PASS commit 312f64c / Implementation Authorization,
+      // signed 2026-09-11). Establishes ONLY the session-scoped
+      // Firestore authorization boundary Checkpoint 1's own scope
+      // covers (Implementation Authorization §3 item 7, §10 items 1-3):
+      // "can a legitimately connected Support operator read only the
+      // active customer's own support-session data, while another
+      // platform operator or an unrelated tenant cannot." Invitation/
+      // code lifecycle (generation, consumption, lockout) is
+      // deliberately NOT added by this checkpoint — it belongs to
+      // Checkpoint 2 (Support-session server foundation) and is
+      // entirely server-mediated (Admin SDK) regardless, so its own
+      // rules text is orthogonal to the risk this checkpoint closes.
+      //
+      // Every grant below either (a) is the customer's own tenant
+      // session (isMemberOf(businessId), the same check every other
+      // tenant-scoped collection in this file uses), or (b) requires
+      // isActiveSupportOperatorForSession(businessId, sessionId),
+      // defined above — isPlatformOperator() ALONE never appears as a
+      // sufficient condition anywhere in this block (I-12, FR-63).
+      // ==========================================================
+      match /supportSessions/{sessionId} {
+        // Session establishment, heartbeat (FR-54 as amended — a
+        // "privileged write", i.e. server/Admin-SDK-mediated, never a
+        // raw client write, for either participant), status transitions
+        // (FR-55-FR-59), and termination (FR-34-FR-36) are exclusively
+        // server-authoritative — matching
+        // initialStockRecoveryAuthorization's own "allow write: if
+        // false, Admin-SDK-only" pattern exactly. No role, including
+        // the Support operator this Session itself names, may write
+        // this document from the client SDK.
+        allow read: if isMemberOf(businessId) || isActiveSupportOperatorForSession(businessId, sessionId);
+        allow write: if false;
+
+        // Mobile rendering path only (FR-23-FR-26, §20). Written ONLY
+        // by the customer's own already-privileged tenant session
+        // (FR-25) — never by the Support operator, and never by any
+        // server-side process acting on the Support operator's behalf.
+        // Field-level allowlist enforcement (FR-49/FR-50 — the four
+        // fixed categories, no credential/secret/code) is deferred to
+        // the Mobile Support View State checkpoint; THIS checkpoint
+        // fixes only the read/write authorization boundary, not yet the
+        // document's internal shape.
+        match /supportViewState/{docId} {
+          allow read: if isActiveSupportOperatorForSession(businessId, sessionId);
+          allow write: if isMemberOf(businessId);
+        }
+
+        // Common to both rendering paths (FR-27). The Support
+        // operator's own write (FR-28) is the first client-side
+        // Firestore write by a platform_operators identity in this
+        // codebase's history (Rule 8 Finding 3-B) — scoped with the
+        // identical isActiveSupportOperatorForSession() precision as
+        // every read grant above, never the broad
+        // `allow write: if isPlatformOperator()` form Finding 3-B
+        // explicitly warns against. The customer reads it read-only, to
+        // render the non-interactive overlay (FR-29) — rendering itself
+        // is a later checkpoint's (Pointer) concern, not this one's.
+        match /pointer/{docId} {
+          allow read: if isMemberOf(businessId) || isActiveSupportOperatorForSession(businessId, sessionId);
+          allow write: if isActiveSupportOperatorForSession(businessId, sessionId);
+        }
+
+        // Desktop rendering path only (FR-21) — SDP offer/answer/ICE-
+        // candidate exchange. Both participants read and create
+        // signaling documents (the offer/answer/candidate exchange is
+        // inherently bidirectional); update/delete are refused for now
+        // — write-once signaling documents need no client-side update
+        // path, and document cleanup (§24 item 10 — storage hygiene,
+        // not security) is deferred to the Desktop WebRTC checkpoint,
+        // not decided here.
+        match /webrtcSignaling/{signalId} {
+          allow read, create: if isMemberOf(businessId) || isActiveSupportOperatorForSession(businessId, sessionId);
+          allow update, delete: if false;
+        }
       }
     }
 
