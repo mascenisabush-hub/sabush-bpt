@@ -116,7 +116,7 @@ describe('C — live-state sourcing / T0-T100 stale-write protection (Decision 3
   it('the save-attempt callback reads live current state from latestFlushArgs.current, never from a schedule-time-captured argument', () => {
     assert.match(
       performRowSaveAttemptBody,
-      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/
+      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi, caixerDraft: cxd \} = latestFlushArgs\.current;/
     );
     // scheduleRowDraftSave's own parameter list must be JUST the row
     // key — no nextCatalogRows/nextManualRows/etc. argument exists to
@@ -127,7 +127,7 @@ describe('C — live-state sourcing / T0-T100 stale-write protection (Decision 3
   it('latestFlushArgs is reassigned unconditionally on every render, so it is always current by the time any row\'s 800ms timer actually fires', () => {
     assert.match(
       source,
-      /const latestFlushArgs = useRef\(\{ catalogRows, manualRows, type, label, date, newProductInfo \}\);\s*\n\s*latestFlushArgs\.current = \{ catalogRows, manualRows, type, label, date, newProductInfo \};/
+      /const latestFlushArgs = useRef\(\{ catalogRows, manualRows, type, label, date, newProductInfo, caixerDraft \}\);\s*\n\s*latestFlushArgs\.current = \{ catalogRows, manualRows, type, label, date, newProductInfo, caixerDraft \};/
     );
   });
 

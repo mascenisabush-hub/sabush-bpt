@@ -165,7 +165,7 @@ describe('PeriodicStockCountView.tsx — Increment 8 correction/recovery write p
 
   it('clears pendingBusinessWorthCorrection after a successful save — a later, unrelated Contagem never silently inherits a stale correction target', () => {
     const start = periodicSrc.indexOf('const saved = await recordStockCount({');
-    const successBlock = periodicSrc.slice(start, start + 8800); // [FR-89–FR-94, Implementation Authorization §2 item 5] Same window-widening as the sibling assertion above. [Product Identity Existing/New Resolution — Checkpoint C] Widened again: the confirmedNewProduct pass-through this authorization adds to the same items-mapping block pushed the target past the prior 8200-char window.
+    const successBlock = periodicSrc.slice(start, start + 8900); // [FR-89–FR-94, Implementation Authorization §2 item 5] Same window-widening as the sibling assertion above. [Product Identity Existing/New Resolution — Checkpoint C] Widened again: the confirmedNewProduct pass-through this authorization adds to the same items-mapping block pushed the target past the prior 8200-char window. [CAIXER — Implementation Authorization §44, Checkpoint 2] Widened again to 8900 — the new CAIXER entry/Review UI added between the two anchor points pushed the target past the prior 8800-char window.
     assert.match(successBlock, /if \(pendingBusinessWorthCorrection\) clearBusinessWorthCorrection\(\);/);
   });
 

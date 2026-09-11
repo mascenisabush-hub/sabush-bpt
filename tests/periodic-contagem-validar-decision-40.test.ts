@@ -332,8 +332,44 @@ describe('Corrigir (Decision 40 FR-N11; Implementation Authorization §1 item 7,
     assert.match(source, />\s*Corrigir\s*</);
   });
 
-  it('"Voltar" is unchanged — still an unconditional setPendingTally(null), independent of Corrigir', () => {
-    assert.match(source, /onClick=\{\(\) => setPendingTally\(null\)\}/);
+  it('"Voltar" is unchanged — still an unconditional setPendingTally(null) (plus the authorized setCaixerStage(null)), independent of Corrigir', () => {
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2; Product
+    // Architect Clarification, commit d4524662ecf64d3a193f9852213c4832e9e0b17e,
+    // Decision 3] The handler is now a multi-statement block
+    // (setPendingTally(null) remains the first, unconditional
+    // statement; caixerStage is cleared alongside it, non-
+    // destructively) rather than a single expression. A loose anchor
+    // match alone would only prove the FIRST statement is
+    // setPendingTally(null) — it would not rule out an additional,
+    // unauthorized effect creeping in later. This brace-matches the
+    // handler's own closing `}}` so the extracted body is exactly and
+    // only this handler's statements, then asserts it contains EXACTLY
+    // the two authorized statements — nothing else — restoring the
+    // same "no other effect" guarantee the original single-expression
+    // anchor provided. This handler is unconditional and unrelated to
+    // Corrigir/item.validated by construction — it is not nested
+    // inside any {item.validated && (...)} or similar gate (confirmed
+    // by locating it outside that block, above).
+    const voltarStart = source.indexOf('onClick={() => {\n                setPendingTally(null);');
+    assert.notEqual(voltarStart, -1, 'Could not locate the review screen\'s Voltar onClick handler — has it been restructured?');
+    const bodyStart = voltarStart + 'onClick={() => {'.length;
+    let depth = 1;
+    let i = bodyStart;
+    for (; i < source.length && depth > 0; i++) {
+      if (source[i] === '{') depth++;
+      else if (source[i] === '}') depth--;
+    }
+    assert.equal(depth, 0, 'Could not find the matching closing brace for the Voltar onClick handler.');
+    const handlerBody = source.slice(bodyStart, i - 1);
+    const statements = handlerBody
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, '').trim())
+      .filter((line) => line.length > 0);
+    assert.deepEqual(
+      statements,
+      ['setPendingTally(null);', 'setCaixerStage(null);'],
+      'Expected the Voltar handler to contain EXACTLY these two statements, in this order, and nothing else — proving it unconditionally clears pendingTally and caixerStage, never touches catalogRows/manualRows/caixerDraft, and performs no other side effect.'
+    );
     assert.match(source, />\s*Voltar\s*</);
   });
 

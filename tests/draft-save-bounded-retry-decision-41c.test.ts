@@ -92,7 +92,7 @@ describe('AppContext.tsx — Decision 41C §2 readback-unconfirmed wrapping', ()
   it('savePeriodicStockDraftMeta wraps its getDocFromServer readback the same way', () => {
     const body = extractFunctionBody(
       appContextSrc,
-      'const savePeriodicStockDraftMeta = async (\n    type: StockCountType,\n    label: string | undefined,\n    date: string,\n    submissionId?: string,\n    newProductInfo?: Record<\n      string,\n      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }\n    >\n  ) => {'
+      'const savePeriodicStockDraftMeta = async (\n    type: StockCountType,\n    label: string | undefined,\n    date: string,\n    submissionId?: string,\n    newProductInfo?: Record<\n      string,\n      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }\n    >,\n    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }\n  ) => {'
     );
     assert.match(body, /try \{\s*await getDocFromServer\(metaRef\);\s*\} catch \(readbackError\) \{\s*throw new ReadbackUnconfirmedError\(readbackError\);\s*\}/);
   });
@@ -100,7 +100,7 @@ describe('AppContext.tsx — Decision 41C §2 readback-unconfirmed wrapping', ()
   it('flushPeriodicStockDraftRows wraps its getDocFromServer readback the same way (the batch-write flush path)', () => {
     const body = extractFunctionBody(
       appContextSrc,
-      'const flushPeriodicStockDraftRows = async (\n    rowsByKey: Record<string, PeriodicStockDraftItem>,\n    type: StockCountType,\n    label: string | undefined,\n    date: string,\n    submissionId?: string,\n    newProductInfo?: Record<\n      string,\n      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }\n    >\n  ) => {'
+      'const flushPeriodicStockDraftRows = async (\n    rowsByKey: Record<string, PeriodicStockDraftItem>,\n    type: StockCountType,\n    label: string | undefined,\n    date: string,\n    submissionId?: string,\n    newProductInfo?: Record<\n      string,\n      { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }\n    >,\n    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }\n  ) => {'
     );
     assert.match(body, /try \{\s*await getDocFromServer\(metaRef\);\s*\} catch \(readbackError\) \{\s*throw new ReadbackUnconfirmedError\(readbackError\);\s*\}/);
   });

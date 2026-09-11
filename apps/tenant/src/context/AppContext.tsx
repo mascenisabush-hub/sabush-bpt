@@ -931,7 +931,13 @@ interface AppContextType {
     newProductInfo?: Record<
       string,
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
-    >
+    >,
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+    // C.3); Specification §45, FR-73] Durable in-progress CAIXER entry
+    // — threaded through this SAME existing meta-save path, exactly
+    // like newProductInfo immediately above (no new autosave timer/
+    // mechanism, per Plan §C.3's own explicit instruction).
+    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }
   ) => Promise<string>;
   flushPeriodicStockDraftRows: (
     rowsByKey: Record<string, PeriodicStockDraftItem>,
@@ -942,7 +948,11 @@ interface AppContextType {
     newProductInfo?: Record<
       string,
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
-    >
+    >,
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2] See
+    // savePeriodicStockDraftMeta's own comment, above — identical
+    // discipline for this function's own all-rows-plus-meta flush.
+    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }
   ) => Promise<string>;
   clearPeriodicStockDraft: () => Promise<void>;
   // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
@@ -7274,13 +7284,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newProductInfo?: Record<
       string,
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
-    >
+    >,
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+    // C.3)] Same "optional and additive, absence means not yet entered"
+    // discipline as newProductInfo, immediately above.
+    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }
   ): Omit<PeriodicStockDraft, 'items'> => ({
     type,
     ...(label ? { label } : {}),
     date,
     ...(submissionId ? { submissionId } : {}),
     ...(newProductInfo && Object.keys(newProductInfo).length > 0 ? { newProductInfo } : {}),
+    ...(caixerDraft && Object.keys(caixerDraft).length > 0 ? { caixerDraft } : {}),
     updatedAt: new Date().toISOString(),
   });
 
@@ -7292,10 +7307,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newProductInfo?: Record<
       string,
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
-    >
+    >,
+    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
-    const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
+    const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo, caixerDraft);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
     // [Bug fix — openConflictCount resurrection race] The prior version
     // read openConflictCount from `periodicStockDraftMeta`, this
@@ -7356,11 +7372,12 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     newProductInfo?: Record<
       string,
       { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
-    >
+    >,
+    caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }
   ) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!currentUser) throw new Error('Sessão não autenticada.');
-    const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo);
+    const meta = buildPeriodicDraftMeta(type, label, date, submissionId, newProductInfo, caixerDraft);
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
     // [Decisions 44-56 — Periodic Contagem Shared Live Data;
     // Implementation Authorization §2 item 6] This is a best-effort,

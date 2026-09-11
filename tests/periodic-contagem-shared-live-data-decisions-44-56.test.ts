@@ -727,12 +727,52 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
     assert.match(viewSource, /A tua contagem está guardada — nada se perde\./);
   });
 
-  it('"Voltar" on the review screen is NOT gated on isOwner — it only clears pendingTally, never touches the draft, and must remain available to everyone', () => {
-    const voltarIdx = viewSource.indexOf("onClick={() => setPendingTally(null)}");
-    assert.notEqual(voltarIdx, -1);
-    const voltarButtonBlock = viewSource.slice(voltarIdx, voltarIdx + 150);
-    assert.match(voltarButtonBlock, /disabled=\{isSaving\}/);
-    assert.doesNotMatch(voltarButtonBlock, /isOwner/, '"Voltar" must remain unrestricted by ownership — it is always safe and must always be available');
+  it('"Voltar" on the review screen is NOT gated on isOwner — it only clears pendingTally and caixerStage, never touches the draft or caixerDraft, and must remain available to everyone', () => {
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2; Product
+    // Architect Clarification, commit d4524662ecf64d3a193f9852213c4832e9e0b17e,
+    // Decision 3] The onClick handler is now a multi-statement block
+    // (it also clears caixerStage, non-destructively, alongside
+    // pendingTally) rather than the prior single-expression arrow
+    // function. A loose window/regex check would only prove the FIRST
+    // statement is setPendingTally(null) — it would NOT rule out an
+    // additional, unauthorized effect. This assertion instead brace-
+    // matches the handler's own closing `}}`, so the extracted body is
+    // exactly and only this handler's statements, then verifies that
+    // body contains EXACTLY the two authorized statements — nothing
+    // else — restoring the same "no other effect" guarantee the
+    // original single-expression anchor provided.
+    const voltarStart = viewSource.indexOf('onClick={() => {\n                setPendingTally(null);');
+    assert.notEqual(voltarStart, -1, 'Could not locate the review screen\'s Voltar onClick handler — has it been restructured?');
+    const bodyStart = voltarStart + 'onClick={() => {'.length;
+    // Brace-match forward from bodyStart to find this handler's own
+    // closing brace — never a fixed character window, so the extracted
+    // body can never accidentally include or exclude neighboring code
+    // regardless of future comment-length changes.
+    let depth = 1;
+    let i = bodyStart;
+    for (; i < viewSource.length && depth > 0; i++) {
+      if (viewSource[i] === '{') depth++;
+      else if (viewSource[i] === '}') depth--;
+    }
+    assert.equal(depth, 0, 'Could not find the matching closing brace for the Voltar onClick handler.');
+    const handlerBody = viewSource.slice(bodyStart, i - 1);
+    // Strip line comments so a future comment edit can never affect
+    // the statement-level check below.
+    const statements = handlerBody
+      .split('\n')
+      .map((line) => line.replace(/\/\/.*$/, '').trim())
+      .filter((line) => line.length > 0);
+    assert.deepEqual(
+      statements,
+      ['setPendingTally(null);', 'setCaixerStage(null);'],
+      'Expected the Voltar handler to contain EXACTLY these two statements, in this order, and nothing else — proving it unconditionally clears pendingTally and caixerStage, never touches catalogRows/manualRows/caixerDraft, and performs no other side effect.'
+    );
+    // The button's own disabled/isOwner attributes sit just after the
+    // handler's closing brace — unaffected by the handler's own length,
+    // so a small fixed window here remains safe and precise.
+    const afterHandler = viewSource.slice(i, i + 150);
+    assert.match(afterHandler, /disabled=\{isSaving\}/);
+    assert.doesNotMatch(afterHandler, /isOwner/, '"Voltar" must remain unrestricted by ownership — it is always safe and must always be available');
   });
 
   it('the review screen\'s own "Confirmar Contagem" button is also disabled for a non-Owner (defense-in-depth) and shows the same reassurance banner', () => {

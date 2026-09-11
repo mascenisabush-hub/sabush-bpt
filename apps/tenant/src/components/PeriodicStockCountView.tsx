@@ -92,6 +92,7 @@ import {
   Users,
   Eye,
   ShieldAlert,
+  Wallet,
 } from 'lucide-react';
 
 interface PeriodicStockCountViewProps {
@@ -1322,6 +1323,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // save (Amendment Part 9) — holds the tally computed from the
   // working list at the moment "Confirmar Contagem" was first pressed.
   const [pendingTally, setPendingTally] = useState<StockCountTallyResult | null>(null);
+  // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+  // C.3-C.5); Specification §45.1, §45.13, FR-80] The CAIXER sub-stage
+  // within the pre-confirmation flow: 'entry' (the four liquidity
+  // inputs) or 'review' (the extended pendingTally screen, showing the
+  // CAIXER components/total alongside the product tally). null outside
+  // the pendingTally flow entirely. Set to 'entry' at the exact same
+  // point pendingTally itself is set (handleRequestConfirmation, below)
+  // — the direct-transition requirement FR-80 fixes: no intervening
+  // screen sits between physical count conclusion and CAIXER entry.
+  const [caixerStage, setCaixerStage] = useState<'entry' | 'review' | null>(null);
 
   // [Stock Count Data-Loss Resilience — Implementation Task] Draft
   // lifecycle state (frozen spec §4) — rendered distinctly from
@@ -1681,6 +1692,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     setProductSearch('');
     setError(null);
     setPendingTally(null);
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2] A shop
+    // switch fully resets every piece of in-progress-count state
+    // (comment above, this effect's own header) — CAIXER's own stage/
+    // draft are no exception; a half-filled CAIXER entry belongs to
+    // the PREVIOUS business and must not silently carry over.
+    setCaixerStage(null);
     setDraftSaveState('editing');
     setDraftBannerDismissed(false);
     // [Discard-Confirmation Safety Fix] A business switch mid-
@@ -1688,6 +1705,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // state pointed at the previous business's draft.
     setDiscardConfirmState('idle');
     setNewProductInfo({});
+    setCaixerDraft({});
     submissionIdRef.current = null;
     // [Decision 39a] Clear every pending per-row timer, not a single
     // ref — a count fundamentally belongs to one business, so no
@@ -1975,10 +1993,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // [Decision 39a FR-N2 — the required correctness property, §8]
     // Read live, current state HERE, at fire-time — never a value
     // captured earlier.
-    const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
+    const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi, caixerDraft: cxd } = latestFlushArgs.current;
     let rawSavePromise: Promise<string>;
-    if (rowKey === '__meta__' || rowKey.startsWith('newProductInfo:')) {
-      rawSavePromise = savePeriodicStockDraftMeta(t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi);
+    if (rowKey === '__meta__' || rowKey.startsWith('newProductInfo:') || rowKey === 'caixerDraft') {
+      rawSavePromise = savePeriodicStockDraftMeta(t, l.trim() || undefined, d, submissionIdRef.current || undefined, npi, cxd);
     } else {
       const row = rowKey.startsWith('catalog:')
         ? cr[rowKey.slice('catalog:'.length)]
@@ -2601,6 +2619,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     >
   >({});
 
+  // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+  // C.3); Specification §45, FR-73] The four CAIXER liquidity inputs,
+  // raw strings until parsed/validated at "Continuar" — mirrors
+  // newProductInfo's own "component state, persisted via the same
+  // meta-save path, never a StockCountWorkingRow field" precedent,
+  // immediately above. A genuinely absent key means "not yet entered
+  // for this method"; never fabricated as `'0'`.
+  const [caixerDraft, setCaixerDraft] = useState<{ cash?: string; emola?: string; mpesa?: string; banco?: string }>({});
+
   // [Product Identity Existing/New Resolution — Implementation
   // Authorization, Checkpoint C] Explicit, owner-confirmed signal that
   // a manual row's typed product name — which does not exactly match
@@ -2655,8 +2682,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // so flushPeriodicDraftNow always sees current values without the
   // visibilitychange/pagehide effect needing to re-subscribe on every
   // keystroke (that effect below has an empty dependency array).
-  const latestFlushArgs = useRef({ catalogRows, manualRows, type, label, date, newProductInfo });
-  latestFlushArgs.current = { catalogRows, manualRows, type, label, date, newProductInfo };
+  const latestFlushArgs = useRef({ catalogRows, manualRows, type, label, date, newProductInfo, caixerDraft });
+  latestFlushArgs.current = { catalogRows, manualRows, type, label, date, newProductInfo, caixerDraft };
 
   // [Decision 38 Amendment §5a; Decision 58 — Interruption Persistence
   // and Recovery Parity] The interruption-durability flush itself:
@@ -2834,7 +2861,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       if (draftInFlightSaveRef.current) {
         await draftInFlightSaveRef.current;
       }
-      const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi } = latestFlushArgs.current;
+      const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi, caixerDraft: cxd } = latestFlushArgs.current;
       const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
       for (const [productId, row] of Object.entries(cr)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
       mr.forEach((row, index) => {
@@ -2846,7 +2873,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         l.trim() || undefined,
         d,
         submissionIdRef.current || undefined,
-        npi
+        npi,
+        cxd
       );
       lastLocalDraftWriteRef.current = updatedAt;
       setDraftSaveState('saved');
@@ -3640,6 +3668,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // error" discipline as the `?? {}` above, requiring no per-entry
     // mapping.
     setNewProductInfo(periodicStockDraft.newProductInfo ?? {});
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+    // C.3); Specification §45, FR-73] Same "absent field = empty
+    // object, never an error" resume discipline as newProductInfo,
+    // immediately above — a draft written before this field existed
+    // simply lacks it.
+    setCaixerDraft(periodicStockDraft.caixerDraft ?? {});
     setDraftSaveState('saved');
     // [Cross-Device Live-Update Notice] The draft being resumed here
     // IS the current local state as of this instant — seed the ref
@@ -5205,7 +5239,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       label.trim() || undefined,
       date,
       submissionIdRef.current,
-      newProductInfo
+      newProductInfo,
+      caixerDraft
     )
       .then((updatedAt) => {
         // [Cross-Device Live-Update Notice] Same bookkeeping as §4a's
@@ -5216,6 +5251,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       .catch(() => setDraftSaveState('save-failed'));
 
     setPendingTally(tally);
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+    // C.3, C.5); Specification §45.1, §45.13, FR-80] Direct transition:
+    // the exact same instant pendingTally is set — concluding physical
+    // stock counting — CAIXER entry begins. No intervening screen sits
+    // between this point and the CAIXER entry render branch, below.
+    setCaixerStage('entry');
   };
 
   // Step 2 of 2: the operator has seen "N contados / M não contados"
@@ -5683,6 +5724,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           : `Contagem ${TYPE_LABELS[type]} registada com sucesso!`
       );
       setPendingTally(null);
+      // [CAIXER — Implementation Authorization §44, Checkpoint 2] Same
+      // treatment as pendingTally immediately above — this Contagem is
+      // now finalized; a future count starts the CAIXER stage fresh
+      // from 'entry' again via handleRequestConfirmation.
+      setCaixerStage(null);
       // [Business Worth Evolution — Implementation Authorization,
       // Increment 8] Correction mode is scoped to exactly one
       // confirmation — cleared here so a later, entirely unrelated
@@ -5708,6 +5754,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     } catch (err: any) {
       setError(err.message || 'Erro ao registar a contagem de stock.');
       setPendingTally(null);
+      // [CAIXER — Implementation Authorization §44, Checkpoint 2;
+      // non-destructive validation, §43.3] Same treatment as
+      // pendingTally, immediately above — the operator returns to the
+      // editing screen exactly as this existing failure path already
+      // does. caixerDraft itself is NOT cleared (it remains durably
+      // persisted, §C.2/§C.3), so a retry through handleRequestConfirmation
+      // resumes CAIXER entry pre-filled with the Owner's own
+      // last-entered values, never forcing re-entry from scratch.
+      setCaixerStage(null);
       // Deliberately NOT clearing submissionIdRef.current here — a
       // failed or ambiguous attempt must remain retryable under the
       // SAME identity (§3/§4b). The operator returns to the editing
@@ -6113,9 +6168,181 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       updateManualRow(item.manualRowIndex, { validated: false });
     }
     setPendingTally(null);
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2] The
+    // whole pendingTally/review flow is discarded here (back to live
+    // editing) — caixerStage goes with it, mirroring pendingTally
+    // exactly; caixerDraft itself is untouched (non-destructive, CX-2).
+    setCaixerStage(null);
   };
 
-  if (pendingTally) {
+  // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+  // C.3, C.4); Specification §45.2, §45.13, FR-73, FR-79] Local,
+  // display-only parsing/validation. This is NOT the canonical,
+  // exported computeCaixerTotalLiquidity() pure function — that is
+  // Plan §D/C.7's own separate, not-yet-implemented checkpoint
+  // (calculations.ts), which will also wire this total into the actual
+  // confirmation write payload. Nothing below this comment is read by
+  // handleConfirmSave/recordStockCount in this checkpoint.
+  const parseCaixerFieldValue = (raw: string | undefined): number | undefined => {
+    if (raw === undefined) return undefined;
+    const trimmed = raw.trim();
+    if (trimmed === '') return undefined;
+    const parsed = Number(trimmed);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  };
+  const caixerCashValue = parseCaixerFieldValue(caixerDraft.cash);
+  const caixerEmolaValue = parseCaixerFieldValue(caixerDraft.emola);
+  const caixerMpesaValue = parseCaixerFieldValue(caixerDraft.mpesa);
+  const caixerBancoValue = parseCaixerFieldValue(caixerDraft.banco);
+  // FR-73: blank/undefined is incomplete; an explicit 0 (parses to the
+  // number 0, not undefined) is complete and valid — parseCaixerFieldValue
+  // only returns undefined for a genuinely blank/non-numeric string, so
+  // this check already treats 0 as valid by construction.
+  const caixerAllFieldsValid =
+    caixerCashValue !== undefined &&
+    caixerEmolaValue !== undefined &&
+    caixerMpesaValue !== undefined &&
+    caixerBancoValue !== undefined;
+  const caixerTotalLiquidity = caixerAllFieldsValid
+    ? Number(((caixerCashValue as number) + (caixerEmolaValue as number) + (caixerMpesaValue as number) + (caixerBancoValue as number)).toFixed(2))
+    : undefined;
+  const handleCaixerFieldChange = (field: 'cash' | 'emola' | 'mpesa' | 'banco', value: string) => {
+    setCaixerDraft((prev) => ({ ...prev, [field]: value }));
+    // [CAIXER — Implementation Authorization §44, Checkpoint 2] Reuses
+    // the SAME existing debounced-autosave mechanism every other meta
+    // field already uses — no new timer/mechanism, per Plan §C.3.
+    scheduleRowDraftSave('caixerDraft');
+  };
+  const caixerFieldClass =
+    'w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2.5 py-2 text-[13px] text-[#111827] placeholder-[#7C8695] ' +
+    'transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30';
+  const mostRecentDeclaration = cashPositionDeclarations.length > 0 ? cashPositionDeclarations[0] : null;
+
+  // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
+  // C.3); Specification §45.1, §45.13, FR-80] The direct-transition
+  // target: the exact screen shown the instant physical counting
+  // concludes (handleRequestConfirmation sets caixerStage to 'entry' at
+  // the same point pendingTally itself is set, above) — no intervening
+  // screen sits between that point and this one.
+  if (pendingTally && caixerStage === 'entry') {
+    return (
+      <div className="max-w-2xl mx-auto py-10 space-y-5">
+        <div className="bg-white border border-[#E5E7EB] rounded-2xl shadow-[0_1px_2px_rgba(11,31,58,0.04),0_12px_32px_-16px_rgba(11,31,58,0.12)] p-6 sm:p-8 space-y-6">
+          <div className="flex items-center gap-3">
+            <div className="w-10 h-10 rounded-xl bg-[#0B1F3A]/[0.06] flex items-center justify-center text-[#0B1F3A] shrink-0">
+              <Wallet className="w-5 h-5" strokeWidth={2} />
+            </div>
+            <div>
+              <h2 className="type-title">Posição de Caixa (CAIXER)</h2>
+              <p className="text-[13px] text-gray-500 mt-0.5">
+                Confirme a posição atual do negócio em cada um dos quatro métodos, à data desta Contagem. Zero é um valor válido — deixe em branco apenas o que ainda não sabe.
+              </p>
+            </div>
+          </div>
+
+          {mostRecentDeclaration && (
+            // [CAIXER — Implementation Authorization §44, Checkpoint 2
+            // (Plan §C.3); Specification §45.4, FR-76] Reference/hint
+            // only — never pre-fills any of the four inputs below, and
+            // never itself satisfies FR-73's active-confirmation
+            // requirement. The actual fix removing the OLD silent
+            // cashPositionDeclarations[0] reuse from the confirmation
+            // payload is Plan §G/C.9's own separate, not-yet-
+            // implemented checkpoint (Rule 8 Finding CX-8) — this hint
+            // is purely informational display.
+            <div className="rounded-xl bg-[var(--muted)] border border-[#E5E7EB] px-4 py-2.5 text-[12px] text-gray-600">
+              Última posição de caixa declarada: <span className="font-semibold text-[#111827]">{formatCurrency(mostRecentDeclaration.amount, currencySymbol)}</span> ({formatDate(mostRecentDeclaration.declaredAt)}) — apenas referência; confirme os quatro valores abaixo.
+            </div>
+          )}
+
+          <div className="space-y-4">
+            <div>
+              <label className="block type-label mb-1">Caixa (numerário)</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={caixerDraft.cash ?? ''}
+                onChange={(e) => handleCaixerFieldChange('cash', e.target.value)}
+                placeholder="0"
+                className={caixerFieldClass}
+              />
+            </div>
+            <div>
+              <label className="block type-label mb-1">eMola</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={caixerDraft.emola ?? ''}
+                onChange={(e) => handleCaixerFieldChange('emola', e.target.value)}
+                placeholder="0"
+                className={caixerFieldClass}
+              />
+            </div>
+            <div>
+              <label className="block type-label mb-1">M-Pesa</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={caixerDraft.mpesa ?? ''}
+                onChange={(e) => handleCaixerFieldChange('mpesa', e.target.value)}
+                placeholder="0"
+                className={caixerFieldClass}
+              />
+            </div>
+            <div>
+              <label className="block type-label mb-1">Banco</label>
+              <input
+                type="text"
+                inputMode="decimal"
+                value={caixerDraft.banco ?? ''}
+                onChange={(e) => handleCaixerFieldChange('banco', e.target.value)}
+                placeholder="0"
+                className={caixerFieldClass}
+              />
+            </div>
+          </div>
+
+          {error && (
+            <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[13px] font-medium">
+              {error}
+            </div>
+          )}
+
+          <div className="flex items-center gap-3">
+            <button
+              type="button"
+              onClick={() => {
+                // [CAIXER — Implementation Authorization §44, Checkpoint
+                // 2 (Plan §C.3); non-destructive validation, §43.3]
+                // caixerDraft is deliberately NOT cleared here — only
+                // pendingTally/caixerStage — so a subsequent re-entry
+                // into CAIXER resumes the Owner's own last-entered
+                // values rather than forcing re-entry.
+                setPendingTally(null);
+                setCaixerStage(null);
+              }}
+              disabled={isSaving}
+              className="btn-secondary flex-1 py-3 px-4 text-sm disabled:opacity-60"
+            >
+              <ArrowLeft className="w-4 h-4" strokeWidth={2.25} />
+              <span>Voltar</span>
+            </button>
+            <button
+              type="button"
+              onClick={() => setCaixerStage('review')}
+              disabled={!caixerAllFieldsValid}
+              className="btn-primary flex-1 py-3 px-4 text-sm disabled:opacity-60 disabled:cursor-not-allowed"
+            >
+              <span>Continuar</span>
+              <ArrowRight className="w-4 h-4" strokeWidth={2.25} />
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (pendingTally && caixerStage === 'review') {
     return (
       <div className="max-w-2xl mx-auto py-10 space-y-5">
         {pendingBusinessWorthCorrection && (
@@ -6265,6 +6492,53 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </span>
           </div>
 
+          {/* [CAIXER — Implementation Authorization §44, Checkpoint 2
+              (Plan §C.4); Specification §45.13, FR-81; Rule 8 Finding
+              CX-6, accepted wording] Review must show all four CAIXER
+              components individually, plus the system-calculated
+              total, alongside the already-shown product valuation
+              above — never final confirmation from the raw CAIXER
+              entry screen alone, and never omitting either figure from
+              this review. "Total Liquidez" is computed by the SAME
+              local sum this file's own CAIXER entry screen already
+              uses (above) — never a sixth, independently-typed input;
+              the canonical, shared computeCaixerTotalLiquidity() is
+              Plan §D/C.7's own separate, not-yet-implemented
+              checkpoint, which will also be the point this total
+              actually reaches the confirmation write payload — it does
+              not yet, in this checkpoint. */}
+          <div className="rounded-xl bg-[var(--muted)] border border-[#E5E7EB] p-4 space-y-2">
+            <p className="text-[11px] font-bold text-gray-500 uppercase tracking-wide mb-1">Posição de Caixa (CAIXER)</p>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-gray-600">Caixa</span>
+              <span className="font-medium text-[#111827] tabular-nums">{formatCurrency(caixerCashValue ?? 0, currencySymbol)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-gray-600">eMola</span>
+              <span className="font-medium text-[#111827] tabular-nums">{formatCurrency(caixerEmolaValue ?? 0, currencySymbol)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-gray-600">M-Pesa</span>
+              <span className="font-medium text-[#111827] tabular-nums">{formatCurrency(caixerMpesaValue ?? 0, currencySymbol)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px]">
+              <span className="text-gray-600">Banco</span>
+              <span className="font-medium text-[#111827] tabular-nums">{formatCurrency(caixerBancoValue ?? 0, currencySymbol)}</span>
+            </div>
+            <div className="flex items-center justify-between text-[13px] pt-2 border-t border-[#E5E7EB]">
+              <span className="font-bold text-[#0B1F3A]">Total Liquidez</span>
+              <span className="font-display font-bold text-[#0B1F3A] tabular-nums">{formatCurrency(caixerTotalLiquidity ?? 0, currencySymbol)}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setCaixerStage('entry')}
+              disabled={isSaving}
+              className="mt-1 text-[12px] font-bold text-[#0B1F3A] bg-[#D4AF37]/15 hover:bg-[#D4AF37]/25 transition-colors duration-150 disabled:opacity-60 rounded-lg px-2.5 py-1"
+            >
+              Corrigir Caixa
+            </button>
+          </div>
+
           {error && (
             <div className="px-3.5 py-2.5 rounded-xl bg-rose-50 border border-rose-200 text-rose-700 text-[13px] font-medium">
               {error}
@@ -6292,7 +6566,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               component's own established "never rely solely on the
               surrounding JSX/upstream guard" discipline (see
               handleConfirmSave's own comment). "Voltar" is deliberately
-              NOT restricted — it only clears pendingTally, never
+              NOT restricted — it only clears pendingTally (and, per
+              this checkpoint, caixerStage alongside it), never
               touches the draft, and must remain available to everyone
               regardless of ownership. */}
           {!isOwner && (
@@ -6310,7 +6585,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           <div className="flex items-center gap-3">
             <button
               type="button"
-              onClick={() => setPendingTally(null)}
+              onClick={() => {
+                setPendingTally(null);
+                // [CAIXER — Implementation Authorization §44, Checkpoint
+                // 2] Same treatment as pendingTally — a full return to
+                // Stock Count clears the CAIXER stage too; caixerDraft
+                // itself is untouched (non-destructive, CX-2).
+                setCaixerStage(null);
+              }}
               disabled={isSaving}
               className="btn-secondary flex-1 py-3 px-4 text-sm disabled:opacity-60"
             >

@@ -245,7 +245,7 @@ describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSav
   it('performRowSaveAttempt reads live current state via latestFlushArgs.current, never a schedule-time-captured argument (Decision 39a FR-N2)', () => {
     assert.match(
       performRowSaveAttemptBody,
-      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
+      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi, caixerDraft: cxd \} = latestFlushArgs\.current;/,
       'Expected the save-attempt function to read live state from latestFlushArgs.current at fire-time, not from schedule-time function arguments — this is the exact property that makes the T0/T100 race across two different rows structurally impossible.'
     );
   });
@@ -275,12 +275,12 @@ describe('§5b — newProductInfo reaches every meta-document write path for the
     );
     assert.match(
       performRowSaveAttemptBody,
-      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi \} = latestFlushArgs\.current;/,
+      /const \{ catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi, caixerDraft: cxd \} = latestFlushArgs\.current;/,
       'Expected performRowSaveAttempt to destructure newProductInfo (as npi) from latestFlushArgs.current — sourced live at fire-time, the same as every other field, never passed as a schedule-time function argument.'
     );
     assert.match(
       performRowSaveAttemptBody,
-      /savePeriodicStockDraftMeta\(t, l\.trim\(\) \|\| undefined, d, submissionIdRef\.current \|\| undefined, npi\)/,
+      /savePeriodicStockDraftMeta\(t, l\.trim\(\) \|\| undefined, d, submissionIdRef\.current \|\| undefined, npi, cxd\)/,
       'Expected performRowSaveAttempt\'s savePeriodicStockDraftMeta call (the "__meta__"/"newProductInfo:*" branch) to pass the live-sourced npi as its fifth argument.'
     );
   });
@@ -312,7 +312,7 @@ describe('§5b — newProductInfo reaches every meta-document write path for the
     const handleRequestConfirmationBody = extractFunctionBody(source, 'const handleRequestConfirmation = async (');
     assert.match(
       handleRequestConfirmationBody,
-      /identityWriteRef\.current\s*=\s*flushPeriodicStockDraftRows\(\s*rowsByKey,\s*type,\s*label\.trim\(\)\s*\|\|\s*undefined,\s*date,\s*submissionIdRef\.current,\s*newProductInfo\s*\)/,
+      /identityWriteRef\.current\s*=\s*flushPeriodicStockDraftRows\(\s*rowsByKey,\s*type,\s*label\.trim\(\)\s*\|\|\s*undefined,\s*date,\s*submissionIdRef\.current,\s*newProductInfo,\s*caixerDraft\s*\)/,
       'Expected the identity-establishing write in handleRequestConfirmation to include newProductInfo as its sixth argument — omitting it would silently erase any already-persisted newProductInfo the moment the operator reaches pendingTally.'
     );
   });
