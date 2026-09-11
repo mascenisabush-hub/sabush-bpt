@@ -966,6 +966,29 @@ export function getLedgerDerivedCashBalance(
 }
 
 /**
+ * [CAIXER — Implementation Authorization §44, Checkpoint 3 (Plan §D/
+ * C.7); Specification §45, FR-79; Rule 8 Finding CX-1] The ONE place
+ * `cashPosition` is ever derived from its four CAIXER components — the
+ * concrete client-side mechanism guaranteeing "the system must
+ * recompute and/or verify the aggregate rather than trusting a
+ * client-supplied aggregate value" (CX-1 acceptance). Every caller
+ * (recordStockCount, below) passes the four raw components here rather
+ * than ever accepting or forwarding a pre-summed total from the UI
+ * layer — an honest client can never construct an inconsistent write.
+ *
+ * Pure, deterministic, no Firestore/AppContext dependency — mirrors
+ * every other calculation function in this file.
+ */
+export function computeCaixerTotalLiquidity(params: {
+  cash: number;
+  emola: number;
+  mpesa: number;
+  banco: number;
+}): number {
+  return Number((params.cash + params.emola + params.mpesa + params.banco).toFixed(2));
+}
+
+/**
  * [Business Worth Evolution — Implementation Authorization, Increment 7;
  * Specification §22, FR-11, FR-31, FR-32] The cash reconciliation
  * signal: the Owner-confirmed actual cash position minus the

@@ -1238,11 +1238,13 @@ export interface StartupInvestmentEntry {
 // the live Business Worth calculation reads to compute a delta since
 // the last snapshot (calculations.ts, computeCaseALiveBusinessWorth)
 // — a bare "current balance" restatement doesn't fit that delta model
-// and is not read by it. Its authoritative effect on Business Worth
-// happens the same way it already does today: via
-// RecordStockCountParams.ownerConfirmedCashPosition, entered (optionally
-// pre-filled from the latest declaration here) at the next Contagem
-// confirmation, becoming that snapshot's own frozen cashPosition.
+// and is not read by it. [CAIXER — Implementation Authorization §44]
+// Its authoritative effect on Business Worth happens via the Owner's
+// own actively-entered CAIXER values at the next Contagem confirmation
+// (RecordStockCountParams.caixerCash/caixerEmola/caixerMpesa/
+// caixerBanco) — the most recent declaration here is shown only as a
+// labeled reference/hint on that screen (FR-76), never used to
+// pre-fill or auto-submit any of the four CAIXER fields.
 export interface CashPositionDeclaration {
   id: string;
   businessId: string;

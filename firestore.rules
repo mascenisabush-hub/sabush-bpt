@@ -955,6 +955,42 @@ service cloud.firestore {
             (
               request.resource.data.get('establishmentMethod', null) in ['contagem', null] &&
               request.resource.data.get('sourceStockCountId', null) is string &&
+              // [CAIXER — Implementation Authorization §44, Checkpoint 3
+              // (Plan §D/C.8); Specification §45, FR-73, FR-74, FR-79;
+              // Rule 8 Findings CX-1, CX-2] Applies only when
+              // establishmentMethod == 'contagem' (an absent
+              // establishmentMethod predates this requirement entirely —
+              // this is the authoritative write boundary going forward,
+              // not a retroactive one). CX-2: each of the four CAIXER
+              // components must be present and numeric — an explicit 0
+              // passes (a number); missing/null/non-numeric fails,
+              // exactly matching measuredBusinessWorth's own existing
+              // is-number tier immediately above. CX-1: cashPosition must
+              // equal the four-component sum, within a small fixed
+              // tolerance absorbing floating-point summation — this is
+              // the authoritative recompute/verify boundary CX-1's own
+              // acceptance requires; a client can never fabricate a
+              // client-side derivation (calculations.ts,
+              // computeCaixerTotalLiquidity) prevents an honest client
+              // from ever constructing an inconsistent write, and this
+              // rule prevents a malformed or compromised client from
+              // succeeding even if it tries.
+              (
+                request.resource.data.get('establishmentMethod', null) != 'contagem' ||
+                (
+                  request.resource.data.get('cashPositionCash', null) is number &&
+                  request.resource.data.get('cashPositionEmola', null) is number &&
+                  request.resource.data.get('cashPositionMpesa', null) is number &&
+                  request.resource.data.get('cashPositionBanco', null) is number &&
+                  request.resource.data.get('cashPosition', null) is number &&
+                  request.resource.data.cashPosition >=
+                    (request.resource.data.cashPositionCash + request.resource.data.cashPositionEmola +
+                      request.resource.data.cashPositionMpesa + request.resource.data.cashPositionBanco) - 0.01 &&
+                  request.resource.data.cashPosition <=
+                    (request.resource.data.cashPositionCash + request.resource.data.cashPositionEmola +
+                      request.resource.data.cashPositionMpesa + request.resource.data.cashPositionBanco) + 0.01
+                )
+              ) &&
               (
                 (request.resource.data.get('supersedesSnapshotId', null) == null &&
                   request.resource.data.get('status', null) == 'active') ||

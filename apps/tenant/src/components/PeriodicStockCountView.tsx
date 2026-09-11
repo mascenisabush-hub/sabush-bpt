@@ -5677,18 +5677,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // So turning this on for periodic confirmations has no
         // Void-&-Redo-exclusivity implication to resolve here.
         producesBusinessWorthSnapshot: true,
-        // [Fix — same gap, the cash half of it] Specification §10
-        // Decision 3, FR-55: cashPosition is "required product behavior
-        // whenever producesBusinessWorthSnapshot is true." Sourced from
-        // the Owner's own most recent Cash Position declaration
-        // (Dívidas screen, cashPositionDeclarations[0] — already
-        // newest-first, AppContext's own onSnapshot sort) — never a
-        // fabricated 0, and genuinely omitted (not merely defaulted)
-        // when the Owner has never declared one yet, exactly matching
-        // this field's own "genuinely omitted... when the caller
-        // supplies nothing" contract (RecordStockCountParams, above).
-        ...(cashPositionDeclarations.length > 0
-          ? { ownerConfirmedCashPosition: cashPositionDeclarations[0].amount }
+        // [CAIXER — Implementation Authorization §44, Checkpoint 3 (Plan
+        // §D/C.7); Specification §45, FR-55, FR-73, FR-76; Rule 8
+        // Finding CX-8] Sourced from the Owner's own actively-confirmed
+        // CAIXER entry (caixerCashValue/caixerEmolaValue/
+        // caixerMpesaValue/caixerBancoValue, derived from caixerDraft,
+        // below) — the OLD silent cashPositionDeclarations[0].amount
+        // reuse this block previously fell back to is removed here: it
+        // is structurally superseded by RecordStockCountParams' own
+        // signature change (a single ownerConfirmedCashPosition scalar
+        // no longer exists to receive it), and was in any case only ever
+        // a reference/hint on the CAIXER entry screen (FR-76), never a
+        // valid substitute for an active confirmation. All four fields
+        // are sent together, only when caixerAllFieldsValid — the exact
+        // same completeness check that already gates the "Continuar"
+        // button on the CAIXER entry screen (§C.6) — or none at all;
+        // they can never partially appear. An explicit 0 in any field is
+        // sent exactly as entered, never coerced or omitted (FR-73).
+        // firestore.rules independently and authoritatively re-verifies
+        // presence/type and aggregate consistency regardless of what
+        // this client sends (Plan §C.8, CX-1/CX-2).
+        ...(caixerAllFieldsValid
+          ? {
+              caixerCash: caixerCashValue as number,
+              caixerEmola: caixerEmolaValue as number,
+              caixerMpesa: caixerMpesaValue as number,
+              caixerBanco: caixerBancoValue as number,
+            }
           : {}),
         // [Business Worth Evolution — Implementation Authorization,
         // Increment 8; Specification §25, §26, FR-38, FR-39, FR-58]
@@ -6177,12 +6192,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   // [CAIXER — Implementation Authorization §44, Checkpoint 2 (Plan §C/
   // C.3, C.4); Specification §45.2, §45.13, FR-73, FR-79] Local,
-  // display-only parsing/validation. This is NOT the canonical,
-  // exported computeCaixerTotalLiquidity() pure function — that is
-  // Plan §D/C.7's own separate, not-yet-implemented checkpoint
-  // (calculations.ts), which will also wire this total into the actual
-  // confirmation write payload. Nothing below this comment is read by
-  // handleConfirmSave/recordStockCount in this checkpoint.
+  // display-only parsing/validation, gating the "Continuar" button
+  // (§C.6) and driving the Review screen's own display total. This is
+  // NOT the canonical, exported computeCaixerTotalLiquidity() pure
+  // function (calculations.ts) — that function is the sole place the
+  // AUTHORITATIVE cashPosition aggregate is derived, inside
+  // recordStockCount itself (AppContext.tsx), from the four raw values
+  // below — never from this display-only total. [Checkpoint 3, Plan
+  // §D/C.7] caixerCashValue/caixerEmolaValue/caixerMpesaValue/
+  // caixerBancoValue and caixerAllFieldsValid, below, ARE now also read
+  // by handleConfirmSave's own recordStockCount call, above.
   const parseCaixerFieldValue = (raw: string | undefined): number | undefined => {
     if (raw === undefined) return undefined;
     const trimmed = raw.trim();
@@ -6241,15 +6260,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           </div>
 
           {mostRecentDeclaration && (
-            // [CAIXER — Implementation Authorization §44, Checkpoint 2
-            // (Plan §C.3); Specification §45.4, FR-76] Reference/hint
-            // only — never pre-fills any of the four inputs below, and
-            // never itself satisfies FR-73's active-confirmation
-            // requirement. The actual fix removing the OLD silent
+            // [CAIXER — Implementation Authorization §44, Checkpoints
+            // 2-3 (Plan §C.3, §D/C.7); Specification §45.4, FR-76]
+            // Reference/hint only — never pre-fills any of the four
+            // inputs below, and never itself satisfies FR-73's active-
+            // confirmation requirement. The OLD silent
             // cashPositionDeclarations[0] reuse from the confirmation
-            // payload is Plan §G/C.9's own separate, not-yet-
-            // implemented checkpoint (Rule 8 Finding CX-8) — this hint
-            // is purely informational display.
+            // payload (Rule 8 Finding CX-8) is removed — the confirmation
+            // call now sends only the Owner's own actively-entered CAIXER
+            // values (handleConfirmSave, above) — this hint remains
+            // purely informational display, exactly as it already was.
             <div className="rounded-xl bg-[var(--muted)] border border-[#E5E7EB] px-4 py-2.5 text-[12px] text-gray-600">
               Última posição de caixa declarada: <span className="font-semibold text-[#111827]">{formatCurrency(mostRecentDeclaration.amount, currencySymbol)}</span> ({formatDate(mostRecentDeclaration.declaredAt)}) — apenas referência; confirme os quatro valores abaixo.
             </div>
