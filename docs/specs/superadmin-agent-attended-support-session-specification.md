@@ -1,17 +1,21 @@
 # SuperAdmin Agent Attended Support Session Specification
 
-**Status:** Drafted. Converts `BDR-0018` (✅ Approved) and the
-SuperAdmin Agent Attended Support Session Policy (✅ Approved,
+**Status:** ✅ **Accepted.** Corrected following the Specification
+Acceptance Audit and the Product Architect's SPEC-1/SPEC-2
+resolutions (see "Product Architect Acceptance," at the end of this
+document). Converts `BDR-0018` (✅ Approved) and the SuperAdmin
+Agent Attended Support Session Policy (✅ Approved,
 `docs/specs/POL-pending-superadmin-agent-attended-support-session-policy.md`
 — currently unnumbered, per that document's own recorded numbering
 queue) into functional requirements, a proposed data model, and
-acceptance criteria a Rule 8 Assessment can be run against. **This
-Specification is not, however, formally Accepted in the signed sense**
-— no named Product Architect signature has been given for this
-document specifically, and none is fabricated here, matching the
-identical, explicitly-stated caveat `superadmin-assisted-initial-stock-recovery-specification.md`'s
-own Status line already established for this repository's convention
-when a Specification is drafted but not yet individually signed.
+acceptance criteria a Rule 8 Assessment can be run against. This
+correction pass resolved, at Specification level, the Support View
+State schema (§20) and the abandoned-session/reconnection mechanism
+(§21) — both of which the original draft had improperly re-deferred to
+Rule 8 despite `BDR-0018` §6 and the Policy's Rule O/Rule U explicitly
+assigning them to this stage; the Specification Acceptance Audit
+identified this as its central finding, and this correction resolved
+it directly.
 
 ---
 
@@ -41,13 +45,16 @@ own explicit exclusion of the same categories.
 **In scope:** the one-time code's full lifecycle (generation, entry,
 consumption, expiry, lockout); Attended Support Session establishment
 and duration; the desktop rendering path (native screen-share) and the
-mobile rendering path (Support View State); the pointer/guide channel;
-the persistent customer-visible indicator; disconnect by either party
-and the abandoned-session safety net; tenant/business isolation for
-every step; the structural (not merely UI-level) enforcement that
-Support never gains write authority; the audit trail for every
-lifecycle event; coexistence with the customer's ordinary tenant
-session.
+mobile rendering path (Support View State, including its explicit,
+allowlisted schema — §20); the pointer/guide channel; the persistent
+customer-visible indicator; disconnect by either party and the
+abandoned-session/reconnection lifecycle, including the heartbeat and
+grace-period mechanism that distinguishes temporary connectivity loss
+from genuine abandonment (§21); tenant/business isolation for every
+step; the structural (not merely UI-level) enforcement that Support
+never gains write authority; the principle that rendering connectivity
+is never itself authorization; the audit trail for every lifecycle
+event; coexistence with the customer's ordinary tenant session.
 
 **Out of scope:** any change to Business Visibility, Suspend/
 Reactivate, Payment Operations, or either existing Recovery
@@ -94,7 +101,7 @@ already made there.
 
 ## 5. Business Rules
 
-Restated from the Policy's Rules A–Z for direct traceability (§29,
+Restated from the Policy's Rules A–Z for direct traceability (§27,
 below, maps each to its FR):
 
 1. Eligible operator tier: `support`, `developer`, or `superadmin` (Rule A).
@@ -121,8 +128,9 @@ below, maps each to its FR):
     hidden, under either rendering path (Rule M).
 14. Desktop: native browser screen-share consent is mandatory and
     non-bypassable, additional to code-based consent (Rule N).
-15. Mobile: Support View State is read-only and minimum-necessary;
-    exact field schema deferred to this Specification (Rule O — see §17).
+15. Mobile: Support View State is read-only and minimum-necessary,
+    following an explicitly allowlisted, customer-authored schema
+    (Rule O — see §12, §20).
 16. Pointer is structurally non-interactive by construction (Rule P).
 17. Customer sees a persistent, unmissable connection indicator for
     the full session duration (Rule Q).
@@ -139,7 +147,7 @@ below, maps each to its FR):
 24. Never logged: the code itself, mirrored/streamed content, pointer
     coordinates, or any underlying tenant business data (Rule X).
 25. Sensitive-field masking: deferred to this Specification (Rule Y —
-    see §24).
+    see §26).
 26. No future mutation-authority carve-out of any kind without a new
     BDR-level decision (Rule Z).
 
@@ -176,6 +184,20 @@ below, maps each to its FR):
 - **I-9.** The customer's ordinary tenant SPA authentication and
   session state are never read, modified, or invalidated by any
   Invitation- or Session-lifecycle event.
+- **I-10.** Rendering connectivity is not authorization: a WebRTC
+  connection, Firestore listener, or Support View State subscription
+  is a rendering/transport mechanism only. No connectivity event
+  (connect, disconnect, or reconnect) may ever itself create, extend,
+  renew, or recreate any Invitation's or Session's authorization
+  state — authorization and connectivity are structurally independent
+  facts, and connectivity can never influence authorization in either
+  direction.
+- **I-11.** A Session's total active lifetime, measured from its own
+  `establishedAt`, never exceeds 60 minutes (Rule I / FR-17), under
+  any circumstance — including any intervening connectivity loss,
+  grace period, or reconnection (§21). A reconnection restores
+  rendering access to an already-authorized Session; it never resets,
+  pauses, or extends that Session's own clock.
 
 ## 7. Functional Requirements — Code Generation
 
@@ -192,8 +214,15 @@ state (active, expired, or locked).
 **FR-3.** The generated code must be exactly 6 numeric digits (Rule D).
 
 **FR-4.** The system must never persist the code in plaintext anywhere
-— only a salted hash, following the Clear-Data Password precedent
-(`server/index.ts`'s `crypto.scrypt` + random salt pattern) (Rule C, I-3).
+— only a salted hash, following the Clear-Data Password precedent's
+full shape (`server/index.ts`'s `crypto.scrypt` + random salt for
+hashing) (Rule C, I-3). Verifying an entered code against the stored
+hash must use a constant-time comparison (the same precedent's
+`crypto.timingSafeEqual`, not a standard `===`/string-equality
+check) — required explicitly here, not merely implied by citing the
+hashing half of the precedent alone, since a timing side-channel could
+otherwise leak information about a valid code's hash even without
+ever recovering the plaintext.
 
 **FR-5.** The system must record the Invitation's generation timestamp
 as a server timestamp, never client-supplied, following this
@@ -222,7 +251,7 @@ expired one.
 **FR-9.** Any platform operator whose `platformRole` is `support`,
 `developer`, or `superadmin` must be able to attempt entering a code
 against a specific, already-identified business (Rule A, Rule K) —
-never against a bare code with no business context (§18, Rule K's
+never against a bare code with no business context (§16, Rule K's
 enumeration-risk rationale).
 
 **FR-10.** The system must verify the entered code against the
@@ -332,11 +361,12 @@ to read/write that business's own data) — never by the Support
 operator's session, and never by any server-side process acting on the
 Support operator's behalf.
 
-**FR-26.** The Support View State's exact field-by-field content is
-**not fixed by this Specification** — see §24 (Sensitive-Field
-Masking) for the minimum-necessary principle this Specification does
-resolve; the literal field list is deferred to Rule 8, per `BDR-0018`
-§6's and the Policy's own explicit deferral (Rule O).
+**FR-26.** The Support View State's field-by-field content is fixed by
+this Specification as an explicit allowlist — never a mirror of
+arbitrary tenant application state — per the Product Architect's
+SPEC-1 resolution. The full schema, its four fixed categories, and its
+explicit exclusions are defined in §20, below, which this FR
+incorporates by reference (Rule O).
 
 ## 13. Functional Requirements — Pointer / Guide Mechanism
 
@@ -395,14 +425,16 @@ Support operator's access — closing the WebRTC connection for the
 desktop path, or denying further reads of the Support View State
 document for the mobile path (I-8, Rule T).
 
-**FR-37.** If either party's browser disappears (connection loss,
-browser closure) without an explicit FR-34/FR-35 termination, the
-system must detect this and end the Session within a bounded time —
-never allowing the Session to remain active past its own FR-17
-60-minute duration even in total absence of explicit termination (Rule
-U). The exact detection mechanism (heartbeat, presence system, or
-connection-close event) is **not fixed by this Specification** —
-deferred to Rule 8 (§25).
+**FR-37.** If either party's connectivity is lost (temporary network/
+transport interruption) or a browser genuinely disappears (closure,
+permanent disconnection) without an explicit FR-34/FR-35 termination,
+the system must distinguish temporary interruption from genuine
+abandonment via the server-authoritative heartbeat and grace-period
+mechanism defined in §21, below, per the Product Architect's SPEC-2
+resolution — never ending the Session immediately on the first sign of
+connectivity loss, and never allowing it to remain active past its own
+FR-17 60-minute duration regardless of how connectivity behaves (Rule
+U). This FR incorporates §21's requirements by reference.
 
 ## 16. Functional Requirements — Tenant Isolation and Authorization
 
@@ -452,18 +484,40 @@ pointer, and audit records it itself defines.
 one `platform_audit_log` entry, using the existing schema
 (`actorUid`, `actorRole`, `actionType`, `targetBusinessId`, server
 `timestamp`, per `platformAuditLog.ts`) — no new entry shape, only new
-`actionType` values (Rule W):
+`actionType` values (Rule W). Per the Product Architect's resolution
+of the audit-ambiguity the Specification Acceptance Audit identified,
+natural completion and abandonment use **distinct action types**
+(Option B) rather than one generic event with a reason field — this
+follows this codebase's own existing convention directly: every
+existing `KNOWN_ACTION_TYPES` entry (`payment.confirmed`,
+`business.suspended`, etc.) is a specific, independently-filterable
+value, and `PlatformAuditLogEntry` has no generic "reason" field
+anywhere in its existing shape for this Specification to introduce
+one into:
 
 | Event | Proposed `actionType` | `actorUid` represents |
 |---|---|---|
-| Code generated | `support_session.invited` | the **customer** (the first audit entry type in this codebase representing a tenant-user-initiated action, not a platform-operator action — flagged explicitly, §26) |
+| Code generated | `support_session.invited` | the **customer** (the first audit entry type in this codebase representing a tenant-user-initiated action, not a platform-operator action) |
 | Code consumed / session established | `support_session.established` | the Support operator |
 | Session ended by customer | `support_session.ended_by_customer` | the customer |
 | Session ended by Support | `support_session.ended_by_support` | the Support operator |
-| Session ended by abandonment (FR-37) | `support_session.ended_by_timeout` | system-attributed (no human actor; `actorUid` set to a server-internal identifier per this codebase's existing convention for system-triggered events, e.g. `20-notifications.md`'s own producer pattern) |
+| **Session reached its natural 60-minute duration cap while still connected/active** | **`support_session.completed`** | system-attributed |
+| **Session ended because the abandoned-session grace period (§21) elapsed without reconnection** | **`support_session.ended_by_abandonment`** | system-attributed, referencing the last successful heartbeat |
 | Invitation expired unused | `support_session.invitation_expired` | system-attributed |
 | Failed code-entry attempt | `support_session.code_attempt_failed` | the attempting Support operator |
 | Invitation locked (5th failure) | `support_session.locked` | system-attributed, referencing the failed attempt that triggered it |
+
+`support_session.completed` and `support_session.ended_by_abandonment`
+replace the single, ambiguous `support_session.ended_by_timeout` this
+Specification originally proposed — the audit correctly identified
+that one name conflated two conceptually distinct endings (a Session
+that ran its full course while actively used, versus one that was
+genuinely abandoned mid-way and caught by the grace-period safety net,
+§21). This distinction is auditable and meaningful: an operator
+reviewing the Audit Center can now tell the difference between "this
+customer's support need was fully served" and "this session was
+dropped and never resumed," without needing a free-text reason field
+this codebase's audit schema does not otherwise use.
 
 `support_session.issued` — already anticipated by name in
 `platformAuditLog.ts`'s own header comment — is deliberately **not**
@@ -499,7 +553,165 @@ normally — navigating, entering data, viewing reports — while a
 Session is active, with the sole visible change being the persistent
 indicator (FR-31).
 
-## 20. Proposed Data Model
+## 20. Functional Requirements — Support View State Schema (SPEC-1)
+
+Resolves Rule O's deferred field-by-field schema question, per the
+Product Architect's explicit SPEC-1 decision. The Support View State
+is a **minimal, explicitly allowlisted, customer-authored** record —
+never a mirror of the tenant SPA's entire React state, and never
+containing anything beyond what a Support operator genuinely needs to
+provide VIEW + POINT + GUIDE assistance for the two evidenced
+scenarios this capability exists for (the OCR field-status case; the
+defect-vs-misunderstanding case, per `BDR-0018` §1).
+
+**FR-49.** The Support View State document's schema is fixed to
+exactly four categories, and no field outside them may ever be
+included:
+
+1. **Navigation/context** — the customer's current tenant route/view
+   identifier, and the relevant workflow/module context (e.g. "Add
+   Stock — OCR Review step"), sufficient for the Support operator to
+   understand *where* the customer is without seeing raw route
+   parameters or internal identifiers beyond what's needed for this
+   purpose.
+2. **Current workflow context** — the identifier of the specific
+   product/record being worked on, where necessary for guidance (e.g.
+   which line item the customer is currently editing), and the current
+   step within a multi-step workflow (e.g. which OCR review row).
+3. **Approved transient UI state** — only the specific, named,
+   allowlisted transient states genuinely needed for the realistic
+   support scenarios already evidenced: OCR field-status indicators
+   (`detected`/`review`/`not_found`, per `AddStockView.tsx`'s own
+   existing badge states), active validation/error messages currently
+   shown to the customer, and whether a specific guidance-relevant
+   modal or panel is currently open. No other transient UI state may
+   be added to this category without a new Specification-level
+   decision (Rule Z's own "no future carve-out without an explicit
+   decision" discipline, applied here to scope creep rather than write
+   authority).
+4. **Viewport information, where technically necessary for pointer
+   alignment** — viewport dimensions and, only if required for the
+   Support operator's pointer coordinates to align correctly with what
+   the customer sees, the current scroll position. Nothing else about
+   the customer's device, browser, or environment is included.
+
+**FR-50.** The Support View State must never contain: any Firebase
+Auth credential or token; any authentication secret; the one-time
+Support code itself, in any form; any payment or financial-account
+secret; any password, PIN, or hash of either; or any other information
+not directly required to satisfy one of FR-49's four categories for
+the purpose of VIEW + POINT + GUIDE assistance. This is an explicit
+negative requirement, not merely an absence — a Rule 8 implementation
+must be able to demonstrate no code path can populate the document
+with any of these, not merely that no current code path happens to do
+so.
+
+**FR-51.** Every field in the Support View State's actual schema (as
+finalized at Rule 8, within FR-49's four fixed categories) must be
+traceable to a specific, named support-diagnosis need — the same
+minimum-necessary discipline Business Visibility's own curated read
+already applies (Gap 2), now made concrete and testable against an
+explicit allowlist rather than stated only as a principle (§26 below
+restates this principle; this FR is what makes it enforceable).
+
+**FR-52.** A Support View State document belongs to exactly one
+Session and exactly one business for its entire lifetime — never
+shared, reused, or readable across Sessions or businesses (I-1, I-5,
+FR-38). The document must become unreadable to any Support operator
+the instant its governing Session transitions to `ended`, by any means
+(FR-34–FR-37, §21) — the same immediate, total revocation FR-36
+already requires for the rendering connection itself, applied here to
+the underlying data record.
+
+**FR-53.** The existence, content, or freshness of a Support View
+State document must never itself establish, extend, substitute for, or
+imply Session authorization (I-10). A Support operator's ability to
+read a Support View State document is always and only a *consequence*
+of an already-valid, already-established Session (FR-11) — never an
+independent access path, and never a signal the server treats as proof
+of an active, valid Session on its own.
+
+## 21. Functional Requirements — Connectivity, Heartbeat, and Reconnection (SPEC-2)
+
+Resolves Rule U's deferred abandoned-session detection mechanism, per
+the Product Architect's explicit SPEC-2 decision. The governing
+principle, restated from the Product Architect's own framing and fixed
+here as Invariant I-10: **rendering connectivity is not authorization**
+— a temporary network or transport interruption must never immediately
+end an otherwise-valid Session, and a restored connection must never
+create, extend, or recreate any authorization it did not already have.
+
+**FR-54.** While a Session is `active`, the customer's browser, under
+either rendering path, must send a heartbeat signal at a regular
+interval — proposed at **every 15 seconds** — to a server-authoritative
+location (e.g. a privileged write updating the Session document's own
+`lastHeartbeatAt` field). This figure is this Specification's own
+proposal, offered clearly enough for Rule 8 to evaluate and adjust, not
+a figure carried over from any existing precedent (no comparable
+heartbeat mechanism exists anywhere else in this codebase).
+
+**FR-55.** If the server does not receive a heartbeat for **30
+seconds** (missing two consecutive expected heartbeats under FR-54's
+proposed interval), the Session's connectivity status must transition
+to `reconnecting` — **not** to `ended`. The Session's own `status`
+field remains `active`, and its `expiresAt` (the 60-minute cap, FR-17)
+is completely unchanged by this transition (I-11).
+
+**FR-56.** If a heartbeat resumes while the Session is in
+`reconnecting` status and before the grace period (FR-57) elapses, the
+Session must return directly to full `active` connectivity status.
+This reconnection must never modify `establishedAt`, `expiresAt`, or
+any other authorization-bearing field on the Session or its originating
+Invitation — it restores the rendering/transport layer only (I-10).
+
+**FR-57.** The grace period — proposed at **2 minutes from the last
+successful heartbeat** — bounds how long a Session may remain in
+`reconnecting` status before being treated as genuinely abandoned. This
+figure, like FR-54's interval, is this Specification's own proposal for
+Rule 8 to evaluate, not an existing precedent. Under no circumstance
+may the grace period cause a Session's total active lifetime to exceed
+its original 60-minute cap (I-11): if the grace period's own natural
+end would fall after `expiresAt`, the Session ends at `expiresAt`, not
+at the grace period's end.
+
+**FR-58.** If the grace period elapses without a heartbeat resuming,
+the server must transition the Session to `ended`, `endedBy:
+'abandonment'`, producing a `support_session.ended_by_abandonment`
+audit entry (§18, FR-44) — with the same immediate, total,
+server-enforced revocation effect FR-36 already requires for explicit
+termination, never a client-side-only state change.
+
+**FR-59.** The server is exclusively authoritative for whether a
+Session is `active`, `reconnecting`, or `ended`. A client's own local
+belief that its Session is still active or still within its grace
+period must be verified against the server's own Session record before
+any rendering-path action may resume (re-establishing a WebRTC stream,
+resuming Support View State reads) — a client may never unilaterally
+declare an expired or ended Session active.
+
+**FR-60.** A reconnection, under either rendering path, must never: be
+treated as a new Invitation-consumption event; extend, renew, or reset
+the Session's `expiresAt`; bypass or substitute for code consumption
+(FR-11); permit reuse of an already-consumed code; create a second,
+concurrent Session for the same business (I-2's single-active-
+Invitation discipline extends here to Sessions); or circumvent
+server-side expiry or termination in any way (I-10).
+
+**FR-61.** Once a Session has transitioned to `ended` — by explicit
+termination (FR-34/FR-35), natural 60-minute completion
+(`support_session.completed`), or grace-period-expired abandonment
+(FR-58) — no reconnection of any kind may restore it. Establishing
+further assistance requires the customer generating an entirely new
+Invitation (FR-1) and an operator newly consuming it (FR-11), producing
+a wholly new Session, never a revival of the old one.
+
+**FR-62.** Temporary WebRTC transport interruption (desktop path) and
+temporary Firestore/Support-View-State listener interruption (mobile
+path) are both governed by the identical heartbeat/grace-period
+mechanism (FR-54–FR-61) — no path-specific exception, shorter grace
+period, or divergent behavior is introduced for either rendering path.
+
+## 22. Proposed Data Model
 
 **Proposed, not final** — exact field names, types, and `firestore.rules`
 text are Rule 8/Implementation Authorization decisions, per §2's scope
@@ -527,24 +739,52 @@ document per established Session:
   establishment, per whether the operator's or customer's environment
   supports `getDisplayMedia`).
 - `establishedAt` — server timestamp (FR-17).
-- `expiresAt` — `establishedAt` + 60 minutes (FR-17).
-- `status`: `'active' | 'ended'`.
-- `endedAt`, `endedBy`: `'customer' | 'support' | 'timeout'` (FR-36,
-  FR-37).
+- `expiresAt` — `establishedAt` + 60 minutes (FR-17), never modified by
+  any connectivity event (I-11).
+- `status`: `'active' | 'reconnecting' | 'ended'` (FR-55, FR-56).
+- `lastHeartbeatAt` — server timestamp, updated at each successful
+  heartbeat (FR-54); the basis for the `active`→`reconnecting`
+  transition (FR-55).
+- `graceExpiresAt` — set when `status` transitions to `reconnecting`
+  (`lastHeartbeatAt` + 2 minutes, capped at the Session's own
+  `expiresAt` per FR-57), `null` otherwise.
+- `endedAt`, `endedBy`: `'customer' | 'support' | 'completed' |
+  'abandonment'` (FR-36, FR-58, FR-61) — `'completed'` for a Session
+  that reached its natural 60-minute cap while still `active`,
+  `'abandonment'` for one ended by grace-period expiry, distinguished
+  per the audit-event resolution (§18, FR-44).
 
 **`businesses/{businessId}/supportSessions/{sessionId}/webrtcSignaling/{...}`**
 (desktop path only) — SDP offer/answer/ICE-candidate exchange
-documents, ephemeral, deleted or expiring with the Session (FR-21).
+documents, ephemeral, deleted or expiring with the Session (FR-21;
+exact cleanup timing, §24 item 10).
 
 **`businesses/{businessId}/supportSessions/{sessionId}/supportViewState`**
 (mobile path only) — the customer-published, Support-read-only mirror
-document (FR-23–FR-26); field-by-field content deferred to Rule 8.
+document, its schema now fixed in full by §20's four allowlisted
+categories (FR-23–FR-26, FR-49–FR-53):
+- `route`, `workflowContext` — Category 1 (Navigation/context).
+- `selectedRecordId`, `workflowStep` — Category 2 (Current workflow
+  context), present only where the active workflow has a specific
+  record/step to name.
+- `fieldStatus` — Category 3 (Approved transient UI state), an
+  allowlisted map of field identifiers to `'detected' | 'review' |
+  'not_found'` (directly mirroring `AddStockView.tsx`'s own existing
+  badge states, per §20's own citation), plus `activeValidationMessage`
+  and `openPanelId`, each present only when applicable.
+- `viewportWidth`, `viewportHeight`, `scrollPosition` — Category 4
+  (Viewport information), `scrollPosition` present only where pointer
+  alignment requires it.
+- No field outside these four categories may exist on this document
+  (FR-49), and FR-50's exclusion list (credentials, secrets, the
+  Support code, payment/security secrets) applies unconditionally
+  regardless of category.
 
 **`businesses/{businessId}/supportSessions/{sessionId}/pointer`** — the
 coordinate channel (FR-27–FR-30), common to both paths: `{x, y,
 timestamp}`, overwritten frequently, never accumulated as history.
 
-## 21. Failure / Edge Cases
+## 23. Failure / Edge Cases
 
 - **Customer generates a new code while a Session from a prior code is
   still active.** The new Invitation (FR-2) does not affect the
@@ -555,10 +795,24 @@ timestamp}`, overwritten frequently, never accumulated as history.
   Rule K's "single Session, one business" govern two different
   records, and this Specification does not conflate them.
 - **Support operator's connection drops mid-session (desktop path).**
-  Covered by FR-37 (abandonment) — the specific detection signal (ICE
-  connection state, WebRTC's own `disconnected`/`failed` states) is a
-  Rule 8 question (§25), but the *requirement* that this triggers
-  eventual termination is fixed here.
+  Governed by the heartbeat/grace-period mechanism (§21, FR-54–FR-62)
+  — a temporary drop enters `reconnecting`, not `ended`; only a
+  grace-period-expired drop is treated as abandonment. The *specific*
+  WebRTC-level signal a Rule 8 implementation uses to detect the drop
+  (ICE connection state, WebRTC's own `disconnected`/`failed` states)
+  remains a Rule 8 question (§24), but the governing behavior —
+  distinguish temporary loss from genuine abandonment, never end
+  immediately — is fixed here.
+- **Support operator's connection drops mid-session (mobile path).**
+  Identical governing mechanism (FR-62) — a Firestore listener
+  disconnecting briefly is not treated differently from a WebRTC
+  connection doing so.
+- **Brief reconnection during an active Session** (either rendering
+  path). Restores full `active` connectivity status with no effect on
+  the Session's own authorization or `expiresAt` (FR-56, I-10, I-11) —
+  this is the ordinary, expected case the heartbeat/grace-period
+  mechanism exists to support, not an edge case requiring special
+  handling beyond what §21 already specifies.
 - **Customer's device cannot support either rendering path** (e.g., an
   unusual browser supporting neither `getDisplayMedia` nor the tenant
   SPA reliably). **Not resolved by this Specification** — flagged as a
@@ -570,67 +824,121 @@ timestamp}`, overwritten frequently, never accumulated as history.
   succeeds, the other's attempt is a failed attempt (FR-13) even though
   the code itself was, at the instant of the race, genuinely valid.
 
-## 22. Explicit Rule-8 Technical Questions
+## 24. Explicit Rule-8 Technical Questions
 
 Per the precedent's own convention, listed here rather than silently
-resolved:
+resolved. Two items previously listed here — the abandoned-session
+detection mechanism and the Support View State's exact schema — are
+now resolved by this Specification (§20, §21) and are **not** repeated
+below; what remains are genuinely lower-level implementation questions
+the now-fixed architectural contract still leaves to Rule 8, per the
+Product Architect's own framing: this Specification defines **what**
+the system must guarantee, Rule 8 evaluates **whether** the proposed
+architecture can safely and correctly guarantee it.
 
-1. The exact abandoned-session detection mechanism (FR-37).
-2. The Support View State's exact field-by-field schema (FR-26, §24).
-3. The exact mechanism for determining, at Session establishment,
-   which rendering path applies (client-side `getDisplayMedia`
-   feature-detection, presumably, but the exact detection code and
-   fallback behavior is a Rule 8 question).
-4. Whether `webrtcSignaling` documents are deleted on Session end or
-   simply expire/become orphaned and are garbage-collected — a
-   storage-hygiene question, not a security one (FR-21's own security
-   requirements are unaffected either way).
-5. The exact transaction design guaranteeing FR-11's atomicity (a
-   Firestore transaction, following the recovery-authorization
-   precedent's own transactional-write pattern, is the evident
-   approach, but the precise implementation is Rule 8/Implementation
-   territory).
+1. Exact WebRTC signaling design (SDP offer/answer/ICE-candidate
+   message shape and Firestore document lifecycle for the signaling
+   exchange itself, FR-21).
+2. TURN/relay requirements — whether a managed or self-hosted TURN
+   service is needed for reliable NAT traversal on this product's
+   actual mobile-network-heavy customer base, and if so, which.
+3. `firestore.rules` implementation for every new collection this
+   capability introduces (Invitation, Session, Support View State,
+   `webrtcSignaling`, pointer) — this Specification fixes the required
+   *properties* (FR-24, FR-42, FR-50, etc.) but not the rules text
+   itself, per §2's scope exclusion.
+4. Transaction correctness for FR-11's atomicity guarantee and for the
+   Invitation-overwrite behavior FR-2 requires.
+5. Heartbeat implementation details — the exact client-side timer
+   mechanism, how a privileged write vs. a client-writable field with
+   server-side validation is chosen for `lastHeartbeatAt` (FR-54).
+6. Exact reconnect timing/threshold feasibility — this Specification
+   proposes a 15-second heartbeat interval, a 30-second missed-
+   heartbeat threshold, and a 2-minute grace period (FR-54, FR-55,
+   FR-57); Rule 8 should validate these figures against real network
+   conditions for this product's customer base, adjusting them if
+   infeasible, without reopening the *principle* they implement.
+7. Performance/load implications of the heartbeat mechanism at
+   whatever scale this capability sees in practice.
+8. Concurrent-session behavior at the infrastructure level (e.g.
+   whether two heartbeats racing against the same Session document
+   need additional transaction discipline beyond what FR-11 already
+   requires for Invitation consumption).
+9. Browser compatibility specifics beyond the already-verified
+   `getDisplayMedia` support matrix (`BDR-0018` §2.2) — e.g. exact
+   `RTCPeerConnection` API differences across supported browsers.
+10. `webrtcSignaling` document cleanup — deleted on Session end or
+    expiring/orphaned and garbage-collected (a storage-hygiene
+    question, not a security one — FR-21's own security requirements
+    are unaffected either way).
+11. The exact mechanism for determining, at Session establishment,
+    which rendering path applies (client-side `getDisplayMedia`
+    feature-detection, presumably, but the exact detection code and
+    fallback behavior is a Rule 8 question).
+12. Security testing requirements for the full lifecycle this
+    Specification now fully defines (§20, §21) — penetration-testing
+    scope, specifically around the heartbeat/reconnection boundary
+    (FR-59's "server never trusts client self-assertion" requirement)
+    and the Support View State allowlist's actual enforcement.
+13. Race conditions beyond FR-11's already-specified atomicity — e.g.
+    a heartbeat arriving in the same instant as an explicit termination
+    request (FR-34/FR-35).
 
-## 23. Non-Goals / Explicit Exclusions
+## 25. Non-Goals / Explicit Exclusions
 
 Restated directly from `BDR-0018` §5 and the Policy's own Rule Z, for
-this Specification's own explicit record: no write, click, typing
-(beyond the customer's own unaffected session), submission, creation,
-editing, or deletion performed by Support; no "Request Control"; no
+this Specification's own explicit record — including one item the
+Specification Acceptance Audit found missing from this consolidated
+list despite being substantively preserved everywhere else in the
+document (BDR-0018 item P): no write, click, typing (beyond the
+customer's own unaffected session), submission, creation, editing, or
+deletion performed by Support; **no second Support permission tier —
+every eligible operator tier (Rule A) receives identical VIEW + POINT
++ GUIDE authority, with no elevated or write-capable variant of the
+role existing anywhere in this capability**; no "Request Control"; no
 full write-capable Impersonation (§9.10); no unrestricted remote
 control; no background/passive monitoring outside an explicit,
-customer-initiated, time-boxed Session; no permanent access; no
-subscription/billing override capability of any kind.
+customer-initiated, time-boxed Session (the heartbeat mechanism, §21,
+exists solely to maintain an already-authorized, already-active
+Session's connectivity — it is never a standing or passive monitoring
+capability, and ceases entirely the instant no Session is active); no
+permanent access; no subscription/billing override capability of any
+kind.
 
-## 24. Sensitive-Field Masking
+## 26. Sensitive-Field Masking
 
 The Policy's Rule Y explicitly deferred this question to this
-Specification stage. This Specification resolves the **principle**,
-consistent with the minimum-necessary discipline Business Visibility's
-own curated read already applies (Gap 2), while deferring the
-**specific field list** to Rule 8, since that list depends on the
-Support View State's own not-yet-fixed schema (§12, FR-26):
+Specification stage. This Specification resolves the **principle**
+and, with §20's schema now fixed, can state it concretely rather than
+hypothetically: every one of the Support View State's four allowlisted
+categories (§20) was itself selected against the same minimum-necessary
+discipline Business Visibility's own curated read already applies
+(Gap 2) — FR-51 makes this a testable requirement, not only a stated
+principle. Whether any *specific* field within that now-fixed schema
+should be further masked (e.g., a product name partially obscured) is
+still deferred to Rule 8:
 
-**Resolved here:** whatever fields the Support View State's eventual
-Rule-8-defined schema includes, it must include only fields genuinely
-necessary to diagnose the realistic support scenarios this capability
-exists for (per the original investigation series' own evidence base
-— the OCR field-status case and the defect-vs-misunderstanding case)
-— never a general-purpose mirror of arbitrary tenant data. This is the
-same "minimum necessary, not maximum available" principle Gap 2 and
-Business Visibility already apply, extended here rather than
-reinvented.
+**Resolved here:** the schema itself (§20) is already the
+minimum-necessary set — four fixed categories, an explicit exclusion
+list (FR-50), and a traceability requirement tying every field to a
+named diagnostic need (FR-51). No field exists in the schema that
+wasn't already selected for being necessary, which meaningfully narrows
+what masking, if any, would even need to address.
 
-**Not resolved here, deferred to Rule 8:** whether any *specific*
-field within that eventual minimum-necessary set should be further
-masked (e.g., a supplier's exact name partially obscured, a cost price
-rounded) even though it would otherwise qualify as diagnostically
-necessary. No existing convention anywhere in this codebase governs
-field-level masking (confirmed, `SUPERADMIN_AGENT_ATTENDED_SUPPORT_COBROWSING_IMPLEMENTATION_INVESTIGATION.md`
-§20) — inventing specific masked fields here, with no such convention
-to ground them in, would be guessing rather than specifying. Rule 8,
-informed by the eventual concrete schema, is better positioned to
-identify whether any field genuinely warrants this.
+**Not resolved here, deferred to Rule 8:** whether any specific field
+*within* that already-minimal schema should be further masked (e.g., a
+cost price rounded rather than shown exactly) even though it already
+qualified as diagnostically necessary to be included at all. No
+existing convention anywhere in this codebase governs field-level
+masking (confirmed,
+`SUPERADMIN_AGENT_ATTENDED_SUPPORT_COBROWSING_IMPLEMENTATION_INVESTIGATION.md`
+§20 [that document's own §20, an external citation, distinct from this
+Specification's own §20] — inventing specific masked fields here, with
+no such convention to ground them in, would be guessing rather than
+specifying. Rule 8, working against this Specification's now-concrete
+schema rather than a hypothetical one, is meaningfully better
+positioned to resolve this than the original draft's "deferred to a
+not-yet-fixed schema" framing allowed.
 
 **A related, harder constraint, stated plainly:** the desktop rendering
 path (screen-share) makes field-level masking structurally difficult
@@ -643,7 +951,18 @@ is required, this asymmetry between the two rendering paths is a real
 factor that decision must account for, not a detail this Specification
 resolves.
 
-## 25. Traceability Matrix
+**A related, harder constraint, stated plainly:** the desktop rendering
+path (screen-share) makes field-level masking structurally difficult
+to achieve at all — a video stream cannot selectively obscure one
+field without the tenant SPA itself pre-rendering it masked, which
+would reintroduce the same "instrument every component" cost the
+mobile path already carries (per the cobrowsing investigation's own
+finding). If Rule 8 or a future decision determines specific masking
+is required, this asymmetry between the two rendering paths is a real
+factor that decision must account for, not a detail this Specification
+resolves.
+
+## 27. Traceability Matrix
 
 | Business Rule (§5) | Policy Rule | FR(s) |
 |---|---|---|
@@ -661,20 +980,20 @@ resolves.
 | 12 | Rule L | FR-39 |
 | 13 | Rule M | FR-20, FR-24, FR-41, FR-42 |
 | 14 | Rule N | FR-19, FR-21, FR-22 |
-| 15 | Rule O | FR-23, FR-25, FR-26 |
+| 15 | Rule O | FR-23, FR-25, FR-26, FR-49, FR-50, FR-51, FR-52, FR-53 |
 | 16 | Rule P | FR-27, FR-28, FR-29, FR-30 |
 | 17 | Rule Q | FR-31, FR-32, FR-33 |
 | 18 | Rule R | FR-34 |
 | 19 | Rule S | FR-35 |
 | 20 | Rule T | FR-36, I-8 |
-| 21 | Rule U | FR-37 |
+| 21 | Rule U | FR-37, FR-54, FR-55, FR-56, FR-57, FR-58, FR-59, FR-60, FR-61, FR-62, I-10, I-11 |
 | 22 | Rule V | FR-47, FR-48, I-9 |
 | 23 | Rule W | FR-44, FR-45 |
 | 24 | Rule X | FR-46 |
-| 25 | Rule Y | §24 |
+| 25 | Rule Y | §26, FR-51 |
 | 26 | Rule Z | FR-30, FR-43 |
 
-## 26. Acceptance Criteria
+## 28. Acceptance Criteria
 
 1. A code is generated only by explicit customer action, stored
    hashed, never plaintext, and bound to exactly one business (FR-1,
@@ -720,36 +1039,99 @@ resolves.
 17. The customer's ordinary tenant session is never interrupted by any
     Invitation- or Session-lifecycle event (FR-47, FR-48, I-9).
 18. No write capability of any kind reaches the Support operator under
-    any circumstance, at any stage of this lifecycle (I-6, §23).
+    any circumstance, at any stage of this lifecycle (I-6, §25).
+19. The Support View State's schema is fixed to exactly four
+    allowlisted categories, contains no credential, secret, or the
+    Support code itself, and every field traces to a named support-
+    diagnosis need (FR-49–FR-51).
+20. A Support View State document is unreadable the instant its
+    governing Session ends, and never itself constitutes or implies
+    authorization (FR-52, FR-53, I-10).
+21. A temporary connectivity interruption (either rendering path) does
+    not immediately end an active Session; it enters a bounded grace
+    period, and reconnection within that period restores full activity
+    with no change to the Session's own authorization or 60-minute cap
+    (FR-55–FR-57, I-10, I-11).
+22. A reconnection can never create, extend, renew, or recreate any
+    authorization, bypass code consumption, reuse a consumed code, or
+    revive an ended Session (FR-60, FR-61).
+23. The server, never the client, is authoritative for whether a
+    Session is active, reconnecting, or ended (FR-59).
 
-## 27. Governance Notes
+## 29. Governance Notes
 
 - This is a Specification document only. No `apps/`, `server/`,
   `firestore.rules`, `tests/`, or `firestore.indexes.json` file is
   touched by this document.
+- **This is a correction pass on the original draft**, incorporating
+  the Product Architect's SPEC-1 and SPEC-2 resolutions following the
+  Specification Acceptance Audit's findings. Corrected: FR-26 (now
+  defines the Support View State schema in full, §20, rather than
+  deferring it); FR-37 (now defines the heartbeat/grace-period
+  mechanism in full, §21, rather than deferring it); FR-4 (constant-
+  time comparison now explicit); FR-44 (the natural-completion-vs-
+  abandonment audit-event ambiguity resolved via distinct action
+  types, per the Product Architect's Option B choice); §25 (Non-Goals,
+  "no second permission tier" now explicit). Also corrected, found
+  during this pass: three pre-existing, unrelated cross-reference
+  defects in the original draft (§5 item 1's "§29" should have read
+  "§25"; the original FR-26's "see §17" should have read "§12"; the
+  original FR-9's "§18" should have read "§16") — none affected any
+  business or technical decision, all fixed as part of touching the
+  surrounding text for other reasons, flagged here per this session's
+  established discipline of disclosing rather than silently leaving
+  known defects.
+- The 5-minute code validity, 5-attempt lockout threshold, 15-minute
+  lockout cooldown, and 60-minute maximum Session duration are
+  **unchanged** by this correction pass — confirmed by direct
+  re-reading of FR-6, FR-14, and FR-17, none of which was touched.
 - This Specification does not modify `BDR-0018`, its Policy,
   `18-superadmin-v1-architecture-gap-resolutions.md`, or Architecture
   §9.7/§9.10 — the future architecture-text amendment to §9.7 the
   Policy already identified as a necessary follow-up remains
   unperformed here as well.
-- This Specification is **not** Accepted. No Product Architect
-  signature is recorded here, none is implied, and none has been
-  fabricated.
+- This Specification is **Accepted**. The Product Architect's
+  acceptance is recorded below, "Product Architect Acceptance."
 - `docs/specs/README.md` is not modified by this document.
 - The `POL-NNNN` numbering queue this capability's Policy identified
   (three unnumbered documents observing `POL-0015`) remains unresolved
   and is not this Specification's concern to address.
 
-## 28. Next Governance Step
+## Product Architect Acceptance
 
-Per this repository's governance chain and the explicit instruction
-accompanying this task: **stop here.** The next step — not performed —
-is Product Architect review of this Specification (including the two
-genuinely open items this document itself flags: §22's five Rule-8
-technical questions, and §24's deferred field-masking specifics),
-followed only then by a Rule 8 Assessment. No Rule 8 Assessment,
-Implementation Plan, or Implementation Authorization is drafted,
-started, or implied by this document.
+**Status:** Accepted. This Specification, including its SPEC-1
+(Support View State schema, §20) and SPEC-2 (heartbeat/reconnection,
+§21) correction-pass resolutions, is approved as a complete document.
+The Product Architect authorizes progression to the next governance
+stage: a Rule 8 Assessment, falsifying the proposed architecture
+against the actual repository before any Implementation Plan or
+Implementation Authorization is considered. Not started by this
+document.
 
-**Lifecycle:** Drafted → **Product Architect review (this step)** →
-Not yet Accepted. Not yet assessed under Rule 8. Not Implemented.
+**Scope of this acceptance:** covers this Specification's content in
+full, as corrected by the SPEC-1/SPEC-2 pass. Does not reopen, amend,
+or re-approve `BDR-0018` or the Policy themselves (both remain approved
+exactly as they already were). Does not itself constitute a Rule 8
+Assessment, Implementation Plan, or Implementation Authorization, each
+of which remains a distinct, separately-gated future step.
+
+## 30. Next Governance Step
+
+Per this repository's governance chain: with this Specification now
+Accepted, the next governance step is a **Rule 8 Assessment** —
+falsifying the proposed architecture (both rendering paths, the
+one-time-code model, tenant isolation, the heartbeat/reconnection
+mechanism, the 60-minute invariant, pointer synchronization, audit
+integrity, masking, concurrency, `firestore.rules`, WebRTC signaling/
+TURN requirements, browser compatibility, performance, and failure
+recovery) against the actual repository, not merely confirming it on
+paper. This document's own §24 (13 remaining Rule-8 technical
+questions) and §26 (the still-open specific field-masking question)
+are the starting point for that assessment, not an exhaustive list of
+everything it must investigate. No Rule 8 Assessment, Implementation
+Plan, or Implementation Authorization is drafted, started, or implied
+by this document itself.
+
+**Lifecycle:** Drafted → Product Architect review → Correction pass
+(SPEC-1/SPEC-2) → **Accepted (this step)** → Not yet assessed under
+Rule 8. Not Implemented.
