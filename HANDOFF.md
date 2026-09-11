@@ -12,49 +12,48 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Policy layer drafted for `BDR-0018` — **committed**
-(`556e842`), unnumbered, awaiting Product Architect review. This
-session's governance sequence is now: `BDR-0018` (Approved,
-`78833ba`) → `POL-pending-superadmin-agent-attended-support-session-policy.md`
-(Drafted, this commit) → **STOP, per explicit governance gate** — no
-Specification, Rule 8, or implementation may begin until this Policy
-is reviewed and accepted.
+**Status:** Specification drafted for `BDR-0018` + its accepted
+Policy — **committed** (`0471076`). Governance sequence: `BDR-0018`
+(Approved, `78833ba`) → Policy (Approved, `db8306c`) →
+`docs/specs/superadmin-agent-attended-support-session-specification.md`
+(Drafted, **not yet Accepted** — no Product Architect signature given
+or fabricated) → **STOP, per explicit instruction** — no Rule 8 or
+implementation until this Specification is reviewed.
 
-**What the Policy resolved:** 26 lettered Operational Rules (A–Z)
-covering operator-tier eligibility (widened to support/developer/
-superadmin, a deliberate departure from every *existing* route's
-superadmin-only reach), the one-time code's full lifecycle (hashing,
-format, single-active-per-business, atomic consumption), session
-duration/non-renewability, mandatory `businessId`-scoped lookup (a
-security requirement, not a UX choice), structural write-incapability
-for both rendering paths, native screen-share consent as a mandatory
-second layer, and disconnect/audit/coexistence rules. Full
-Traceability table maps every task item to its resolving rule.
+**What the Specification converted:** 48 numbered FRs across 13
+groupings (code generation → entry/consumption → expiry/lockout →
+session duration → desktop rendering → mobile rendering → pointer →
+customer indicator → disconnect → tenant isolation → structural
+write-incapability → audit → session coexistence), 9 Invariants, a
+Proposed (explicitly non-binding) Data Model following the
+`initialStockRecoveryAuthorization` "current"-document precedent, 8
+new `platform_audit_log` `actionType` values, and a full Traceability
+Matrix — every one of the 26 accepted Policy Rules mapped to at least
+one FR, every one of the 48 FRs traced from at least one Rule (verified
+programmatically, one real gap found and fixed before commit).
 
-**What's still explicitly open, not decided or invented:**
-- The exact code-validity-window duration and lockout threshold/
-  duration figures — flagged for direct Product Architect input (no
-  existing precedent transfers cleanly, unlike session duration which
-  reuses Architecture §9.7's own 60-minute figure).
-- Three items marked `DEFER TO SPECIFICATION` per `BDR-0018`'s own
-  deferral: the Support View State schema, sensitive-field masking,
-  exact audit `actionType` string values.
-- **A real numbering queue**: this Policy is the *third* unnumbered
-  `POL-pending-*.md` document in the repository currently observing
-  `POL-0015` as the next collision-free slot (the other two:
-  `POL-pending-business-worth-evolution-policy.md`'s sibling
-  `POL-pending-existing-product-stock-entry-purchase-authority.md`
-  and `POL-pending-selling-price-unit-invariant-amendment.md`). None
-  claims the number; this document does not resolve the ordering
-  either — flagged plainly for whoever numbers them.
+**What's still explicitly open, flagged not invented:**
+- 5 Rule-8 technical questions (§22 of the Spec): the abandoned-session
+  detection mechanism, the Support View State's exact field schema,
+  rendering-path detection logic, signaling-document lifecycle, the
+  exact FR-11 atomicity transaction design.
+- Sensitive-field masking (§24): resolved at the *principle* level
+  (minimum-necessary, same discipline Business Visibility already
+  applies) but the specific field list is deferred to Rule 8 — no
+  masking convention exists anywhere in this codebase to ground
+  specific choices in, and the desktop screen-share path makes
+  field-level masking structurally harder than mobile, a real
+  asymmetry flagged for whoever resolves this next.
+- The `POL-0015` three-way numbering queue (still unresolved, carried
+  over from the Policy stage).
 
-**Note on this session's numbering discipline, still holding:** a
-prior "correction" this session claimed `BDR-0018` was already taken;
-verification against the repository showed that claim was false
-(`BDR-0004` is Customer Communication Architecture). The same
-verify-before-acting discipline was applied again here — this Policy's
-own numbering section reports the observed state plainly rather than
-guessing at the three-way queue.
+**A naming choice worth knowing:** the Specification deliberately does
+**not** reuse `platformAuditLog.ts`'s own anticipated
+`support_session.issued` name (that file's header comment named it
+years before this capability existed, for the original, never-built,
+non-consent-gated §9.7 concept) — uses `support_session.established`
+instead, flagged explicitly rather than silently repurposing an old
+name for a materially different capability.
 
 **What this session did:** produced
 `docs/engineering/SUPERADMIN_AGENT_CAPABILITY_AND_AUTHORITY_INVESTIGATION.md`,
@@ -100,15 +99,14 @@ happens.
 
 ## Next session should
 
-1. **Wait for explicit Product Architect direction before drafting the
-   Specification that follows this Policy.** The governing task's own
-   explicit instruction: "STOP after producing the Policy draft/
-   investigation... WAIT for Product Architect review and acceptance.
-   No implementation or downstream governance stage may begin until
-   explicitly authorized."
-2. When that direction arrives, it will likely need to also resolve:
-   the code-validity-window and lockout figures (Policy's own "Genuine
-   Open Questions"), and the three-way `POL-0015` numbering queue.
+1. **Wait for explicit Product Architect direction before starting
+   Rule 8.** The Specification's own §28 states this plainly: "stop
+   here... Rule 8 Assessment... is not drafted, started, or implied by
+   this document."
+2. When that direction arrives, it will likely need to resolve the
+   Specification's own §22 (5 Rule-8 technical questions) and §24
+   (specific field-masking list) as part of, or immediately before,
+   Rule 8.
 3. Otherwise, the still-open items from the prior SuperAdmin panel
    investigation remain open (see
    `docs/engineering/SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
