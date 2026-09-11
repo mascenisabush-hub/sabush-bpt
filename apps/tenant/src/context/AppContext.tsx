@@ -110,7 +110,7 @@ import {
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, computeBusinessWorthCorrectionEligibility, computeBusinessWorthAuthorizedRecoveryEligibility, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, computeCaixerTotalLiquidity, computeBusinessWorthCorrectionEligibility, computeBusinessWorthAuthorizedRecoveryEligibility, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -433,18 +433,31 @@ interface RecordStockCountParams {
   // confirmation via Void & Redo (that mechanism is entirely separate —
   // Implementation Plan §13's exclusivity design).
   producesBusinessWorthSnapshot?: boolean;
-  // [Business Worth Evolution — Implementation Authorization, Increment
-  // 7; Specification §10 Decision 3, §22, FR-11, FR-55] The Owner-
-  // confirmed actual cash position as of this Contagem's own date —
-  // required product behavior whenever producesBusinessWorthSnapshot is
-  // true (FR-55), per the identical "physical measurement" discipline
-  // Contagem already applies to stock. Ignored (never read) when
-  // producesBusinessWorthSnapshot is not true — mirrors
-  // expectedValueAtCount's own "only meaningful for its own governing
-  // flag" shape, above. The caller (a UI decision point) is responsible
-  // for actually collecting this from the Owner; this function does not
-  // decide whether to prompt for it.
-  ownerConfirmedCashPosition?: number;
+  // [CAIXER — Implementation Authorization §44, Checkpoint 3 (Plan §D/
+  // C.7); Specification §45, FR-73, FR-74, FR-79; Rule 8 Findings CX-1,
+  // CX-2] Supersedes the former single ownerConfirmedCashPosition
+  // parameter (Business Worth Evolution, Increment 7) — the Owner-
+  // confirmed actual cash position is now supplied as its four
+  // individual CAIXER components, never as a pre-summed aggregate
+  // (FR-79: "cashPosition is never a direct input"). Each is
+  // `number | undefined`, mirroring ownerConfirmedCashPosition's own
+  // prior optionality discipline — an explicit `0` is a valid, present
+  // value; `undefined` means "not supplied." Required product behavior
+  // whenever producesBusinessWorthSnapshot is true (FR-55, restated by
+  // FR-73 for the four-component shape); ignored (never read) when
+  // producesBusinessWorthSnapshot is not true. The caller (a UI decision
+  // point — PeriodicStockCountView.tsx's own CAIXER entry/Review flow,
+  // Plan §C.3–C.6) is responsible for actually collecting these from the
+  // Owner and for blocking submission client-side while any is missing;
+  // this function does not decide whether to prompt for them. The
+  // aggregate `cashPosition` this function itself computes from these
+  // four (below) is the ONLY value ever written to that field — a
+  // caller-supplied aggregate is structurally impossible, since no such
+  // parameter exists.
+  caixerCash?: number;
+  caixerEmola?: number;
+  caixerMpesa?: number;
+  caixerBanco?: number;
   // [Business Worth Evolution — Implementation Authorization, Increment
   // 8; Specification §25, §26, FR-38, FR-39, FR-58] Present ONLY when
   // this call is a correction (Owner, within the 3-hour window) or an
@@ -4747,8 +4760,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // incremental movement — see CashPositionDeclaration's own type
   // comment. A single, un-batched, append-only write, mirroring
   // addStartupInvestmentEntry exactly; no Business Worth field is
-  // touched by this write itself (that happens later, at the next
-  // Contagem confirmation, via RecordStockCountParams.ownerConfirmedCashPosition).
+  // touched by this write itself. [CAIXER — Implementation Authorization
+  // §44, Checkpoints 2-3] The most recent declaration is shown as a
+  // labeled reference/hint only on the CAIXER entry screen (FR-76) —
+  // it never pre-fills or auto-submits any of the four CAIXER fields.
+  // Business Worth is only ever affected later, at the next Contagem
+  // confirmation, via the Owner's own actively-entered CAIXER values
+  // (RecordStockCountParams.caixerCash/caixerEmola/caixerMpesa/
+  // caixerBanco).
   const addCashPositionDeclaration = async ({ amount, declaredAt, description }: { amount: number; declaredAt?: string; description?: string }) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!isOwner) throw new Error('Apenas o dono pode registar a posição de caixa.');
@@ -5347,7 +5366,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
-  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, ownerConfirmedCashPosition, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries, referencePriceEntries }: RecordStockCountParams) => {
+  const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, caixerCash, caixerEmola, caixerMpesa, caixerBanco, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries, referencePriceEntries }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
 
@@ -6028,19 +6047,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // figure only (§8) — never fed into this arithmetic.
       const currentPayablesOutstanding = sumOutstandingPayables(payables);
       const currentReceivablesOutstanding = sumOutstandingReceivables(receivables);
-      // [Business Worth Evolution — Implementation Authorization,
-      // Increment 7; Specification §10 Decision 3, §22, FR-11, FR-55]
-      // cashPosition is now genuinely available — the Owner-confirmed
-      // actual cash position at this Contagem, when the caller supplied
-      // one (RecordStockCountParams.ownerConfirmedCashPosition, above).
-      // Passed into computeMeasuredBusinessWorth's own existing
-      // (previously always-omitted) cashPosition parameter — the first
-      // time this term is ever actually included, not a change to the
-      // function's own formula. Genuinely omitted (never a fabricated
-      // 0) when the caller supplies nothing, exactly as
-      // payablesPosition/receivablesPosition were omitted before
-      // Increment 3.
-      const hasCashPosition = typeof ownerConfirmedCashPosition === 'number' && Number.isFinite(ownerConfirmedCashPosition);
+      // [CAIXER — Implementation Authorization §44, Checkpoint 3 (Plan
+      // §D/C.7); Specification §45, FR-73, FR-74, FR-79; Rule 8 Finding
+      // CX-1] cashPosition is now derived, never accepted directly —
+      // present ONLY when all four CAIXER components are genuinely
+      // supplied (a present, finite number each; an explicit 0 counts as
+      // supplied, per FR-73 — see computeCaixerTotalLiquidity's own
+      // caller contract). Any missing/blank component means CAIXER was
+      // not completed for this confirmation, so no aggregate is
+      // fabricated — the same "genuinely omitted, never a fabricated 0"
+      // discipline payablesPosition/receivablesPosition already
+      // established (Increment 3), now also governing the one value that
+      // used to be a direct, single caller-supplied parameter
+      // (ownerConfirmedCashPosition, Increment 7 — superseded by this
+      // checkpoint).
+      const hasCaixer =
+        typeof caixerCash === 'number' && Number.isFinite(caixerCash) &&
+        typeof caixerEmola === 'number' && Number.isFinite(caixerEmola) &&
+        typeof caixerMpesa === 'number' && Number.isFinite(caixerMpesa) &&
+        typeof caixerBanco === 'number' && Number.isFinite(caixerBanco);
+      const ownerConfirmedCashPosition = hasCaixer
+        ? computeCaixerTotalLiquidity({ cash: caixerCash!, emola: caixerEmola!, mpesa: caixerMpesa!, banco: caixerBanco! })
+        : undefined;
+      const hasCashPosition = hasCaixer;
       const measuredBusinessWorth = computeMeasuredBusinessWorth({
         productValuationTotal,
         totalExpensesAllTime,
@@ -6209,6 +6238,27 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         ...(difference !== undefined ? { difference } : {}),
         // [Increment 7] See doc comment above.
         ...(hasCashPosition ? { cashPosition: ownerConfirmedCashPosition as number } : {}),
+        // [CAIXER — Implementation Authorization §44, Checkpoint 3 (Plan
+        // §D/C.7); Specification §45, FR-74; Rule 8 Finding CX-1] The
+        // four individual CAIXER components, preserved alongside the
+        // derived cashPosition aggregate above — never a second,
+        // independent source of truth for the total (FR-74's own
+        // "preserved individually" requirement, satisfied without ever
+        // letting a caller supply the aggregate directly). Follows the
+        // exact same omit-not-fabricate pattern every other optional
+        // field on this literal already uses; absent together whenever
+        // hasCaixer is false, present together whenever it is true (the
+        // same hasCaixer check that gates the aggregate itself, so the
+        // four components and the aggregate can never diverge in
+        // presence).
+        ...(hasCaixer
+          ? {
+              cashPositionCash: caixerCash!,
+              cashPositionEmola: caixerEmola!,
+              cashPositionMpesa: caixerMpesa!,
+              cashPositionBanco: caixerBanco!,
+            }
+          : {}),
         ...(ledgerDerivedCashBalance !== undefined ? { cashLedgerBalanceAtConfirmation: ledgerDerivedCashBalance } : {}),
         ...(cashReconciliationDifference !== undefined ? { cashReconciliationDifference } : {}),
         correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),
