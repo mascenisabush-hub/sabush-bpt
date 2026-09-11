@@ -2,10 +2,17 @@ Policy
 
 # POL-pending — SuperAdmin Agent Attended Support Session Policy
 
-**Status:** ✅ Drafted. Operationalizes every DECIDED business rule in
-`BDR-0018` (SuperAdmin Agent Attended Support Session: Rendering
-Mechanism and Support Authority Boundary) into enforceable "how,
-specifically" operational rules. Does not authorize implementation.
+**Status:** ✅ **Approved.** Operationalizes every DECIDED business
+rule in `BDR-0018` (SuperAdmin Agent Attended Support Session:
+Rendering Mechanism and Support Authority Boundary) into enforceable
+"how, specifically" operational rules. All six previously-open
+Policy-level decisions (CODE-1, CODE-2, LOCKOUT-1 through LOCKOUT-4)
+are incorporated by explicit Product Architect decision (see "Product
+Architect Decisions Incorporated," below) — Rules E, G, and H updated
+accordingly. **This Policy, as a complete document, is now Accepted by
+explicit Product Architect decision** (see "Product Architect
+Acceptance," at the end of this document). Does not authorize
+implementation.
 
 ## Numbering (Not Assigned Here)
 
@@ -65,6 +72,53 @@ sensitive-field masking rules, and the SuperAdmin/tenant-side UI flow
 Authorization remain further, separately-gated steps after that.
 
 ---
+
+## Product Architect Decisions Incorporated (Recorded Verbatim)
+
+Six decisions, requested as an explicit extraction
+("Decision-Extraction Brief," prior governance turn) and returned by
+the Product Architect, are incorporated into the Operational Rules
+below exactly as decided, without reinterpretation, substitution, or
+scope-broadening. Recorded verbatim here, matching the convention
+`POL-0009`'s own "Numbering and Product Architect Decisions" section
+established for the same situation:
+
+> **CODE-1 — UNUSED CODE VALIDITY WINDOW.** The customer-generated
+> one-time Support code remains enterable for 5 MINUTES starting from
+> its generation. After 5 minutes, the code is expired and cannot
+> establish a session. This is specifically the UNUSED-CODE window,
+> not the Attended Support Session duration.
+>
+> **LOCKOUT-1 — FAILED ATTEMPT THRESHOLD.** 5 failed code-entry
+> attempts. On the fifth failed attempt, lockout is triggered.
+>
+> **LOCKOUT-2 — LOCKOUT DURATION.** 15 minutes. Interpreted together
+> with LOCKOUT-3.
+>
+> **LOCKOUT-3 — WHAT LOCKOUT DOES TO THE CODE.** LOCKOUT KILLS THE
+> CODE. On the fifth failed attempt: the current invitation/code is
+> permanently invalidated; it cannot become usable again after the
+> 15-minute lockout; the customer must generate a fresh code; fresh
+> customer action/consent is therefore required. The 15-minute lockout
+> is a security cooldown associated with the failed-attempt event, not
+> a mechanism for making the old code usable again.
+>
+> **LOCKOUT-4 — LOCKOUT SCOPE.** Per invitation/business. The
+> failed-attempt counter belongs to the active customer-generated
+> invitation for that business. No per-operator failed-attempt
+> tracking is introduced.
+>
+> **CODE-2 — OPERATOR IDENTITY BINDING.** Unbound. The code is not
+> bound to a particular Support operator. Any eligible Support operator
+> who possesses the valid code may enter it. The first successful
+> eligible operator establishes the Attended Support Session. Once
+> successfully consumed, the code is immediately invalid and cannot be
+> reused by another operator.
+
+These six decisions are reflected in Rules E, G, and H below. No other
+Operational Rule, and no other section of this Policy, is changed by
+this update — see "Consistency Check," at the end of this document,
+for explicit confirmation.
 
 ## Purpose
 
@@ -223,16 +277,19 @@ choice, made for consistency with an established product pattern, not
 a Specification-level detail invented independently.
 
 **Rule E — One-time code: validity window before use.** The generated
-code remains valid to enter only for a short, bounded period after
-generation — materially shorter than the session duration itself
-(Rule H, below), since its only purpose is to bridge the moment the
-customer reads it aloud to the moment the operator enters it, not to
-function as a standing credential. **The exact figure (a small number
-of minutes) is not fixed by this Policy** — this is flagged for
-explicit Product Architect confirmation rather than invented, since,
-unlike Rule H's duration (which reuses Architecture §9.7's own
-already-decided figure), no existing precedent in this repository
-fixes an analogous "code read-aloud window."
+code remains valid to enter for **5 minutes** from its own generation
+timestamp — by explicit Product Architect decision (Decision CODE-1,
+recorded verbatim above) — materially shorter than the Attended
+Support Session's own duration (Rule I, below; not to be confused with
+it), since its only purpose is to bridge the moment the customer reads
+it aloud to the moment the operator enters it, not to function as a
+standing credential. After 5 minutes, the code is expired and cannot
+establish a session, whether or not any entry attempt was ever made
+against it. Unlike Rule I's duration (which reuses Architecture §9.7's
+own already-decided figure), no existing repository precedent fixed an
+analogous "code read-aloud window" — this figure is a fresh,
+mechanism-specific Product Architect decision, not an inference from
+any existing pattern.
 
 **Rule F — One-time code: single active invitation per business.** At
 most one unconsumed, unexpired code may exist for a given business at
@@ -242,32 +299,57 @@ existed before it for that business — directly following the
 property by construction rather than requiring a separate rule to
 police a growing collection.
 
-**Rule G — One-time code: brute-force protection.** Following the
-Clear-Data Password precedent (#6, above) exactly, given the code's
-materially weaker entropy (6 digits, 1,000,000 possible values, versus
-an owner-chosen password): a failed-attempt counter with a time-boxed
-lockout after a threshold is mandatory, not optional. **The exact
-threshold and lockout duration are not fixed by this Policy** — the
-Clear-Data Password's own already-shipped figures
-(`CLEAR_DATA_LOCKOUT_MAX_ATTEMPTS`/`_DURATION_MS`) are the best-
-evidenced starting point for a future Specification to reuse or adapt,
-not a number this Policy invents independently for a differently-
-weighted risk (an attacker who successfully guesses this code gains
-read-only screen visibility into one business for a bounded time, not
-account access or a standing credential — a materially different
-consequence than the Clear-Data Password's own "wipe real business
-data" stakes, which may justify a different, likely stricter,
-threshold; that judgment is left to the Specification stage informed
-by this note, not decided here).
+**Rule G — One-time code: brute-force protection.** A failed-attempt
+counter with a time-boxed lockout is mandatory, given the code's
+materially weaker entropy than an owner-chosen password (6 digits,
+1,000,000 possible values). By explicit Product Architect decision
+(Decisions LOCKOUT-1 through LOCKOUT-4, recorded verbatim above), not
+inferred from the Clear-Data Password precedent's own specific figures
+(#6, above — that mechanism protects a different asset class, a
+destructive write, at a materially different risk profile; only its
+general *shape* — a failed-attempt counter tied to one resource,
+resetting on a fresh secret — was found directly reusable, not its
+numbers):
 
-**Rule H — One-time code: atomic, one-time consumption.** Successful
-entry of the code by a Support-tier operator immediately and
-atomically transitions it out of any "usable" state — following the
-recovery-authorization precedent's own `'unconsumed'`-style enum
-transition (#4, above) — such that no race condition between two
-simultaneous entry attempts (by the same or different operators) can
-ever establish two sessions from one code, or allow the same code to
-be consumed twice.
+- **Threshold (LOCKOUT-1):** 5 failed code-entry attempts. The fifth
+  failed attempt triggers lockout.
+- **Cooldown duration (LOCKOUT-2):** 15 minutes, associated with the
+  failed-attempt event itself.
+- **Effect on the code (LOCKOUT-3):** Lockout **permanently
+  invalidates** the invitation/code that was being attempted — it does
+  **not** merely pause attempts against a code that later becomes
+  re-enterable once the 15-minute cooldown elapses. The 15-minute
+  period is a security cooldown associated with the failed-attempt
+  event, never a mechanism by which the same, now-dead code becomes
+  usable again. Following lockout, the customer must generate an
+  entirely fresh code (Rules C–F), which requires fresh customer
+  action/consent (Rule B, Rule C) — there is no path back to a valid
+  session using the locked-out code, ever.
+- **Scope (LOCKOUT-4):** Per invitation/business — the failed-attempt
+  counter belongs to the single active customer-generated invitation
+  for that business (Rule F), the same resource the Clear-Data
+  Password's own precedent (#6, above) ties its counter to. No
+  per-Support-operator failed-attempt tracking is introduced; a
+  failure by any operator counts against the same one counter as a
+  failure by any other.
+
+**Rule H — One-time code: atomic, one-time consumption; unbound
+operator identity.** Successful entry of the code by a Support-tier
+operator immediately and atomically transitions it out of any "usable"
+state — following the recovery-authorization precedent's own
+`'unconsumed'`-style enum transition (#4, above) — such that no race
+condition between two simultaneous entry attempts (by the same or
+different operators) can ever establish two sessions from one code, or
+allow the same code to be consumed twice. By explicit Product
+Architect decision (Decision CODE-2, recorded verbatim above), the
+code is **not bound to a particular Support operator**: any operator
+whose tier is eligible under Rule A, and who possesses the still-valid
+code, may enter it; the **first** eligible operator to successfully
+enter it establishes the session, and every other eligible operator —
+including one who might otherwise have been the customer's intended
+contact — finds the code already consumed and invalid. No
+operator-selection or operator-binding step exists or is introduced by
+this Policy.
 
 **Rule I — Session duration.** An established Attended Support Session
 is valid for **60 minutes** from its own establishment, reusing
@@ -538,9 +620,6 @@ this Policy does **not** decide:
 - The Support View State's field-by-field content (Rule O).
 - Whether or how sensitive fields are masked (Rule Y).
 - The abandoned-session detection mechanism (Rule U).
-- The exact code-validity-window figure (Rule E) and lockout
-  threshold/duration figures (Rule G) — flagged for explicit Product
-  Architect input, not invented here.
 - Database transaction design for code generation/consumption.
 - The UI/interaction design for any screen this capability requires,
   on either the tenant or SuperAdmin side.
@@ -553,14 +632,12 @@ and Implementation Authorization stages that must follow.
 
 ## Genuine Open Questions — Not Silently Resolved
 
-- **The exact code-validity-window duration (Rule E)** — not fixed by
-  this Policy; flagged for explicit Product Architect decision.
-- **The exact brute-force lockout threshold/duration (Rule G)** — the
-  Clear-Data Password's own figures are the best-evidenced starting
-  point, but this Policy explicitly does not assume they transfer
-  unchanged, given the different risk profile; flagged for explicit
-  Product Architect decision or Specification-stage judgment informed
-  by this note.
+**CODE-1, CODE-2, and LOCKOUT-1 through LOCKOUT-4 are no longer open**
+— each is now resolved by explicit Product Architect decision (see
+"Product Architect Decisions Incorporated," above; Rules E, G, H).
+This section is retained, per the same discipline `POL-0009`'s own
+"Genuine Open Questions" section demonstrates, to record what remains:
+
 - **The POL-NNNN numbering queue** — three unnumbered Policy documents
   (this one and two others) currently observe `POL-0015` as the next
   available slot; this document does not resolve the ordering.
@@ -575,7 +652,9 @@ and Implementation Authorization stages that must follow.
   Traceability table, above).
 - Every rule reuses an identified, cited existing repository
   convention where one exists, and states plainly where none exists
-  (Rule E's and Rule G's exact figures; Rule Y's masking question).
+  (Rule Y's masking question remains such a case; Rule E's and Rule
+  G's figures are now resolved by explicit Product Architect decision
+  rather than by repository precedent, and are labeled as such).
 - Architecture §9.7 and §9.10 are reconciled explicitly, not silently
   reinterpreted or rewritten.
 
@@ -590,6 +669,80 @@ in `19-governance-bdr-policy-framework.md`'s Numbering Ledger, once
 assigned, is a follow-on documentation step, mirroring the identical
 deferral `POL-0008`'s and `POL-0010`'s own Governance Notes recorded
 for their own numbers.
+
+## Consistency Check — Six-Decision Incorporation Pass
+
+Run across the entire document after incorporating CODE-1, CODE-2, and
+LOCKOUT-1 through LOCKOUT-4, per the governing task's own requirement.
+
+**No contradiction found** between the six newly-incorporated decisions
+and any other rule, section, or the Traceability table. One
+**pre-existing defect, unrelated to these six decisions**, was found
+and corrected in the course of rewriting Rule E (necessarily touching
+the exact sentence it appeared in, not sought out separately): Rule E
+previously cross-referenced "Rule H" twice, describing it as governing
+"the session duration itself" and as the rule that "reuses Architecture
+§9.7's own already-decided figure." Both descriptions actually belong
+to **Rule I** (titled "Session duration," 60 minutes, reusing §9.7) —
+Rule H is "atomic, one-time consumption," an unrelated rule. This
+mislabeling predates this task and was not introduced by it; it is
+flagged here explicitly, per the governing task's own instruction, and
+was corrected as part of the necessary Rule E rewrite rather than left
+in a sentence that had to be rewritten anyway for CODE-1.
+
+**Confirmed, item by item, per the governing task's required
+verification:**
+- The old code can never become usable again after lockout — Rule G's
+  "Effect on the code (LOCKOUT-3)" states this explicitly: "permanently
+  invalidates," "does not... pause attempts against a code that later
+  becomes re-enterable," "there is no path back to a valid session
+  using the locked-out code, ever."
+- Fresh customer action is required after lockout — Rule G:
+  "the customer must generate an entirely fresh code (Rules C–F),
+  which requires fresh customer action/consent (Rule B, Rule C)."
+- The failed-attempt counter is per invitation/business, not
+  per-operator — Rule G's "Scope (LOCKOUT-4)": "No per-Support-operator
+  failed-attempt tracking is introduced; a failure by any operator
+  counts against the same one counter as a failure by any other."
+- No operator identity binding exists — Rule H: "the code is not bound
+  to a particular Support operator... No operator-selection or
+  operator-binding step exists or is introduced by this Policy."
+- Successful consumption permanently invalidates the code — Rule H
+  (unchanged from the prior draft on this point): "immediately and
+  atomically transitions it out of any 'usable' state."
+
+**Everything else in this Policy is unchanged:** Rules A–D, F, I–Z;
+the Repository Precedents Examined list; the Decisions Already
+Determined by BDR-0018 section; the Reconciliation With Architecture
+§9.7/§9.10 section; the Traceability table (whose row for item C
+already correctly pointed to "Rules C–H" — unchanged, since the
+lettering and scope of those rules did not change, only Rules E/G/H's
+content); the Scope Exclusions list (minus the now-resolved item,
+removed); the Business Acceptance Criteria (one bullet updated to
+reflect the resolution); and the Governance Notes / Next Governance
+Step sections.
+
+## Product Architect Acceptance
+
+**Status:** Accepted. This Policy, including all 26 Operational Rules
+(A–Z) and the six Product Architect decisions incorporated into Rules
+E, G, and H, is approved as a complete document. The Product Architect
+authorizes progression to the next governance stage: a Specification
+converting this Policy's rules, together with `BDR-0018`'s own
+decisions, into functional requirements, a data model, and acceptance
+criteria a Rule 8 Assessment can be run against. Not started by this
+document.
+
+**Scope of this acceptance:** covers this Policy's content in full, as
+amended by the six decisions recorded above. Does not reopen, amend,
+or re-approve `BDR-0018` itself (it remains approved exactly as it
+already was). Does not itself constitute a Specification, Rule 8
+Assessment, or Implementation Authorization, each of which remains a
+distinct, separately-gated future step. The `POL-NNNN` numbering queue
+identified in "Genuine Open Questions," above, remains unresolved by
+this acceptance — a numbering decision is a distinct act from
+substantive approval, per the same discipline `POL-0010`'s own
+Governance Notes established.
 
 ## Next Governance Step
 
