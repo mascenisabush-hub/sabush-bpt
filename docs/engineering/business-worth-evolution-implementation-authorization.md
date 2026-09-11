@@ -1152,3 +1152,30 @@ Traceable to the Specification (§45, FR-73–FR-81), the Rule 8 gate decisions 
 > ☐ NOT AUTHORIZED
 
 **Status: 🔶 DRAFT — AWAITING PRODUCT ARCHITECT SIGNATURE.** The Formal Acceptance block above is blank, per this repository's own established pending-authorization convention (`capital-inicial-retirement-implementation-authorization.md`'s "Pending" sections) — it is preserved exactly as circulated for review; a future, separate, dated "§43 — Recorded" section is where an actual signature would be entered, mirroring that document's own Pending → Recorded pattern. **Implementation remains blocked until the Product Architect formally accepts/signs this Implementation Authorization.** No checkpoint in §43.2 is authorized to begin, no code/test/`firestore.rules` file may be modified on the strength of this section, and this document's own §7/§23/§36 precedent for what a signature does and does not authorize applies identically here, once and if signed.
+
+---
+
+## 44. Product Architect Authorization — CAIXER — Recorded
+
+**Status: ✅ AUTHORIZED FOR IMPLEMENTATION (11 September 2026).** Recorded additively below, per this repository's own established signature-recording convention (`capital-inicial-retirement-implementation-authorization.md`'s "Amendment N — Pending" → "Amendment N — Recorded" pattern; this document's own §14/§31 "signature is a separate, later, dated act" precedent) — **§43 above, including its own "DRAFT — AWAITING PRODUCT ARCHITECT SIGNATURE" status lines and the blank Formal Acceptance block at §43.7, is preserved completely unedited as the historical record of what was drafted and circulated for review.** This section is the actual, dated act of signature; §43.1–§43.6's scope, non-destructive validation requirement, out-of-scope list, execution rule, and acceptance criteria are not restated, reworded, or reopened here — they govern exactly as drafted.
+
+**Formal acceptance, recorded verbatim from the Product Architect's own authorization:**
+
+> I, SABUSHIMIKE MASCENI, acting as Product Architect for SABUSH BPT, have reviewed the CAIXER Implementation Authorization §43 in full — its scope (§43.2), the mandatory non-destructive validation requirement (§43.3), its explicit out-of-scope boundaries (§43.4), the execution rule (§43.5), and the acceptance criteria (§43.6) — and hereby AUTHORIZE IMPLEMENTATION.
+>
+> I authorize implementation of the CAIXER multi-method liquidity measurement model strictly according to: the accepted CAIXER Specification; the resolved Rule 8 decisions; the accepted Product Architect decisions (CX-1, CX-2, CX-6, CX-13, CX-14); the accepted CAIXER Implementation Plan; and the scope, checkpoints, acceptance criteria, invariants, dependencies, and exclusions contained in §43 of this Implementation Authorization.
+>
+> This authorization does not authorize redesign. Implementation must remain strictly within the accepted governance state, and must in particular preserve: the four CAIXER methods (Cash, eMola, M-Pesa, Banco), all mandatory, `0` valid; Total Liquidity calculated exclusively by the system; `cashPosition` derived from the four components; aggregate consistency enforced at the authoritative write boundary; non-destructive validation in full (§43.3) — on any validation failure, entered CAIXER values and Stock Count/Contagem data must remain, the workflow must not reset, no valid in-progress data may be discarded, the exact error must be identified, the operator must be able to correct and resubmit, and no partial snapshot may be created; the direct Stock Count → CAIXER transition; CAIXER → Review → final confirmation; Review's exposure of all four components, the calculated total, the measured product valuation, and the governed Business Worth calculation together; back-navigation/correction remaining possible until final confirmation; an immutable `BusinessWorthSnapshot` created only at successful final confirmation; existing duplicate-confirmation/idempotency protection; backward compatibility with pre-CAIXER historical snapshots, without unnecessary migration or rewriting; total-only reconciliation, with no per-method transaction ledgers; unchanged Owner Investment, Levantamento, stock/cash conversion, and Business Worth economic semantics; intact tenant isolation and existing authorization boundaries; and no unrelated module or product redesign.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 11 September 2026
+> **Decision:**
+> ☑ AUTHORIZED FOR IMPLEMENTATION
+> ☐ AUTHORIZED WITH MODIFICATIONS (specify)
+> ☐ NOT AUTHORIZED
+
+**Governance gate — resolved.** §43's own Governance Gate (§43's closing paragraph) and its §7/§23/§36-mirrored execution discipline now apply as an active authorization, not a pending one: this signature is the governance authorization gate for the seven checkpoints named at §43.2 (Plan §B–§I) — it authorizes them to be implemented, strictly **one checkpoint at a time** (§43.5), subject in full to §43.3 (non-destructive validation, binding and unweakened), §43.4 (explicit exclusions, unweakened), and §43.6 (acceptance criteria, unweakened). None of §43.1–§43.6 is reopened, reworded, or reinterpreted by this signature.
+
+**This signature does not itself instruct implementation of any checkpoint to begin.** Per §43.5's own "implementation remains strictly one checkpoint at a time" discipline and this document's identical §36 precedent for Decision 37 ("no item becomes authorized to begin merely because the section is signed"), a further, separate, explicit per-checkpoint instruction — naming which of §43.2's seven items (or which grouping) is to be implemented first — remains required before any application code, test, `firestore.rules`, or `firestore.indexes.json` file may be created or modified. **No such instruction is given, implied, or begun by this section.** No Execution Record (mirroring §37–§42's format) exists yet for any CAIXER checkpoint.
+
+**Next Governance Step:** a separate, subsequent, explicit instruction identifying the first CAIXER checkpoint to implement — not performed, drafted, or implied by this signature.
