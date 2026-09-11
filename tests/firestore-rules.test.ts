@@ -2893,3 +2893,229 @@ describe('payments', () => {
   });
 });
 
+// ---------------------------------------------------------------------
+// SuperAdmin Agent Attended Support Session — Implementation Checkpoint 1.
+// Session-scoped Firestore authorization boundary (Specification
+// Invariant I-12 / FR-63; Implementation Authorization §3.7/§6; Rule 8
+// Findings 5-A/5-B/10-A/10-B/12-A). This suite proves ONLY the
+// checkpoint's own scope: /supportSessions/{sessionId} read
+// authorization and its total client-write incapability. Invitation
+// lifecycle, webrtcSignaling, supportViewState, and pointer collections
+// do not exist yet (later checkpoints) and are intentionally not tested
+// here.
+//
+// Every fixture below seeds the supportSessions document directly via
+// withSecurityRulesDisabled — the same "act as a trusted, privileged
+// server write" pattern the existing initialStockRecoveryAuthorization
+// suite (above) already uses — because the actual server route that
+// will write this document (Admin SDK) is not part of this checkpoint.
+// ---------------------------------------------------------------------
+describe('supportSessions — Checkpoint 1 session-scoped authorization (I-12 / FR-63)', () => {
+  const SUPPORT_OPERATOR_UID = 'support-op-1';
+  const OTHER_SUPPORT_OPERATOR_UID = 'support-op-2';
+
+  const ACTIVE_SESSION_ID = 'sess-active-1';
+  const RECONNECTING_SESSION_ID = 'sess-reconnecting-1';
+  const EXPIRED_SESSION_ID = 'sess-expired-1';
+  const ENDED_SESSION_ID = 'sess-ended-1';
+  const OTHER_BIZ_SESSION_ID = 'sess-other-biz-1';
+
+  function inFuture(minutes: number) {
+    return Timestamp.fromMillis(Date.now() + minutes * 60 * 1000);
+  }
+  function inPast(minutes: number) {
+    return Timestamp.fromMillis(Date.now() - minutes * 60 * 1000);
+  }
+
+  async function seedOperatorAccount(uid: string) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'platform_operators', uid), { platformRole: 'superadmin' });
+    });
+  }
+
+  async function seedSession(
+    businessId: string,
+    sessionId: string,
+    fields: { operatorUid: string; status: 'active' | 'reconnecting' | 'ended'; expiresAt: Timestamp }
+  ) {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', businessId, 'supportSessions', sessionId), {
+        businessId,
+        operatorUid: fields.operatorUid,
+        status: fields.status,
+        establishedAt: Timestamp.fromMillis(Date.now() - 5 * 60 * 1000),
+        expiresAt: fields.expiresAt,
+      });
+    });
+  }
+
+  // Case A — legitimate operator.
+  it('Case A: the exact operator bound to an active session CAN read that session', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    await assertSucceeds(getDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+  });
+
+  it('Case A (reconnecting): the bound operator CAN also read a session in reconnecting status', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, RECONNECTING_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'reconnecting', expiresAt: inFuture(60),
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    await assertSucceeds(getDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', RECONNECTING_SESSION_ID)));
+  });
+
+  // Case B — different operator.
+  it('Case B: a different, otherwise-eligible platform operator CANNOT read another operator\'s session', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedOperatorAccount(OTHER_SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    const otherOperatorDb = ctxFor(OTHER_SUPPORT_OPERATOR_UID).firestore();
+    await assertFails(getDoc(doc(otherOperatorDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+  });
+
+  // Case C — unrelated business.
+  it('Case C: an operator with a valid session on one business CANNOT read a session on a different, unrelated business', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedOperatorAccount(OTHER_SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    // A genuinely different session, on a genuinely different business,
+    // bound to a genuinely different operator.
+    await seedSession(OTHER_BIZ, OTHER_BIZ_SESSION_ID, {
+      operatorUid: OTHER_SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    // Confirm the operator's own session still reads fine (control)...
+    await assertSucceeds(getDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+    // ...but they cannot reach the other business's session at all.
+    await assertFails(getDoc(doc(operatorDb, 'businesses', OTHER_BIZ, 'supportSessions', OTHER_BIZ_SESSION_ID)));
+  });
+
+  // Case D — platform operator without session.
+  it('Case D: a verified SuperAdmin with no session document at all for this business/sessionId CANNOT read it', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    // Deliberately: no seedSession call at all — the document does not exist.
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    await assertFails(getDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', 'nonexistent-session')));
+  });
+
+  // Case E — expired session.
+  it('Case E: a previously-bound operator CANNOT read the session once request.time has passed its own expiresAt', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, EXPIRED_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inPast(1),
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    await assertFails(getDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', EXPIRED_SESSION_ID)));
+  });
+
+  // Case F — ended session.
+  it('Case F: a previously-bound operator CANNOT read the session once its status is \'ended\', even with a still-future expiresAt', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, ENDED_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'ended', expiresAt: inFuture(30),
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    await assertFails(getDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', ENDED_SESSION_ID)));
+  });
+
+  // Case G — wrong business (path substitution).
+  it('Case G: an operator cannot substitute a different businessId in the path to reach a session that only exists under the original business', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    // Same sessionId, wrong businessId in the path — no document exists there.
+    await assertFails(getDoc(doc(operatorDb, 'businesses', OTHER_BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+  });
+
+  // Case H — direct tenant access (this mechanism is not a backdoor).
+  it('Case H: even a correctly-authorized Support operator (Case A) cannot use this mechanism to read an arbitrary tenant collection', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    // Seed an ordinary tenant document unrelated to the support session.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'products', 'prod1'), {
+        id: 'prod1', name: 'Test Product',
+      });
+    });
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    await assertFails(getDoc(doc(operatorDb, 'businesses', BIZ, 'products', 'prod1')));
+    // The business document itself is equally out of reach.
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ), { id: BIZ, name: 'Test Business' }, { merge: true });
+    });
+    await assertFails(getDoc(doc(operatorDb, 'businesses', BIZ)));
+  });
+
+  // Tenant-side (customer) transparency — the business's own team can
+  // read its own session document, regardless of status, same as every
+  // other isMemberOf-gated collection in this file.
+  it('Tenant transparency: the business\'s own Owner CAN read its own session document, including an already-ended one', async () => {
+    await seedSession(BIZ, ENDED_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'ended', expiresAt: inFuture(30),
+    });
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+    await assertSucceeds(getDoc(doc(ownerDb, 'businesses', BIZ, 'supportSessions', ENDED_SESSION_ID)));
+  });
+
+  it('Tenant isolation: a different business\'s Owner CANNOT read this business\'s session document', async () => {
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    const otherOwnerDb = ctxFor(OTHER_OWNER_UID).firestore();
+    await assertFails(getDoc(doc(otherOwnerDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+  });
+
+  // Write boundary — no client write path exists at all, for anyone.
+  it('No client — not the matched Support operator, not the business Owner, not any platform operator — can create, update, or delete a session document', async () => {
+    await seedOperatorAccount(SUPPORT_OPERATOR_UID);
+    const operatorDb = ctxFor(SUPPORT_OPERATOR_UID).firestore();
+    const ownerDb = ctxFor(OWNER_UID).firestore();
+
+    // Create: neither the operator nor the Owner can create one client-side.
+    await assertFails(
+      setDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', 'client-created'), {
+        businessId: BIZ, operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+      })
+    );
+    await assertFails(
+      setDoc(doc(ownerDb, 'businesses', BIZ, 'supportSessions', 'client-created-2'), {
+        businessId: BIZ, operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+      })
+    );
+
+    // Update: seed a legitimately-authorized session, then attempt a
+    // client-side write against it from both sides — e.g. a Support
+    // operator cannot self-extend their own session's expiresAt, and an
+    // Owner cannot end it early by direct write.
+    await seedSession(BIZ, ACTIVE_SESSION_ID, {
+      operatorUid: SUPPORT_OPERATOR_UID, status: 'active', expiresAt: inFuture(60),
+    });
+    await assertFails(
+      updateDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID), {
+        expiresAt: inFuture(600),
+      })
+    );
+    await assertFails(
+      updateDoc(doc(ownerDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID), {
+        status: 'ended',
+      })
+    );
+
+    // Delete: neither side can delete it either.
+    await assertFails(deleteDoc(doc(operatorDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+    await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'supportSessions', ACTIVE_SESSION_ID)));
+  });
+});
+

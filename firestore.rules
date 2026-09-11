@@ -399,7 +399,20 @@ service cloud.firestore {
         (
           get(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)).data.get('status', null) == 'active' ||
           get(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)).data.get('status', null) == 'reconnecting'
-        );
+        ) &&
+        // [Checkpoint 1 amendment] Invariant I-11 fixes a Session's total
+        // active lifetime at 60 minutes from its own establishedAt,
+        // "under any circumstance" — this is a rules-layer, not merely
+        // server-layer, guarantee: status alone is a single field the
+        // privileged server is trusted to flip to 'ended' at the cap
+        // (FR-58/FR-61), but Checkpoint 2 (the server route that would
+        // ever perform that flip) is not built yet, so until it exists
+        // a Session seeded/left with status: 'active' has no other
+        // enforcement of its own expiry without this clause. Fail-closed
+        // default: `.get('expiresAt', request.time)` makes a document
+        // missing this field compare request.time < request.time, always
+        // false, never a silent bypass for an incomplete document.
+        request.time < get(/databases/$(database)/documents/businesses/$(businessId)/supportSessions/$(sessionId)).data.get('expiresAt', request.time);
     }
 
     // ==========================================================
