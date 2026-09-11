@@ -703,3 +703,329 @@ Governing basis: BDR-pending-business-worth-evolution-measurement-model.md §4, 
 ## Next Governance Step
 
 Per this repository's established sequence and identical to Revision 3's own lifecycle, above: this Plan Amendment, once accepted and signed by the Product Architect, is followed by a signed Implementation Authorization item (its own dated section in `business-worth-evolution-implementation-authorization.md`, naming B.1–B.5 individually, subject to that document's existing one-item-at-a-time execution rule). Not created by this document. No code, test, rules, or index file is authorized to be touched by this Plan amendment alone.
+
+---
+
+# Implementation Plan Amendment — CAIXER: Multi-Method Liquidity Measurement (BDR Decision 40 / Specification §45)
+
+**Status:** 🔶 **DRAFTED — AWAITING PRODUCT ARCHITECT REVIEW.** This amendment translates the already-accepted Specification §45 and the already-accepted Rule 8 gate decisions into a precise implementation map. It does **not** itself authorize implementation — see "Governance Gate," at the end of this amendment.
+
+**Target of this amendment:** `docs/engineering/business-worth-evolution-implementation-plan.md`, appended per this document's own established append-only discipline (matching Revision 3's and Decision 37's own amendment sections, above). No `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or test file is touched by this document — plan-drafting only.
+
+**Governing basis:**
+- [BDR Decision 40](../specs/BDR-pending-business-worth-evolution-measurement-model.md) and its [signed decision record](caixer-multi-method-liquidity-measurement-decision.md) (11 September 2026, SABUSHIMIKE MASCENI).
+- Specification §45 (Amendment — CAIXER, `docs/specs/business-worth-evolution-specification.md`), including §45.13's refinement — FR-73 through FR-81, Invariant I-8. **Already accepted before Rule 8; not reopened, redesigned, or reinterpreted by this amendment.**
+- The CAIXER Rule 8 Assessment Addendum (`business-worth-evolution-rule8-assessment.md`), Findings CX-1–CX-19, Decision Matrix, and Required Test Categories.
+- [`caixer-rule8-gate-decisions-product-architect-acceptance.md`](./caixer-rule8-gate-decisions-product-architect-acceptance.md) — the signed Product Architect acceptance of CX-1 (aggregate consistency), CX-2 (mandatory-field enforcement, with the non-destructive validation requirement), CX-6 (Review-step visibility), CX-13 (total-only reconciliation), and CX-14 (backward compatibility).
+
+**This amendment introduces no product decision beyond what Decision 40, §45, and the CX-1/CX-2/CX-6/CX-13/CX-14 acceptance already settled.** Every item below either directly implements a named FR/Finding/accepted-decision, or is an implementation-shape choice (exact field/component/state names, exact code location) of the kind this Plan document's own prior amendments (Revision 3 §A.1–A.3, Decision 37 §B.1–B.5) already make at this stage — never a new business rule.
+
+**Method — grounded in direct repository inspection, not the addendum's text alone.** Every file/line reference below was re-confirmed against the current repository state (`apps/tenant/src/types.ts`, `apps/tenant/src/context/AppContext.tsx`, `apps/tenant/src/components/PeriodicStockCountView.tsx`, `apps/tenant/src/utils/calculations.ts`, `firestore.rules`, `tests/business-worth-measured-value.test.ts`) immediately before drafting. No file listed below was modified to produce this amendment.
+
+---
+
+## 0. Governed Flow This Amendment Implements
+
+```
+Physical Stock Measurement (existing, unchanged)
+  → CAIXER Liquidity Measurement (new — this amendment)
+  → Review (extended — this amendment)
+  → Contagem Confirmation (existing atomic write, extended payload)
+  → Business Worth Snapshot (extended schema)
+```
+
+Reversibility before final confirmation, per Decision 40's "Additional Product Architect Principle" and CX-2's non-destructive requirement: Review → CAIXER (correction) and CAIXER → Stock Count (correction) must both remain available, and no `BusinessWorthSnapshot` exists until the single atomic write at the bottom of this flow — an inherited guarantee, not a new mechanism (Rule 8 Finding CX-5, restated in §5, below).
+
+---
+
+## A. Already-Authorized Behavior Being Reused (no new Plan item — named here only so this amendment does not silently duplicate or re-decide it)
+
+- **Fresh-remeasurement principle** (`computeMeasuredBusinessWorth`, `calculations.ts:904-930`) — signature and formula are **unchanged** by this amendment (§45.2 Option A, confirmed below, §C.6). CAIXER changes only how its existing `cashPosition` parameter is derived before the call, never the function itself.
+- **Owner Investment** (§43, `ownerInvestmentsSinceSnapshot`) — not reopened, not reassessed, not touched by any item below (Decision 40 §7; §45.6; Rule 8 Finding CX-11). Where an item below must account for the boundary between CAIXER and Owner Investment, it cross-references §45.6 rather than re-deriving it.
+- **Levantamento** (§19) — unaffected (§45.6; Rule 8 Finding CX-12). No item below touches `expensesSinceSnapshot`/`levantamentosSinceSnapshot` exclusion logic in `calculations.ts:583-591`.
+- **Atomic, idempotent finalization** (`AppContext.tsx`'s `recordStockCount`, the single `fsBatch` that writes `StockCount` and `BusinessWorthSnapshot` together, keyed by `submissionId`) — CAIXER's four values are designed to enter this exact same atomic write, never a separate write of their own (Rule 8 Finding CX-7). No new idempotency mechanism is introduced.
+- **Contagem Autosave / Draft model** (`PeriodicStockDraft`, `apps/tenant/src/types.ts:1509-1553`) — CAIXER's in-progress entry is designed to extend this existing draft record via one new optional field (§C.2, below), reusing its existing persistence/restore path, never a second draft mechanism (Rule 8 Finding CX-4).
+- **Standalone `CashPositionDeclaration`** (`cashPositionDeclarations` collection, `AppContext.tsx:676`) — not deleted, not redesigned. Its role is narrowed, per FR-76/§45.4, to reference/pre-fill only (§C.9, below fixes the existing gap; it does not replace the mechanism).
+- **3-hour correction / 72-hour recovery windows** (§25–§26) — unaffected. CAIXER's four fields become part of the same frozen, correction-eligible snapshot as every other drill-down field already is; no new correction/recovery logic is introduced.
+
+## B. New Data Model (implements §8/§45.2, FR-74; Rule 8 Finding CX-1, CX-2)
+
+### C.1 `BusinessWorthSnapshot` — Four New Immutable Fields (`apps/tenant/src/types.ts:752-955`)
+
+**The actual type change:** add four new fields to the `BusinessWorthSnapshot` interface, adjacent to the existing `cashPosition` field (`types.ts:854`), using the exact field names Specification §8/§45.2 already proposes (not newly invented by this Plan):
+
+```
+cashPositionCash?: number;    // CAIXER component — Cash, as of the Contagem date
+cashPositionEmola?: number;   // CAIXER component — eMola, as of the Contagem date
+cashPositionMpesa?: number;   // CAIXER component — M-Pesa, as of the Contagem date
+cashPositionBanco?: number;   // CAIXER component — Banco, as of the Contagem date
+```
+
+**Optionality, per CX-14 (backward compatibility):** all four fields are `?:` (optional at the type level), mirroring `cashPosition`'s own existing optionality and the exact discipline `establishmentMethod`/`sourceStockCountId` already use for Increment-10-era additive fields (`types.ts:765-772`). Every pre-CAIXER snapshot genuinely lacks these fields — never backfilled, never defaulted to `0` (CX-14, accepted wording). **`cashPosition` itself is unchanged in type (`number`, required on every `establishmentMethod: 'contagem'` snapshot) — only its authoritative derivation changes (§C.6, below).**
+
+**Requirement this satisfies:** FR-74 (individually and immutably preserved, never merged at storage). No change to `BusinessWorthSnapshotProductValuationLine` or any other type in this file.
+
+### C.2 `PeriodicStockDraft` — CAIXER Draft Persistence (`apps/tenant/src/types.ts:1509-1553`)
+
+**The actual type change:** one new optional field on `PeriodicStockDraft`, modeled directly on the existing `newProductInfo` field's own "optional and additive, absence treated as empty, never lost with any single row" precedent (`types.ts:1524-1538`):
+
+```
+caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string };
+```
+
+**Why string, not number, at the draft level:** mirrors this file's own existing convention for in-progress, not-yet-validated numeric entry (draft fields elsewhere in this codebase hold the raw input string until validated/parsed at submission, avoiding a `NaN`/`0` ambiguity while the Owner is still typing). Genuinely absent keys mean "not yet entered for this method" — never a fabricated `"0"`.
+
+**Why on `PeriodicStockDraft`, not a separate collection/document:** CAIXER entry is part of the same Contagem draft lifecycle (Specification §23/FR-33-34) already governing every other in-progress Contagem field — a second draft record would duplicate, not reuse, the existing autosave/restore mechanism this amendment is instructed to inherit (§A, above).
+
+**Requirement this satisfies:** the data-loss-prevention half of CX-2 (§F, "Critical Data-Preservation Analysis," below) — CAIXER input becomes durable across interruption, refresh, and navigation exactly as every other Contagem field already is, with no new persistence mechanism invented.
+
+## C. CAIXER UI / State Flow (implements §45.1, §45.13 direct-transition and Review-content requirements, FR-80, FR-81; Rule 8 Finding CX-4, CX-5, CX-6)
+
+**Current state, confirmed by inspection:** `PeriodicStockCountView.tsx`'s `handleRequestConfirmation` (line 5064) computes the stock tally and calls `setPendingTally(tally)` (line 5218); the component then renders a single pre-confirmation screen (`if (pendingTally) {...}`, line 6118, headed "Confirmar Contagem") showing counted/not-counted products and a "Confirmar Contagem" button that calls `handleConfirmSave` (line 5346), which performs the actual write. **There is no existing CAIXER entry step and no existing display of `cashPosition` on this screen** — confirmed by the Rule 8 Assessment Addendum's own Method statement and re-confirmed here.
+
+### C.3 CAIXER Entry — New Sub-Stage, Inserted Before the Existing Review Screen
+
+**The actual UI change:** introduce new component state, `caixerStage: 'entry' | 'review' | null`, initialized to `null` and set to `'entry'` at the same point `handleRequestConfirmation` currently calls `setPendingTally(tally)` — so the transition that today goes directly from the live counting screen to the product-tally review instead goes directly to a new CAIXER entry screen, satisfying FR-80's "no intervening screen, exit point, or deferral option" requirement (the existing product-tally content becomes part of the Review stage, §C.5, not a separate intervening screen — see below).
+
+CAIXER entry screen requires four numeric inputs (Cash, eMola, M-Pesa, Banco), each:
+- pre-filled from `caixerDraft` (§C.2) on mount/resume, so an interrupted CAIXER entry survives exactly like every other draft field;
+- writing back to `caixerDraft` on every change, via the existing debounced-autosave path `PeriodicStockDraft` already uses for its other fields — no new autosave timer/mechanism;
+- optionally showing the most recent `cashPositionDeclarations[0]` value as a **labeled reference/hint only** (e.g. "última posição declarada: X," never pre-filling the input itself) — this is the concrete mechanism resolving Rule 8 Finding CX-8 (§C.9, below), replacing the current silent `ownerConfirmedCashPosition: cashPositionDeclarations[0].amount` reuse (`PeriodicStockCountView.tsx:5649-5651`) with an active, Owner-typed confirmation for every one of the four methods.
+
+**"Continuar" (proceed to Review)** is enabled only once all four fields hold a valid, explicit numeric value (`0` valid, blank invalid — FR-73, §D below) and transitions `caixerStage` to `'review'`.
+
+**"Voltar" (return to Stock Count)** clears `pendingTally` and `caixerStage` (identical to the existing `setPendingTally(null)` pattern at line 6313) — `caixerDraft` itself is **not** cleared, so a subsequent re-entry into CAIXER resumes the Owner's own last-entered values rather than forcing re-entry (non-destructive, per CX-2).
+
+### C.4 Review — Extended to Show CAIXER Content (implements FR-81, CX-6)
+
+**The actual UI change:** when `caixerStage === 'review'`, render the existing `pendingTally` product-review content (line 6118 onward, unmodified) **plus** a new CAIXER summary block, positioned above the existing "Confirmar Contagem" button, showing exactly the five figures CX-6/FR-81 require:
+
+```
+Cash            <value>
+eMola           <value>
+M-Pesa          <value>
+Banco           <value>
+Total Liquidez  <system-calculated sum — never a sixth input>
+```
+
+— alongside the already-rendered `productValuationTotal`/selling-value figures, satisfying FR-81's "complete governed measured Business Worth calculation... at minimum, the measured product/stock valuation and the CAIXER-derived total liquidity position" requirement. The "Total Liquidez" figure is computed client-side by the same pure sum function §C.6 introduces — **never an editable field, never independently typed** (CX-1, FR-79).
+
+**"Corrigir Caixa"** (new button, positioned alongside the existing per-row "Corrigir" affordance, §6109) sets `caixerStage` back to `'entry'` **without** clearing `pendingTally` or `caixerDraft` — the Owner returns to the four CAIXER inputs with their own last-entered values intact, corrects one or more, and proceeds back to Review; the stock tally itself is untouched by this round-trip (reversibility, §0 above; non-destructive correction, CX-2).
+
+### C.5 Direct Transition — Confirmed Satisfied
+
+**No further code path exists between "physical count concluded" and "CAIXER entry begins"** once §C.3 lands: `handleRequestConfirmation` is the sole existing entry point that concludes physical counting, and it is the exact point modified to enter `caixerStage: 'entry'`. FR-80 requires no additional mechanism beyond this single state-transition change.
+
+## D. Non-Destructive Validation — UI and Server Layer (implements FR-73; Rule 8 Finding CX-2; CX-2 acceptance's non-destructive requirement)
+
+### C.6 UI-Layer Validation (`PeriodicStockCountView.tsx`, CAIXER entry screen, §C.3)
+
+- "Continuar" is disabled (not merely warned-against) while any of the four fields is blank/non-numeric — mirrors this codebase's existing disabled-button-until-valid pattern (e.g. the existing "Rever e Confirmar Contagem" button's own disablement conditions, `PeriodicStockCountView.tsx:5085`).
+- An explicit `0` is accepted and treated identically to any other valid numeric entry — no special-cased falsy check (a known class of bug this codebase has previously had to correct elsewhere, e.g. the cost-price silent-zero-fallback correction already recorded in this Plan's own Part B.2).
+- A field left blank is never silently coerced to `0` at any point in this path — `caixerDraft`'s own optional-key-per-method shape (§C.2) makes "not yet entered" and "entered as zero" structurally distinguishable end-to-end.
+
+### C.7 `computeMeasuredBusinessWorth` Call Site — Aggregate Now Always Derived (`AppContext.tsx`, `recordStockCount`, lines 6021-6040)
+
+**The actual change:** the existing `ownerConfirmedCashPosition: number | undefined` parameter (`RecordStockCountParams`, `AppContext.tsx:447`) is replaced by four new parameters — `caixerCash`, `caixerEmola`, `caixerMpesa`, `caixerBanco` (each `number | undefined`, mirroring the existing optionality discipline) — with `ownerConfirmedCashPosition` itself **derived internally**, never accepted as a caller-supplied aggregate:
+
+```
+const hasCaixer =
+  [caixerCash, caixerEmola, caixerMpesa, caixerBanco].every(
+    (v) => typeof v === 'number' && Number.isFinite(v)
+  );
+const ownerConfirmedCashPosition = hasCaixer
+  ? computeCaixerTotalLiquidity({ cash: caixerCash!, emola: caixerEmola!, mpesa: caixerMpesa!, banco: caixerBanco! })
+  : undefined;
+```
+
+**New pure function, `calculations.ts` (adjacent to `computeMeasuredBusinessWorth`):**
+
+```
+export function computeCaixerTotalLiquidity(params: {
+  cash: number; emola: number; mpesa: number; banco: number;
+}): number {
+  return Number((params.cash + params.emola + params.mpesa + params.banco).toFixed(2));
+}
+```
+
+Every downstream use of `ownerConfirmedCashPosition`/`hasCashPosition` in `recordStockCount` (the `computeMeasuredBusinessWorth` call, `getLedgerDerivedCashBalance`/`computeCashReconciliationDifference` calls, the `businessWorthSnapshot` object literal, lines 6033-6203) is **unchanged** — this item only changes how the single `ownerConfirmedCashPosition` value those call sites already consume is derived, never their own logic (CX-1: "no second independent source of truth for total liquidity" — this is the concrete mechanism guaranteeing it client-side, matching Finding CX-1's own default recommendation applied at the application layer).
+
+**Snapshot write payload — the actual addition:** the four raw components are also written onto the `businessWorthSnapshot` object literal (`AppContext.tsx:6171-6214`), following the exact same `...(hasX ? {...} : {})` omit-not-fabricate pattern every other optional field on that literal already uses:
+
+```
+...(hasCaixer
+  ? { cashPositionCash: caixerCash!, cashPositionEmola: caixerEmola!, cashPositionMpesa: caixerMpesa!, cashPositionBanco: caixerBanco! }
+  : {}),
+```
+
+### C.8 `firestore.rules` — Authoritative Write-Boundary Enforcement (implements CX-1, CX-2 acceptance; `firestore.rules:919-1020`)
+
+**The actual rule change**, added to the existing "ordinary Contagem confirmation" disjunct (`firestore.rules:955-975`) — the Owner-Declared disjunct (`:997-1019`) is untouched, since it already, independently, requires `cashPosition` to be **absent** and is not a CAIXER write path:
+
+1. **Mandatory-field presence/type (CX-2):** each of `cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco` must satisfy `request.resource.data.get(<field>, null) is number`, the same tier `measuredBusinessWorth` already receives (`:932`) — an explicit `0` passes this check (a number), a missing/null/non-numeric value fails it.
+2. **Aggregate consistency (CX-1):** `request.resource.data.get('cashPosition', null)` must equal the sum of the four fields above, within a small fixed tolerance to absorb floating-point summation (mirroring this same file's existing `initialStockRecoveryAuthorizationActive()` cross-document-consistency precedent, cited by Rule 8 Finding CX-1 as the governing pattern to mirror) — the exact tolerance value (e.g. `0.01`) is a Plan-stage engineering constant, not a business decision, and is recorded here rather than left for execution-time invention.
+
+**Both checks apply only when `establishmentMethod == 'contagem'`** (they are meaningless for the already-fully-omitted Owner-Declared branch) — added as an additional `&&`-joined condition inside the existing first disjunct, not a new third disjunct, so the existing correction/recovery sub-branches (`:958-974`) are structurally unaffected and continue to gate on `supersedesSnapshotId`/`status` exactly as before.
+
+**This is the authoritative recompute/verify boundary Decision 40's CX-1 acceptance requires** ("the system must recompute and/or verify the aggregate rather than trusting a client-supplied aggregate value") — client-side derivation (§C.7) prevents an honest client from ever constructing an inconsistent write; this rule prevents a malformed or compromised client from succeeding even if it tries, exactly the belt-and-suspenders precedent Finding CX-1 names.
+
+## E. Reconciliation — Confirmed Total-Only, No New Mechanism (implements CX-13; §45.7)
+
+**No code change beyond §C.7's redefinition of how `ownerConfirmedCashPosition` is derived.** `computeCashReconciliationDifference` (`calculations.ts:984-989`) and its existing call site (`AppContext.tsx:6164-6170`) are **unchanged** — they already compare one scalar (`ownerConfirmedCashPosition`) against `getLedgerDerivedCashBalance`'s own single ledger-derived figure. Since CX-13 accepts total-only reconciliation, the scalar that function already receives — now sourced from the four-method sum rather than a single direct entry — is exactly the correct input, with no per-method ledger, no per-method comparison function, and no change to `CashLedgerEntry`'s schema. This item exists in the Plan only to record explicitly that no further engineering work is required here, closing Implementation Plan Amendment Checklist item 4 from the Rule 8 Assessment Addendum.
+
+## F. Critical Data-Preservation Analysis (implements the CX-2 acceptance's non-destructive validation requirement in full)
+
+This section demonstrates, state-by-state, how the design above satisfies the Product Architect's explicit requirement (`caixer-rule8-gate-decisions-product-architect-acceptance.md` §3) that a validation failure must never cause data loss.
+
+**State lifecycle:**
+
+```
+CAIXER input (caixerDraft, §C.2 — autosaved continuously, survives interruption)
+  → client-side validation (§C.6 — blocks "Continuar," never clears a field)
+  → Review (§C.4 — read-only display of the same caixerDraft-derived values)
+  → Confirmar Contagem → atomic write attempt (§C.7/§C.8)
+  → server-side validation (§C.8's firestore.rules checks)
+       ├─ ACCEPT → single atomic StockCount + BusinessWorthSnapshot write (existing mechanism, §A)
+       └─ REJECT → write throws; caught by the existing error-handling path
+                    already surrounding handleConfirmSave's write call;
+                    pendingTally, caixerStage, and caixerDraft are ALL
+                    left exactly as they were — no state-clearing code
+                    runs on this path, because none is added by this
+                    amendment (the only existing state-clearing calls,
+                    setPendingTally(null) at lines 5685/5710/6115/6313,
+                    are each already gated behind an explicit Owner
+                    action — Voltar, Corrigir — never behind a write
+                    failure)
+```
+
+**Specific scenarios, per the acceptance's own required analysis:**
+
+- **One field blank:** "Continuar" (§C.6) is disabled client-side; the write is never attempted. `caixerDraft` retains every other already-entered value.
+- **One field invalid (non-numeric):** identical — client-side validation blocks progression before any write is attempted.
+- **Server validation rejects the aggregate** (§C.8, e.g. a client bug or tampered request produces a mismatched sum): the `firestore.rules` `allow create` denial throws a permission error at the write call; per the lifecycle above, no local state is cleared by this amendment's own code on that path. The Owner sees an error and remains on the Review screen with `caixerDraft` intact, able to retry (a rules-layer rejection is, by construction, the same shape of failure the existing write path already handles for every other field this collection already validates — no new error-handling mechanism is introduced, only a new condition that can trigger the existing one).
+- **Network/server failure:** identical treatment — the existing `try/catch` already surrounding the confirmation write (unmodified by this amendment) is what the CAIXER write rides inside; `caixerDraft`'s own autosave (§C.2) means even a full page reload during this failure recovers the Owner's entered values on resume, via the existing `PeriodicStockDraft` restore path.
+- **Operator navigates backward (Review → CAIXER, "Corrigir Caixa"):** `caixerDraft` is not cleared (§C.4) — the four inputs re-render pre-filled with their last values.
+- **Operator corrects a previously-entered value:** since `caixerDraft` is the single source of truth for both the entry screen and the Review summary, a correction at either step propagates without any special-cased merge/reconciliation code — both screens render directly from the same draft object.
+- **Final confirmation is retried / duplicate confirmation attempted:** inherited, unmodified, from the existing `submissionId`-keyed idempotency mechanism (Rule 8 Finding CX-7, §A above) — CAIXER introduces no new write path this protection does not already cover, since the four components travel inside the same single atomic batch every other snapshot field already does.
+
+**No new destructive code path is introduced by any item in §C or §D.** The non-destructive property holds because this design adds no new state-clearing call anywhere in the write-failure path — every existing `setPendingTally(null)`/state-reset call remains gated behind an explicit Owner action, exactly as today.
+
+## G. Standalone Declaration — Reference-Only Wiring (implements FR-76, §45.4; closes Rule 8 Finding CX-8)
+
+### C.9 Fix the Existing Silent-Reuse Gap
+
+**Current defect, reconfirmed by this amendment's own inspection:** `PeriodicStockCountView.tsx:5649-5651` currently builds `ownerConfirmedCashPosition: cashPositionDeclarations[0].amount` directly into the confirmation payload with no re-confirmation gate and no display before submission — exactly the gap Rule 8 Finding CX-8 named as reconfirmed, not new.
+
+**The actual fix:** this code is removed. In its place, §C.3's CAIXER entry screen reads `cashPositionDeclarations[0]` (if any) **for display as a labeled reference hint only**, and the Owner's own four typed values in `caixerDraft` are the sole source ultimately written (§C.7). No declaration value ever reaches the write payload without having passed through the Owner's own active CAIXER confirmation. This is a UI change only — the standalone `CashPositionDeclaration` mechanism and its collection are otherwise untouched, per §45.4's explicit "not deleted or redesigned" instruction.
+
+## H. Backward Compatibility (implements CX-14; §45's own historical-snapshot principle)
+
+**No migration, no backfill, no rewrite of any historical snapshot** — confirmed as the correct reading by the signed CX-14 acceptance. Concretely:
+
+- **Pre-CAIXER `BusinessWorthSnapshot` documents** (every snapshot written before this amendment's code lands) permanently lack `cashPositionCash`/`Emola`/`Mpesa`/`Banco`. Their existing `cashPosition` scalar remains exactly as frozen and remains the authoritative figure `computeMeasuredBusinessWorth` already consumed for that historical measurement — no code in this amendment reads or depends on the four new fields being present on an old document.
+- **No existing UI surface currently renders a per-method drill-down of `cashPosition`** — confirmed by inspection (`grep` across `apps/tenant/src/components/` finds no existing per-method display; only `PeriodicStockCountView.tsx`, `CashFlowView.tsx`, and `DashboardView.tsx` reference `cashPosition` at all today, none showing a four-way breakdown). Backward compatibility is therefore a data-model/type-level discipline this amendment must establish going forward (the four fields are `?:` optional, §C.1), not a display-code retrofit against an existing screen.
+- **Any future drill-down surface** that does render the four components (none exists today, none is created by this amendment) must treat their absence as "not measured under this model" — never fabricate a `0` — per CX-14's accepted wording. This is recorded here as a binding constraint on that future work, not implemented now, since no such surface is in scope.
+- **`firestore.rules`' existing `allow update: ... hasOnly(['status'])` / `allow delete: if false`** (`:1036-1045`, unmodified by this amendment) already makes every historical snapshot's frozen fields untouchable regardless — no new rule is required to protect historical records from rewriting; §C.8's new checks apply only to `allow create` of a **new** document.
+
+## I. Security / Tenant Isolation (no new authorization model — implements Rule 8 Finding CX-15)
+
+- CAIXER's four new fields live on the existing `businesses/{businessId}/businessWorthSnapshots/{snapshotId}` document — the identical `isMemberOf(businessId)`-read / `isOwnerOf(businessId)`-create grants every other field on that document already uses (`firestore.rules:919-920`) apply automatically; **no new collection, no new rule scope, no new role tier is introduced.**
+- §C.8's new `allow create` conditions are additional `&&`-joined constraints inside the existing, already-tenant-scoped branch — they narrow what a write must contain, they do not widen who may write, so a member of Business A gains no new ability to write or read Business B's CAIXER fields (inherits the existing isolation test pattern the Rule 8 Assessment's own Required Test Category 15 already names).
+- **New security-rule requirement, made explicit rather than silently assumed** (per the task's own instruction): the two new `allow create` conditions in §C.8 (four-field presence/type check; aggregate-sum check) are genuinely new rule text, not inherited from an existing check — flagged here as the one place this amendment adds new `firestore.rules` surface, fully specified in §C.8, not left to execution-time invention.
+- No change to `isOwnerOf`, `isMemberOf`, or any helper function's own definition.
+
+---
+
+## Dependencies
+
+- **§C.1 (types.ts fields) must land before §C.7 (AppContext write payload)** — the write payload references the new field names.
+- **§C.2 (draft field) and §C.3 (entry UI) are tightly coupled** — the entry screen is the sole writer/reader of `caixerDraft`; they are most naturally a single implementation unit, though nothing prevents landing the type addition fractionally ahead.
+- **§C.4 (Review) depends on §C.3** — the Review summary reads from the same `caixerStage`/`caixerDraft` state §C.3 establishes.
+- **§C.6 (UI validation) is part of §C.3**, not separable from it — the "Continuar" gating logic lives in the same component change.
+- **§C.7 (AppContext) and §C.8 (firestore.rules) should land together, or §C.8 first** — landing §C.7 alone (client derives and sends a correct aggregate) without §C.8 leaves the aggregate-consistency requirement (CX-1) enforced only client-side, which Rule 8 Finding CX-1 already identifies as the weaker of the two available mechanisms; landing §C.8 first is safe in isolation (it only narrows an already-permissive rule, and no existing caller sends the four new fields yet, so no existing write path is newly rejected until §C.7 starts sending them).
+- **§C.9 (standalone-declaration fix) depends on §C.3** — it is a specific behavior of the same CAIXER entry screen, not a separable code path.
+- **No dependency on Owner Investment (§43), Levantamento, Fecho, Owner Portfolio, or any other Increment 10 item** — confirmed by Rule 8 Finding CX-11/CX-12/CX-15 (non-overlapping code paths) and this amendment's own inspection.
+
+## Tests Anticipated (enumerated per the Rule 8 Assessment Addendum's own "Required Test Categories," not written here)
+
+Directly against that addendum's fifteen-item list (`business-worth-evolution-rule8-assessment.md`, "Required Test Categories" under the CAIXER addendum):
+
+1. All four CAIXER fields mandatory — blank/null/undefined rejected client-side (§C.6) and server-side (§C.8); explicit `0` accepted at both layers.
+2. `computeCaixerTotalLiquidity` (§C.7, new pure function) — exact sum across representative decimal/rounding cases, unit-tested identically in style to the existing `computeMeasuredBusinessWorth` suite (`tests/business-worth-measured-value.test.ts`).
+3. A client-constructed inconsistent write (`cashPosition` ≠ sum of the four components) is rejected by the new `firestore.rules` check (§C.8) — rules-emulator test, mirroring this codebase's existing rules-test patterns for other `businessWorthSnapshots` branches.
+4. No code path can pass a direct, independently-typed `cashPosition` value into the write payload — regression-style assertion that `recordStockCount`'s signature no longer accepts `ownerConfirmedCashPosition` directly (§C.7).
+5. Go-Back/correction (`caixerStage` transitions, §C.3/§C.4) never creates a partial or duplicate `BusinessWorthSnapshot` — extends the existing Go-Back safety guarantee (Finding CX-5) with CAIXER-specific state assertions.
+6. Review displays all four components plus the system-calculated total, alongside `productValuationTotal` (§C.4) — component-level UI test.
+7. Final confirmation idempotent under retry/duplicate submission with CAIXER data present — extends existing `submissionId`/FR-37 regression coverage.
+8. Snapshot immutability: no role can rewrite `cashPositionCash`/`Emola`/`Mpesa`/`Banco` outside the existing §25/§26 correction windows — extends existing FR-44-style coverage to the four new fields.
+9. Standalone declaration is displayed as reference only and never silently reaches the write payload absent active CAIXER confirmation (§C.9) — closes Finding CX-8.
+10. Double submission / duplicate final confirmation with CAIXER data produces exactly one snapshot.
+11. Double-counting: extend `tests/business-worth-measured-value.test.ts`'s existing cash-financed-stock-purchase worked example (lines 84-110 region) to all four methods and to method-to-method transfer (I-8, Finding CX-10).
+12. Owner Investment interaction: both worked scenarios in the Rule 8 Addendum's Finding CX-11 reproduced as regression tests.
+13. Levantamento interaction: regression check only, confirming no change to existing coverage (Finding CX-12).
+14. Old (pre-CAIXER) snapshot compatibility: reading a snapshot with `cashPosition` but no component fields renders correctly, without fabricating a zero or an error (§H, above).
+15. Firestore tenant isolation: a member of Business A cannot read or write Business B's CAIXER fields — extends the existing `businessWorthSnapshots` isolation test pattern with the four new fields, no new test class required.
+
+**None of these tests is written by this Plan amendment** — enumerated here so the eventual Implementation Authorization item can verify complete coverage against this exact list, per this document's own established discipline (see the parent Plan's §22, "Tests," and Decision 37's own "Tests anticipated" section, above).
+
+## Explicitly Out of Scope
+
+Restated from Decision 40's own §10 ("What This Decision Does NOT Authorize") and the CX-1–CX-14 acceptance, and reconfirmed by this amendment's own inspection:
+
+- Implementation itself — this document is a Plan, not an Implementation Authorization (see "Governance Gate," below).
+- New transaction ledgers for eMola/M-Pesa/Banco, or any per-method Cash Ledger structure — none is introduced; `CashLedgerEntry`'s schema is unchanged.
+- Per-method reconciliation of any kind — CX-13 fixes total-only; §E above adds no per-method mechanism.
+- Redesign of the Business Worth Engine, `computeMeasuredBusinessWorth`'s signature/formula, or the fresh-remeasurement principle — all unchanged (§A, §C.7).
+- Redesign of Owner Investment (§43) or Levantamento (§19) — neither is touched by any item above.
+- Rewriting, migrating, or backfilling any historical `BusinessWorthSnapshot` — §H is explicit that none occurs.
+- Background liquidity jobs of any kind — every computation in this amendment is synchronous, at Contagem-confirmation time, inside the existing atomic write.
+- Any UI redesign beyond `PeriodicStockCountView.tsx`'s CAIXER entry/Review sections named in §C — no change to `InitialStockCountView.tsx`, `AddStockView.tsx`, Dashboard, Fecho, Owner Portfolio, or any other screen.
+- Any unrelated Contagem redesign — the existing tally/grouping/multi-unit logic (`stockCountPortionGrouping.ts`, `contagemMultiUnitValuation.ts`, Decision 37's own B.1–B.5 items) is untouched by every item above.
+- `firestore.indexes.json` — no new query pattern is introduced by this amendment (four additional scalar fields on an already-indexed-by-default document require no new composite index), confirmed by re-checking Rule 8 Finding CX-17 (performance — no material risk).
+- The exact `firestore.rules` floating-point tolerance constant proposed in §C.8 is a Plan-stage default (`0.01`), not fixed by Decision 40 or the CX-1 acceptance — flagged here as a detail the Implementation Authorization step should either confirm or adjust, not silently treated as final.
+
+---
+
+## Traceability
+
+| Requirement / Decision | Implemented By | Rule 8 Finding Addressed |
+|---|---|---|
+| FR-73 (mandatory fields, zero valid) | §C.6 (UI), §C.8 (rules) | CX-2 |
+| FR-74 (four fields individually/immutably preserved) | §C.1 | CX-1 (partially — storage shape) |
+| FR-75 (measurement date = Contagem date, no grace period) | Inherited unchanged, `confirmedAt` (§A) | CX-9 (already PASS) |
+| FR-76 (standalone declaration — reference only) | §C.9 | CX-8 |
+| FR-77 (no double-counting across methods/stock) | Inherited unchanged, fresh-remeasurement (§A, §C.7) | CX-10 (already PASS) |
+| FR-78 (no reuse of subscription `PaymentMethod`) | §C.1 (distinct field names, distinct type) | — |
+| FR-79 (`cashPosition` never direct input) | §C.7 (server-derived), §C.8 (rules-enforced) | CX-1 |
+| FR-80 (direct transition into CAIXER) | §C.3, §C.5 | CX-4 (already PASS, transition safety) |
+| FR-81 (Review shows product valuation + total liquidity) | §C.4 | CX-6 |
+| CX-1 (aggregate consistency mechanism) | §C.7 (client) + §C.8 (rules, authoritative) | CX-1 |
+| CX-2 (mandatory-field mechanism + non-destructive validation) | §C.6, §C.8, §F (dedicated analysis) | CX-2 |
+| CX-6 (Review component visibility) | §C.4 | CX-6 |
+| CX-13 (total-only reconciliation) | §E (confirmed, no new code) | CX-13 |
+| CX-14 (backward compatibility) | §H | CX-14 |
+| §45.6 (Owner Investment boundary restated) | §A (reused, not reopened) | CX-11 |
+| §45.4 (standalone declaration boundary) | §C.9 | CX-8 |
+| Tenant isolation | §I | CX-15 |
+
+Every FR-73–FR-81 and every CX-1/CX-2/CX-6/CX-13/CX-14 gate decision traces to at least one checkpoint above; no checkpoint above introduces a requirement not traceable to Decision 40, §45, or the signed CX acceptance.
+
+## Governance Notes
+
+- This amendment resolves Implementation Plan Amendment Checklist items 1–4 and 7 from the CAIXER Rule 8 Assessment Addendum in full (aggregate-consistency mechanism, §C.8; mandatory-field rules, §C.8; Review clarification, already resolved by CX-6 acceptance and implemented at §C.4; reconciliation model, already resolved by CX-13 acceptance and confirmed at §E; test-matrix extension, enumerated in "Tests Anticipated," above).
+- Checklist item 5 (the small Specification §45 clarification stating historical snapshots permanently lack the four fields) is a **Specification-text task, not a Plan or code task** — not performed by this amendment, consistent with how CX-14's own acceptance record already flagged it as separate (`caixer-rule8-gate-decisions-product-architect-acceptance.md` §6).
+- Checklist item 6 (fix the standalone-declaration silent-reuse gap, CX-8) is fully addressed by §C.9.
+- Checklist item 8 (no change to `computeMeasuredBusinessWorth`'s signature, the live-formula functions, `CashLedgerEntry`'s schema, or §43) is confirmed satisfied throughout §A, §C.7, §E.
+- **No unresolved architectural or product decision was discovered during this Plan's drafting that Decision 40, §45, or the CX-1–CX-14 acceptance does not already cover.** The one implementation-shape choice this Plan makes that is not dictated word-for-word by prior governance — exactly where in `PeriodicStockCountView.tsx`'s existing state machine the new CAIXER stage is inserted (§C.3) — is the same kind of exact-mechanism latitude this Plan document's own prior amendments already exercise (e.g. Decision 37 §B.1–B.5's exact component/state choices), not a new business rule; it is fully determined by FR-80's explicit "direct transition, no intervening screen" requirement once the existing code's own single entry point (`handleRequestConfirmation`) is identified.
+
+## Governance Gate
+
+**THIS DOCUMENT IS AN IMPLEMENTATION PLAN ONLY.**
+
+It does **NOT** constitute Implementation Authorization. It does not itself permit any change to `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or any test file — none was touched to produce it. Production implementation of any item in §C–§I above may begin only after: (1) explicit Product Architect review and acceptance of this Plan amendment (mirroring the acceptance record format `caixer-rule8-gate-decisions-product-architect-acceptance.md` and this Plan's own prior Revision 3/Decision 37 acceptance blocks already use), and (2) a subsequent, separately-signed Implementation Authorization item in `business-worth-evolution-implementation-authorization.md`, naming the specific checkpoint(s) authorized to begin, per that document's own established one-item-at-a-time execution rule.
+
+**No Implementation Authorization is created, implied, or signed by this document.**
+
+## Next Governance Step
+
+Per this repository's established sequence, identical in shape to Revision 3's and Decision 37's own lifecycle, above: this Plan Amendment, once reviewed and accepted by explicit Product Architect signature, is followed by a signed Implementation Authorization item — a new dated section in `business-worth-evolution-implementation-authorization.md`, naming which of §C.1–§C.9 (or which grouping of them) is authorized to begin first, subject to that document's existing one-item-at-a-time execution rule. Not created, drafted, or implied by this document.
