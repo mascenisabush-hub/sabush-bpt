@@ -1211,6 +1211,9 @@ This amendment does not authorize any code, test, `firestore.rules`, or `firesto
 | Owner Investment boundary restated | BDR Decision 40 §g | §45.6 | none new | No — §43 unamended |
 | Reconciliation — left OPEN | Decision 40 §11.3 (unresolved by design) | §22, §36 item 14 | none | No — explicitly deferred, not decided |
 | FR-55 amendment | BDR Decision 40 | §10 | FR-55 amended in place | No — the underlying principle (Decision 3) is unchanged; only its precision is increased |
+| Component entry vs. system-calculated total | Decision 40 refinement, 11 September 2026 | §45.13 | FR-79 | No — makes §45.2's existing implicit rule explicit |
+| Direct transition into CAIXER | Decision 40 refinement, 11 September 2026 | §45.13 | FR-80 | No — sharpens §45.1's existing "non-deferrable" language |
+| Review-step content | Decision 40 refinement, 11 September 2026 | §45.13 | FR-81 | No — fills a gap in §45.1's own flow diagram, not previously specified |
 
 ### 45.12 Product Architect Acceptance
 
@@ -1224,3 +1227,19 @@ This amendment does not authorize any code, test, `firestore.rules`, or `firesto
 **Scope of this acceptance:** covers this §45 amendment's content in full, as it amends §8, §10/FR-55, §22 (cross-reference only), and §36 of this Specification, and adds new FR-73–FR-78 and new Invariant I-8. It does not reopen, amend, or re-approve §43 (Owner Investment) or any other portion of this Specification, the BDR, or POL-0010 not named above, and does not itself authorize a Rule 8 Assessment Addendum, an Implementation Plan, or an Implementation Authorization — each of which remains a distinct, separately-gated future step (§45.10).
 
 **Disclosed, not fixed, per this document's own "disclose rather than silently resolve" convention:** this amendment's own drafting pass discovered a pre-existing, unrelated defect — `FR-70` is independently assigned to two different requirements (§42.8's Owner-Declared verification-status framing requirement, and §44.1's Expected Current Stock Value terminology requirement). This collision predates this amendment, is not touched by it, and is flagged here for a future correction pass rather than silently repaired as a side effect of this amendment. This amendment's own new FRs begin at FR-73, one past the highest previously-assigned number (FR-72), so as not to compound the collision.
+
+### 45.13 Refinement — Manual Entry, Direct Transition, and Review-Step Content (11 September 2026)
+
+**Status:** ✅ **Accepted (11 September 2026).** This subsection tightens §45.1's and §45.2's already-accepted text with three precise clarifications the Product Architect provided after §45's initial acceptance — none of it reopens, contradicts, or reverses anything §45.1–§45.12 already established; each point below either makes an already-implicit rule explicit, or fills the one genuine gap in the original §45.1 flow diagram (what the "Review" step must contain).
+
+**Component entry vs. total calculation, made explicit.** The four CAIXER components (`cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco`) are the Owner's own manually-entered, directly-confirmed values. `cashPosition` (the aggregate) is never itself an entry field — it is always and only the system-calculated sum of the four components, at every Contagem, with no code path permitted to accept it as independent Owner input or to allow it to diverge from that sum.
+
+**Direct transition, made explicit.** The Contagem action that concludes physical stock counting must transition directly into the CAIXER stage — no intervening screen, exit point, or deferral option may sit between "physical count complete" and "CAIXER measurement begins." This sharpens §45.1's existing "not an optional, separate, or deferrable activity" language into a concrete flow requirement.
+
+**Review-step content, newly specified.** §45.1's governed flow already names a "Review" step between CAIXER and Contagem Confirmation; this amendment did not previously specify its content. It is now fixed: after CAIXER, and before the Owner may give final confirmation, the system must present the complete governed measured Business Worth calculation for that Contagem — at minimum, the measured product/stock valuation (`productValuationTotal`) and the total liquidity position (`cashPosition`, the CAIXER-derived sum) — so the Owner reviews the actual figures the resulting `BusinessWorthSnapshot` will freeze, not merely the raw CAIXER entries in isolation. This restates, applied specifically to CAIXER, the same pre-confirmation-awareness discipline Decision 30 already established for Contagem finalization generally (§24) — it introduces no new UI mechanism, only a content requirement for a review step the governed flow already names.
+
+**FR-79 [new].** `BusinessWorthSnapshot.cashPosition` must never be accepted as direct Owner input, at any Contagem, under any code path — it is always computed as the sum of the four CAIXER components at the moment of measurement (§45.2).
+
+**FR-80 [new].** The Contagem action concluding physical stock counting must transition directly into the CAIXER stage, with no intervening exit point or deferral option, matching the same non-optional, non-deferrable treatment §45.1 already establishes for CAIXER's inclusion in the flow as a whole.
+
+**FR-81 [new].** Before the Owner may give final Contagem confirmation, the system must present, at minimum, the measured product/stock valuation and the CAIXER-derived total liquidity position as part of the same review — never final confirmation from the raw CAIXER entry screen alone, and never omitting either figure from that review.
