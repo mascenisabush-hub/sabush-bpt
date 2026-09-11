@@ -198,6 +198,18 @@ below, maps each to its FR):
   grace period, or reconnection (§21). A reconnection restores
   rendering access to an already-authorized Session; it never resets,
   pauses, or extends that Session's own clock.
+- **I-12 (SPEC-3).** No `firestore.rules` grant introduced by this
+  capability may condition Support access on `platformRole` or
+  `isPlatformOperator()` alone. Every read of the Support View State,
+  pointer, or `webrtcSignaling` documents, and the pointer's own write
+  path (FR-28), must be conditioned exclusively on a narrow,
+  session-matched check against the specific
+  `businesses/{businessId}/supportSessions/{sessionId}` document —
+  confirming both `status ∈ {active, reconnecting}` and `operatorUid
+  == request.auth.uid` at the moment of access (Rule L, Rule M). The
+  existing `platform_audit_log` grant (a broad, non-tenant-scoped
+  `isPlatformOperator()` read) is never treated as precedent for any
+  tenant-scoped collection this capability introduces.
 
 ## 7. Functional Requirements — Code Generation
 
@@ -641,21 +653,38 @@ here as Invariant I-10: **rendering connectivity is not authorization**
 end an otherwise-valid Session, and a restored connection must never
 create, extend, or recreate any authorization it did not already have.
 
-**FR-54.** While a Session is `active`, the customer's browser, under
-either rendering path, must send a heartbeat signal at a regular
-interval — proposed at **every 15 seconds** — to a server-authoritative
-location (e.g. a privileged write updating the Session document's own
-`lastHeartbeatAt` field). This figure is this Specification's own
-proposal, offered clearly enough for Rule 8 to evaluate and adjust, not
-a figure carried over from any existing precedent (no comparable
-heartbeat mechanism exists anywhere else in this codebase).
+**FR-54 (amended, SPEC-3).** While a Session is `active`, **both the
+customer's browser and the Support operator's own browser**, under
+either rendering path, must independently send a heartbeat signal at a
+regular interval — proposed at **every 15 seconds** — to a
+server-authoritative location (a privileged write updating the Session
+document's own `lastHeartbeatAt` field for the customer and
+`lastOperatorHeartbeatAt` field for the Support operator, tracked and
+evaluated independently, per I-12's identity-matched discipline for the
+operator's own write). Neither party's heartbeat substitutes for the
+other's — FR-55's connectivity-status transition (below) is driven by
+whichever participant's heartbeat is currently lapsed, not by the
+customer's alone. This figure is this Specification's own proposal,
+offered clearly enough for Rule 8 to evaluate and adjust, not a figure
+carried over from any existing precedent (no comparable heartbeat
+mechanism exists anywhere else in this codebase). *(Original FR-54
+required only the customer's browser to heartbeat; corrected here per
+Rule 8 Finding 6-A and the Product Architect's Decision 7, which
+accepts the principle that both participants must be represented in
+authoritative session liveness. Rule 8's own assessment already
+identified this as an application of Policy Rule U's existing text —
+"either party's browser" — not a reopening of Rule U itself.)*
 
-**FR-55.** If the server does not receive a heartbeat for **30
-seconds** (missing two consecutive expected heartbeats under FR-54's
-proposed interval), the Session's connectivity status must transition
-to `reconnecting` — **not** to `ended`. The Session's own `status`
-field remains `active`, and its `expiresAt` (the 60-minute cap, FR-17)
-is completely unchanged by this transition (I-11).
+**FR-55 (clarified, SPEC-3).** If the server does not receive a
+heartbeat from **either participant** (customer or Support operator,
+per FR-54) for **30 seconds** (missing two consecutive expected
+heartbeats under FR-54's proposed interval), the Session's connectivity
+status must transition to `reconnecting` — **not** to `ended`. The
+Session's own `status` field remains `active`, and its `expiresAt` (the
+60-minute cap, FR-17) is completely unchanged by this transition
+(I-11). This already applied symmetrically as originally worded — this
+pass makes the "either participant" reading explicit, matching FR-54's
+own correction, without changing the underlying rule.
 
 **FR-56.** If a heartbeat resumes while the Session is in
 `reconnecting` status and before the grace period (FR-57) elapses, the
@@ -711,6 +740,24 @@ path) are both governed by the identical heartbeat/grace-period
 mechanism (FR-54–FR-61) — no path-specific exception, shorter grace
 period, or divergent behavior is introduced for either rendering path.
 
+### Support Authorization Model (SPEC-3 addition)
+
+**FR-63 (new, SPEC-3).** Every `firestore.rules` grant permitting a
+Support operator to read the Support View State (§20), pointer
+(FR-27–FR-30), or `webrtcSignaling` (FR-21) documents, and the
+pointer's own write path (FR-28), must be conditioned on the narrow,
+session-matched check named in I-12 — confirming both that the
+governing `businesses/{businessId}/supportSessions/{sessionId}`
+document's `status` is `active` or `reconnecting` **and** that its
+`operatorUid` field equals the requesting operator's own
+`request.auth.uid` — never on `platformRole` or `isPlatformOperator()`
+alone, and never using the existing `platform_audit_log` grant as
+precedent. This is the specification-level fix for Rule 8 Findings
+5-A/5-B/10-A/10-B/12-A and the Product Architect's Decision 4; it fixes
+the required *authorization shape*, not the literal `firestore.rules`
+syntax, which remains an Implementation Plan responsibility per §2's
+scope exclusion (§24 item 3, unchanged by this addition).
+
 ## 22. Proposed Data Model
 
 **Proposed, not final** — exact field names, types, and `firestore.rules`
@@ -743,8 +790,13 @@ document per established Session:
   any connectivity event (I-11).
 - `status`: `'active' | 'reconnecting' | 'ended'` (FR-55, FR-56).
 - `lastHeartbeatAt` — server timestamp, updated at each successful
-  heartbeat (FR-54); the basis for the `active`→`reconnecting`
-  transition (FR-55).
+  customer heartbeat (FR-54); one of the two bases for the
+  `active`→`reconnecting` transition (FR-55).
+- `lastOperatorHeartbeatAt` (new, SPEC-3) — server timestamp, updated
+  at each successful Support operator heartbeat (FR-54, as amended);
+  the second basis for the `active`→`reconnecting` transition (FR-55),
+  written only by the operator identified in this same document's own
+  `operatorUid` field (I-12).
 - `graceExpiresAt` — set when `status` transitions to `reconnecting`
   (`lastHeartbeatAt` + 2 minutes, capped at the Session's own
   `expiresAt` per FR-57), `null` otherwise.
@@ -884,6 +936,17 @@ architecture can safely and correctly guarantee it.
     a heartbeat arriving in the same instant as an explicit termination
     request (FR-34/FR-35).
 
+**SPEC-3 note on items 2 and 3, above.** Item 3 (exact `firestore.rules`
+text) is narrowed but not closed by SPEC-3's new I-12/FR-63: the
+required *authorization shape* (session-matched, never role-only) is
+now fixed at the Specification level; the literal rules syntax remains
+an Implementation Plan item, unchanged in kind. Item 2 (TURN/relay) is
+unchanged by SPEC-3 — it remains a genuine infrastructure/cost
+dependency, addressed by the Product Architect's Decision 8 as an
+explicit implementation prerequisite for the desktop path, not resolved
+by any Specification text (see the Rule 8 Closure document for its
+disposition).
+
 ## 25. Non-Goals / Explicit Exclusions
 
 Restated directly from `BDR-0018` §5 and the Policy's own Rule Z, for
@@ -977,10 +1040,10 @@ resolves.
 | 9 | Rule I | FR-17 |
 | 10 | Rule J | FR-18 |
 | 11 | Rule K | FR-9, FR-10, FR-38 |
-| 12 | Rule L | FR-39 |
-| 13 | Rule M | FR-20, FR-24, FR-41, FR-42 |
+| 12 | Rule L | FR-39, FR-63, I-12 |
+| 13 | Rule M | FR-20, FR-24, FR-41, FR-42, FR-63, I-12 |
 | 14 | Rule N | FR-19, FR-21, FR-22 |
-| 15 | Rule O | FR-23, FR-25, FR-26, FR-49, FR-50, FR-51, FR-52, FR-53 |
+| 15 | Rule O | FR-23, FR-25, FR-26, FR-49, FR-50, FR-51, FR-52, FR-53, FR-63 |
 | 16 | Rule P | FR-27, FR-28, FR-29, FR-30 |
 | 17 | Rule Q | FR-31, FR-32, FR-33 |
 | 18 | Rule R | FR-34 |
@@ -1047,16 +1110,23 @@ resolves.
 20. A Support View State document is unreadable the instant its
     governing Session ends, and never itself constitutes or implies
     authorization (FR-52, FR-53, I-10).
-21. A temporary connectivity interruption (either rendering path) does
-    not immediately end an active Session; it enters a bounded grace
+21. A temporary connectivity interruption from **either participant**
+    — customer or Support operator (either rendering path) — does not
+    immediately end an active Session; it enters a bounded grace
     period, and reconnection within that period restores full activity
     with no change to the Session's own authorization or 60-minute cap
-    (FR-55–FR-57, I-10, I-11).
+    (FR-54 as amended, FR-55–FR-57, I-10, I-11).
 22. A reconnection can never create, extend, renew, or recreate any
     authorization, bypass code consumption, reuse a consumed code, or
     revive an ended Session (FR-60, FR-61).
 23. The server, never the client, is authoritative for whether a
     Session is active, reconnecting, or ended (FR-59).
+24. (New, SPEC-3.) No Support access to the Support View State,
+    pointer, or `webrtcSignaling` documents is ever granted merely by
+    `platformRole` or `isPlatformOperator()` — every such grant is
+    conditioned on the narrow, session-matched check of I-12, confirmed
+    by dedicated security-rules test coverage before Implementation
+    Authorization (FR-63, I-12).
 
 ## 29. Governance Notes
 
@@ -1096,42 +1166,75 @@ resolves.
 - The `POL-NNNN` numbering queue this capability's Policy identified
   (three unnumbered documents observing `POL-0015`) remains unresolved
   and is not this Specification's concern to address.
+- **SPEC-3 correction pass (this update).** Following the Rule 8
+  Assessment's `READY AFTER DECISIONS` verdict
+  (`docs/engineering/superadmin-agent-attended-support-session-rule8-assessment.md`,
+  §7) and the Product Architect's subsequent Decisions 1–8 resolving
+  its three outstanding findings, this pass makes two of those
+  decisions explicit in the Specification's own binding text (the third,
+  TURN/relay, is an infrastructure dependency, not a Specification
+  change — see the Rule 8 Closure document): (1) **Decision 4**
+  (Firestore authorization model) is now fixed as **I-12** and **FR-63**
+  — no grant introduced by this capability may condition Support access
+  on `platformRole`/`isPlatformOperator()` alone; every grant is
+  session-matched, per Rule 8 Findings 5-A/5-B/10-A/10-B/12-A. (2)
+  **Decision 7** (bidirectional heartbeat) amends **FR-54** to require
+  the Support operator's own browser to heartbeat symmetrically with the
+  customer's, adds `lastOperatorHeartbeatAt` to the Session data model
+  (§22), and clarifies FR-55's "either participant" reading, per Rule 8
+  Finding 6-A. Both corrections operate entirely within Rule 8's own
+  technical authority and Policy Rule U's/Rule L's/Rule M's already-
+  approved text (confirmed by the Rule 8 Assessment itself, §3, Findings
+  5-B and 6-A) — neither reopens, reinterprets, or amends `BDR-0018` or
+  the Policy. FR numbering for the new FR-63 continues from the
+  Specification's prior highest number (FR-62) rather than being
+  inserted out of sequence; its physical placement (end of §21, before
+  §22) reflects where the requirement is substantively grounded, not
+  its number.
+- The existing distinction between natural Session completion
+  (`support_session.completed`) and grace-period-expired abandonment
+  (`support_session.ended_by_abandonment`, FR-44, §18) is unchanged and
+  is not collapsed by the SPEC-3 heartbeat amendment — both audit event
+  types remain as originally defined; FR-54's amendment only widens
+  *whose* heartbeat lapsing can trigger the existing `reconnecting`/
+  abandonment path, not the event types themselves.
 
 ## Product Architect Acceptance
 
 **Status:** Accepted. This Specification, including its SPEC-1
-(Support View State schema, §20) and SPEC-2 (heartbeat/reconnection,
-§21) correction-pass resolutions, is approved as a complete document.
-The Product Architect authorizes progression to the next governance
-stage: a Rule 8 Assessment, falsifying the proposed architecture
-against the actual repository before any Implementation Plan or
-Implementation Authorization is considered. Not started by this
-document.
+(Support View State schema, §20), SPEC-2 (heartbeat/reconnection, §21),
+and SPEC-3 (Firestore authorization model and bidirectional heartbeat,
+per the post-Rule-8 Product Architect Decisions 4 and 7) correction-pass
+resolutions, is approved as a complete document. The Product Architect
+authorizes progression to the next governance stage: Rule 8 Closure,
+recording the disposition of the Rule 8 Assessment's three outstanding
+findings against this now-amended Specification, before any
+Implementation Plan or Implementation Authorization is considered. Not
+started by this document.
 
 **Scope of this acceptance:** covers this Specification's content in
-full, as corrected by the SPEC-1/SPEC-2 pass. Does not reopen, amend,
-or re-approve `BDR-0018` or the Policy themselves (both remain approved
-exactly as they already were). Does not itself constitute a Rule 8
-Assessment, Implementation Plan, or Implementation Authorization, each
-of which remains a distinct, separately-gated future step.
+full, as corrected by the SPEC-1/SPEC-2/SPEC-3 passes. Does not reopen,
+amend, or re-approve `BDR-0018` or the Policy themselves (both remain
+approved exactly as they already were). Does not itself constitute a
+Rule 8 Closure, Implementation Plan, or Implementation Authorization,
+each of which remains a distinct, separately-gated future step.
 
 ## 30. Next Governance Step
 
 Per this repository's governance chain: with this Specification now
-Accepted, the next governance step is a **Rule 8 Assessment** —
-falsifying the proposed architecture (both rendering paths, the
-one-time-code model, tenant isolation, the heartbeat/reconnection
-mechanism, the 60-minute invariant, pointer synchronization, audit
-integrity, masking, concurrency, `firestore.rules`, WebRTC signaling/
-TURN requirements, browser compatibility, performance, and failure
-recovery) against the actual repository, not merely confirming it on
-paper. This document's own §24 (13 remaining Rule-8 technical
-questions) and §26 (the still-open specific field-masking question)
-are the starting point for that assessment, not an exhaustive list of
-everything it must investigate. No Rule 8 Assessment, Implementation
-Plan, or Implementation Authorization is drafted, started, or implied
-by this document itself.
+Accepted (including its SPEC-3 pass) and the Rule 8 Assessment's three
+outstanding findings resolved by the Product Architect's Decisions 1–8,
+the next governance step is **Rule 8 Closure** — updating
+`docs/engineering/superadmin-agent-attended-support-session-rule8-assessment.md`
+to record the final disposition of each finding against this amended
+Specification, and determining whether the Rule 8 verdict is now
+`CLOSED / PASS` or must remain `READY AFTER DECISIONS` pending a
+remaining infrastructure dependency (TURN/relay, Decision 8). No
+Implementation Plan or Implementation Authorization is drafted,
+started, or implied by this document itself.
 
 **Lifecycle:** Drafted → Product Architect review → Correction pass
-(SPEC-1/SPEC-2) → **Accepted (this step)** → Not yet assessed under
-Rule 8. Not Implemented.
+(SPEC-1/SPEC-2) → Accepted → Rule 8 Assessment (`READY AFTER
+DECISIONS`) → Product Architect Decisions 1–8 → **Correction pass
+(SPEC-3, this update)** → **Accepted (this step)** → Not yet Rule 8
+Closed. Not Implemented.

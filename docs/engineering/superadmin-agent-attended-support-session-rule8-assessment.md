@@ -575,7 +575,7 @@ above (a genuine Product Architect decision) or pre-approve the
 specific rules text for items 2–3 (an Implementation Plan
 responsibility, informed by this assessment's required direction).
 
-## Governance Notes
+## Governance Notes (original assessment)
 
 - This is a Rule 8 Assessment only. No `apps/`, `server/`,
   `firestore.rules`, `firestore.indexes.json`, or `tests/` file is
@@ -592,17 +592,113 @@ responsibility, informed by this assessment's required direction).
   technical authority, not a business-decision reversal.
 - Nothing was committed or pushed to produce this document.
 
+---
+
+## 8. Rule 8 Closure — Product Architect Decisions 1–8 Applied
+
+**This section is a closure pass, added after the Product Architect's
+explicit Decisions 1–8** resolving this assessment's three outstanding
+findings (§7, original verdict `READY AFTER DECISIONS`). Sections 1–7
+and the "Governance Notes (original assessment)" above are preserved
+verbatim as the historical falsification record; nothing in them is
+edited, reinterpreted, or retracted by this section. Where a decision
+requires a change to binding Specification text, that change is made in
+`docs/specs/superadmin-agent-attended-support-session-specification.md`
+as a formal **SPEC-3** correction pass (see that document's own
+Governance Notes) — not silently, and not in this document.
+
+### 8.1 Findings Disposition
+
+| Finding | Product Architect decision | Specification already sufficient? | Amendment made | Final Rule 8 disposition |
+|---|---|---|---|---|
+| **1-B / 15-B** — TURN/relay infrastructure absent; cost/vendor decision required | **Decision 8**: TURN/relay is an explicit implementation/infrastructure dependency, not silently invented or vendor-selected; must be provisioned before desktop-path production use | N/A — not a Specification-text question | None (infrastructure/procurement item, not governance text) | **RESOLVED as a documented pre-production dependency**, gating the desktop rendering path's production launch specifically (not the mobile path, not this Rule 8 Closure itself). Vendor/self-hosted selection and cost estimation (Finding 15-B) remain an ordinary Implementation Plan / procurement item. See §8.3. |
+| **5-A / 5-B / 2-B / 3-B / 10-A / 10-B / 12-A** — broad vs. narrow `isPlatformOperator()` grant; catastrophic-isolation risk if the one existing broad precedent is copied | **Decision 4**: authorization boundary is the active support session, never `platformRole` alone; must reuse the narrow `initialStockRecoveryAuthorizationActive()`-shaped pattern; explicitly forbids using `platform_audit_log` as precedent | **No** — the Specification's FR-53 implied the principle for reads but never stated it as a binding invariant, and no FR covered the pointer write or `webrtcSignaling` read at all | **Yes — SPEC-3**: new **Invariant I-12** (§6) and new **FR-63** (§21) added to `superadmin-agent-attended-support-session-specification.md`, naming the exact session-matched check (`status ∈ {active, reconnecting}` and `operatorUid == request.auth.uid`) and explicitly excluding `platform_audit_log` as precedent. Traceability matrix (§27) and Acceptance Criteria (§28, new item 24) updated to match. | **RESOLVED.** The narrow-grant requirement is now binding Specification text, not merely a Rule 8 recommendation — an Implementation Plan is bound by FR-63/I-12 the same way it is bound by any other FR, and the required security-rules test coverage (Finding 12-A) remains a pre-Authorization gate. |
+| **6-A** — FR-54 heartbeat is one-directional (customer only); Support operator's own disconnection undetected as worded | **Decision 7**: both participants must be represented in authoritative session liveness; reconnection cannot create new authorization, extend the 60-minute cap, bypass the consumed code, create a second session, or revive an ended session; natural expiry/completion and abandonment must remain distinct audit events | **No** — FR-54's literal text named only "the customer's browser" | **Yes — SPEC-3**: **FR-54 amended** to require both the customer's and the Support operator's own browser to heartbeat independently; **FR-55 clarified** ("either participant"); **Data Model (§22)** gains `lastOperatorHeartbeatAt`; **Acceptance Criteria item 21** updated. FR-56–FR-62 required no textual change — already participant-agnostic as originally worded, confirmed by direct re-reading. The `support_session.completed` / `support_session.ended_by_abandonment` distinction (§18, FR-44) is unchanged and unaffected. | **RESOLVED.** FR-54 as amended now matches Policy Rule U's own "either party" text exactly, closing the gap Finding 6-A identified without reopening Rule U or any other Policy Rule. |
+
+### 8.2 Specification Integrity Check
+
+- **Firestore authorization:** the Specification now makes this
+  explicit and binding (I-12, FR-63) — Support is never authorized by
+  `platformRole` alone; the Support View State, pointer, and
+  `webrtcSignaling` reads and the pointer write are all conditioned on
+  the active session; no broad platform-operator grant is permitted.
+  This closes the gap this assessment's own §8.1 row 2 identifies as
+  "No."
+- **Support-side heartbeat:** the Specification now requires it
+  explicitly (FR-54 as amended). This closes the gap this assessment's
+  own §8.1 row 3 identifies as "No."
+- **TURN dependency:** confirmed to need only implementation
+  documentation, not a Specification or further governance decision —
+  Decision 8 itself constitutes the required Product Architect
+  acknowledgment (acquire and provision TURN before desktop production
+  use; vendor deferred). No Specification text names a TURN vendor or
+  needs to.
+
+### 8.3 TURN/Relay — Remaining Dependency (not a blocker to this closure)
+
+Decision 8 resolves the *governance* question Finding 1-B raised (does
+the Product Architect accept a real infrastructure dependency here, or
+silently skip it) without resolving the *implementation* question
+(which vendor, or self-hosted, and its exact cost). That split is
+consistent with Finding 1-B's own original framing: "a cost/vendor
+decision, not a technical one" for the former, ordinary Implementation
+Plan estimation (Finding 15-A/15-B) for the latter. Concretely:
+
+- The desktop rendering path (`getDisplayMedia()` + `RTCPeerConnection`)
+  **must not** reach production use without a provisioned TURN/relay
+  service — this is now a fixed pre-production gate, not an open
+  question.
+- The mobile rendering path (Support View State) has no TURN dependency
+  and is not gated by this item.
+- Selecting a managed vs. self-hosted TURN service, its exact recurring
+  cost, and its environment-variable/deployment integration remain
+  ordinary Implementation Plan work — no vendor is named here, per the
+  Product Architect's own instruction not to invent one.
+
+This dependency does not block Rule 8 Closure itself (a governance
+determination that the architecture is sound and correctly bounded); it
+blocks **desktop-path production launch** specifically, and must be
+tracked as an Implementation Plan prerequisite.
+
+### 8.4 Final Verdict
+
+**✅ RULE 8 — CLOSED / PASS.**
+
+All three findings that kept the original §7 verdict at `READY AFTER
+DECISIONS` are now resolved:
+
+1. TURN/relay (Finding 1-B/15-B) — resolved as a documented,
+   pre-production infrastructure dependency for the desktop path only
+   (Decision 8, §8.3) — no longer an open governance decision.
+2. The narrow, session-matched Firestore authorization model (Findings
+   5-A/5-B/2-B/3-B/10-A/10-B/12-A) — resolved and now binding
+   Specification text (I-12, FR-63, SPEC-3).
+3. The bidirectional heartbeat requirement (Finding 6-A) — resolved and
+   now binding Specification text (FR-54 as amended, SPEC-3).
+
+No finding in §3 of this assessment is reopened, reversed, or
+reinterpreted by this closure. No Policy Rule or `BDR-0018` item is
+touched. The security-rules test coverage this assessment recommends
+(Finding 12-A) — an explicit test asserting that a platform operator
+**without** an active session for a business cannot read that
+business's Support View State, pointer, or Session documents — remains
+required before Implementation Authorization; Rule 8 Closure fixes the
+*requirement*, it does not itself constitute that test's existence.
+
 ## Next Governance Step
 
-Per `19-governance-bdr-policy-framework.md` §3 and this assessment's
-own §7 verdict (READY AFTER DECISIONS): the Product Architect must
-first resolve Finding 1-B/15-B's TURN/relay question. Once resolved,
-alongside explicit confirmation that Findings 5-A/5-B and 6-A will be
-carried into the Implementation Plan as binding requirements (not
-optional refinements), the next governance step is an **Implementation
-Plan**, followed by a signed **Implementation Authorization**. Neither
-is drafted, started, or authorized by this document.
+Rule 8 is now **CLOSED / PASS**. Per `19-governance-bdr-policy-framework.md`
+§3, the next governance step is an **Implementation Plan**, informed by
+this assessment's findings (in particular Findings 5-B, 12-A, and the
+now-binding FR-63/I-12 and amended FR-54), followed by a signed
+**Implementation Authorization**. **Neither is drafted, started, or
+authorized by this document or by this closure pass.** Implementation
+Authorization specifically remains a separate, future, explicitly-gated
+step — this closure resolves governance findings; it does not itself
+authorize code.
 
-**Lifecycle:** Drafted (this step) → Awaiting Product Architect
-decision on TURN/relay → Not yet an Implementation Plan. Not yet an
-Implementation Authorization. Not Implemented.
+**Lifecycle:** Drafted → Verdict: READY AFTER DECISIONS → Product
+Architect Decisions 1–8 → Specification SPEC-3 correction pass →
+**Rule 8 Closure: CLOSED / PASS (this step)** → Not yet an
+Implementation Plan. Not yet an Implementation Authorization. Not
+Implemented.
