@@ -117,7 +117,20 @@ BusinessWorthSnapshot {
   embeddedProfitDetail: BatchProfitLine[]           // per-batch, references StockBatch ids
   cashPosition: number               // owner-recorded/confirmed actual cash position AS OF the
                                      // Contagem date (Decision 3, §10) — a measured fact of this
-                                     // snapshot, not merely a read of the ongoing ledger balance
+                                     // snapshot, not merely a read of the ongoing ledger balance.
+                                     // [§45 amendment] The authoritative AGGREGATE liquidity figure
+                                     // — as of §45, this is the sum of the four CAIXER components
+                                     // immediately below, never an independently-entered figure of
+                                     // its own. Unchanged in every other respect: still what
+                                     // `computeMeasuredBusinessWorth` consumes (§45.2).
+  cashPositionCash: number           // [§45, new] CAIXER component — Cash, as of the Contagem date.
+  cashPositionEmola: number          // [§45, new] CAIXER component — eMola, as of the Contagem date.
+  cashPositionMpesa: number          // [§45, new] CAIXER component — M-Pesa, as of the Contagem date.
+  cashPositionBanco: number          // [§45, new] CAIXER component — Banco (business bank account
+                                     // balance), as of the Contagem date. Field names above are
+                                     // illustrative, per this section's own existing "proposed,
+                                     // subject to Rule 8 refinement" convention — not authoritative
+                                     // naming (§45.2).
   receivablesPosition: number        // sum of outstanding Receivables (§11) at confirmation time
   payablesPosition: number           // sum of outstanding Payables (§12) at confirmation time
   expensesSinceLastSnapshot: number  // reference to Expense records in the intervening period
@@ -222,11 +235,11 @@ CashLedgerEntry {
 
 Current cash balance is **derived** (sum of `inflow` minus sum of `outflow` entries), never a separately stored, independently mutable field — the same "never a fabricated cash figure" discipline `10-stock-counts.md`'s own governing code comment already establishes for the platform generally.
 
-**Cash at Contagem [DECIDED — Product Architect review, Decision 3, 22 August 2026].** At a new-model Contagem, the Owner records/confirms the **actual cash position as of that measurement date** — the same "physical measurement" discipline Contagem already applies to stock, applied to cash. The resulting `BusinessWorthSnapshot.cashPosition` (§8) is this Owner-confirmed figure, not merely a mechanical read of the ledger-derived balance, though the two are compared (below) and any difference is a reconciliation signal, never a silent overwrite of either figure. **The system must never attempt to reconstruct historical cash from old data** — for a period before the Cash Ledger existed for a given business, no `CashLedgerEntry` is fabricated, backdated, or inferred; the first Contagem-confirmed cash position under this model is the Owner's own confirmed starting fact, not a derived reconstruction (source BDR Decisions 11–12; POL-0010 FIN-1, FIN-2, SYS-11).
+**Cash at Contagem [DECIDED — Product Architect review, Decision 3, 22 August 2026].** At a new-model Contagem, the Owner records/confirms the **actual cash position as of that measurement date** — the same "physical measurement" discipline Contagem already applies to stock, applied to cash. The resulting `BusinessWorthSnapshot.cashPosition` (§8) is this Owner-confirmed figure, not merely a mechanical read of the ledger-derived balance, though the two are compared (below) and any difference is a reconciliation signal, never a silent overwrite of either figure. **The system must never attempt to reconstruct historical cash from old data** — for a period before the Cash Ledger existed for a given business, no `CashLedgerEntry` is fabricated, backdated, or inferred; the first Contagem-confirmed cash position under this model is the Owner's own confirmed starting fact, not a derived reconstruction (source BDR Decisions 11–12; POL-0010 FIN-1, FIN-2, SYS-11). **[§45 amendment, 11 September 2026]** This principle is unchanged; it is now operationalized as CAIXER, measuring the position separately across four liquidity methods rather than as a single undifferentiated figure — see §45.
 
 **FR-10.** The system must record every governed cash-affecting event (a receivable payment, a payable payment, an expense, a Levantamento, an other explicitly-governed movement) as its own `CashLedgerEntry`, never as a direct edit to a stored balance field.
 **FR-11.** Contagem must be able to compare the ledger-derived cash balance against the Owner-confirmed actual cash position entered at that Contagem (§22), producing a reconciliation signal, never silently overwriting the ledger — or the Owner-confirmed figure — to force agreement.
-**FR-55 [DECIDED — Product Architect review, 22 August 2026].** New-model Contagem confirmation must require the Owner to record/confirm the actual cash position as of that date; this confirmed figure, not a derived ledger balance alone, becomes `BusinessWorthSnapshot.cashPosition`. No `CashLedgerEntry` may be created for a date before the business's own Cash Ledger began, as a means of reconstructing historical cash.
+**FR-55 [DECIDED — Product Architect review, 22 August 2026; amended in place, §45, 11 September 2026].** New-model Contagem confirmation must require the Owner to actively record/confirm the actual liquidity position as of that date, measured separately across the four CAIXER methods (Cash, eMola, M-Pesa, Banco — §45.2), each mandatory, with an explicit `0` valid and a blank/unfilled value never acceptable (§45.2, §45.3). The confirmed figures, not a derived ledger balance alone and not a silently-reused standalone declaration (§45.4), become `BusinessWorthSnapshot.cashPositionCash`/`cashPositionEmola`/`cashPositionMpesa`/`cashPositionBanco`, whose sum becomes `BusinessWorthSnapshot.cashPosition`. No `CashLedgerEntry` may be created for a date before the business's own Cash Ledger began, as a means of reconstructing historical cash — unchanged by this amendment.
 **I-4.** No `CashLedgerEntry`, once written, is ever updated or deleted — append-only, matching the `InitialStockPriceChangeEvent`/Timeline-event precedent already established elsewhere in this codebase.
 
 ## 11. Receivables
@@ -436,7 +449,7 @@ The existing Expense system and categories are preserved (source BDR Decision 17
 
 **(C) New behavior, layered on top of existing Contagem entry.**
 
-Contagem compares system-recorded financial reality (the Cash Ledger balance, §10) against physically counted reality entered during the count. The difference — e.g. system cash `120,000` vs. physical cash `115,000`, a `-5,000` difference — is a **reconciliation signal**: visible, explainable, and never automatically classified as theft, expense, loss, or Quebra (source BDR Decisions 11, 22; POL-0010 CON-8, FIN-2, OWN-5). The same reconciliation-signal treatment applies to Estimated-vs-Measured Business Worth at the moment a new Contagem is confirmed (§8's `difference` field; source BDR Decision 22; POL-0010 BW-6). The system helps the Owner investigate rather than asserting a conclusion — this Specification does not introduce any automated cause-classification logic.
+Contagem compares system-recorded financial reality (the Cash Ledger balance, §10) against physically counted reality entered during the count. The difference — e.g. system cash `120,000` vs. physical cash `115,000`, a `-5,000` difference — is a **reconciliation signal**: visible, explainable, and never automatically classified as theft, expense, loss, or Quebra (source BDR Decisions 11, 22; POL-0010 CON-8, FIN-2, OWN-5). The same reconciliation-signal treatment applies to Estimated-vs-Measured Business Worth at the moment a new Contagem is confirmed (§8's `difference` field; source BDR Decision 22; POL-0010 BW-6). The system helps the Owner investigate rather than asserting a conclusion — this Specification does not introduce any automated cause-classification logic. **[§45 amendment, 11 September 2026]** Whether this comparison is performed against the four-method CAIXER total only, or per-method against a future per-method ledger breakdown, is explicitly left OPEN for Rule 8 (§36, item 14) — not resolved by this amendment.
 
 **Measured value is never replaced by the estimate [DECIDED — Product Architect review, Decision 9, 22 August 2026].** Worked example, exactly as decided: Previous Current Business Worth `500,000`; Fecho's Estimated Business Worth immediately before the new Contagem, `525,000`; new Contagem's measured value, `518,000`. **Current Business Worth becomes `518,000`** — the measured figure — because that is what is actually present; the estimate is never substituted for, or blended with, the measurement. The `-7,000` difference (`518,000 − 525,000`) is preserved separately, on the new `BusinessWorthSnapshot`, as a reconciliation signal (§8's `difference` field), never used to adjust `measuredBusinessWorth` itself. **[AMENDMENT DRAFT — PENDING PRODUCT ARCHITECT ACCEPTANCE, §41]** This worked example's own numbers and outcome are unchanged. What changes is only a naming nuance the amendment surfaces: outside of Fecho, that same `525,000` figure — the live computation immediately before the new Contagem — is now called Current Business Worth (§7), not Estimated, since a prior `BusinessWorthSnapshot` already existed for it to be computed from. Fecho's own reading of it keeps the "Estimated" label per §9/§18's own convention (a read as of a chosen date, not "right now"). §8's own `estimatedBusinessWorthImmediatelyBefore` field name is not renamed by this amendment (§15's own instruction not to redesign the data model here) — see §36's new item for this exact naming question, carried forward rather than silently resolved.
 
@@ -722,6 +735,10 @@ Consistent with this repository's established precedent (the accepted SuperAdmin
 11. Whether every existing business already in State 1a (§6, §9 Case B) has a sufficiently reliable `historicalCapitalInicialDate` on record to anchor its Startup Investment window (§13), and if not, what fallback treatment Rule 8 should adopt — this Specification deliberately does not fabricate a date where the existing historical record does not carry one. **Note:** the Rule 8 Assessment independently resolved this question favorably during its own investigation (anchor to `StockCount.createdAt`, which is present on every historical record without exception) — see the Rule 8 Assessment §3 Finding 6-A. That resolution is recorded there, not restated as a decision here, because it was reached entirely within Rule 8's own technical authority — unlike the correction/recovery-cycle ceiling question removed above, which required an actual Product Architect decision to resolve. This item is left in the list, unedited, as the accurate record of what this Specification itself decided (nothing) versus what a later governance stage resolved.
 12. **[Added by the §41 amendment draft, PENDING Product Architect acceptance]** Whether `BusinessWorthSnapshot.estimatedBusinessWorthImmediatelyBefore` (§8) should be renamed to reflect that, under the corrected Current/Estimated distinction (§6, §7), the value it captures — the live formula's output immediately before a new Contagem, for a business that already had a prior snapshot — is what §7 now calls Current Business Worth, not a Case-B-style Estimated Business Worth. The *value* captured is unchanged either way (§22); this is a field-naming question only, explicitly not resolved here per the instruction not to redesign the data model as part of a terminology amendment.
 13. **[Added by the §41 amendment draft, PENDING Product Architect acceptance]** Whether live Current Business Worth (§7) is (a) derived on read, exactly like `businessWorth`/Estimated Business Worth already are today (no new storage, a pure function evaluated on demand — matching this Specification's own long-standing "computed, never stored as authoritative" convention, §9), or (b) requires some form of maintained/cached value for performance or notification-triggering reasons not yet identified. This Specification does not decide (b) is necessary and does not invent any storage mechanism for it — per the source BDR/POL-0010's own "computed, never stored" precedent for Estimated Business Worth, option (a) is the default expectation carried into Rule 8, not a new open design space.
+14. **[Added by the §45 amendment, 11 September 2026 — CAIXER]** Whether the Contagem reconciliation signal (§22, FR-11) compares the four-method CAIXER total against the single ledger-derived balance (the existing, unmodified `CashLedgerEntry` model), or requires a per-method breakdown against some future per-method ledger structure. No per-method Cash Ledger exists today — the Ledger is, and remains under this amendment, a single undifferentiated balance. §45 explicitly does not resolve this.
+15. **[Added by the §45 amendment, 11 September 2026 — CAIXER]** Exact field names and storage shape for the four CAIXER components (§8's `cashPositionCash`/`cashPositionEmola`/`cashPositionMpesa`/`cashPositionBanco` are illustrative only, per §8's own "proposed, subject to Rule 8 refinement" convention — not authoritative naming).
+16. **[Added by the §45 amendment, 11 September 2026 — CAIXER]** The UI/flow mechanism for blocking Contagem confirmation until all four CAIXER fields are filled (§45.2/§45.3 fix the business rule — every field mandatory, explicit zero valid — the mechanism is undecided).
+17. **[Added by the §45 amendment, 11 September 2026 — CAIXER]** The future disposition of the existing standalone Posição de Caixa declaration UI (`CashPositionDeclaration`, `cashPositionDeclarations` collection) — whether it is retained as a pre-fill/reference convenience for the CAIXER step, or eventually retired — subject only to the fixed constraint (§45.4) that it may never again silently become the authoritative measurement for a Contagem.
 
 None of the above is a business decision reopened — each is a "how, specifically, at the code/schema level" question the source BDR and POL-0010 both explicitly deferred to this stage or the next, consistent with §6/§19 of those two documents respectively.
 
@@ -1074,3 +1091,136 @@ This section does not amend §9's formulas (Case A or Case B arithmetic), §14's
 - That this amendment creates **no new Business Worth establishment method** — there remain exactly two: confirmed Contagem and Owner-Declared Business Worth.
 
 **Governance boundary — stated explicitly.** This acceptance accepts Specification §44 in full. It does **NOT** authorize: implementation of any kind; the Implementation Authorization; any change to application code, server code, `firestore.rules`, `firestore.indexes.json`, tests, database records, or historical Capital Inicial records; or any change to any other governance document. The next governance step remains preparation of the separate Implementation Authorization, based on the already-accepted Implementation Plan and this now-fully-accepted Specification §44 — not performed, drafted, or implied by this acceptance.
+
+## 45. Amendment — CAIXER: Multi-Method Liquidity Measurement (11 September 2026)
+
+**Status:** ✅ **ACCEPTED (11 September 2026).** This section converts the already-signed [BDR Decision 40](BDR-pending-business-worth-evolution-measurement-model.md) and its full [signed decision record](../engineering/caixer-multi-method-liquidity-measurement-decision.md) into precise Specification text. It amends §8 (snapshot data model), §10/FR-55 (Contagem cash confirmation), §22 (reconciliation, cross-reference only — substance left OPEN, §45.7), and §36 (new Rule-8-deferred items). **It does not reopen, amend, or redesign §43 (Owner Investment)** — that capability's own FR-63–66 and Increment 10 Item 3 authorization are unaffected and unrestated here except by cross-reference (§45.6). It does not redesign the Business Worth Engine, the fresh-remeasurement principle, snapshot immutability, Levantamento, or Startup Investment — every one of those is explicitly preserved, not merely left unmentioned (§45.5, §45.6). **This amendment does not itself authorize implementation** — see §45.10.
+
+### 45.1 CAIXER Definition and Governed Flow
+
+**CAIXER** is the financial/liquidity measurement stage of a new-model Contagem — the mechanism operationalizing Decision 3 and FR-55's existing "actual cash position as of the Contagem date" principle. The governed flow, extending §14's existing Contagem mechanics:
+
+```
+Physical Stock Measurement (existing, unchanged)
+  → CAIXER Liquidity Measurement (new, this amendment)
+  → Review
+  → Contagem Confirmation
+  → Business Worth Snapshot
+```
+
+CAIXER is part of the authoritative Contagem measurement, not an optional, separate, or deferrable activity — it is a required stage of Contagem finalization itself, in the same sense physical stock counting already is.
+
+### 45.2 Four Required Liquidity Methods — Snapshot Representation
+
+CAIXER measures, and `BusinessWorthSnapshot` individually and immutably preserves (§8, as amended above), the business's position in exactly four liquidity methods: **Cash, eMola, M-Pesa, and Banco** (a bank account balance belonging to the business). Every method is mandatory at every Contagem — a blank, null, or undefined value is never an acceptable measurement; an explicit `0` is valid and meaningful, distinguishing "the business has zero in this method" from "the Owner did not provide a measurement."
+
+**Snapshot representation — Option A, the smallest amendment compatible with the existing model, per Decision 40 §11's own instruction:** `BusinessWorthSnapshot.cashPosition` is **preserved, unchanged in kind**, as the single authoritative aggregate `computeMeasuredBusinessWorth` (§9) consumes — it is not replaced, and the existing formula's signature and behavior are unaffected. What changes is only how that aggregate is *derived*: as of this amendment, `cashPosition` is the sum of four new, individually-preserved, immutable fields (`cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco` — §8) rather than a figure the Owner enters directly as one undifferentiated number. Option B (replacing `cashPosition` with a new aggregate representation) is explicitly rejected — nothing about Decision 40 requires it, and it would touch the formula layer this amendment is instructed to leave untouched.
+
+**Explicitly rejected as a source for this concept:** the existing `PaymentMethod` type (`'mpesa' | 'emola' | 'bim'`, `apps/tenant/src/types.ts:504`), which governs how the tenant Owner pays SABUSH's own subscription fee — a structurally unrelated domain. It must not be reused, widened, or referenced as a basis for CAIXER's four methods merely because it shares method names (Decision 40 §2).
+
+### 45.3 Measurement Date — Contagem-Time, Not Declaration-Time
+
+**CAIXER measurement date = Contagem measurement date.** The Owner must actively confirm the actual liquidity position, across all four methods, as of the specific Contagem being confirmed — never a value silently carried over from an earlier, disconnected act. There is **no day-based grace period** of any kind (not 7, 14, or 30 days) — a standalone declaration's age is never the governing criterion (a declaration made 1, 10, or 29 days before a Contagem can each be equally stale, or equally accurate; elapsed time does not predict which). The single governing boundary is the Contagem measurement event itself, and only the Owner's active confirmation at that event is ever authoritative.
+
+### 45.4 Standalone Posição de Caixa — Reference Only, Never Silently Authoritative
+
+The existing standalone declaration mechanism (`CashPositionDeclaration`, `businesses/{businessId}/cashPositionDeclarations`) is **not deleted or redesigned** by this amendment. Its relationship to CAIXER is fixed as follows:
+
+- The authoritative liquidity measurement for a `BusinessWorthSnapshot` is exclusively the CAIXER confirmation made *inside* the Contagem that produces that snapshot.
+- A standalone declaration, however recent, must never silently become that authoritative measurement without the Owner's own active confirmation at the Contagem itself (§45.3).
+- A standalone declaration **may** be used as reference or pre-fill/convenience information when the Owner reaches the CAIXER step — this is a permitted UX convenience, not a governed data-flow shortcut, and does not relieve the Owner of the active-confirmation requirement (§45.3).
+- A late standalone declaration must never retroactively modify an already-confirmed `BusinessWorthSnapshot` — this restates, and does not weaken, §27's existing immutability guarantee.
+- The declaration's exact future disposition (retained as pre-fill, or eventually retired) is explicitly left open to Rule 8 (§36, item 17) — the only fixed constraint from this amendment is the boundary stated above.
+
+### 45.5 No Double-Counting — Liquidity-to-Stock Conversion Invariant
+
+**I-8 [new].** Money measured through any CAIXER method (Cash, eMola, M-Pesa, or Banco) that is subsequently spent on stock must never be counted twice across two Contagens — at the Contagem where it is spent, it must appear in exactly one of: (a) the relevant CAIXER component, if any portion remains unspent at that measurement date, or (b) the fresh physical stock count (`productValuationTotal`), for the portion converted into stock — never both, and never neither. This restates and generalizes, across all four liquidity methods, the existing invariant already proven for Cash alone (`tests/business-worth-measured-value.test.ts:84-110`, the BDR Decision 15/16 worked example) and rests entirely on the existing, unamended fresh-remeasurement principle (§45's own governing constraint, below) — no new mechanism is introduced to enforce it.
+
+**Governing test case (Decision 40 §7, restated normatively):**
+
+```
+Contagem #1:  Cash = 100,000 MZN   Stock = 500,000 MZN
+              (Owner fails to declare the 100,000 MZN)
+Later:        100,000 MZN Cash → converted into Stock
+Contagem #2:  Cash = 0             Stock = 600,000 MZN
+```
+
+Contagem #2 must measure the actual current state only — never a phantom re-addition of the original 100,000 on top of the now-increased stock figure. The identical principle applies without exception to eMola → Stock, M-Pesa → Stock, and Banco → Stock, and to any conversion between the four methods themselves. **The liquidity method is a measurement dimension, not an additional source of economic value** — no conversion, of any kind, between any two of {Cash, eMola, M-Pesa, Banco, Stock}, creates new value or destroys existing value.
+
+**Fresh remeasurement, explicitly preserved, not re-derived:** `computeMeasuredBusinessWorth` (§9) must continue to compute a *fresh, from-scratch* measurement at every Contagem — never `previous Business Worth + previous liquidity + new liquidity + stock...`. This amendment adds no incremental/carry-forward term of any kind; I-8 above is a consequence of this pre-existing principle applied across four methods, not a new mechanism competing with it.
+
+### 45.6 Owner Investment (§43) — Explicitly Unaffected, Boundary Restated
+
+§43 is not reopened, amended, or reinterpreted by this amendment. The boundary between the two is restated, not newly created:
+
+- **Owner Investment** is a *transaction* — money the Owner deliberately introduces, producing its own immediate, live Business Worth effect (FR-64) via `ownerInvestmentsSinceSnapshot`, paired atomically with its own `CashLedgerEntry`.
+- **CAIXER** is a *measurement* — what liquidity the business currently holds, by method, as of a Contagem date. It does not itself create economic value.
+- Money an Owner Investment already credited to the live "since snapshot" calculation must not be counted a second time when a later CAIXER measurement physically observes it (whether still liquid or converted into stock, §45.5) — the same non-double-counting discipline §43 already requires against its own linked `CashLedgerEntry`, extended here to also cover CAIXER's later physical remeasurement of the same funds. No new mechanism is required to guarantee this: the fresh-remeasurement principle (§45.5) already ensures it, since each new Contagem's `measuredBusinessWorth` supersedes, rather than adds to, the live delta that preceded it.
+- Levantamento (§19) remains the corresponding, unaffected, unchanged money-out concept. Owner Investment (money in), Levantamento (money out), and CAIXER (a measurement of what remains) are three distinct concepts and are not collapsed into one mechanism by this amendment.
+
+### 45.7 Reconciliation — Left Explicitly OPEN, Not Solved Here
+
+Per instruction, this amendment does not invent a new reconciliation model. §22's existing reconciliation-signal mechanism (`computeCashReconciliationDifference`, comparing one Owner-confirmed scalar against one ledger-derived balance) is **not redesigned**. Whether four-method CAIXER reconciles against the aggregate total only, or requires a per-method breakdown against some future per-method Cash Ledger structure (none exists today), is explicitly marked **OPEN** and deferred to Rule 8 (§36, item 14) — not resolved by inference, and not silently defaulted to either answer.
+
+### 45.8 New Functional Requirements
+
+**FR-73 [new].** Every new-model Contagem confirmation must require the Owner to actively provide a numeric value for each of the four CAIXER methods (Cash, eMola, M-Pesa, Banco) before the Contagem may be finally confirmed — a blank, null, or undefined value for any method is never a complete measurement; an explicit `0` is complete and valid.
+
+**FR-74 [new].** The four CAIXER values, once confirmed, must be individually and immutably preserved on the resulting `BusinessWorthSnapshot` (`cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco`, §8), never merged into a single figure at the point of measurement or storage — their governed sum becomes `BusinessWorthSnapshot.cashPosition`, unchanged in role from today (§45.2).
+
+**FR-75 [new].** The CAIXER measurement date is the Contagem's own confirmation date; no mechanism may substitute a standalone `CashPositionDeclaration`'s own `declaredAt` for it, and no day-based staleness/grace-period threshold of any kind may be introduced for this purpose (§45.3).
+
+**FR-76 [new].** A standalone `CashPositionDeclaration` may be surfaced as reference/pre-fill information during the CAIXER step, but must never, by itself, satisfy FR-73's active-confirmation requirement, and must never modify an already-confirmed `BusinessWorthSnapshot` (§45.4, §27).
+
+**FR-77 [new].** No code path may attribute the same liquid value to two different Contagens, or to both a CAIXER component and the physical stock count within the same Contagem, when that value has converted from one liquidity method into another or into stock between two Contagens (I-8, §45.5).
+
+**FR-78 [new].** No requirement in this section (§45) may be satisfied by widening, reusing, or referencing the existing subscription `PaymentMethod` type (`apps/tenant/src/types.ts:504`) — CAIXER's four methods are a structurally separate concept (§45.2).
+
+### 45.9 Acceptance Scenarios (Reference Set)
+
+The following scenarios must each produce the economically correct result under this amendment — reproduced here as a normative reference set for the eventual Rule 8 Assessment and Implementation Plan, not newly invented business rules:
+
+1. All four methods = 0 — a valid, complete measurement.
+2. Money exists only in Cash — the other three are explicit zeros.
+3–5. Money exists only in eMola / only in M-Pesa / only in Banco, respectively — symmetric to (2).
+6. Money distributed across all four methods.
+7. One method intentionally has 0 (a true zero, not a missing value).
+8. One method is left blank — an **incomplete** measurement; FR-73 is not satisfied and Contagem confirmation must not proceed on this basis.
+9. Owner Investment occurs; the resulting liquidity remains as cash at the next CAIXER measurement — no double count (§45.6).
+10. Owner Investment occurs; the cash is converted into stock before the next Contagem — no double count (§45.5, §45.6).
+11. Previously unreported liquidity (any method) is later converted into stock — the I-8 governing test case (§45.5), generalized across all four methods.
+12. Liquidity declared today (standalone) is partially spent before the next Contagem — the standalone figure must not be silently reused as-is; the Owner's active CAIXER confirmation at the next Contagem is what governs (§45.3, §45.4).
+13. A prior standalone declaration exists but differs from the actual CAIXER position at the next Contagem — the CAIXER confirmation is authoritative regardless of the discrepancy's direction or size.
+14. A prior declaration is very recent but is nonetheless stale — age does not imply accuracy (§45.3).
+15. A prior declaration is old but happens to still be accurate — age does not imply staleness either; only the Owner's active confirmation at Contagem time is dispositive, never the declaration's own elapsed time (§45.3).
+
+### 45.10 What Remains Before Implementation
+
+This amendment does not authorize any code, test, `firestore.rules`, or `firestore.indexes.json` change. Per this Specification's own standing discipline (§39, §42.5, §44.4), the next required governance gate is a **Rule 8 Assessment Addendum** for this amendment — appended to `docs/engineering/business-worth-evolution-rule8-assessment.md` following its own existing "Addendum" convention, resolving §36 items 14–17 above — followed by an Implementation Plan Amendment and a signed Implementation Authorization item, mirroring exactly how Owner-Declared Business Worth (§42) and Owner Investment (§43) were each carried through this same sequence. **No such Rule 8 Assessment Addendum exists as of this amendment's acceptance.** This section identifies that requirement; it does not, and cannot, satisfy it.
+
+### 45.11 Traceability
+
+| Item | Governing Decision | Specification Section | New/Amended FR | Reverses a prior decision? |
+|---|---|---|---|---|
+| CAIXER as mandatory Contagem stage | BDR Decision 40 §a | §45.1 | FR-73 | No — operationalizes existing FR-55/Decision 3 |
+| Four separately-preserved methods | BDR Decision 40 §b | §8, §45.2 | FR-74 | No — new territory, additive to existing `cashPosition` |
+| Mandatory fields, explicit zero valid | BDR Decision 40 §c | §45.2 | FR-73 | No |
+| Measurement date = Contagem date; no grace period | BDR Decision 40 §d | §45.3 | FR-75 | No — the "no grace period" position was explicitly considered and rejected, not left undecided |
+| Standalone declaration boundary | BDR Decision 40 §d | §45.4 | FR-76 | No — narrows an existing implementation gap, does not remove the feature |
+| No-double-counting invariant | BDR Decision 40 §f | §45.5 | FR-77; I-8 | No — generalizes an already-proven Cash-only invariant |
+| Owner Investment boundary restated | BDR Decision 40 §g | §45.6 | none new | No — §43 unamended |
+| Reconciliation — left OPEN | Decision 40 §11.3 (unresolved by design) | §22, §36 item 14 | none | No — explicitly deferred, not decided |
+| FR-55 amendment | BDR Decision 40 | §10 | FR-55 amended in place | No — the underlying principle (Decision 3) is unchanged; only its precision is increased |
+
+### 45.12 Product Architect Acceptance
+
+**Status:** ✅ **Accepted (11 September 2026).**
+
+> I have reviewed the §45 amendment converting BDR Decision 40 into precise Specification text — the CAIXER definition and governed flow (§45.1), the four-method snapshot representation preserving `cashPosition` as the authoritative aggregate (§45.2, Option A), the Contagem-time-only measurement date with no grace period (§45.3), the standalone-declaration boundary (§45.4), the no-double-counting invariant I-8 (§45.5), the explicit restatement that §43 Owner Investment is unaffected (§45.6), and the explicit deferral of the reconciliation-model question to Rule 8 (§45.7). This amendment is **ACCEPTED**.
+
+**Product Architect:** SABUSHIMIKE MASCENI
+**Date:** 11 September 2026
+
+**Scope of this acceptance:** covers this §45 amendment's content in full, as it amends §8, §10/FR-55, §22 (cross-reference only), and §36 of this Specification, and adds new FR-73–FR-78 and new Invariant I-8. It does not reopen, amend, or re-approve §43 (Owner Investment) or any other portion of this Specification, the BDR, or POL-0010 not named above, and does not itself authorize a Rule 8 Assessment Addendum, an Implementation Plan, or an Implementation Authorization — each of which remains a distinct, separately-gated future step (§45.10).
+
+**Disclosed, not fixed, per this document's own "disclose rather than silently resolve" convention:** this amendment's own drafting pass discovered a pre-existing, unrelated defect — `FR-70` is independently assigned to two different requirements (§42.8's Owner-Declared verification-status framing requirement, and §44.1's Expected Current Stock Value terminology requirement). This collision predates this amendment, is not touched by it, and is flagged here for a future correction pass rather than silently repaired as a side effect of this amendment. This amendment's own new FRs begin at FR-73, one past the highest previously-assigned number (FR-72), so as not to compound the collision.
