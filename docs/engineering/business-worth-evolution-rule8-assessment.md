@@ -487,7 +487,7 @@ No structural blocker, no `firestore.rules`/schema change identified, and no con
 
 # Rule 8 Assessment Addendum — CAIXER: Multi-Method Liquidity Measurement (BDR Decision 40 / Specification §45)
 
-**Status:** 🔶 **DRAFTED — AWAITING PRODUCT ARCHITECT REVIEW.** Authored on direct repository inspection, distinct from and not reopening Revision 3 or the First-Time Contagem addendum above (both remain accepted, unaffected).
+**Status:** ✅ **ACCEPTED (11 September 2026).** The four `READY AFTER DECISIONS` gate items below (CX-1, CX-2, CX-6, CX-13) and the CX-14 Specification-gap flag were reviewed and accepted by explicit Product Architect decision, recorded in full in [`caixer-rule8-gate-decisions-product-architect-acceptance.md`](./caixer-rule8-gate-decisions-product-architect-acceptance.md) — see that document for the accepted wording, including CX-2's explicit non-destructive validation/data-preservation requirement. This addendum's own findings below are unmodified by that acceptance and remain, as of this acceptance, authoritative Rule 8 Assessment content. Distinct from and not reopening Revision 3 or the First-Time Contagem addendum above (both remain accepted, unaffected).
 
 **Target of this addendum:** `docs/engineering/business-worth-evolution-rule8-assessment.md`, appended per this document's own established append-only discipline.
 
@@ -601,6 +601,12 @@ No architectural, security, or economic-correctness blocker was found — every 
 
 Additionally, one Specification gap (backward-compatibility statement for historical snapshots, CX-14, Decision Matrix #17) should be closed with a small §45 addition once the Product Architect confirms the "genuinely absent, never fabricated" reading this addendum recommends is correct — a low-risk, low-effort item, but still a gap, not silently assumed here.
 
+**Gate resolution (11 September 2026).** All four items above (CX-1, CX-2, CX-6, CX-13) and the CX-14 Specification-gap flag have been resolved by explicit Product Architect decision — see [`caixer-rule8-gate-decisions-product-architect-acceptance.md`](./caixer-rule8-gate-decisions-product-architect-acceptance.md) for the accepted wording of each, including CX-2's non-destructive validation/data-preservation requirement (recorded there as a formal acceptance criterion, not merely implementation guidance) and CX-13's resolution as total-only reconciliation. This paragraph and the four-item list above are preserved unmodified as the historical record of what the gate originally asked; they are not rewritten to reflect the answers. The verdict for this addendum, following that acceptance, is:
+
+# **READY FOR IMPLEMENTATION PLAN**
+
+An Implementation Plan Amendment may now be drafted against the checklist immediately below, incorporating the accepted CX-1/CX-2/CX-6/CX-13/CX-14 decisions. Neither the Plan Amendment nor a signed Implementation Authorization item is drafted, started, or authorized by this recording.
+
 ## Issues the Implementation Plan Amendment Must Address (This Addendum's Own Checklist)
 
 1. Choose and specify the exact aggregate-consistency enforcement mechanism (CX-1) — recommended default, pending Product Architect confirmation: a `firestore.rules` expression requiring `cashPosition == cashPositionCash + cashPositionEmola + cashPositionMpesa + cashPositionBanco` at write time.
@@ -614,4 +620,4 @@ Additionally, one Specification gap (backward-compatibility statement for histor
 
 ---
 
-**This addendum's own drafting precedes Product Architect review; it is not yet accepted, and does not itself authorize an Implementation Plan Amendment or Implementation Authorization item. Both remain separate, subsequent governance steps, per Decision 40's own recording note (§11.4 of the signed decision record).**
+**This addendum's own findings are now accepted, and its `READY AFTER DECISIONS` gate is resolved by the Product Architect decisions recorded in `caixer-rule8-gate-decisions-product-architect-acceptance.md`. That acceptance does not itself constitute an Implementation Plan Amendment or Implementation Authorization item — both remain separate, subsequent governance steps, per Decision 40's own recording note (§11.4 of the signed decision record).**
