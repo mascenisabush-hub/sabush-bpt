@@ -708,7 +708,33 @@ Per this repository's established sequence and identical to Revision 3's own lif
 
 # Implementation Plan Amendment — CAIXER: Multi-Method Liquidity Measurement (BDR Decision 40 / Specification §45)
 
-**Status:** 🔶 **DRAFTED — AWAITING PRODUCT ARCHITECT REVIEW.** This amendment translates the already-accepted Specification §45 and the already-accepted Rule 8 gate decisions into a precise implementation map. It does **not** itself authorize implementation — see "Governance Gate," at the end of this amendment.
+**Status: ✅ ACCEPTED (11 September 2026).** Reviewed and accepted by explicit Product Architect decision:
+
+> I, SABUSHIMIKE MASCENI, Product Architect, hereby REVIEW AND ACCEPT the CAIXER Implementation Plan as currently recorded in `docs/engineering/business-worth-evolution-implementation-plan.md` (this amendment), as pushed at commit `07cef6e528849a3807dc9d03b53e5f8668bdd26f`. I confirm that the Plan is sufficiently bounded and traceable to the already-accepted CAIXER Specification, Rule 8 decisions, and Product Architect decisions.
+>
+> I specifically accept the Plan's treatment of:
+>
+> 1. Four-method CAIXER measurement (Cash, eMola, M-Pesa, Banco).
+> 2. System-calculated Total Liquidity.
+> 3. `cashPosition` as a derived aggregate rather than an independently entered value.
+> 4. Authoritative write-boundary aggregate verification/recomputation.
+> 5. Mandatory-field validation with `0` MZN valid.
+> 6. Non-destructive validation — must not clear CAIXER values, must not discard Stock Count/Contagem data, must not reset the workflow, must identify the error, must allow correction and resubmission, must not create a partial snapshot.
+> 7. Direct Stock Count → CAIXER transition.
+> 8. CAIXER → Review → final Business Worth confirmation.
+> 9. Review visibility of all four liquidity components, the calculated total, the measured product valuation, and the complete governed Business Worth calculation.
+> 10. Reversible correction before final confirmation.
+> 11. Immutable `BusinessWorthSnapshot` only after successful final confirmation.
+> 12. Preservation of the existing duplicate-confirmation/idempotency protections.
+> 13. Backward compatibility for pre-CAIXER historical snapshots, without historical migration.
+> 14. Total-only reconciliation, with no per-method transaction ledgers.
+> 15. Preservation of the existing economic distinction between Owner Investment, CAIXER liquidity measurement, Levantamento, stock/cash conversion, and Business Worth measurement.
+> 16. The Plan's explicit out-of-scope boundaries.
+>
+> **This acceptance authorizes the Implementation Plan as the governing plan for the subsequent implementation-authorization process. It does NOT itself authorize production implementation** — no application code, `firestore.rules`, test, or checkpoint may be modified or begun on the strength of this acceptance alone. Implementation remains blocked until the separate Implementation Authorization gate is formally satisfied.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 11 September 2026
 
 **Target of this amendment:** `docs/engineering/business-worth-evolution-implementation-plan.md`, appended per this document's own established append-only discipline (matching Revision 3's and Decision 37's own amendment sections, above). No `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or test file is touched by this document — plan-drafting only.
 
@@ -1022,10 +1048,10 @@ Every FR-73–FR-81 and every CX-1/CX-2/CX-6/CX-13/CX-14 gate decision traces to
 
 **THIS DOCUMENT IS AN IMPLEMENTATION PLAN ONLY.**
 
-It does **NOT** constitute Implementation Authorization. It does not itself permit any change to `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or any test file — none was touched to produce it. Production implementation of any item in §C–§I above may begin only after: (1) explicit Product Architect review and acceptance of this Plan amendment (mirroring the acceptance record format `caixer-rule8-gate-decisions-product-architect-acceptance.md` and this Plan's own prior Revision 3/Decision 37 acceptance blocks already use), and (2) a subsequent, separately-signed Implementation Authorization item in `business-worth-evolution-implementation-authorization.md`, naming the specific checkpoint(s) authorized to begin, per that document's own established one-item-at-a-time execution rule.
+It does **NOT** constitute Implementation Authorization. It does not itself permit any change to `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or any test file — none was touched to produce it, and none is touched by this Plan's own subsequent acceptance either. Production implementation of any item in §C–§I above may begin only after: (1) explicit Product Architect review and acceptance of this Plan amendment — **now satisfied**, see the Status line at the top of this amendment, above — and (2) a subsequent, separately-signed Implementation Authorization item in `business-worth-evolution-implementation-authorization.md`, naming the specific checkpoint(s) authorized to begin, per that document's own established one-item-at-a-time execution rule — **not yet satisfied, not created by this Plan or its acceptance.**
 
-**No Implementation Authorization is created, implied, or signed by this document.**
+**No Implementation Authorization is created, implied, or signed by this document, at drafting or at acceptance.**
 
 ## Next Governance Step
 
-Per this repository's established sequence, identical in shape to Revision 3's and Decision 37's own lifecycle, above: this Plan Amendment, once reviewed and accepted by explicit Product Architect signature, is followed by a signed Implementation Authorization item — a new dated section in `business-worth-evolution-implementation-authorization.md`, naming which of §C.1–§C.9 (or which grouping of them) is authorized to begin first, subject to that document's existing one-item-at-a-time execution rule. Not created, drafted, or implied by this document.
+Per this repository's established sequence, identical in shape to Revision 3's and Decision 37's own lifecycle, above: this Plan Amendment, now reviewed and accepted by explicit Product Architect signature (11 September 2026, see Status line above), is followed by a signed Implementation Authorization item — a new dated section in `business-worth-evolution-implementation-authorization.md`, naming which of §C.1–§C.9 (or which grouping of them) is authorized to begin first, subject to that document's existing one-item-at-a-time execution rule. **Not created, drafted, implied, or authorized by this acceptance** — a separate, subsequent governance step.
