@@ -852,6 +852,26 @@ export interface BusinessWorthSnapshot {
   // reason receivablesPosition/payablesPosition were omitted before
   // Increment 3 shipped.
   cashPosition?: number;
+  // [CAIXER — Implementation Authorization §44, Checkpoint 1 (Plan §B/
+  // C.1); Specification §8/§45.2, §45.13, FR-74, FR-79] The four
+  // individually-preserved CAIXER liquidity components, as of this
+  // Contagem's own date. Optional/additive, per CX-14 (backward
+  // compatibility) — genuinely, permanently ABSENT (never backfilled,
+  // never a fabricated 0) on every pre-CAIXER snapshot, mirroring
+  // `cashPosition`'s own existing optionality and the identical
+  // discipline `establishmentMethod`/`sourceStockCountId` already use
+  // for Increment-10-era additive fields (above). `cashPosition`
+  // itself is UNCHANGED by this checkpoint — still required on every
+  // `establishmentMethod: 'contagem'` snapshot, still the sole figure
+  // computeMeasuredBusinessWorth consumes; only its authoritative
+  // derivation (as the system-calculated sum of these four fields,
+  // never independent Owner input, FR-79/CX-1) is Plan §D's own,
+  // separate, not-yet-implemented checkpoint. These four fields are
+  // never merged into a single figure at the point of storage (FR-74).
+  cashPositionCash?: number;    // CAIXER component — Cash, as of the Contagem date
+  cashPositionEmola?: number;   // CAIXER component — eMola, as of the Contagem date
+  cashPositionMpesa?: number;   // CAIXER component — M-Pesa, as of the Contagem date
+  cashPositionBanco?: number;   // CAIXER component — Banco (business bank account balance), as of the Contagem date
   // [Business Worth Evolution — Implementation Authorization, Increment
   // 7; Specification §10, FR-11] The ledger-derived cash balance (sum
   // of CashLedgerEntry inflow minus outflow, all-time) at the moment
@@ -1536,6 +1556,24 @@ export interface PeriodicStockDraft {
     string,
     { purchaseUnit: string; relationshipSteps: { unit: string; factor: string }[] }
   >;
+  // [CAIXER — Implementation Authorization §44, Checkpoint 1 (Plan §B/
+  // C.2); Specification §45, FR-73; Rule 8 Finding CX-2's
+  // non-destructive-validation requirement] Durable, in-progress CAIXER
+  // liquidity entry — the four values the Owner is actively typing
+  // during the CAIXER stage of a periodic Contagem, before validation/
+  // confirmation. Modeled directly on `newProductInfo`'s own precedent,
+  // immediately above: optional and additive (absent on any draft
+  // written before this field existed, and the resume path must treat
+  // that absence as an empty object, never as an error), never owned
+  // by or lost with any single row. String-typed (not number) at the
+  // draft level — the same "raw input string until validated/parsed at
+  // submission" convention this codebase already uses elsewhere for
+  // in-progress numeric entry, avoiding a NaN/0 ambiguity while the
+  // Owner is still typing. A genuinely absent key means "not yet
+  // entered for this method"; it is never fabricated as `"0"`. This
+  // field is data-model foundation only — no CAIXER UI, autosave
+  // wiring, or write-path behavior is implemented by this checkpoint.
+  caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string };
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
   // 55 §5 items 7-10; Technical Design §11] Denormalized count of
   // currently-`state: 'CONFLICT'` rows, maintained transactionally in
