@@ -1,15 +1,12 @@
 # Implementation Authorization — SuperAdmin Agent Attended Support Session (VIEW + POINT + GUIDE)
 
-**Status:** ⚠️ **DRAFTED — AWAITING PRODUCT ARCHITECT ACCEPTANCE.** This
-document is the prepared authorization artifact only. It has not been
-signed. **No code, `firestore.rules`, `firestore.indexes.json`, or test
-file has been created, modified, or committed to produce this
-document, and none may be until §14's signature is recorded.** The
-Product Architect's prior acceptance of `BDR-0018`, the Policy, the
-Specification (including its SPEC-3 correction pass), and the Rule 8
-Closure does **not** itself constitute acceptance of this Authorization
-— per this task's own explicit instruction, that acceptance must be
-separate and explicit.
+**Status:** ✅ **ACCEPTED / AUTHORIZED.** See §14 for the recorded
+Product Architect signature. Implementation of this feature — strictly
+within §3's scope and §4's exclusions — is authorized as of that
+signature. **No code, `firestore.rules`, `firestore.indexes.json`, or
+test file has yet been created, modified, or committed** — signature is
+the governance gate that permits that next, separate execution step; it
+does not itself perform it.
 
 **Governing chain:**
 [`BDR-0018`](../specs/BDR-0018-superadmin-agent-attended-support-session.md)
@@ -20,7 +17,7 @@ separate and explicit.
 (✅ Accepted, including its SPEC-1/SPEC-2/SPEC-3 correction passes) →
 [Rule 8 Assessment](./superadmin-agent-attended-support-session-rule8-assessment.md)
 (✅ **CLOSED / PASS**, commit `312f64c`) → **this Authorization
-(⚠️ Drafted, not yet signed, §14)**.
+(✅ Signed, §14)**.
 
 **Note on this Authorization's place in the chain.** Several sibling
 capabilities in this repository (e.g.
@@ -500,36 +497,50 @@ any authority beyond VIEW + POINT + GUIDE (§4); no broad
 
 ## 14. Product Architect Signature
 
-**Status:** ⚠️ **DRAFTED — AWAITING PRODUCT ARCHITECT ACCEPTANCE.**
+**Status:** ✅ **Signed and Authorized.**
 
 **Product Architect:** SABUSHIMIKE MASCENI
 
-**Date:** *(not recorded — no signature date is fabricated by this
-document; to be filled in only if and when acceptance is explicitly
-given)*
+**Date:** September 11, 2026
 
-**Authorization decision:** *(not yet recorded)*
+**Authorization decision (verbatim):**
+> "Accepted and signed. Stage 8 — Implementation Authorization. Status:
+> ✅ ACCEPTED / AUTHORIZED. Implementation may now begin."
 
-**To be confirmed as part of signature, when given:**
+**Confirmed as part of this signature:**
 
-- [ ] This authorization's scope (§3) is approved as stated.
-- [ ] This authorization's exclusions (§4) are approved as stated.
-- [ ] The session-scoped Firestore authorization model (§6, I-12,
+- [x] This authorization's scope (§3) is approved as stated.
+- [x] This authorization's exclusions (§4) are approved as stated.
+- [x] The session-scoped Firestore authorization model (§6, I-12,
       FR-63) is approved as the required implementation shape — not
-      left to implementation-time judgment.
-- [ ] The bidirectional heartbeat requirement (§8, FR-54 as amended) is
+      left to implementation-time judgment. Explicitly restated by the
+      Product Architect at signature as a condition the implementation
+      team must preserve, backed by dedicated security-rules/isolation
+      tests.
+- [x] The bidirectional heartbeat requirement (§8, FR-54 as amended) is
       approved as binding.
-- [ ] The TURN/relay pre-production dependency (§11) is acknowledged,
-      with no vendor selected here.
-- [ ] The required validation surface (§10) is acknowledged as a
+- [x] The TURN/relay pre-production dependency (§11) is acknowledged,
+      with no vendor selected here. Explicitly restated by the Product
+      Architect at signature: TURN/relay provisioning required before
+      desktop WebRTC reaches production.
+- [x] The required validation surface (§10) is acknowledged as a
       pre-Authorization-completion gate, in particular the dedicated
       security-rules test of Finding 12-A.
-- [ ] No additional scope change is required beyond what §1–§13 of this
+- [x] No additional scope change is required beyond what §1–§13 of this
       document describe.
 
 ---
 
-**As of this filing, this document authorizes nothing.** Until §14 is
-signed, no implementation of any kind — code, `firestore.rules`,
-`firestore.indexes.json`, test file, or infrastructure — may begin
-under this capability's name.
+**As of this signature, implementation of this feature — strictly
+within §3's scope and §4's exclusions — is authorized.** No code,
+`firestore.rules`, `firestore.indexes.json`, or test file has been
+written or modified to produce this signature — implementation is the
+next, separate execution step this signature enables, not something
+this signature itself performs, and not something performed in this
+same governance step.
+
+**Implementation status:** 🟢 **AUTHORIZED TO BEGIN**, strictly bounded
+by: VIEW + POINT + GUIDE (§4 — no Support writes, no control mode, no
+second permission tier); the session-scoped Firestore authorization
+model (§6); and the TURN/relay pre-production condition for the desktop
+path (§11).

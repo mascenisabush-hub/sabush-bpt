@@ -12,59 +12,62 @@ here. This file is short-term memory only.
 
 ## Right now
 
-**Status:** Rule 8 **CLOSED / PASS** for the SuperAdmin Agent Attended
-Support Session. Governance sequence: `BDR-0018` (Approved) → Policy
-(Approved) → Specification (**Accepted, including SPEC-1/SPEC-2/SPEC-3**)
-→
-`docs/engineering/superadmin-agent-attended-support-session-rule8-assessment.md`
-(§8, Rule 8 Closure: **CLOSED / PASS**) → next step is an
-**Implementation Plan** (not started).
+**Status:** Implementation Authorization for the SuperAdmin Agent
+Attended Support Session is **✅ SIGNED** (Product Architect
+SABUSHIMIKE MASCENI, September 11, 2026). Governance sequence:
+`BDR-0018` (Approved) → Policy (Approved) → Specification (Accepted,
+SPEC-1/SPEC-2/SPEC-3) → Rule 8 (**CLOSED / PASS**, `312f64c`) →
+[Implementation Authorization](docs/engineering/superadmin-agent-attended-support-session-implementation-authorization.md)
+(**✅ Signed, §14**) → **Implementation is now authorized to begin.**
 
-**Product Architect Decisions 1–8 resolved this assessment's three
-outstanding findings:**
-- **Findings 5-A/5-B/2-B/3-B/10-A/10-B/12-A** (broad vs. narrow
-  `isPlatformOperator()` grant — the critical isolation risk) —
-  resolved by **Decision 4**: Support access is authorized only through
-  the active support session, never by `platformRole` alone; the
-  existing `platform_audit_log` broad grant is explicitly **not**
-  precedent. Now binding Specification text: **Invariant I-12** and
-  **FR-63** (SPEC-3 correction pass).
-- **Finding 6-A** (heartbeat was customer-only) — resolved by
-  **Decision 7**: both participants must heartbeat. Now binding
-  Specification text: **FR-54 amended**, `lastOperatorHeartbeatAt`
-  added to the Session data model (SPEC-3).
-- **Finding 1-B/15-B** (no TURN/relay infrastructure) — resolved by
-  **Decision 8** as a documented pre-production infrastructure
-  dependency, gating the **desktop** rendering path's production launch
-  specifically (not mobile, not this closure). Vendor selection and
-  cost remain an ordinary Implementation Plan/procurement item — no
-  vendor is named anywhere in governance.
+**Strict implementation boundary (do not exceed):**
+- **VIEW + POINT + GUIDE only** — no Support writes, no control mode,
+  no second permission tier, no broad platform-operator tenant access
+  (Authorization §4).
+- **Session-scoped Firestore authorization is the single highest-stakes
+  item** — every grant on Support View State, pointer, or
+  `webrtcSignaling` must use the narrow, session-matched check
+  (Invariant I-12 / FR-63: `status ∈ {active, reconnecting}` **and**
+  `operatorUid == request.auth.uid`), never `platformRole`/
+  `isPlatformOperator()` alone, and never the `platform_audit_log`
+  precedent. Dedicated security-rules/isolation tests are required
+  before this is considered complete (Finding 12-A).
+- **TURN/relay must be provisioned before the desktop rendering path
+  reaches production.** No vendor is selected anywhere in governance —
+  that remains an Implementation Plan/procurement item. The mobile path
+  has no TURN dependency.
+- Session security parameters are fixed and must not change: 5-minute
+  code, 5-attempt lockout, 15-minute cooldown (permanent lock, not a
+  reactivation), 60-minute session cap.
+- Bidirectional heartbeat (customer **and** Support operator, FR-54 as
+  amended) governs connectivity status; reconnection never creates,
+  extends, or revives authorization.
 
-**Full reasoning trail:**
-`docs/specs/BDR-0018-superadmin-agent-attended-support-session.md`,
+**Full authorized scope, exclusions, architecture, and required test
+surface:**
+`docs/engineering/superadmin-agent-attended-support-session-implementation-authorization.md`
+§§3–13. Full reasoning trail: `docs/specs/BDR-0018-superadmin-agent-attended-support-session.md`,
 `docs/specs/POL-pending-superadmin-agent-attended-support-session-policy.md`,
 `docs/specs/superadmin-agent-attended-support-session-specification.md`
-(SPEC-1/SPEC-2/SPEC-3), the Rule 8 Assessment's §§1–7 (original
-falsification record) and §8 (closure pass), and the four
+(SPEC-1/SPEC-2/SPEC-3), the Rule 8 Assessment (§§1–8), and the four
 `docs/engineering/SUPERADMIN_AGENT_*` investigation docs.
 
 ## Next session should
 
-1. **Implementation Authorization is NOT issued.** Rule 8 Closure
-   resolves governance findings; it does not authorize code. Do not
-   begin implementation (`apps/`, `server/`, `firestore.rules`,
-   `tests/`) for this capability without a separate, explicit
-   Implementation Authorization following a drafted Implementation
-   Plan.
-2. The next governance step is an **Implementation Plan** for the
-   SuperAdmin Agent Attended Support Session, informed in particular
-   by: FR-63/I-12 (the exact narrow, session-matched `firestore.rules`
-   text — the single highest-stakes correctness item, per Finding
-   12-A, requiring dedicated security-rules test coverage before
-   Authorization), the amended FR-54 (Support-operator heartbeat), and
-   the desktop path's TURN/relay provisioning as a pre-production gate
-   (§8.3 of the Rule 8 Closure).
-3. Otherwise, the still-open items from the prior SuperAdmin panel
+1. **Begin implementation**, strictly within the Authorization's §3
+   scope and §4 exclusions. Start with the highest-risk item first —
+   the session-scoped `firestore.rules` grant (I-12/FR-63) and its
+   dedicated security-rules test (Finding 12-A) — before building the
+   rendering paths that depend on it.
+2. Do not implement anything not traceable to a specific FR/Invariant
+   in the Specification or an item in the Authorization's §3. If a gap
+   is discovered mid-implementation, stop and surface it rather than
+   inventing a resolution (Authorization §13).
+3. TURN/relay vendor selection (managed vs. self-hosted) and its exact
+   cost remain open Implementation Plan/procurement items — needed
+   before the desktop path can go to production, not before
+   implementation can begin.
+4. Otherwise, the still-open items from the prior SuperAdmin panel
    investigation remain open (see
    `docs/engineering/SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
    §22): the stale audit-log action-type allowlist, the two pre-
@@ -72,5 +75,3 @@ falsification record) and §8 (closure pass), and the four
    failures, and the still-pending emulator-backed test run for the
    Clear-Data password rules (see prior HANDOFF revision / commit
    `03ccc83`) — none of these block or depend on this session's work.
-4. Check `docs/specs/README.md` for the next item in the Module Order
-   table in `CLAUDE.md` if no SuperAdmin-related direction is given.
