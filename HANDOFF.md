@@ -10,7 +10,28 @@ here. This file is short-term memory only.
 
 ---
 
-## Right now
+## Also landed this session (unrelated to the above)
+
+**Bug fix, `apps/tenant/src/components/AddStockView.tsx`:** Owner-reported —
+OCR-scanned cost price from a receipt was getting silently wiped to blank
+whenever a stock-entry row wasn't auto-recognized and had to be resolved
+to an existing product via a "similar product" suggestion, a retyped
+exact name, or a silent supplier-wording reuse match. Cause: shared helper
+`buildProductMemoryAutofill` always returned `costPrice: undefined` (dead
+`newCost` local, never reassigned) which clobbered the row's real cost via
+the `{...row, ...fields}` merge in `updateRow`, leaving sellingPrice
+autofilled from memory — profit calc silently became 100% until the
+operator retyped cost by hand. Fix: the helper no longer returns
+`costPrice`/`costPriceAutoFilled`/`costPriceBasisUnit` at all, matching
+the pattern already correct in `handleConfirmSupplierWordingCandidate`.
+Full repo typecheck and `npm run build` both clean. No schema/Firestore/
+rules impact — client-only. **Not yet covered by a dedicated regression
+test** (existing tests in this area don't exercise the row-merge path);
+worth adding one if this area is touched again.
+
+---
+
+## Right now (SuperAdmin Agent Attended Support Session thread)
 
 **Status:** Implementation Authorization for the SuperAdmin Agent
 Attended Support Session is **✅ SIGNED** (Product Architect

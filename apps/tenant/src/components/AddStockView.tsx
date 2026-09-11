@@ -1752,21 +1752,39 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       stockCounts,
       isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship?.sellingUnit : undefined
     );
-    let newCost = '';
     let newSell = '';
     let newUnit = suggestedUnits[0] || 'un';
     // [Track A — Existing-Product Stock Entry Purchase Authority,
     // POL-pending-existing-product-stock-entry-purchase-authority.md §A/§C/§D,
-    // BDR-0012 §3] Purchase unit and purchase cost are current-transaction
-    // facts, supplied by the current receipt/operator entry — never by
-    // historical memory (findLatestRememberedProductMemory) or by
-    // Product.costPrice. Both removed here; newUnit/newCost stay at their
-    // blank/generic defaults until the current purchase actually supplies
-    // them. Selling price remains a legitimate Product-Memory concern (§E),
-    // unaffected: memory.sellingPrice is still the pre-canonical-correction
-    // fallback, immediately superseded by canonical Product selling memory
-    // below whenever that exists — byte-for-byte the same selling-side
-    // behavior as before this change.
+    // BDR-0012 §3] Purchase unit is a current-transaction fact, supplied by
+    // the current receipt/operator entry — never defaulted from historical
+    // memory (findLatestRememberedProductMemory) or Product.costPrice, so
+    // newUnit stays at its generic default until the current purchase
+    // actually supplies it. Selling price remains a legitimate Product-
+    // Memory concern (§E), unaffected: memory.sellingPrice is still the
+    // pre-canonical-correction fallback, immediately superseded by
+    // canonical Product selling memory below whenever that exists —
+    // byte-for-byte the same selling-side behavior as before this change.
+    //
+    // [Bug fix — urgent, Owner-reported: OCR-read cost price silently
+    // replaced by "100% profit" after resolving a row to an existing
+    // product via a "similar product" suggestion, a retyped exact name,
+    // or a silent supplier-wording reuse match] Purchase cost is ALSO a
+    // current-transaction fact — it must never be defaulted from memory,
+    // but critically that means it must be LEFT ALONE, not actively
+    // blanked. This function used to unconditionally return
+    // `costPrice: undefined` (via a `newCost` local that was declared ''
+    // and never reassigned) — every caller spreads this return value
+    // straight into updateRow's `{...row, ...fields}` merge, so an
+    // explicit `undefined` overwrote whatever cost the row already held,
+    // including a perfectly good OCR-scanned or hand-typed figure.
+    // Selling price was refilled from memory in the same call, so the
+    // profit calculation silently became sellingPrice − 0 until the
+    // Owner noticed and retyped cost manually. Fix: this function no
+    // longer returns a costPrice/costPriceAutoFilled/costPriceBasisUnit
+    // key at all, so the merge simply leaves the row's existing cost
+    // exactly as it was — matching the pattern already correct in
+    // handleConfirmSupplierWordingCandidate, below.
     if (memory) {
       newSell = String(memory.sellingPrice);
     } else if (product.sellingPrice != null) {
@@ -1778,8 +1796,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // itself. See createEmptyRow's own identical fix and comment, above,
     // for the full rationale (this exact pattern previously silently
     // reinterpreted a batch-denominated cost into the selling unit's
-    // own terms whenever the two genuinely differed). newCost stays
-    // completely untouched.
+    // own terms whenever the two genuinely differed). Cost itself is
+    // never computed or returned by this function at all — see the
+    // bug-fix comment above.
     const canonicalSellingMemory = resolveCanonicalProductSellingMemory(product);
     if (canonicalSellingMemory) {
       const resolvedSell = resolveUnitAwarePrice(canonicalSellingMemory.sellingPrice, canonicalSellingMemory.unit, newUnit, product.unitRelationship);
@@ -1788,12 +1807,9 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       }
     }
     return {
-      costPrice: newCost || undefined,
       sellingPrice: newSell || undefined,
       unit: newUnit || undefined,
-      costPriceAutoFilled: !!newCost,
       sellingPriceAutoFilled: !!newSell,
-      costPriceBasisUnit: newCost ? newUnit : undefined,
       sellingPriceBasisUnit: newSell ? newUnit : undefined,
       previousRemainingQuantity: '',
       previousCycleQuantity: resolvePreviousCycleQuantity(product.name),
