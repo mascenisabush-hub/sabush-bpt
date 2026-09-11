@@ -13,17 +13,25 @@
 // data, while another platform operator or an unrelated tenant
 // cannot?**
 //
-// SCOPE: Checkpoint 1 only — the isActiveSupportOperatorForSession()
+// SCOPE: Checkpoint 1 — the isActiveSupportOperatorForSession()
 // authorization boundary on supportSessions, supportViewState, pointer,
-// and webrtcSignaling. Invitation/code lifecycle (Checkpoint 2),
-// heartbeat semantics (Checkpoint 3), Support View State field-content
-// allowlisting (Checkpoint 4), and pointer/WebRTC content shape
-// (Checkpoints 5-6) are deliberately out of scope for this file — this
-// suite seeds supportSessions documents directly (bypassing rules, via
-// withSecurityRulesDisabled), exactly as tests/firestore-rules.test.ts's
-// own initialStockRecoveryAuthorization suite seeds Authorization
-// documents, since the server-side session-establishment routes that
-// will write these documents in production don't exist yet.
+// and webrtcSignaling — PLUS Checkpoint 2's own addition: the
+// supportSessionInvitation/current read/write authorization boundary
+// (member-only read, Admin-SDK-only write; no platform-operator read
+// grant exists on this collection at all). Heartbeat semantics
+// (Checkpoint 3), Support View State field-content allowlisting
+// (Checkpoint 4), and pointer/WebRTC content shape (Checkpoints 5-6)
+// remain deliberately out of scope for this file. This suite seeds
+// supportSessions and supportSessionInvitation documents directly
+// (bypassing rules, via withSecurityRulesDisabled), exactly as
+// tests/firestore-rules.test.ts's own initialStockRecoveryAuthorization
+// suite seeds Authorization documents — Checkpoint 2 does add the real
+// server-side routes that write these documents in production
+// (server/supportSessionInvitation.ts, server/supportSessionConsumption.ts),
+// covered by their own dedicated unit-test files
+// (tests/support-session-invitation.test.ts,
+// tests/support-session-consumption.test.ts) rather than by this rules
+// suite, which stays focused on the rules layer only.
 //
 // HOW TO RUN:
 //   npm run test:support-session-rules
@@ -394,6 +402,72 @@ describe('supportSessions/{sessionId}/webrtcSignaling — desktop signaling auth
     );
     await assertFails(
       deleteDoc(doc(ctxFor(OPERATOR_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'webrtcSignaling', 'offer'))
+    );
+  });
+});
+
+// ---------------------------------------------------------------------
+// supportSessionInvitation/current — Checkpoint 2's own rules addition.
+// Generation/consumption/lockout are entirely server-mediated (Admin
+// SDK, server/supportSessionInvitation.ts /
+// server/supportSessionConsumption.ts) — this collection's rules fix
+// only the read boundary (the customer's own tenant session) and the
+// write boundary (Admin-SDK-only). No platform-operator read grant
+// exists on this collection at all; a Support operator's only
+// interaction with it is via the consume-code route, which bypasses
+// these rules via the Admin SDK.
+// ---------------------------------------------------------------------
+async function seedInvitation(businessId: string, fields: { status: 'active' | 'consumed' | 'expired' | 'locked'; generatedByUid: string }) {
+  await testEnv.withSecurityRulesDisabled(async (ctx) => {
+    await setDoc(doc(ctx.firestore(), 'businesses', businessId, 'supportSessionInvitation', 'current'), {
+      codeHash: 'irrelevant-for-rules-test',
+      codeSalt: 'irrelevant-for-rules-test',
+      status: fields.status,
+      generatedAt: serverTimestamp(),
+      expiresAt: new Date(Date.now() + 5 * 60 * 1000),
+      failedAttempts: 0,
+      lockedAt: null,
+      consumedByUid: null,
+      consumedAt: null,
+      generatedByUid: fields.generatedByUid,
+    });
+  });
+}
+
+describe('supportSessionInvitation/current — Checkpoint 2 authorization boundary', () => {
+  it('A member of the business (the customer, Owner or non-Owner) CAN read the Invitation document', async () => {
+    await seedInvitation(BIZ, { status: 'active', generatedByUid: OWNER_UID });
+    await assertSucceeds(getDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current')));
+    await assertSucceeds(getDoc(doc(ctxFor(STAFF_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current')));
+  });
+
+  it('A member of a DIFFERENT business cannot read the Invitation document (tenant isolation)', async () => {
+    await seedInvitation(BIZ, { status: 'active', generatedByUid: OWNER_UID });
+    await assertFails(getDoc(doc(ctxFor(OTHER_OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current')));
+  });
+
+  it('A real platform operator CANNOT read the Invitation document directly, even a legitimately connected one for this business (no platform-operator read grant exists on this collection at all)', async () => {
+    await seedInvitation(BIZ, { status: 'active', generatedByUid: OWNER_UID });
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(getDoc(doc(ctxFor(OPERATOR_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current')));
+  });
+
+  it('No client — customer or platform operator — can write the Invitation document; generation/consumption/lockout are exclusively Admin-SDK-mediated', async () => {
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current'), {
+        status: 'active', codeHash: 'x', codeSalt: 'y',
+      })
+    );
+    await seedInvitation(BIZ, { status: 'active', generatedByUid: OWNER_UID });
+    await assertFails(
+      updateDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current'), {
+        status: 'consumed',
+      })
+    );
+    await assertFails(
+      updateDoc(doc(ctxFor(OPERATOR_UID).firestore(), 'businesses', BIZ, 'supportSessionInvitation', 'current'), {
+        status: 'consumed',
+      })
     );
   });
 });

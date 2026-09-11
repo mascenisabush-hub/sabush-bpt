@@ -136,3 +136,40 @@ export function requireSuperAdmin(req: PlatformOperatorRequest, res: Response, n
   }
   next();
 }
+
+/**
+ * [SuperAdmin Agent Attended Support Session — Checkpoint 2] A second,
+ * DISTINCT gate from requireSuperAdmin above — never built by relaxing
+ * it (Specification FR-40's own explicit instruction: "never by
+ * relaxing requireSuperAdmin itself, which must continue to protect
+ * every action that actually requires it"). This is the first route in
+ * this codebase's history where 'support' and 'developer' — real,
+ * structurally-recognized platformRole values since ADR-0005, but
+ * functionally inert everywhere until now (Policy's own "Repository
+ * Precedents Examined" §2) — actually gain a capability: attempting an
+ * Attended Support Session code entry (BDR-0018 Rule A; Specification
+ * FR-9, FR-40).
+ *
+ * Must run after createRequirePlatformOperator(...)'s middleware, same
+ * as requireSuperAdmin. Deliberately has no narrower/wider variant —
+ * every one of the three eligible tiers is treated identically for
+ * this one capability, per Rule A's own flat enumeration.
+ */
+export function requireSupportEligibleOperator(req: PlatformOperatorRequest, res: Response, next: NextFunction): void {
+  if (!req.platformOperator) {
+    res.status(403).json({ error: 'permission-denied', message: 'Autorização de operador de plataforma em falta.' });
+    return;
+  }
+  if (!VALID_PLATFORM_ROLES.includes(req.platformOperator.platformRole)) {
+    console.warn('[superadmin-auth] platform operator lacks an eligible support role', {
+      uid: req.platformOperator.uid,
+      platformRole: req.platformOperator.platformRole,
+    });
+    res.status(403).json({
+      error: 'permission-denied',
+      message: 'Esta ação está limitada a contas de operador de plataforma elegíveis (Support, Developer ou SuperAdmin).',
+    });
+    return;
+  }
+  next();
+}

@@ -33,7 +33,7 @@ import { registerBusinessWorthNotificationPolicyAndTemplates, createBusinessWort
 import { createBusinessWorthRecoveryExpiryAuditSweep, type BusinessWorthRecoveryExpiryAuditDb } from './businessWorthRecoveryExpiryAudit';
 import { createSubscriptionEngine } from './subscriptionEngine';
 import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
-import { createRequirePlatformOperator, requireSuperAdmin, type PlatformOperatorRequest } from './superadminAuth';
+import { createRequirePlatformOperator, requireSuperAdmin, requireSupportEligibleOperator, type PlatformOperatorRequest } from './superadminAuth';
 import { writeAuditLogEntry } from './platformAuditLog';
 import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
 import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
@@ -44,6 +44,8 @@ import { queryAuditLog, type AuditLogDb } from './auditLogQuery';
 import { grantInitialStockRecoveryAuthorization, type InitialStockRecoveryAuthorizationDb } from './initialStockRecoveryAuthorization';
 import { grantBusinessWorthRecoveryAuthorization, type BusinessWorthRecoveryAuthorizationDb } from './businessWorthRecoveryAuthorization';
 import { consumeInitialStockRecoveryAuthorization, type InitialStockRecoveryConsumptionDb } from './initialStockRecoveryConsumption';
+import { generateSupportSessionInvitation, type SupportSessionInvitationDb } from './supportSessionInvitation';
+import { consumeSupportSessionInvitationCode, type SupportSessionConsumptionDb } from './supportSessionConsumption';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -2244,6 +2246,19 @@ const initialStockRecoveryAuthorizationClock = {
   now: () => Timestamp.now(),
   fromMillis: (ms: number) => Timestamp.fromMillis(ms),
 };
+// [SuperAdmin Agent Attended Support Session — Checkpoint 2] Same real
+// Admin SDK Timestamp shape as initialStockRecoveryAuthorizationClock
+// immediately above, given its own name rather than shared — this
+// capability's server/*.ts modules are fully separate from the
+// Initial-Stock-Recovery ones (never sharing a type, a read, or a
+// write with them), and this codebase's own convention is one named
+// clock per capability, not a shared generic one.
+const supportSessionTimestampClock = {
+  now: () => Timestamp.now(),
+  fromMillis: (ms: number) => Timestamp.fromMillis(ms),
+};
+const supportSessionInvitationDb = db as unknown as SupportSessionInvitationDb;
+const supportSessionConsumptionDb = db as unknown as SupportSessionConsumptionDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -2256,6 +2271,205 @@ async function readSubscriptionStatus(businessId: string): Promise<string | null
   const snap = await db.collection('subscriptions').doc(businessId).get();
   return snap.exists ? ((snap.data()?.status as string) ?? null) : null;
 }
+
+// ------------------------------------------------------------------
+// SuperAdmin Agent Attended Support Session — Checkpoint 2.
+// Governing chain: BDR-0018 -> Policy -> Specification (SPEC-1/2/3) ->
+// Rule 8 (CLOSED / PASS, 312f64c) -> Implementation Authorization
+// (Signed, 2026-09-11).
+//
+// Two routes, two different authorization models — deliberately not
+// symmetric, mirroring the Specification's own split between a
+// customer-side action (FR-1: "within their own already-authenticated
+// tenant session") and a platform-operator-side action (FR-9: eligible
+// platformRole against an already-identified business):
+//
+//   POST /api/business/support-session/generate-code — TENANT side.
+//   requireAuth + isMemberOf(businessId) (any tenant role, not
+//   Owner-only — see supportSessionInvitation.ts's own header). Marked
+//   tenantOnly, per this codebase's existing SERVICE_MODE convention
+//   (server/serviceMode.ts) — reachable on the tenant Railway service,
+//   404s on the SuperAdmin service, same as every other tenant-facing
+//   route in this file.
+//
+//   POST /api/superadmin/support-session/consume-code — PLATFORM
+//   OPERATOR side. requireAuth + requirePlatformOperator +
+//   requireSupportEligibleOperator (the NEW, distinct gate this
+//   Checkpoint adds — support/developer/superadmin, never
+//   requireSuperAdmin, per FR-40's explicit "never by relaxing
+//   requireSuperAdmin itself" instruction). NOT tenantOnly — every
+//   /api/superadmin/* route in this file remains reachable in both
+//   service modes, unchanged convention.
+//
+// Neither route ever writes to any tenant-owned collection (FR-43) —
+// each calls exactly one of the two Checkpoint 2 modules, whose own
+// write surface is limited to supportSessionInvitation/current and (on
+// successful consumption only) a new supportSessions/{sessionId}
+// document.
+// ------------------------------------------------------------------
+
+expressApp.post(
+  '/api/business/support-session/generate-code',
+  tenantOnly,
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const requesterUid = req.callerUid!;
+    const businessId = String(req.body?.businessId || '').trim();
+
+    if (!businessId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId é obrigatório.' });
+      return;
+    }
+
+    try {
+      const result = await generateSupportSessionInvitation(supportSessionInvitationDb, supportSessionTimestampClock, {
+        businessId,
+        requesterUid,
+      });
+
+      if (result.outcome === 'requester-not-found' || result.outcome === 'not-member') {
+        res.status(403).json({ error: 'permission-denied', message: result.message });
+        return;
+      }
+
+      // [FR-44] "Code generated" -> support_session.invited, actorUid
+      // representing the customer. Written as a separate step after
+      // the Invitation write settles, per this codebase's established
+      // audit-atomicity discipline (platformAuditLog.ts's own header) —
+      // never inside the same write as the Invitation document itself.
+      try {
+        await writeAuditLogEntry(db, {
+          actorUid: requesterUid,
+          actorRole: 'customer',
+          actionType: 'support_session.invited',
+          targetBusinessId: businessId,
+        });
+      } catch (auditErr) {
+        console.error('[support-session/generate-code] audit write failed', {
+          requesterUid,
+          businessId,
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        });
+      }
+
+      res.json({ code: result.code, expiresAt: result.expiresAt.toMillis() });
+    } catch (err) {
+      console.error('[support-session/generate-code] failed', {
+        requesterUid,
+        businessId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível gerar o código de sessão de suporte.' });
+    }
+  }
+);
+
+expressApp.post(
+  '/api/superadmin/support-session/consume-code',
+  requireAuth,
+  requirePlatformOperator,
+  requireSupportEligibleOperator,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operatorUid = req.platformOperator!.uid;
+    const operatorRole = req.platformOperator!.platformRole;
+    const businessId = String(req.body?.businessId || '').trim();
+    const code = String(req.body?.code || '').trim();
+
+    if (!businessId || !code) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId e código são obrigatórios.' });
+      return;
+    }
+
+    try {
+      const result = await consumeSupportSessionInvitationCode(supportSessionConsumptionDb, supportSessionTimestampClock, {
+        businessId,
+        code,
+        operatorUid,
+      });
+
+      // [FR-44] Each terminal outcome that represents a real lifecycle
+      // event gets exactly one audit entry — a bare invalid-code retry
+      // that neither locks nor expires anything still counts
+      // (code_attempt_failed), per FR-44's own table; a stale read that
+      // matches no lifecycle event (no-active-invitation) does not.
+      try {
+        if (result.outcome === 'established') {
+          await writeAuditLogEntry(db, {
+            actorUid: operatorUid,
+            actorRole: operatorRole,
+            actionType: 'support_session.established',
+            targetBusinessId: businessId,
+          });
+        } else if (result.outcome === 'invalid-code') {
+          await writeAuditLogEntry(db, {
+            actorUid: operatorUid,
+            actorRole: operatorRole,
+            actionType: 'support_session.code_attempt_failed',
+            targetBusinessId: businessId,
+          });
+        } else if (result.outcome === 'locked-now') {
+          await writeAuditLogEntry(db, {
+            actorUid: operatorUid,
+            actorRole: operatorRole,
+            actionType: 'support_session.locked',
+            targetBusinessId: businessId,
+          });
+        } else if (result.outcome === 'invitation-expired') {
+          await writeAuditLogEntry(db, {
+            actorUid: operatorUid,
+            actorRole: 'system',
+            actionType: 'support_session.invitation_expired',
+            targetBusinessId: businessId,
+          });
+        }
+      } catch (auditErr) {
+        console.error('[support-session/consume-code] audit write failed', {
+          operatorUid,
+          businessId,
+          outcome: result.outcome,
+          error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+        });
+      }
+
+      switch (result.outcome) {
+        case 'established':
+          res.json({
+            sessionId: result.sessionId,
+            businessId: result.businessId,
+            operatorUid: result.operatorUid,
+            establishedAt: result.establishedAt.toMillis(),
+            expiresAt: result.expiresAt.toMillis(),
+          });
+          return;
+        case 'no-active-invitation':
+          res.status(404).json({ error: 'no-active-invitation', message: result.message });
+          return;
+        case 'invitation-expired':
+          res.status(410).json({ error: 'invitation-expired', message: result.message });
+          return;
+        case 'invitation-locked':
+          res.status(423).json({ error: 'invitation-locked', message: result.message });
+          return;
+        case 'invitation-already-consumed':
+          res.status(409).json({ error: 'invitation-already-consumed', message: result.message });
+          return;
+        case 'locked-now':
+          res.status(423).json({ error: 'invitation-locked', message: result.message });
+          return;
+        case 'invalid-code':
+          res.status(401).json({ error: 'invalid-code', message: result.message, attemptsRemaining: result.attemptsRemaining });
+          return;
+      }
+    } catch (err) {
+      console.error('[support-session/consume-code] failed', {
+        operatorUid,
+        businessId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível verificar o código de sessão de suporte.' });
+    }
+  }
+);
 
 // ------------------------------------------------------------------
 // GET /api/superadmin/payments/pending

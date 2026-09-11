@@ -138,7 +138,17 @@ export interface PlatformAuditLogEntry {
   // business_worth_recovery.expired). Mirrors the exact same widening
   // rationale the 'owner' addition already established — no existing
   // entry or reader is affected.
-  actorRole: PlatformRole | 'owner' | 'system';
+  // [SuperAdmin Agent Attended Support Session — Checkpoint 2;
+  // Specification FR-44] Widened again, identically additively, to
+  // accept 'customer' — the tenant user (any isMemberOf(businessId)
+  // account, not Owner-only) who triggers `support_session.invited` by
+  // generating an Attended Support Session code from their own already-
+  // authenticated tenant session. Distinct from the existing 'owner'
+  // value (initial_stock_recovery.consumed's own widening): that one is
+  // scoped to Owner/Admin only, this one is any tenant member. No
+  // existing entry or reader is affected — this is the same additive
+  // widening pattern already established twice above.
+  actorRole: PlatformRole | 'owner' | 'system' | 'customer';
   actionType: string;
   targetBusinessId?: string;
   targetUid?: string;

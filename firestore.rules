@@ -1799,6 +1799,30 @@ service cloud.firestore {
       }
 
       // ==========================================================
+      // SuperAdmin Agent Attended Support Session — Checkpoint 2
+      // (BDR-0018 / Policy / Specification SPEC-1/SPEC-2/SPEC-3 / Rule 8
+      // CLOSED-PASS commit 312f64c / Implementation Authorization,
+      // signed 2026-09-11). Adds the Invitation/code-lifecycle
+      // collection Checkpoint 1 explicitly deferred (see its own
+      // comment immediately below). Generation, consumption, and
+      // lockout are entirely server-mediated (Admin SDK,
+      // server/supportSessionInvitation.ts /
+      // server/supportSessionConsumption.ts) — this collection's rules
+      // fix only the read boundary (the customer's own tenant session)
+      // and the write boundary (Admin-SDK-only, matching
+      // initialStockRecoveryAuthorization's own "allow write: if
+      // false" precedent exactly). No platform-operator read grant
+      // exists on this collection at all — a Support operator never
+      // reads the Invitation document directly; their only interaction
+      // with it is via the server-mediated consume-code route, which
+      // bypasses these rules via the Admin SDK.
+      // ==========================================================
+      match /supportSessionInvitation/{docId} {
+        allow read: if isMemberOf(businessId);
+        allow write: if false;
+      }
+
+      // ==========================================================
       // SuperAdmin Agent Attended Support Session — Checkpoint 1
       // (BDR-0018 / Policy / Specification SPEC-1/SPEC-2/SPEC-3 / Rule 8
       // CLOSED-PASS commit 312f64c / Implementation Authorization,

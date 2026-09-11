@@ -18,7 +18,24 @@ SABUSHIMIKE MASCENI, September 11, 2026). Governance sequence:
 `BDR-0018` (Approved) → Policy (Approved) → Specification (Accepted,
 SPEC-1/SPEC-2/SPEC-3) → Rule 8 (**CLOSED / PASS**, `312f64c`) →
 [Implementation Authorization](docs/engineering/superadmin-agent-attended-support-session-implementation-authorization.md)
-(**✅ Signed, §14**) → **Implementation is now authorized to begin.**
+(**✅ Signed, §14**) → **Checkpoint 1** (session-scoped Firestore
+authorization, implemented) → **Checkpoint 2** (Invitation/code
+lifecycle + Session-establishment server foundation, implemented this
+session — see
+[Checkpoint 2 doc](docs/engineering/superadmin-agent-attended-support-session-checkpoint-2-server-foundation.md)).
+
+**Checkpoint 2 summary:** `server/supportSessionInvitation.ts` (code
+generation) and `server/supportSessionConsumption.ts` (verification,
+atomic consumption, lockout, Session establishment) are implemented and
+wired into two new routes
+(`POST /api/business/support-session/generate-code`,
+`POST /api/superadmin/support-session/consume-code`), with a new
+`requireSupportEligibleOperator` gate, `firestore.rules` addition for
+`supportSessionInvitation/current`, and audit-log wiring. 21/21 new
+plain unit tests passing; the rules-emulator addition is typechecked
+but NOT EXECUTED (same disclosed sandbox network-egress limitation as
+Checkpoint 1). Full repo typecheck (`npx tsc --noEmit -p .`) is clean
+for every file this checkpoint touched.
 
 **Strict implementation boundary (do not exceed):**
 - **VIEW + POINT + GUIDE only** — no Support writes, no control mode,
@@ -54,20 +71,26 @@ surface:**
 
 ## Next session should
 
-1. **Begin implementation**, strictly within the Authorization's §3
-   scope and §4 exclusions. Start with the highest-risk item first —
-   the session-scoped `firestore.rules` grant (I-12/FR-63) and its
-   dedicated security-rules test (Finding 12-A) — before building the
-   rendering paths that depend on it.
-2. Do not implement anything not traceable to a specific FR/Invariant
+1. **Begin Checkpoint 3 — bidirectional heartbeat and reconnection**:
+   `lastHeartbeatAt`/`lastOperatorHeartbeatAt` transition logic, the
+   `active`→`reconnecting`→`ended` state machine, the 2-minute grace
+   period capped at the Session's own 60-minute `expiresAt` (FR-54 as
+   amended, FR-55–FR-61, I-10, I-11). See Checkpoint 2 doc's own "Next
+   checkpoint" note.
+2. Run `npm run test:support-session-rules:emulator` (Checkpoint 1) and
+   the same command now also covers Checkpoint 2's
+   `supportSessionInvitation` rules cases — an actual emulator run is
+   still the real acceptance gate for the rules-layer portion of both
+   checkpoints, not yet performed in any sandbox so far.
+3. Do not implement anything not traceable to a specific FR/Invariant
    in the Specification or an item in the Authorization's §3. If a gap
    is discovered mid-implementation, stop and surface it rather than
    inventing a resolution (Authorization §13).
-3. TURN/relay vendor selection (managed vs. self-hosted) and its exact
+4. TURN/relay vendor selection (managed vs. self-hosted) and its exact
    cost remain open Implementation Plan/procurement items — needed
    before the desktop path can go to production, not before
    implementation can begin.
-4. Otherwise, the still-open items from the prior SuperAdmin panel
+5. Otherwise, the still-open items from the prior SuperAdmin panel
    investigation remain open (see
    `docs/engineering/SUPERADMIN_PANEL_CURRENT_STATE_AND_REMAINING_WORK_INVESTIGATION.md`
    §22): the stale audit-log action-type allowlist, the two pre-

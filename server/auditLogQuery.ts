@@ -64,6 +64,28 @@ export const KNOWN_ACTION_TYPES = [
   'initial_stock_recovery.consumed',
   'business_worth_recovery.authorized',
   'business_worth_recovery.expired',
+  // [SuperAdmin Agent Attended Support Session — Checkpoint 2;
+  // Specification FR-44, FR-45] Updated in the same change that
+  // introduces these actionType values, per FR-45's explicit
+  // instruction not to leave this allowlist stale. This checkpoint's
+  // own server-side transaction logic only ever writes
+  // 'support_session.invited', 'support_session.established',
+  // 'support_session.code_attempt_failed', 'support_session.locked',
+  // and 'support_session.invitation_expired' — the remaining four
+  // (ended_by_customer, ended_by_support, completed,
+  // ended_by_abandonment) are listed here now, per FR-44's full table,
+  // so later checkpoints (session termination, heartbeat) never need a
+  // second allowlist-maintenance change; no route in this checkpoint
+  // writes them yet.
+  'support_session.invited',
+  'support_session.established',
+  'support_session.code_attempt_failed',
+  'support_session.locked',
+  'support_session.invitation_expired',
+  'support_session.ended_by_customer',
+  'support_session.ended_by_support',
+  'support_session.completed',
+  'support_session.ended_by_abandonment',
 ] as const;
 
 export type KnownActionType = (typeof KNOWN_ACTION_TYPES)[number];
