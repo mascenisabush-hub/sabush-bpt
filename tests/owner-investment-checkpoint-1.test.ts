@@ -13,6 +13,15 @@
 // economic boundary — see OwnerInvestment's own type comment,
 // apps/tenant/src/types.ts).
 //
+// [Checkpoint 2 note] The Economic boundary suite below was updated
+// when Checkpoint 2/FR-64 was implemented (Implementation Authorization
+// §23 item 3; Product Architect's recorded `createdAt` clarification,
+// commit 1000bde) — Checkpoint 1's "no Owner Investment term yet"
+// assertion is superseded by design, not weakened; the full FR-64
+// live-formula proof (boundary cases, double-counting, separation from
+// Startup Investment/Levantamento/CAIXER) lives in the dedicated
+// tests/owner-investment-checkpoint-2-fr64.test.ts.
+//
 // The Firestore rules/security boundary (Rule 8 Finding OI-1) and the
 // atomic-pairing behavior (Rule 8 Finding OI-2) are covered separately
 // in tests/owner-investment-firestore-rules.test.ts, which requires a
@@ -136,13 +145,23 @@ describe('AppContext.tsx — addOwnerInvestment (Checkpoint 1 write path)', () =
   });
 });
 
-describe('Economic boundary (Checkpoint 1 — Owner Investment must NOT yet affect Business Worth)', () => {
-  it('computeCaseALiveBusinessWorth has no ownerInvestment-related term of any kind', () => {
+describe('Economic boundary (Checkpoint 1 boundary superseded by Checkpoint 2/FR-64 — see owner-investment-checkpoint-2-fr64.test.ts for the full live-formula proof)', () => {
+  it('computeCaseALiveBusinessWorth now HAS an ownerInvestment-related term — Checkpoint 2/FR-64 authorizes exactly this, per the Product Architect\'s recorded createdAt clarification (commit 1000bde)', () => {
     const start = calculationsSrc.indexOf('function computeCaseALiveBusinessWorth(');
     assert.notEqual(start, -1);
-    const end = calculationsSrc.indexOf('\n}', start);
+    // The naive `indexOf('\n}', start)` this suite's Checkpoint 1 version
+    // used matches the PARAMS object's own closing brace
+    // ("}): number {"), truncating the body before the function's real
+    // closing brace — harmless for a `doesNotMatch` assertion (Checkpoint
+    // 1), but wrong for this `match` assertion (Checkpoint 2), so this
+    // version finds the true end: the next line consisting of a single
+    // top-level `}` after the params object's own `): number {` line.
+    const paramsEnd = calculationsSrc.indexOf('): number {', start);
+    assert.notEqual(paramsEnd, -1);
+    const end = calculationsSrc.indexOf('\n}\n', paramsEnd);
+    assert.notEqual(end, -1);
     const body = calculationsSrc.slice(start, end);
-    assert.doesNotMatch(body, /ownerInvestment/i, 'Checkpoint 1 must not add any Owner Investment term to the live formula.');
+    assert.match(body, /ownerInvestmentsSinceSnapshot/, 'Checkpoint 2/FR-64 must add the ownerInvestmentsSinceSnapshot term to the live formula.');
   });
 
   it('the live formula\'s CashLedgerEntry filter does not include other-governed-movement — the linked ledger entry cannot be double-counted even transiently', () => {

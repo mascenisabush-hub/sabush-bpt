@@ -1,4 +1,4 @@
-import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine, StartupInvestmentEntry, BusinessWorthRecoveryAuthorization } from '../types';
+import { StockBatch, Quebra, BatchCalculation, Product, ProductReportDetail, Expense, ReportSummary, Withdrawal, StockCount, InitialStockPriceChangeEvent, InitialStockRecoveryAuthorization, BusinessWorthSnapshot, Payable, CashLedgerEntry, Receivable, BusinessWorthSnapshotProductValuationLine, StartupInvestmentEntry, BusinessWorthRecoveryAuthorization, OwnerInvestment } from '../types';
 
 /**
  * Calculates Investment Value / Market Value / Embedded Profit for a single
@@ -439,11 +439,23 @@ export function getCurrentBusinessWorth(params: {
   // isn't computed," which is what that discipline actually forbids.
   payables?: Payable[];
   cashLedgerEntries?: CashLedgerEntry[];
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-64; Rule 8
+  // Finding OI-4; Product Architect's recorded `createdAt` boundary
+  // clarification] Optional/additive, defaulting to `[]` — same
+  // "genuinely empty, not a fabricated omission" discipline this
+  // function already applies to `payables`/`cashLedgerEntries` above.
+  // Read only by `computeCaseALiveBusinessWorth`'s own
+  // `ownerInvestmentsSinceSnapshot` term (Case A) — Case B (below, in
+  // `getEstimatedBusinessWorth`) has no `activeBaseline.confirmedAt` to
+  // measure "since" from, so this parameter has no effect there.
+  ownerInvestments?: OwnerInvestment[];
   asOfDate?: string;
 }): number | 'UNKNOWN' {
   const { snapshots, batches, quebras, expenses, withdrawals } = params;
   const payables = params.payables ?? [];
   const cashLedgerEntries = params.cashLedgerEntries ?? [];
+  const ownerInvestments = params.ownerInvestments ?? [];
   const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
   const asOfMillis = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
 
@@ -454,7 +466,7 @@ export function getCurrentBusinessWorth(params: {
 
   const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
 
-  return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, asOfMillis });
+  return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, ownerInvestments, asOfMillis });
 }
 
 /**
@@ -524,9 +536,10 @@ function computeCaseALiveBusinessWorth(params: {
   withdrawals: Withdrawal[];
   payables: Payable[];
   cashLedgerEntries: CashLedgerEntry[];
+  ownerInvestments: OwnerInvestment[];
   asOfMillis: number;
 }): number {
-  const { latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, asOfMillis } = params;
+  const { latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, ownerInvestments, asOfMillis } = params;
   const snapshotMillis = toMillis(latest.confirmedAt);
 
   // Embedded profit delta since the snapshot (see doc comment above) —
@@ -592,10 +605,41 @@ function computeCaseALiveBusinessWorth(params: {
 
   const financialPositionChangeSinceSnapshot = Number((payablesPositionChange + cashLedgerNetSinceSnapshot).toFixed(2));
 
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-64; Rule 8
+  // Finding OI-4; Product Architect Decision 2 and the recorded
+  // `createdAt` boundary clarification] `ownerInvestmentsSinceSnapshot`
+  // — the sum of every `OwnerInvestment.amount` for the active business
+  // whose own `createdAt` is strictly after this snapshot's own
+  // `confirmedAt` (and no later than `asOfMillis`), using the exact same
+  // `isPostSnapshotActivity` boundary helper — and therefore the exact
+  // same operator (`>`, never `>=`) — every other post-snapshot term
+  // above already uses. Deliberately compared against `createdAt`, never
+  // `date`: `date` remains the Owner-chosen, backdatable business/
+  // economic date (OwnerInvestment's own type comment, types.ts) and is
+  // NOT this boundary — a backdated `OwnerInvestment.date` does not
+  // exclude an otherwise-post-snapshot record, and a future `date` does
+  // not force-include a genuinely pre-snapshot one; only `createdAt`
+  // decides.
+  //
+  // No double-counting risk: the linked CashLedgerEntry
+  // (`category: 'other-governed-movement'`) this same OwnerInvestment
+  // produces (addOwnerInvestment, AppContext.tsx) is excluded from
+  // `cashLedgerNetSinceSnapshot` above, which reads only
+  // `customer-payment`/`supplier-payment` — so the amount below is this
+  // OwnerInvestment's ONLY additive Business Worth effect.
+  const ownerInvestmentsSinceSnapshot = Number(
+    ownerInvestments
+      .filter((oi) => isPostSnapshotActivity(oi.createdAt))
+      .reduce((sum, oi) => sum + Number(oi.amount || 0), 0)
+      .toFixed(2)
+  );
+
   return Number(
     (
       latest.measuredBusinessWorth +
-      embeddedProfitSinceSnapshot -
+      embeddedProfitSinceSnapshot +
+      ownerInvestmentsSinceSnapshot -
       expensesSinceSnapshot -
       levantamentosSinceSnapshot +
       financialPositionChangeSinceSnapshot
@@ -684,11 +728,20 @@ export function getEstimatedBusinessWorth(params: {
   // rationale — optional/additive, defaulting to `[]`.
   payables?: Payable[];
   cashLedgerEntries?: CashLedgerEntry[];
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-64] See
+  // getCurrentBusinessWorth's own identical parameter for the full
+  // rationale — optional/additive, defaulting to `[]`. Only affects the
+  // Case A branch immediately below (the only branch with an
+  // `activeBaseline.confirmedAt` boundary to measure "since" from);
+  // Case B has no such effect defined for it in this checkpoint.
+  ownerInvestments?: OwnerInvestment[];
   asOfDate?: string;
 }): number | 'UNKNOWN' {
   const { snapshots, initialStockCount, batches, quebras, expenses, withdrawals } = params;
   const payables = params.payables ?? [];
   const cashLedgerEntries = params.cashLedgerEntries ?? [];
+  const ownerInvestments = params.ownerInvestments ?? [];
   const asOfDate = params.asOfDate ?? new Date().toISOString().slice(0, 10);
   const asOfMillis = new Date(`${asOfDate}T23:59:59.999Z`).getTime();
 
@@ -701,7 +754,7 @@ export function getEstimatedBusinessWorth(params: {
     // a later increment) would call it Estimated; the arithmetic itself
     // never differs from Current.
     const latest = [...active].sort((a, b) => toMillis(b.confirmedAt) - toMillis(a.confirmedAt))[0];
-    return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, asOfMillis });
+    return computeCaseALiveBusinessWorth({ latest, batches, quebras, expenses, withdrawals, payables, cashLedgerEntries, ownerInvestments, asOfMillis });
   }
 
   // Case B — State 1a: existing business, preserved historical Capital

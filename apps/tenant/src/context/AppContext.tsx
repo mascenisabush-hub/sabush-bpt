@@ -1249,6 +1249,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const [cashLedgerEntries, setCashLedgerEntries] = useState<CashLedgerEntry[]>([]);
   const [receivables, setReceivables] = useState<Receivable[]>([]);
   const [startupInvestmentEntries, setStartupInvestmentEntries] = useState<StartupInvestmentEntry[]>([]);
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-64; Rule 8
+  // Finding OI-4] Checkpoint 2 — the live-read side of Checkpoint 1's
+  // write-only `ownerInvestments` collection. Owner-only tier
+  // (isOwnerOf, firestore.rules), same access class as
+  // startupInvestmentEntries/withdrawals/cashLedgerEntries above. Feeds
+  // `computeCaseALiveBusinessWorth`'s own `ownerInvestmentsSinceSnapshot`
+  // term (calculations.ts) — this array has no other purpose yet
+  // (no UI, no reporting — explicitly out of this checkpoint's scope).
+  const [ownerInvestments, setOwnerInvestments] = useState<OwnerInvestment[]>([]);
   const [receivablePayments, setReceivablePayments] = useState<ReceivablePayment[]>([]);
   const [payables, setPayables] = useState<Payable[]>([]);
   const [payablePayments, setPayablePayments] = useState<PayablePayment[]>([]);
@@ -1755,6 +1765,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     withdrawals,
     payables,
     cashLedgerEntries,
+    ownerInvestments,
   });
 
   // [Business Worth Evolution — Implementation Authorization, Increment 2;
@@ -1779,6 +1790,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     withdrawals,
     payables,
     cashLedgerEntries,
+    ownerInvestments,
   });
 
   // [Business Worth Evolution — Implementation Authorization §18,
@@ -1807,6 +1819,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       withdrawals,
       payables,
       cashLedgerEntries,
+      ownerInvestments,
       asOfDate,
     });
 
@@ -2404,6 +2417,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       setStartupInvestmentEntries([]);
     }
 
+    // [Business Worth Evolution — Implementation Authorization, Increment
+    // 10 (Revision 3), §23 item 3; Specification §43, FR-64] OwnerInvestment
+    // — Owner-only per firestore.rules (mirrors startupInvestmentEntries'
+    // own listener immediately above exactly); sorted newest-first by
+    // createdAt, since (unlike StartupInvestmentEntry's own recordedAt)
+    // that is this collection's own boundary-relevant timestamp.
+    const ownerInvestmentsRef = collection(db, 'businesses', businessId, 'ownerInvestments');
+    let unsubOwnerInvestments: () => void = () => {};
+    if (isOwner) {
+      unsubOwnerInvestments = onSnapshot(
+        ownerInvestmentsRef,
+        (snap) => {
+          const list: OwnerInvestment[] = [];
+          snap.forEach((doc) => list.push(doc.data() as OwnerInvestment));
+          list.sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+          setOwnerInvestments(list);
+        },
+        (err) => {
+          console.error('Error fetching owner investments:', err);
+          setOwnerInvestments([]);
+        }
+      );
+    } else {
+      setOwnerInvestments([]);
+    }
+
     // [SuperAdmin-Assisted Initial Stock Recovery — Implementation Plan
     // §2/§17] Single fixed-id document, not a collection — mirrors the
     // subscription doc listener's own shape (1a, above) rather than
@@ -2794,6 +2833,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       unsubPayablePayments();
       unsubCashPositionDeclarations();
       unsubStartupInvestmentEntries();
+      unsubOwnerInvestments();
       unsubInitialStockRecoveryAuthorization();
       unsubBusinessWorthRecoveryAuthorization();
       unsubInitialStockPriceChangeEvents();
@@ -3210,7 +3250,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     try {
-      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap, stockCountsSnap, voidRecordsSnap, businessWorthSnapshotsSnap, payablesSnap, cashLedgerEntriesSnap] = await Promise.all([
+      const [batchesSnap, quebrasSnap, expensesSnap, withdrawalsSnap, stockCountsSnap, voidRecordsSnap, businessWorthSnapshotsSnap, payablesSnap, cashLedgerEntriesSnap, ownerInvestmentsSnap] = await Promise.all([
         getDocs(collection(db, 'businesses', businessId, 'batches')),
         getDocs(collection(db, 'businesses', businessId, 'quebras')),
         getDocs(collection(db, 'businesses', businessId, 'expenses')),
@@ -3220,6 +3260,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         getDocs(collection(db, 'businesses', businessId, 'businessWorthSnapshots')),
         getDocs(collection(db, 'businesses', businessId, 'payables')),
         getDocs(collection(db, 'businesses', businessId, 'cashLedgerEntries')),
+        getDocs(collection(db, 'businesses', businessId, 'ownerInvestments')),
       ]);
 
       const shopBatches: StockBatch[] = [];
@@ -3240,6 +3281,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       payablesSnap.forEach((d) => shopPayables.push(d.data() as Payable));
       const shopCashLedgerEntries: CashLedgerEntry[] = [];
       cashLedgerEntriesSnap.forEach((d) => shopCashLedgerEntries.push(d.data() as CashLedgerEntry));
+      const shopOwnerInvestments: OwnerInvestment[] = [];
+      ownerInvestmentsSnap.forEach((d) => shopOwnerInvestments.push(d.data() as OwnerInvestment));
 
       // Same "exclude a voided confirmation" choke point the active-shop
       // context already applies (see `initialStockCount`'s own definition,
@@ -3258,6 +3301,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         withdrawals: shopWithdrawals,
         payables: shopPayables,
         cashLedgerEntries: shopCashLedgerEntries,
+        ownerInvestments: shopOwnerInvestments,
       });
 
       if (shopEstimatedOrCurrentWorth === 'UNKNOWN') {
@@ -5286,6 +5330,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           withdrawals,
           payables,
           cashLedgerEntries,
+          ownerInvestments,
           asOfDate: date,
         });
         const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
@@ -5304,6 +5349,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           withdrawals,
           payables,
           cashLedgerEntries,
+          ownerInvestments,
           asOfDate: date,
         });
         const estimatedBusinessWorthImmediatelyBefore = priorEstimated === 'UNKNOWN' ? undefined : priorEstimated;
@@ -6290,6 +6336,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         withdrawals,
         payables,
         cashLedgerEntries,
+        ownerInvestments,
         asOfDate: date,
       });
       const previousCurrentBusinessWorth = priorCurrent === 'UNKNOWN' ? null : priorCurrent;
@@ -6317,6 +6364,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         withdrawals,
         payables,
         cashLedgerEntries,
+        ownerInvestments,
         asOfDate: date,
       });
       const estimatedBusinessWorthImmediatelyBefore = priorEstimated === 'UNKNOWN' ? undefined : priorEstimated;
