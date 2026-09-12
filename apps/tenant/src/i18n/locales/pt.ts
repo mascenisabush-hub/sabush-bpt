@@ -334,6 +334,18 @@ export interface TranslationDict {
       cashDateLabel: string;
     };
   };
+  // [Checkpoint 6 - Desktop WebRTC] The minimal, purely technical
+  // share-start prompt required to satisfy the browser's own
+  // user-gesture requirement for getDisplayMedia() - never a
+  // persistent status indicator or disconnect control (Checkpoint 7's
+  // own concern).
+  supportSession: {
+    desktopCapture: {
+      prompt: string;
+      button: string;
+      denied: string;
+    };
+  };
   // [Business Worth Evolution — Implementation Authorization, Increment 5;
   // Specification §13] Minimal screen for the Owner to record residual
   // Startup Investment spending (FR-17) and view the report-time
@@ -1589,6 +1601,13 @@ export const pt: TranslationDict = {
       submitPayment: 'Confirmar Pagamento',
       cashAmountLabel: 'Dinheiro em Caixa',
       cashDateLabel: 'A partir de',
+    },
+  },
+  supportSession: {
+    desktopCapture: {
+      prompt: 'Um operador de Suporte gostaria de ver o seu ecrã para o ajudar.',
+      button: 'Iniciar partilha de ecrã',
+      denied: 'A partilha de ecrã não foi iniciada.',
     },
   },
   startupInvestment: {

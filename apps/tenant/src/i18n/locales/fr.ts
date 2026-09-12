@@ -311,6 +311,13 @@ export const fr: TranslationDict = {
       cashDateLabel: 'À partir du',
     },
   },
+  supportSession: {
+    desktopCapture: {
+      prompt: "Un opérateur du Support souhaite voir votre écran pour vous aider.",
+      button: "Démarrer le partage d'écran",
+      denied: "Le partage d'écran n'a pas démarré.",
+    },
+  },
   startupInvestment: {
     title: 'Investissement Initial',
     subtitle: 'Combien vous avez investi pour établir votre entreprise — séparé de la Valeur de l\'Entreprise.',

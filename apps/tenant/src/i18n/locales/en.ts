@@ -311,6 +311,13 @@ export const en: TranslationDict = {
       cashDateLabel: 'As of',
     },
   },
+  supportSession: {
+    desktopCapture: {
+      prompt: 'A Support operator would like to view your screen to help you.',
+      button: 'Start screen sharing',
+      denied: 'Screen sharing was not started.',
+    },
+  },
   startupInvestment: {
     title: 'Startup Investment',
     subtitle: 'How much you invested to establish your business — kept separate from Business Worth.',
