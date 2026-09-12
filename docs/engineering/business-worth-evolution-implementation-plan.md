@@ -1188,3 +1188,141 @@ No existing, already-created `BusinessWorthSnapshot` is migrated or rewritten as
 > **Product Architect:** SABUSHIMIKE MASCENI
 > **Decision:** ACCEPTED
 > **Date:** 12 September 2026
+
+---
+
+## Implementation Plan Amendment — Lifetime Owner Investment Total (OI-PA-6 / Specification §46, FR-82; Rule 8 Assessment Addendum, Findings OI-7–OI-18) [DRAFT — PENDING PRODUCT ARCHITECT ACCEPTANCE, 12 September 2026]
+
+**Status:** 🔶 **DRAFT — AWAITING PRODUCT ARCHITECT REVIEW.** This is a Plan document only — no code, `firestore.rules`, `firestore.indexes.json`, i18n, or test file is written or modified here. **Implementation is NOT authorized by this document.** Acceptance of this Plan amendment does not itself constitute or imply an Implementation Authorization — a separate, subsequent, signed Implementation Authorization item remains required after acceptance, per this document's own established Revision-3/Decision-37/CAIXER precedent (each above).
+
+**Type:** Implementation Plan Amendment — translates the already-accepted Specification §46/FR-82 and its `READY FOR PLAN` Rule 8 Assessment Addendum (Findings OI-7 through OI-18, `business-worth-evolution-rule8-assessment.md`) into an implementation-ready Plan entry. Not a Specification Amendment, not a new Rule 8 finding, not a Decision, not a BDR, not a Policy — decides no new business rule and reopens no accepted decision. Does not reopen §A.3 (the existing Owner Investment Plan entry) or Checkpoints 1–7, all already implemented and unaffected.
+
+**Governing basis:** Specification §46/FR-82 (✅ Accepted, 12 September 2026, SABUSHIMIKE MASCENI); the Rule 8 Assessment Addendum — Lifetime Owner Investment Total (Findings OI-7–OI-18, gate: `READY FOR PLAN`, `business-worth-evolution-rule8-assessment.md`); OI-PA-5, OI-PA-6, OI-PA-7, OI-PA-8 (this Plan, above, ✅ Accepted); the existing Owner Investment Plan entry (§A.3, above) and its own already-implemented Checkpoints 1–7 (commits `ca9f407`, `b95e4aa`, `17b2e3b`, `c8c6586`, `2148793`, `4dbcc2b`, `3d1160b`); Implementation Authorization §45 (Owner Investment UI Entry Point, ✅ AUTHORIZED, already implemented — not reopened by this amendment).
+
+### Checkpoint 8 — Lifetime Owner Investment Total (implements §46/FR-82; Rule 8 Findings OI-7–OI-18)
+
+Numbered next in Owner Investment's own existing checkpoint sequence (Checkpoint 1 — data model/persistence/security boundary; Checkpoint 2 — FR-64 live contribution; Checkpoint 3 — FR-65 snapshot drill-down; Checkpoint 4 — FR-65 Owner-Declared establishment; Checkpoint 5 — closed-period enforcement; Checkpoint 6 — subscription/trial gating; Checkpoint 7 — Cash Flow UI entry point), matching the sequence `tests/owner-investment-checkpoint-{1..7}-*.test.ts` already establishes.
+
+#### Scope
+
+**1. Pure derived calculation (implements FR-82; Rule 8 Finding OI-7, OI-9).** A new function in `apps/tenant/src/utils/calculations.ts`, alongside the existing `computeStartupInvestmentTotal` (the closest existing structural precedent — same "report-time aggregation, not a duplicated ledger" discipline), computing the sum of `amount` across a supplied `OwnerInvestment[]` array with **no snapshot/date/time parameter of any kind** — structurally distinguishing it, by signature alone, from `computeOwnerInvestmentsSinceSnapshot` (FR-64/FR-65's existing time-bounded function, `calculations.ts:641`). The expected architectural direction is equivalent to `computeOwnerInvestmentLifetimeTotal(ownerInvestments: OwnerInvestment[]): number`; the engineer picking up this checkpoint may adjust the exact name if a clearer one fits this file's existing naming conventions, but the signature shape (array in, number out, no time bound) is fixed by this Plan, per Rule 8 Finding OI-9's own specified safeguard.
+
+**2. Cash Flow UI — total and collapsible history (implements §46.1's approved presentation; Rule 8 Finding OI-14, OI-17).** `apps/tenant/src/components/CashFlowView.tsx`'s existing Owner Investment card (currently: title, add-button, subtitle only — no total, no history, per direct inspection) gains: (a) a visible Lifetime Owner Investment Total, computed via the Checkpoint's new function; (b) a collapsible history of individual `OwnerInvestment` records, adapting the existing Cash Position `showCashHistory`/`cashPositionDeclarations.slice(1)` pattern (same file, lines 444–465) to `OwnerInvestment`'s own `date`/`amount`/`description` shape. **Both the total and the history list must read from the exact same `ownerInvestments` array already available from `AppContext` — the history list must never be independently filtered, paginated, or re-queried in a way the total's own sum does not equally reflect** (Rule 8 Finding OI-17's required safeguard). No new top-level Owner Investment module, route, or navigation item — both additions live inside the existing card, per §46.1's explicit constraint and OI-PA-3's existing "no new top-level module" boundary, unchanged.
+
+**3. i18n (only if new UI copy requires it).** New label strings only (e.g. a total label, a history-toggle label), added to `apps/tenant/src/i18n/locales/{en,pt,fr}.ts` under the existing `cashFlow.ownerInvestmentSection` namespace `AddOwnerInvestmentView`'s own Checkpoint 7 addition already established — no restructuring of existing keys.
+
+**4. Tests.** New file `tests/owner-investment-checkpoint-8-lifetime-total.test.ts`, following the existing `owner-investment-checkpoint-{1..7}` naming and structural convention (plain unit tests, no Firestore emulator required for the pure-function portion — mirroring `owner-investment-checkpoint-2-fr64.test.ts`'s own precedent for a pure-calculation checkpoint). See "Testing Plan," below, for the required coverage.
+
+#### Economic boundaries preserved (restated from Specification §46.1 for Plan-level traceability — not redecided here)
+
+**A. Lifetime scope.** Every valid immutable `OwnerInvestment` record belonging to the business is included. No filtering by `date`, `createdAt`, snapshot boundary, Contagem, or Owner-Declared establishment method.
+
+**B. Immutable source.** The total is derived from `OwnerInvestment` records only, computed fresh at read time. No mutable accumulator, no separately persisted lifetime-total field, no reconciliation ledger.
+
+**C. FR-65 separation.** `ownerInvestmentSinceLastSnapshot` (FR-65) is never used as, substituted for, or merged with the lifetime total. The two remain separate calculations, separate functions, separate call sites (Rule 8 Finding OI-9's safeguard, above, item 1).
+
+**D. CAIXER separation.** The lifetime total never reads or infers from `cashPosition`, `cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco`, or any standalone `CashPositionDeclaration`. Structurally guaranteed by the function's own signature (`ownerInvestments` array only, no CAIXER field in scope).
+
+**E. Business Worth History separation.** The lifetime total does not modify `BusinessWorthSnapshot`, `measuredBusinessWorth`, or any Business Worth Evolution formula, and is never inserted into Business Worth History. It is a separate, additive, presentation-only Owner Investment capital-history aggregate, with no write path into the snapshot schema.
+
+#### Protected boundaries (regression boundary — none of the following may be altered by this checkpoint)
+
+- FR-64 (`computeCaseALiveBusinessWorth`'s live "since snapshot" additive term) — unchanged.
+- FR-65 (`ownerInvestmentSinceLastSnapshot`, `computeOwnerInvestmentsSinceSnapshot`) — unchanged.
+- CAIXER (Specification §45, FR-73–FR-81, `cashPosition`/component fields) — unchanged, untouched.
+- Startup Investment (`computeStartupInvestmentTotal`, FR-16/FR-17) — unchanged; reused only as a structural precedent, not modified.
+- Levantamento (`Withdrawal` schema, live-formula term) — unchanged.
+- Expenses — unchanged.
+- Business Worth History (`businessWorthSnapshots`, drill-down view) — unchanged; the lifetime total is never inserted into it.
+- `BusinessWorthSnapshot` schema — unchanged.
+- `OwnerInvestment` write path (`addOwnerInvestment`, `AddOwnerInvestmentParams`, the atomic `CashLedgerEntry` pairing, FR-63) — unchanged; this checkpoint is read/derivation only and performs no write of any kind.
+- Closed-period enforcement (OI-PA-1) and subscription/trial gating (OI-PA-2) — unchanged; both are write-time gates and this checkpoint introduces no new write.
+- Owner-only authorization (`isOwnerOf(businessId)`) — unchanged.
+- Existing submission-identity idempotency — unchanged; not applicable to a read-only calculation.
+
+#### Testing Plan (enumerated per the Rule 8 Assessment Addendum's own findings; not written here)
+
+Directly against Rule 8 Findings OI-7 through OI-18 and this task's own required coverage:
+
+1. Empty `OwnerInvestment` array → total is `0`.
+2. One investment → total equals its exact `amount`.
+3. Multiple investments → total equals the exact sum.
+4. Decimal amounts → correctly summed, consistent with this codebase's existing `POL-0001`/`POL-0002` rounding convention (no new convention introduced).
+5. A backdated `date` → record still included (no `date`-based exclusion).
+6. Records with varying `createdAt` values → all included (no `createdAt`-based exclusion).
+7. Investments recorded before and after one or more `BusinessWorthSnapshot`s → all included, regardless of snapshot timing.
+8. Records spanning both Owner-Declared and Contagem-established snapshots present in the same business's history → establishment method is irrelevant to the sum.
+9. `ownerInvestmentSinceLastSnapshot` (FR-65) computed for the same data remains numerically independent and is not equal to the lifetime total except by coincidence — regression assertion that the two functions/call sites remain distinct.
+10. CAIXER field values (`cashPosition` and its four components) present on snapshots in the same test fixture do not affect the lifetime total in any way.
+11. Business Worth History / `measuredBusinessWorth` values present in the same fixture do not affect the lifetime total.
+12. Startup Investment / `startupInvestmentEntries` present in the same fixture do not affect the lifetime total.
+13. Levantamento / `Withdrawal` records present in the same fixture do not affect the lifetime total.
+14. Duplicate-submission protection is inherited, not reimplemented — a fixture with a would-be-duplicate `id` is not constructible given the existing write-side idempotency guarantee; this checkpoint tests only that the sum function performs no independent deduplication logic of its own (none is needed, since the input array can never contain a true duplicate).
+15. The Cash Flow total and the collapsible history list are demonstrated to derive from the identical source array/derivation in the checkpoint's own test or component-level check (Rule 8 Finding OI-17).
+16. Tenant/business scoping — a fixture combining two businesses' `OwnerInvestment` arrays confirms the function only ever receives and sums one business's own already-scoped array (Rule 8 Finding OI-13).
+17. Reactive update — after a new `OwnerInvestment` record becomes available (simulated array update), the computed total reflects it on the next render/computation, consistent with this app's existing `onSnapshot`-driven reactive pattern (no new mechanism required).
+18. No persisted lifetime-accumulator field is written anywhere — confirmed by the absence of any new write call in the implementation, checked at code-review/test-inspection time rather than by a runtime assertion.
+
+**None of these tests is written by this Plan amendment** — enumerated here so the eventual Implementation Authorization item and its checkpoint can verify complete coverage against this exact list, per this document's own established discipline (§22 of the base Plan; the CAIXER amendment's own "Tests Anticipated" section, above).
+
+#### Dependencies
+
+- No dependency on any other in-flight or unimplemented Owner Investment, CAIXER, or Business Worth History work — Checkpoints 1–7 are already implemented and unaffected; this checkpoint is purely additive.
+- The new calculation function has no dependency on `computeCaseALiveBusinessWorth`, `computeOwnerInvestmentsSinceSnapshot`, or any `BusinessWorthSnapshot` field — it depends only on the already-loaded `ownerInvestments` array.
+- The UI addition depends only on `CashFlowView.tsx`'s existing Owner Investment card and Cash Position's existing `showCashHistory` pattern, both already shipped.
+
+#### Explicitly Out of Scope
+
+- Implementation itself — this document is a Plan, not an Implementation Authorization (see "Governance Gate," below).
+- Any change to FR-63, FR-64, FR-65, or FR-66, or to `§43`'s existing write model.
+- Any change to CAIXER (§45), Business Worth History, or `BusinessWorthSnapshot`'s schema.
+- Any new Firestore collection, persisted aggregate field, backend job, server-side query, new listener, migration, or index.
+- Any cross-business query — the function operates exclusively on one business's already-scoped array.
+- Editing or deleting historical `OwnerInvestment` records, or any change to their append-only/immutable status.
+- Any new accounting field, investment category, or classification on `OwnerInvestment` — the existing simple `date`/`amount`/`description?` schema is unchanged.
+- A new top-level Owner Investment module or navigation item.
+- Speculative pagination, caching, or backend-aggregation infrastructure — not justified at current or realistically foreseeable scale (Rule 8 Finding OI-15).
+
+---
+
+## Traceability
+
+| Requirement / Decision | Implemented By | Rule 8 Finding Addressed |
+|---|---|---|
+| FR-82 (lifetime sum, no filtering) | Checkpoint 8, item 1 | OI-7, OI-8 |
+| No mutable accumulator | Checkpoint 8, item 1 (pure function, no write) | OI-7, OI-12 |
+| FR-65 separation | Checkpoint 8, item 1 (distinct signature/name) | OI-9 |
+| CAIXER separation | Checkpoint 8, item 1 (no CAIXER field in scope) | OI-10 |
+| Business Worth History separation | Checkpoint 8, item 1 (no snapshot write path) | OI-11 |
+| Tenant isolation | Checkpoint 8, item 1 (single-business array input only) | OI-13 |
+| UI placement — existing Owner Investment card | Checkpoint 8, item 2 | OI-14 |
+| Total/history shared-source requirement | Checkpoint 8, item 2 | OI-17 |
+| Performance | Checkpoint 8, item 1 (client-side reduce, no new infra) | OI-15 |
+| Snapshot correction/supersession non-interaction | Checkpoint 8, item 1 (reads `OwnerInvestment` only, never `BusinessWorthSnapshot`) | OI-16 |
+
+Every item OI-7 through OI-18 traces to at least one line of Checkpoint 8 above; no line of Checkpoint 8 introduces a requirement not traceable to Specification §46/FR-82 or its Rule 8 Assessment Addendum.
+
+## Governance Notes
+
+- This amendment resolves the Rule 8 Assessment Addendum's own "Issues the Implementation Plan Amendment Must Address" checklist in full (items 1–6: function name/signature, OI-9's separation safeguards, UI placement, shared-source requirement, distinct labeling, and the explicit no-change confirmation for `firestore.rules`/schema/other formulas).
+- **No new Product Architect decision was required to draft this Plan amendment** — consistent with the Rule 8 Assessment Addendum's own explicit "NO NEW PRODUCT ARCHITECT DECISION REQUIRED" finding; every choice this Plan makes beyond §46.1's own text (the exact function name latitude, the exact i18n key names) is an ordinary implementation-detail latitude of the same kind this Plan document's own prior amendments already exercise (e.g. the CAIXER amendment's CAIXER-stage-insertion-point choice, above), not a new business rule.
+
+## Governance Gate
+
+**THIS DOCUMENT IS AN IMPLEMENTATION PLAN ONLY.**
+
+It does **NOT** constitute Implementation Authorization. It does not itself permit any change to `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, or any test file — none was touched to produce it. Production implementation of Checkpoint 8 may begin only after: (1) explicit Product Architect review and acceptance of this Plan amendment — **not yet satisfied; this amendment is drafted and awaiting review** — and (2) a subsequent, separately-signed Implementation Authorization item in `business-worth-evolution-implementation-authorization.md`, naming Checkpoint 8 explicitly, per that document's own established one-item-at-a-time execution rule — **not yet satisfied, not created by this Plan.**
+
+**No Implementation Authorization is created, implied, or signed by this document.**
+
+## Product Architect Acceptance — Pending
+
+> I have reviewed this Implementation Plan Amendment — Lifetime Owner Investment Total (Checkpoint 8), covering the pure derived calculation function (item 1), the Cash Flow UI total/collapsible-history addition (item 2), i18n (item 3), and the testing plan (item 4), together with the economic boundaries, protected boundaries, dependencies, and explicit out-of-scope list above. I confirm this introduces no new business rule beyond Specification §46/FR-82, and no change to FR-64, FR-65, CAIXER, or Business Worth History.
+>
+> **Product Architect:** _______________________________
+> **Date:** _______________________________
+> **Decision:** ☐ ACCEPTED &nbsp;&nbsp; ☐ ACCEPTED WITH MODIFICATIONS (specify) &nbsp;&nbsp; ☐ NOT ACCEPTED
+
+## Next Governance Step
+
+Per this repository's established sequence: once this Plan Amendment is reviewed and accepted by explicit Product Architect signature (above), the next step is a signed Implementation Authorization item — a new dated section in `business-worth-evolution-implementation-authorization.md`, naming Checkpoint 8 explicitly as authorized to begin, subject to that document's existing one-item-at-a-time execution rule. **Not created, drafted, implied, or authorized by this document.**
