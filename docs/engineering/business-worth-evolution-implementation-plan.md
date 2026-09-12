@@ -502,7 +502,9 @@ match /ownerInvestments/{investmentId} {
 
 **Idempotency (implements FR-63; Rule 8 Finding OI-3):** the `OwnerInvestment` document's `id` derives from a client-supplied `submissionId`, mirroring §5's existing discipline. Exact id-derivation scheme (e.g. `` `${submissionId}` `` vs. a composite) is an implementation detail for the engineer picking this up, not decided here.
 
-**Live formula extension (implements FR-64; Rule 8 Finding OI-4):** `computeCaseALiveBusinessWorth` (Increment 3, `calculations.ts`) gains one new additive parameter: `+ ownerInvestmentsSinceSnapshot`, computed as the sum of `OwnerInvestment.amount` where `date > <active baseline's own confirmedAt>`. This is structurally the same kind of additive-term extension Increment 3 already performed once for the Receivables/Payables/Cash position-change term (Plan §24 item 3) — not a new class of change to this function. **No double-counting:** this term is read directly from `OwnerInvestment` records; the function must **not** separately sum `cashLedgerEntries` by `category: 'other-governed-movement'` into the same total — the linked `CashLedgerEntry`'s own effect and this term must never both move the live figure independently.
+**Live formula extension (implements FR-64; Rule 8 Finding OI-4):** `computeCaseALiveBusinessWorth` (Increment 3, `calculations.ts`) gains one new additive parameter: `+ ownerInvestmentsSinceSnapshot`, computed as the sum of `OwnerInvestment.amount` where `createdAt > <active baseline's own confirmedAt>`. This is structurally the same kind of additive-term extension Increment 3 already performed once for the Receivables/Payables/Cash position-change term (Plan §24 item 3) — not a new class of change to this function.
+
+**Boundary-field clarification (Product Architect decision, narrow, non-reopening — recorded below, this section):** the boundary field is `createdAt` (a precise timestamp), never `date` (the record's own Owner-chosen, backdatable business/economic date, unchanged in meaning and still stored exactly as Specification §43 defines). This follows the identical, already-established post-snapshot activity architecture Increment 1's own signed correction (`4a99430`, "correct same-day snapshot-boundary double-counting") set for every sibling term in this same function (`expensesSinceSnapshot`, `levantamentosSinceSnapshot`, `cashLedgerNetSinceSnapshot`) — using `date` instead would reintroduce the exact silent-permanent-exclusion risk that correction was written to eliminate (a backdated Owner Investment — business `date` before the baseline, but genuinely recorded/`createdAt` after it — would be excluded by a `date` filter and was never baked into the frozen snapshot either, so it would be counted nowhere, ever). Specification §43/FR-64 itself never mandated a specific boundary field (it requires only "additive... symmetric to how `Withdrawal.amount` is subtractive... applied exactly once" — and `Withdrawal` itself already uses `createdAt` for this exact boundary), so this clarification corrects an internal inconsistency in this Plan's own prior wording rather than reinterpreting any signed Specification or Authorization commitment. **No double-counting:** this term is read directly from `OwnerInvestment` records; the function must **not** separately sum `cashLedgerEntries` by `category: 'other-governed-movement'` into the same total — the linked `CashLedgerEntry`'s own effect and this term must never both move the live figure independently.
 
 **Snapshot drill-down field (implements FR-65):** `BusinessWorthSnapshot` gains `ownerInvestmentSinceLastSnapshot`, following the existing "reference, don't duplicate" discipline §8 already establishes for its sibling since-last-snapshot fields. **Confirmed compatible with §42.3's Owner-Declared omission rule (Rule 8 Finding OI-6):** this field is a *since-baseline* field, never an *at-establishment* field, so it is never one of the fields FR-69 requires omitted on an Owner-Declared snapshot's own establishment-moment detail — present identically regardless of which method established the baseline.
 
@@ -1077,3 +1079,42 @@ Per this repository's established sequence, identical in shape to Revision 3's a
 > **Product Architect:** SABUSHIMIKE MASCENI
 > **Decision:** ACCEPTED
 > **Date:** 11 September 2026
+
+---
+
+## Product Architect Clarification — Owner Investment FR-64 Live Boundary Field (`createdAt`, not `date`)
+
+**Type:** Narrow implementation-semantics clarification, below the Specification level. Not a Specification Amendment, not a new Decision, not a BDR, not a Policy, not an Implementation Authorization amendment — decides no new business rule, introduces no new product behavior, and reopens no accepted decision. Amends only this Plan's own §A.3 wording (and, identically, Rule 8 Finding OI-4's carried-over wording in `business-worth-evolution-rule8-assessment.md`) to correct an internal inconsistency those two documents introduced on their own — neither the accepted Specification (§43/FR-64) nor the signed Implementation Authorization (§23 item 3/AC-R3-3) ever specified which timestamp field governs the live "since snapshot" boundary, so this clarification reinterprets nothing at either of those levels.
+
+**Status:** ✅ Accepted (12 September 2026).
+
+**Governing basis:** Specification §43/FR-64 (`business-worth-evolution-specification.md`, silent on the specific boundary field); this Plan's own §A.3 (Owner Investment, drafted 23 August 2026, commit `a801458`); Rule 8 Finding OI-4 (`business-worth-evolution-rule8-assessment.md`); Implementation Authorization §23 item 3/AC-R3-3 (signed, silent on the specific boundary field); the pre-existing, Product-Architect-approved same-day snapshot-boundary correction, commit `4a99430` (22 August 2026, one day before §A.3 was drafted), which established `createdAt`-based (never `date`-based) post-snapshot filtering for every term in `computeCaseALiveBusinessWorth`; a read-only governance impact check (this session, prior to this clarification) that traced the conflict to its source and confirmed no higher-level document requires amendment.
+
+**Decision, recorded in full:**
+
+> For Owner Investment's FR-64 live Business Worth calculation, the authoritative post-snapshot activity boundary is:
+>
+> `OwnerInvestment.createdAt > activeBaseline.confirmedAt`
+>
+> The existing `OwnerInvestment.date` field remains the Owner-chosen, backdatable business/economic date (Specification §43's own schema, unchanged) and is NOT used as the live post-snapshot calculation boundary.
+
+**Rationale:**
+
+1. `createdAt` represents when the Owner Investment actually entered the system and therefore whether it existed at the snapshot boundary.
+2. The existing Business Worth architecture deliberately uses precise `createdAt` timestamps rather than calendar `date` values for post-snapshot activity (commit `4a99430`).
+3. This prevents a backdated Owner Investment from being permanently excluded from Business Worth merely because its business `date` is earlier than the snapshot.
+4. The `OwnerInvestment.date` field remains unchanged and continues to represent the Owner-chosen business/economic date.
+5. This decision preserves FR-64's required additive and exactly-once behavior and remains symmetric with `Withdrawal`'s existing post-snapshot boundary treatment (`Withdrawal` itself already uses `createdAt` for this exact purpose).
+6. This does NOT change the Owner Investment economic event itself.
+7. This does NOT change FR-63 atomic pairing.
+8. This does NOT change FR-65 snapshot drill-down.
+9. This does NOT change FR-66 Startup Investment separation.
+10. This does NOT change CAIXER.
+
+**Documents changed by this clarification:** this Plan's own §A.3 ("Live formula extension" passage, above) and Rule 8 Finding OI-4's carried-over boundary wording (`business-worth-evolution-rule8-assessment.md`) — both corrected to read `createdAt`, with the boundary-field rationale added inline. **Documents intentionally left unchanged:** the Specification (`business-worth-evolution-specification.md`, FR-64 verbatim as accepted — it never specified a boundary field), the Implementation Authorization (§23 item 3/AC-R3-3 verbatim as signed — same reason), Rule 8 Finding OI-4's own substantive double-counting verdict (unaffected either way — the finding's tested concern was exclusively the `CashLedgerEntry` double-count risk, not the boundary-field choice), and the original Decision 2 (Additional Owner Investment, `business-worth-evolution-first-establishment-decision.md` — silent on this detail).
+
+> I have reviewed the conflict between this Plan's own prior `date`-based FR-64 boundary wording and the already-established, signed `createdAt`-based post-snapshot activity architecture (`4a99430`), and the accompanying read-only governance impact check confirming that neither the Specification, the Implementation Authorization, Rule 8's substantive verdict, nor Decision 2 requires amendment. I accept the clarification exactly as recorded above: the FR-64 live boundary is `OwnerInvestment.createdAt > activeBaseline.confirmedAt`, and `OwnerInvestment.date` remains solely the Owner-chosen business/economic date. This clarification does not reopen Owner Investment governance, does not create a new BDR, Policy, Rule 8 assessment, or Implementation Authorization, and does not itself authorize or begin any implementation — a separate, subsequent, explicit instruction remains required before the FR-64 implementation checkpoint may resume.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Decision:** ACCEPTED
+> **Date:** 12 September 2026
