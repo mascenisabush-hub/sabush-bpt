@@ -46,6 +46,7 @@ import { grantBusinessWorthRecoveryAuthorization, type BusinessWorthRecoveryAuth
 import { consumeInitialStockRecoveryAuthorization, type InitialStockRecoveryConsumptionDb } from './initialStockRecoveryConsumption';
 import { generateSupportSessionInvitation, type SupportSessionInvitationDb } from './supportSessionInvitation';
 import { consumeSupportSessionInvitationCode, type SupportSessionConsumptionDb } from './supportSessionConsumption';
+import { recordSupportSessionHeartbeat, type SupportSessionHeartbeatDb } from './supportSessionHeartbeat';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -2259,6 +2260,7 @@ const supportSessionTimestampClock = {
 };
 const supportSessionInvitationDb = db as unknown as SupportSessionInvitationDb;
 const supportSessionConsumptionDb = db as unknown as SupportSessionConsumptionDb;
+const supportSessionHeartbeatDb = db as unknown as SupportSessionHeartbeatDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -2467,6 +2469,181 @@ expressApp.post(
         error: err instanceof Error ? err.message : String(err),
       });
       res.status(500).json({ error: 'internal', message: 'Não foi possível verificar o código de sessão de suporte.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// SuperAdmin Agent Attended Support Session — Checkpoint 3 (bidirectional
+// heartbeat and reconnection). Governing chain: BDR-0018 -> Policy ->
+// Specification §21 (FR-54 as amended-FR-61) -> Rule 8 (CLOSED / PASS,
+// 312f64c, Finding 6-A/11-B) -> Implementation Authorization (Signed,
+// 2026-09-11, §3 item 4).
+//
+// [FR-44] Only the two lazily-discovered terminal transitions —
+// 'ended-abandonment' and 'ended-completed' — are named in FR-44's own
+// table as producing an audit entry (system-attributed actorRole,
+// mirroring the existing invitation-expired precedent immediately
+// above, which likewise attributes a system-discovered event to
+// whichever caller's request happened to trigger the discovery).
+// 'active'/'reconnecting'/'already-ended'/'session-not-found'/
+// 'operator-mismatch' are not named in FR-44's table and therefore
+// produce no audit entry — an ordinary heartbeat is not itself a
+// lifecycle event.
+async function auditSupportSessionHeartbeatOutcome(
+  result: Awaited<ReturnType<typeof recordSupportSessionHeartbeat>>,
+  ctx: { actorUid: string; businessId: string }
+): Promise<void> {
+  try {
+    if (result.outcome === 'ended-abandonment') {
+      await writeAuditLogEntry(db, {
+        actorUid: ctx.actorUid,
+        actorRole: 'system',
+        actionType: 'support_session.ended_by_abandonment',
+        targetBusinessId: ctx.businessId,
+      });
+    } else if (result.outcome === 'ended-completed') {
+      await writeAuditLogEntry(db, {
+        actorUid: ctx.actorUid,
+        actorRole: 'system',
+        actionType: 'support_session.completed',
+        targetBusinessId: ctx.businessId,
+      });
+    }
+  } catch (auditErr) {
+    console.error('[support-session/heartbeat] audit write failed', {
+      actorUid: ctx.actorUid,
+      businessId: ctx.businessId,
+      outcome: result.outcome,
+      error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+    });
+  }
+}
+
+// Shared response mapping for both heartbeat routes — identical outcome
+// shape regardless of which participant called, per FR-54's own
+// "neither party's heartbeat substitutes for the other's, but both are
+// evaluated by the same rule" symmetry.
+function respondToHeartbeatOutcome(res: Response, result: Awaited<ReturnType<typeof recordSupportSessionHeartbeat>>): void {
+  switch (result.outcome) {
+    case 'active':
+      res.json({ status: 'active', recoveredFromReconnecting: result.recoveredFromReconnecting });
+      return;
+    case 'reconnecting':
+      res.json({ status: 'reconnecting', graceExpiresAt: result.graceExpiresAt.toMillis() });
+      return;
+    case 'ended-abandonment':
+      res.json({ status: 'ended', endedBy: 'abandonment', endedAt: result.endedAt.toMillis() });
+      return;
+    case 'ended-completed':
+      res.json({ status: 'ended', endedBy: 'completed', endedAt: result.endedAt.toMillis() });
+      return;
+    case 'already-ended':
+      res.json({ status: 'ended', message: result.message });
+      return;
+    case 'session-not-found':
+      res.status(404).json({ error: 'session-not-found', message: result.message });
+      return;
+    case 'operator-mismatch':
+      res.status(403).json({ error: 'operator-mismatch', message: result.message });
+      return;
+  }
+}
+
+// Two routes, mirroring the identical split the two Checkpoint 2 routes
+// above already use — tenant-side (customer) vs. platform-operator-side
+// — both calling the SAME shared recordSupportSessionHeartbeat module,
+// differing only in which participant they represent and their own
+// authorization gate:
+//
+//   POST /api/business/support-session/heartbeat — TENANT side.
+//   requireAuth + isMemberOf(businessId) equivalent (the same
+//   tenantOnly + requireAuth gate the generate-code route already
+//   uses — no customer-specific identity match, matching that route's
+//   own precedent).
+//
+//   POST /api/superadmin/support-session/heartbeat — PLATFORM OPERATOR
+//   side. requireAuth + requirePlatformOperator +
+//   requireSupportEligibleOperator, with the additional operatorUid ==
+//   Session.operatorUid check performed inside
+//   recordSupportSessionHeartbeat itself (I-12's discipline, applied
+//   server-side, not only in firestore.rules).
+//
+// Neither route ever writes to any tenant-owned collection (FR-43) or
+// creates a second Session — each call updates exactly the one
+// existing Session document named by sessionId.
+// ------------------------------------------------------------------
+
+expressApp.post(
+  '/api/business/support-session/heartbeat',
+  tenantOnly,
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const requesterUid = req.callerUid!;
+    const businessId = String(req.body?.businessId || '').trim();
+    const sessionId = String(req.body?.sessionId || '').trim();
+
+    if (!businessId || !sessionId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId e sessionId são obrigatórios.' });
+      return;
+    }
+
+    try {
+      const result = await recordSupportSessionHeartbeat(supportSessionHeartbeatDb, supportSessionTimestampClock, {
+        businessId,
+        sessionId,
+        participant: 'customer',
+      });
+
+      await auditSupportSessionHeartbeatOutcome(result, { actorUid: requesterUid, businessId });
+
+      respondToHeartbeatOutcome(res, result);
+    } catch (err) {
+      console.error('[support-session/heartbeat] (customer) failed', {
+        requesterUid,
+        businessId,
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível registar o sinal de atividade.' });
+    }
+  }
+);
+
+expressApp.post(
+  '/api/superadmin/support-session/heartbeat',
+  requireAuth,
+  requirePlatformOperator,
+  requireSupportEligibleOperator,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operatorUid = req.platformOperator!.uid;
+    const businessId = String(req.body?.businessId || '').trim();
+    const sessionId = String(req.body?.sessionId || '').trim();
+
+    if (!businessId || !sessionId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId e sessionId são obrigatórios.' });
+      return;
+    }
+
+    try {
+      const result = await recordSupportSessionHeartbeat(supportSessionHeartbeatDb, supportSessionTimestampClock, {
+        businessId,
+        sessionId,
+        participant: 'operator',
+        operatorUid,
+      });
+
+      await auditSupportSessionHeartbeatOutcome(result, { actorUid: operatorUid, businessId });
+
+      respondToHeartbeatOutcome(res, result);
+    } catch (err) {
+      console.error('[support-session/heartbeat] (operator) failed', {
+        operatorUid,
+        businessId,
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível registar o sinal de atividade.' });
     }
   }
 );

@@ -41,9 +41,10 @@ SPEC-1/SPEC-2/SPEC-3) → Rule 8 (**CLOSED / PASS**, `312f64c`) →
 [Implementation Authorization](docs/engineering/superadmin-agent-attended-support-session-implementation-authorization.md)
 (**✅ Signed, §14**) → **Checkpoint 1** (session-scoped Firestore
 authorization, implemented) → **Checkpoint 2** (Invitation/code
-lifecycle + Session-establishment server foundation, implemented this
-session — see
-[Checkpoint 2 doc](docs/engineering/superadmin-agent-attended-support-session-checkpoint-2-server-foundation.md)).
+lifecycle + Session-establishment server foundation, implemented — see
+[Checkpoint 2 doc](docs/engineering/superadmin-agent-attended-support-session-checkpoint-2-server-foundation.md))
+→ **Checkpoint 3** (bidirectional heartbeat and reconnection,
+implemented this session).
 
 **Checkpoint 2 summary:** `server/supportSessionInvitation.ts` (code
 generation) and `server/supportSessionConsumption.ts` (verification,
@@ -57,6 +58,40 @@ plain unit tests passing; the rules-emulator addition is typechecked
 but NOT EXECUTED (same disclosed sandbox network-egress limitation as
 Checkpoint 1). Full repo typecheck (`npx tsc --noEmit -p .`) is clean
 for every file this checkpoint touched.
+
+**Checkpoint 3 summary:** `server/supportSessionHeartbeat.ts` (new) —
+`recordSupportSessionHeartbeat()` implements FR-54 (amended)–FR-61 as
+one lazy-transition transactional function (same "discover on next
+touch" discipline `consumeSupportSessionInvitationCode` already uses
+for Invitation expiry, now applied to Session heartbeat/reconnecting/
+grace/60-minute-cap): independent `lastHeartbeatAt`/
+`lastOperatorHeartbeatAt` tracking; `active`→`reconnecting` on either
+participant's 30-second lapse (FR-55); `reconnecting`→`active` on
+recovery, never touching `establishedAt`/`expiresAt` (FR-56, I-10);
+2-minute grace capped at the Session's own 60-minute `expiresAt`
+(FR-57, I-11) — `min(graceExpiresAt, expiresAt)`; grace-elapsed →
+`ended`/`abandonment` (FR-58); natural 60-minute cap reached while
+still active → `ended`/`completed` (FR-61); a heartbeat that finds the
+Session already `ended` simply no-ops, per Rule 8 Finding 11-B's
+accepted last-write-wins-with-status-check behavior — never errors,
+never resurrects. Operator heartbeats are identity-matched against the
+Session's own `operatorUid` server-side (I-12's discipline, not only
+`firestore.rules`). Wired into two new routes
+(`POST /api/business/support-session/heartbeat`,
+`POST /api/superadmin/support-session/heartbeat`), both calling the
+same shared module. Audit entries fire only for the two FR-44-named
+terminal transitions (`support_session.ended_by_abandonment`,
+`support_session.completed`) — both `actionType` values were already
+present in `KNOWN_ACTION_TYPES` since Checkpoint 2, no allowlist
+change needed. **No `firestore.rules` change** — `supportSessions` was
+already `allow write: if false` (Admin-SDK-only) since Checkpoint 1,
+exactly anticipating this checkpoint's own privileged-write
+requirement. 14/14 new plain unit tests passing
+(`tests/support-session-heartbeat.test.ts`); full existing Checkpoint
+1/2 suites re-run and unaffected (7/7, 14/14 green); the rules-emulator
+suite remains NOT EXECUTED in this sandbox (same disclosed limitation,
+unrelated to this checkpoint since no rules changed). Full repo
+typecheck and production build both clean.
 
 **Strict implementation boundary (do not exceed):**
 - **VIEW + POINT + GUIDE only** — no Support writes, no control mode,
@@ -79,7 +114,8 @@ for every file this checkpoint touched.
   reactivation), 60-minute session cap.
 - Bidirectional heartbeat (customer **and** Support operator, FR-54 as
   amended) governs connectivity status; reconnection never creates,
-  extends, or revives authorization.
+  extends, or revives authorization — **now implemented, Checkpoint
+  3**, not merely a rule to remember for the future.
 
 **Full authorized scope, exclusions, architecture, and required test
 surface:**
@@ -92,17 +128,21 @@ surface:**
 
 ## Next session should
 
-1. **Begin Checkpoint 3 — bidirectional heartbeat and reconnection**:
-   `lastHeartbeatAt`/`lastOperatorHeartbeatAt` transition logic, the
-   `active`→`reconnecting`→`ended` state machine, the 2-minute grace
-   period capped at the Session's own 60-minute `expiresAt` (FR-54 as
-   amended, FR-55–FR-61, I-10, I-11). See Checkpoint 2 doc's own "Next
-   checkpoint" note.
-2. Run `npm run test:support-session-rules:emulator` (Checkpoint 1) and
-   the same command now also covers Checkpoint 2's
-   `supportSessionInvitation` rules cases — an actual emulator run is
-   still the real acceptance gate for the rules-layer portion of both
-   checkpoints, not yet performed in any sandbox so far.
+1. **Begin the next unimplemented item from Implementation Authorization
+   §3** — items 5 (Desktop rendering path, `getDisplayMedia()` +
+   `RTCPeerConnection`) and 6 (Mobile rendering path, Support View
+   State) are the next largest pieces of authorized-but-unbuilt scope;
+   item 8 (Pointer channel) and item 9 (Customer transparency banner)
+   are smaller, self-contained items that could reasonably go first
+   instead. No checkpoint number is assigned to any of these yet —
+   that remains an explicit choice for whoever picks this up next, not
+   fixed here.
+2. Run `npm run test:support-session-rules:emulator` (Checkpoint 1) —
+   the same command also covers Checkpoint 2's `supportSessionInvitation`
+   rules cases; Checkpoint 3 introduced no `firestore.rules` change, so
+   nothing new is added to this emulator suite's own scope. An actual
+   emulator run is still the real acceptance gate for the rules-layer
+   portion of Checkpoints 1–2, not yet performed in any sandbox so far.
 3. Do not implement anything not traceable to a specific FR/Invariant
    in the Specification or an item in the Authorization's §3. If a gap
    is discovered mid-implementation, stop and surface it rather than
