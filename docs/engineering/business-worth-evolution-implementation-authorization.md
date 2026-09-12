@@ -1224,3 +1224,90 @@ Traceable to the Specification (§45, FR-73–FR-81), the Rule 8 gate decisions 
 **This signature does not itself instruct implementation of this checkpoint to begin.** Per this document's own §14/§31/§36/§44 precedent ("no item becomes authorized to begin merely because the section is signed"), a further, separate, explicit instruction to begin the Owner Investment UI implementation checkpoint remains required before any application code, test, or `firestore.rules` file may be created or modified. **No such instruction is given, implied, or begun by this section.** No Execution Record exists yet for this checkpoint.
 
 **Next Governance Step:** a separate, subsequent, explicit instruction to begin the Owner Investment UI implementation checkpoint — not performed, drafted, or implied by this signature.
+
+## 46. Product Architect Authorization — Lifetime Owner Investment Total (OI-PA-6 / Specification §46, FR-82) — DRAFT
+
+**Status: 🔶 DRAFT — AWAITING PRODUCT ARCHITECT SIGNATURE.** Drafted below per this document's own established "one umbrella Authorization, extended, not replaced" discipline (§7's own opening statement; §17–§21, §23, §36, §43–§45's own precedent for adding a new dated item) and this document's own §43 precedent for a pending, unsigned draft item. **Drafting this section authorizes nothing by itself.** No `apps/`, `server/`, `firestore.rules`, `firestore.indexes.json`, i18n, or test file is touched to produce it. Signing the blank Formal Acceptance block at the end of this section (§46.7, below) is the sole act that would authorize implementation to be instructed to begin — and even then, per §7's own one-item-at-a-time discipline restated at §46.5 below, signature is the governance gate only, not an instruction to start.
+
+### 46.1 Governing Chain
+
+Specification §46/FR-82 (✅ Accepted, 12 September 2026, SABUSHIMIKE MASCENI, `business-worth-evolution-specification.md`, commit `29902b0`) → Rule 8 Assessment Addendum — Lifetime Owner Investment Total (`business-worth-evolution-rule8-assessment.md`, Findings OI-7–OI-18, verdict `READY FOR PLAN`, commit `c2b03ce`) → Implementation Plan Amendment — Lifetime Owner Investment Total, Checkpoint 8 (`business-worth-evolution-implementation-plan.md`, drafted commit `5f558b3`, ✅ ACCEPTED by Product Architect 12 September 2026, acceptance recorded commit `9607f06`) → **this draft Authorization item (§46), pending signature.**
+
+**One umbrella Authorization, extended, not replaced** — this section does not create a second, separate Implementation Authorization for Owner Investment; it proposes to extend the single existing document with a new dated item, exactly as §17–§21, §23, §36, §43, and §45 already did for their respective items, including the existing Owner Investment UI entry-point item (§45, above), which this item does not reopen.
+
+### 46.2 Scope of This Authorization Item — Exactly the Accepted Plan Amendment's Checkpoint 8, No More
+
+Per the accepted Implementation Plan Amendment's own Checkpoint 8 (`business-worth-evolution-implementation-plan.md`, "Implementation Plan Amendment — Lifetime Owner Investment Total"):
+
+1. **Checkpoint 8, item 1 — Pure derived calculation.** A new function in the existing calculation utilities (`apps/tenant/src/utils/calculations.ts`), alongside the existing `computeStartupInvestmentTotal`, computing `SUM(OwnerInvestment.amount)` across a supplied `OwnerInvestment[]` array belonging to one business, with no snapshot/date/`createdAt`/establishment-method parameter or filter of any kind — structurally distinct, by name and signature, from `computeOwnerInvestmentsSinceSnapshot` (FR-64/FR-65's existing time-bounded function). The exact function name is an implementation-detail latitude already granted by the accepted Plan (item 7 does not fix it); the signature shape (array in, number out, no time bound) is fixed and binding.
+2. **Checkpoint 8, item 2 — Cash Flow UI.** The existing Owner Investment card in `apps/tenant/src/components/CashFlowView.tsx` (currently: title, add-button, subtitle only) gains a visible Lifetime Owner Investment Total and a collapsible history of individual `OwnerInvestment` records, adapting the existing Cash Position `showCashHistory`/`cashPositionDeclarations.slice(1)` pattern in the same file to `OwnerInvestment`'s own `date`/`amount`/`description` shape. Both the total and the history list must read from the same business-scoped `ownerInvestments` array already available from `AppContext` — the history list may never be independently filtered, paginated, or re-queried in a way the total's own sum does not equally reflect.
+3. **Checkpoint 8, item 3 — i18n.** New label strings only, added to `apps/tenant/src/i18n/locales/{en,pt,fr}.ts` under the existing `cashFlow.ownerInvestmentSection` namespace already established by the Checkpoint 7 UI entry-point item (§45, above) — no restructuring of existing keys.
+4. **Checkpoint 8, item 4 — Tests.** A new `tests/owner-investment-checkpoint-8-lifetime-total.test.ts`, following the existing `owner-investment-checkpoint-{1..7}` naming and structural convention, covering the full Testing Plan the accepted Implementation Plan Amendment enumerates (eighteen items — restated in full at §46.6, below, as Acceptance Criteria AC-OI-LT-12's own governing list).
+
+**No item outside Checkpoint 8's own four items above is authorized by this section.** In particular, this authorization does **not** cover anything the accepted Plan's own "Explicitly Out of Scope" section already excludes (restated in full at §46.4, below).
+
+### 46.3 No New Write Path — Read/Derivation Only (Confirmed Boundary)
+
+Unlike CAIXER's own §43 (a write-boundary-heavy authorization item), Checkpoint 8 introduces **no new write of any kind**. The Lifetime Owner Investment Total is computed fresh, at read time, from `OwnerInvestment` records that already exist under the existing, unmodified write path (FR-63, §43 of the Specification, already implemented at Checkpoints 1–7). Consequently:
+
+- No new `firestore.rules` condition is authorized or required by this item — the existing `allow read: if isOwnerOf(businessId)` / `allow update, delete: if false` block governing `ownerInvestments` already covers every read this checkpoint performs.
+- No non-destructive-validation requirement analogous to §43.3 applies — there is no form submission, no write-time failure mode, and no in-progress operator data this checkpoint could lose, since it displays already-committed, already-immutable records only.
+- The sole failure mode in scope is ordinary reactive-UI staleness (a listener not yet reflecting a just-written record), which is not a new risk class — Rule 8 Finding OI-17 (Rule 8 Assessment Addendum) already classifies this as normal reactive behavior, not a defect.
+
+### 46.4 Explicitly Out of Scope (Restated from the Accepted Plan, Binding)
+
+This authorization does **not** cover, and Checkpoint 8 may not be used to justify:
+
+- implementation of anything beyond Checkpoint 8's own four items (§46.2);
+- any change to FR-63, FR-64, FR-65, or FR-66, or to §43 of the Specification's existing write model;
+- any change to CAIXER (Specification §45, FR-73–FR-81) or any CAIXER field (`cashPosition`, `cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco`);
+- any change to `BusinessWorthSnapshot`'s schema, `measuredBusinessWorth`, or any Business Worth Evolution formula, and no insertion of the lifetime total into Business Worth History;
+- any new Firestore collection, persisted aggregate field, backend scheduled job, new listener, migration, or new index;
+- any cross-business query — the function operates exclusively on one business's already-scoped array;
+- editing or deleting historical `OwnerInvestment` records, or any change to their append-only/immutable status;
+- any new accounting field, investment category, or classification on `OwnerInvestment` — the existing simple `date`/`amount`/`description?` schema is unchanged;
+- a new top-level Owner Investment module or navigation item — the existing Owner Investment entry form authorized under §45 (above) is unchanged and unreopened by this item;
+- unrelated Contagem, Fecho, Owner Portfolio, SuperAdmin, or Subscription redesign — none is touched by anything in §46.2;
+- any product or architectural redesign not contained in the accepted Specification §46/FR-82 or the accepted Implementation Plan Amendment (Checkpoint 8).
+
+### 46.5 Execution Rule, If Signed (Mirrors §7/§23/§36/§43's Discipline Exactly)
+
+1. Read this item's scope (§46.2, and the Plan Amendment's own Checkpoint 8 text) before writing anything.
+2. Verify prerequisites — per the Plan's own "Dependencies" section: none of Checkpoint 8's four items depends on any other in-flight or unimplemented work; Checkpoints 1–7 are already implemented and unaffected.
+3. Implement only Checkpoint 8's own scope — no later, unrelated Owner Investment or Business Worth work may be silently folded in.
+4. Run the tests the Plan Amendment's own Testing Plan names (eighteen items, restated at §46.6/AC-OI-LT-12), including every regression check it lists (FR-64/FR-65 unaffected, CAIXER unaffected, Business Worth History unaffected, Startup Investment/Levantamento unaffected, tenant scoping, reactive update, no persisted accumulator).
+5. Inspect the diff — confirm no file outside Checkpoint 8's own named surfaces (`calculations.ts`, `CashFlowView.tsx`, the three i18n locale files, the one new test file) was touched, unless a genuinely required change is separately identified and justified.
+6. Verify governance compliance against this section's own scope (§46.2) and out-of-scope list (§46.4).
+7. Record the result as its own dated Execution Record section, mirroring §37–§42's format.
+
+**Implementation remains strictly this one checkpoint** — Checkpoint 8 does not become authorized to *begin* merely because this section is signed; a further, separate, explicit "begin this item" instruction remains required, exactly as §36 and §43 already establish for their own items.
+
+### 46.6 Acceptance Criteria Governing Completion
+
+Traceable to the Specification (§46, FR-82), the Rule 8 Assessment Addendum (Findings OI-7–OI-18), and the accepted Implementation Plan's own Traceability table:
+
+- **AC-OI-LT-1** — the lifetime total equals the sum of all immutable, business-scoped `OwnerInvestment.amount` records, with no record excluded.
+- **AC-OI-LT-2** — no `date`, `createdAt`, snapshot-boundary, Contagem, or establishment-method filtering is applied anywhere in the calculation.
+- **AC-OI-LT-3** — no mutable or persisted accumulator is introduced; the total is a pure, report-time derivation only.
+- **AC-OI-LT-4** — `ownerInvestmentSinceLastSnapshot` (FR-65) remains unchanged and is computed independently, via its own existing function (`computeOwnerInvestmentsSinceSnapshot`), never reused, renamed, replaced, or modified to serve as the lifetime total.
+- **AC-OI-LT-5** — CAIXER remains completely uninvolved: no code path in the lifetime calculation reads `cashPosition` or any of its four components, and no `firestore.rules`/schema change touches any CAIXER field.
+- **AC-OI-LT-6** — `BusinessWorthSnapshot` and Business Worth History remain unchanged; the lifetime total is not written into the snapshot schema and does not alter `measuredBusinessWorth` or any Business Worth Evolution formula.
+- **AC-OI-LT-7** — the Lifetime Owner Investment Total is displayed inside the existing Owner Investment card in `CashFlowView.tsx`, with no new top-level module or navigation item.
+- **AC-OI-LT-8** — the same card provides the approved collapsible history of individual `OwnerInvestment` records, following the existing Cash Position `showCashHistory` structural pattern.
+- **AC-OI-LT-9** — the total and the history list are demonstrated (by test or component-level check) to derive from the exact same business-scoped `ownerInvestments` source array.
+- **AC-OI-LT-10** — existing security (Owner-only `isOwnerOf(businessId)` access), tenant isolation, `OwnerInvestment` immutability (`allow update, delete: if false`), closed-period enforcement (OI-PA-1), subscription/trial gating (OI-PA-2), and existing submission-identity idempotency all remain fully intact and unmodified.
+- **AC-OI-LT-11** — no new Firestore collection, listener, backend job, migration, index, or persisted aggregate is introduced by any part of this checkpoint.
+- **AC-OI-LT-12** — `tests/owner-investment-checkpoint-8-lifetime-total.test.ts` covers, at minimum, all eighteen scenarios the accepted Implementation Plan Amendment's Testing Plan enumerates (empty array; single investment; multiple investments; decimal amounts; backdated `date` included; varying `createdAt` all included; investments before/after snapshots all included; Owner-Declared/Contagem establishment-method irrelevance; FR-65 independence; CAIXER non-effect; Business Worth History non-effect; Startup Investment non-effect; Levantamento non-effect; duplicate/idempotency inheritance; total/history shared-source; tenant scoping; reactive update; no persisted accumulator) — and passes.
+
+### 46.7 Formal Acceptance — PENDING, NOT SIGNED
+
+> I have reviewed §46, "Product Architect Authorization — Lifetime Owner Investment Total," in full, including its scope (§46.2), the confirmed no-new-write-path boundary (§46.3), its explicit out-of-scope boundaries (§46.4), the execution rule (§46.5), and the acceptance criteria (§46.6). I understand that signing below authorizes, exactly and only, Checkpoint 8 as named in §46.2, subject to every boundary in §46.3/§46.4. I understand this does not reopen or reinterpret Specification §46/FR-82, the Rule 8 Assessment Addendum, the accepted Implementation Plan Amendment, or §45 (the existing Owner Investment UI entry-point authorization). I understand this signature is a governance authorization gate only — it does not itself instruct implementation of Checkpoint 8 to begin; a further, separate, explicit instruction is required before any code, test, `firestore.rules`, or i18n file may be created or modified.
+>
+> **Product Architect:** ______________________________
+> **Date:** __________________________________________
+> **Decision:**
+> ☐ AUTHORIZED FOR IMPLEMENTATION
+> ☐ AUTHORIZED WITH MODIFICATIONS (specify)
+> ☐ NOT AUTHORIZED
+
+**Status: 🔶 DRAFT — AWAITING PRODUCT ARCHITECT SIGNATURE.** The Formal Acceptance block above is blank, per this document's own established pending-authorization convention (§43.7's own precedent, above) — it is preserved exactly as circulated for review; a future, separate, dated "§46 — Recorded" section is where an actual signature would be entered, mirroring §43→§44's own Draft → Recorded pattern. **Implementation remains blocked until the Product Architect formally accepts/signs this Implementation Authorization.** Checkpoint 8 is not authorized to begin, no code/test/`firestore.rules`/i18n file may be modified on the strength of this section, and this document's own §7/§23/§36/§43 precedent for what a signature does and does not authorize applies identically here, once and if signed.
