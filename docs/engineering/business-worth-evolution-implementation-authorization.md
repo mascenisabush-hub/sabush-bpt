@@ -1179,3 +1179,48 @@ Traceable to the Specification (§45, FR-73–FR-81), the Rule 8 gate decisions 
 **This signature does not itself instruct implementation of any checkpoint to begin.** Per §43.5's own "implementation remains strictly one checkpoint at a time" discipline and this document's identical §36 precedent for Decision 37 ("no item becomes authorized to begin merely because the section is signed"), a further, separate, explicit per-checkpoint instruction — naming which of §43.2's seven items (or which grouping) is to be implemented first — remains required before any application code, test, `firestore.rules`, or `firestore.indexes.json` file may be created or modified. **No such instruction is given, implied, or begun by this section.** No Execution Record (mirroring §37–§42's format) exists yet for any CAIXER checkpoint.
 
 **Next Governance Step:** a separate, subsequent, explicit instruction identifying the first CAIXER checkpoint to implement — not performed, drafted, or implied by this signature.
+
+---
+
+## 45. Product Architect Authorization — Owner Investment UI Entry Point (OI-PA-3 / OI-PA-4)
+
+**Status: ✅ AUTHORIZED FOR IMPLEMENTATION (12 September 2026).** Recorded per this document's own established signature-recording convention (§14/§31/§36/§44's "signature is a separate, later, dated act" precedent). This section formalizes, at Authorization level, the Product Architect decisions already recorded at Plan level as OI-PA-3 and OI-PA-4 (`business-worth-evolution-implementation-plan.md`, "Product Architect Decisions — Owner Investment Completion Scope"), following the existing Owner-Declared UI authorization precedent (§26, above).
+
+**Governing basis, in order:** the OI-PA-1 through OI-PA-14 audit and decision record (✅ Accepted, 12 September 2026, Plan) → OI-PA-3 ("Owner Investment User Entry Point") and OI-PA-4 ("Simple Entry Form") specifically → §23 item 3 of this Authorization (Increment 10, `OwnerInvestment` new collection/rules/atomic pairing — already authorized and implemented, Checkpoints 1–6) → **this §45 (✅ AUTHORIZED, 12 September 2026)**.
+
+**One umbrella Authorization, extended, not replaced** — this section does not create a second, separate Implementation Authorization; it extends the single existing document with a new dated item, exactly as §17–§21, §23, §36, and §43–§44 already did for their respective items.
+
+**Scope of this authorization item:**
+
+1. Owner Investment shall be exposed to the Owner through the existing Cash Flow area (`CashFlowView.tsx`), positioned alongside the existing financial sections — Cash Position, Receivables, Payables, Expenses, Withdrawals. No new top-level module is authorized. Conceptually, Owner Investment/Capital Added is the mirror of Levantamento (Withdrawal): money entering the business from the Owner, rather than leaving it.
+2. The entry point shall use a dedicated `AddOwnerInvestmentView.tsx` component, following the existing `AddWithdrawalView.tsx`/`AddExpenseView.tsx` structural pattern where appropriate.
+3. The form shall require only `date` and `amount`; `description` is optional. No additional accounting or financial-classification field is authorized — specifically excluded: investment category, financing source, equity percentage, repayment terms, accounting classification, a separate reason/notes field, or any other new economic concept.
+4. The view shall call the existing `addOwnerInvestment()` function (`AppContext.tsx`) unchanged, using its already-governed signature (`date`, `amount`, optional `description`, optional `submissionId`) — no change to `AddOwnerInvestmentParams` or the underlying `OwnerInvestment` data model is authorized or required.
+5. The view shall preserve `submissionId` idempotency behavior and `try`/`catch` handling of the async write, mirroring the existing entry-point screens exactly.
+6. The view shall respect, unmodified, the already-implemented closed-period enforcement (OI-PA-1, §23 item 3, Checkpoint 5) and subscription/trial entitlement gating (OI-PA-2, §23 item 3, Checkpoint 6) — both already authoritative at the Firestore boundary; the view wires in the existing `subscriptionBlocksNewRecords` client-side check the same way `AddWithdrawalView.tsx`/`AddExpenseView.tsx` already do, introducing no new gating mechanism.
+7. Owner-only access, as already established for Owner Investment, is preserved unmodified. No new authorization model is introduced by this UI.
+
+**This authorization means, and means only:**
+- This is Authorization-level formalization of a UI entry point for an already-governed, already-implemented data/rules layer (§23 item 3, Checkpoints 1–6) — it authorizes UI implementation only, not any change to the Owner Investment economic model, calculation, CAIXER, FR-64, FR-65, Levantamento, or Startup Investment, all of which remain exactly as already governed.
+- This signature is the **governance authorization gate only** — it does not by itself instruct implementation to begin, exactly as §14/§31/§36/§44's own established language establishes for every prior item in this document. A further, separate, explicit instruction remains required before `AddOwnerInvestmentView.tsx`, `CashFlowView.tsx`, `AppContext.tsx`, `calculations.ts`, `firestore.rules`, tests, or i18n files may be created or modified.
+- This authorization does not reopen OI-PA-1, OI-PA-2, OI-PA-5 through OI-PA-14, the Specification (`business-worth-evolution-specification.md`), or the Rule 8 Assessment (`business-worth-evolution-rule8-assessment.md`) — all remain exactly as already accepted, with no contradiction identified between any of them and this item.
+
+**Acceptance criterion for this item (extends §28's AC-R3 series):**
+- **AC-OI-UI-1:** Owner Investment is accessible from `CashFlowView.tsx`, positioned alongside Cash Position, Receivables, Payables, Expenses, and Withdrawals, via a dedicated `AddOwnerInvestmentView.tsx` entry-point component; the form requires `date` and `amount`, with `description` optional and no additional accounting field present; the existing `addOwnerInvestment()` write path is used unchanged; the existing subscription/trial gate and closed-period enforcement are respected without a new gating mechanism; Owner-only access is preserved; existing `submissionId` idempotency behavior is preserved; a failed write is caught and does not falsely display success; no Owner Investment economic-model, CAIXER, FR-64, or FR-65 change accompanies this item.
+
+**Formal acceptance, recorded verbatim from the Product Architect's own authorization:**
+
+> I, SABUSHIMIKE MASCENI, acting as Product Architect for SABUSH BPT, have reviewed OI-PA-3 ("Owner Investment User Entry Point") and OI-PA-4 ("Simple Entry Form") as recorded in the Implementation Plan, and hereby AUTHORIZE their formalization at Authorization level exactly as recorded in §45 above, following the existing Owner-Declared UI authorization precedent (§26).
+>
+> This authorization covers a future Owner Investment UI implementation checkpoint's scope and constraints only. It does not itself instruct implementation to begin. It does not reopen or amend OI-PA-1, OI-PA-2, or OI-PA-5 through OI-PA-14, the Owner Investment economic model, CAIXER, FR-64, FR-65, Levantamento, or Startup Investment, all of which remain exactly as already governed. Implementation of the Owner Investment UI entry point begins only upon a further, separate, explicit instruction.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Date:** 12 September 2026
+> **Decision:**
+> ☑ AUTHORIZED FOR IMPLEMENTATION
+> ☐ AUTHORIZED WITH MODIFICATIONS (specify)
+> ☐ NOT AUTHORIZED
+
+**This signature does not itself instruct implementation of this checkpoint to begin.** Per this document's own §14/§31/§36/§44 precedent ("no item becomes authorized to begin merely because the section is signed"), a further, separate, explicit instruction to begin the Owner Investment UI implementation checkpoint remains required before any application code, test, or `firestore.rules` file may be created or modified. **No such instruction is given, implied, or begun by this section.** No Execution Record exists yet for this checkpoint.
+
+**Next Governance Step:** a separate, subsequent, explicit instruction to begin the Owner Investment UI implementation checkpoint — not performed, drafted, or implied by this signature.
