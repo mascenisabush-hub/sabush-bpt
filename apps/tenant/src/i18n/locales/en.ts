@@ -317,6 +317,11 @@ export const en: TranslationDict = {
       button: 'Start screen sharing',
       denied: 'Screen sharing was not started.',
     },
+    banner: {
+      title: 'Support session active',
+      message: 'A Support operator can see your screen and point to things to help you.',
+      disconnectButton: 'End support session',
+    },
   },
   startupInvestment: {
     title: 'Startup Investment',

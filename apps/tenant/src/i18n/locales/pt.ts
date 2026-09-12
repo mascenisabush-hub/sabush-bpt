@@ -345,6 +345,14 @@ export interface TranslationDict {
       button: string;
       denied: string;
     };
+    // [Checkpoint 7 - Customer transparency / disconnect] Persistent,
+    // non-dismissible banner (FR-31-33, Rule Q) and its direct
+    // disconnect action (FR-34, Rule R - no confirmation dialog).
+    banner: {
+      title: string;
+      message: string;
+      disconnectButton: string;
+    };
   };
   // [Business Worth Evolution — Implementation Authorization, Increment 5;
   // Specification §13] Minimal screen for the Owner to record residual
@@ -1608,6 +1616,11 @@ export const pt: TranslationDict = {
       prompt: 'Um operador de Suporte gostaria de ver o seu ecrã para o ajudar.',
       button: 'Iniciar partilha de ecrã',
       denied: 'A partilha de ecrã não foi iniciada.',
+    },
+    banner: {
+      title: 'Sessão de suporte ativa',
+      message: 'Um operador de Suporte pode ver o seu ecrã e apontar para elementos para o ajudar.',
+      disconnectButton: 'Terminar sessão de suporte',
     },
   },
   startupInvestment: {

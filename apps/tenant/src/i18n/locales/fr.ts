@@ -317,6 +317,11 @@ export const fr: TranslationDict = {
       button: "Démarrer le partage d'écran",
       denied: "Le partage d'écran n'a pas démarré.",
     },
+    banner: {
+      title: 'Session de support active',
+      message: 'Un opérateur du Support peut voir votre écran et pointer des éléments pour vous aider.',
+      disconnectButton: 'Terminer la session de support',
+    },
   },
   startupInvestment: {
     title: 'Investissement Initial',

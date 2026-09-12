@@ -180,8 +180,13 @@ describe('Checkpoint 5 — mounted in App.tsx alongside the existing app-wide ov
     assert.match(appSrc, /import \{ SupportPointerOverlay \} from '\.\/components\/SupportPointerOverlay';/);
   });
 
-  it('renders it unconditionally alongside BusinessSuspendedBanner, matching that component\'s own self-gating pattern (renders null internally when not applicable, rather than being wrapped in a conditional here)', () => {
-    assert.match(appSrc, /<BusinessSuspendedBanner \/>\s*\n\s*<SupportPointerOverlay \/>/);
+  it('renders it unconditionally alongside the app-wide banner/overlay group, matching that component\'s own self-gating pattern (renders null internally when not applicable, rather than being wrapped in a conditional here)', () => {
+    // [Checkpoint 7] SupportSessionBanner was legitimately inserted
+    // between BusinessSuspendedBanner and SupportPointerOverlay — this
+    // assertion is widened to allow that, while still requiring
+    // SupportPointerOverlay to render unconditionally, directly after
+    // the banner group and before SupportDesktopCapture.
+    assert.match(appSrc, /<BusinessSuspendedBanner \/>\s*\n\s*<SupportSessionBanner \/>\s*\n\s*<SupportPointerOverlay \/>/);
   });
 });
 

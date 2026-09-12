@@ -34,6 +34,7 @@ import { createBusinessWorthRecoveryExpiryAuditSweep, type BusinessWorthRecovery
 import { createSubscriptionEngine } from './subscriptionEngine';
 import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
 import { createRequirePlatformOperator, requireSuperAdmin, requireSupportEligibleOperator, type PlatformOperatorRequest } from './superadminAuth';
+import type { PlatformRole } from '../packages/shared-types';
 import { writeAuditLogEntry } from './platformAuditLog';
 import { provisionOperator, revokeOperator, listOperators } from './operatorManagement';
 import { searchBusinesses, fetchBusinessDetail, type BusinessVisibilityDb } from './businessVisibility';
@@ -47,6 +48,7 @@ import { consumeInitialStockRecoveryAuthorization, type InitialStockRecoveryCons
 import { generateSupportSessionInvitation, type SupportSessionInvitationDb } from './supportSessionInvitation';
 import { consumeSupportSessionInvitationCode, type SupportSessionConsumptionDb } from './supportSessionConsumption';
 import { recordSupportSessionHeartbeat, type SupportSessionHeartbeatDb } from './supportSessionHeartbeat';
+import { recordSupportSessionTermination, type SupportSessionTerminationDb } from './supportSessionTermination';
 import { reportCriticalFailure } from './alerting';
 import {
   validateExtractionUpload,
@@ -2261,6 +2263,7 @@ const supportSessionTimestampClock = {
 const supportSessionInvitationDb = db as unknown as SupportSessionInvitationDb;
 const supportSessionConsumptionDb = db as unknown as SupportSessionConsumptionDb;
 const supportSessionHeartbeatDb = db as unknown as SupportSessionHeartbeatDb;
+const supportSessionTerminationDb = db as unknown as SupportSessionTerminationDb;
 
 interface SuperAdminRequest extends AuthedRequest, PlatformOperatorRequest {}
 
@@ -2644,6 +2647,155 @@ expressApp.post(
         error: err instanceof Error ? err.message : String(err),
       });
       res.status(500).json({ error: 'internal', message: 'Não foi possível registar o sinal de atividade.' });
+    }
+  }
+);
+
+// ------------------------------------------------------------------
+// SuperAdmin Agent Attended Support Session — Checkpoint 7 (customer
+// transparency and session termination). Governing chain: BDR-0018 ->
+// Policy (Rule Q/R/S/T) -> Specification §§14-15 (FR-31-FR-36) ->
+// Rule 8 (CLOSED / PASS, 312f64c) -> Implementation Authorization
+// (Signed, 2026-09-11, §3 item 10).
+//
+// Two routes, mirroring the identical split the heartbeat routes above
+// already use — tenant-side (customer, FR-34/Rule R) vs.
+// platform-operator-side (Support, FR-35/Rule S) — both calling the
+// SAME shared recordSupportSessionTermination module. The Support-side
+// route exists because FR-35 requires the operator to BE ABLE to
+// terminate the Session — no visible operator-facing UI control calls
+// it yet (no operator session screen exists to host one; deferred,
+// exactly as Checkpoint 6 deferred full operator-viewer integration).
+// Not implementing the mechanism merely because its UI is deferred
+// would leave FR-35 unsatisfied — the mechanism itself is what this
+// checkpoint's own Authorization item requires.
+// ------------------------------------------------------------------
+
+// [FR-36, FR-44] The 'ended' outcome represents a real lifecycle event
+// and gets exactly one audit entry, actor-attributed to the
+// participant who triggered it (never system-attributed, unlike the
+// heartbeat module's own lazily-discovered completion/abandonment
+// events) — 'already-ended' is a no-op, not a new lifecycle event, and
+// produces no audit entry (Rule 8 Finding 11-B's own reasoning,
+// reused). actorRole for the customer matches the exact 'customer'
+// value the existing support_session.invited audit call already
+// establishes; actorRole for the operator is the operator's own real
+// platformRole (Support/Developer/SuperAdmin — requireSupportEligible
+// Operator's own flat, three-tier eligibility), matching the
+// consume-code route's own actorRole: operatorRole precedent, never a
+// hard-coded 'support' literal that would mislabel a Developer- or
+// SuperAdmin-tier operator.
+async function auditSupportSessionTerminationOutcome(
+  result: Awaited<ReturnType<typeof recordSupportSessionTermination>>,
+  ctx: { actorUid: string; businessId: string; actorRole: 'customer' | PlatformRole }
+): Promise<void> {
+  try {
+    if (result.outcome === 'ended') {
+      await writeAuditLogEntry(db, {
+        actorUid: ctx.actorUid,
+        actorRole: ctx.actorRole,
+        actionType: result.endedBy === 'customer' ? 'support_session.ended_by_customer' : 'support_session.ended_by_support',
+        targetBusinessId: ctx.businessId,
+      });
+    }
+  } catch (auditErr) {
+    console.error('[support-session/end] audit write failed', {
+      actorUid: ctx.actorUid,
+      businessId: ctx.businessId,
+      outcome: result.outcome,
+      error: auditErr instanceof Error ? auditErr.message : String(auditErr),
+    });
+  }
+}
+
+function respondToTerminationOutcome(res: Response, result: Awaited<ReturnType<typeof recordSupportSessionTermination>>): void {
+  switch (result.outcome) {
+    case 'ended':
+      res.json({ status: 'ended', endedAt: result.endedAt.toMillis(), endedBy: result.endedBy });
+      return;
+    case 'already-ended':
+      res.json({ status: 'ended', message: result.message });
+      return;
+    case 'session-not-found':
+      res.status(404).json({ error: 'session-not-found', message: result.message });
+      return;
+    case 'operator-mismatch':
+      res.status(403).json({ error: 'operator-mismatch', message: result.message });
+      return;
+  }
+}
+
+expressApp.post(
+  '/api/business/support-session/end',
+  tenantOnly,
+  requireAuth,
+  async (req: AuthedRequest, res: Response) => {
+    const requesterUid = req.callerUid!;
+    const businessId = String(req.body?.businessId || '').trim();
+    const sessionId = String(req.body?.sessionId || '').trim();
+
+    if (!businessId || !sessionId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId e sessionId são obrigatórios.' });
+      return;
+    }
+
+    try {
+      const result = await recordSupportSessionTermination(supportSessionTerminationDb, supportSessionTimestampClock, {
+        businessId,
+        sessionId,
+        participant: 'customer',
+      });
+
+      await auditSupportSessionTerminationOutcome(result, { actorUid: requesterUid, businessId, actorRole: 'customer' });
+
+      respondToTerminationOutcome(res, result);
+    } catch (err) {
+      console.error('[support-session/end] (customer) failed', {
+        requesterUid,
+        businessId,
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível terminar a sessão de suporte.' });
+    }
+  }
+);
+
+expressApp.post(
+  '/api/superadmin/support-session/end',
+  requireAuth,
+  requirePlatformOperator,
+  requireSupportEligibleOperator,
+  async (req: SuperAdminRequest, res: Response) => {
+    const operatorUid = req.platformOperator!.uid;
+    const operatorRole = req.platformOperator!.platformRole;
+    const businessId = String(req.body?.businessId || '').trim();
+    const sessionId = String(req.body?.sessionId || '').trim();
+
+    if (!businessId || !sessionId) {
+      res.status(400).json({ error: 'invalid-argument', message: 'businessId e sessionId são obrigatórios.' });
+      return;
+    }
+
+    try {
+      const result = await recordSupportSessionTermination(supportSessionTerminationDb, supportSessionTimestampClock, {
+        businessId,
+        sessionId,
+        participant: 'operator',
+        operatorUid,
+      });
+
+      await auditSupportSessionTerminationOutcome(result, { actorUid: operatorUid, businessId, actorRole: operatorRole });
+
+      respondToTerminationOutcome(res, result);
+    } catch (err) {
+      console.error('[support-session/end] (operator) failed', {
+        operatorUid,
+        businessId,
+        sessionId,
+        error: err instanceof Error ? err.message : String(err),
+      });
+      res.status(500).json({ error: 'internal', message: 'Não foi possível terminar a sessão de suporte.' });
     }
   }
 );
