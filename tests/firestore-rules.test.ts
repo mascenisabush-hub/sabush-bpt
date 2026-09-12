@@ -2144,14 +2144,20 @@ describe('notifications', () => {
 
 // ---------------------------------------------------------------------
 // Module #19 Phase 2 (Trial Engine) — Restricted-Operations Enforcement
-// (Business Rule 6 / Decision 2). Applies to `create` on the six
+// (Business Rule 6 / Decision 2). Applies to `create` on the seven
 // operational collections identified as "affecting Business Worth or
 // financial position": batches, purchaseBatches, quebras, expenses,
-// withdrawals, stockCounts. Reads are never restricted (Read-Only
-// Preservation, Business Rule 5) — checked explicitly below, not just
-// assumed. The fail-open-if-no-subscription-doc interim behavior is
-// exercised implicitly by every pre-existing describe block above (none
-// of them seed a subscriptions/{BIZ} doc) and once more explicitly here.
+// withdrawals, stockCounts, and ownerInvestments (the last added by
+// Product Architect Decision OI-PA-2, business-worth-evolution-
+// implementation-plan.md — this collection was created after this
+// rule's original enumeration and was simply never added to it; this
+// is the same, already-accepted principle applied to a collection
+// that came later, not a new decision). Reads are never restricted
+// (Read-Only Preservation, Business Rule 5) — checked explicitly below,
+// not just assumed. The fail-open-if-no-subscription-doc interim
+// behavior is exercised implicitly by every pre-existing describe
+// block above (none of them seed a subscriptions/{BIZ} doc) and once
+// more explicitly here.
 // ---------------------------------------------------------------------
 describe('Module #19 Phase 2 — restricted operations enforcement', () => {
   const seedSubscriptionStatus = async (status: string) => {
@@ -2204,6 +2210,8 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     // [Amendment v1.0] stockCountDrafts create/update follow the same
     // restriction as stockCounts create; delete never restricted.
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-06-01', updatedAt: new Date().toISOString() }));
+    // [OI-PA-2] ownerInvestments — the seventh restricted collection.
+    await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'ownerInvestments', 'ta-oi1'), { id: 'ta-oi1', businessId: BIZ, date: '2026-06-01', amount: 10, createdBy: OWNER_UID }));
   });
 
   it('Once trial_completed, every restricted collection rejects new records', async () => {
@@ -2216,6 +2224,8 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'withdrawals', 'tc-w1'), { id: 'tc-w1', date: '2026-06-01', amount: 10 }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'tc-sc1'), { id: 'tc-sc1', countedAt: '2026-06-01' }));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'initial'), { items: [], date: '2026-06-01', updatedAt: new Date().toISOString() }));
+    // [OI-PA-2] ownerInvestments — the seventh restricted collection.
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'ownerInvestments', 'tc-oi1'), { id: 'tc-oi1', businessId: BIZ, date: '2026-06-01', amount: 10, createdBy: OWNER_UID }));
   });
 
   it('Once expired, every restricted collection rejects new records (same as trial_completed)', async () => {
@@ -2223,6 +2233,8 @@ describe('Module #19 Phase 2 — restricted operations enforcement', () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'batches', 'ex-b1'), validBatchFor('ex-b1')));
     await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'expenses', 'ex-e1'), { id: 'ex-e1', date: '2026-06-01', amount: 10 }));
+    // [OI-PA-2] ownerInvestments — same restriction, expired is treated identically to trial_completed.
+    await assertFails(setDoc(doc(ownerDb, 'businesses', BIZ, 'ownerInvestments', 'ex-oi1'), { id: 'ex-oi1', businessId: BIZ, date: '2026-06-01', amount: 10, createdBy: OWNER_UID }));
   });
 
   it('Read-Only Preservation: existing records remain fully readable once trial_completed', async () => {

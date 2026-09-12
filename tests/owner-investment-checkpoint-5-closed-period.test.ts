@@ -105,15 +105,15 @@ describe('firestore.rules — ownerInvestments create rule now enforces the clos
 });
 
 describe('Scope discipline — no unauthorized coupling', () => {
-  it('addOwnerInvestment still has no subscription/trial gate — OI-PA-2 remains a separate, not-yet-implemented decision', () => {
+  it('addOwnerInvestment still has no subscription/trial gate — this is correct: OI-PA-2\'s client-side half lives in the not-yet-built entry-point screen (OI-PA-3), not inside the write function itself (see Checkpoint 6 for the full explanation)', () => {
     assert.doesNotMatch(addOwnerInvestmentBody, /subscriptionAllowsNewRecords|subscriptionBlocksNewRecords/);
   });
 
-  it('the ownerInvestments create rule still has no subscriptionAllowsNewRecords call — OI-PA-2 remains separate', () => {
+  it('the ownerInvestments create rule now ALSO has a subscriptionAllowsNewRecords call — superseded by Checkpoint 6/OI-PA-2 (see owner-investment-checkpoint-6-subscription-gating.test.ts for the full proof); addOwnerInvestment itself still correctly has none, per the test immediately above', () => {
     const ruleStart = rulesSrc.indexOf("match /ownerInvestments/{investmentId} {");
     const ruleEnd = rulesSrc.indexOf('\n      }', ruleStart);
     const ruleBody = rulesSrc.slice(ruleStart, ruleEnd);
-    assert.doesNotMatch(ruleBody, /subscriptionAllowsNewRecords/);
+    assert.match(ruleBody, /subscriptionAllowsNewRecords/);
   });
 
   it('no CAIXER, Startup Investment, or Levantamento code was touched by this checkpoint', () => {

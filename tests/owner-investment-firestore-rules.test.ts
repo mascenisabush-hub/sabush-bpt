@@ -1,8 +1,9 @@
 // Owner Investment / Capital Added — Implementation Authorization §23,
 // Increment 10, Item 3 — CHECKPOINT 1 (Data Model + Persistence
 // Boundary + Security), extended by Product Architect Decision OI-PA-1
-// (closed-period enforcement, business-worth-evolution-implementation-
-// plan.md) — against a REAL Firestore emulator, not application code.
+// (closed-period enforcement) and OI-PA-2 (subscription/trial gating)
+// (business-worth-evolution-implementation-plan.md) — against a REAL
+// Firestore emulator, not application code.
 //
 // Specification §43, FR-63, FR-66; Rule 8 Findings OI-1 (security/
 // tenant isolation), OI-2 (atomicity — asserted at the data-shape
@@ -265,6 +266,38 @@ describe('ownerInvestments — Product Architect Decision OI-PA-1: closed-period
     await assertSucceeds(
       setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-023'), ownerInvestmentBody('oi-023', { date: '2026-08-01' }))
     );
+  });
+});
+
+describe('ownerInvestments — Product Architect Decision OI-PA-2: subscription/trial gating, server-side (mirrors expenses/withdrawals exactly, Module #19 Phase 2 / Business Rule 6)', () => {
+  it('rejects a create once the subscription is trial_completed', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { businessId: BIZ, status: 'trial_completed' });
+    });
+    const db = ownerDbFor();
+    await assertFails(setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-024'), ownerInvestmentBody('oi-024')));
+  });
+
+  it('rejects a create once the subscription is expired', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { businessId: BIZ, status: 'expired' });
+    });
+    const db = ownerDbFor();
+    await assertFails(setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-025'), ownerInvestmentBody('oi-025')));
+  });
+
+  it('still accepts a create while trial_active', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'subscriptions', BIZ), { businessId: BIZ, status: 'trial_active' });
+    });
+    const db = ownerDbFor();
+    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-026'), ownerInvestmentBody('oi-026')));
+  });
+
+  it('still accepts a create with no subscription document at all (pre-Phase-1 legacy fail-open, same interim behavior as expenses/withdrawals)', async () => {
+    // Deliberately does not seed subscriptions/{BIZ} at all.
+    const db = ownerDbFor();
+    await assertSucceeds(setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-027'), ownerInvestmentBody('oi-027')));
   });
 });
 

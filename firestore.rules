@@ -1308,14 +1308,23 @@ service cloud.firestore {
       // plan.md)] Closed-period enforcement added — reuses
       // `isDateInsideClosedPeriod`, the identical mechanism already
       // governing `expenses`/`withdrawals` above, applied to this
-      // record's own `date` field. Subscription/trial gating (OI-PA-2)
-      // remains a separate, not-yet-implemented decision.
+      // record's own `date` field. [Product Architect Decision OI-PA-2]
+      // Subscription/trial gating added — reuses `subscriptionAllowsNewRecords`,
+      // the identical Module #19 Phase 2 (Business Rule 6 / Decision 2)
+      // mechanism already governing `expenses`/`withdrawals` above; no
+      // new entitlement system. This collection was created after that
+      // rule's original enumerated scope (batches, purchaseBatches,
+      // quebras, expenses, withdrawals, stockCounts) and was simply
+      // never added to it — this is that same, already-accepted
+      // principle applied to a collection that came later, not a new
+      // decision.
       match /ownerInvestments/{investmentId} {
         allow read: if isOwnerOf(businessId);
         allow create: if isOwnerOf(businessId) &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == investmentId &&
           !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
+          subscriptionAllowsNewRecords(businessId) &&
           request.resource.data.get('amount', null) is number &&
           request.resource.data.get('amount', 0) > 0 &&
           request.resource.data.get('createdBy', null) == request.auth.uid;
