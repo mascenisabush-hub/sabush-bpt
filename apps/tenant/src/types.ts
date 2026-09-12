@@ -1102,7 +1102,7 @@ export interface CashLedgerEntry {
   amount: number;
   category: 'customer-payment' | 'supplier-payment' | 'expense' | 'levantamento' | 'other-governed-movement';
   sourceReference: {
-    type: 'receivable' | 'payable' | 'expense' | 'withdrawal' | 'contagem-reconciliation' | 'other';
+    type: 'receivable' | 'payable' | 'expense' | 'withdrawal' | 'contagem-reconciliation' | 'owner-investment' | 'other';
     id?: string;
   };
   occurredAt: string; // ISO string — the Owner-declared date of the event, e.g. a payment date
@@ -1216,6 +1216,46 @@ export interface StartupInvestmentEntry {
   amount: number;
   description?: string;
   recordedAt: string; // ISO string
+  createdAt: string; // ISO string — server-recorded write time
+  createdBy: string; // uid, for auditability
+}
+
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 10 (Revision 3), §23 item 3; Specification §43, FR-63–FR-66; Rule 8
+// Findings OI-1–OI-6] Money the Owner personally contributes to an
+// ALREADY-OPERATING business, after Business Worth has been
+// established — a genuine, additive Business Worth transaction, never
+// a historical record and never excluded spending. Structurally and
+// conceptually distinct from both Capital Inicial/Initial Investment
+// (a historical record, never re-entered, never affects Business Worth
+// directly) and Startup Investment (`StartupInvestmentEntry`, above —
+// governed spending, permanently excluded from Business Worth, Decision
+// 6/FR-52, never widened to cover this). Own transaction/record type,
+// own collection (`ownerInvestments`) — mirroring `Withdrawal`'s shape
+// as its natural inverse (money in vs. money out), never merged into
+// `startupInvestmentEntries`, `withdrawals`, `cashPositionDeclarations`,
+// CAIXER, or `CashLedgerEntry` itself (FR-66). Append-only — no
+// update/delete path exists for any role, at any time, mirroring
+// `StartupInvestmentEntry`'s/`CashLedgerEntry`'s own I-4 discipline (see
+// firestore.rules). `amount` must be strictly positive (`> 0`) — unlike
+// CAIXER's own liquidity fields, zero is never a valid Owner Investment
+// (Rule 8 Finding OI-1; Plan §A.3's own exact rule text).
+//
+// [Checkpoint 1 scope note — Implementation Authorization §23 item 3,
+// Plan §A.3] This checkpoint implements only the data model,
+// persistence, and security boundary. The live Business Worth formula
+// term (`+ ownerInvestmentsSinceSnapshot`, FR-64) and the
+// `BusinessWorthSnapshot.ownerInvestmentSinceLastSnapshot` drill-down
+// field (FR-65) are explicitly NOT implemented by this checkpoint — an
+// `OwnerInvestment` recorded now has no effect on any Business Worth
+// figure yet, by design, pending the later, separately-authorized
+// calculation checkpoint.
+export interface OwnerInvestment {
+  id: string;
+  businessId: string;
+  amount: number;
+  date: string; // YYYY-MM-DD — Owner-chosen, backdatable, mirroring Expense/Withdrawal precedent
+  description?: string;
   createdAt: string; // ISO string — server-recorded write time
   createdBy: string; // uid, for auditability
 }
@@ -1924,6 +1964,14 @@ export type TimelineActivityType =
   | 'business-worth-recovery-consumed'
   | 'receivable-payment-recorded'
   | 'payable-payment-recorded'
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, Rule 8 Finding OI-5]
+  // Owner Investment's own governed Timeline event — logged to the
+  // per-business Timeline (never `platform_audit_log`, reserved for
+  // platform/SuperAdmin events), only after the OwnerInvestment +
+  // CashLedgerEntry batch has successfully committed, mirroring
+  // 'withdrawal-recorded' as this event's natural inverse.
+  | 'owner-investment-recorded'
   // [Owner-Controlled Correction of a Remembered Supplier-Wording
   // Relationship — Implementation Authorization, signed SABUSHIMIKE
   // MASCENI, 29 August 2026] One additive event type covering BOTH an

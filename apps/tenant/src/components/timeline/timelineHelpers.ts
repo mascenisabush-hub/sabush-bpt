@@ -56,6 +56,11 @@ export const ACTIVITY_ICON: Record<TimelineActivityType, React.ComponentType<{ c
   'business-worth-recovery-consumed': ShieldCheck,
   'receivable-payment-recorded': Coins,
   'payable-payment-recorded': Receipt,
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3] Same Coins icon as
+  // 'receivable-payment-recorded' — both are money flowing INTO the
+  // business.
+  'owner-investment-recorded': Coins,
   // [Owner-Controlled Correction of a Remembered Supplier-Wording
   // Relationship — Implementation Authorization, 29 August 2026] Same
   // "correction" concept as 'business-worth-correction' above — reuses
@@ -97,6 +102,8 @@ export const ACTIVITY_COLOR: Record<TimelineActivityType, string> = {
   'business-worth-recovery-consumed': 'bg-amber-50 text-amber-700 border-amber-200',
   'receivable-payment-recorded': 'bg-emerald-50 text-emerald-600 border-emerald-200',
   'payable-payment-recorded': 'bg-rose-50 text-rose-600 border-rose-200',
+  // Same emerald "money in" family as 'receivable-payment-recorded'.
+  'owner-investment-recorded': 'bg-emerald-50 text-emerald-600 border-emerald-200',
   // Same amber "correction" family as 'business-worth-correction'.
   'supplier-wording-relationship-corrected': 'bg-amber-50 text-amber-700 border-amber-200',
 };
@@ -127,6 +134,7 @@ export const ACTIVITY_LABEL: Record<TimelineActivityType, string> = {
   'business-worth-recovery-consumed': 'Recuperação de Valor do Negócio',
   'receivable-payment-recorded': 'Pagamento Recebido',
   'payable-payment-recorded': 'Pagamento a Fornecedor',
+  'owner-investment-recorded': 'Investimento do Proprietário',
   'supplier-wording-relationship-corrected': 'Correção de Relação de Fornecedor',
 };
 
@@ -153,6 +161,7 @@ export const ALL_ACTIVITY_TYPES: TimelineActivityType[] = [
   'business-worth-recovery-consumed',
   'receivable-payment-recorded',
   'payable-payment-recorded',
+  'owner-investment-recorded',
   'supplier-wording-relationship-corrected',
 ];
 

@@ -1292,6 +1292,30 @@ service cloud.firestore {
         allow update, delete: if false;
       }
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 10 (Revision 3), §23 item 3; Specification §43,
+      // FR-63, FR-66; Rule 8 Finding OI-1] Structurally identical in
+      // shape to startupInvestmentEntries immediately above (same
+      // tenant path, same isOwnerOf gate, same closed-field-presence
+      // discipline, append-only) — but a genuinely separate collection,
+      // never merged with Startup Investment, Withdrawals,
+      // CashPositionDeclaration, or CAIXER (FR-66). `amount` must be
+      // strictly positive — unlike CAIXER's own liquidity fields, zero
+      // is never a valid Owner Investment (Plan §A.3's own exact rule
+      // text, reused verbatim here). Checkpoint 1 scope only — this
+      // rule governs persistence/security only; it has no bearing on,
+      // and is not read by, any Business Worth calculation.
+      match /ownerInvestments/{investmentId} {
+        allow read: if isOwnerOf(businessId);
+        allow create: if isOwnerOf(businessId) &&
+          request.resource.data.get('businessId', null) == businessId &&
+          request.resource.data.get('id', null) == investmentId &&
+          request.resource.data.get('amount', null) is number &&
+          request.resource.data.get('amount', 0) > 0 &&
+          request.resource.data.get('createdBy', null) == request.auth.uid;
+        allow update, delete: if false;
+      }
+
       // [Owner-recorded cash position] Mirrors startupInvestmentEntries'
       // own rule exactly — Owner-only, append-only, no update/delete
       // path for any role at any time. `amount` may be exactly 0 (unlike

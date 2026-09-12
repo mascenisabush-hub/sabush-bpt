@@ -106,6 +106,7 @@ import {
   Payable,
   PayablePayment,
   StartupInvestmentEntry,
+  OwnerInvestment,
   CashPositionDeclaration,
   ContagemValuationMode,
 } from '../types';
@@ -314,6 +315,20 @@ interface AddWithdrawalParams {
   amount: number;
   reason?: string;
   notes?: string;
+  submissionId?: string;
+}
+
+// [Business Worth Evolution — Implementation Authorization, Increment
+// 10 (Revision 3), §23 item 3; Specification §43, FR-63; Plan §A.3]
+// Mirrors AddWithdrawalParams exactly, as Owner Investment's own
+// natural inverse — money in, not money out. `description` matches
+// Specification §43's own optional field; there is no `reason`/`notes`
+// split here since §43 defines only a single optional `description`
+// field, unlike Withdrawal's own two-field shape.
+interface AddOwnerInvestmentParams {
+  date: string;
+  amount: number;
+  description?: string;
   submissionId?: string;
 }
 
@@ -817,6 +832,12 @@ interface AppContextType {
   addExpense: (params: AddExpenseParams) => Promise<Expense>;
   addWithdrawal: (params: AddWithdrawalParams) => Promise<Withdrawal>;
   deleteWithdrawal: (id: string) => Promise<void>;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-63–FR-66]
+  // Checkpoint 1 only — data model, persistence, and security boundary.
+  // Does NOT yet contribute to any Business Worth calculation (see
+  // OwnerInvestment's own type comment, types.ts).
+  addOwnerInvestment: (params: AddOwnerInvestmentParams) => Promise<OwnerInvestment>;
   hasInitialStockCount: boolean;
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
@@ -4685,6 +4706,122 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
 
     return newWithdrawal;
+  };
+
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-63, FR-66; Rule 8
+  // Findings OI-1–OI-3, OI-5] Checkpoint 1 ONLY — data model,
+  // persistence, and security boundary. Mirrors addWithdrawal
+  // immediately above exactly (same atomic-batch-plus-idempotency-
+  // precheck pattern, same createFirestoreBatch/logTimelineEvent
+  // reuse) as Owner Investment's own natural inverse — money in, not
+  // money out — per Decision 2's own "mirroring Withdrawal's shape as
+  // the natural inverse" instruction. Does NOT yet add this amount to
+  // any Business Worth calculation — that is FR-64's own live-formula
+  // term (`+ ownerInvestmentsSinceSnapshot`), explicitly deferred to a
+  // later, separately-authorized checkpoint (see OwnerInvestment's own
+  // type comment, types.ts). The linked CashLedgerEntry
+  // (`category: 'other-governed-movement'`) is this transaction's
+  // governed financial-position representation only — never a second,
+  // independent economic addition; it is currently excluded from the
+  // live "since snapshot" calculation's own CashLedgerEntry filter
+  // (`computeCaseALiveBusinessWorth`, calculations.ts, which reads only
+  // `customer-payment`/`supplier-payment`), so no double-counting risk
+  // exists even transiently during this checkpoint.
+  const addOwnerInvestment = async ({ date, amount, description, submissionId }: AddOwnerInvestmentParams) => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!isOwner) throw new Error('Apenas o dono pode registar um investimento do proprietário.');
+    // [Rule 8 Finding OI-1; Plan §A.3's own exact rule text] Unlike
+    // CAIXER's own liquidity fields, zero is never a valid Owner
+    // Investment amount — this is a genuine capital contribution, not a
+    // measurement. Mirrors the identical `> 0` discipline
+    // startupInvestmentEntries/receivables/payables already enforce,
+    // client-side here and authoritatively at firestore.rules' own
+    // `allow create` (below).
+    if (!(Number(amount) > 0)) throw new Error('O valor investido deve ser maior que zero.');
+
+    const businessId = activeBusinessId;
+    const roundedAmount = Number(Number(amount).toFixed(2));
+
+    // [Bug-class precedent — same duplicate-submission protection
+    // addExpense/addWithdrawal already apply] A deterministic id derived
+    // from the caller-supplied submissionId (Rule 8 Finding OI-3; Plan
+    // §A.3) — falls back to a random id only when no submissionId is
+    // supplied, mirroring addWithdrawal's own identical fallback
+    // exactly. A retry with the SAME submissionId lands on the SAME
+    // document id; the pre-check below short-circuits the common case,
+    // and firestore.rules' own `allow update, delete: if false` on this
+    // collection is the authoritative backstop even if two retries race
+    // past this client-side check simultaneously — the second batch's
+    // `set()` is classified as an update to an already-existing
+    // document and is rejected outright, so at most one
+    // OwnerInvestment/CashLedgerEntry pair can ever exist for a given
+    // submissionId.
+    const investmentId = submissionId || 'oi-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+    const investmentRef = doc(db, 'businesses', businessId, 'ownerInvestments', investmentId);
+    const existingSnap = await getDoc(investmentRef);
+    if (existingSnap.exists()) {
+      return existingSnap.data() as OwnerInvestment;
+    }
+
+    const newInvestment: OwnerInvestment = {
+      id: investmentId,
+      businessId,
+      amount: roundedAmount,
+      date,
+      description: description ? description.trim() : undefined,
+      createdAt: new Date().toISOString(),
+      createdBy: currentUser?.uid || '',
+    };
+
+    // [Specification §43, FR-63; Rule 8 Finding OI-2 — confirmed zero
+    // schema/rules change to cashLedgerEntries itself] The linked
+    // CashLedgerEntry — direction 'inflow', category
+    // 'other-governed-movement' (already in the live enum, genuinely
+    // unused by any other production write path). Paired atomically
+    // with the OwnerInvestment document below, in the same batch,
+    // exactly like addWithdrawal's own 'levantamento'-category pairing
+    // immediately above.
+    const cashLedgerEntryId = 'cle-owner-investment-' + newInvestment.id;
+    const cashLedgerEntry: CashLedgerEntry = {
+      id: cashLedgerEntryId,
+      businessId,
+      direction: 'inflow',
+      amount: newInvestment.amount,
+      category: 'other-governed-movement',
+      sourceReference: { type: 'owner-investment', id: newInvestment.id },
+      occurredAt: date,
+      createdAt: newInvestment.createdAt,
+      createdBy: currentUser?.uid || '',
+    };
+
+    const fsBatch = createFirestoreBatch(db);
+    fsBatch.set(doc(db, 'businesses', businessId, 'ownerInvestments', newInvestment.id), newInvestment);
+    fsBatch.set(doc(db, 'businesses', businessId, 'cashLedgerEntries', cashLedgerEntryId), cashLedgerEntry);
+    await fsBatch.commit();
+
+    // [Rule 8 Finding OI-5; Specification §43] Logged to the per-business
+    // Timeline only — NEVER platform_audit_log (reserved for platform/
+    // SuperAdmin events) — and only AFTER the batch above has already
+    // committed successfully, mirroring the exact ordering discipline
+    // every other governed financial write in this file already
+    // follows (a throw from fsBatch.commit() above propagates out of
+    // this function before this line is ever reached).
+    await logTimelineEvent({
+      type: 'owner-investment-recorded',
+      date,
+      title: 'Investimento do Proprietário',
+      description: newInvestment.description
+        ? `Investimento do proprietário: "${newInvestment.description}".`
+        : 'Investimento do proprietário registado.',
+      financialImpact: [{ label: 'Investimento', amount: newInvestment.amount, tone: 'positive' }],
+      details: {
+        description: newInvestment.description,
+        amount: newInvestment.amount,
+      },
+    });
+
+    return newInvestment;
   };
 
   // ============================================================
@@ -8971,6 +9108,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addQuebra,
         addExpense,
         addWithdrawal,
+        addOwnerInvestment,
         deleteWithdrawal,
         hasInitialStockCount,
         initialStockCount,
