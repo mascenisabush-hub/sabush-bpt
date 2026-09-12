@@ -912,12 +912,15 @@ FR-7 (§8) requires every snapshot to be drillable into all twelve content items
 
 For a snapshot with `establishmentMethod: 'owner-declared'`:
 - `measuredBusinessWorth` is the Owner's declared figure — the one genuine, required fact this establishment method provides.
-- `productValuationTotal`, `productValuationDetail`, `embeddedProfitTotal`, `embeddedProfitDetail`, `cashPosition`, `receivablesPosition`, `payablesPosition`, `expensesSinceLastSnapshot`, `breakagesSinceLastSnapshot`, `levantamentosSinceLastSnapshot`, and `ownerInvestmentSinceLastSnapshot` (§43) are all **omitted entirely** — never written as a fabricated zero, never written as `null` standing in for "measured as zero," and never inferred from any other data source.
+- `productValuationTotal`, `productValuationDetail`, `embeddedProfitTotal`, `embeddedProfitDetail`, `cashPosition`, `receivablesPosition`, `payablesPosition`, `expensesSinceLastSnapshot`, `breakagesSinceLastSnapshot`, and `levantamentosSinceLastSnapshot` are all **omitted entirely** — never written as a fabricated zero, never written as `null` standing in for "measured as zero," and never inferred from any other data source.
+- **`ownerInvestmentSinceLastSnapshot` (§43) is deliberately NOT in the list above — see §42.10.** [Correction, 12 September 2026, Product Architect Decision.] An earlier version of this list incorrectly named `ownerInvestmentSinceLastSnapshot` alongside the establishment-moment fields above. It does not belong there: it represents governed Owner Investment activity occurring *after* the snapshot's own establishment baseline, not establishment-moment detail, and it therefore applies to a `BusinessWorthSnapshot` established by either Contagem or Owner-Declared Business Worth. §43/FR-65's own text and Rule 8 Finding OI-6 were never in question on this point — only this list's own literal wording was. See §42.10 for the full correction record.
 - The drill-down UI, for an Owner-Declared snapshot, displays the declared total, its date, its `establishmentMethod` badge, and an explicit notice that no physical/financial breakdown exists for this snapshot because none was measured — never presenting a blank/zero field as though it meant "nothing existed," and never presenting the absence as an error or a defect in the snapshot.
 - **FR-7 is not violated by this absence** — FR-7 requires that every *available* content item be drillable; it has never required a content item to be fabricated where the establishment method genuinely does not produce it.
 - From the moment immediately after an Owner-Declared snapshot's `confirmedAt`, the live "since snapshot" calculation (`computeCaseALiveBusinessWorth`) behaves identically regardless of establishment method — embedded profit changes, expenses, withdrawals, Owner Investments, and receivable/payable payments all accrue against the declared `measuredBusinessWorth` baseline exactly as they would against a Contagem-measured one. No change to the live-calculation engine is required or introduced by this provision.
 
 **FR-69 [new].** A `BusinessWorthSnapshot` with `establishmentMethod: 'owner-declared'` must omit every drill-down field this Specification defines except `measuredBusinessWorth`, `confirmedAt`, `establishmentMethod`, and the reconciliation fields (§8) where meaningfully computable — never fabricating a zero or inferred value for any omitted field. The Dashboard/history UI must display this absence explicitly and never as an error.
+
+**Clarifying note (12 September 2026, §42.10):** `ownerInvestmentSinceLastSnapshot` is not one of the fields FR-69 reaches. It is post-establishment governed activity (§43/FR-65), not a "drill-down field" describing the snapshot's own establishment moment — the same category as the reconciliation fields FR-69 already excepts, not the same category as `productValuationTotal`/`embeddedProfitTotal`/etc. This note does not alter FR-69's own text above or narrow its omission of any other field; it resolves a drafting contradiction between this section's own prior field list (corrected, above) and §43/FR-65's always-unambiguous text. See §42.10 for the full correction record.
 
 ### 42.4 Rule 8 Assessment Correction
 
@@ -949,6 +952,7 @@ For a snapshot with `establishmentMethod: 'owner-declared'`:
 | Dashboard/report terminology, 3 surfaces | §32 | New Decision, approved | none new | No — extends scope, executes BDR Decision 3 in full |
 | Rule 8 Finding 6-A/8-A | Rule 8 Assessment | Correction addendum | N/A | No — corrects documentation of now-superseded behavior |
 | Owner-Declared verification-status qualification | BDR Decision 36 (qualified); §42.8; Rule 8 Finding OD-2 (qualified) | Qualification, approved | FR-70 | No — narrows "same governance weight" to procedural scope only; no calculation, formula, or Fecho-baseline change |
+| Owner Investment drill-down field, §42.3 drafting contradiction | §42.3 (corrected)/§42.10; Rule 8 Finding OI-6 (addendum) | Correction | none (textual; FR-65 unchanged) | No — corrects a drafting contradiction; reaffirms Rule 8's own already-correct substantive reading |
 
 ### 42.7 Product Architect Acceptance
 
@@ -986,6 +990,39 @@ For a snapshot with `establishmentMethod: 'owner-declared'`:
 
 **Product Architect:** SABUSHIMIKE Masceni
 **Date:** 23 August 2026
+
+### 42.10 Owner Investment Drill-Down Field — §42.3 Drafting Contradiction Corrected [Amendment, 12 September 2026, Product Architect Decision]
+
+**Type:** Narrow textual correction to this Specification's own §42.3, resolving a drafting contradiction discovered during a read-only governance audit of the Owner Investment capability. Not a new business decision, not a reversal of any accepted decision, not a reinterpretation of §43/FR-65, and not a reopening of BDR Decision 36 or the Owner-Declared establishment method itself.
+
+**The contradiction, as found:** §42.3's own descriptive field list (corrected, above) and the sentence immediately following FR-69 (clarified, above) both — by literal wording — named or implied that `ownerInvestmentSinceLastSnapshot` is one of the fields omitted from an Owner-Declared `BusinessWorthSnapshot`. This directly contradicted §43's own text and FR-65 itself (below, this section), and contradicted Rule 8 Finding OI-6's own substantive conclusion (`business-worth-evolution-rule8-assessment.md`), which had already determined — correctly — that this field is post-establishment governed activity, not establishment-moment detail, and must apply regardless of establishment method. The Implementation Plan (§A.3, "Snapshot drill-down field") and the Implementation Authorization (AC-R3-3) were both already drafted consistent with the §43/FR-65/OI-6 reading — only this Specification's own §42.3 text contained the literal contradiction.
+
+**Resolution:** §42.3's field list (above) is corrected to remove `ownerInvestmentSinceLastSnapshot`, with an explanatory bullet added in its place; a clarifying note (not a rewrite) is added immediately after FR-69's own text confirming the same. Rule 8 Finding OI-6 receives a matching correction addendum, appended per this document's own established practice (§42.4's own precedent), confirming its substantive conclusion was correct and is now unambiguously reflected in the Specification text it assesses.
+
+**Governing basis:** §43/FR-65 (this Specification, unchanged, always unambiguous on this point); Rule 8 Finding OI-6 (`business-worth-evolution-rule8-assessment.md`, substantive conclusion unchanged, correction addendum appended); the Implementation Plan's own §A.3 passage (`business-worth-evolution-implementation-plan.md`, already consistent, unchanged); the Implementation Authorization's own AC-R3-3 (`business-worth-evolution-implementation-authorization.md`, already consistent, unchanged); a read-only governance audit (this session) that traced the contradiction to its exact source and confirmed no other governance artifact requires amendment.
+
+**Decision, recorded in full:**
+
+> `ownerInvestmentSinceLastSnapshot` is a post-establishment governed-activity field, never establishment-moment detail. FR-69's establishment-moment omission rule does not apply to it. It must be applicable to a `BusinessWorthSnapshot` regardless of whether that snapshot was established through Contagem or Owner-Declared Business Worth.
+
+**This does NOT:**
+1. Change FR-64 or the `createdAt > activeBaseline.confirmedAt` live boundary.
+2. Change FR-63 atomic pairing or FR-66 Startup Investment separation.
+3. Reopen BDR Decision 36 or the Owner-Declared establishment method itself.
+4. Reopen or narrow FR-69's omission of any *other* field.
+5. Authorize migration or rewriting of any existing, already-created `BusinessWorthSnapshot` — this correction applies prospectively, to snapshots created under the corrected text going forward; every existing historical snapshot remains valid under the governance that existed when it was created (§27 immutability, unaffected).
+6. Authorize any implementation. `recordOwnerDeclaredBusinessWorth()` computing and writing this field, and `firestore.rules`' matching correction, remain separate, not-yet-authorized implementation work for a future checkpoint.
+
+**Documents changed by this correction:** this Specification's own §42.3 (field list and FR-69 clarifying note, above) and Rule 8 Finding OI-6 (correction addendum, `business-worth-evolution-rule8-assessment.md`). **Documents confirmed already consistent, left unchanged:** the Implementation Plan's §A.3 ("Snapshot drill-down field" passage — already states the field is "present identically regardless of which method established the baseline"); the Implementation Authorization's AC-R3-3 (already states the field appears "regardless of establishment method"); `business-worth-evolution-first-establishment-decision.md` (silent on this specific detail, as previously confirmed by this Plan's own FR-64 boundary-field clarification).
+
+### 42.11 Product Architect Acceptance — §42.10 Correction
+
+**Status:** ✅ **Accepted (12 September 2026).**
+
+> I have reviewed the drafting contradiction identified between §42.3's own field list/FR-69 text and §43/FR-65's always-unambiguous requirement, confirmed by Rule 8 Finding OI-6. I accept the correction exactly as recorded above: `ownerInvestmentSinceLastSnapshot` is post-establishment governed activity, not establishment-moment detail, and FR-69's omission rule does not reach it, regardless of establishment method. This correction does not reopen BDR Decision 36, the Owner-Declared establishment method, FR-64, FR-63, or FR-66, and does not itself authorize any implementation, migration, or Firestore rules change — a separate, subsequent, explicit instruction remains required before the corresponding implementation checkpoint (Owner-Declared FR-65, and the matching `firestore.rules` reconciliation) may begin.
+
+**Product Architect:** SABUSHIMIKE Masceni
+**Date:** 12 September 2026
 
 ## 43. Owner Investment
 

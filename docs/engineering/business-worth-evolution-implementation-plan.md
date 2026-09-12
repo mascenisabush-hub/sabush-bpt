@@ -1118,3 +1118,73 @@ Per this repository's established sequence, identical in shape to Revision 3's a
 > **Product Architect:** SABUSHIMIKE MASCENI
 > **Decision:** ACCEPTED
 > **Date:** 12 September 2026
+
+## Product Architect Decisions — Owner Investment Completion Scope (OI-PA-1 through OI-PA-14)
+
+**Type:** A recorded set of Product Architect decisions, made following a read-only full-feature audit of Owner Investment (FR-63–FR-66; Rule 8 OI-1–OI-6) against its governing Authorization. Six of these decisions (OI-PA-9 through OI-PA-14) resolve the §42.3/OI-6 drafting contradiction and are fully executed by the Specification's own §42.10/§42.11 (`business-worth-evolution-specification.md`) and the matching Rule 8 correction addendum (`business-worth-evolution-rule8-assessment.md`) — see those documents for the full record; they are restated here only for a single, complete index of the whole decision set. The remaining eight (OI-PA-1 through OI-PA-8) are forward-looking scope decisions for Owner Investment's still-incomplete completion path (entry point, closed-period/subscription enforcement, lifetime total) — **recorded now, not implemented now.** No code, Firestore rule, or test change accompanies this record; each remains gated behind its own future, separately-authorized implementation checkpoint, per this Plan's own established one-item-at-a-time discipline (§23 of the Implementation Authorization).
+
+**Status:** ✅ Accepted (12 September 2026).
+
+**Governing basis:** the full-feature audit (this session) tracing FR-63/FR-64/FR-65/FR-66 and Rule 8 OI-1–OI-6 against actual repository evidence (application code, `firestore.rules`, and this governance chain); the recovered OI-6 text (`business-worth-evolution-rule8-assessment.md`); Specification §42.3/§43/FR-65/FR-69 (`business-worth-evolution-specification.md`); this Plan's own §A.3; the Implementation Authorization's AC-R3-3.
+
+### OI-PA-1 — Closed-Period Enforcement
+
+Owner Investment must respect the existing closed-period mechanism (`isDateInsideClosedPeriod`/`findClosedPeriodConflict`, already governing `expenses` and `withdrawals`). An Owner Investment cannot be recorded with its business/economic `date` inside a closed period. Reuse the existing mechanism; do not create a new one. Enforcement must exist at the authoritative server/write boundary (`firestore.rules`), not only client-side UI validation. **Not yet implemented** — `addOwnerInvestment` (`AppContext.tsx`) and the `ownerInvestments` create rule (`firestore.rules`) currently have neither check, unlike their `expenses`/`withdrawals` siblings. This is the gap the full-feature audit identified as a Governance Gap; it is now resolved into this recorded requirement, pending its own implementation checkpoint.
+
+### OI-PA-2 — Subscription/Trial Entitlement
+
+Owner Investment is a governed tenant feature and must respect the existing subscription/trial entitlement mechanism (`subscriptionAllowsNewRecords`/`subscriptionBlocksNewRecords`). Reuse the existing gate; do not create a new entitlement system. **Not yet implemented**, for the identical reason as OI-PA-1 — neither the write function nor the rules currently check this.
+
+### OI-PA-3 — Owner Investment User Entry Point
+
+Owner Investment must be exposed to the Owner through the existing Cash Flow area (`CashFlowView.tsx`), alongside the existing Expenses, Withdrawals, and Cash Position sections — not a new top-level module. Conceptually: Levantamento is money leaving the business; Owner Investment/Capital Added is its mirror, money entering the business from the owner. **Not yet implemented** — confirmed by the full-feature audit that `addOwnerInvestment` has no UI caller anywhere in the application today.
+
+### OI-PA-4 — Simple Entry Form
+
+The entry form must remain deliberately simple: required `date` and `amount`; optional `description`. No additional accounting fields, investment categories, financing classifications, equity fields, repayment fields, or other new concepts. The existing, already-governed `OwnerInvestment` schema (`AddOwnerInvestmentParams`, `AppContext.tsx`) remains authoritative and requires no change to support this form.
+
+### OI-PA-5 — Owner Investment Is Distinct From CAIXER
+
+Owner Investment answers "how much money did the owner put into the business"; CAIXER answers "how much liquidity does the business hold at the measurement date." Owner Investment is an economic event; CAIXER is a measurement. Cash moving from liquidity into stock is a conversion and must never create a second economic-value contribution. CAIXER must never be used to infer Owner Investment. This restates and reaffirms the existing, already-implemented separation (§45.6 of this Plan; Rule 8 Finding CX-11) — no change to CAIXER is authorized or required by this record.
+
+### OI-PA-6 — Lifetime Owner Investment Total
+
+The product should eventually provide a lifetime/historical Owner Investment total, derived from the immutable `OwnerInvestment` records — never a mutable accumulator that can drift from them. This is the total amount historically invested by the owner across the full governed Owner Investment history, and is distinct from FR-65 (interval/snapshot attribution). **Not yet implemented** — confirmed by the full-feature audit that no function anywhere sums the full `ownerInvestments` array today.
+
+### OI-PA-7 — Business Worth History vs. Owner Investment History
+
+Business Worth History should eventually expose the historical measurement itself — measured product value, CAIXER liquidity breakdown, CAIXER total liquidity, and the resulting Business Worth — for each snapshot. Owner Investment history is a separate capital-history concept and must not be conflated with the historical CAIXER measurement. Both remain, for now, unimplemented display surfaces (confirmed by the full-feature audit); this record establishes that they are two distinct future surfaces, not one.
+
+### OI-PA-8 — FR-65 Remains the Interval Attribution Mechanism
+
+`ownerInvestmentSinceLastSnapshot` remains the governed interval attribution mechanism — "how much Owner Investment occurred since the active previous Business Worth baseline." It remains separate from, and must not be replaced by, the lifetime cumulative total (OI-PA-6). Both are needed; neither substitutes for the other.
+
+### OI-PA-9 — OI-6/FR-65 Interpretation Accepted
+
+`ownerInvestmentSinceLastSnapshot` is a post-establishment governed-activity field, not establishment-moment detail. FR-69's establishment-moment omission rule does not apply to it. It must be applicable to a `BusinessWorthSnapshot` regardless of whether that snapshot was established through Contagem or Owner-Declared Business Worth. **Fully executed** by Specification §42.10/§42.11.
+
+### OI-PA-10 — §42.3 Was a Drafting Contradiction
+
+The literal inclusion of `ownerInvestmentSinceLastSnapshot` inside §42.3's Owner-Declared omission list was a specification drafting contradiction, conflicting with §43, FR-65, and Rule 8 Finding OI-6. Resolved by correcting §42.3, never by weakening FR-65. **Fully executed** by Specification §42.10.
+
+### OI-PA-11 — Narrow §42.3 Correction
+
+§42.3's field list is amended narrowly: `ownerInvestmentSinceLastSnapshot` (§43) is removed from the list of fields omitted entirely from Owner-Declared snapshots, with a clarification that it represents governed Owner Investment activity occurring after the snapshot's establishment baseline, and therefore applies to snapshots established by either method. No broad rewrite of §42.3; no change to FR-69's own omission of any other field. **Fully executed** by Specification §42.3 (corrected) and §42.10.
+
+### OI-PA-12 — FR-65 Implementation Requirement (Owner-Declared Path)
+
+The Owner-Declared Business Worth path must eventually implement the same FR-65 semantic requirement as the Contagem path: `recordOwnerDeclaredBusinessWorth()` (`AppContext.tsx`) must eventually compute and write `ownerInvestmentSinceLastSnapshot`, using the already-established shared `computeOwnerInvestmentsSinceSnapshot` calculation/boundary logic (`calculations.ts`). **Not implemented by this record** — this record documents and authorizes the governance resolution only; the implementation itself remains gated behind its own future, explicit implementation checkpoint.
+
+### OI-PA-13 — Firestore Rules Must Eventually Align
+
+The current Owner-Declared `firestore.rules` branch actively rejects `ownerInvestmentSinceLastSnapshot` (`!('ownerInvestmentSinceLastSnapshot' in request.resource.data)`), which is now inconsistent with the accepted OI-6/FR-65 decision (OI-PA-9). This is a recorded implementation gap, not resolved by this record — `firestore.rules` is not modified here. It must be reconciled during the implementation checkpoint that executes OI-PA-12, without inventing a new security architecture.
+
+### OI-PA-14 — No Historical Migration
+
+No existing, already-created `BusinessWorthSnapshot` is migrated or rewritten as a result of this decision record. Every historical snapshot remains valid under the governance that existed when it was created. The corrected FR-65 behavior (once implemented, per OI-PA-12/13) applies prospectively only, to snapshots created after that implementation ships.
+
+> I have reviewed the full-feature audit's findings on Owner Investment's completion state — a missing user entry point, an unaddressed closed-period/subscription-gate asymmetry relative to Expense/Withdrawal, an absent lifetime total, and the §42.3/OI-6 drafting contradiction — and I accept OI-PA-1 through OI-PA-14 exactly as recorded above. OI-PA-9 through OI-PA-14 are fully executed by the accompanying Specification §42.10/§42.11 correction and the matching Rule 8 addendum. OI-PA-1 through OI-PA-8 are accepted as forward-looking scope decisions only — none of them, nor OI-PA-12/13, authorizes any implementation, UI, Firestore rule change, or code change at this time. Each remains gated behind its own future, separate, explicit instruction identifying the specific implementation checkpoint to execute, per this Plan's own established one-item-at-a-time discipline.
+>
+> **Product Architect:** SABUSHIMIKE MASCENI
+> **Decision:** ACCEPTED
+> **Date:** 12 September 2026
