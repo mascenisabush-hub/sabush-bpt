@@ -1301,14 +1301,21 @@ service cloud.firestore {
       // CashPositionDeclaration, or CAIXER (FR-66). `amount` must be
       // strictly positive — unlike CAIXER's own liquidity fields, zero
       // is never a valid Owner Investment (Plan §A.3's own exact rule
-      // text, reused verbatim here). Checkpoint 1 scope only — this
-      // rule governs persistence/security only; it has no bearing on,
-      // and is not read by, any Business Worth calculation.
+      // text, reused verbatim here). This rule governs
+      // persistence/security only; it has no bearing on, and is not
+      // read by, any Business Worth calculation. [Product Architect
+      // Decision OI-PA-1 (business-worth-evolution-implementation-
+      // plan.md)] Closed-period enforcement added — reuses
+      // `isDateInsideClosedPeriod`, the identical mechanism already
+      // governing `expenses`/`withdrawals` above, applied to this
+      // record's own `date` field. Subscription/trial gating (OI-PA-2)
+      // remains a separate, not-yet-implemented decision.
       match /ownerInvestments/{investmentId} {
         allow read: if isOwnerOf(businessId);
         allow create: if isOwnerOf(businessId) &&
           request.resource.data.get('businessId', null) == businessId &&
           request.resource.data.get('id', null) == investmentId &&
+          !isDateInsideClosedPeriod(businessId, request.resource.data.date) &&
           request.resource.data.get('amount', null) is number &&
           request.resource.data.get('amount', 0) > 0 &&
           request.resource.data.get('createdBy', null) == request.auth.uid;

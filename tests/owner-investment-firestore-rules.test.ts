@@ -1,7 +1,8 @@
 // Owner Investment / Capital Added — Implementation Authorization §23,
 // Increment 10, Item 3 — CHECKPOINT 1 (Data Model + Persistence
-// Boundary + Security) — against a REAL Firestore emulator, not
-// application code.
+// Boundary + Security), extended by Product Architect Decision OI-PA-1
+// (closed-period enforcement, business-worth-evolution-implementation-
+// plan.md) — against a REAL Firestore emulator, not application code.
 //
 // Specification §43, FR-63, FR-66; Rule 8 Findings OI-1 (security/
 // tenant isolation), OI-2 (atomicity — asserted at the data-shape
@@ -11,9 +12,12 @@
 // the application code performs, rather than invoking AppContext.tsx's
 // tightly-coupled addOwnerInvestment() directly).
 //
-// SCOPE: Checkpoint 1 only. This suite does NOT test any Business
-// Worth formula/snapshot effect — Owner Investment has none yet, by
-// design (see OwnerInvestment's own type comment, types.ts).
+// SCOPE: Checkpoint 1 (data model/persistence/security), plus OI-PA-1's
+// closed-period enforcement. This suite does NOT test any Business
+// Worth formula/snapshot effect — those are covered separately in
+// tests/owner-investment-checkpoint-2-fr64.test.ts,
+// tests/owner-investment-checkpoint-3-fr65.test.ts, and
+// tests/owner-investment-checkpoint-4-owner-declared-fr65.test.ts.
 //
 // HOW TO RUN:
 //   npx tsx --test tests/owner-investment-firestore-rules.test.ts
@@ -220,6 +224,47 @@ describe('ownerInvestments — append-only immutability (mirrors startupInvestme
     // collection's own `allow update: if false`, exactly mirroring
     // businessWorthSnapshots' own identical retry-rejection precedent.
     await assertFails(setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-017'), ownerInvestmentBody('oi-017')));
+  });
+});
+
+describe('ownerInvestments — Product Architect Decision OI-PA-1: closed-period enforcement, server-side (mirrors expenses/withdrawals exactly)', () => {
+  it('Owner cannot create an Owner Investment dated inside a closed monthly period', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'closedPeriods', 'monthly:2026-07'), {
+        id: 'monthly:2026-07', periodType: 'monthly', startDate: '2026-07-01', endDate: '2026-07-31',
+        closingId: 'closing-A', closedAt: new Date().toISOString(),
+      });
+    });
+    const db = ownerDbFor();
+    await assertFails(
+      setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-021'), ownerInvestmentBody('oi-021', { date: '2026-07-20' }))
+    );
+  });
+
+  it('Owner cannot create an Owner Investment dated inside a closed yearly period (no matching monthly doc)', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'closedPeriods', 'yearly:2025'), {
+        id: 'yearly:2025', periodType: 'yearly', startDate: '2025-01-01', endDate: '2025-12-31',
+        closingId: 'closing-Y', closedAt: new Date().toISOString(),
+      });
+    });
+    const db = ownerDbFor();
+    await assertFails(
+      setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-022'), ownerInvestmentBody('oi-022', { date: '2025-03-01' }))
+    );
+  });
+
+  it('a date OUTSIDE the closed period is unaffected', async () => {
+    await testEnv.withSecurityRulesDisabled(async (ctx) => {
+      await setDoc(doc(ctx.firestore(), 'businesses', BIZ, 'closedPeriods', 'monthly:2026-07'), {
+        id: 'monthly:2026-07', periodType: 'monthly', startDate: '2026-07-01', endDate: '2026-07-31',
+        closingId: 'closing-A', closedAt: new Date().toISOString(),
+      });
+    });
+    const db = ownerDbFor();
+    await assertSucceeds(
+      setDoc(doc(db, 'businesses', BIZ, 'ownerInvestments', 'oi-023'), ownerInvestmentBody('oi-023', { date: '2026-08-01' }))
+    );
   });
 });
 

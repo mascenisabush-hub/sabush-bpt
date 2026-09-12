@@ -4775,6 +4775,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   const addOwnerInvestment = async ({ date, amount, description, submissionId }: AddOwnerInvestmentParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!isOwner) throw new Error('Apenas o dono pode registar um investimento do proprietário.');
+
+    // [Business Worth Evolution — Implementation Authorization,
+    // Increment 10 (Revision 3), §23 item 3; Product Architect Decision
+    // OI-PA-1 (business-worth-evolution-implementation-plan.md)] Same
+    // closed-period guard `addExpense`/`addWithdrawal` already apply —
+    // reused, not reinvented. An Owner Investment must not be
+    // backdated into an already-closed Fecho period, exactly like
+    // every other governed financial write in this file. This is the
+    // client-side half of the guard; firestore.rules enforces the same
+    // check independently (below), since client-side gating alone is
+    // never sufficient.
+    const conflict = findClosedPeriodConflict(date);
+    if (conflict) {
+      throw new Error(
+        `Não é possível registar um investimento do proprietário em ${date} — este período ("${conflict.periodLabel}") já foi fechado. Para corrigir um período fechado, reabra-o primeiro em Fechos.`
+      );
+    }
+
     // [Rule 8 Finding OI-1; Plan §A.3's own exact rule text] Unlike
     // CAIXER's own liquidity fields, zero is never a valid Owner
     // Investment amount — this is a genuine capital contribution, not a
