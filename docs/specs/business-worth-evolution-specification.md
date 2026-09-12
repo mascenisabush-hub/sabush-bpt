@@ -1280,3 +1280,60 @@ This amendment does not authorize any code, test, `firestore.rules`, or `firesto
 **FR-80 [new].** The Contagem action concluding physical stock counting must transition directly into the CAIXER stage, with no intervening exit point or deferral option, matching the same non-optional, non-deferrable treatment §45.1 already establishes for CAIXER's inclusion in the flow as a whole.
 
 **FR-81 [new].** Before the Owner may give final Contagem confirmation, the system must present, at minimum, the measured product/stock valuation and the CAIXER-derived total liquidity position as part of the same review — never final confirmation from the raw CAIXER entry screen alone, and never omitting either figure from that review.
+
+## 46. Amendment — Lifetime Owner Investment Total (OI-PA-6) [Amendment, 12 September 2026, Product Architect Decision]
+
+### 46.1 Definition and New Functional Requirement
+
+**Type:** New Specification content, narrowly scoped to a single new Functional Requirement, converting the already-accepted Plan-level scope decision OI-PA-6 (`business-worth-evolution-implementation-plan.md`, "Product Architect Decisions — Owner Investment Completion Scope") into precise Specification text. Not a reversal of any accepted decision, not a reinterpretation of FR-63–FR-66 or FR-65 specifically, and not a reopening of §43 (Owner Investment) or §45 (CAIXER) beyond the single new requirement below.
+
+**Governing basis:** OI-PA-6 (Implementation Plan, accepted 12 September 2026); OI-PA-5 (Owner Investment is distinct from CAIXER, restated below); OI-PA-7 (Business Worth History vs. Owner Investment History, restated below); OI-PA-8 (FR-65 remains the interval attribution mechanism, restated below); §43 (Owner Investment, this Specification, unchanged); FR-65 (unchanged); the OI-PA-6 governance investigation (this session, read-only) that confirmed no Specification FR, Rule 8 finding, or Implementation Authorization item currently covers this capability.
+
+**The decision, recorded in full:**
+
+> The system shall provide a Lifetime Owner Investment Total — the full historical sum of money the Owner has personally contributed to the business across the entire governed Owner Investment history, derived exclusively from the immutable `OwnerInvestment` records (§43) and computed fresh at read time, never persisted as a separate mutable field or accumulator.
+
+**Exact aggregation formula:**
+
+```
+Lifetime Owner Investment Total = SUM(OwnerInvestment.amount) across ALL OwnerInvestment
+records belonging to the business — every record, unconditionally.
+```
+
+No record is excluded from this sum. `OwnerInvestment.date` and `OwnerInvestment.createdAt` are never used as filter criteria for this total — unlike FR-65's own `ownerInvestmentSinceLastSnapshot` (an interval figure bounded by a snapshot baseline), the Lifetime Owner Investment Total has no lower or upper time boundary, no snapshot boundary, no Contagem boundary, and no Owner-Declared-establishment boundary of any kind. Because every `OwnerInvestment` record is already permanently immutable and append-only at the Firestore rules layer (`allow update, delete: if false`, §43), and already write-idempotent under the existing submission-identity discipline (FR-63's atomic pairing), this sum requires no notion of a "valid" versus "invalid" record, no correction/supersession handling, and no deduplication logic beyond what the existing write path already guarantees.
+
+**FR-82 [new].** The system must be able to compute a Lifetime Owner Investment Total for a business, equal to the sum of `amount` across every `OwnerInvestment` record belonging to that business, with no exclusion by `date`, `createdAt`, snapshot boundary, or establishment method. This calculation must be a pure, report-time derivation over the existing immutable `OwnerInvestment` records — never a separately persisted or independently mutable field, and never capable of drifting from the sum of the underlying records it derives from.
+
+**This does NOT:**
+1. Change FR-64 or the live "since snapshot" additive-term calculation in any way.
+2. Change FR-65 or `ownerInvestmentSinceLastSnapshot` in any way — the Lifetime Owner Investment Total and FR-65's interval attribution remain distinct, per OI-PA-8, and this amendment does not merge, replace, or reinterpret either.
+3. Change FR-63's atomic `CashLedgerEntry` pairing, or any other aspect of how an `OwnerInvestment` record is created.
+4. Change FR-66 or the Startup Investment/Capital Inicial/Owner Investment three-way distinction (§43).
+5. Authorize CAIXER (§45) to be read, referenced, or used in any way to compute or infer this total. Per OI-PA-5, restated here: Owner Investment answers "how much money did the Owner put into the business," CAIXER answers "how much liquidity does the business hold at the measurement date" — the Lifetime Owner Investment Total must never be derived from, cross-checked against, or reconciled with `cashPositionCash`, `cashPositionEmola`, `cashPositionMpesa`, `cashPositionBanco`, `cashPosition`, or any standalone `CashPositionDeclaration`.
+6. Authorize the Lifetime Owner Investment Total to be folded into, merged with, or displayed as part of Business Worth History (§8's `businessWorthSnapshots`) or any historical CAIXER/product-value measurement. Per OI-PA-7, restated here: Owner Investment history is a separate capital-history concept from the historical measurement Business Worth History exposes, and the two remain distinct future surfaces, never one.
+7. Authorize a new Firestore collection, a new persisted aggregate field, a new backend job, a new server query, a new listener, a migration, a new index, or any schema change — the existing `ownerInvestments` collection and its existing client-side data availability are confirmed sufficient for this calculation.
+8. Modify the existing `OwnerInvestment` write model, `AddOwnerInvestmentParams`, the closed-period enforcement (OI-PA-1), or the subscription/trial entitlement gating (OI-PA-2).
+9. Reopen or amend the OI-PA-3/OI-PA-4 entry-form authorization already recorded at Authorization level (§45 of `business-worth-evolution-implementation-authorization.md`) — this amendment adds a distinct capability alongside it, not a change to it.
+10. Authorize any implementation, UI, Firestore rules, i18n, or test change. FR-82 establishes governance only. A Rule 8 Assessment addendum, an Implementation Plan entry, and a separate Implementation Authorization item each remain required, separately, before any code may be written.
+
+**Approved presentation (governance-level only, not itself an implementation authorization):** the Lifetime Owner Investment Total shall be surfaced as a visible total inside the existing Owner Investment card of `CashFlowView.tsx` (§43, already authorized at §45 of the Implementation Authorization for its entry-point form), accompanied by a collapsible history of individual `OwnerInvestment` records within that same card — no new top-level Owner Investment module or navigation item is authorized, consistent with OI-PA-3's existing constraint. This presentation decision does not itself authorize any UI implementation; it records where, once implemented, this capability belongs.
+
+**Traceability (local to this section, per this document's own §41.6/§42.6/§45.11 convention — the master Traceability Matrix, §28, is original-scope only and is not amended by this or any later section):**
+
+| Item | Governing Decision | Specification Section | New/Amended FR | Reverses a prior decision? |
+|---|---|---|---|---|
+| Lifetime Owner Investment Total | OI-PA-6 (Implementation Plan) | §46.1 | FR-82 | No — new territory, additive to §43 |
+| Separation from CAIXER restated | OI-PA-5 (Implementation Plan) | §46.1, item 5 | none new | No — §45 unamended |
+| Separation from Business Worth History restated | OI-PA-7 (Implementation Plan) | §46.1, item 6 | none new | No — §8 unamended |
+| Separation from FR-65 restated | OI-PA-8 (Implementation Plan) | §46.1, item 2 | none new | No — FR-65 unamended |
+
+**FR numbering note, per this document's own §45.12 disclosure convention:** this amendment's new FR is numbered FR-82 — one past FR-81, the highest previously-assigned number in this Specification — so as not to compound the pre-existing, already-disclosed FR-70 collision (§45.12) or introduce a new one. FR-70 is not reused, corrected, or otherwise touched by this amendment.
+
+### 46.2 Product Architect Acceptance
+
+**Status:** ✅ **Accepted (12 September 2026).**
+
+> I have reviewed the Lifetime Owner Investment Total capability as recorded above, converting OI-PA-6 into new Functional Requirement FR-82. I accept this exactly as recorded: a report-time sum of `OwnerInvestment.amount` across all records belonging to the business, with no date, snapshot, or establishment-method filtering; never a persisted or mutable accumulator; distinct from and additive to FR-65's interval attribution (OI-PA-8); never inferred from or reconciled against CAIXER (OI-PA-5); never folded into Business Worth History (OI-PA-7); surfaced inside the existing Owner Investment card in Cash Flow, with no new top-level module (consistent with OI-PA-3). This acceptance does not reopen FR-63, FR-64, FR-65, FR-66, §43, §45, or the OI-PA-3/OI-PA-4 entry-form authorization already recorded at Authorization §45, all of which remain exactly as already governed. **This acceptance establishes Specification-level governance only. It does NOT authorize implementation, any code change, any test change, any `firestore.rules` change, an Implementation Plan entry, a Rule 8 Assessment addendum, or an Implementation Authorization — each remains a separate, later, explicitly-gated step, per this document's own standing discipline.**
+
+**Product Architect:** SABUSHIMIKE MASCENI
+**Date:** 12 September 2026
