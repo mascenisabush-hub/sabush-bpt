@@ -290,6 +290,11 @@ export const fr: TranslationDict = {
       subtitle: "Argent retiré de l'entreprise pour usage personnel, salaire, famille, ou un autre besoin.",
       addButton: '+ Retrait',
     },
+    ownerInvestmentSection: {
+      title: 'Investissement du Propriétaire',
+      subtitle: "Argent que le propriétaire ajoute à l'entreprise, en plus de ce qui est déjà établi.",
+      addButton: '+ Investissement',
+    },
     form: {
       amountLabel: 'Montant',
       debtorNameLabel: 'Qui doit (optionnel)',
@@ -634,6 +639,20 @@ export const fr: TranslationDict = {
     notesLabel: 'Notes (optionnel)',
     notesPlaceholder: 'Détails supplémentaires sur ce retrait...',
     submitButton: 'Enregistrer le Retrait',
+    errors: {
+      invalidAmount: 'Veuillez saisir un montant valide supérieur à 0.',
+    },
+  },
+  addOwnerInvestment: {
+    title: 'Enregistrer un Investissement du Propriétaire',
+    subtitle: 'Argent que le propriétaire ajoute à l\\u2019entreprise, en plus de ce qui est déjà établi.',
+    registeredTitle: 'Investissement Enregistré !',
+    successMessage: 'Investissement de {{amount}} enregistré.',
+    dateLabel: 'Date de l\\u2019Investissement',
+    amountLabel: 'Montant ({{symbol}})',
+    descriptionLabel: 'Description (optionnel)',
+    descriptionPlaceholder: 'Détails supplémentaires sur cet investissement...',
+    submitButton: 'Enregistrer l\\u2019Investissement',
     errors: {
       invalidAmount: 'Veuillez saisir un montant valide supérieur à 0.',
     },

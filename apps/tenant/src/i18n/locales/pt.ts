@@ -310,6 +310,14 @@ export interface TranslationDict {
       subtitle: string;
       addButton: string;
     };
+    // [Implementation Authorization §45 / AC-OI-UI-1] Same reasoning as
+    // expensesSection/withdrawalsSection above, for the embedded
+    // AddOwnerInvestmentView.
+    ownerInvestmentSection: {
+      title: string;
+      subtitle: string;
+      addButton: string;
+    };
     form: {
       amountLabel: string;
       debtorNameLabel: string;
@@ -665,6 +673,22 @@ export interface TranslationDict {
     };
     notesLabel: string;
     notesPlaceholder: string;
+    submitButton: string;
+    errors: {
+      invalidAmount: string;
+    };
+  };
+  // [Implementation Authorization §45 / AC-OI-UI-1; OI-PA-3, OI-PA-4]
+  // Dedicated Owner Investment entry point, mirroring addWithdrawal above.
+  addOwnerInvestment: {
+    title: string;
+    subtitle: string;
+    registeredTitle: string;
+    successMessage: string;
+    dateLabel: string;
+    amountLabel: string;
+    descriptionLabel: string;
+    descriptionPlaceholder: string;
     submitButton: string;
     errors: {
       invalidAmount: string;
@@ -1544,6 +1568,11 @@ export const pt: TranslationDict = {
       subtitle: 'Dinheiro retirado do negócio para uso pessoal, salário, família, ou outra necessidade.',
       addButton: '+ Levantamento',
     },
+    ownerInvestmentSection: {
+      title: 'Investimento do Proprietário',
+      subtitle: 'Dinheiro que o proprietário adiciona ao negócio, além do que já está estabelecido.',
+      addButton: '+ Investimento',
+    },
     form: {
       amountLabel: 'Valor',
       debtorNameLabel: 'Quem deve (opcional)',
@@ -1895,6 +1924,20 @@ export const pt: TranslationDict = {
     notesLabel: 'Notas (opcional)',
     notesPlaceholder: 'Detalhes adicionais sobre este levantamento...',
     submitButton: 'Registar Levantamento',
+    errors: {
+      invalidAmount: 'Por favor introduza um valor válido superior a 0.',
+    },
+  },
+  addOwnerInvestment: {
+    title: 'Registar Investimento do Proprietário',
+    subtitle: 'Dinheiro que o proprietário adiciona ao negócio, além do que já está estabelecido.',
+    registeredTitle: 'Investimento Registado!',
+    successMessage: 'Investimento de {{amount}} registado.',
+    dateLabel: 'Data do Investimento',
+    amountLabel: 'Valor ({{symbol}})',
+    descriptionLabel: 'Descrição (opcional)',
+    descriptionPlaceholder: 'Detalhes adicionais sobre este investimento...',
+    submitButton: 'Registar Investimento',
     errors: {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
     },

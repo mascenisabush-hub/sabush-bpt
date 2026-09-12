@@ -45,7 +45,7 @@ import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
-import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp, Receipt } from 'lucide-react';
+import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp, Receipt, ArrowDownToLine } from 'lucide-react';
 import { Receivable, Payable, type SupplierRecord } from '../types';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 // [Bug fix — "digits typed are hidden" on decimal entry] See this
@@ -55,6 +55,7 @@ import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
 import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 import { AddExpenseView } from './AddExpenseView';
 import { AddWithdrawalView } from './AddWithdrawalView';
+import { AddOwnerInvestmentView } from './AddOwnerInvestmentView';
 
 function newSubmissionId(prefix: string): string {
   return prefix + '-' + Date.now() + '-' + Math.random().toString(36).substr(2, 6);
@@ -237,6 +238,9 @@ export const CashFlowView: React.FC = () => {
   // above, not a new interaction pattern.
   const [showAddExpense, setShowAddExpense] = useState(false);
   const [showAddWithdrawal, setShowAddWithdrawal] = useState(false);
+  // [Implementation Authorization §45 / AC-OI-UI-1] Same toggle pattern,
+  // for the new Owner Investment section (placed after Withdrawals).
+  const [showAddOwnerInvestment, setShowAddOwnerInvestment] = useState(false);
   const [showCashHistory, setShowCashHistory] = useState(false);
   const [newCashAmount, setNewCashAmount] = useState('');
   const [newCashDate, setNewCashDate] = useState(getTodayDateString());
@@ -785,6 +789,44 @@ export const CashFlowView: React.FC = () => {
               </button>
             </div>
             <AddWithdrawalView onComplete={() => setShowAddWithdrawal(false)} />
+          </div>
+        )}
+      </div>
+
+      {/* [Implementation Authorization §45 / AC-OI-UI-1] OWNER INVESTMENT
+          — the already-authorized, already-implemented (§23 item 3,
+          Checkpoints 1–6) Owner Investment capability's own entry point.
+          Same collapsible-card pattern as EXPENSES/WITHDRAWALS above,
+          positioned immediately after Withdrawals per §45's own scope.
+          AddOwnerInvestmentView's own form/submission logic is
+          completely self-contained; only onComplete differs (collapses
+          this section). */}
+      <div className="bg-white rounded-[10px] elevation-1 p-4">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-2">
+            <ArrowDownToLine className="w-4 h-4 text-[#0B1F3A]" />
+            <h2 className="text-sm font-bold text-title">{t('cashFlow.ownerInvestmentSection.title')}</h2>
+          </div>
+          {!showAddOwnerInvestment && (
+            <button
+              onClick={() => setShowAddOwnerInvestment(true)}
+              className="flex items-center gap-1 text-xs font-bold text-[#0B1F3A] bg-[#0B1F3A]/[0.06] px-3 py-1.5 rounded-md hover:bg-[#0B1F3A]/10 transition"
+            >
+              <Plus className="w-3.5 h-3.5" /> {t('cashFlow.ownerInvestmentSection.addButton')}
+            </button>
+          )}
+        </div>
+        {!showAddOwnerInvestment && (
+          <p className="text-[10px] text-gray-500 mt-1">{t('cashFlow.ownerInvestmentSection.subtitle')}</p>
+        )}
+        {showAddOwnerInvestment && (
+          <div className="mt-3">
+            <div className="flex justify-end mb-1">
+              <button type="button" onClick={() => setShowAddOwnerInvestment(false)} className="text-gray-400 hover:text-gray-700">
+                <X className="w-4 h-4" />
+              </button>
+            </div>
+            <AddOwnerInvestmentView onComplete={() => setShowAddOwnerInvestment(false)} />
           </div>
         )}
       </div>

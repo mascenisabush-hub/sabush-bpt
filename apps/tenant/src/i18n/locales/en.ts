@@ -290,6 +290,11 @@ export const en: TranslationDict = {
       subtitle: 'Money taken out of the business for personal use, salary, family, or another need.',
       addButton: '+ Withdrawal',
     },
+    ownerInvestmentSection: {
+      title: 'Owner Investment',
+      subtitle: 'Money the owner adds into the business, on top of what is already established.',
+      addButton: '+ Investment',
+    },
     form: {
       amountLabel: 'Amount',
       debtorNameLabel: 'Who owes this (optional)',
@@ -634,6 +639,20 @@ export const en: TranslationDict = {
     notesLabel: 'Notes (optional)',
     notesPlaceholder: 'Additional details about this withdrawal...',
     submitButton: 'Record Withdrawal',
+    errors: {
+      invalidAmount: 'Please enter a valid amount greater than 0.',
+    },
+  },
+  addOwnerInvestment: {
+    title: 'Record Owner Investment',
+    subtitle: 'Money the owner adds into the business, on top of what is already established.',
+    registeredTitle: 'Investment Recorded!',
+    successMessage: 'Investment of {{amount}} recorded.',
+    dateLabel: 'Investment Date',
+    amountLabel: 'Amount ({{symbol}})',
+    descriptionLabel: 'Description (optional)',
+    descriptionPlaceholder: 'Additional details about this investment...',
+    submitButton: 'Record Investment',
     errors: {
       invalidAmount: 'Please enter a valid amount greater than 0.',
     },
