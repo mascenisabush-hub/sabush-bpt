@@ -294,6 +294,8 @@ export const fr: TranslationDict = {
       title: 'Investissement du Propriétaire',
       subtitle: "Argent que le propriétaire ajoute à l'entreprise, en plus de ce qui est déjà établi.",
       addButton: '+ Investissement',
+      lifetimeTotalLabel: 'Total Investi (Historique)',
+      history: 'Historique',
     },
     form: {
       amountLabel: 'Montant',

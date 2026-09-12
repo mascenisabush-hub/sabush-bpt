@@ -294,6 +294,8 @@ export const en: TranslationDict = {
       title: 'Owner Investment',
       subtitle: 'Money the owner adds into the business, on top of what is already established.',
       addButton: '+ Investment',
+      lifetimeTotalLabel: 'Total Invested (Lifetime)',
+      history: 'History',
     },
     form: {
       amountLabel: 'Amount',

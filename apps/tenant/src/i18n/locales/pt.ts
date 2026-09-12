@@ -317,6 +317,8 @@ export interface TranslationDict {
       title: string;
       subtitle: string;
       addButton: string;
+      lifetimeTotalLabel: string;
+      history: string;
     };
     form: {
       amountLabel: string;
@@ -1572,6 +1574,8 @@ export const pt: TranslationDict = {
       title: 'Investimento do Proprietário',
       subtitle: 'Dinheiro que o proprietário adiciona ao negócio, além do que já está estabelecido.',
       addButton: '+ Investimento',
+      lifetimeTotalLabel: 'Total Investido (Histórico)',
+      history: 'Histórico',
     },
     form: {
       amountLabel: 'Valor',

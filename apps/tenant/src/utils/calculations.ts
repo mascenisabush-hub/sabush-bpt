@@ -1692,3 +1692,33 @@ export function computeStartupInvestmentTotal(params: {
 
   return { referencedPurchasesTotal, referencedExpensesTotal, entriesTotal, total };
 }
+
+/**
+ * [Business Worth Evolution — Implementation Authorization §46/§47
+ * (Checkpoint 8); Specification §46, FR-82; Rule 8 Assessment Addendum
+ * — Lifetime Owner Investment Total, Findings OI-7–OI-18] The Lifetime
+ * Owner Investment Total: `SUM(OwnerInvestment.amount)` across every
+ * immutable `OwnerInvestment` record belonging to the business — a
+ * pure, report-time derivation, never a persisted or mutable
+ * accumulator, following the identical "aggregate and format, never
+ * duplicate" discipline `computeStartupInvestmentTotal` (above) already
+ * applies to its own total.
+ *
+ * Deliberately takes NO snapshot/date/time parameter of any kind —
+ * this is the structural safeguard Rule 8 Finding OI-9 requires,
+ * distinguishing this function from `computeOwnerInvestmentsSinceSnapshot`
+ * (above), FR-64/FR-65's own time-bounded boundary+sum function, by
+ * signature alone, so the two can never be confused or accidentally
+ * merged. No record is ever excluded by `date`, `createdAt`, a
+ * `BusinessWorthSnapshot` boundary, Contagem, or Owner-Declared
+ * establishment method (§46.1) — every record in the array supplied
+ * contributes unconditionally, which is why this function accepts only
+ * the caller's own already business-scoped `ownerInvestments` array
+ * and nothing else (Rule 8 Finding OI-13 — tenant isolation is
+ * inherited from the caller's own scoping, never re-derived here).
+ */
+export function computeOwnerInvestmentLifetimeTotal(ownerInvestments: OwnerInvestment[]): number {
+  return Number(
+    ownerInvestments.reduce((sum, oi) => sum + Number(oi.amount || 0), 0).toFixed(2)
+  );
+}

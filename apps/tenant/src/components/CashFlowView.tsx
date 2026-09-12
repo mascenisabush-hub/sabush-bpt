@@ -45,6 +45,7 @@ import React, { useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
+import { computeOwnerInvestmentLifetimeTotal } from '../utils/calculations';
 import { Landmark, HandCoins, Wallet, Plus, X, ChevronDown, ChevronUp, Receipt, ArrowDownToLine } from 'lucide-react';
 import { Receivable, Payable, type SupplierRecord } from '../types';
 import { useUnsavedChangesWarning } from '../hooks/useUnsavedChangesWarning';
@@ -205,6 +206,13 @@ export const CashFlowView: React.FC = () => {
     recordPayablePayment,
     cashPositionDeclarations,
     addCashPositionDeclaration,
+    // [Implementation Authorization §46/§47, Checkpoint 8; Specification
+    // §46, FR-82] Already business-scoped, already-immutable, already
+    // sorted newest-first by createdAt (AppContext.tsx's own listener
+    // comment) — the single source array for BOTH the Lifetime Owner
+    // Investment Total and its collapsible history below, per Rule 8
+    // Finding OI-17's shared-source requirement.
+    ownerInvestments,
     // [Bug fix — auto-created Payables displayed a meaningless raw
     // document ID instead of the supplier's name] Needed to resolve
     // Payable.supplierId back to an actual name — see
@@ -241,6 +249,10 @@ export const CashFlowView: React.FC = () => {
   // [Implementation Authorization §45 / AC-OI-UI-1] Same toggle pattern,
   // for the new Owner Investment section (placed after Withdrawals).
   const [showAddOwnerInvestment, setShowAddOwnerInvestment] = useState(false);
+  // [Implementation Authorization §46/§47, Checkpoint 8] Collapsible
+  // history toggle for individual OwnerInvestment records — same
+  // show/hide pattern as showCashHistory above.
+  const [showOwnerInvestmentHistory, setShowOwnerInvestmentHistory] = useState(false);
   const [showCashHistory, setShowCashHistory] = useState(false);
   const [newCashAmount, setNewCashAmount] = useState('');
   const [newCashDate, setNewCashDate] = useState(getTodayDateString());
@@ -264,6 +276,14 @@ export const CashFlowView: React.FC = () => {
   // newest-first (AppContext's own onSnapshot sort) — index 0 is always
   // the current figure, if any declaration exists yet.
   const currentCashPosition = cashPositionDeclarations.length > 0 ? cashPositionDeclarations[0] : null;
+
+  // [Implementation Authorization §46/§47, Checkpoint 8; Specification
+  // §46, FR-82] Pure derived calculation over the already business-
+  // scoped, already-loaded `ownerInvestments` array — no snapshot/date
+  // filtering, no separate fetch, no persisted field. The same
+  // `ownerInvestments` array is used, unfiltered, for the collapsible
+  // history below (Rule 8 Finding OI-17's shared-source requirement).
+  const ownerInvestmentLifetimeTotal = computeOwnerInvestmentLifetimeTotal(ownerInvestments);
 
   const handleCreateReceivable = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -819,6 +839,52 @@ export const CashFlowView: React.FC = () => {
         {!showAddOwnerInvestment && (
           <p className="text-[10px] text-gray-500 mt-1">{t('cashFlow.ownerInvestmentSection.subtitle')}</p>
         )}
+
+        {/* [Implementation Authorization §46/§47, Checkpoint 8; AC-OI-LT-7]
+            Lifetime Owner Investment Total — always visible, regardless
+            of the add-form toggle, mirroring Cash Position's own
+            currentCashPosition block above (lines 359-392), which
+            likewise renders unconditionally alongside its own toggle. */}
+        <div className="mt-3">
+          <p className="text-[10px] font-bold text-gray-500 uppercase tracking-wide">
+            {t('cashFlow.ownerInvestmentSection.lifetimeTotalLabel')}
+          </p>
+          <p className="text-lg font-bold text-[#0B1F3A] type-number">
+            {formatCurrency(ownerInvestmentLifetimeTotal, currencySymbol)}
+          </p>
+        </div>
+
+        {/* [AC-OI-LT-8, AC-OI-LT-9] Collapsible history of individual
+            OwnerInvestment records — same show/hide pattern as Cash
+            Position's own history (lines 444-465), reading from the
+            exact same `ownerInvestments` array the total above sums,
+            with no independent filtering, re-sorting, or re-querying. */}
+        {ownerInvestments.length > 0 && (
+          <div className="mt-3">
+            <button
+              type="button"
+              onClick={() => setShowOwnerInvestmentHistory((v) => !v)}
+              className="flex items-center gap-1 text-[11px] font-bold text-gray-500 hover:text-gray-700"
+            >
+              {showOwnerInvestmentHistory ? <ChevronUp className="w-3.5 h-3.5" /> : <ChevronDown className="w-3.5 h-3.5" />}
+              {t('cashFlow.ownerInvestmentSection.history')}
+            </button>
+            {showOwnerInvestmentHistory && (
+              <div className="mt-2 space-y-1.5">
+                {ownerInvestments.map((oi) => (
+                  <div key={oi.id} className="flex items-center justify-between px-3 py-1.5 rounded-md border border-gray-100 text-xs">
+                    <div className="flex flex-col">
+                      <span className="text-gray-500">{formatDate(oi.date)}</span>
+                      {oi.description && <span className="text-[10px] text-gray-400">{oi.description}</span>}
+                    </div>
+                    <span className="type-number text-gray-600">{formatCurrency(oi.amount, currencySymbol)}</span>
+                  </div>
+                ))}
+              </div>
+            )}
+          </div>
+        )}
+
         {showAddOwnerInvestment && (
           <div className="mt-3">
             <div className="flex justify-end mb-1">

@@ -171,7 +171,13 @@ describe('M. i18n keys exist in en/pt/fr', () => {
   }
 
   it('pt.ts (canonical TranslationDict) declares matching type shapes for both blocks', () => {
-    assert.match(ptSrc, /ownerInvestmentSection:\s*\{\s*title:\s*string;\s*subtitle:\s*string;\s*addButton:\s*string;\s*\};/);
+    // [Checkpoint 8 / Implementation Authorization §46/§47, FR-82]
+    // ownerInvestmentSection's type shape was extended, additively only
+    // (no existing key removed or renamed), with lifetimeTotalLabel and
+    // history — this assertion is updated to match that authorized
+    // addition; it still asserts an exact, closed shape (no unexpected
+    // further keys), just a larger one than Checkpoint 7's own original.
+    assert.match(ptSrc, /ownerInvestmentSection:\s*\{\s*title:\s*string;\s*subtitle:\s*string;\s*addButton:\s*string;\s*lifetimeTotalLabel:\s*string;\s*history:\s*string;\s*\};/);
     assert.match(ptSrc, /addOwnerInvestment:\s*\{\s*title:\s*string;/);
   });
 });
