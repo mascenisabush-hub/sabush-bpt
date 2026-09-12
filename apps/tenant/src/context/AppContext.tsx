@@ -838,6 +838,18 @@ interface AppContextType {
   // Does NOT yet contribute to any Business Worth calculation (see
   // OwnerInvestment's own type comment, types.ts).
   addOwnerInvestment: (params: AddOwnerInvestmentParams) => Promise<OwnerInvestment>;
+  // [Bug fix — Checkpoint 8 (Specification §46, FR-82) — the raw,
+  // already business-scoped, already-immutable OwnerInvestment array
+  // was read internally by AppContext.tsx's own calculation call
+  // sites (getCurrentBusinessWorth/getEstimatedBusinessWorth/
+  // recordStockCount) since Checkpoint 2, but was never itself
+  // exposed on this context type or the Provider's own value object
+  // — no UI component needed the raw array before Checkpoint 8's
+  // Lifetime Owner Investment Total, which is the first consumer.
+  // Missing this field/value caused `ownerInvestments` to resolve to
+  // `undefined` for any consumer, crashing computeOwnerInvestmentLifetimeTotal's
+  // `.reduce()` call in CashFlowView.tsx.]
+  ownerInvestments: OwnerInvestment[];
   hasInitialStockCount: boolean;
   initialStockCount: StockCount | null;
   initialCapitalValue: number;
@@ -9238,6 +9250,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         addExpense,
         addWithdrawal,
         addOwnerInvestment,
+        // [Bug fix — Checkpoint 8, Specification §46/FR-82] Now exposed
+        // on the context value itself — previously only read internally
+        // by this file's own calculation call sites; see the matching
+        // AppContextType field comment above for the full history.
+        ownerInvestments,
         deleteWithdrawal,
         hasInitialStockCount,
         initialStockCount,
