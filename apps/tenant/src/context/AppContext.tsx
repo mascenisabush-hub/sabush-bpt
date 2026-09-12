@@ -5366,15 +5366,51 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // helper.] Every field FR-69 requires omitted — sourceStockCountId,
         // productValuationTotal/Detail, embeddedProfitTotal/Detail,
         // cashPosition, receivablesPosition, payablesPosition,
-        // expenses/breakages/levantamentosSinceLastSnapshot,
-        // ownerInvestmentSinceLastSnapshot — is genuinely absent below,
-        // never written as a fabricated zero/undefined-as-zero.
+        // expenses/breakages/levantamentosSinceLastSnapshot — is
+        // genuinely absent below, never written as a fabricated
+        // zero/undefined-as-zero.
+        //
+        // [Business Worth Evolution — Implementation Authorization,
+        // Increment 10 (Revision 3), §23 item 3; Specification §43,
+        // FR-65; Rule 8 Finding OI-6; Product Architect Decision
+        // OI-PA-9/OI-PA-12, Specification §42.10/§42.11]
+        // `ownerInvestmentSinceLastSnapshot` is deliberately NOT in the
+        // omitted-fields list above — it is post-establishment governed
+        // activity, never establishment-moment detail (§42.3's own
+        // field list was corrected to remove it for exactly this
+        // reason), so it applies to a snapshot established by either
+        // method. Computed here via the SAME shared, exported
+        // `computeOwnerInvestmentsSinceSnapshot` helper (calculations.ts)
+        // FR-64's own live term and the Contagem write path
+        // (`recordStockCount`, below) both already use — identical
+        // "previous ACTIVE snapshot's own confirmedAt, or null if this
+        // is the business's very first snapshot" baseline resolution,
+        // so this figure can never diverge from what FR-64 already
+        // included for the same interval.
+        const previousActiveSnapshots = businessWorthSnapshots.filter((s) => s.status === 'active');
+        const previousActiveSnapshot = previousActiveSnapshots.length
+          ? [...previousActiveSnapshots].sort((a, b) => {
+              const aMs = (a.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+              const bMs = (b.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? 0;
+              return bMs - aMs;
+            })[0]
+          : null;
+        const activeBaselineConfirmedAtMillis = previousActiveSnapshot
+          ? (previousActiveSnapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? null
+          : null;
+        const ownerInvestmentSinceLastSnapshot = computeOwnerInvestmentsSinceSnapshot(
+          ownerInvestments,
+          activeBaselineConfirmedAtMillis,
+          Date.now()
+        );
+
         const businessWorthSnapshot: Omit<BusinessWorthSnapshot, 'confirmedAt'> = {
           id: snapshotId,
           businessId,
           establishmentMethod: 'owner-declared',
           measuredBusinessWorth: roundedAmount,
           previousCurrentBusinessWorth,
+          ownerInvestmentSinceLastSnapshot,
           ...(estimatedBusinessWorthImmediatelyBefore !== undefined ? { estimatedBusinessWorthImmediatelyBefore } : {}),
           ...(difference !== undefined ? { difference } : {}),
           correctionWindowExpiresAt: new Date(Date.now() + 3 * 60 * 60 * 1000).toISOString(),

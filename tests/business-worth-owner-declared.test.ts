@@ -199,7 +199,6 @@ describe('FR-69 — every omitted drill-down field must be genuinely absent, ser
     expensesSinceLastSnapshot: 0,
     breakagesSinceLastSnapshot: 0,
     levantamentosSinceLastSnapshot: 0,
-    ownerInvestmentSinceLastSnapshot: 0,
   };
 
   for (const [field, value] of Object.entries(forbiddenFields)) {
@@ -220,6 +219,44 @@ describe('FR-69 — every omitted drill-down field must be genuinely absent, ser
   it('accepts an Owner-Declared write that omits every one of the above fields entirely (the honest, correct shape)', async () => {
     const db = ownerDbFor();
     const submissionId = 'owner-declared-sub-clean';
+    const bwsId = ownerDeclaredSnapshotId(submissionId);
+
+    await assertSucceeds(
+      setDoc(doc(db, 'businesses', BIZ, 'businessWorthSnapshots', bwsId), ownerDeclaredBody(bwsId))
+    );
+  });
+});
+
+describe('FR-65 — ownerInvestmentSinceLastSnapshot is post-establishment governed activity, never establishment-moment detail (Specification §42.3/§42.10, correcting a drafting contradiction; Rule 8 Finding OI-6, unchanged)', () => {
+  it('accepts an Owner-Declared write that includes ownerInvestmentSinceLastSnapshot as a number — this field is NOT one of the FR-69-omitted fields, unlike its siblings above', async () => {
+    const db = ownerDbFor();
+    const submissionId = 'owner-declared-sub-with-oi-since-snapshot';
+    const bwsId = ownerDeclaredSnapshotId(submissionId);
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'businesses', BIZ, 'businessWorthSnapshots', bwsId),
+        ownerDeclaredBody(bwsId, {}, { ownerInvestmentSinceLastSnapshot: 100000 })
+      )
+    );
+  });
+
+  it('accepts an Owner-Declared write with ownerInvestmentSinceLastSnapshot equal to 0 — a genuine governed zero, not an omission', async () => {
+    const db = ownerDbFor();
+    const submissionId = 'owner-declared-sub-with-oi-since-snapshot-zero';
+    const bwsId = ownerDeclaredSnapshotId(submissionId);
+
+    await assertSucceeds(
+      setDoc(
+        doc(db, 'businesses', BIZ, 'businessWorthSnapshots', bwsId),
+        ownerDeclaredBody(bwsId, {}, { ownerInvestmentSinceLastSnapshot: 0 })
+      )
+    );
+  });
+
+  it('still accepts an Owner-Declared write that omits ownerInvestmentSinceLastSnapshot entirely — optional, not required (e.g. a legacy pre-correction write shape)', async () => {
+    const db = ownerDbFor();
+    const submissionId = 'owner-declared-sub-without-oi-since-snapshot';
     const bwsId = ownerDeclaredSnapshotId(submissionId);
 
     await assertSucceeds(

@@ -306,28 +306,38 @@ describe('FR-65 — no-baseline case (business\'s first-ever snapshot): governed
 });
 
 // ============================================================
-// FR-69 (Owner-Declared) omission discipline — confirmed by both the
-// existing recordOwnerDeclaredBusinessWorth source text and the
-// pre-existing firestore.rules absence check (which already
-// anticipated this exact field name).
+// FR-69 (Owner-Declared) omission discipline — this checkpoint (3) was
+// built and tested under §42.3's own then-literal (and, as later
+// discovered, self-contradictory) field list, which named
+// ownerInvestmentSinceLastSnapshot among the Owner-Declared omissions.
+// A subsequent read-only full-feature audit traced this to a genuine
+// Specification drafting contradiction against §43/FR-65's own text
+// and Rule 8 Finding OI-6's own (always-correct) substantive
+// conclusion — resolved by Product Architect Decision (Specification
+// §42.10/§42.11; Implementation Plan OI-PA-9 through OI-PA-13) and
+// implemented in Checkpoint 4
+// (tests/owner-investment-checkpoint-4-owner-declared-fr65.test.ts
+// carries the full, dedicated proof). This block is superseded by
+// design, not weakened — see that file for the current, authoritative
+// behavior.
 // ============================================================
 
-describe('FR-65 — Owner-Declared establishment: ownerInvestmentSinceLastSnapshot remains genuinely OMITTED (FR-69), never a fabricated 0', () => {
-  it('recordOwnerDeclaredBusinessWorth\'s own snapshot object has no ownerInvestmentSinceLastSnapshot field', () => {
+describe('FR-65 — Owner-Declared establishment: ownerInvestmentSinceLastSnapshot is now genuinely PRESENT (superseded by Checkpoint 4 — see owner-investment-checkpoint-4-owner-declared-fr65.test.ts for the full proof)', () => {
+  it('recordOwnerDeclaredBusinessWorth\'s own snapshot object now HAS an ownerInvestmentSinceLastSnapshot field — Checkpoint 4 implements exactly this, per Product Architect Decision OI-PA-9/OI-PA-12 (Specification §42.10/§42.11)', () => {
     const start = appContextSrc.indexOf('const recordOwnerDeclaredBusinessWorth = async (');
     assert.notEqual(start, -1);
     const objStart = appContextSrc.indexOf('const businessWorthSnapshot: Omit<BusinessWorthSnapshot', start);
     const objEnd = appContextSrc.indexOf('};', objStart);
     const objBody = appContextSrc.slice(objStart, objEnd);
-    assert.doesNotMatch(objBody, /ownerInvestmentSinceLastSnapshot/);
+    assert.match(objBody, /ownerInvestmentSinceLastSnapshot/);
   });
 
-  it('firestore.rules\' owner-declared branch already requires ownerInvestmentSinceLastSnapshot to be genuinely absent (pre-existing, confirmed unchanged)', () => {
+  it('firestore.rules\' owner-declared branch no longer requires ownerInvestmentSinceLastSnapshot to be absent — corrected in Checkpoint 4, per OI-PA-13', () => {
     const start = rulesSrc.indexOf("establishmentMethod', null) == 'owner-declared'");
     assert.notEqual(start, -1);
     const end = rulesSrc.indexOf('\n            (', start);
     const body = rulesSrc.slice(start, end);
-    assert.match(body, /!\('ownerInvestmentSinceLastSnapshot' in request\.resource\.data\)/);
+    assert.doesNotMatch(body, /ownerInvestmentSinceLastSnapshot/);
   });
 });
 
