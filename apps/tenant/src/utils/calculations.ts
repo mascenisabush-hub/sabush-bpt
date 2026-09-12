@@ -628,12 +628,17 @@ function computeCaseALiveBusinessWorth(params: {
   // `cashLedgerNetSinceSnapshot` above, which reads only
   // `customer-payment`/`supplier-payment` — so the amount below is this
   // OwnerInvestment's ONLY additive Business Worth effect.
-  const ownerInvestmentsSinceSnapshot = Number(
-    ownerInvestments
-      .filter((oi) => isPostSnapshotActivity(oi.createdAt))
-      .reduce((sum, oi) => sum + Number(oi.amount || 0), 0)
-      .toFixed(2)
-  );
+  //
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-65] Delegates to
+  // the shared, exported `computeOwnerInvestmentsSinceSnapshot` helper
+  // (below) — the SAME single implementation of the boundary+sum rule
+  // that `BusinessWorthSnapshot.ownerInvestmentSinceLastSnapshot`'s own
+  // write path (AppContext.tsx, recordStockCount) now also calls, so
+  // the live FR-64 term and the frozen FR-65 drill-down can never
+  // diverge — there is exactly one implementation of this rule, not two
+  // independently-maintained copies of it.
+  const ownerInvestmentsSinceSnapshot = computeOwnerInvestmentsSinceSnapshot(ownerInvestments, snapshotMillis, asOfMillis);
 
   return Number(
     (
@@ -644,6 +649,48 @@ function computeCaseALiveBusinessWorth(params: {
       levantamentosSinceSnapshot +
       financialPositionChangeSinceSnapshot
     ).toFixed(2)
+  );
+}
+
+/**
+ * [Business Worth Evolution — Implementation Authorization, Increment
+ * 10 (Revision 3), §23 item 3; Specification §43, FR-64/FR-65; Rule 8
+ * Finding OI-4; Product Architect's recorded `createdAt` boundary
+ * clarification, commit 1000bde] Shared, single-source-of-truth
+ * boundary+sum used by BOTH the FR-64 live Business Worth term
+ * (`computeCaseALiveBusinessWorth`, above) and the FR-65
+ * `BusinessWorthSnapshot.ownerInvestmentSinceLastSnapshot` drill-down
+ * field (AppContext.tsx, `recordStockCount`) — guarantees the two can
+ * never diverge, since there is exactly one implementation of the
+ * boundary rule, not two independently-written copies of it.
+ *
+ * The authoritative boundary: `OwnerInvestment.createdAt` strictly
+ * AFTER `baselineConfirmedAtMillis` (never `date`, never `>=`) and no
+ * later than `asOfMillis`.
+ *
+ * `baselineConfirmedAtMillis === null` means no active baseline
+ * snapshot exists yet (a business's very first-ever snapshot, about to
+ * be created, with no predecessor). Returns 0 in that case — never a
+ * fabricated "since business creation" fallback — mirroring FR-64's
+ * own structural Case A/Case B split: `getEstimatedBusinessWorth`'s
+ * Case B (no active snapshot) has no `ownerInvestmentsSinceSnapshot`
+ * term at all, so there is genuinely nothing for a first snapshot's
+ * own FR-65 drill-down to equal but zero.
+ */
+export function computeOwnerInvestmentsSinceSnapshot(
+  ownerInvestments: OwnerInvestment[],
+  baselineConfirmedAtMillis: number | null,
+  asOfMillis: number
+): number {
+  if (baselineConfirmedAtMillis === null) return 0;
+  return Number(
+    ownerInvestments
+      .filter((oi) => {
+        const createdMillis = new Date(oi.createdAt).getTime();
+        return createdMillis > baselineConfirmedAtMillis && createdMillis <= asOfMillis;
+      })
+      .reduce((sum, oi) => sum + Number(oi.amount || 0), 0)
+      .toFixed(2)
   );
 }
 

@@ -916,6 +916,35 @@ export interface BusinessWorthSnapshot {
   expensesSinceLastSnapshot?: number;
   breakagesSinceLastSnapshot?: number;
   levantamentosSinceLastSnapshot?: number;
+  // [Business Worth Evolution — Implementation Authorization, Increment
+  // 10 (Revision 3), §23 item 3; Specification §43, FR-65; Rule 8
+  // Finding OI-5; Product Architect's recorded `createdAt` boundary
+  // clarification] Drill-down/explanatory only — mirrors
+  // `expensesSinceLastSnapshot`/`breakagesSinceLastSnapshot`/
+  // `levantamentosSinceLastSnapshot` immediately above in every
+  // structural respect (own optionality, own historical-compatibility
+  // discipline) with exactly one difference: those three use each
+  // record's own `date` field for their window; this one uses
+  // `OwnerInvestment.createdAt`, per FR-64's own authoritative boundary
+  // (`createdAt > activeBaseline.confirmedAt`, never `date`, never
+  // `>=`) — computed by the SAME shared, exported
+  // `computeOwnerInvestmentsSinceSnapshot` helper (calculations.ts)
+  // FR-64's own live term uses, so the two figures can never diverge.
+  // Historical attribution ONLY — never a second addend to
+  // `measuredBusinessWorth` (that is FR-64's own, separate, live-only
+  // effect); this field simply freezes, at snapshot creation, what
+  // FR-64 already included for the interval ending at that moment.
+  // OPTIONAL, Increment 10: OMITTED on an Owner-Declared snapshot
+  // (FR-69, §42.3) — an Owner-Declared establishment has no
+  // "since-last-snapshot" window to compute this against, identical
+  // reasoning to the three sibling fields above. Also genuinely absent
+  // (never backfilled, never a fabricated 0) on every snapshot created
+  // before this checkpoint shipped — only a NEW `establishmentMethod:
+  // 'contagem'` snapshot writes this field going forward, and it does
+  // so unconditionally (0 is a genuine, governed value, not an
+  // omission, when no qualifying Owner Investment exists for the
+  // interval).
+  ownerInvestmentSinceLastSnapshot?: number;
   // The prior Current Business Worth (the immediately-preceding
   // snapshot's own measuredBusinessWorth) — null ONLY for a business's
   // very first snapshot ever, which is a truthful null (there genuinely
@@ -1241,15 +1270,18 @@ export interface StartupInvestmentEntry {
 // CAIXER's own liquidity fields, zero is never a valid Owner Investment
 // (Rule 8 Finding OI-1; Plan §A.3's own exact rule text).
 //
-// [Checkpoint 1 scope note — Implementation Authorization §23 item 3,
-// Plan §A.3] This checkpoint implements only the data model,
-// persistence, and security boundary. The live Business Worth formula
-// term (`+ ownerInvestmentsSinceSnapshot`, FR-64) and the
-// `BusinessWorthSnapshot.ownerInvestmentSinceLastSnapshot` drill-down
-// field (FR-65) are explicitly NOT implemented by this checkpoint — an
-// `OwnerInvestment` recorded now has no effect on any Business Worth
-// figure yet, by design, pending the later, separately-authorized
-// calculation checkpoint.
+// [Implementation history — Implementation Authorization §23 item 3,
+// Plan §A.3] Checkpoint 1 shipped only the data model, persistence, and
+// security boundary. Checkpoint 2 (FR-64) added the live Business
+// Worth formula term (`+ ownerInvestmentsSinceSnapshot`,
+// calculations.ts). Checkpoint 3 (FR-65) added the
+// `BusinessWorthSnapshot.ownerInvestmentSinceLastSnapshot` historical
+// drill-down field, frozen at each new Contagem-established snapshot's
+// own creation moment — both now implemented, both using the identical
+// `createdAt > activeBaseline.confirmedAt` boundary (never `date`,
+// never `>=`), computed by the same shared, exported
+// `computeOwnerInvestmentsSinceSnapshot` helper (calculations.ts) so
+// the two can never diverge.
 export interface OwnerInvestment {
   id: string;
   businessId: string;

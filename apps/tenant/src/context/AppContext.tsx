@@ -111,7 +111,7 @@ import {
   ContagemValuationMode,
 } from '../types';
 import { INITIAL_PRODUCTS, INITIAL_BATCHES, INITIAL_QUEBRAS, INITIAL_EXPENSES } from '../data/sampleData';
-import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, computeCaixerTotalLiquidity, computeBusinessWorthCorrectionEligibility, computeBusinessWorthAuthorizedRecoveryEligibility, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
+import { calculateInventoryTotals, calculateBatch, groupQuebrasByBatch, generateReportSummary, isDateInRange, calculateInitialStockCurrentValuation, resolveInitialCapitalValue, computeInitialStockVoidEligibility, computeInitialStockAuthorizedRecoveryEligibility, getCurrentBusinessWorth, getEstimatedBusinessWorth, computeMeasuredBusinessWorth, sumOutstandingPayables, sumOutstandingReceivables, buildProductValuationDetail, resolveStartupInvestmentWindow, computeStartupInvestmentTotal, resolveActiveBusinessWorthBaselineDate, getLedgerDerivedCashBalance, computeCashReconciliationDifference, computeCaixerTotalLiquidity, computeBusinessWorthCorrectionEligibility, computeBusinessWorthAuthorizedRecoveryEligibility, computeOwnerInvestmentsSinceSnapshot, type VoidEligibility, type AuthorizedRecoveryEligibility } from '../utils/calculations';
 import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from '../utils/purchaseBatchCalculations';
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
@@ -6314,6 +6314,32 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           .toFixed(2)
       );
 
+      // [Business Worth Evolution — Implementation Authorization,
+      // Increment 10 (Revision 3), §23 item 3; Specification §43,
+      // FR-65; Rule 8 Finding OI-5; Product Architect's recorded
+      // `createdAt` boundary clarification] Reuses the SAME
+      // `previousSnapshot` (the active baseline) already resolved
+      // immediately above for the three sibling drill-down fields —
+      // but, per FR-65's own explicit boundary requirement, compares
+      // against `OwnerInvestment.createdAt`, never against the
+      // calendar-day `windowStartDate`/`isDateInRange` those three
+      // fields use for `date`-based sources. `null` (no previous active
+      // snapshot — this is the business's very first-ever snapshot)
+      // correctly yields 0 from the shared helper below — there is no
+      // FR-64 contribution defined before any baseline exists either
+      // (getEstimatedBusinessWorth's own Case B has no such term), so
+      // this stays consistent with FR-64 rather than inventing a
+      // "since business creation" fallback the sibling fields use for
+      // an unrelated (date-based, not createdAt-based) reason.
+      const activeBaselineConfirmedAtMillis = previousSnapshot
+        ? (previousSnapshot.confirmedAt as unknown as { toMillis?: () => number })?.toMillis?.() ?? null
+        : null;
+      const ownerInvestmentSinceLastSnapshot = computeOwnerInvestmentsSinceSnapshot(
+        ownerInvestments,
+        activeBaselineConfirmedAtMillis,
+        Date.now()
+      );
+
       // [Specification §7, §41; Implementation Plan §6 (corrected)]
       // previousCurrentBusinessWorth now correctly captures the LIVE
       // Current Business Worth immediately before this new confirmation
@@ -6414,6 +6440,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         expensesSinceLastSnapshot,
         breakagesSinceLastSnapshot,
         levantamentosSinceLastSnapshot,
+        ownerInvestmentSinceLastSnapshot,
         previousCurrentBusinessWorth,
         // [Increment 2] Now genuinely computable — see doc comment above.
         // Still omitted (not fabricated) on the one path where it is

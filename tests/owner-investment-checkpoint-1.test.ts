@@ -173,12 +173,12 @@ describe('Economic boundary (Checkpoint 1 boundary superseded by Checkpoint 2/FR
     assert.doesNotMatch(body, /other-governed-movement/);
   });
 
-  it('BusinessWorthSnapshot does not yet expose ownerInvestmentSinceLastSnapshot — the drill-down field remains a later checkpoint', () => {
+  it('BusinessWorthSnapshot now HAS ownerInvestmentSinceLastSnapshot — Checkpoint 3/FR-65 authorizes exactly this (superseded by design, see owner-investment-checkpoint-3-fr65.test.ts for the full drill-down proof)', () => {
     const start = typesSrc.indexOf('export interface BusinessWorthSnapshot {');
     assert.notEqual(start, -1);
     const end = typesSrc.indexOf('\nexport interface', start + 10);
     const body = typesSrc.slice(start, end);
-    assert.doesNotMatch(body, /ownerInvestmentSinceLastSnapshot\?:/);
+    assert.match(body, /ownerInvestmentSinceLastSnapshot\?:/);
   });
 });
 
