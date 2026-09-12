@@ -23,6 +23,7 @@ import { QuickLoginScreen } from './components/QuickLoginScreen';
 import AppLoadingScreen from './components/AppLoadingScreen';
 import { SubscriptionStatusBanner } from './components/SubscriptionStatusBanner';
 import { BusinessSuspendedBanner } from './components/BusinessSuspendedBanner';
+import { SupportPointerOverlay } from './components/SupportPointerOverlay';
 import { Product } from './types';
 import { useDocumentTitle, tabTitleKey } from './hooks/useDocumentTitle';
 
@@ -113,6 +114,7 @@ function MainApp() {
       <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />
       <SubscriptionStatusBanner />
       <BusinessSuspendedBanner />
+      <SupportPointerOverlay />
 
       <main className="flex-1 max-w-7xl w-full mx-auto px-4 sm:px-8 py-6 sm:py-8 pb-24 md:pb-12">
         {!isStaff && activeTab === 'dashboard' && (
