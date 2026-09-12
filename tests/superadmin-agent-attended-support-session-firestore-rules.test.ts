@@ -18,10 +18,15 @@
 // and webrtcSignaling — PLUS Checkpoint 2's own addition: the
 // supportSessionInvitation/current read/write authorization boundary
 // (member-only read, Admin-SDK-only write; no platform-operator read
-// grant exists on this collection at all). Heartbeat semantics
-// (Checkpoint 3), Support View State field-content allowlisting
-// (Checkpoint 4), and pointer/WebRTC content shape (Checkpoints 5-6)
-// remain deliberately out of scope for this file. This suite seeds
+// grant exists on this collection at all) — PLUS Checkpoint 4's own
+// addition: Support View State field-content allowlisting (FR-49,
+// FR-50), layered on top of (never replacing) Checkpoint 1's own
+// write-authorization boundary for that same collection. Heartbeat
+// semantics (Checkpoint 3) has its own dedicated plain-unit-test file
+// (tests/support-session-heartbeat.test.ts) and introduced no
+// firestore.rules change, so it is not covered here. Pointer/WebRTC
+// content shape (Checkpoints 5-6) remain deliberately out of scope for
+// this file. This suite seeds
 // supportSessions and supportSessionInvitation documents directly
 // (bypassing rules, via withSecurityRulesDisabled), exactly as
 // tests/firestore-rules.test.ts's own initialStockRecoveryAuthorization
@@ -279,6 +284,145 @@ describe('supportSessions/{sessionId}/supportViewState — mobile path authoriza
     const otherOwnerDb = ctxFor(OTHER_OWNER_UID).firestore();
     await assertFails(
       setDoc(doc(otherOwnerDb, 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: '/add-stock',
+      })
+    );
+  });
+});
+
+// ---------------------------------------------------------------------
+// supportViewState — Checkpoint 4: field-content allowlisting (FR-49,
+// FR-50, §20/§22's four fixed categories). Extends (never replaces) the
+// Checkpoint 1 write-authorization boundary tested immediately above —
+// every test here uses OWNER_UID, an already-authorized writer, so a
+// failure below is specifically a content-shape rejection, not an
+// authorization rejection (already covered above).
+// ---------------------------------------------------------------------
+describe('supportSessions/{sessionId}/supportViewState — field-content allowlisting (Checkpoint 4, FR-49/FR-50)', () => {
+  it('Category 1 (Navigation/context) — route + workflowContext alone is accepted', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertSucceeds(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: '/add-stock', workflowContext: 'Add Stock — OCR Review step',
+      })
+    );
+  });
+
+  it('Category 2 (Current workflow context) — selectedRecordId + workflowStep alone is accepted', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertSucceeds(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        selectedRecordId: 'batch-123', workflowStep: 'ocr-review-row-2',
+      })
+    );
+  });
+
+  it('Category 3 (Approved transient UI state) — fieldStatus map + activeValidationMessage + openPanelId alone is accepted', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertSucceeds(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        fieldStatus: { quantity: 'detected', costPrice: 'review' },
+        activeValidationMessage: 'Quantity looks unusually high — please confirm.',
+        openPanelId: 'ocr-confirmation-modal',
+      })
+    );
+  });
+
+  it('Category 4 (Viewport information) — viewportWidth + viewportHeight + scrollPosition alone is accepted', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertSucceeds(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        viewportWidth: 390, viewportHeight: 844, scrollPosition: 1200,
+      })
+    );
+  });
+
+  it('All four categories combined, every allowlisted field present, is accepted', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertSucceeds(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: '/add-stock', workflowContext: 'Add Stock — OCR Review step',
+        selectedRecordId: 'batch-123', workflowStep: 'ocr-review-row-2',
+        fieldStatus: { quantity: 'detected' }, activeValidationMessage: 'Confirm quantity.', openPanelId: 'ocr-modal',
+        viewportWidth: 390, viewportHeight: 844, scrollPosition: 0,
+      })
+    );
+  });
+
+  it('An empty document (no fields at all) is accepted — every field in all four categories is conditionally present ("present only when applicable", §20)', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertSucceeds(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {})
+    );
+  });
+
+  it('An arbitrary extra field outside all four categories is rejected, even alongside otherwise-valid content (FR-49: "no field outside them may ever be included")', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: '/add-stock', notes: 'this is not an allowlisted field',
+      })
+    );
+  });
+
+  it('Tenant/business data entirely outside the four categories is rejected — e.g. an attempt to smuggle a product price into the document', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        productSellingPrice: 499.99, customerPhoneNumber: '+258840000000',
+      })
+    );
+  });
+
+  it('FR-50\'s excluded content (e.g. an authToken-style field) is rejected — structurally impossible via the allowlist, never a named field', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: '/add-stock', authToken: 'should-never-be-writable-here',
+      })
+    );
+  });
+
+  it('An allowlisted field name carrying the wrong type is rejected — a map where a string is required (unexpected nested structure)', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: { unexpected: 'nested object instead of a plain string' },
+      })
+    );
+  });
+
+  it('An allowlisted field name carrying the wrong type is rejected — a string where a number is required', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        viewportWidth: '390px',
+      })
+    );
+  });
+
+  it('fieldStatus (Category 3) must itself be a map, not a string or array — a scalar value in its place is rejected', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        fieldStatus: 'detected',
+      })
+    );
+  });
+
+  it('Content-allowlist rejection and Checkpoint 1\'s own authorization boundary remain independently enforced — the Support operator still cannot write even fully valid, allowlisted content', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OPERATOR_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
+        route: '/add-stock',
+      })
+    );
+  });
+
+  it('Content-allowlist rejection and tenant isolation remain independently enforced — a different business\'s member still cannot write, even fully valid, allowlisted content', async () => {
+    await seedSession(BIZ, SESSION_ID, { operatorUid: OPERATOR_UID, status: 'active' });
+    await assertFails(
+      setDoc(doc(ctxFor(OTHER_OWNER_UID).firestore(), 'businesses', BIZ, 'supportSessions', SESSION_ID, 'supportViewState', 'current'), {
         route: '/add-stock',
       })
     );

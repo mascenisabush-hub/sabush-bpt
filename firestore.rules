@@ -1937,14 +1937,55 @@ service cloud.firestore {
         // by the customer's own already-privileged tenant session
         // (FR-25) — never by the Support operator, and never by any
         // server-side process acting on the Support operator's behalf.
-        // Field-level allowlist enforcement (FR-49/FR-50 — the four
-        // fixed categories, no credential/secret/code) is deferred to
-        // the Mobile Support View State checkpoint; THIS checkpoint
-        // fixes only the read/write authorization boundary, not yet the
-        // document's internal shape.
+        //
+        // [Checkpoint 4 — Support View State field-content allowlisting]
+        // FR-49/FR-50's four-fixed-category content boundary, enforced
+        // here at the document-content level, on top of (never
+        // replacing) the pre-existing isMemberOf(businessId)
+        // write-authorization boundary above. `hasOnly()` guarantees no
+        // field outside the four categories' own field names (§22's
+        // Data Model) can ever exist on this document — the mechanism
+        // FR-49 itself names ("no field outside them may ever be
+        // included"). Per-field type constraints close the more subtle
+        // gap of a correctly-named field carrying a smuggled value of
+        // the wrong shape (e.g. `route` as a map instead of a string).
+        // `fieldStatus` (Category 3) is constrained to being a map —
+        // Firestore Security Rules has no construct to iterate an
+        // arbitrary map's own values and validate each one is exactly
+        // 'detected'|'review'|'not_found' (there is no generic
+        // "for every value in this map" primitive in this rules
+        // language); that per-value constraint is therefore NOT
+        // enforceable at the rules layer and is disclosed here as a
+        // real, named boundary of this checkpoint, not silently
+        // dropped. Because this write path is the customer's own
+        // already-fully-trusted tenant session writing about itself
+        // (FR-25) — not an untrusted or cross-boundary party — this is
+        // a defense-in-depth/no-accidental-scope-creep boundary, not
+        // this capability's primary trust boundary (that remains
+        // Checkpoint 1's session-scoped read authorization, unchanged
+        // by this checkpoint). FR-50's exclusion list (credentials,
+        // secrets, the Support code, payment/security secrets) is
+        // satisfied as a structural consequence of the allowlist itself
+        // — none of those ever appear as an allowlisted field name.
         match /supportViewState/{docId} {
           allow read: if isActiveSupportOperatorForSession(businessId, sessionId);
-          allow write: if isMemberOf(businessId);
+          allow write: if isMemberOf(businessId) &&
+            request.resource.data.keys().hasOnly([
+              'route', 'workflowContext',
+              'selectedRecordId', 'workflowStep',
+              'fieldStatus', 'activeValidationMessage', 'openPanelId',
+              'viewportWidth', 'viewportHeight', 'scrollPosition'
+            ]) &&
+            (!('route' in request.resource.data) || request.resource.data.route is string) &&
+            (!('workflowContext' in request.resource.data) || request.resource.data.workflowContext is string) &&
+            (!('selectedRecordId' in request.resource.data) || request.resource.data.selectedRecordId is string) &&
+            (!('workflowStep' in request.resource.data) || request.resource.data.workflowStep is string) &&
+            (!('fieldStatus' in request.resource.data) || request.resource.data.fieldStatus is map) &&
+            (!('activeValidationMessage' in request.resource.data) || request.resource.data.activeValidationMessage is string) &&
+            (!('openPanelId' in request.resource.data) || request.resource.data.openPanelId is string) &&
+            (!('viewportWidth' in request.resource.data) || request.resource.data.viewportWidth is number) &&
+            (!('viewportHeight' in request.resource.data) || request.resource.data.viewportHeight is number) &&
+            (!('scrollPosition' in request.resource.data) || request.resource.data.scrollPosition is number);
         }
 
         // Common to both rendering paths (FR-27). The Support
