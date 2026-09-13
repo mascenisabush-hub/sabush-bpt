@@ -401,19 +401,21 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
             <LanguageSwitcher />
           </div>
 
-          {/* Brand Header — the banner ships with its own near-black navy
-              background (matches this screen's own bg almost exactly), so
-              it's shown as a clean framed image rather than composited
-              with the old halo/glow treatment built for a transparent icon
-              — that combination made the artwork read as busy/hard to
-              read. A subtle border + shadow keeps it crisp instead. */}
+          {/* Brand Header — the banner now ships with a white background
+              (the "Technology for African Businesses" logo), which no
+              longer matches this screen's near-black bg the way the old
+              artwork did. Framed as a padded white rounded card instead
+              of a borderless blend, so it reads as a deliberate logo
+              plaque rather than a stray white rectangle. */}
           <div className="flex flex-col items-center text-center mb-5 relative z-10">
-            <img
-              src="/branding/sabush-tech-banner.png"
-              alt="Sabush Tech"
-              draggable={false}
-              className="w-full max-w-[300px] sm:max-w-[340px] h-auto select-none rounded-2xl border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.5)]"
-            />
+            <div className="w-full max-w-[300px] sm:max-w-[340px] bg-white rounded-2xl p-4 border border-white/10 shadow-[0_8px_30px_rgba(0,0,0,0.5)]">
+              <img
+                src="/branding/sabush-tech-banner.png"
+                alt="Sabush Tech"
+                draggable={false}
+                className="w-full h-auto select-none"
+              />
+            </div>
             <h1 className="text-lg sm:text-xl font-bold tracking-tight text-white mt-4">
               Batch Profit Tracker
             </h1>
