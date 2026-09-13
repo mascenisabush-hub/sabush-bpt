@@ -75,7 +75,7 @@ function MainApp() {
   );
 
   if (isAuthLoading) {
-    return <AppLoadingScreen message="A carregar dados do negócio..." />;
+    return <AppLoadingScreen message="A preparar dados do negócio..." />;
   }
 
   if (!currentUser) {
