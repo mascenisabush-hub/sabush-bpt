@@ -8017,7 +8017,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     if (!response.ok) {
-      return { success: false, reason: 'network_error' };
+      // [Bug fix — Owner-reported, urgent, live with a client: a
+      // genuine server-side rejection (403 permission-denied, 500
+      // internal failure) was shown to the Owner as "Sem ligação ao
+      // servidor. Verifique a sua internet..." — misleading, since
+      // nothing about the network connection itself was the problem.
+      // Every EXPECTED failure mode this route can return
+      // (too_large/unsupported_type/invalid_upload/provider_unavailable/
+      // unreadable) is sent as res.json(...), i.e. HTTP 200 — this
+      // branch is therefore reached only for a genuine, unexpected
+      // server-side rejection (missing businessId, permission-denied,
+      // or an unhandled internal error), never for any of this
+      // feature's own known, graceful outcomes. Attempts to read the
+      // response body first — a future server change could start
+      // sending a specific `reason` on a non-2xx response too, and this
+      // honors it rather than discarding it unread — falling back to
+      // 'provider_unavailable' (not 'network_error') when the body
+      // carries no usable reason, since "the scan service rejected
+      // this request" is the honest description of what actually
+      // happened, not "no internet connection." True 'network_error'
+      // remains reserved for the fetch() call itself failing, above —
+      // a response that was never received at all.
+      try {
+        const body = await response.json();
+        const reason: SmartStockEntryFailureReason =
+          body?.reason === 'too_large' ||
+          body?.reason === 'unsupported_type' ||
+          body?.reason === 'provider_unavailable' ||
+          body?.reason === 'unreadable' ||
+          body?.reason === 'invalid_upload'
+            ? body.reason
+            : 'provider_unavailable';
+        return { success: false, reason };
+      } catch {
+        return { success: false, reason: 'provider_unavailable' };
+      }
     }
 
     try {
