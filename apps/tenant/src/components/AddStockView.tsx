@@ -10,7 +10,7 @@ import { PurchaseDraft, PurchaseDraftLineItem, UnitRelationship, Product } from 
 import type { SmartStockEntryLineItemProposal, SmartStockEntryFailureReason } from '../context/AppContext';
 import { type SupplierWordingCandidate, detectSupplierWordingContradictions } from '../lib/supplierWordingMatching';
 import { resolveSupplierWordingRecognitionAsync, resolveScanRowSupplierWordingAsync } from '../lib/supplierWordingRecognition';
-import { isValidUnitRelationship, type UnitRelationshipProposal } from '../lib/unitRelationship';
+import { isValidUnitRelationship, getDefaultUnit, type UnitRelationshipProposal } from '../lib/unitRelationship';
 import { computeRatePerPurchaseUnit } from '../lib/purchaseToSellingConversion';
 import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanonicalProductSellingMemory } from '../lib/productMemoryPriceResolution';
 import { findSimilarProducts } from '../lib/productNameSimilarity';
@@ -888,6 +888,36 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     if (productName) {
       const match = products.find(p => p.name.toLowerCase() === productName.toLowerCase());
       if (match) {
+        // [Bug fix — Owner-reported, urgent, live with a client:
+        // "Pipoca Chipa, 1 Emb = 50 Un, sells 5 MZN/Un" — selling total
+        // showed 5 (the raw per-Un price) instead of 250 (the correct
+        // per-Emb rate)] Root cause: this row's own starting `unit` was
+        // a GENERIC, product-agnostic category suggestion
+        // (suggestedUnits[0], e.g. "un") — never the product's own
+        // CONFIRMED default purchase unit (unitRelationship.units[0],
+        // e.g. "Emb", BDR-0012 §5.A Item 4's own documented meaning for
+        // that field). Since the confirmed selling unit here also
+        // happens to be "Un", the row's generic default and the
+        // selling unit silently coincided — resolveUnitAwarePrice's own
+        // "already same unit" fast path fired below, so the remembered
+        // per-Un price was never converted into per-Emb terms at all,
+        // and (worse than the display bug alone) the Owner's actual
+        // purchase would have been recorded in the WRONG unit entirely
+        // unless they happened to notice and manually correct it.
+        // Distinct from the Track A / BDR-0012 §3 "never default
+        // purchase unit from HISTORICAL TRANSACTIONS" policy this
+        // function's own sibling comments describe below: that policy
+        // is about not inferring a unit from a specific past batch/
+        // receipt; unitRelationship.units[0] is a deliberate, standing,
+        // Owner-confirmed configuration (set once via "Configurar
+        // relação de unidades"), the exact same kind of authoritative
+        // default this codebase already trusts for the confirmed
+        // selling unit elsewhere (resolveCanonicalProductSellingMemory,
+        // PeriodicStockCountView's own buildCatalogRow) — not a
+        // transaction-history inference.
+        if (isValidUnitRelationship(match.unitRelationship)) {
+          initialUnit = getDefaultUnit(match) || initialUnit;
+        }
         // [Owner-requested — "auto-fill from memory in Contagem or old
         // Capital Inicial"] Widened from batches-only to also search
         // confirmed StockCounts (see findLatestRememberedProductMemory's
@@ -1770,7 +1800,20 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // the receipt actually said, with nothing on screen flagging the
     // change. Fix: prefer the row's own already-present unit; only fall
     // back to the generic default when the row genuinely has none yet.
-    let newUnit = (existingUnit && existingUnit.trim()) || suggestedUnits[0] || 'un';
+    //
+    // [Bug fix — Owner-reported, urgent, live with a client: same root
+    // cause as createEmptyRow's own identical fix, above, for the
+    // dropdown-select existing-product path — when the row has no unit
+    // yet (existingUnit blank, e.g. selecting a product for a fresh
+    // row), this used to fall straight to the generic category
+    // suggestion, skipping right past the product's own confirmed
+    // default purchase unit. Now prefers getDefaultUnit(product)
+    // (unitRelationship.units[0]) before that generic fallback — the
+    // same standing, Owner-confirmed configuration this codebase
+    // already trusts elsewhere, not a historical-transaction inference
+    // (see createEmptyRow's own fuller comment for why this is
+    // distinct from the Track A/BDR-0012 §3 policy immediately below).
+    let newUnit = (existingUnit && existingUnit.trim()) || getDefaultUnit(product) || suggestedUnits[0] || 'un';
     // [Track A — Existing-Product Stock Entry Purchase Authority,
     // POL-pending-existing-product-stock-entry-purchase-authority.md §A/§C/§D,
     // BDR-0012 §3] Purchase unit is a current-transaction fact, supplied by
