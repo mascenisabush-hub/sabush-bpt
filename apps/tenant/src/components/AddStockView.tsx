@@ -3110,6 +3110,52 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     ? rows.findIndex((r) => r.id === currentUnresolvedRowId) + 1
     : null;
 
+  // [Bug fix — Owner-reported, urgent: selling total showing wrong/no
+  // value for an existing product whose confirmed selling unit differs
+  // from its purchase unit — e.g. "1 Cx = 150 Un, sells 7 MZN/Un, cost
+  // 760 MZN/Cx": quantity is counted in Cx, but sellingPrice (7) is
+  // denominated in Un, a genuinely smaller unit. Both this row's own
+  // revenue figure (rowRevenue, rendered per-row below) and the
+  // Combined Total Summary Bar's own totalMarketValue/
+  // totalEmbeddedProfit (the `totals` reduce, immediately below) used
+  // to compute `quantity * sellingPrice` directly — correct ONLY when
+  // quantity and sellingPrice happen to already be denominated in the
+  // SAME unit, and silently, badly wrong whenever they are not (e.g.
+  // 10 Cx * 7 MZN/Un = 70, instead of the correct 10 * 150 * 7 = 10,500
+  // MZN) — `computeRatePerPurchaseUnit` (purchaseToSellingConversion.ts)
+  // already exists and is already imported in this file (used today
+  // only inside the unit-relationship configuration modal's own live
+  // preview, line ~516) but was never wired into either of these two
+  // display calculations at all. This resolves the row's own confirmed
+  // Product.unitRelationship (exact-name match, mirroring every other
+  // exact-match lookup already in this file) and, only when the row's
+  // sellingPrice is genuinely denominated in a different unit than its
+  // own purchase unit (`sellingPriceBasisUnit`, set by every autofill
+  // path already in this file — see buildRowFromProposalLineItem/
+  // createEmptyRow), converts via the SAME single conversion engine
+  // every other unit-aware calculation in this codebase already uses —
+  // never a second, independently-invented conversion. Falls back to
+  // the existing direct multiplication whenever no conversion is
+  // needed (the ordinary, same-unit case — completely unaffected by
+  // this fix) or, defensively, whenever a genuine mismatch exists but
+  // no valid relationship can bridge it (should not occur in practice,
+  // since `sellingPriceBasisUnit` is only ever set via a resolution
+  // that already required a valid relationship — but never worse than
+  // today's existing behavior for that edge case).
+  const resolveRowRevenue = (row: StockRowItem, quantity: number, sellingPrice: number): number => {
+    const purchaseUnit = (row.unit || '').trim();
+    const sellingUnit = (row.sellingPriceBasisUnit || row.unit || '').trim();
+    if (!purchaseUnit || !sellingUnit || purchaseUnit.toLowerCase() === sellingUnit.toLowerCase()) {
+      return quantity * sellingPrice;
+    }
+    const matched = products.find((p) => p.name.toLowerCase() === row.productName.trim().toLowerCase());
+    const relationship = matched?.unitRelationship;
+    const rate = isValidUnitRelationship(relationship)
+      ? computeRatePerPurchaseUnit(relationship, purchaseUnit, sellingUnit, sellingPrice)
+      : null;
+    return rate !== null ? quantity * rate : quantity * sellingPrice;
+  };
+
   // Calculate totals across all rows (new batches, so remainingQuantity == quantity — no quebras yet)
   const totals = rows.reduce(
     (acc, row) => {
@@ -3117,7 +3163,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       const c = parseFloat(row.costPrice) || 0;
       const s = parseFloat(row.sellingPrice) || 0;
       const investmentValue = q * c;
-      const marketValue = q * s;
+      const marketValue = resolveRowRevenue(row, q, s);
       return {
         totalInvestmentValue: acc.totalInvestmentValue + investmentValue,
         totalMarketValue: acc.totalMarketValue + marketValue,
@@ -3611,7 +3657,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   const numCost = parseFloat(row.costPrice) || 0;
                   const numSell = parseFloat(row.sellingPrice) || 0;
                   const rowCost = numQty * numCost;
-                  const rowRevenue = numQty * numSell;
+                  const rowRevenue = resolveRowRevenue(row, numQty, numSell);
                   const rowProfit = rowRevenue - rowCost;
 
                   // Filter existing products for autocomplete
