@@ -173,7 +173,20 @@ describe('TEST 6 — Owner selling-price override still works, no cost corruptio
     // through sanitizeDecimalInput first (type="number" ->
     // type="text"/inputMode="decimal") — the *AutoFilled: false pairing
     // itself is otherwise unchanged.
-    assert.match(addStockSrc, /onChange=\{e => updateRow\(row\.id, \{ sellingPrice: sanitizeDecimalInput\(e\.target\.value\), sellingPriceAutoFilled: false \}\)\}/);
+    //
+    // [Bug fix — Owner-reported, existing-product Stock Entry
+    // incompatible-basis calculation, forensic investigation this
+    // session] The literal pattern below now also expects
+    // `sellingPriceBasisUnit: row.unit` in the same update — a later,
+    // separate fix (see add-stock-venda-manual-edit-basis-sync.test.ts
+    // for its own full rationale) that keeps the price's basis unit
+    // synchronized with the row's current purchase unit at the moment
+    // of a manual edit. This assertion's own intent — that a manual
+    // Owner edit still flips sellingPriceAutoFilled to false and is
+    // otherwise unrelated to THIS file's cost/selling-unit-conflation
+    // fix — remains exactly as true as before; only the literal string
+    // being matched was updated to the current, correct handler text.
+    assert.match(addStockSrc, /onChange=\{e => updateRow\(row\.id, \{ sellingPrice: sanitizeDecimalInput\(e\.target\.value\), sellingPriceAutoFilled: false, sellingPriceBasisUnit: row\.unit \}\)\}/);
   });
 });
 

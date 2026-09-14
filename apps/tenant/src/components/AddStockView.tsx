@@ -4021,12 +4021,33 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
                         {/* Preço Venda */}
                         <div className="col-span-1.5">
+                          {/* [Bug fix — Owner-reported: existing-product Stock
+                              Entry produced an incompatible-basis total after
+                              the auto-filled Venda value was manually retyped]
+                              Every OTHER mutation of sellingPrice in this file
+                              (createEmptyRow, buildProductMemoryAutofill,
+                              handleUnitChange) keeps sellingPriceBasisUnit
+                              paired with the value it sets — this handler was
+                              the one place that didn't, leaving a manual edit
+                              tagged with whatever unit the PREVIOUS auto-fill
+                              happened to be in. Since this field displays the
+                              row's selling price re-expressed in the row's own
+                              current purchase unit (row.unit) — never a raw,
+                              unit-less number — a value the Owner just typed
+                              here is, by that same established convention,
+                              denominated in row.unit at the moment of typing.
+                              Tagging it accordingly is the minimal fix: it
+                              keeps resolveRowRevenue/addMultipleStockBatches'
+                              existing basis-aware conversion logic (unchanged)
+                              internally consistent with what was actually
+                              entered, instead of silently carrying forward a
+                              now-unrelated basis from before this edit. */}
                           <input
                             type="text"
                             inputMode="decimal"
                             required
                             value={row.sellingPrice}
-                            onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false })}
+                            onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false, sellingPriceBasisUnit: row.unit })}
                             className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold text-right transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                           />
                           {/* [Fix — resolveUnitAwarePrice] Deliberately a
@@ -4377,12 +4398,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                             <label className="block type-label mb-1">
                               {t('addStock.fields.sellPrice', { symbol: currencySymbol })}
                             </label>
+                            {/* [Bug fix — same basis-synchronization fix as the
+                                desktop table layout's own identical field,
+                                above; see that copy's own comment for the
+                                full rationale] */}
                             <input
                               type="text"
                               inputMode="decimal"
                               required
                               value={row.sellingPrice}
-                              onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false })}
+                              onChange={e => updateRow(row.id, { sellingPrice: sanitizeDecimalInput(e.target.value), sellingPriceAutoFilled: false, sellingPriceBasisUnit: row.unit })}
                               className="w-full bg-[#E4E8ED] border-[1.5px] border-[#9AA6B5] rounded-[10px] px-2 py-2 text-[#111827] text-[13px] font-semibold transition-all duration-150 focus:outline-none focus:bg-[#F6EFD9] focus:border-[2px] focus:border-[#D4AF37] focus:ring-[3px] focus:ring-[#D4AF37]/30 font-mono tabular-nums"
                             />
                             {/* [Bug fix — mobile layout never showed
