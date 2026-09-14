@@ -67,20 +67,20 @@ describe('AddStockView.tsx — exact-match typing now autofills cost/selling pri
     const fnMatch = addStockSrc.match(/const applySupplierWordingCheck = \([\s\S]*?\n  \};/);
     const body = fnMatch![0];
     assert.match(body, /const exactMatch = trimmed \? products\.find\(p => p\.name\.toLowerCase\(\) === trimmed\.toLowerCase\(\)\) : undefined;/);
-    assert.match(body, /updateRow\(rowId, exactMatch \? \{ \.\.\.cleared, \.\.\.buildProductMemoryAutofill\(exactMatch\) \} : cleared\);/);
+    assert.match(body, /updateRow\(rowId, exactMatch \? \{ \.\.\.cleared, \.\.\.buildProductMemoryAutofill\(exactMatch, currentRowUnit\) \} : cleared\);/);
   });
 
   it('buildProductMemoryAutofill exists as a single shared helper, reused by both applySupplierWordingCheck and handleSelectProductForTool', () => {
-    assert.match(addStockSrc, /const buildProductMemoryAutofill = \(product: \(typeof products\)\[number\]\): Partial<StockRowItem> => \{/);
+    assert.match(addStockSrc, /const buildProductMemoryAutofill = \(product: \(typeof products\)\[number\], existingUnit\?: string\): Partial<StockRowItem> => \{/);
     const selectFnMatch = addStockSrc.match(/const handleSelectProductForTool = \([\s\S]*?\n  \};/);
     assert.ok(selectFnMatch, 'expected to find handleSelectProductForTool');
-    assert.match(selectFnMatch![0], /buildProductMemoryAutofill\(match\)/);
+    assert.match(selectFnMatch![0], /buildProductMemoryAutofill\(match, row\?\.unit\)/);
   });
 
   it('the reused-supplier-wording outcome also applies buildProductMemoryAutofill (previously never autofilled either)', () => {
     const fnMatch = addStockSrc.match(/const applySupplierWordingCheck = \([\s\S]*?\n  \};/);
     const body = fnMatch![0];
-    assert.match(body, /case 'reused': \{[\s\S]{0,400}?buildProductMemoryAutofill\(matchedProduct\)/);
+    assert.match(body, /case 'reused': \{[\s\S]{0,400}?buildProductMemoryAutofill\(matchedProduct, currentRow\.unit\)/);
   });
 });
 

@@ -63,12 +63,23 @@ function fnBody(source: string, defSignature: string): string {
 // ==================================================================
 describe('Track A §A/§C/§D — purchase unit/cost are never sourced from historical memory or Product.costPrice', () => {
   it('buildProductMemoryAutofill: newUnit is never assigned from memory.unit; newCost is never assigned from memory.costPrice or product.costPrice', () => {
-    const body = fnBody(addStockSrc, 'const buildProductMemoryAutofill = (product: (typeof products)[number]): Partial<StockRowItem> => {');
+    const body = fnBody(addStockSrc, 'const buildProductMemoryAutofill = (product: (typeof products)[number], existingUnit?: string): Partial<StockRowItem> => {');
     assert.doesNotMatch(body, /newUnit = memory\.unit/);
     assert.doesNotMatch(body, /newCost = String\(memory\.costPrice\)/);
     assert.doesNotMatch(body, /newCost = String\(product\.costPrice\)/);
     // Selling side untouched: memory.sellingPrice remains a legitimate fallback.
     assert.match(body, /newSell = String\(memory\.sellingPrice\)/);
+    // [Bug fix — Owner-reported: "2 caixas" on a scanned receipt silently
+    // became "2 un" the moment a row resolved to an existing product late
+    // (similar-product click, retyped exact name, silent supplier-wording
+    // reuse) — buildProductMemoryAutofill used to return `unit: newUnit`
+    // where newUnit was UNCONDITIONALLY the generic default, discarding
+    // whatever unit (e.g. OCR-read) the row already held. newUnit must now
+    // prefer the row's own already-present unit, only falling back to the
+    // generic default when the row genuinely has none yet — and must never
+    // again go straight to the generic default with no such preference.]
+    assert.match(body, /newUnit = \(existingUnit && existingUnit\.trim\(\)\) \|\| suggestedUnits\[0\] \|\| 'un';/);
+    assert.doesNotMatch(body, /let newUnit = suggestedUnits\[0\] \|\| 'un';/, 'must not regress to unconditionally discarding the row\'s own existing unit');
   });
 
   it('createEmptyRow: initialUnit is never assigned from memory.unit; initialCost is never assigned from memory.costPrice or match.costPrice', () => {

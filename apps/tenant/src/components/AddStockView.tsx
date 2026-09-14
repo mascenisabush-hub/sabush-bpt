@@ -1744,7 +1744,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
   // for the equally common case of the Owner typing the full, already-
   // correct product name rather than clicking it. One fill logic, two
   // callers — never duplicated.
-  const buildProductMemoryAutofill = (product: (typeof products)[number]): Partial<StockRowItem> => {
+  const buildProductMemoryAutofill = (product: (typeof products)[number], existingUnit?: string): Partial<StockRowItem> => {
     const memory = findLatestRememberedProductMemory(
       product.id,
       product.name,
@@ -1753,18 +1753,34 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
       isValidUnitRelationship(product.unitRelationship) ? product.unitRelationship?.sellingUnit : undefined
     );
     let newSell = '';
-    let newUnit = suggestedUnits[0] || 'un';
+    // [Bug fix — urgent, Owner-reported: "2 caixas" on a scanned receipt
+    // silently became "2 un" the moment the row resolved to an existing
+    // product via a "similar product" suggestion, a retyped exact name,
+    // or a silent supplier-wording reuse match] newUnit used to be
+    // UNCONDITIONALLY the generic default (suggestedUnits[0] || 'un'),
+    // with no regard for whatever unit the row already held — the exact
+    // same clobbering bug already fixed for costPrice below, just missed
+    // for this field in that earlier pass. Since every caller spreads
+    // this return value straight into updateRow's `{...row, ...fields}`
+    // merge, that generic default silently overwrote a perfectly good
+    // OCR-read unit (e.g. 'caixa'), and because selling price is then
+    // converted FOR that same newUnit (resolveUnitAwarePrice below), the
+    // wrong target unit compounded into a wrong converted price too —
+    // the row ended up internally consistent but wrong relative to what
+    // the receipt actually said, with nothing on screen flagging the
+    // change. Fix: prefer the row's own already-present unit; only fall
+    // back to the generic default when the row genuinely has none yet.
+    let newUnit = (existingUnit && existingUnit.trim()) || suggestedUnits[0] || 'un';
     // [Track A — Existing-Product Stock Entry Purchase Authority,
     // POL-pending-existing-product-stock-entry-purchase-authority.md §A/§C/§D,
     // BDR-0012 §3] Purchase unit is a current-transaction fact, supplied by
     // the current receipt/operator entry — never defaulted from historical
-    // memory (findLatestRememberedProductMemory) or Product.costPrice, so
-    // newUnit stays at its generic default until the current purchase
-    // actually supplies it. Selling price remains a legitimate Product-
-    // Memory concern (§E), unaffected: memory.sellingPrice is still the
-    // pre-canonical-correction fallback, immediately superseded by
-    // canonical Product selling memory below whenever that exists —
-    // byte-for-byte the same selling-side behavior as before this change.
+    // memory (findLatestRememberedProductMemory) or Product.costPrice.
+    // Selling price remains a legitimate Product-Memory concern (§E),
+    // unaffected: memory.sellingPrice is still the pre-canonical-correction
+    // fallback, immediately superseded by canonical Product selling memory
+    // below whenever that exists — byte-for-byte the same selling-side
+    // behavior as before this change.
     //
     // [Bug fix — urgent, Owner-reported: OCR-read cost price silently
     // replaced by "100% profit" after resolving a row to an existing
@@ -2028,14 +2044,19 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
 
   const handleSelectProductForTool = (rowId: string, name: string) => {
     const match = products.find(p => p.name.toLowerCase() === name.toLowerCase());
+    const row = rows.find(r => r.id === rowId);
 
     // [Bug fix — urgent, refactor] Reuses the SAME memory-based
     // cost/selling-price/unit autofill applySupplierWordingCheck's own
     // exact-match/reused branches now use — one source of truth for
     // this fill logic, never duplicated across the two callers.
+    // [Bug fix — the row's own already-present unit (e.g. OCR-read
+    // 'caixa') is passed through so it survives resolution instead of
+    // being silently reset to the generic default — see
+    // buildProductMemoryAutofill's own header comment.]
     const autofill: Partial<StockRowItem> = match
-      ? buildProductMemoryAutofill(match)
-      : { unit: suggestedUnits[0] || 'un' };
+      ? buildProductMemoryAutofill(match, row?.unit)
+      : { unit: (row?.unit && row.unit.trim()) || suggestedUnits[0] || 'un' };
 
     // [Supplier-Wording Recognition — Checkpoint 3, Owner-Initiated
     // Declaration, POL-0007 Business Requirement 3] If the owner had
@@ -2049,7 +2070,6 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // Amendment: Add Stock only). Captured here; the actual relationship
     // write happens at finalization once the supplier's identity is
     // resolved (Specification §8) — see handleSubmit.
-    const row = rows.find(r => r.id === rowId);
     const typedWording = row?.productName?.trim();
     const typedWordingAlreadyExactMatch =
       !typedWording || products.some(p => p.name.toLowerCase() === typedWording.toLowerCase());
@@ -2175,7 +2195,8 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // full memory-based autofill right away; anything else just gets
     // its typed text reflected immediately.
     const exactMatch = trimmed ? products.find(p => p.name.toLowerCase() === trimmed.toLowerCase()) : undefined;
-    updateRow(rowId, exactMatch ? { ...cleared, ...buildProductMemoryAutofill(exactMatch) } : cleared);
+    const currentRowUnit = rows.find(r => r.id === rowId)?.unit;
+    updateRow(rowId, exactMatch ? { ...cleared, ...buildProductMemoryAutofill(exactMatch, currentRowUnit) } : cleared);
 
     // Step 3 — debounced candidate/reuse detection. Cancels any prior
     // pending check for this row first (Decision-39-style per-row timer
@@ -2216,7 +2237,7 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
             return;
           }
           updateRow(rowId, {
-            ...buildProductMemoryAutofill(matchedProduct),
+            ...buildProductMemoryAutofill(matchedProduct, currentRow.unit),
             productName: matchedProduct.name,
             pendingSupplierWording: {
               wording: trimmed,
