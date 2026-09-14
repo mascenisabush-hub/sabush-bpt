@@ -4469,7 +4469,37 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
 
     await fsBatch.commit();
 
-    // [Supplier-Wording Recognition — Checkpoint 3] Run AFTER the stock/
+    // [Bug fix — Owner-reported, urgent, live with a client: "confirming
+    // add stocks delays... it takes time to confirm"] Root cause: this
+    // function used to `await` every item in the two loops below,
+    // sequentially, one Firestore round trip at a time, BEFORE returning
+    // to the caller (AddStockView.tsx's handleSubmit) — so a purchase
+    // with several new products, or several supplier-wording
+    // confirmations, kept the Owner staring at a spinner for one round
+    // trip per item, entirely AFTER the actual stock data (the fsBatch
+    // commit immediately above) was already durably saved. The comments
+    // on this exact block already documented the correct intent —
+    // "Deliberately best-effort past this point: the stock itself is
+    // already durably recorded... not a reason to make the caller
+    // believe their stock entry itself failed" — but the code never
+    // actually acted on that intent; it still made the caller wait for
+    // all of it regardless. Fix: detached into its own fire-and-forget
+    // async block, mirroring triggerTrialActivation's own identical,
+    // already-established pattern immediately below (this function
+    // returns the moment the CRITICAL write above has committed; this
+    // background work continues independently afterward). Internal
+    // ordering/sequencing is completely unchanged — the supplier-wording
+    // confirmations still run one at a time, in order (their own
+    // comment's "sequential, not parallel" requirement, so two rows in
+    // the same submission that reference each other are still checked
+    // against each other's already-committed result) — only WHEN the
+    // caller stops waiting for them has changed. logTimelineEvent
+    // already swallows its own errors internally (never rejects); the
+    // outer .catch below is a pure defensive backstop for anything else
+    // in this block, so a background failure can never surface as an
+    // unhandled promise rejection.
+    (async () => {
+      // [Supplier-Wording Recognition — Checkpoint 3] Run AFTER the stock/
     // product write has already committed, and only if a real supplier
     // identity now exists (a relationship must be keyed to
     // SupplierRecord.id per Rule 8 Finding 2 — this is always true here
@@ -4544,6 +4574,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         marketValue: totalMarketValue,
         embeddedProfit: totalMarketValue - totalInvestmentValue,
       },
+    });
+    })().catch((err) => {
+      console.error('[addMultipleStockBatches] background finalization (supplier-wording confirmations / Timeline logging) failed, non-blocking — stock data itself was already saved', err);
     });
 
     triggerTrialActivation(businessId);
