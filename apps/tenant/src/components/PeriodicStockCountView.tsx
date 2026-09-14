@@ -3,7 +3,7 @@ import { useApp, type StockCountReconciliationSignal } from '../context/AppConte
 import { isFirestorePersistenceActive } from '../lib/firebase';
 import { formatCurrency, formatDate, getTodayDateString } from '../utils/formatters';
 import { getSuggestedUnitsForCategory } from '../data/businessCategories';
-import { StockCount, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
+import { StockCount, StockCountItem, StockCountType, PeriodicStockDraft, PeriodicStockDraftItem, UnitRelationship } from '../types';
 import { findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { tallyStockCountRows, StockCountWorkingRow, StockCountTallyItem, StockCountTallyResult, workingRowToDraftItem, draftItemToWorkingRow } from '../utils/stockCount';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
@@ -1829,12 +1829,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // next time `products` happens to change for an unrelated reason.
   //
   // A product that was part of the original count but no longer exists
-  // in the current catalog (deleted since) cannot be pre-filled into a
-  // catalog row — there is no row for it. This is a disclosed, narrow
-  // limitation (surfaced to the Owner via `missingFromCatalogCount`,
-  // rendered in the correction banner below), not a silent data loss:
-  // nothing about the original StockCount document itself is touched or
-  // discarded by this effect, only this session's working-row seeding.
+  // in the current catalog (deleted since) is restored as a manual row
+  // instead of a catalog row (see the correction-prefill useEffect's
+  // own full comment, below, for the complete rationale) — no longer a
+  // disclosed limitation. `correctionPrefillMissingCount` remains as a
+  // defensive-only signal for a genuinely unrecoverable historical item
+  // (no product name at all), which should not occur in practice for a
+  // real confirmed record.
   const correctionPrefillAppliedForRef = useRef<string | null>(null);
   const [correctionPrefillMissingCount, setCorrectionPrefillMissingCount] = useState(0);
   // [Bug fix — Owner-reported, "products are disorganized, not the same
@@ -1858,6 +1859,62 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // useful guarantee. A plain ref (not state) — purely a lookup table
   // for the sort comparator below, never itself rendered or persisted.
   const correctionOriginalOrderRef = useRef<Record<string, number>>({});
+  // [Bug fix — Owner-reported, urgent, live with a client: a confirmed
+  // Monthly Contagem (211 items/portions, including 34 second-portion
+  // entries of multi-portion products sharing a productId with an
+  // already-restored catalog row, e.g. Rachele's 20 Emb + 6 Un) reopened
+  // via SuperAdmin-authorized recovery and showed only 177 items/
+  // 332,671.00 MT — exactly the confirmed total minus every second-or-
+  // later portion, before the Owner made a single edit. Root cause,
+  // confirmed by direct forensic investigation: `catalogRows` is
+  // `Record<productId, row>` — structurally exactly ONE slot per
+  // product (see its own declaration, above) — while a confirmed
+  // StockCount can legitimately contain MULTIPLE items sharing the
+  // same productId (one per physical portion counted, e.g. one from
+  // the auto-populated catalog row, one or more from
+  // "+ Adicionar Porção" manual rows — recordStockCount/AppContext.tsx
+  // resolves the SAME productId for all of them at persistence time, by
+  // name match, confirmed by direct inspection). The prior version of
+  // this effect wrote every restored item into `catalogRows`, keyed
+  // only by productId — so every portion beyond the first for a given
+  // product silently overwrote the previous one, and NONE of them were
+  // ever written into `manualRows` at all (no such call existed
+  // anywhere in this effect).
+  //
+  // Fix: the FIRST occurrence of a given productId (in sourceCount.items'
+  // own array order) may still populate the corresponding catalogRows
+  // entry, exactly as before, WHEN that slot is available at the moment
+  // this pass runs. EVERY subsequent occurrence for the same productId
+  // — and any item whose productId has no catalogRows slot at all
+  // (a product deleted from the catalog since the original count, the
+  // prior "missingFromCatalogCount" limitation) — is instead restored
+  // as an ordinary manual row, using the exact same shape
+  // handleAddPortionToManualGroup already constructs for a normal,
+  // Owner-added portion (productId left undefined — a manual row is
+  // never keyed by productId, matched by name instead, exactly like
+  // every other manual row of an existing product) — never a new row
+  // architecture, never a "recovery-only" row kind. This closes both
+  // gaps with one mechanism: no confirmed portion is ever dropped
+  // merely because it shares a productId with another portion, and no
+  // confirmed item is ever dropped merely because its product no longer
+  // exists in the current catalog — both simply land in manualRows
+  // instead of catalogRows, which the existing, completely unmodified
+  // tallyStockCountRows/liveTally calculation already sums identically
+  // either way (allWorkingRows = catalogRows + manualRows). The total is
+  // therefore never "patched" — restoring the correct ROWS is the whole
+  // fix; the existing calculation engine produces the correct total
+  // from them unchanged.
+  //
+  // Timing hardening: this pass is also safe regardless of whether
+  // `catalogRows` has finished being built from `products` yet — since
+  // ANY item that doesn't find an available catalog slot falls back to
+  // a manual row rather than being silently skipped, an early run (before
+  // catalogRows is fully hydrated) still recovers every item, just with
+  // more of them landing in manualRows than would ideally be necessary,
+  // never with any data loss. `products.length > 0` is still required
+  // before running at all, so the pass has at least attempted to build
+  // catalogRows once, keeping the common case (most items land correctly
+  // in their own catalog slot) the normal outcome.
   useEffect(() => {
     if (!pendingBusinessWorthCorrection) {
       correctionPrefillAppliedForRef.current = null;
@@ -1869,24 +1926,40 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (!sourceStockCountId) return; // no link yet (still loading) — try again next render
     const sourceCount = stockCounts.find((sc) => sc.id === sourceStockCountId);
     if (!sourceCount) return; // source not loaded yet — try again next render
+    if (products.length === 0) return; // catalog not loaded yet — try again next render
 
     correctionPrefillAppliedForRef.current = pendingBusinessWorthCorrection.snapshotId;
     let missingCount = 0;
     const originalOrder: Record<string, number> = {};
+    // Items that couldn't claim a catalogRows slot (either because that
+    // productId's slot was already claimed by an earlier portion in
+    // THIS SAME restoration pass, or because no catalogRows entry
+    // exists for it at all) — captured here, outside the setCatalogRows
+    // updater below, so they can be turned into manualRows entries in a
+    // second, separate state update immediately after.
+    const overflowItems: StockCountItem[] = [];
     setCatalogRows((prev) => {
       const next = { ...prev };
+      const claimedThisPass = new Set<string>();
       sourceCount.items.forEach((item, index) => {
         // Recorded regardless of whether the product still exists in the
-        // catalog — harmless if the row is never rendered, and correct
-        // either way: this map's only job is "what position was this
-        // productId at in the original record," independent of whether
-        // today's catalog still has a row for it.
+        // catalog, or which structure ultimately holds this portion —
+        // this map's only job is "what position was this productId at
+        // in the original record."
         originalOrder[item.productId] = index;
-        const existing = next[item.productId];
-        if (!existing) {
+        if (!item.productName || !item.productName.trim()) {
+          // Defensive only — should not occur for a genuinely confirmed
+          // record; a StockCountItem with no product name at all cannot
+          // be restored into either structure.
           missingCount += 1;
           return;
         }
+        const existing = !claimedThisPass.has(item.productId) ? next[item.productId] : undefined;
+        if (!existing) {
+          overflowItems.push(item);
+          return;
+        }
+        claimedThisPass.add(item.productId);
         next[item.productId] = {
           ...existing,
           quantity: String(item.quantity),
@@ -1897,6 +1970,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       });
       return next;
     });
+    if (overflowItems.length > 0) {
+      setManualRows((prevManual) => [
+        ...prevManual,
+        ...overflowItems.map((item): StockCountWorkingRow => ({
+          productId: undefined,
+          productName: item.productName,
+          quantity: String(item.quantity),
+          unit: item.unit || 'un',
+          costPrice: String(item.costPrice),
+          sellingPrice: item.sellingPrice != null ? String(item.sellingPrice) : '',
+          // A restored confirmed portion is, by definition, an already-
+          // deliberately-entered value — never the product-level
+          // default a brand-new blank row would start at.
+          sellingPriceAutoFilled: false,
+          sellingPriceBasisUnit: item.sellingPriceBasisUnit ?? item.unit,
+        })),
+      ]);
+    }
     correctionOriginalOrderRef.current = originalOrder;
     setCorrectionPrefillMissingCount(missingCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -7220,11 +7311,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               Os produtos e quantidades da contagem original foram pré-preenchidos abaixo — reveja e corrija o que for
               necessário.
             </p>
+            {/* [Bug fix — see the correction-prefill useEffect's own full
+                comment, above, for the complete rationale] Products
+                deleted from the catalog since the original count are no
+                longer excluded from restoration — they now land in
+                manualRows via the same fallback that also fixes the
+                multi-portion overwrite bug, so this banner should now
+                fire only in the genuinely defensive case of a malformed
+                historical item with no product name at all — kept as a
+                safety net, not an expected/normal-case message anymore. */}
             {correctionPrefillMissingCount > 0 && (
               <p className="text-[12px] text-amber-700 mt-1.5">
                 {correctionPrefillMissingCount === 1
-                  ? '1 produto da contagem original já não existe no catálogo e não pôde ser pré-preenchido — os dados originais permanecem guardados no histórico, apenas não aparecem aqui para edição.'
-                  : `${correctionPrefillMissingCount} produtos da contagem original já não existem no catálogo e não puderam ser pré-preenchidos — os dados originais permanecem guardados no histórico, apenas não aparecem aqui para edição.`}
+                  ? '1 item da contagem original não pôde ser recuperado — os dados originais permanecem guardados no histórico, apenas não aparece aqui para edição.'
+                  : `${correctionPrefillMissingCount} itens da contagem original não puderam ser recuperados — os dados originais permanecem guardados no histórico, apenas não aparecem aqui para edição.`}
               </p>
             )}
             <button

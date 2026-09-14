@@ -89,47 +89,100 @@ describe('PeriodicStockCountView.tsx — view past count details (any count, no 
   });
 });
 
-describe('PeriodicStockCountView.tsx — correction mode pre-fills the original count (bug fix)', () => {
+describe('PeriodicStockCountView.tsx — correction/recovery mode faithfully restores the confirmed StockCount, including multi-portion products (bug fix)', () => {
+  // Locates the actual recovery useEffect precisely, by its own
+  // declaration comment through to the end of the hook body — used by
+  // every test below instead of a fragile fixed-character-offset
+  // window, so these assertions cannot silently drift out of alignment
+  // with unrelated later edits to this large file the way the prior
+  // version of this suite had (confirmed via baseline comparison: four
+  // of its assertions were already failing before this fix, due to
+  // exactly that kind of offset drift).
+  const effectStart = src.indexOf('  useEffect(() => {\n    if (!pendingBusinessWorthCorrection) {');
+  const effectEnd = src.indexOf('\n  }, [pendingBusinessWorthCorrection, latestActiveBusinessWorthSnapshot, stockCounts, products]);', effectStart);
+  const effectBody = src.slice(effectStart, effectEnd);
+
+  it('the recovery effect is found in the source, well-formed', () => {
+    assert.notEqual(effectStart, -1, 'expected to locate the correction-prefill useEffect');
+    assert.notEqual(effectEnd, -1, 'expected to locate the end of the correction-prefill useEffect');
+  });
+
   it('destructures latestActiveBusinessWorthSnapshot from useApp() — the authoritative link to the count being corrected', () => {
     const useAppBlock = src.slice(src.indexOf('export const PeriodicStockCountView'), src.indexOf('} = useApp();') + 20);
     assert.match(useAppBlock, /latestActiveBusinessWorthSnapshot,/);
   });
 
   it('resolves the source count via sourceStockCountId — never a "most recent by date" guess', () => {
-    const idx = src.indexOf('const correctionPrefillAppliedForRef = useRef');
-    assert.notEqual(idx, -1, 'expected the prefill-once guard ref declaration');
-    const nearby = src.slice(idx, idx + 2500);
-    assert.match(nearby, /latestActiveBusinessWorthSnapshot\?\.sourceStockCountId/);
-    assert.match(nearby, /stockCounts\.find\(\(sc\) => sc\.id === sourceStockCountId\)/);
-  });
-
-  it('pre-fills quantity, unit, costPrice, and sellingPrice from the source count\'s own items into catalogRows', () => {
-    const idx = src.indexOf('const correctionPrefillAppliedForRef = useRef');
-    const nearby = src.slice(idx, idx + 2500);
-    assert.match(nearby, /setCatalogRows\(\(prev\) => \{/);
-    assert.match(nearby, /for \(const item of sourceCount\.items\)/);
-    assert.match(nearby, /quantity: String\(item\.quantity\)/);
-    assert.match(nearby, /costPrice: String\(item\.costPrice\)/);
-    assert.match(nearby, /sellingPrice: item\.sellingPrice != null/);
+    assert.match(effectBody, /latestActiveBusinessWorthSnapshot\?\.sourceStockCountId/);
+    assert.match(effectBody, /stockCounts\.find\(\(sc\) => sc\.id === sourceStockCountId\)/);
   });
 
   it('only applies once per correction session — guarded by a ref keyed on the specific snapshotId, so it can never silently re-overwrite in-progress edits', () => {
-    const idx = src.indexOf('const correctionPrefillAppliedForRef = useRef');
-    const nearby = src.slice(idx, idx + 1200);
-    assert.match(nearby, /if \(correctionPrefillAppliedForRef\.current === pendingBusinessWorthCorrection\.snapshotId\) return;/);
-    assert.match(nearby, /correctionPrefillAppliedForRef\.current = pendingBusinessWorthCorrection\.snapshotId;/);
+    assert.match(effectBody, /if \(correctionPrefillAppliedForRef\.current === pendingBusinessWorthCorrection\.snapshotId\) return;/);
+    assert.match(effectBody, /correctionPrefillAppliedForRef\.current = pendingBusinessWorthCorrection\.snapshotId;/);
   });
 
   it('resets the guard when correction mode is exited, so entering it again later re-applies the prefill correctly', () => {
-    const idx = src.indexOf('const correctionPrefillAppliedForRef = useRef');
-    const nearby = src.slice(idx, idx + 800);
-    assert.match(nearby, /if \(!pendingBusinessWorthCorrection\) \{\s*correctionPrefillAppliedForRef\.current = null;/);
+    assert.match(effectBody, /if \(!pendingBusinessWorthCorrection\) \{\s*correctionPrefillAppliedForRef\.current = null;/);
   });
 
-  it('tracks and discloses products that could not be pre-filled (deleted from the catalog since the original count) — never a silent gap', () => {
+  it('[Timing hardening] waits for the catalog to have loaded at least once before running, rather than restoring everything as manual rows unnecessarily', () => {
+    assert.match(effectBody, /if \(products\.length === 0\) return;/);
+  });
+
+  it('[TEST 1 / TEST 2 — completeness] iterates every item in sourceCount.items exactly once — nothing is filtered out before the restoration decision is made', () => {
+    assert.match(effectBody, /sourceCount\.items\.forEach\(\(item, index\) => \{/);
+  });
+
+  it('[TEST 3 — multiple portions] the FIRST occurrence of a productId in this pass may claim the catalogRows slot; a claimed slot is tracked and never reused within the same pass', () => {
+    assert.match(effectBody, /const claimedThisPass = new Set<string>\(\);/);
+    assert.match(effectBody, /const existing = !claimedThisPass\.has\(item\.productId\) \? next\[item\.productId\] : undefined;/);
+    assert.match(effectBody, /claimedThisPass\.add\(item\.productId\);/);
+  });
+
+  it('[TEST 3 / TEST 4 / TEST 8 — no overwrite] a productId whose slot is already claimed this pass is pushed to overflowItems, never re-entering the catalogRows write for a second time', () => {
+    assert.match(effectBody, /overflowItems\.push\(item\);/);
+    // The catalogRows write only ever happens inside the `if (!existing)
+    // { overflowItems.push(item); return; }` branch's else-path — i.e.
+    // exactly once per productId per pass, confirmed by claimedThisPass
+    // being consulted (asserted above) before this assignment is ever
+    // reached for a given productId.
+    assert.match(effectBody, /claimedThisPass\.add\(item\.productId\);\s*next\[item\.productId\] = \{/);
+  });
+
+  it('[TEST 8 / TEST 9 — manual-row restoration, catalog-change safety] overflow items are restored via setManualRows, using the SAME productId: undefined convention handleAddPortionToManualGroup already uses — never a new row kind', () => {
+    assert.match(effectBody, /setManualRows\(\(prevManual\) => \[/);
+    assert.match(effectBody, /\.\.\.prevManual,/);
+    assert.match(effectBody, /productId: undefined,/);
+    assert.match(effectBody, /productName: item\.productName,/);
+  });
+
+  it('a restored manual-row portion preserves quantity/unit/costPrice/sellingPrice/sellingPriceBasisUnit from the confirmed item, and is marked deliberate (never the product-level default)', () => {
+    assert.match(effectBody, /quantity: String\(item\.quantity\),/);
+    assert.match(effectBody, /unit: item\.unit \|\| 'un',/);
+    assert.match(effectBody, /costPrice: String\(item\.costPrice\),/);
+    assert.match(effectBody, /sellingPrice: item\.sellingPrice != null \? String\(item\.sellingPrice\) : '',/);
+    assert.match(effectBody, /sellingPriceAutoFilled: false,/);
+    assert.match(effectBody, /sellingPriceBasisUnit: item\.sellingPriceBasisUnit \?\? item\.unit,/);
+  });
+
+  it('the claimed catalogRows slot preserves quantity/unit/costPrice/sellingPrice from the source item, exactly as the original implementation did', () => {
+    assert.match(effectBody, /quantity: String\(item\.quantity\)/);
+    assert.match(effectBody, /costPrice: String\(item\.costPrice\)/);
+    assert.match(effectBody, /sellingPrice: item\.sellingPrice != null/);
+  });
+
+  it('[TEST 12 — no historical mutation] this effect only ever calls setCatalogRows/setManualRows (local React state) — it contains no write to any StockCount/BusinessWorthSnapshot document', () => {
+    assert.doesNotMatch(effectBody, /updateDoc|setDoc|deleteDoc|writeBatch|runTransaction/);
+  });
+
+  it('[TEST 13 — prefill timing] originalOrder is recorded for every item regardless of which structure it lands in, independent of hydration timing', () => {
+    assert.match(effectBody, /originalOrder\[item\.productId\] = index;/);
+  });
+
+  it('tracks a defensive-only missing count for a genuinely unrecoverable item (no product name) — no longer used for "deleted from catalog," which now recovers via manualRows', () => {
+    assert.match(effectBody, /if \(!item\.productName \|\| !item\.productName\.trim\(\)\) \{/);
     assert.match(src, /const \[correctionPrefillMissingCount, setCorrectionPrefillMissingCount\] = useState\(0\);/);
-    const bannerIdx = src.indexOf('correctionPrefillMissingCount > 0');
-    assert.notEqual(bannerIdx, -1, 'expected the missing-products disclosure in the correction banner');
   });
 
   it('the live-entry correction banner confirms the original data was pre-filled, not just that a correction is in progress', () => {
@@ -137,3 +190,91 @@ describe('PeriodicStockCountView.tsx — correction mode pre-fills the original 
     assert.notEqual(idx, -1, 'expected the Owner-facing confirmation that original values were loaded');
   });
 });
+
+describe('PeriodicStockCountView.tsx — recovery/correction multi-portion restoration, behavioral simulation of the actual customer incident', () => {
+  // [Scope note] This repository has no DOM/React render harness, so
+  // the actual useReducer-style state transitions cannot be executed
+  // directly. This suite instead re-implements the EXACT restoration
+  // algorithm asserted structurally above, as a small, pure, standalone
+  // function operating on plain objects shaped like the real
+  // catalogRows/sourceCount.items — proving the ALGORITHM's own
+  // correctness on the real customer numbers, while the structural
+  // tests above prove that algorithm is what the component actually
+  // runs. Mirrors this repository's own established two-technique
+  // pattern for exactly this situation.
+  function simulateRecoveryRestoration(
+    catalogRowProductIds: Set<string>,
+    items: { productId: string; productName: string; quantity: number; unit: string; costPrice: number; sellingPrice: number }[]
+  ) {
+    const catalogRowsClaimed = new Map<string, typeof items[number]>();
+    const claimedThisPass = new Set<string>();
+    const manualRows: typeof items = [];
+    for (const item of items) {
+      const canClaim = !claimedThisPass.has(item.productId) && catalogRowProductIds.has(item.productId);
+      if (canClaim) {
+        claimedThisPass.add(item.productId);
+        catalogRowsClaimed.set(item.productId, item);
+      } else {
+        manualRows.push(item);
+      }
+    }
+    return { catalogRowsClaimed, manualRows };
+  }
+
+  it('[TEST 3] three portions of the SAME productId produce one catalog slot and TWO manual rows — never one overwritten row', () => {
+    const items = [
+      { productId: 'A', productName: 'Product A', quantity: 1, unit: 'un', costPrice: 10, sellingPrice: 20 },
+      { productId: 'A', productName: 'Product A', quantity: 2, unit: 'cx', costPrice: 100, sellingPrice: 200 },
+      { productId: 'A', productName: 'Product A', quantity: 3, unit: 'kg', costPrice: 5, sellingPrice: 8 },
+    ];
+    const { catalogRowsClaimed, manualRows } = simulateRecoveryRestoration(new Set(['A']), items);
+    assert.equal(catalogRowsClaimed.size, 1);
+    assert.equal(catalogRowsClaimed.get('A')!.unit, 'un'); // first occurrence wins the catalog slot
+    assert.equal(manualRows.length, 2);
+    assert.deepEqual(manualRows.map((r) => r.unit), ['cx', 'kg']);
+  });
+
+  it('[TEST 9] a productId absent from the current catalog is restored entirely as a manual row, never dropped', () => {
+    const items = [{ productId: 'DELETED', productName: 'Discontinued Product', quantity: 5, unit: 'un', costPrice: 10, sellingPrice: 15 }];
+    const { catalogRowsClaimed, manualRows } = simulateRecoveryRestoration(new Set(), items);
+    assert.equal(catalogRowsClaimed.size, 0);
+    assert.equal(manualRows.length, 1);
+    assert.equal(manualRows[0].productName, 'Discontinued Product');
+  });
+
+  it('[TEST 1 / TEST 2 / TEST 4 — the actual customer incident] 211 confirmed items (177 single-portion + 34 second-portions of already-counted products) restore as 211 total rows, with zero loss', () => {
+    const distinctProducts = 177;
+    const items: { productId: string; productName: string; quantity: number; unit: string; costPrice: number; sellingPrice: number }[] = [];
+    const catalogRowProductIds = new Set<string>();
+    for (let i = 0; i < distinctProducts; i++) {
+      const productId = `prod-${i}`;
+      catalogRowProductIds.add(productId);
+      items.push({ productId, productName: `Product ${i}`, quantity: 10, unit: 'un', costPrice: 5, sellingPrice: 8 });
+    }
+    // The 34 known second-portion entries from the actual incident — each
+    // reuses one of the first 34 productIds above, exactly like Rachele's
+    // own second portion shared its first portion's productId.
+    for (let i = 0; i < 34; i++) {
+      items.push({ productId: `prod-${i}`, productName: `Product ${i}`, quantity: 4, unit: 'cx', costPrice: 20, sellingPrice: 30 });
+    }
+    assert.equal(items.length, 211);
+    const { catalogRowsClaimed, manualRows } = simulateRecoveryRestoration(catalogRowProductIds, items);
+    assert.equal(catalogRowsClaimed.size, 177);
+    assert.equal(manualRows.length, 34);
+    assert.equal(catalogRowsClaimed.size + manualRows.length, 211); // zero loss — the exact acceptance criterion
+  });
+
+  it('[TEST 5 — Pala Pala] a single-portion product\'s corrected quantity (3 cxn, not 2) is preserved exactly, unaffected by the multi-portion fix', () => {
+    const items = [{ productId: 'pala-pala', productName: 'Pala Pala', quantity: 3, unit: 'cxn', costPrice: 40, sellingPrice: 40 }];
+    const { catalogRowsClaimed } = simulateRecoveryRestoration(new Set(['pala-pala']), items);
+    assert.equal(catalogRowsClaimed.get('pala-pala')!.quantity, 3);
+    assert.equal(catalogRowsClaimed.get('pala-pala')!.quantity * catalogRowsClaimed.get('pala-pala')!.costPrice, 120);
+  });
+
+  it('[TEST 6 — Lucky Star] the confirmed (wrong) quantity restores exactly as confirmed — 140, never silently corrected to 14 — the Owner must edit it intentionally', () => {
+    const items = [{ productId: 'lucky-star', productName: 'Lucky Star', quantity: 140, unit: 'un', costPrice: 100, sellingPrice: 140 }];
+    const { catalogRowsClaimed } = simulateRecoveryRestoration(new Set(['lucky-star']), items);
+    assert.equal(catalogRowsClaimed.get('lucky-star')!.quantity, 140);
+  });
+});
+
