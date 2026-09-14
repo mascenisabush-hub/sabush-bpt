@@ -1754,7 +1754,7 @@ export interface PurchaseDraft {
 // must degrade gracefully (simply fails to match anything current),
 // never error.
 export interface PeriodicContagemUserPrefs {
-  sortMode?: 'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc';
+  sortMode?: 'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc' | 'original-order';
   lastWorkspaceProductKey?: string | null;
   updatedAt: string; // ISO string
 }

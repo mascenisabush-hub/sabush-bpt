@@ -1200,7 +1200,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // itself is UNCHANGED by this addition — it remains available,
   // still ordinal, still not time-based.
   const [validatedSortMode, setValidatedSortMode] = useState<
-    'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc'
+    'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc' | 'original-order'
   >('name-asc');
   // [Decision 60 §13.B — Sort-Mode Persistence] Guards the one-time
   // restore below so it applies exactly once per mount, never
@@ -1837,9 +1837,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // discarded by this effect, only this session's working-row seeding.
   const correctionPrefillAppliedForRef = useRef<string | null>(null);
   const [correctionPrefillMissingCount, setCorrectionPrefillMissingCount] = useState(0);
+  // [Bug fix — Owner-reported, "products are disorganized, not the same
+  // order as when they were created"] The correction/recovery screen has
+  // no genuine per-item entry timestamp to sort by — StockCountItem never
+  // persisted one (entrySequence is session-local/ephemeral only, never
+  // written to the finalized document), so 'time-desc'/'time-asc' and
+  // 'entry-order' all silently tie-break to alphabetical for a
+  // bulk-prefilled correction, which is what was being reported as
+  // "sorting doesn't do anything here." True original chronological
+  // entry order is genuinely unrecoverable from historical data — it was
+  // never saved. What CAN be reproduced exactly is the order this
+  // Contagem's own items were stored in (`sourceCount.items`, array
+  // order) — the SAME order the existing historical-PDF export
+  // (handleDownloadHistoricalPdf, unchanged, reads `viewingCount.items`
+  // directly with no re-sort) already prints. Recording that position
+  // here, per productId, lets the correction screen offer a sort mode
+  // that lines up 1:1 against that PDF for direct side-by-side
+  // verification — never claimed to be "time of entry," only "same order
+  // as the original record/PDF," which is the genuinely available and
+  // useful guarantee. A plain ref (not state) — purely a lookup table
+  // for the sort comparator below, never itself rendered or persisted.
+  const correctionOriginalOrderRef = useRef<Record<string, number>>({});
   useEffect(() => {
     if (!pendingBusinessWorthCorrection) {
       correctionPrefillAppliedForRef.current = null;
+      correctionOriginalOrderRef.current = {};
       return;
     }
     if (correctionPrefillAppliedForRef.current === pendingBusinessWorthCorrection.snapshotId) return;
@@ -1850,13 +1872,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
     correctionPrefillAppliedForRef.current = pendingBusinessWorthCorrection.snapshotId;
     let missingCount = 0;
+    const originalOrder: Record<string, number> = {};
     setCatalogRows((prev) => {
       const next = { ...prev };
-      for (const item of sourceCount.items) {
+      sourceCount.items.forEach((item, index) => {
+        // Recorded regardless of whether the product still exists in the
+        // catalog — harmless if the row is never rendered, and correct
+        // either way: this map's only job is "what position was this
+        // productId at in the original record," independent of whether
+        // today's catalog still has a row for it.
+        originalOrder[item.productId] = index;
         const existing = next[item.productId];
         if (!existing) {
           missingCount += 1;
-          continue;
+          return;
         }
         next[item.productId] = {
           ...existing,
@@ -1865,9 +1894,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           costPrice: String(item.costPrice),
           sellingPrice: item.sellingPrice != null ? String(item.sellingPrice) : existing.sellingPrice,
         };
-      }
+      });
       return next;
     });
+    correctionOriginalOrderRef.current = originalOrder;
     setCorrectionPrefillMissingCount(missingCount);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [pendingBusinessWorthCorrection, latestActiveBusinessWorthSnapshot, stockCounts, products]);
@@ -4072,11 +4102,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     getValue: (item: T) => number,
     mode: typeof validatedSortMode,
     getSequence?: (item: T) => number | undefined,
-    getTimestamp?: (item: T) => string | undefined
+    getTimestamp?: (item: T) => string | undefined,
+    // [Bug fix — correction screen has no recoverable entry timestamp;
+    // see correctionOriginalOrderRef's own header comment above] Only
+    // ever supplied by the unified-list call site, and only meaningful
+    // while a correction/recovery is in progress — a row with no
+    // recorded original position (a newly-added product fixing a
+    // missing-from-catalog gap, or any row outside a correction session)
+    // sorts after every row that has one, so genuinely new additions are
+    // easy to spot at the bottom rather than interleaved unpredictably.
+    getOriginalOrder?: (item: T) => number | undefined
   ): T[] {
     const sorted = [...items];
     sorted.sort((a, b) => {
       switch (mode) {
+        case 'original-order': {
+          const oa = getOriginalOrder?.(a);
+          const ob = getOriginalOrder?.(b);
+          if (oa === undefined && ob === undefined) {
+            return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
+          }
+          if (oa === undefined) return 1;
+          if (ob === undefined) return -1;
+          return oa - ob;
+        }
         case 'name-asc':
           return getName(a).trim().toLowerCase().localeCompare(getName(b).trim().toLowerCase());
         case 'name-desc':
@@ -4373,6 +4422,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         firstWriteAt:
           periodicStockDraftItemsByKey[`catalog:${productId}`]?.firstWriteAt ??
           periodicStockDraftItemsByKey[`catalog:${productId}`]?.lastWriteAt,
+        // [Bug fix — see correctionOriginalOrderRef's own header comment,
+        // above] `undefined` outside a correction session (the ref is
+        // reset to `{}` whenever `pendingBusinessWorthCorrection` is
+        // absent) and for any catalog product that wasn't part of the
+        // Contagem this correction is targeting — both cases correctly
+        // fall through to sortByValidatedMode's own "no original
+        // position" handling for the 'original-order' mode.
+        originalOrderIndex: correctionOriginalOrderRef.current[productId],
       }));
     const manualEntries = manualRows
       .map((row, idx) => ({ row, idx }))
@@ -4391,6 +4448,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         activationKey: productKeyFor(row.productName),
         firstWriteAt:
           periodicStockDraftItemsByKey[`manual:${idx}`]?.firstWriteAt ?? periodicStockDraftItemsByKey[`manual:${idx}`]?.lastWriteAt,
+        // A manual row never has a productId to look up in
+        // correctionOriginalOrderRef — any product that WAS part of the
+        // original Contagem and still exists in the catalog is already
+        // prefilled as a catalog row, above, not a manual one. So a
+        // manual row under 'original-order' is, by construction, either
+        // a genuinely new addition or a stand-in for a since-deleted
+        // catalog product — correctly sorts to the end either way.
+        originalOrderIndex: undefined as number | undefined,
       }));
     return [...catalogEntries, ...manualEntries];
   }, [catalogRows, manualRows, periodicStockDraftItemsByKey]);
@@ -4431,7 +4496,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         (entry) => (entry.quantity.trim() === '' ? 0 : Number(entry.quantity) || 0) * (Number(entry.sellingPrice) || 0),
         validatedSortMode,
         (entry) => entry.entrySequence,
-        (entry) => entry.firstWriteAt
+        (entry) => entry.firstWriteAt,
+        (entry) => entry.originalOrderIndex
       ),
     [filteredUnifiedListEntries, validatedSortMode]
   );
@@ -8745,6 +8811,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 <option value="time-desc">Entrada mais recente</option>
                 <option value="time-asc">Entrada mais antiga</option>
                 <option value="entry-order">Ordem de registo</option>
+                {/* [Bug fix — Owner-reported, "products are disorganized,
+                    not the same order as when they were created," raised
+                    while verifying a SuperAdmin-authorized correction
+                    against the original Contagem's exported PDF] Only
+                    offered during an active correction/recovery — outside
+                    one, every row's `originalOrderIndex` is `undefined`
+                    by construction (correctionOriginalOrderRef is reset
+                    to `{}` the moment `pendingBusinessWorthCorrection` is
+                    absent), so this mode would silently collapse to
+                    alphabetical for a normal Contagem anyway; hiding the
+                    option there avoids offering a choice that can never
+                    do anything different. Deliberately labeled "Ordem da
+                    Contagem Original," never "time of entry" — this
+                    reproduces the STORED item order of the original
+                    record (the same order its own PDF export already
+                    prints, unchanged), not a genuine entry timestamp,
+                    which no historical StockCountItem has ever recorded. */}
+                {pendingBusinessWorthCorrection && (
+                  <option value="original-order">Ordem da Contagem Original</option>
+                )}
               </select>
             </div>
 
