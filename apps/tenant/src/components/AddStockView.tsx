@@ -2947,6 +2947,16 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
         ...(row.identityConfirmedNew || confirmedNewProductNames.has(trimmedName.toLowerCase())
           ? { confirmedNewProduct: true }
           : {}),
+        // [Bug fix — see AddStockParams.sellingPriceBasisUnit's own
+        // comment (AppContext.tsx) for the full rationale] Tells the
+        // write path which unit this row's sellingPrice is ACTUALLY
+        // denominated in, so the persisted purchase-event totals
+        // (Investment Ledger / Timeline "Lote de Compra Criado") can
+        // be computed correctly via the product's own confirmed
+        // unitRelationship whenever it differs from the row's own
+        // purchase unit — mirrors this file's own resolveRowRevenue
+        // fix for its local preview totals.
+        ...(row.sellingPriceBasisUnit ? { sellingPriceBasisUnit: row.sellingPriceBasisUnit } : {}),
       });
     }
 

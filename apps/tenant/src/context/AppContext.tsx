@@ -54,7 +54,7 @@ import {
   evaluateUnitRelationshipReplacement,
   type UnitRelationshipProposal,
 } from '../lib/unitRelationship';
-import { buildDerivedSellingValuationSnapshot, type ProductMemorySnapshot } from '../lib/purchaseToSellingConversion';
+import { buildDerivedSellingValuationSnapshot, computeRatePerPurchaseUnit, type ProductMemorySnapshot } from '../lib/purchaseToSellingConversion';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
   Product,
@@ -253,6 +253,28 @@ interface AddStockParams {
   // those cases). Absent/false on any item whose identity was never
   // actually unresolved.
   confirmedNewProduct?: boolean;
+  // [Bug fix — Owner-reported, urgent, live with a client: purchase-
+  // event totals (Investment Ledger / "Lote de Compra Criado" Timeline
+  // event) showing a wrong "Lucro Embutido"/market-value figure for a
+  // line whose sellingPrice is denominated in a genuinely different
+  // unit than its own purchase `unit` above — e.g. "1 Cx = 150 Un,
+  // sells 7 MZN/Un": this interface's own `sellingPrice` field is
+  // documented to be "denominated in unit/purchase terms" (see its own
+  // comment above), but AddStockView.tsx did not reliably convert into
+  // that unit before sending whenever the row's sellingPrice was
+  // resolved from Product Memory in the confirmed SELLING unit's own
+  // terms instead. Rather than silently violate that documented
+  // contract (or risk changing what StockBatch.sellingPrice itself
+  // means), this field tells addMultipleStockBatches which unit
+  // `sellingPrice` is ACTUALLY denominated in, so ONLY the
+  // totalMarketValue/Timeline financial-impact figures below can be
+  // computed correctly via the product's own confirmed unitRelationship
+  // — mirrors AddStockView.tsx's own identical `resolveRowRevenue` fix
+  // for its local preview totals. Absent (or equal to `unit` above)
+  // means no conversion is needed — the ordinary, unaffected case.
+  // Never used for anything written onto the StockBatch document
+  // itself (`sellingPrice` there remains exactly as sent, unchanged).
+  sellingPriceBasisUnit?: string;
 }
 
 // [Owner Product Catalog — Phase 1, Checkpoint B — Implementation
@@ -4374,7 +4396,29 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       tempBatches.push(newBatch);
 
       totalInvestmentValue += Number(item.quantity) * Number(item.costPrice);
-      totalMarketValue += Number(item.quantity) * Number(item.sellingPrice);
+      // [Bug fix — see AddStockParams.sellingPriceBasisUnit's own
+      // comment above for the full rationale] Converts via the SAME
+      // conversion engine `derivedSellingValuation` above already used
+      // (computeRatePerPurchaseUnit) — never a second, independently-
+      // invented conversion — but resolves item.sellingPrice AS
+      // ACTUALLY SUPPLIED (the operator's own transaction figure,
+      // whatever it is), never Product Memory's own remembered price,
+      // which this codebase's own governance explicitly treats as a
+      // conceptually separate figure (see this loop's derivedSellingValuation
+      // computation, above, and AddStockParams.sellingPrice's own
+      // "never conflate the two" comment).
+      const sellingBasisUnit = (item.sellingPriceBasisUnit || batchUnit).trim();
+      const relationshipForConversion = product
+        ? product.unitRelationship
+        : newlyEstablishedProductMemory?.unitRelationship;
+      const rowMarketValue =
+        sellingBasisUnit && sellingBasisUnit.toLowerCase() !== batchUnit.toLowerCase() && isValidUnitRelationship(relationshipForConversion)
+          ? (() => {
+              const rate = computeRatePerPurchaseUnit(relationshipForConversion, batchUnit, sellingBasisUnit, Number(item.sellingPrice));
+              return rate !== null ? Number(item.quantity) * rate : Number(item.quantity) * Number(item.sellingPrice);
+            })()
+          : Number(item.quantity) * Number(item.sellingPrice);
+      totalMarketValue += rowMarketValue;
       lineItemSummaries.push({
         productName: trimmedName,
         quantity: Number(item.quantity),
