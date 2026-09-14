@@ -660,7 +660,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                   Loja: <span className="text-blue-700">{business?.name || '—'}</span>
                 </p>
                 <p className="text-xs text-gray-500 mb-4 leading-relaxed">
-                  Os funcionários usam estas credenciais para entrar na aplicação. Eles têm acesso <strong>apenas aos formulários de introdução</strong> (Stock, Quebra, Despesa) e <strong>não conseguem ver preços, custos, margens nem relatórios</strong>. Este funcionário terá acesso <strong>apenas a esta loja</strong> — para adicionar funcionários a outra loja, mude de loja primeiro em "Meu Negócio".
+                  Os funcionários usam estas credenciais para entrar na aplicação. Eles têm acesso <strong>apenas aos formulários de introdução de Stock e Quebra</strong> e <strong>não conseguem ver preços, custos, margens nem relatórios</strong>. Este funcionário terá acesso <strong>apenas a esta loja</strong> — para adicionar funcionários a outra loja, mude de loja primeiro em "Meu Negócio".
                 </p>
 
                 {staffError && (

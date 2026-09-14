@@ -199,7 +199,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           } else {
             userMsg = err.message || t('auth.errors.genericAuth');
           }
-          throw new Error(`[Login Auth | Code: ${err.code || 'N/A'}] ${userMsg}`);
+          throw new Error(userMsg);
         }
 
         try {
@@ -209,7 +209,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           }
         } catch (err: any) {
           console.error('[Login Firestore Error]:', err);
-          throw new Error(`[Login Firestore | Code: ${err.code || 'N/A'}] ${err.message || t('auth.errors.profileFetchFailed')}`);
+          throw new Error(err.message || t('auth.errors.profileFetchFailed'));
         }
       } else {
         // Register Owner
@@ -250,7 +250,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
           } else {
             userMsg = err.message || t('auth.errors.createAccountFailed');
           }
-          throw new Error(`[Passo 1 (Auth) | Code: ${err.code || 'N/A'}] ${userMsg}`);
+          throw new Error(userMsg);
         }
 
         // Step 2: Business Provisioning Orchestrator (ADR-0001) —
@@ -270,7 +270,7 @@ export const AuthView: React.FC<AuthViewProps> = ({ onBackToQuickLogin }) => {
         } catch (err: any) {
           console.error('[Registar Step 2 - Provisioning Error]:', err);
           await bestEffortAuthCleanup(userCred.user);
-          throw new Error(`[Passo 2 (Aprovisionamento)] ${err.message || t('auth.errors.saveBusinessFailed')}`);
+          throw new Error(err.message || t('auth.errors.saveBusinessFailed'));
         }
       }
     } catch (err: any) {
