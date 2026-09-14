@@ -76,12 +76,50 @@ interface PaymentDoc {
   status?: string;
 }
 
+// [Bug fix — Owner-reported, urgent, live with a client: SuperAdmin
+// support granted an Initial Stock Capital Inicial recovery when the
+// business actually needed a Business Worth (Contagem) recovery
+// instead] Root cause: this screen showed rich, easy-to-use context
+// for the Capital Inicial recovery panel (a one-click "the common
+// case" default) but ZERO context for the Business Worth recovery
+// panel — the operator had to blindly type/paste an exact snapshot id
+// relayed secondhand from the Owner, with nothing on this screen to
+// verify it against. Under time pressure, the easier (but wrong, for
+// a business that has already transitioned past Capital Inicial)
+// panel is the one that gets used. Minimal, read-only, additive fix:
+// surface the business's own CURRENT active BusinessWorthSnapshot
+// (id/confirmedAt/establishmentMethod/measuredBusinessWorth only —
+// the same narrow, curated-field discipline BR-5 already requires for
+// every other field this module reads) so the operator can see and
+// confirm the correct target directly on this screen, never blind.
+interface BusinessWorthSnapshotDoc {
+  // Firestore Timestamp at rest (serverTimestamp() on write) — read as
+  // `unknown` here and normalized to an ISO string below via
+  // toIsoStringOrNull, mirroring the identical, already-established
+  // conversion server/businessWorthNotificationProducer.ts's own
+  // toIsoString already uses for this same field on this same
+  // collection.
+  confirmedAt?: unknown;
+  establishmentMethod?: string;
+  measuredBusinessWorth?: number;
+  status?: string;
+}
+
+function toIsoStringOrNull(value: unknown): string | null {
+  if (typeof value === 'string') return value;
+  if (value && typeof (value as { toDate?: () => Date }).toDate === 'function') {
+    return (value as { toDate: () => Date }).toDate().toISOString();
+  }
+  return null;
+}
+
 export interface BusinessVisibilityDb {
   collection(name: 'businesses'): QueryLike<BusinessDoc> & {
     doc(businessId: string): {
       get(): Promise<DocSnap<BusinessDoc>>;
       collection(name: 'staff'): { get(): Promise<{ docs: DocSnap<StaffDoc>[] }> };
       collection(name: 'payments'): QueryLike<PaymentDoc>;
+      collection(name: 'businessWorthSnapshots'): QueryLike<BusinessWorthSnapshotDoc>;
     };
   };
   collection(name: 'users'): {
@@ -165,6 +203,17 @@ export interface BusinessDetail {
   recentPayments: BusinessDetailPaymentRow[];
   // [Phase C — ADR-0006, Gap 1] See BusinessDoc.suspended above.
   suspended: boolean;
+  // [Bug fix — see BusinessWorthSnapshotDoc's own comment, above, for
+  // the full rationale] Null when the business genuinely has no active
+  // BusinessWorthSnapshot yet (never fabricated) — the "Recuperação de
+  // Valor do Negócio" panel simply has nothing to offer in that case,
+  // same as today.
+  currentBusinessWorthSnapshot: {
+    id: string;
+    confirmedAt: string | null;
+    establishmentMethod: string | null;
+    measuredBusinessWorth: number | null;
+  } | null;
 }
 
 export type FetchBusinessDetailResult =
@@ -197,13 +246,20 @@ export async function fetchBusinessDetail(
   }
   const businessData = businessSnap.data();
 
-  const [ownerSnap, staffSnap, subscriptionStatus, paymentsSnap] = await Promise.all([
+  const [ownerSnap, staffSnap, subscriptionStatus, paymentsSnap, activeSnapshotSnap] = await Promise.all([
     businessData?.ownerUid
       ? db.collection('users').doc(businessData.ownerUid).get()
       : Promise.resolve<DocSnap<UserDoc>>({ exists: false, id: '', data: () => undefined }),
     db.collection('businesses').doc(businessId).collection('staff').get(),
     readSubscriptionStatus(businessId),
     db.collection('businesses').doc(businessId).collection('payments').orderBy('submittedAt', 'desc').limit(RECENT_PAYMENTS_LIMIT).get(),
+    db
+      .collection('businesses')
+      .doc(businessId)
+      .collection('businessWorthSnapshots')
+      .where('status', '==', 'active')
+      .limit(1)
+      .get(),
   ]);
 
   const detail: BusinessDetail = {
@@ -222,6 +278,14 @@ export async function fetchBusinessDetail(
     staff: staffSnap.docs.map((d) => ({ name: d.data()?.name ?? '', suspended: d.data()?.suspended === true })),
     subscriptionStatus,
     suspended: businessData?.suspended === true,
+    currentBusinessWorthSnapshot: activeSnapshotSnap.docs[0]
+      ? {
+          id: activeSnapshotSnap.docs[0].id,
+          confirmedAt: toIsoStringOrNull(activeSnapshotSnap.docs[0].data()?.confirmedAt),
+          establishmentMethod: activeSnapshotSnap.docs[0].data()?.establishmentMethod ?? null,
+          measuredBusinessWorth: activeSnapshotSnap.docs[0].data()?.measuredBusinessWorth ?? null,
+        }
+      : null,
     recentPayments: paymentsSnap.docs.map((d) => {
       const data = d.data();
       return {

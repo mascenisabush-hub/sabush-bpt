@@ -485,6 +485,50 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
             Concede ao dono uma janela de 72 horas para corrigir/recuperar um registo de valor do negócio (Contagem) fora do prazo normal de 3 horas. O SuperAdmin apenas autoriza — quem executa a correção é sempre o dono do negócio, através do fluxo normal de Contagem.
           </p>
 
+          {/* [Bug fix — Owner-reported, urgent, live with a client:
+              support granted an Initial Stock (Capital Inicial)
+              recovery for a business that had already transitioned to
+              Contagem, because this screen previously gave no way to
+              see the business's own CURRENT Business Worth record
+              before choosing a panel — everything above the recovery
+              buttons was Capital Inicial/subscription/payment context
+              only. This block surfaces exactly what
+              fetchBusinessDetail now additionally reads (read-only,
+              curated, same BR-5 discipline as every other field this
+              screen shows) so the operator can see, before acting,
+              whether this business has ANY current Business Worth
+              record at all — and if so, its own real id, confirmation
+              date, and establishment method — never a blind
+              relay-and-hope from the Owner. */}
+          {data.currentBusinessWorthSnapshot ? (
+            <div className="mb-2.5 rounded-lg border p-2.5" style={{ background: 'var(--muted)', borderColor: 'var(--border)' }}>
+              <p className="type-label mb-1" style={{ color: 'var(--muted-foreground)' }}>Registo atual de Valor do Negócio:</p>
+              <p className="type-body m-0 font-mono text-[12px] font-bold">{data.currentBusinessWorthSnapshot.id}</p>
+              <p className="type-body mt-1 text-[11.5px]" style={{ color: 'var(--muted-foreground)' }}>
+                Confirmado em {data.currentBusinessWorthSnapshot.confirmedAt ? new Date(data.currentBusinessWorthSnapshot.confirmedAt).toLocaleString('pt-PT') : '—'}
+                {' · '}Método: {data.currentBusinessWorthSnapshot.establishmentMethod ?? '—'}
+                {' · '}Valor: {data.currentBusinessWorthSnapshot.measuredBusinessWorth ?? '—'} {data.currencySymbol ?? ''}
+              </p>
+              <button
+                type="button"
+                onClick={() => {
+                  setPendingAction('authorize-business-worth-recovery');
+                  setActionError(null);
+                  setActionResult(null);
+                  setBusinessWorthTargetSnapshotId(data.currentBusinessWorthSnapshot!.id);
+                }}
+                className="mt-2 text-[11.5px] font-semibold underline"
+                style={{ color: 'var(--gold-hover)' }}
+              >
+                Usar este registo para autorizar a recuperação
+              </button>
+            </div>
+          ) : (
+            <p className="type-body mb-2.5 text-[11.5px]" style={{ color: 'var(--warning)' }}>
+              Este negócio ainda não tem nenhum registo de Valor do Negócio (Contagem/Declaração) confirmado — se o pedido do dono é sobre a contagem/confirmação de Capital Inicial, use a Recuperação de Capital Inicial acima, não este painel.
+            </p>
+          )}
+
           {pendingAction === null && (
             <button
               onClick={() => { setPendingAction('authorize-business-worth-recovery'); setActionError(null); setActionResult(null); }}

@@ -50,17 +50,31 @@ interface FakePayment {
   submittedAt?: string;
   status?: string;
 }
+// [Bug fix — Owner-reported, urgent, live with a client: support
+// granted the wrong recovery type for a business that had already
+// transitioned to Contagem] Mirrors FakePayment's own shape/role
+// exactly, for the new businessWorthSnapshots read
+// fetchBusinessDetail now performs — see server/businessVisibility.ts's
+// own BusinessWorthSnapshotDoc comment for the full rationale.
+interface FakeBusinessWorthSnapshot {
+  confirmedAt?: string;
+  establishmentMethod?: string;
+  measuredBusinessWorth?: number;
+  status?: string;
+}
 
 function makeFakeDb(fixtures: {
   businesses?: Record<string, FakeBusiness>;
   users?: Record<string, FakeUser>;
   staff?: Record<string, Record<string, FakeStaff>>; // businessId -> staffUid -> doc
   payments?: Record<string, Record<string, FakePayment>>; // businessId -> paymentId -> doc
+  businessWorthSnapshots?: Record<string, Record<string, FakeBusinessWorthSnapshot>>; // businessId -> snapshotId -> doc
 }): BusinessVisibilityDb {
   const businesses = fixtures.businesses ?? {};
   const users = fixtures.users ?? {};
   const staff = fixtures.staff ?? {};
   const payments = fixtures.payments ?? {};
+  const businessWorthSnapshots = fixtures.businessWorthSnapshots ?? {};
 
   function makeBusinessQuery(filters: Array<{ field: string; op: string; value: unknown }>, limitN: number | null) {
     return {
@@ -113,7 +127,7 @@ function makeFakeDb(fixtures: {
               const data = businesses[businessId];
               return { exists: !!data, id: businessId, data: () => data };
             },
-            collection(sub: 'staff' | 'payments') {
+            collection(sub: 'staff' | 'payments' | 'businessWorthSnapshots') {
               if (sub === 'staff') {
                 return {
                   async get() {
@@ -121,6 +135,29 @@ function makeFakeDb(fixtures: {
                     return { docs: Object.entries(rows).map(([id, data]) => ({ exists: true, id, data: () => data })) };
                   },
                 };
+              }
+              if (sub === 'businessWorthSnapshots') {
+                let filters: Array<{ field: string; op: string; value: unknown }> = [];
+                let limitN: number | null = null;
+                const builder = {
+                  where(field: string, op: string, value: unknown) {
+                    filters = [...filters, { field, op, value }];
+                    return builder;
+                  },
+                  limit(n: number) {
+                    limitN = n;
+                    return builder;
+                  },
+                  async get() {
+                    let rows = Object.entries(businessWorthSnapshots[businessId] ?? {});
+                    for (const f of filters) {
+                      rows = rows.filter(([, d]) => (d as Record<string, unknown>)[f.field] === f.value);
+                    }
+                    if (limitN != null) rows = rows.slice(0, limitN);
+                    return { docs: rows.map(([id, data]) => ({ exists: true, id, data: () => data })) };
+                  },
+                };
+                return builder;
               }
               // payments
               let limitN: number | null = null;
@@ -236,12 +273,18 @@ describe('fetchBusinessDetail', () => {
     assert.equal(result.outcome, 'not-found');
   });
 
-  it('assembles exactly the curated field set — BR-5, structural allowlist proof (extended, Phase C — ADR-0006, Gap 1: `suspended` is an explicitly-authorized single-field addition, not scope creep — see BusinessDoc.suspended\'s own comment in server/businessVisibility.ts)', async () => {
+  it('assembles exactly the curated field set — BR-5, structural allowlist proof (extended, Phase C — ADR-0006, Gap 1: `suspended` is an explicitly-authorized single-field addition; further extended, Owner-reported urgent bug fix: `currentBusinessWorthSnapshot` is a second explicitly-authorized, narrow, read-only addition — see BusinessWorthSnapshotDoc\'s own comment in server/businessVisibility.ts)', async () => {
     const db = makeFakeDb({
       businesses: { 'biz-1': { name: 'Loja Central', category: 'retail', currencySymbol: 'MZN', createdAt: '2026-01-01T00:00:00.000Z', ownerUid: 'owner-1', suspended: false } },
       users: { 'owner-1': { name: 'Dono Teste', email: 'owner@example.com', createdAt: '2025-01-01T00:00:00.000Z' } },
       staff: { 'biz-1': { 'staff-1': { name: 'Funcionário A', suspended: false } } },
       payments: { 'biz-1': { 'pmt-1': { amount: 699, currency: 'MZN', method: 'mpesa', reference: 'TXN-1', submittedAt: '2026-02-01T00:00:00.000Z', status: 'confirmed' } } },
+      businessWorthSnapshots: {
+        'biz-1': {
+          'bws-old-superseded': { confirmedAt: '2026-01-15T00:00:00.000Z', establishmentMethod: 'owner-declared', measuredBusinessWorth: 10000, status: 'corrected' },
+          'bws-current-active': { confirmedAt: '2026-03-01T00:00:00.000Z', establishmentMethod: 'contagem', measuredBusinessWorth: 25000, status: 'active' },
+        },
+      },
     });
     const result = await fetchBusinessDetail(db, 'biz-1', 'diagnosing login issue', readSubscriptionStatus);
     assert.equal(result.outcome, 'found');
@@ -249,7 +292,7 @@ describe('fetchBusinessDetail', () => {
 
     assert.deepEqual(
       Object.keys(result.detail).sort(),
-      ['businessId', 'category', 'createdAt', 'currencySymbol', 'name', 'owner', 'recentPayments', 'staff', 'subscriptionStatus', 'suspended'].sort()
+      ['businessId', 'category', 'createdAt', 'currencySymbol', 'currentBusinessWorthSnapshot', 'name', 'owner', 'recentPayments', 'staff', 'subscriptionStatus', 'suspended'].sort()
     );
     assert.equal(result.detail.suspended, false);
     assert.deepEqual(Object.keys(result.detail.owner!).sort(), ['createdAt', 'email', 'name']);
@@ -259,6 +302,16 @@ describe('fetchBusinessDetail', () => {
       ['amount', 'currency', 'method', 'reference', 'status', 'submittedAt']
     );
 
+    // Only the 'active'-status snapshot is ever returned — a
+    // 'corrected'/superseded one (bws-old-superseded, present in the
+    // same fixture above) must never be picked, matching the whole
+    // system's own "current means status === 'active'" convention
+    // used everywhere else (DashboardView, firestore.rules).
+    assert.deepEqual(Object.keys(result.detail.currentBusinessWorthSnapshot!).sort(), ['confirmedAt', 'establishmentMethod', 'id', 'measuredBusinessWorth']);
+    assert.equal(result.detail.currentBusinessWorthSnapshot!.id, 'bws-current-active');
+    assert.equal(result.detail.currentBusinessWorthSnapshot!.establishmentMethod, 'contagem');
+    assert.equal(result.detail.currentBusinessWorthSnapshot!.measuredBusinessWorth, 25000);
+
     // never products/batches/expenses/withdrawals/stockCounts/timelineEvents (BR-5) —
     // proven by construction: this module never queries those collections at all,
     // and this allowlist assertion is the regression guard against a future addition.
@@ -267,6 +320,18 @@ describe('fetchBusinessDetail', () => {
     assert.equal(result.detail.subscriptionStatus, 'active');
     assert.equal(result.detail.staff.length, 1);
     assert.equal(result.detail.recentPayments.length, 1);
+  });
+
+  it('currentBusinessWorthSnapshot is null, never fabricated, when the business has no active Business Worth record yet (e.g. still on legacy Capital Inicial only)', async () => {
+    const db = makeFakeDb({
+      businesses: { 'biz-2': { name: 'Loja Nova', ownerUid: 'owner-2' } },
+      users: { 'owner-2': { name: 'Dono B' } },
+      businessWorthSnapshots: {},
+    });
+    const result = await fetchBusinessDetail(db, 'biz-2', 'checking business worth state', readSubscriptionStatus);
+    assert.equal(result.outcome, 'found');
+    if (result.outcome !== 'found') return;
+    assert.equal(result.detail.currentBusinessWorthSnapshot, null);
   });
 
   it('reuses the injected readSubscriptionStatus verbatim rather than reading subscriptions itself', async () => {

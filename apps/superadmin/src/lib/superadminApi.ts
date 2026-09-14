@@ -256,6 +256,19 @@ export interface BusinessDetailResponse {
   recentPayments: BusinessDetailPaymentRow[];
   suspended: boolean;
   auditLogged?: false;
+  // [Bug fix — Owner-reported, urgent, live with a client: support
+  // granted the wrong (Capital Inicial) recovery for a business that
+  // had already transitioned to Contagem, because this screen gave no
+  // way to see/verify the business's own current Business Worth
+  // record before blindly typing an id relayed from the Owner] Null
+  // when the business genuinely has no active BusinessWorthSnapshot
+  // yet.
+  currentBusinessWorthSnapshot: {
+    id: string;
+    confirmedAt: string | null;
+    establishmentMethod: string | null;
+    measuredBusinessWorth: number | null;
+  } | null;
 }
 
 export async function fetchBusinessDetail(businessId: string, justification: string): Promise<BusinessDetailResponse> {
