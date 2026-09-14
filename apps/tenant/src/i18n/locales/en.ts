@@ -1124,6 +1124,10 @@ export const en: TranslationDict = {
         title: 'Your business is currently read-only',
         contactButton: 'Contact Support',
       },
+      trialCompleted: {
+        title: 'Your trial has ended',
+        subscribeButton: 'Subscribe',
+      },
     },
     businessSuspension: {
       banner: {
@@ -1153,13 +1157,15 @@ export const en: TranslationDict = {
       priceLabel: 'per month',
       chooseMethod: 'Choose a payment method',
       payTo: 'Pay to:',
+      copyDestination: 'Copy',
+      destinationCopied: 'Copied!',
       referenceLabel: 'Payment reference / transaction ID',
       referencePlaceholder: 'e.g. QGH7X2K9P1',
       notesLabel: 'Notes (optional)',
       submitButton: 'Submit payment',
       submitting: 'Submitting…',
       pendingTitle: 'Payment under review',
-      pendingMessage: "We've received your payment reference. Our team will confirm it and your subscription will be activated soon.",
+      pendingMessage: "We've received your payment reference. Our team will confirm it and your subscription will be activated soon — you'll get a notification once that happens.",
       pendingMethod: 'Method',
       pendingReference: 'Reference',
       pendingSubmittedAt: 'Submitted on',
@@ -1227,6 +1233,13 @@ export const en: TranslationDict = {
         whatHappened: 'Some receivables remain outstanding.',
         whyItMatters: "An unpaid receivable doesn't yet count toward business worth.",
         recommendedAction: 'Consider following up with customers.',
+      },
+    },
+    subscription: {
+      paymentConfirmed: {
+        whatHappened: 'Your payment has been confirmed.',
+        whyItMatters: 'Your subscription is now active and you can create new records again.',
+        recommendedAction: 'No action needed on your part.',
       },
     },
   },

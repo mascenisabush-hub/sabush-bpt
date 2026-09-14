@@ -10,14 +10,23 @@ import { SubscriptionContactModal } from './SubscriptionContactModal';
 // subscription status. This banner is the minimum fix.
 // [Subscription banner color/positioning fix — Owner-requested] Color
 // now follows a simple two-tier read: GREEN for "you're fine" (Trial
-// Active, Active/subscribed), RED for "this needs attention" (Grace
-// Period, Expired) — Grace Period and Expired share the same rose
-// palette, distinguished from each other only by icon (AlertTriangle
-// vs Lock) and their own title/button text, never by color, per this
-// explicit direction. Renders nothing at all for Staff (Architecture
-// 6.8 — subscription management is Owner/Manager territory; a Staff
-// account has no action to take here and the [Subscribe]/[Contact
-// Support] button would be a dead end for them).
+// Active, Active/subscribed), RED for "this needs attention" (Trial
+// Completed, Grace Period, Expired) — these three share the same rose
+// palette, distinguished from each other only by icon and their own
+// title/button text, never by color, per this explicit direction.
+// Renders nothing at all for Staff (Architecture 6.8 — subscription
+// management is Owner/Manager territory; a Staff account has no action
+// to take here and the [Subscribe]/[Contact Support] button would be a
+// dead end for them).
+//
+// [UX gap fix — Owner-reported, trial->payment investigation]
+// trial_completed previously rendered no banner at all here, relying
+// solely on SubscriptionBlockedNotice.tsx to surface the payment flow
+// — but that notice only appears once a write is actually attempted
+// and blocked. A customer who opens the app right after their trial
+// ends, without yet trying to write anything, had zero visible path to
+// "pay now." This banner now covers that gap directly, the same way it
+// already does for Grace Period and Expired.
 export const SubscriptionStatusBanner: React.FC = () => {
   const {
     subscription,
@@ -131,10 +140,31 @@ export const SubscriptionStatusBanner: React.FC = () => {
     );
   }
 
-  // trial_pending / trial_completed: no banner. trial_pending is a
-  // momentary state (Business Rule 4); trial_completed's own blocked-
-  // write notice (SubscriptionBlockedNotice.tsx) covers that case
-  // directly on the screens where it actually matters, avoiding a
-  // second, redundant banner saying the same thing twice.
+  if (subscription.status === 'trial_completed') {
+    return (
+      <>
+        <div className="bg-rose-50 border-b border-rose-500/30">
+          <div className="max-w-7xl mx-auto px-4 sm:px-8 py-2 flex flex-wrap items-center justify-between gap-2">
+            <div className="flex items-center gap-2 text-[13px] text-rose-800">
+              <Lock className="w-4 h-4 shrink-0 text-rose-600" strokeWidth={2.25} />
+              <span className="font-bold">{t('subscription.banner.trialCompleted.title')}</span>
+            </div>
+            <button
+              type="button"
+              onClick={() => setShowContactModal(true)}
+              className="px-3 py-1 rounded-lg bg-rose-600 text-white text-[12px] font-bold hover:bg-rose-700 transition shrink-0"
+            >
+              {t('subscription.banner.trialCompleted.subscribeButton')}
+            </button>
+          </div>
+        </div>
+        {showContactModal && <SubscriptionContactModal onClose={() => setShowContactModal(false)} />}
+      </>
+    );
+  }
+
+  // trial_pending: no banner — a momentary state (Business Rule 4),
+  // never expected to be visible to a real user for any meaningful
+  // duration.
   return null;
 };

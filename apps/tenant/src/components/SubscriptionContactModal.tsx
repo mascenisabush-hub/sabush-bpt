@@ -2,7 +2,7 @@ import React, { useEffect, useRef, useState } from 'react';
 import { useApp } from '../context/AppContext';
 import { useLanguage } from '../context/LanguageContext';
 import { formatDate } from '../utils/formatters';
-import { CreditCard, X, Clock, XCircle, CheckCircle2 } from 'lucide-react';
+import { CreditCard, X, Clock, XCircle, CheckCircle2, Copy, Check } from 'lucide-react';
 import type { PaymentMethod } from '../types';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, PAYMENT_METHODS } from '../data/subscriptionPlan';
 
@@ -20,8 +20,11 @@ interface SubscriptionContactModalProps {
 //
 // This component only ever writes a 'pending' Payment via
 // useApp().submitPayment() — it never touches subscription state in
-// any way. Confirmation happens entirely outside the client, via
-// server/scripts/confirmPayment.ts.
+// any way. Confirmation happens entirely outside the client: a
+// SuperAdmin reviews it via the Pending Payments queue
+// (apps/superadmin/src/pages/PendingPaymentsQueue.tsx), which calls
+// the confirm-payment server engine through a real API route — or, as
+// a fallback, server/scripts/confirmPayment.ts directly.
 export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> = ({ onClose }) => {
   const { payments, submitPayment, subscription, checkLatestPaymentAuthoritative } = useApp();
   const { t } = useLanguage();
@@ -32,6 +35,7 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [justSubmitted, setJustSubmitted] = useState(false);
+  const [copiedDestination, setCopiedDestination] = useState(false);
 
   // [Track B — Payment Activation UX correctness fix] Auto-close on a
   // genuine transition to 'active' while this modal is mounted mid
@@ -109,6 +113,16 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
   }, [justSubmitted]);
   const authoritativeShowPendingView = !justSubmitted && authoritativeLatestPayment?.status === 'pending';
   const authoritativeSubmissionBlocked = authoritativeLatestPayment === undefined || authoritativeShowPendingView;
+
+  async function handleCopyDestination(destination: string) {
+    try {
+      await navigator.clipboard.writeText(destination);
+      setCopiedDestination(true);
+      setTimeout(() => setCopiedDestination(false), 2000);
+    } catch (err) {
+      console.error('[SubscriptionContactModal] clipboard write failed', err);
+    }
+  }
 
   async function handleSubmit() {
     if (authoritativeSubmissionBlocked) {
@@ -216,7 +230,7 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
                     <button
                       key={m.id}
                       type="button"
-                      onClick={() => setSelectedMethod(m.id)}
+                      onClick={() => { setSelectedMethod(m.id); setCopiedDestination(false); }}
                       className={`text-left px-4 py-3 rounded-xl border transition ${
                         selectedMethod === m.id
                           ? 'border-[#0B1F3A] bg-[#0B1F3A]/[0.04]'
@@ -231,8 +245,27 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
               </div>
 
               {selectedMethodConfig && (
-                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-700">
-                  {t('subscription.subscribe.payTo')} <span className="font-bold">{selectedMethodConfig.destination}</span>
+                <div className="bg-gray-50 border border-gray-200 rounded-xl p-3 text-sm text-gray-700 flex items-center justify-between gap-2">
+                  <span>
+                    {t('subscription.subscribe.payTo')} <span className="font-bold">{selectedMethodConfig.destination}</span>
+                  </span>
+                  <button
+                    type="button"
+                    onClick={() => handleCopyDestination(selectedMethodConfig.destination)}
+                    className="shrink-0 flex items-center gap-1 px-2.5 py-1.5 rounded-lg bg-white border border-gray-300 text-xs font-bold text-gray-700 hover:bg-gray-100 transition"
+                  >
+                    {copiedDestination ? (
+                      <>
+                        <Check className="w-3.5 h-3.5 text-emerald-600" strokeWidth={2.5} />
+                        {t('subscription.subscribe.destinationCopied')}
+                      </>
+                    ) : (
+                      <>
+                        <Copy className="w-3.5 h-3.5" strokeWidth={2.25} />
+                        {t('subscription.subscribe.copyDestination')}
+                      </>
+                    )}
+                  </button>
                 </div>
               )}
 

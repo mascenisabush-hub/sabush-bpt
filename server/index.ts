@@ -27,6 +27,7 @@ import { backgroundWorker } from './backgroundWorker';
 import { resolveServiceMode, isTenantMode, createTenantOnlyMiddleware } from './serviceMode';
 import { createNotificationPlatform } from './notificationPlatform';
 import { registerTrialNotificationPolicyAndTemplates, createTrialNotificationProducer } from './trialNotificationProducer';
+import { registerPaymentNotificationPolicyAndTemplates, buildPaymentConfirmedEvent } from './paymentNotificationProducer';
 import { registerClosingNotificationPolicyAndTemplates, createClosingNotificationProducer } from './closingNotificationProducer';
 import { registerBreakageNotificationPolicyAndTemplates, createBreakageNotificationProducer } from './breakageNotificationProducer';
 import { registerBusinessWorthNotificationPolicyAndTemplates, createBusinessWorthNotificationProducer } from './businessWorthNotificationProducer';
@@ -140,6 +141,7 @@ const { writeNotification } = notificationPlatform;
 // the same shared Notification Platform instance every producer uses.
 registerTrialNotificationPolicyAndTemplates(notificationPlatform);
 const trialNotificationProducer = createTrialNotificationProducer(db, notificationPlatform);
+registerPaymentNotificationPolicyAndTemplates(notificationPlatform);
 // Module #20 Phase 3 Checkpoint 4 — Closing Integrity Producer, against
 // the same shared Notification Platform instance every producer uses.
 registerClosingNotificationPolicyAndTemplates(notificationPlatform);
@@ -2979,6 +2981,22 @@ expressApp.post(
     }
 
     const subscriptionStatus = await readSubscriptionStatus(businessId).catch(() => null);
+
+    // [UX gap fix — Owner-reported, trial->payment investigation] Only
+    // fire on a genuine state change to 'active' (never on an
+    // idempotent replay of an already-confirmed payment, where
+    // lifecycleTransition is null) — mirrors this route's own
+    // "auditLogged" isolation pattern just above: a notification
+    // failure must never fail the confirm response itself.
+    if (result.lifecycleTransition?.status === 'active') {
+      try {
+        await notificationPlatform.evaluateBusinessEvent(
+          buildPaymentConfirmedEvent(businessId, paymentId, new Date().toISOString()),
+        );
+      } catch (err) {
+        console.error('[superadmin/payments/confirm] payment-confirmed notification failed, continuing', { businessId, paymentId, error: err instanceof Error ? err.message : String(err) });
+      }
+    }
 
     res.json({
       outcome: 'confirmed',

@@ -1171,6 +1171,20 @@ export interface TranslationDict {
         title: string;
         contactButton: string;
       };
+      // [UX gap fix — Owner-reported, trial->payment investigation]
+      // trial_completed previously rendered no banner at all (see the
+      // removed comment in SubscriptionStatusBanner.tsx) — the ONLY way to reach the
+      // payment flow during this exact state was to first hit a
+      // blocked write (SubscriptionBlockedNotice), or to already be
+      // mid-write on a screen that shows it. A customer who opens the
+      // app right after their trial ends, without yet attempting a
+      // write, had zero visible path to "pay now." This restores the
+      // same persistent, always-visible banner treatment every other
+      // needs-attention state already has.
+      trialCompleted: {
+        title: string;
+        subscribeButton: string;
+      };
     };
     // SuperAdmin V1 Operational Control Plane, Phase C (ADR-0006, Gap
     // 1). Distinct from the trial/grace/expired states above — this is
@@ -1210,6 +1224,12 @@ export interface TranslationDict {
       priceLabel: string;
       chooseMethod: string;
       payTo: string;
+      // [UX gap fix — Owner-reported, trial->payment investigation] The
+      // destination number/account was plain text with no way to copy
+      // it, forcing the customer to manually retype/select it into
+      // their mobile-money app.
+      copyDestination: string;
+      destinationCopied: string;
       referenceLabel: string;
       referencePlaceholder: string;
       notesLabel: string;
@@ -1290,6 +1310,16 @@ export interface TranslationDict {
         recommendedAction: string;
       };
       receivableOutstanding: {
+        whatHappened: string;
+        whyItMatters: string;
+        recommendedAction: string;
+      };
+    };
+    // [UX gap fix — Owner-reported, trial->payment investigation]
+    // Engineering first draft, not Product-Architect-approved copy —
+    // see server/paymentNotificationProducer.ts's header note.
+    subscription: {
+      paymentConfirmed: {
         whatHappened: string;
         whyItMatters: string;
         recommendedAction: string;
@@ -2431,6 +2461,10 @@ export const pt: TranslationDict = {
         title: 'O seu negócio está atualmente em modo só de leitura',
         contactButton: 'Contactar Suporte',
       },
+      trialCompleted: {
+        title: 'O seu período experimental terminou',
+        subscribeButton: 'Subscrever',
+      },
     },
     businessSuspension: {
       banner: {
@@ -2460,13 +2494,15 @@ export const pt: TranslationDict = {
       priceLabel: 'por mês',
       chooseMethod: 'Escolha um método de pagamento',
       payTo: 'Pague para:',
+      copyDestination: 'Copiar',
+      destinationCopied: 'Copiado!',
       referenceLabel: 'Referência do pagamento / ID da transação',
       referencePlaceholder: 'Ex: QGH7X2K9P1',
       notesLabel: 'Notas (opcional)',
       submitButton: 'Submeter pagamento',
       submitting: 'A submeter…',
       pendingTitle: 'Pagamento em análise',
-      pendingMessage: 'Recebemos a sua referência de pagamento. A nossa equipa vai confirmar e a sua subscrição será ativada em breve.',
+      pendingMessage: 'Recebemos a sua referência de pagamento. A nossa equipa vai confirmar e a sua subscrição será ativada em breve — vai receber uma notificação assim que isso acontecer.',
       pendingMethod: 'Método',
       pendingReference: 'Referência',
       pendingSubmittedAt: 'Submetido em',
@@ -2534,6 +2570,13 @@ export const pt: TranslationDict = {
         whatHappened: 'Ainda há valores a receber por regularizar.',
         whyItMatters: 'Um valor por cobrar ainda não conta para o valor do negócio.',
         recommendedAction: 'Considere fazer o acompanhamento com os clientes.',
+      },
+    },
+    subscription: {
+      paymentConfirmed: {
+        whatHappened: 'O seu pagamento foi confirmado.',
+        whyItMatters: 'A sua subscrição está agora ativa e pode voltar a criar novos registos normalmente.',
+        recommendedAction: 'Não é necessária nenhuma ação da sua parte.',
       },
     },
   },

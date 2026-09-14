@@ -1124,6 +1124,10 @@ export const fr: TranslationDict = {
         title: 'Votre entreprise est actuellement en lecture seule',
         contactButton: 'Contacter le support',
       },
+      trialCompleted: {
+        title: 'Votre période d\'essai est terminée',
+        subscribeButton: 'S\'abonner',
+      },
     },
     businessSuspension: {
       banner: {
@@ -1153,13 +1157,15 @@ export const fr: TranslationDict = {
       priceLabel: 'par mois',
       chooseMethod: 'Choisissez un mode de paiement',
       payTo: 'Payez à :',
+      copyDestination: 'Copier',
+      destinationCopied: 'Copié !',
       referenceLabel: 'Référence de paiement / ID de transaction',
       referencePlaceholder: 'ex. QGH7X2K9P1',
       notesLabel: 'Notes (facultatif)',
       submitButton: 'Soumettre le paiement',
       submitting: 'Envoi en cours…',
       pendingTitle: 'Paiement en cours de vérification',
-      pendingMessage: 'Nous avons reçu votre référence de paiement. Notre équipe la confirmera et votre abonnement sera activé prochainement.',
+      pendingMessage: 'Nous avons reçu votre référence de paiement. Notre équipe la confirmera et votre abonnement sera activé prochainement — vous recevrez une notification dès que ce sera fait.',
       pendingMethod: 'Méthode',
       pendingReference: 'Référence',
       pendingSubmittedAt: 'Soumis le',
@@ -1227,6 +1233,13 @@ export const fr: TranslationDict = {
         whatHappened: 'Certaines créances restent en attente.',
         whyItMatters: "Une créance impayée ne compte pas encore dans la valeur du négoce.",
         recommendedAction: 'Envisagez de faire un suivi avec les clients.',
+      },
+    },
+    subscription: {
+      paymentConfirmed: {
+        whatHappened: 'Votre paiement a été confirmé.',
+        whyItMatters: 'Votre abonnement est maintenant actif et vous pouvez à nouveau créer de nouveaux enregistrements.',
+        recommendedAction: "Aucune action n'est requise de votre part.",
       },
     },
   },
