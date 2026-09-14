@@ -24,6 +24,7 @@ import AppLoadingScreen from './components/AppLoadingScreen';
 import { SubscriptionStatusBanner } from './components/SubscriptionStatusBanner';
 import { BusinessSuspendedBanner } from './components/BusinessSuspendedBanner';
 import { SupportSessionBanner } from './components/SupportSessionBanner';
+import { InstallAppBanner } from './components/InstallAppBanner';
 import { SupportPointerOverlay } from './components/SupportPointerOverlay';
 import { SupportDesktopCapture } from './components/SupportDesktopCapture';
 import { Product } from './types';
@@ -117,6 +118,7 @@ function MainApp() {
       <SubscriptionStatusBanner />
       <BusinessSuspendedBanner />
       <SupportSessionBanner />
+      <InstallAppBanner />
       <SupportPointerOverlay />
       <SupportDesktopCapture />
 

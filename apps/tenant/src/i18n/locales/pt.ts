@@ -744,6 +744,16 @@ export interface TranslationDict {
       generic: string;
     };
   };
+  // [Feature — "facilitate downloading (make it easy)"] InstallAppBanner's
+  // own strings.
+  installApp: {
+    banner: {
+      title: string;
+      subtitle: string;
+      installButton: string;
+      dismiss: string;
+    };
+  };
   // [Owner Product Catalog — Phase 1, Checkpoint A/C] Checkpoint A's
   // own minimal block (title, subtitle, emptyState), extended by
   // Checkpoint C with exactly the registration-form strings that
@@ -2031,6 +2041,14 @@ export const pt: TranslationDict = {
     errors: {
       invalidAmount: 'Por favor introduza um valor válido superior a 0.',
       generic: 'Erro ao declarar o Valor do Negócio.',
+    },
+  },
+  installApp: {
+    banner: {
+      title: 'Instale a aplicação Sabush',
+      subtitle: 'Acesso mais rápido, direto do seu ecrã inicial.',
+      installButton: 'Instalar',
+      dismiss: 'Dispensar',
     },
   },
   productCatalog: {

@@ -696,6 +696,14 @@ export const fr: TranslationDict = {
       generic: 'Erreur lors de la déclaration de la Valeur du Négoce.',
     },
   },
+  installApp: {
+    banner: {
+      title: 'Installez l\\u2019application Sabush',
+      subtitle: 'Acces plus rapide, directement depuis votre ecran d\\u2019accueil.',
+      installButton: 'Installer',
+      dismiss: 'Ignorer',
+    },
+  },
   productCatalog: {
     title: 'Catalogue de Produits',
     subtitle: 'Enregistrez et gérez les produits de votre entreprise, même avant de les acheter.',

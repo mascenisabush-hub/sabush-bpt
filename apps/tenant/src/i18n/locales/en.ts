@@ -696,6 +696,14 @@ export const en: TranslationDict = {
       generic: 'Error declaring Business Worth.',
     },
   },
+  installApp: {
+    banner: {
+      title: 'Install the Sabush app',
+      subtitle: 'Faster access, right from your home screen.',
+      installButton: 'Install',
+      dismiss: 'Dismiss',
+    },
+  },
   productCatalog: {
     title: 'Product Catalog',
     subtitle: 'Register and manage your business products, even before you buy them.',
