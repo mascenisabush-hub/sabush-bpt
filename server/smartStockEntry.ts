@@ -349,16 +349,26 @@ const EXTRACTION_PROMPT =
   'entries in lineItems, not one. For each purchased line item, extract ' +
   'productName, quantity, unit (e.g. un, cx, kg, saco, carton — copy the ' +
   'document\'s own wording, never convert or infer a different unit), and ' +
-  'costPrice (the PURCHASE/cost price paid, never a selling or retail ' +
-  'price — if the document shows no purchase price for a line, omit ' +
-  'costPrice for that one line only; still include the rest of that ' +
-  'line\'s known fields, and still include every other line item). Also ' +
-  'extract supplierName and documentDate if clearly present. If a field ' +
-  'is not clearly present, OMIT it entirely rather than guessing — never ' +
-  'invent, estimate, or infer a value that is not directly legible in the ' +
-  'document. Never extract a selling price under any field name. Never ' +
-  'infer how much stock remained before this purchase. Respond with JSON ' +
-  'matching the provided schema only.';
+  'costPrice — the PER-UNIT purchase/cost price (never a selling or ' +
+  'retail price, and never the line\'s total price). Many receipts print ' +
+  'only a line TOTAL (quantity × unit price) and no separate per-unit ' +
+  'price column. When that happens and both the quantity and the line ' +
+  'total are clearly, literally printed, DIVIDE the total by the ' +
+  'quantity to get costPrice — this is a direct arithmetic calculation ' +
+  'from two numbers you can already read, not a guess, and you must do ' +
+  'it rather than omitting costPrice. Only omit costPrice for a line ' +
+  'when NEITHER a per-unit price NOR a (total + quantity) pair is ' +
+  'legible for it — still include the rest of that line\'s known ' +
+  'fields, and still include every other line item. Also extract ' +
+  'supplierName and documentDate if clearly present. If a field is not ' +
+  'clearly present, OMIT it entirely rather than guessing — never ' +
+  'invent or estimate a productName, quantity, unit, or total figure ' +
+  'that is not directly legible in the document (costPrice\'s own ' +
+  'total÷quantity division above is the one explicit exception, since ' +
+  'both inputs to it must themselves be directly legible). Never ' +
+  'extract a selling price under any field name. Never infer how much ' +
+  'stock remained before this purchase. Respond with JSON matching the ' +
+  'provided schema only.';
 
 /**
  * Calls the configured AI vision provider with one image and returns its

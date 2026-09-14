@@ -54,14 +54,31 @@ describe('smartStockEntry.ts — the extraction call is deterministic and asks f
   });
 
   it('the prompt clarifies a missing costPrice on one line must not drop that line or any other line item', () => {
-    assert.match(smartStockEntrySrc, /costPrice for that one line only; still include the rest of that/);
+    assert.match(smartStockEntrySrc, /still include the rest of that/);
     assert.match(smartStockEntrySrc, /still include every other line item/);
   });
 
-  it('the "never invent/estimate/infer" discipline is unchanged — determinism must never be achieved by fabricating values instead of extracting them', () => {
-    assert.match(
-      smartStockEntrySrc,
-      /invent, estimate, or infer a value that is not directly legible in the/
-    );
+  // [Bug fix — Owner-reported, urgent: costPrice consistently coming back
+  // empty] The prompt's prior blanket "never invent, estimate, or infer"
+  // wording, with no distinction between per-unit price and line total,
+  // meant a model reading a receipt that prints only a line TOTAL
+  // (quantity × unit price, no separate per-unit column — the common case
+  // for informal/small-supplier receipts) would correctly-but-uselessly
+  // omit costPrice every time, since deriving it required a calculation
+  // the prompt's own wording discouraged. The fix narrows the "never
+  // infer" discipline to apply to productName/quantity/unit/total (never
+  // fabricate a NUMBER OR STRING that isn't grounded in the document) while
+  // carving out one explicit, narrow exception: costPrice MAY be computed
+  // as total ÷ quantity when BOTH inputs are themselves directly legible —
+  // this is arithmetic on two already-extracted numbers, not a guess about
+  // an illegible one. This test asserts the discipline still forbids
+  // fabricating ungrounded values, and that the one exception is scoped
+  // and explicit, not a general license to estimate.
+  it('the "never invent/estimate" discipline still forbids fabricating ungrounded values, with one explicit, narrow, arithmetic-only exception for costPrice', () => {
+    assert.match(smartStockEntrySrc, /invent or estimate a productName, quantity, unit, or total figure/);
+    assert.match(smartStockEntrySrc, /that is not directly legible in the/);
+    assert.match(smartStockEntrySrc, /DIVIDE the total by the/);
+    assert.match(smartStockEntrySrc, /this is a direct arithmetic calculation/);
+    assert.match(smartStockEntrySrc, /the one explicit exception/);
   });
 });
