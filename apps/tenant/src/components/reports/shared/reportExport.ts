@@ -27,6 +27,53 @@ export interface ExportTable {
 }
 
 /**
+ * [Bug fix — Owner-reported, urgent, live with a client: the "Exportar
+ * PDF" button in Contagem (including during a SuperAdmin-authorized
+ * recovery re-edit) failed with a raw, technical browser error —
+ * "Failed to fetch dynamically imported module:
+ * .../jspdf.es.min-DkucjaH_.js" — shown verbatim to the Owner] Root
+ * cause: jsPDF/jspdf-autotable are lazy-loaded, content-hashed chunks
+ * (see this file's own header comment on buildReportPdfDocument for
+ * why) — every new deploy can give these chunks a new hash. A browser
+ * tab left open from BEFORE a deploy still has the OLD hash baked into
+ * its already-loaded JS, so its next dynamic-import request asks the
+ * server for a file that no longer exists; the server's SPA routing
+ * then falls back to serving index.html (text/html) for that request,
+ * which the browser correctly refuses to execute as a module — hence
+ * "Expected a JavaScript module script but the server responded with
+ * a MIME type of text/html." This is not a data-loss or corruption
+ * bug — the fix genuinely is "reload the page" — but the app was
+ * showing the raw technical message instead of saying so. Detects
+ * that specific class of failure (by the same distinctive phrasing
+ * every major browser engine uses for it) and replaces it with a
+ * clear, actionable Portuguese message; any OTHER kind of failure
+ * (a genuine bug inside the PDF-building code itself, for instance)
+ * is re-thrown completely unchanged, so this never masks a real error.
+ */
+function isStaleDeploymentChunkError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /dynamically imported module/i.test(message) ||
+    /error loading dynamically imported module/i.test(message) ||
+    /expected a javascript(-| )?or(-| )?wasm module script/i.test(message)
+  );
+}
+
+const STALE_DEPLOYMENT_MESSAGE =
+  'A aplicação foi atualizada desde que esta página foi aberta. Recarregue a página (F5) e tente novamente.';
+
+async function loadPdfLibraries() {
+  try {
+    return await Promise.all([import('jspdf'), import('jspdf-autotable')]);
+  } catch (err) {
+    if (isStaleDeploymentChunkError(err)) {
+      throw new Error(STALE_DEPLOYMENT_MESSAGE);
+    }
+    throw err;
+  }
+}
+
+/**
  * [Owner-requested — preview before download] Builds the exact same
  * jsPDF document exportReportPdf below builds — same header, same KPI
  * block, same per-table rendering — but returns the constructed
@@ -44,10 +91,7 @@ async function buildReportPdfDocument(
   kpis: ExportKpi[],
   tables: ExportTable[]
 ) {
-  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-    import('jspdf'),
-    import('jspdf-autotable'),
-  ]);
+  const [{ default: jsPDF }, { default: autoTable }] = await loadPdfLibraries();
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();

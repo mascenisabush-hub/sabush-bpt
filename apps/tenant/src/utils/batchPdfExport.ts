@@ -6,6 +6,25 @@ const DARK: [number, number, number] = [17, 17, 17];
 const GRAY: [number, number, number] = [107, 114, 128];
 
 /**
+ * [Bug fix — see reportExport.ts's own identical
+ * isStaleDeploymentChunkError/loadPdfLibraries comment for the full
+ * rationale — same lazy-loaded jsPDF chunk, same failure class, same
+ * fix, kept as its own small local copy since this file has no shared
+ * import path to reportExport.ts's internals.]
+ */
+function isStaleDeploymentChunkError(err: unknown): boolean {
+  const message = err instanceof Error ? err.message : String(err);
+  return (
+    /dynamically imported module/i.test(message) ||
+    /error loading dynamically imported module/i.test(message) ||
+    /expected a javascript(-| )?or(-| )?wasm module script/i.test(message)
+  );
+}
+
+const STALE_DEPLOYMENT_MESSAGE =
+  'A aplicação foi atualizada desde que esta página foi aberta. Recarregue a página (F5) e tente novamente.';
+
+/**
  * Exports a single Purchase Batch to PDF: Header, Supplier, Products,
  * Financial Summary, Timeline, Inventory Status — as specified.
  *
@@ -19,10 +38,19 @@ export async function exportPurchaseBatchToPdf(
   currencySymbol: string,
   businessName: string
 ) {
-  const [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
-    import('jspdf'),
-    import('jspdf-autotable'),
-  ]);
+  let jsPDF: typeof import('jspdf').default;
+  let autoTable: typeof import('jspdf-autotable').default;
+  try {
+    [{ default: jsPDF }, { default: autoTable }] = await Promise.all([
+      import('jspdf'),
+      import('jspdf-autotable'),
+    ]);
+  } catch (err) {
+    if (isStaleDeploymentChunkError(err)) {
+      throw new Error(STALE_DEPLOYMENT_MESSAGE);
+    }
+    throw err;
+  }
 
   const doc = new jsPDF({ unit: 'pt', format: 'a4' });
   const pageWidth = doc.internal.pageSize.getWidth();
