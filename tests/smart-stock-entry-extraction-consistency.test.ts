@@ -3,7 +3,7 @@
 // separate times produced three different totals, none matching the
 // receipt's own printed total.
 //
-// Two contributing gaps, both addressed here:
+// Two contributing gaps, originally addressed here:
 //
 // 1. No `temperature` was set on the Gemini call at all, so the
 //    provider's own non-zero default sampling temperature applied —
@@ -11,7 +11,13 @@
 //    not merely "hard to read" variance. For a bookkeeping feature
 //    whose entire premise is a reliable, literal reading of a document
 //    (never an invented/estimated value, per the prompt's own explicit
-//    rule), that randomness is actively harmful.
+//    rule), that randomness is actively harmful. FIXED, THEN LATER
+//    REMOVED (see the first test below): `temperature: 0` was added to
+//    pin this down, but Google has since deprecated `temperature`/
+//    `top_p`/`top_k` entirely for the gemini-3.5-flash-lite family —
+//    silently ignored, no longer honored — so the parameter was
+//    removed as dead configuration, not because determinism no longer
+//    matters.
 //
 // 2. The prompt asked to extract "each" line item but never explicitly
 //    stated that EVERY item on a multi-product receipt must be
@@ -41,11 +47,25 @@ function src(relPath: string): string {
 const smartStockEntrySrc = src('server/smartStockEntry.ts');
 
 describe('smartStockEntry.ts — the extraction call is deterministic and asks for every line item', () => {
-  it('temperature: 0 is set on the generateContent config, alongside responseMimeType/responseSchema', () => {
+  // [Cleanup — Google's own Gemini 3.x migration guidance] temperature/
+  // top_p/top_k are deprecated and silently ignored for
+  // gemini-3.5-flash-lite, with later model generations returning an
+  // HTTP 400 error if supplied at all. This test now asserts the
+  // OPPOSITE of what it originally checked: these deprecated
+  // parameters must NOT be present, so a future model upgrade never
+  // silently starts failing every extraction over dead configuration.
+  it('no deprecated sampling parameters (temperature/top_p/top_k) are set on the generateContent config', () => {
     const configStart = smartStockEntrySrc.indexOf('config: {\n          responseMimeType:');
     assert.notEqual(configStart, -1);
-    const configBlock = smartStockEntrySrc.slice(configStart, configStart + 2000);
-    assert.match(configBlock, /temperature: 0,/);
+    const configEnd = smartStockEntrySrc.indexOf('\n        },', configStart);
+    assert.notEqual(configEnd, -1);
+    const configBlock = smartStockEntrySrc.slice(configStart, configEnd);
+    assert.doesNotMatch(configBlock, /\btemperature:/);
+    assert.doesNotMatch(configBlock, /\btop_p:/);
+    assert.doesNotMatch(configBlock, /\btop_k:/);
+    // The two fields this call genuinely still relies on remain.
+    assert.match(configBlock, /responseMimeType: 'application\/json',/);
+    assert.match(configBlock, /responseSchema: EXTRACTION_RESPONSE_SCHEMA,/);
   });
 
   it('the prompt explicitly instructs extracting EVERY line item, not just the first/clearest one', () => {

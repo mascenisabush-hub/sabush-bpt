@@ -428,26 +428,36 @@ export async function callVisionExtractionProvider(
         config: {
           responseMimeType: 'application/json',
           responseSchema: EXTRACTION_RESPONSE_SCHEMA,
-          // [Bug fix — repeated scans of the SAME receipt returning
-          // DIFFERENT results] Owner-reported: scanning one multi-item
-          // receipt three separate times produced three different
-          // totals, none matching the receipt's own printed total.
-          // Root cause: no temperature was set at all, so the
-          // provider's own non-zero default sampling temperature
-          // applied — meaning genuine run-to-run randomness on the
-          // EXACT SAME image, not merely "hard to read" variance. For
-          // a bookkeeping feature where the whole point is a reliable,
-          // literal reading of a document (never an invented or
-          // estimated value, per this prompt's own explicit rule
-          // above), that randomness is actively harmful — the same
-          // photo should extract the same numbers every time. 0 is
-          // Gemini's minimum/most-deterministic setting; it does not
-          // guarantee byte-for-byte identical output on every possible
-          // input (some residual variance can remain from the
-          // provider's own infrastructure), but it removes the
-          // avoidable, deliberate randomness this call was previously
-          // leaving fully uncontrolled.
-          temperature: 0,
+          // [Cleanup — Google's own Gemini 3.x migration guidance,
+          // verified directly against current documentation, not
+          // training-data assumptions] `temperature` (along with
+          // `top_p`/`top_k`) is deprecated and silently ignored on the
+          // 'gemini-3.5-flash-lite' family — Google's own wording:
+          // "these parameters are ignored by the backend," with later
+          // model generations returning an HTTP 400 error if supplied
+          // at all. Removed here rather than left as dead, eventually-
+          // breaking configuration.
+          //
+          // HISTORY, preserved for context: this field was originally
+          // added (Owner-reported: scanning the SAME multi-item receipt
+          // three separate times produced three different totals, none
+          // matching the receipt's own printed total) to pin sampling
+          // determinism — the provider's own non-zero default
+          // temperature was producing genuine run-to-run randomness on
+          // the exact same image, actively harmful for a feature whose
+          // whole point is a reliable, literal reading of a document.
+          // That fix is now a silent no-op on this model family (Google
+          // ignores the field rather than honoring it), so it no longer
+          // provides the determinism guarantee its own comment
+          // described — removing it changes nothing about the model's
+          // actual current behavior, only this codebase's own honesty
+          // about what it controls. Google's current guidance offers no
+          // direct determinism replacement for extraction-style calls
+          // like this one (`thinking_level` governs reasoning depth,
+          // not sampling variance) — if determinism regresses in
+          // practice, the correct follow-up is re-opening this as its
+          // own investigation, not reintroducing a parameter Google has
+          // already stated it will not honor.
         },
       }),
       new Promise((_resolve, reject) =>
