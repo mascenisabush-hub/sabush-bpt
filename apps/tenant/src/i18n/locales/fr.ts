@@ -509,6 +509,8 @@ export const fr: TranslationDict = {
       sellingPriceFromMemory: 'Prix de la mémoire du produit \u2014 confirmez ou ajustez',
       sellingPriceNotFound: 'Aucun prix mémorisé pour cette unité \u2014 indiquez le prix',
       inAppBrowserWarning: 'Vous ouvrez ceci dans {{app}} \u2014 la caméra peut échouer ici. Si « Prendre une photo » ne fonctionne pas, appuyez sur « ⋮ » ou « Ouvrir dans le navigateur » et réessayez dans Chrome/Safari, ou utilisez « Charger un document » avec une photo déjà prise.',
+      openInChrome: 'Ouvrir dans Chrome (recommandé)',
+      openInSafariInstructions: 'En haut de l\'écran, appuyez sur « ⋯ » puis choisissez « Ouvrir dans Safari ».',
       fields: {
         product: 'Produit',
         quantity: 'Quantité',

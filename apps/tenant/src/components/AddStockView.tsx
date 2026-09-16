@@ -25,7 +25,7 @@ import { checkPriceDeviation } from '../lib/priceDeviationCheck';
 import { sanitizeDecimalInput } from '../lib/decimalInputSanitizer';
 import { getCurrentUnresolvedRowId, getRowsToDisplay, isReceiptReadyForFinalReview } from '../lib/receiptSequencing';
 import { preprocessSmartStockEntryImage } from '../utils/smartStockEntryImagePreprocessing';
-import { detectInAppBrowser } from '../lib/inAppBrowserDetection';
+import { detectInAppBrowser, buildAndroidChromeEscapeUrl } from '../lib/inAppBrowserDetection';
 
 interface AddStockViewProps {
   initialProductName?: string;
@@ -3388,15 +3388,39 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                 <div className="min-w-0">
                   <p className="text-[13px] font-bold text-[#111827]">{t('addStock.smartEntry.title')}</p>
                   <p className="text-[13px] text-gray-500">{t('addStock.smartEntry.subtitle')}</p>
-                  {/* [Bug fix investigation — WhatsApp in-app browser]
-                      Informational only — never disables the buttons
-                      below, since some in-app browser/OS combinations
-                      do work. See inAppBrowserDetection.ts. */}
+                  {/* [Bug fix — Owner-reported, urgent, live with a
+                      client: "add another [receipt]... does not work
+                      and sometimes brings the previous receipt" — see
+                      InAppBrowserDetection.os's own comment
+                      (inAppBrowserDetection.ts) for the full
+                      rationale] Never disables the buttons below —
+                      some in-app browser/OS combinations do work, and
+                      this is advisory, not a hard block. On Android, a
+                      genuine, one-tap, no-download fix exists (reopen
+                      this exact page in Chrome); on iOS, no
+                      programmatic escape is possible at all (Apple's
+                      own platform policy), so the only honest guidance
+                      is the manual menu steps. */}
                   {inAppBrowser.detected && (
-                    <p className="text-[12px] text-amber-700 font-semibold mt-1 flex items-center gap-1">
-                      <AlertTriangle className="w-3 h-3 shrink-0" />
-                      {t('addStock.smartEntry.inAppBrowserWarning', { app: inAppBrowser.appName || '' })}
-                    </p>
+                    <div className="mt-1">
+                      <p className="text-[12px] text-amber-700 font-semibold flex items-center gap-1">
+                        <AlertTriangle className="w-3 h-3 shrink-0" />
+                        {t('addStock.smartEntry.inAppBrowserWarning', { app: inAppBrowser.appName || '' })}
+                      </p>
+                      {inAppBrowser.os === 'android' && (
+                        <a
+                          href={buildAndroidChromeEscapeUrl(typeof window !== 'undefined' ? window.location.href : '') || '#'}
+                          className="inline-flex items-center gap-1 text-[12px] font-bold text-[#0B1F3A] underline mt-0.5"
+                        >
+                          {t('addStock.smartEntry.openInChrome')}
+                        </a>
+                      )}
+                      {inAppBrowser.os === 'ios' && (
+                        <p className="text-[12px] text-gray-600 mt-0.5">
+                          {t('addStock.smartEntry.openInSafariInstructions')}
+                        </p>
+                      )}
+                    </div>
                   )}
                 </div>
               </div>
