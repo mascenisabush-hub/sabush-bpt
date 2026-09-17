@@ -3034,13 +3034,22 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
     // that, handled in handleAddAnotherSupplier below).
     setIsSaving(true);
     try {
+      // [Bug fix — same "insufficient permission" root cause as the
+      // checkbox's own !isStaff gate above] Defensive re-check,
+      // independent of that UI-level gate — this file's own established
+      // pattern (see the supplierWordingCandidates/identity-resolution
+      // re-checks earlier in this same handler). Ensures a staff
+      // session can never send `supplierCredit: true` into
+      // addMultipleStockBatches, and therefore can never trigger its
+      // owner-only /payables write, even if some future or already-
+      // resumed draft state carried a stale `true` value forward.
       const result = await addMultipleStockBatches(
         itemsToSave,
         { name: supplierName, phone: supplierPhone, notes: supplierNotes },
         batchNotes,
         supplierId,
         currentPurchaseEventId,
-        supplierCredit
+        isStaff ? false : supplierCredit
       );
 
       const messageText =
@@ -3642,16 +3651,45 @@ export const AddStockView: React.FC<AddStockViewProps> = ({ initialProductName, 
                   UI control this increment adds to +Stock — an explicit
                   Owner declaration that this purchase was on supplier
                   credit. Unchecked (the default) is Case 1 (paid
-                  immediately) — completely unmodified +Stock behavior. */}
-              <label className="flex items-center gap-2 text-[13px] text-[#111827] cursor-pointer">
-                <input
-                  type="checkbox"
-                  checked={supplierCredit}
-                  onChange={e => setSupplierCredit(e.target.checked)}
-                  className="w-4 h-4 rounded border-[#E5E7EB] text-[#0B1F3A] focus:ring-[#D4AF37]/30"
-                />
-                {t('addStock.supplier.creditCheckboxLabel')}
-              </label>
+                  immediately) — completely unmodified +Stock behavior.
+                  [BUG FIX — Owner-reported: staff hit "insufficient
+                  permission" on the final Save/Confirm] This control was
+                  missing the same `!isStaff` gate every other owner-only
+                  control in this file already has (see the estProfit
+                  column and two other `!isStaff` checks below) — the
+                  comment above always said "Owner declaration," but
+                  nothing in the JSX enforced that, so a staff member
+                  could check this box. Checking it makes
+                  addMultipleStockBatches (AppContext.tsx) write a new
+                  /payables document in the SAME atomic Firestore batch
+                  as the stock batch itself — and /payables' own create
+                  rule (firestore.rules) requires `isOwnerOf(businessId)`,
+                  not just membership. Firestore batch writes are
+                  all-or-nothing: that one disallowed write inside the
+                  batch caused the entire save — batches, products,
+                  supplier record, everything — to be rejected with
+                  PERMISSION_DENIED, surfacing to the client as
+                  "insufficient permission" on a purchase that had
+                  nothing else wrong with it. Restoring the UI-level gate
+                  here (rather than loosening the Firestore rule, which
+                  would be an actual governance/business-rule change to
+                  who may record supplier debt) makes the client-visible
+                  behavior match what was always the documented intent:
+                  supplierCredit's own default (false) is never disturbed
+                  for a staff-submitted purchase, so the /payables branch
+                  in addMultipleStockBatches simply never fires for
+                  staff — exactly the pre-FR-14 behavior for them. */}
+              {!isStaff && (
+                <label className="flex items-center gap-2 text-[13px] text-[#111827] cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={supplierCredit}
+                    onChange={e => setSupplierCredit(e.target.checked)}
+                    className="w-4 h-4 rounded border-[#E5E7EB] text-[#0B1F3A] focus:ring-[#D4AF37]/30"
+                  />
+                  {t('addStock.supplier.creditCheckboxLabel')}
+                </label>
+              )}
               {/* [Feature — outstanding-balance warning, Owner-requested]
                   Live-computed, never stored state — same "leave it,
                   signal the mistake" pattern as the price-deviation and
