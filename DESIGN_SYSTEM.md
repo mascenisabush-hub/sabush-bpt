@@ -1,4 +1,4 @@
-# Sabush Design System v2.0
+# Sabush Design System v2.1
 
 This is the single source of truth for how every screen, component, and
 state in this product looks and behaves — not just color and spacing, but
@@ -16,6 +16,19 @@ against this file needs the file to actually *cover* every surface first.
 SuperAdmin (Phase 2), Subscriptions/Notifications UI (Phase 1), and every
 AI Insight card (Phase 3) all get built against what's below — not
 invented fresh when each one arrives.
+
+**v2.1 changes from v2.0 (Field Readability & Interaction, P0):** the field
+foundation is now specified as a system — tokens, one `.input-base`
+foundation with a closed set of variants, one focus model, one
+disabled/locked model, one field-error state, field typography tiers,
+and the CSS layering rules that keep it composable — governed by
+`docs/specs/field-readability-and-interaction-specification-amendment.md`
+(PAD-1…PAD-21) and `docs/engineering/field-readability-p0-implementation-authorization-request.md`.
+It also separates **brand gold** from **accessible gold** and corrects
+the gold-text contrast guidance. See [Forms & inputs](#forms--inputs).
+*Adoption status:* P0 ships the foundation and adopts it in SuperAdmin.
+Tenant screens migrate in later, separately-authorized phases; until a
+screen adopts `.input-base` it is a documented gap, not an exception.
 
 **v2.0 changes from v1.0:** adds Forms (beyond the base input), Dialogs,
 Empty & Loading States, Notifications, Charts, Iconography, Mobile Rules,
@@ -102,16 +115,18 @@ to fill.
 |---|---|---|
 | `--navy` / `--title` | `#0B1F3A` | Structure: headings, nav, dark surfaces, primary text emphasis, primary chart series |
 | `--navy-soft` | `#14294A` | Navy hover/pressed state |
-| `--gold` | `#D4AF37` | The accent for money and primary actions — CTAs, key numbers, focus states, the *one* thing on a screen that should draw the eye first |
-| `--gold-hover` | `#B8952F` | Gold pressed/darker state |
+| `--gold` | `#D4AF37` | **Brand gold** — the accent for money and primary actions: CTAs, key numbers, fills, badges, icons, decorative focus glow. A *fill/decoration* color: never normal text, never a thin border, never the sole focus indicator (2.1:1 on white) |
+| `--gold-hover` | `#B8952F` | Gold pressed/darker **fill** state. Not a text color (2.85:1 on white) |
 | `--gold-bright` | `#E8C65C` | Gold hover state (brightens, doesn't darken) |
 | `--gold-soft` | `#F6EFD9` | Gold background tint (badges, subtle highlight fills, AI Insight badge background) |
 | `--orange` | `#FF8C42` | Secondary accent: alerts, attention, warnings only |
-| `--background` | `#FFFFFF` | Base surface — the dominant color of every screen |
+| `--background` | `#FFFFFF` | Card / field surface |
+| `--surface-page` | `#FBF9F4` | The tenant **page** background (what `App.tsx` actually renders behind cards). Field boundaries and focus indicators are evaluated against both this and `#FFFFFF` |
 | `--foreground` | `#111827` | Body text |
 | `--muted` | `#F5F7FA` | Muted backgrounds (disabled states, subtle panels) |
 | `--muted-foreground` | `#6B7280` | Secondary/label text, neutral icon color |
-| `--border` | `#E5E7EB` | The only border color — used sparingly |
+| `--border` | `#E5E7EB` | **Decorative hairline** only — table rules, card edges. Not a component boundary (1.2:1) |
+| `--border-strong` | `#7C8695` | **Component boundary** — the field border (3.7:1 on white, 3.5:1 on the page). Equals `--field-border` |
 | `--success` | `#059669` | Success states only |
 | `--warning` | `#D97706` | Warning states only |
 | `--error` | `#DC2626` | Error/destructive states only |
@@ -120,12 +135,20 @@ Rose (`rose-500`/`rose-600`) is used for destructive actions and danger
 banners — it's a fourth semantic color reserved strictly for "this
 deletes/removes something," never decorative.
 
-**Contrast rule:** gold (`#D4AF37`) on white fails text-contrast at normal
-weight/size — it's a *fill* color (buttons, badges, borders, icons), never
-a body-text color. Where gold-family text is needed against white (links,
-active nav labels, accent numbers), use a darkened gold
-(`#B8952F`/`#8A6D1F` range), not the raw token. Gold-filled buttons use
-navy text (`#0B1F3A`), never white — white-on-gold also fails contrast.
+**Contrast rule — brand gold vs accessible gold (PAD-8).** Gold has two
+roles that must not be confused:
+
+| Role | Value | Use |
+|---|---|---|
+| Brand / fill / decorative | `#D4AF37` | Buttons, badges, icons, selection, decorative focus glow. **Never** normal text, a thin border, or the sole focus indicator (2.1:1 on white, 2.0:1 on the page) |
+| Accessible gold — text and focus, on white / page | `#8A6D1F` | Gold-family text, links, active labels, accent numbers, and the **field focus border** (4.9:1 white, 4.65:1 page) |
+| Accessible gold — text on `--gold-soft` | `#7A5F17` | `#8A6D1F` measures only **4.26:1** on `#F6EFD9` and is not valid for normal text there; `#7A5F17` is 5.25:1 |
+
+`#B8952F` is **removed from text guidance** (2.85:1 on white). Gold-filled
+buttons use navy text (`#0B1F3A`), never white — white-on-gold also fails
+contrast. Requirements used across the field system: text ≥ 4.5:1;
+non-text component boundaries and focus indicators ≥ 3:1 (WCAG 1.4.11);
+decorative elements (hairlines, glows) are exempt.
 
 **Chart-specific extension of this rule** (new in v2.0, see
 [Charts](#charts) for the full spec): a multi-series chart never reaches
@@ -343,14 +366,82 @@ non-negotiable rather than a nice-to-have on this product specifically.
 
 ## Forms & inputs
 
-**Base treatment** (`.input-base`, applied to every text/number/date input
-and select): `1px solid #E5E7EB` border, `--radius-md` (10px), white
-background. Focus: `border-color: #D4AF37` + `box-shadow: 0 0 0 2px
-rgba(212,175,55,0.2)`.
+### Field foundation (v2.1)
 
-Exception: fields inside a danger/warning context (e.g. a delete-reason
-field under a rose banner) use that context's color for focus instead of
-gold — semantic state beats default styling.
+`.input-base` is **the** visual foundation of every text/number/date input,
+select and textarea. It lives in `@layer components` in both apps'
+`index.css` and the two copies are **byte-identical** (a conformance test,
+`tests/field-foundation-p0.test.ts`, fails if they drift). New tenant
+fields **must** use it unless an approved variant or a documented exception
+below applies; no screen may introduce another independent field signature.
+
+| Layer | Token | Value |
+|---|---|---|
+| Page | `--surface-page` | `#FBF9F4` |
+| Field surface | `--field-bg` | `#FFFFFF` |
+| Entered value | `--field-text` | `#000000` |
+| Placeholder | `--field-placeholder` | `#5F6B7A` (5.4:1) — visually secondary to the value |
+| Boundary | `--field-border` = `--border-strong` | `#7C8695` (3.7:1 white / 3.5:1 page) |
+| Focus | `--field-focus-border` | `#8A6D1F` (accessible gold) |
+| Focus glow (decorative) | `--field-focus-ring` | `rgba(212,175,55,0.30)` — brand gold |
+| Field error | `--field-error` | `#B91C1C` — **fields only**; the global `--error` (`#DC2626`) is unchanged |
+| Disabled / locked | `--field-disabled-bg` / `-text` / `-border` | `#F5F7FA` / `#4B5563` / `#7C8695` |
+
+**Ownership.** The foundation owns *appearance and state*: surface,
+boundary, entered text, placeholder, default radius (10px, overridable by a
+utility), font, focus, disabled/locked, field error, transition. It owns
+**no layout** — width, height, padding, margin, display, grid placement,
+icon padding and `font-mono`/tabular numerics stay with utilities.
+
+**Typography tiers.** Standard: Inter 14px / 500 / line-height 1.5.
+Compact (`.input-base--compact`): Inter 13px / 500 / 1.5 — only on the
+enumerated dense data-entry grids (membership decided per phase; none yet).
+**Nothing below 13px** for field values. Fields are **not** 16px-forced on
+mobile; mobile behavior is validated per phase. **Do not put `.type-body` on a
+field** — it is unlayered and would override the field text color and size.
+Labels keep `.type-label` (10px / 600 / uppercase / tracked).
+
+**Focus model (one, everywhere).** Border-color → `--field-focus-border`,
+plus a same-color 1px outer stroke and the decorative gold glow, using only
+`border-color` and `box-shadow`: **border width never changes**, so a focused
+field never shifts layout. The fill does not change on focus. A transparent
+2px outline keeps an indicator visible in forced-colors mode.
+
+**Disabled / locked.** Explicit tokens, **never `opacity-50`/`opacity-60`**:
+value text stays ≥ 4.5:1 and the boundary stays ≥ 3:1. Existing row-level
+confirmation/locked cues are unchanged.
+
+**Field error.** `aria-invalid="true"` on the field switches the border and
+focus indication to `--field-error`; the message goes directly below in the
+same color and replaces help text. (The state exists in CSS; wiring it and
+the accessible-name/`aria-describedby` semantics is a later phase.)
+
+**Variants and documented exceptions.** A closed set — Standard; Dark
+(Login); Error (a state); Identity Search (amber); Borderless Inline
+(Timeline — a wrapper-owned exception with `:focus-within`); Native controls
+(checkbox, range; file inputs are hidden) as a **separate** family, not
+routed through `.input-base`. Numeric `font-mono` treatment is an intentional
+exception. Values for the Dark, Identity Search and native-control variants
+are decided in their own phases. Semantic focus colors (rose for danger,
+blue where blue is meaningful, amber for identity/warning `#B45309`) are
+preserved, not homogenized.
+
+**CSS layering (Tailwind v4: theme < base < components < utilities).** The
+foundation and its variants are in `@layer components`; no unlayered rule may
+target a field; `!important` is prohibited in field CSS. The global
+`:focus-visible` rule is **temporarily unlayered** (it currently defeats
+`focus:outline-none` utilities on not-yet-migrated tenant fields), has no
+forced radius, and excludes `.input-base`; it moves to `@layer base` after
+tenant field migration.
+
+### Base form conventions
+
+Previously documented values, for reference: `1px solid` boundary, `--radius-md`
+(10px), white surface, gold focus — now superseded by the foundation above,
+which keeps the radius and surface but replaces the boundary, text,
+placeholder, focus and disabled values. Exception: fields inside a
+danger/warning context use that context's semantic color for focus instead
+of gold — semantic state beats default styling.
 
 **New in v2.0 — the rules around the base input that were previously
 undocumented:**
@@ -366,8 +457,8 @@ undocumented:**
   cost-price field's rule about being frozen at time of purchase,
   Architecture Section 8.5, is exactly the kind of thing that must be
   visible text, not something the admin has to discover by hovering).
-- **Error state:** border and focus ring switch to `--error`; the message
-  appears directly below the field in `--error` text, same position help
+- **Error state:** border and focus ring switch to `--field-error` (`#B91C1C`); the message
+  appears directly below the field in `--field-error` text, same position help
   text would occupy (never both at once — an error replaces help text, it
   doesn't stack above it).
 - **Checkboxes / radios / toggles:** use `--gold` for the checked/active
@@ -499,8 +590,10 @@ prevent, applied pre-emptively to a domain that hasn't shipped yet.
 **AI Insight badge — the mandatory distinct treatment (Architecture
 Section 10.1):** any AI-derived output (a prediction, a Dead Stock flag,
 a Risk Detection signal) that surfaces as a notification or inline badge
-uses `--gold-soft` background with darkened-gold text (`#8A6D1F` range,
-per the Color System's contrast rule) and a small "AI Insight" or
+uses `--gold-soft` background with darkened-gold text (`#7A5F17` — `#8A6D1F`
+measures 4.26:1 on `--gold-soft` and is not valid there, per the Color System's
+contrast rule; existing components that still use `#8A6D1F` on gold-soft are a
+tracked follow-up, not changed by the field work) and a small "AI Insight" or
 "Prediction" label — visually and unambiguously distinct from every
 operational notification type above. This is not a style choice; it's
 the concrete UI implementation of the rule that an AI output must never
