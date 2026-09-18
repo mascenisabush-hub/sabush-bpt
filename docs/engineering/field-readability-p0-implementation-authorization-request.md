@@ -1,15 +1,51 @@
-# Field Readability & Interaction — P0 (Canonical Field Foundation) — Implementation Authorization REQUEST
+# Field Readability & Interaction — P0 (Canonical Field Foundation) — Implementation Authorization
 
 **Type:** Governance bridge document (Stage 8 *request*, per `platform-engineering-governance-standard.md` §2).
-**Status:** 🟡 **PROPOSED — awaiting Product Architect review and signature. NOT AUTHORIZED.** This document is a request. **No Implementation Authorization exists for P0 or for any other phase.** Nothing in `apps/`, `packages/`, `server/`, `tests/`, `firestore.rules`, `DESIGN_SYSTEM.md` or any other implementation artifact was modified to produce it.
-**Phase requested:** **P0 only — the canonical field foundation.** P1, P2, P3, P4 and P5 remain **unauthorized**.
+**Status:** ✅ **AUTHORIZED — P0 ONLY (recorded September 18, 2026).** See "Authorization Record" immediately below. *(History: this document was first issued as a PROPOSED request, unsigned, in commit `02de2ef`; that history and the request text below are preserved unchanged. Only this status line, the lifecycle line, the Authorization Record and §16 were updated to record the authorization.)*
+**Phase requested / authorized:** **P0 only — the canonical field foundation.** P1, P2, P3, P4 and P5 remain **unauthorized**.
 **Basis (strictly):**
 1. [`field-readability-and-interaction-specification-amendment.md`](../specs/field-readability-and-interaction-specification-amendment.md) — revision 3 (finalized).
 2. [`field-readability-and-interaction-rule8-assessment.md`](./field-readability-and-interaction-rule8-assessment.md) — Assessed, addendum r3.
 3. PAD-1 … PAD-21 — all `DECIDED` (spec §W).
 4. R-1 and R-6 — `RATIFIED` by the Product Architect.
 **Repository state at drafting:** HEAD `ff30819` (docs) on top of `0394235`; working tree contained only governance documents.
-**Lifecycle:** Designed → **Proposed (this document)**. Reaching "Assessed" was a readiness opinion; the transition to **Authorized** requires the Product Architect's own signature (Governance Standard §3).
+**Lifecycle:** Designed → Proposed → Assessed → **Authorized (P0 only, 2026-09-18)** → Implementation (Stage 9) in progress under this record. Reaching "Assessed" was a readiness opinion; the transition to Authorized was made by the Product Architect's explicit decision (Governance Standard §3).
+
+---
+
+## Authorization Record
+
+**Product Architect authorization: APPROVED.**
+**Date of authorization (execution date):** **September 18, 2026.**
+**Recorded from:** the Product Architect's explicit written instruction "P0 Implementation Authorization + Implementation + Push" of that date, which states that the Product Architect "has explicitly authorized implementation of P0 of the Field Readability & Interaction program." This record transcribes that decision; it does not create it.
+
+> **Authorization applies only to P0. It does not authorize P1, P2, P3, P4, or P5.**
+
+| Item | Status |
+|---|---|
+| Scope | **P0 only** |
+| P1, P2, P3, P4, P5 | **NOT authorized** |
+| PAD-1 … PAD-21 | **DECIDED** |
+| R-1 (field error color scope) | **RATIFIED** |
+| R-6 (disabled/locked field colors) | **RATIFIED** |
+| S-1 (shared-stylesheet rule) | **APPROVED** |
+| S-2 (phased global focus rule) | **APPROVED** |
+| S-3 (accepted visible effects, §2.3) | **APPROVED** |
+| S-4 (`.input-base--compact` defined-not-applied; `--field-focus-amber`, `--gold-text` not created) | **APPROVED** |
+| Push to `origin` | Authorized by the Product Architect for the completed, validated P0 commits only; a `401 Bad credentials` response is a **stop** (no credential handling, no workaround) |
+
+### Product Architect amendments to this document made at authorization (recorded, not silently applied)
+
+1. **Checkpoint structure (supersedes §12's table).** The Product Architect's authorization instruction fixes the checkpoints as: **CP-0** baseline capture, no commit · **CP-1** foundation/tokens/layering · **CP-2** Superadmin field class migration · **CP-3** conformance test and its `package.json` script · **CP-4** governance/documentation finalization and implementation evidence (which carries the `DESIGN_SYSTEM.md` v2.1 update, formerly CP-1). A separate governance commit records this authorization **before** CP-1. §3.1's file list and every other section are unchanged; only the checkpoint each file lands in moves (F-1 → CP-4; F-2/F-3 → CP-1; F-6 → CP-2; F-7 → CP-3).
+   *Sequencing note (Principle 2.11):* the design-system update now lands in CP-4, so **all checkpoint commits are pushed together only after every validation passes**; no published state contains the new CSS without its design-system documentation.
+2. **S-1 resolved (mechanism).** The authorization instruction directs that a shared stylesheet be used only if it complies with the existing architectural boundary, and otherwise that no new cross-app dependency be forced. `apps/superadmin/vite.config.ts` documents that only `@sabush/shared-types` crosses the boundary (and F-5 would require rewriting that policy comment). **Mechanism B is therefore used:** byte-identical canonical foundation blocks in both `index.css` files, guarded by the CP-3 synchronization assertion. Files F-4 (shared stylesheet) and F-5 (`vite.config.ts` comment) are **not** used and remain out of scope.
+3. **Conflict handling with the instruction's §12 (source-reading tests).** Any test that fails because of an intentional P0 field-class change is analysed individually; a test is updated only where this authorization or the specification explicitly requires the source representation to change, and never to hide a behavioral regression. The two failures already present at baseline (`test:staff-management-multishop-authorization`, `test:subscription-contact-modal-autoclose`) are pre-existing and are neither caused nor fixed by P0.
+
+### CP-0 baseline recorded before implementation (HEAD `02de2ef`, clean tree)
+- Typecheck: tenant **3** errors, superadmin **0**, server **15** (pre-existing; equals `HANDOFF.md`).
+- `npm run build` and `npm run build:superadmin`: pass.
+- Tests (each `test:*` script run individually, because the `test:all` chain aborts at its first failing script): 95 scripts — 67 exit 0; 28 non-zero, of which 26 are Firestore-emulator-dependent (blocked/cancelled in this sandbox — reported as blocked, never as passed) and **2 are genuine pre-existing failures**; 1264 tests pass / 2 fail.
+- Rendered baseline (headless Chromium, computed styles, pixel samples, screenshots at 1440px and 390px) captured for the 23 Superadmin field elements, 62 distinct tenant field signatures, and the real Superadmin sign-in and tenant Login pages.
 
 ---
 
@@ -21,8 +57,8 @@
 | Specification | Field Readability & Interaction amendment r3 | ✅ Finalized; PAD-1…21 DECIDED |
 | Ratifications | R-1 (field error color scope), R-6 (disabled/locked colors) | ✅ RATIFIED |
 | Rule 8 Assessment | Program-level, P0–P5, addendum r3 | ✅ Assessed — P0 request ready; no PA decision blocker for P0 |
-| **Implementation Authorization** | **This document (P0 only)** | 🟡 **Proposed — unsigned** |
-| Implementation, Close-out | — | ⛔ Not started; not permitted until signed |
+| **Implementation Authorization** | **This document (P0 only)** | ✅ **Authorized 2026-09-18** |
+| Implementation, Close-out | — | Stage 9 begins under this record; close-out after CP-4 |
 
 **Product Architect decisions this request relies on (values are binding for P0):**
 
@@ -341,25 +377,25 @@ Any of the following stops work and is reported — never resolved by engineerin
 
 ## 16. Signature
 
-**Status: ⬜ NOT SIGNED.** This section is intentionally blank. It is completed only by the Product Architect's own decision.
+**Status: ✅ AUTHORIZED — P0 ONLY.** *(Originally issued blank/unsigned; completed on September 18, 2026.)*
 
-> _Product Architect decision (to be recorded verbatim if given):_
+> _Product Architect decision, recorded from the written instruction of September 18, 2026:_
 >
-> _(unsigned)_
+> _"The Product Architect has explicitly authorized implementation of P0 of the Field Readability & Interaction program."_
+> _S-1, S-2, S-3, S-4: APPROVED. R-1, R-6: RATIFIED. PAD-1 through PAD-21: DECIDED._
+> **Authorization applies only to P0. It does not authorize P1, P2, P3, P4, or P5.**
 
-**Signed by:** ______________________ (Product Architect)
-**Date:** ______________________
-**Scope stated at signature:** ______________________
-
-**If signed, the authorization must be limited to:** P0 exactly as scoped in §2, files exactly as listed in §3.1, invariants §5, layering §6, tests §8, validation §9, confirmations §10, rollback §11, commit boundary §12, acceptance §13, evidence §14 and stop conditions §15. **P1–P5 remain unauthorized regardless.**
+**Authorized by:** Product Architect (instruction of 2026-09-18) — recorded by Claude as instructed.
+**Date:** September 18, 2026.
+**Scope stated at authorization:** P0 exactly as scoped in §2, files as listed in §3.1 (with the S-1 resolution and checkpoint restructuring recorded in the Authorization Record), invariants §5, layering §6, tests §8, validation §9, confirmations §10, rollback §11, commit boundary §12 (as restructured), acceptance §13, evidence §14, stop conditions §15. **P1–P5 remain unauthorized regardless of P0's outcome, and a successful push is not permission to implement them.**
 
 ---
 
 ## Governance notes
 
-- This document is a **request**. It does not authorize Stage 9 for P0 or for any other phase, and no statement in it may be read as authorization.
+- **(Original note, preserved.)** As first issued this document was a request and authorized nothing. It is now an authorization for **P0 only**, by the Authorization Record above; it authorizes no other phase.
 - It does not modify the specification or the Rule 8 Assessment; it sits downstream of both.
 - It introduces no new Product Architect decision: §10 lists engineering confirmations derived from recorded evidence, for the signature to accept or reject.
 - Producing it changed only governance artifacts; no implementation file was touched.
 
-**Lifecycle:** Designed → **Proposed (this request; unsigned).** Next state, **Authorized**, exists only if and when the Product Architect signs §16.
+**Lifecycle:** Designed → Proposed → Assessed → **Authorized (P0 only, 2026-09-18)**. Next: Implemented → Verified → Closed (Stage 10 record after CP-4).
