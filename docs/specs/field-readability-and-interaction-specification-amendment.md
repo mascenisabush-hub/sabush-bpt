@@ -3,8 +3,8 @@
 
 **Repository:** `mascenisabush-hub/sabush-bpt` @ `0394235` (working tree clean at time of writing)
 **Type:** Specification amendment (Governance Standard Stage 2). Not an architecture decision, not a Rule 8 Assessment, not an Implementation Authorization.
-**Lifecycle state:** **Revision 2 — Product Architect decisions recorded (PAD-1 … PAD-21 = `DECIDED`; see Section W).** Assessed by the companion Rule 8 Assessment. **NOT Authorized** — recording decisions and assessing readiness are not Implementation Authorization (Governance Standard §3).
-**Revision history:** r1 = proposed amendment with PADs open. r2 = this revision: PADs recorded, values reconciled, residual items listed (W.2), design hierarchy added (H.0), `DESIGN_SYSTEM.md` update list added (H.15), dangling cross-reference fixed, R.2 rule 8 and FU-10 added from the Rule 8 layering finding.
+**Lifecycle state:** **Revision 3 — Product Architect decisions recorded (PAD-1 … PAD-21 = `DECIDED`; R-1 and R-6 = `RATIFIED`; see Section W).** Assessed by the companion Rule 8 Assessment. **NOT Authorized** — recording decisions and assessing readiness are not Implementation Authorization (Governance Standard §3).
+**Revision history:** r1 = proposed amendment with PADs open. r2 = this revision: PADs recorded, values reconciled, residual items listed (W.2), design hierarchy added (H.0), `DESIGN_SYSTEM.md` update list added (H.15), dangling cross-reference fixed, R.2 rule 8 and FU-10 added from the Rule 8 layering finding. **r3 = R-1 and R-6 ratified by the Product Architect and recorded (H.7, H.9, W, W.2); the six remaining residual items are recorded as intentionally deferred to their phases; the P0 governance boundary is recorded (T.1); R.2 rule 3 is phased (found while drafting the P0 authorization request).**
 **Companion:** `docs/engineering/field-readability-and-interaction-rule8-assessment.md`
 **Mode:** Governance/specification only. No application source, React component, CSS implementation, Firestore, business-logic, calculation or authentication file is modified by this revision.
 
@@ -232,9 +232,17 @@ Every decided value meets its requirement. Two approved values are pairings to w
 ### H.6a Focus fill — PAD-4 **DECIDED**
 **No background change on focus.** The field stays `#FFFFFF`. Retires Option C's `focus:bg-[#F6EFD9]`. Rationale: avoids visual movement and preserves dense-grid stability.
 
-### H.7 Disabled / locked — PAD-16 direction **DECIDED**; values **[Proposed — R-6]**
-Direction is decided: explicit disabled/locked tokens, **no `opacity-60`/`opacity-50` on the field**. Values carried from the amendment as proposals, pending ratification (R-6):
-`--field-disabled-bg: #F5F7FA` (existing `--muted`, documented for disabled states), `--field-disabled-text: #4B5563` (7.04:1), border `--border` `#E5E7EB` (decorative; WCAG exempts inactive controls). The product rule that locked **value text stays ≥ 4.5:1** is retained.
+### H.7 Disabled / locked — PAD-16 **DECIDED**; values **R-6 RATIFIED**
+Ratified by the Product Architect:
+
+| Property | Value | Contrast **[C]** |
+|---|---|---|
+| Background `--field-disabled-bg` | `#F5F7FA` (existing `--muted`, already documented for disabled states) | — |
+| Text `--field-disabled-text` | `#4B5563` | **7.04:1** on `#F5F7FA` (product floor 4.5:1 met) |
+| Border `--field-disabled-border` | `#7C8695` (the same value as `--field-border`; alias) | 3.43:1 vs `#F5F7FA`; 3.50:1 vs page `#FBF9F4` (≥ 3:1 met) |
+| Opacity | **None.** `opacity-50` / `opacity-60` are **not** to be used as the mechanism for disabled/locked readability | — |
+
+The boundary therefore stays visible on a disabled field; the state is communicated by the muted fill, the `#4B5563` text and `cursor: not-allowed`. WCAG exempts inactive controls from contrast rules; the ≥ 4.5:1 text floor is a **product** rule. **Existing row-level confirmation/locked cues remain unchanged** (PAD-16). Supersedes: `opacity-60` / `opacity-50` on fields and the earlier proposal to use the decorative `--border` for disabled fields.
 
 ### H.8 Focus — PAD-5 **DECIDED**
 - Focus border: **`#8A6D1F`** (4.90 / 4.65). **Not** `#D4AF37`.
@@ -244,7 +252,7 @@ Direction is decided: explicit disabled/locked tokens, **no `opacity-60`/`opacit
 Supersedes: `#D4AF37` as sole indicator, Option C's `border-[2px]` and `ring-[3px]`. Affected: 111 tenant fields currently using `focus:border-[#D4AF37]` **[V, grep]** plus all others. Risk: low visual change (gold → darker gold); layout risk removed.
 
 ### H.9 Error — PAD-6 **DECIDED** (scope note R-1)
-`--field-error: #B91C1C` for error text and error border (6.47 / 6.15). No new validation rules. `--error #DC2626` continues to exist for non-field uses unless the Product Architect extends PAD-6 globally (R-1); this record treats PAD-6 as **field-system scope**, consistent with "where appropriate" and with the instruction not to introduce unrelated changes.
+`--field-error: #B91C1C` for error text and error border (6.47 / 6.15). No new validation rules. **R-1 RATIFIED:** `#B91C1C` applies to SABUSH BPT **field error states only**. The global `--error` token (`#DC2626`) is **not changed** by this program, so unrelated error presentation elsewhere in the product is unaffected. The two values intentionally coexist: `--field-error` (fields) and `--error` (everything else).
 
 ### H.10 Selected state
 Native checkbox/radio/range: separate canonical family — PAD-17 (Section G6). Not passed through `.input-base`.
@@ -274,7 +282,7 @@ Semantic colors are preserved where they carry meaning and changed only where th
 Text white (≈15:1). Focus per H.12. The approved PAD-2/PAD-3 values are for light surfaces. For the dark variant, resting placeholder and border remain **proposals**: placeholder `#94A3B8` (7.16), border `#64748B` (3.86). Login field fill is a computed composite (≈`#0D1425`) and must be measured at Rule 8.
 
 ### H.14 Token changes summary (for Rule 8)
-Redefined: `--border-strong`. Documented: `--surface-page`. New (aliases to existing tokens wherever they suffice): `--field-bg`, `--field-text`, `--field-placeholder`, `--field-border`, `--field-focus-border`, `--field-focus-ring`, `--field-focus-amber`, `--field-error`, `--field-disabled-bg`, `--field-disabled-text`, `--gold-text`; Login-scoped dark equivalents. Retired from field class strings: `#E4E8ED`, `#9AA6B5`, `#7C8695` (as placeholder), `gray-400` placeholders, `amber-500/70` placeholder, `#E5E7EB` as field border, raw `#D4AF37` as focus border, `opacity-60`/`opacity-50` on fields.
+Redefined: `--border-strong`. Documented: `--surface-page`. **Not changed: `--error`, `--foreground`, `--border`, `--gold`.** New (aliases to existing tokens wherever they suffice): `--field-bg`, `--field-text`, `--field-placeholder`, `--field-border`, `--field-focus-border`, `--field-focus-ring`, `--field-focus-amber` *(P3 consumer)*, `--field-error`, `--field-disabled-bg`, `--field-disabled-text`, `--field-disabled-border`, `--gold-text` *(documentation-level in P0)*; Login-scoped dark equivalents. Retired from field class strings: `#E4E8ED`, `#9AA6B5`, `#7C8695` (as placeholder), `gray-400` placeholders, `amber-500/70` placeholder, `#E5E7EB` as field border, raw `#D4AF37` as focus border, `opacity-60`/`opacity-50` on fields.
 
 ### H.15 Required `DESIGN_SYSTEM.md` updates (closes the original brief §16 requirement)
 
@@ -400,7 +408,7 @@ Only states actually present are specified.
 
 | State | Present in product? | Specification |
 |---|---|---|
-| **Disabled** | Yes (~103 occurrences of `disabled:opacity-*` / `opacity-60|50 cursor-not-allowed` patterns **[V, grep count]**) | One appearance: `--field-disabled-bg` + `--field-disabled-text` (H.7), border at decorative `--border`, `cursor: not-allowed`, **no opacity** |
+| **Disabled** | Yes (~103 occurrences of `disabled:opacity-*` / `opacity-60|50 cursor-not-allowed` patterns **[V, grep count]**) | One appearance (ratified R-6): background `#F5F7FA`, text `#4B5563`, border `#7C8695`, `cursor: not-allowed`, **no opacity** (H.7) |
 | **Confirmed / locked** (Contagem, Initial Stock confirmed rows) | Yes; implemented via `disabled` + `opacity-60` **[V]** | Same appearance as Disabled. The *meaning* ("counted and confirmed") is carried by existing row UI, not by the field. **PAD-16 DECIDED:** keep the existing row-level confirmation/locked cue; no additional icon/ornament is required |
 | **Unavailable** (disabled because a prerequisite is missing) | Plausibly yes (e.g. unit select before product resolves) — **not verified** | Same appearance as Disabled. Rule 8 must confirm whether it has any distinct requirement |
 | **Read-only** | **No.** `readOnly` has 0 uses in tenant source **[V]** | **Not specified.** A token slot is reserved in documentation only, to be defined when a real use appears. Single-editor "viewer" behavior (Decision 44 refinement) should be checked at Rule 8 for whether it uses `disabled` |
@@ -509,7 +517,7 @@ Rules:
 
 1. **Foundation and variants live in `@layer components`.** Utilities may override radius, padding, font-size, etc. — this is the intended composability.
 2. **No unlayered CSS may target field elements.** A CI-checkable rule.
-3. **Global `:focus-visible`** moves to `@layer base` and **loses `border-radius: 4px`** (radius belongs to the element). Fields opt out of the global outline by defining their own indicator inside the component layer (K.1, including the transparent-outline fallback). Non-field elements (buttons, links, checkbox) keep the existing global behavior.
+3. **Global `:focus-visible`** **loses `border-radius: 4px`** (radius belongs to the element) and is excluded for `.input-base` fields, which define their own indicator inside the component layer (K.1, including the transparent-outline fallback). Non-field elements (buttons, links, checkbox) keep the existing global behavior. **Phasing (r3, found while drafting the P0 authorization request):** the rule remains **unlayered in P0** and moves to `@layer base` only after tenant field migration is complete (P2 close-out, enforced by P5). Reason: 124 tenant occurrences of `focus:outline-none` **[V]** are currently defeated by the unlayered global outline (cascade fact, reproduced in the assessment §8.7); layering the global rule early would let those utilities win and would **weaken the focus indication of every not-yet-migrated tenant field** (whose own indicator is a 2.1:1 gold border plus a 20% ring). Until then AC-15 is evaluated for `.input-base` and its variants only; after P2 it applies to all field elements.
 4. **Variants override the foundation only through tokens** (custom properties), not by re-declaring properties, so a variant cannot silently change layout.
 5. **`!important` is prohibited** in field CSS. (The existing `prefers-reduced-motion` block uses `!important` intentionally and is unaffected.)
 6. **Do not use `@apply` to bake Tailwind utilities into the foundation** — layout utilities in the foundation would defeat F.3.
@@ -566,6 +574,12 @@ Requires: (1) the reason; (2) proof no variant fits; (3) the deviation stated as
 Order is fixed by PAD-19 (P0→P5). **Every phase requires its own Rule 8 scope and governance checkpoint; no phase is authorized by this document.** Superadmin convergence follows PAD-14 and is verified at the P0 checkpoint. Each phase should be its own Rule 8 scope and its own commits; **one commit per checkpoint** (Governance Standard §2a).
 
 Anti-duplication: after P2, the 34 signatures should collapse to the foundation + variants + the enumerated exceptions. Any leftover raw `bg-/border-/placeholder-` color utilities on fields are findings.
+
+### T.1 P0 governance boundary (recorded from the Product Architect's ratification)
+
+**P0 is ONLY the canonical field foundation.** P0 **may** cover: field background, field boundary, field text, placeholder, typography foundation, the canonical focus model, disabled/locked foundation, the error field state, CSS layering foundation, `.input-base`, and removal of a conflicting `.type-body` usage from fields where the specification requires it.
+P0 **must not** implement: Contagem migration; Initial Stock Count migration; broad tenant migration; the semantic `Field` wrapper; native-control migration; Timeline migration beyond foundation compatibility; the Login variant; the Identity Search variant; the final Contagem "Não contado" treatment; unrelated accessibility work; unrelated button/touch-target work.
+**P0 is not authorized by this document.** See `docs/engineering/field-readability-p0-implementation-authorization-request.md` (a *request*, pending Product Architect signature).
 
 ---
 
@@ -644,7 +658,7 @@ Recorded from the Product Architect's review. **Status of every entry below = `D
 | PAD-3 | Placeholder | `#5F6B7A`; secondary to value; not `gray-400` | Secondary to values while meeting readability | **DECIDED** |
 | PAD-4 | Focus background | No background change on focus; field stays white; focus via border/ring system | Avoid visual movement; preserve dense Contagem stability | **DECIDED** |
 | PAD-5 | Focus border | `#8A6D1F`; not `#D4AF37` as a thin border; no width change; border-color change + subtle same-color shadow + decorative gold ring + constant dimensions + forced-colors fallback | Preserve gold identity with distinguishable interaction | **DECIDED** |
-| PAD-6 | Error color | `#B91C1C` for error text/border where appropriate; no new validation rules | — | **DECIDED** |
+| PAD-6 | Error color | `#B91C1C` for error text/border where appropriate; no new validation rules | — | **DECIDED** *(scope ratified: R-1 — fields only; global `--error` unchanged)* |
 | PAD-7 | Semantic focus colors | Amber `#B45309`; blue stays an accessible blue where semantically meaningful; Login may use `#8A6D1F`; no arbitrary replacement | Do not homogenize semantic color | **DECIDED** |
 | PAD-8 | Gold text | Brand `#D4AF37` for brand/decorative/fill; `#8A6D1F` accessible gold text on light; `#7A5F17` on gold-soft; not `#D4AF37` as universal text; `#B8952F` not retained as text guidance | Separate brand gold from accessible gold | **DECIDED** |
 | PAD-9 | Field typography | Standard 14px Inter 500 / lh 1.5; Compact 13px Inter 500 / lh 1.5; minimum 13px; nothing below; **not** auto-16px on mobile; mobile validated at Rule 8 implementation testing, esp. dense Contagem | Validate rather than assume | **DECIDED** |
@@ -654,7 +668,7 @@ Recorded from the Product Architect's review. **Status of every entry below = `D
 | PAD-13 | Class name | Retain `.input-base`; do not rename to `.field` | Already exists and used in Superadmin; avoid migration | **DECIDED** |
 | PAD-14 | Tenant + Superadmin foundation | One shared canonical foundation wherever repository architecture permits it cleanly; no duplicate styling for historical reasons if it can be avoided without architectural damage | Prevent independent drift | **DECIDED** *(principle; mechanism per Section Q, verified at the P0 checkpoint)* |
 | PAD-15 | Timeline | Borderless inline field is a documented exception; not converted to a bordered field; wrapper provides focus/`:focus-within` while preserving design | Preserve existing design | **DECIDED** |
-| PAD-16 | Locked/confirmed rows | Keep the existing row-level confirmation/locked cue; remove opacity-based degradation from the field; explicit disabled/locked styling; no extra icon/ornament | Standardization only | **DECIDED** *(direction; token values: R-6)* |
+| PAD-16 | Locked/confirmed rows | Keep the existing row-level confirmation/locked cue; remove opacity-based degradation from the field; explicit disabled/locked styling; no extra icon/ornament | Standardization only | **DECIDED** *(values ratified: R-6 — bg `#F5F7FA`, text `#4B5563`, border `#7C8695`, no opacity)* |
 | PAD-17 | Native controls | Separate canonical family; **not** forced through `.input-base`; own accessible rules; file-input implementation stays as architected | Different rendering model | **DECIDED** |
 | PAD-18 | `Field` wrapper | A lightweight `Field` wrapper **may** be introduced for semantics/accessibility, in the semantics phase; `.input-base` remains the visual foundation; wrapper not responsible for visual architecture | Avoid DOM/layout regression risk of wrapping every field immediately | **DECIDED** |
 | PAD-19 | Migration order | P0 Foundation · P1 Contagem + Initial Stock Count · P2 remaining tenant families · P3 special variants · P4 semantic/accessibility wiring · P5 anti-divergence guardrail; each phase gets its own Rule 8 scope and governance checkpoint; **no phase is authorized by this document** | Controlled rollout | **DECIDED** |
@@ -681,18 +695,20 @@ Recorded from the Product Architect's review. **Status of every entry below = `D
 
 ### W.2 Residual items (not PADs — gaps discovered while reconciling)
 
-These are **not** unresolved PADs. They are details the approved decisions did not specify, discovered during reconciliation. Where a default is applied it is stated; nothing here is silently decided.
+These are **not** PADs. They are details the approved decisions did not specify. Nothing is silently decided.
 
-| ID | Item | Applied default | Blocks |
+| ID | Item | Status | Phase |
 |---|---|---|---|
-| **R-1** | PAD-6 scope: `#B91C1C` for **field** error only, or also the global `--error` (`#DC2626`, used e.g. for required asterisks and DS destructive states)? | Field-system scope only | Ratify before P0 sign-off |
-| **R-2** | Identity Search **resting** border. PAD-7 fixes focus (`#B45309`); resting `amber-200` fails 3:1 (1.25) | None | P3 (Identity variant) only |
-| **R-3** | Login dark-variant **resting** placeholder/border (PAD-2/3 values are light-surface) | Proposals in H.13 | P3 (Login) only |
-| **R-4** | Membership of the Compact 13px tier | Initial list: Contagem, Initial Stock Count, Add Stock row grids (mechanism in J.1/S.3) | Confirm before P1 |
-| **R-5** | Contagem: what the Qtd placeholder becomes once "Ainda não contado" leaves it (empty / neutral / short), and remediation of the **existing** row cue's contrast — the value-cell badge "Não contado" is `amber-600` on `amber-50` = **3.07:1** at 13px (`PeriodicStockCountView.tsx:8112–8115`) | None | P1 Rule 8 checkpoint |
-| **R-6** | Disabled/locked token **values** (PAD-16 decided the direction only) | H.7 proposals | Ratify before P0 sign-off |
-| **R-7** | Semantic blue/rose values on **light** surfaces where the existing shade is below 3:1 (`blue-400` ×1, `rose-400` ×1) | Requirement ≥3:1; anchors in H.12 | P2/P3 checkpoint |
-| **R-8** | Native-control (PAD-17) concrete rules: unchecked outline, checked-state edge, range accent | Proposals in G6 (outline `--field-border`; checked fill keeps gold with an accessible `#8A6D1F` edge; range accent to be set) | P3 checkpoint |
+| **R-1** | Scope of `#B91C1C` | **RATIFIED** — fields only; global `--error` unchanged (H.9) | P0 |
+| **R-6** | Disabled/locked field colors | **RATIFIED** — bg `#F5F7FA`, text `#4B5563`, border `#7C8695`, no opacity; row-level cues unchanged (H.7) | P0 |
+| R-2 | Identity Search resting border (PAD-7 fixes focus only; `amber-200` fails 3:1) | **DEFERRED** by the Product Architect to its phase | P3 |
+| R-3 | Login dark-surface resting values (placeholder, border) | **DEFERRED** | P3 |
+| R-4 | Exact screens permitted to use Compact 13px (initial list: Contagem, Initial Stock Count, Add Stock row grids) | **DEFERRED** | P1 |
+| R-5 | Final Contagem quantity placeholder / "Não contado" chip treatment (chip is 3.07:1 today) | **DEFERRED** | P1 |
+| R-7 | Darker blue/rose semantic focus colors on light surfaces (`blue-400` ×1, `rose-400` ×1 below 3:1) | **DEFERRED** | P2/P3 |
+| R-8 | Native-control values (checkbox outline/checked edge, range accent) | **DEFERRED** | P3 |
+
+**The six deferred items are not blockers for P0.** They belong to later phases and must not be pulled into P0.
 
 ---
 
@@ -706,7 +722,7 @@ These are **not** unresolved PADs. They are details the approved decisions did n
 4. **Shared components/styles affected:** both `index.css` files (`.input-base`, global focus rule, tokens), a possible neutral shared stylesheet (Q), a possible `Field` wrapper (P4), the two `fieldClass` constants (Contagem, Initial Stock Count), per-screen field class strings.
 5. **Product surfaces affected:** Login, Add Stock, Contagem, Initial Stock Count, Expenses, Withdrawals, Owner Investment, Cash Flow, Settings, Dashboard search, Subscription, Timeline search, product/edit modals, Superadmin (six pages).
 6. **Risks:** Section U and Rule 8.4–8.8 of the assessment.
-7. **Remaining Product Architect attention:** residual items R-1 … R-8 (W.2) — **no PAD remains undecided.**
+7. **Product Architect status:** PAD-1 … PAD-21 `DECIDED`; R-1 and R-6 `RATIFIED`; R-2, R-3, R-4, R-5, R-7, R-8 intentionally deferred to P3, P3, P1, P1, P2/P3, P3 respectively. **No Product Architect decision blocker remains for P0.**
 8. **Deterministic from evidence:** the layering defect and its fix — now also **reproduced empirically** in the Rule 8 Assessment; `--border-strong` has no consumers; gold-as-text/focus failures; Option C focus shift; file inputs are `hidden`; `readOnly` unused.
 
 ---

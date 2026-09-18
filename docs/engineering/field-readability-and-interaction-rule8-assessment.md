@@ -5,6 +5,7 @@
 **Lifecycle state:** Decided → **Assessed** (this document). Reaching "Assessed" is a readiness opinion, not authorization (`platform-engineering-governance-standard.md` §3, Principle 7).
 **Baseline verified fresh:** HEAD `0394235` (`fix(add-stock): staff hitting "insufficient permission" saving a stock purchase`), working tree clean (`git status --short` empty) immediately before this work began; re-confirmed at the end (see §7).
 **Implementation status: NOT AUTHORIZED.** No Implementation Authorization is issued or implied by this document.
+**Addendum r3 (post-ratification):** R-1 and R-6 were ratified by the Product Architect; see §11. The original §§1–10 are preserved as assessed, except the two 8.9 table rows and the 8.9 conclusion, which are updated in place and marked.
 
 ---
 
@@ -111,7 +112,7 @@ Consequently the Firestore emulator limitation recorded in `HANDOFF.md` is **not
 | Required semantics | Many `required` attributes (loose grep ≈77 matches); asterisk convention in DS | Programmatic `required`/`aria-required`; asterisk `aria-hidden` | P4 |
 | Dense-grid labeling | Per-cell labels `sm:hidden`; desktop relies on column headers | `aria-labelledby` = column header + row/product context (PAD-20) | Sound; needs a header-id scheme in P4 |
 | Native controls | Unchecked outline `#E5E7EB` 1.18; checked gold fill 2.0; range accent gold 2.0 | Separate family (PAD-17); values R-8 | **Not yet specified to value** — P3 |
-| Disabled/locked | `opacity-60` (unpredictable) | Explicit tokens; product floor 4.5:1 (R-6 values) | Direction decided |
+| Disabled/locked | `opacity-60` (unpredictable) | Explicit tokens: bg `#F5F7FA`, text `#4B5563` (7.04:1), border `#7C8695` (3.43 vs its fill, 3.50 vs page), no opacity (R-6 **ratified**) | Decided and ratified |
 | Semantic focus colors | `blue-400` ×1 and `rose-400` ×1 on light surfaces below 3:1 **[C]**; identity amber `amber-200`/`amber-400` fail | PAD-7 amber `#B45309`; others per R-2/R-7 | Partly decided |
 
 Interpretive note carried from the spec: applying WCAG 1.4.11 to field borders is the conservative reading; it is the adopted standard for this program.
@@ -174,8 +175,8 @@ Counts below are **lines containing `<input`/`<select`/`<textarea`** from a plai
 
 | Item | Needed from | Needed by |
 |---|---|---|
-| R-1 `#B91C1C` scope (field-only vs global `--error`) | Product Architect — one-line ratification | **Before P0 sign-off** |
-| R-6 Disabled/locked token **values** | Product Architect — one-line ratification | **Before P0 sign-off** |
+| R-1 `#B91C1C` scope | **RATIFIED (r3):** field error states only; global `--error` unchanged | ✅ Closed |
+| R-6 Disabled/locked token **values** | **RATIFIED (r3):** bg `#F5F7FA`, text `#4B5563`, border `#7C8695`, no opacity | ✅ Closed |
 | R-4 Compact-tier membership list | Product Architect confirmation | Before P1 |
 | R-5 Contagem placeholder replacement + "Não contado" chip contrast (3.07:1) | P1 checkpoint (Product Architect input) | P1 |
 | R-7 Light-surface `blue-400`/`rose-400` values | P2/P3 checkpoint | P2/P3 |
@@ -195,9 +196,9 @@ Counts below are **lines containing `<input`/`<select`/`<textarea`** from a plai
 | P5 Guardrail | Conformance-check mechanism and exception register |
 
 **4. Can Implementation Authorization now be requested?**
-**Yes — for P0 (Foundation) only, and only after the Product Architect ratifies R-1 and R-6.** Authorization for P1–P5 **cannot** be requested from this assessment; each needs its own Rule 8 checkpoint and signature. A single blanket authorization for the program would contradict PAD-19 and Governance Standard §2 (Stage 8: "exactly the scope the Rule 8 Assessment defined — nothing broader").
+**Yes — for P0 (Foundation) only.** *(Originally conditional on R-1/R-6 ratification; both are now ratified — §11.)* Authorization for P1–P5 **cannot** be requested from this assessment; each needs its own Rule 8 checkpoint and signature. A single blanket authorization for the program would contradict PAD-19 and Governance Standard §2 (Stage 8: "exactly the scope the Rule 8 Assessment defined — nothing broader").
 
-**Rule 8 conclusion: ASSESSED — READY to request Implementation Authorization for P0 (conditional on R-1/R-6 ratification). Program-wide authorization: NOT requestable. Implementation: NOT AUTHORIZED.**
+**Rule 8 conclusion (updated r3): ASSESSED — READY to request Implementation Authorization for P0; the R-1/R-6 conditions are satisfied. Program-wide authorization: NOT requestable. Implementation: NOT AUTHORIZED.**
 
 ---
 
@@ -211,3 +212,31 @@ Counts below are **lines containing `<input`/`<select`/`<textarea`** from a plai
 ## 10. What this document does not do
 
 It does not authorize Stage 9 for any phase, does not modify any source/CSS/component/Firestore file, does not approve any residual item, and does not claim any screen has been validated.
+
+---
+
+## 11. Addendum r3 — post-ratification update
+
+### 11.1 Ratifications recorded
+- **R-1 — RATIFIED:** `#B91C1C` for field error states only; the global `--error` (`#DC2626`) is not changed by this program. Effect on assessment: removes the only cross-product side effect in the token set; §8.1 "no unrelated presentation change" is strengthened.
+- **R-6 — RATIFIED:** disabled/locked fields use background `#F5F7FA`, text `#4B5563`, border `#7C8695`, no opacity; existing row-level cues unchanged. Contrast **[C]**: text 7.04:1 on its fill; border 3.43:1 vs its fill and 3.50:1 vs page. This departs from the earlier proposal (decorative border) in the safe direction: the boundary stays ≥ 3:1.
+- **Deferred by the Product Architect (not P0 blockers):** R-2 (P3), R-3 (P3), R-4 (P1), R-5 (P1), R-7 (P2/P3), R-8 (P3).
+- **Status:** PAD-1…PAD-21 DECIDED; R-1, R-6 RATIFIED; **no Product Architect decision blocker remains for P0.**
+
+### 11.2 Evidence gathered while scoping P0 (new; read-only)
+
+| # | Finding | Effect |
+|---|---|---|
+| E-1 | All **23** Superadmin `input-base` elements carry `type-body` (BusinessDirectory 5, SignIn 2, PaymentDetail 1, Operators 2, BusinessDetail 7, BusinessSearch 1, AuditTrail 5). **0** tenant field elements use `type-body`; **0** tenant `.tsx` files use `.input-base` | P0's `.type-body` removal is a class-string edit on exactly these 23 elements in 7 Superadmin files; **no tenant `.tsx` file needs to change in P0** |
+| E-2 | **P0 changes only Superadmin fields visibly.** Tenant has no `.input-base` consumer, so tenant field appearance is unchanged by the foundation itself | Bounds the visual regression surface (Superadmin + the global focus rule) |
+| E-3 | 124 tenant `focus:outline-none` occurrences; only 1 lacks its own `focus:ring/border/shadow`, and that element (a button in `QuickLoginScreen.tsx`) carries its own `focus-visible:` classes. Non-prefixed `outline-none` appears once (Timeline inner input). Zero `<button>` elements use `outline-none` | The unlayered global outline is currently *the extra* indicator on essentially every tenant text field |
+| E-4 | **Consequence:** layering the global `:focus-visible` into `@layer base` in P0 would let `focus:outline-none` win and remove that extra indicator from ~120 unmigrated tenant fields, leaving only a 2.1:1 gold border and a 20% ring — an interim **accessibility regression** (cascade reasoning reproduced by the §8.7 experiment; not browser-verified) | Specification R.2 rule 3 is **phased**: in P0 the global rule stays unlayered, loses `border-radius: 4px`, and excludes `.input-base`; it is layered after P2. Documented in the spec (R.2 rule 3) and carried into the P0 authorization request |
+| E-5 | Superadmin carries its **own** copy of the same global `:focus-visible` rule (`index.css:123`) and `input, textarea, select { font-family: inherit }` (line 113, unlayered) | Same treatment in both apps |
+| E-6 | `apps/superadmin/vite.config.ts` states that **only `@sabush/shared-types` crosses the app boundary** and that no cross-app relative imports are permitted. A shared stylesheet under `packages/` does not resolve into `apps/tenant/src`, but it would be a **second boundary crossing** | PAD-14's mechanism (shared file vs duplicated blocks + sync test) is decided by **evidence at the first P0 checkpoint** with explicit go/no-go criteria; the fallback stays inside PAD-14's own wording ("where cleanly") |
+| E-7 | CI (`.github/workflows/ci.yml`) runs `npm ci`, `npm run lint`, `npm run test:all`, `npm run test:rules:emulator`, `npm run build` — **not** `build:superadmin` | P0 must run `build:superadmin` explicitly |
+
+### 11.3 P0 boundary (as recorded by the Product Architect)
+P0 = the canonical field foundation only (spec T.1). Contagem, Initial Stock Count, broad tenant migration, the `Field` wrapper, native controls, Timeline beyond compatibility, the Login and Identity Search variants, the final Contagem "Não contado" treatment, unrelated accessibility work and unrelated button/touch-target work are **not** P0.
+
+### 11.4 Updated conclusion
+**Assessed. No Product Architect decision blocker for P0. An Implementation Authorization request for P0 only is prepared** (`field-readability-p0-implementation-authorization-request.md`). It is a request; it is **not** an authorization. P1–P5 remain unauthorized and each requires its own Rule 8 checkpoint.
