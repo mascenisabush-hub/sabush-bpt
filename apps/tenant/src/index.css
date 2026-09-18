@@ -54,11 +54,17 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
 }
 
 /* Visible, on-brand focus ring everywhere — never a browser default blue
-   outline slipping through on a keyboard-only pass. */
-:focus-visible {
+   outline slipping through on a keyboard-only pass.
+   [Field Readability P0 / S-2] Deliberately still UNLAYERED for now: 124 tenant
+   `focus:outline-none` utilities are defeated by this rule, so layering it before the
+   tenant fields migrate would strip their extra focus indicator. It moves to
+   `@layer base` only after tenant field migration (P2). Its forced `border-radius: 4px`
+   is removed (an element keeps its authored radius) and `.input-base` fields are
+   excluded — they draw their own indicator (see the field foundation block). `:where()`
+   keeps the selector's specificity identical to the old rule. */
+:focus-visible:not(:where(.input-base)) {
   outline: 2px solid var(--gold, #D4AF37);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -110,7 +116,7 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
 
   /* Borders per design system v1.0 spec (#E5E7EB) */
   --border: #E5E7EB;
-  --border-strong: #E5E7EB;
+  /* --border-strong (field boundary) is defined in the FIELD FOUNDATION block below. */
   --ring: #D4AF37;
 
   --success: #059669;
@@ -414,21 +420,66 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
 .btn-ghost:active { transform: translateY(0) scale(0.97); transition-duration: 80ms; }
 
 /* ==========================================================================
-   Input system — SABUSH DESIGN SYSTEM v1.0.
-   Light gray border, 10px radius, gold focus ring — the canonical
-   treatment behind every text/number/date input and select across the app.
+   Input system — SABUSH DESIGN SYSTEM v2.1 (Field Readability & Interaction P0).
    ========================================================================== */
-.input-base {
-  border: 1px solid #E5E7EB;
-  border-radius: 10px;
-  background: #FFFFFF;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+/* >>> FIELD FOUNDATION — canonical, BYTE-IDENTICAL in apps/tenant and apps/superadmin >>>
+   Field Readability & Interaction — P0 (docs/engineering/field-readability-p0-implementation-authorization-request.md).
+   Do NOT edit one copy alone: tests/field-foundation-p0.test.ts asserts both copies are identical.
+   The foundation owns APPEARANCE and STATE only (surface, boundary, entered text, placeholder,
+   default radius, font, focus, disabled/locked, field error, transition). It owns NO layout:
+   width, height, padding, margin, display and grid placement stay with utilities. It lives in
+   @layer components so utilities (rounded-*, px-*, w-*, text-*) still compose over it.
+   Fields must NOT also carry .type-body (unlayered — it would override the field text). */
+:root {
+  --surface-page: #FBF9F4;
+  --border-strong: #7C8695;
+  --field-bg: #FFFFFF;
+  --field-text: #000000;
+  --field-placeholder: #5F6B7A;
+  --field-border: var(--border-strong);
+  --field-focus-border: #8A6D1F;
+  --field-focus-ring: rgba(212,175,55,0.30);
+  --field-error: #B91C1C;
+  --field-error-ring: rgba(185,28,28,0.25);
+  --field-disabled-bg: #F5F7FA;
+  --field-disabled-text: #4B5563;
+  --field-disabled-border: #7C8695;
 }
-.input-base:focus {
-  outline: none;
-  border-color: #D4AF37;
-  box-shadow: 0 0 0 2px rgba(212,175,55,0.2);
+@layer components {
+  .input-base {
+    --field-font-size: 0.875rem;
+    background-color: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    font-family: var(--font-sans);
+    font-size: var(--field-font-size);
+    font-weight: 500;
+    line-height: 1.5;
+    transition: border-color var(--duration-fast) var(--ease-premium), box-shadow var(--duration-fast) var(--ease-premium), background-color var(--duration-fast) var(--ease-premium);
+  }
+  .input-base--compact { --field-font-size: 0.8125rem; }
+  .input-base::placeholder { color: var(--field-placeholder); opacity: 1; }
+  .input-base:focus {
+    outline: 2px solid transparent;
+    border-color: var(--field-focus-border);
+    box-shadow: 0 0 0 1px var(--field-focus-border), 0 0 0 4px var(--field-focus-ring);
+  }
+  .input-base[aria-invalid="true"] { border-color: var(--field-error); }
+  .input-base[aria-invalid="true"]:focus {
+    border-color: var(--field-error);
+    box-shadow: 0 0 0 1px var(--field-error), 0 0 0 4px var(--field-error-ring);
+  }
+  .input-base:disabled {
+    background-color: var(--field-disabled-bg);
+    color: var(--field-disabled-text);
+    -webkit-text-fill-color: var(--field-disabled-text);
+    border-color: var(--field-disabled-border);
+    cursor: not-allowed;
+    opacity: 1;
+  }
 }
+/* <<< FIELD FOUNDATION <<< */
 
 /* ==========================================================================
    Table system — SABUSH DESIGN SYSTEM v1.0.

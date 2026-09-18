@@ -51,7 +51,7 @@
   --muted-foreground: #6B7280;
 
   --border: #E5E7EB;
-  --border-strong: #E5E7EB;
+  /* --border-strong (field boundary) is defined in the FIELD FOUNDATION block below. */
   --ring: #D4AF37;
 
   --success: #059669;
@@ -110,7 +110,7 @@ body {
   font-variant-numeric: tabular-nums;
 }
 button { font-family: inherit; cursor: pointer; }
-input, textarea, select { font-family: inherit; }
+@layer base { input, textarea, select { font-family: inherit; } }
 a { color: inherit; }
 
 ::selection { background: rgba(212,175,55,0.22); color: #0B1F3A; }
@@ -120,10 +120,11 @@ a { color: inherit; }
 ::-webkit-scrollbar-thumb:hover { background: #C3CAD6; }
 * { scrollbar-width: thin; scrollbar-color: #D9DEE6 transparent; }
 
-:focus-visible {
+/* [Field Readability P0 / S-2] Kept unlayered in P0 (see apps/tenant/src/index.css);
+   forced `border-radius: 4px` removed; `.input-base` fields excluded (own indicator). */
+:focus-visible:not(:where(.input-base)) {
   outline: 2px solid var(--gold, #D4AF37);
   outline-offset: 2px;
-  border-radius: 4px;
 }
 
 @media (prefers-reduced-motion: reduce) {
@@ -227,14 +228,65 @@ a { color: inherit; }
 .btn-ghost:hover { background: rgba(11,31,58,0.05); color: #0B1F3A; transform: translateY(-2px); }
 .btn-ghost:active { transform: translateY(0) scale(0.97); transition-duration: 80ms; }
 
-/* Inputs */
-.input-base {
-  border: 1px solid #E5E7EB; border-radius: 10px; background: #FFFFFF;
-  transition: border-color 150ms ease, box-shadow 150ms ease;
+/* Inputs — SABUSH DESIGN SYSTEM v2.1 (Field Readability & Interaction P0). */
+/* >>> FIELD FOUNDATION — canonical, BYTE-IDENTICAL in apps/tenant and apps/superadmin >>>
+   Field Readability & Interaction — P0 (docs/engineering/field-readability-p0-implementation-authorization-request.md).
+   Do NOT edit one copy alone: tests/field-foundation-p0.test.ts asserts both copies are identical.
+   The foundation owns APPEARANCE and STATE only (surface, boundary, entered text, placeholder,
+   default radius, font, focus, disabled/locked, field error, transition). It owns NO layout:
+   width, height, padding, margin, display and grid placement stay with utilities. It lives in
+   @layer components so utilities (rounded-*, px-*, w-*, text-*) still compose over it.
+   Fields must NOT also carry .type-body (unlayered — it would override the field text). */
+:root {
+  --surface-page: #FBF9F4;
+  --border-strong: #7C8695;
+  --field-bg: #FFFFFF;
+  --field-text: #000000;
+  --field-placeholder: #5F6B7A;
+  --field-border: var(--border-strong);
+  --field-focus-border: #8A6D1F;
+  --field-focus-ring: rgba(212,175,55,0.30);
+  --field-error: #B91C1C;
+  --field-error-ring: rgba(185,28,28,0.25);
+  --field-disabled-bg: #F5F7FA;
+  --field-disabled-text: #4B5563;
+  --field-disabled-border: #7C8695;
 }
-.input-base:focus {
-  outline: none; border-color: #D4AF37; box-shadow: 0 0 0 2px rgba(212,175,55,0.2);
+@layer components {
+  .input-base {
+    --field-font-size: 0.875rem;
+    background-color: var(--field-bg);
+    color: var(--field-text);
+    border: 1px solid var(--field-border);
+    border-radius: 10px;
+    font-family: var(--font-sans);
+    font-size: var(--field-font-size);
+    font-weight: 500;
+    line-height: 1.5;
+    transition: border-color var(--duration-fast) var(--ease-premium), box-shadow var(--duration-fast) var(--ease-premium), background-color var(--duration-fast) var(--ease-premium);
+  }
+  .input-base--compact { --field-font-size: 0.8125rem; }
+  .input-base::placeholder { color: var(--field-placeholder); opacity: 1; }
+  .input-base:focus {
+    outline: 2px solid transparent;
+    border-color: var(--field-focus-border);
+    box-shadow: 0 0 0 1px var(--field-focus-border), 0 0 0 4px var(--field-focus-ring);
+  }
+  .input-base[aria-invalid="true"] { border-color: var(--field-error); }
+  .input-base[aria-invalid="true"]:focus {
+    border-color: var(--field-error);
+    box-shadow: 0 0 0 1px var(--field-error), 0 0 0 4px var(--field-error-ring);
+  }
+  .input-base:disabled {
+    background-color: var(--field-disabled-bg);
+    color: var(--field-disabled-text);
+    -webkit-text-fill-color: var(--field-disabled-text);
+    border-color: var(--field-disabled-border);
+    cursor: not-allowed;
+    opacity: 1;
+  }
 }
+/* <<< FIELD FOUNDATION <<< */
 
 /* Tables */
 .table-clean thead tr { border-bottom: 1px solid var(--border); }
