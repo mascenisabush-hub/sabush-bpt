@@ -211,7 +211,7 @@ export default function PaymentDetail({ businessId, paymentId, onBack }: Props) 
                     onChange={(e) => setRejectReason(e.target.value)}
                     placeholder="Motivo da rejeição…"
                     rows={3}
-                    className="input-base type-body mt-2 w-full p-2.5"
+                    className="input-base mt-2 w-full p-2.5"
                     style={{ borderColor: 'rgba(225,29,72,0.35)' }}
                   />
                   {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}

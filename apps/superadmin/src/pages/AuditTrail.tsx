@@ -81,7 +81,7 @@ export default function AuditTrail() {
             value={filters.businessId}
             onChange={(e) => setFilters((f) => ({ ...f, businessId: e.target.value }))}
             placeholder="businessId"
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           />
         </Field>
         <Field label="Operador (UID)">
@@ -89,14 +89,14 @@ export default function AuditTrail() {
             value={filters.actorUid}
             onChange={(e) => setFilters((f) => ({ ...f, actorUid: e.target.value }))}
             placeholder="actorUid"
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           />
         </Field>
         <Field label="Ação">
           <select
             value={filters.actionType}
             onChange={(e) => setFilters((f) => ({ ...f, actionType: e.target.value }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           >
             <option value="">Todas</option>
             {KNOWN_ACTION_TYPES.map((a) => (
@@ -109,7 +109,7 @@ export default function AuditTrail() {
             type="datetime-local"
             value={filters.from}
             onChange={(e) => setFilters((f) => ({ ...f, from: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           />
         </Field>
         <Field label="Até">
@@ -117,7 +117,7 @@ export default function AuditTrail() {
             type="datetime-local"
             value={filters.to}
             onChange={(e) => setFilters((f) => ({ ...f, to: e.target.value ? new Date(e.target.value).toISOString() : '' }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           />
         </Field>
         <button onClick={handleApply} disabled={busy} className="btn-primary lift px-4 py-2 text-sm">

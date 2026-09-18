@@ -221,7 +221,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
             onChange={(e) => setJustification(e.target.value)}
             placeholder="Motivo da consulta…"
             rows={3}
-            className="input-base type-body mb-2 w-full p-2.5"
+            className="input-base mb-2 w-full p-2.5"
           />
           {error && <p className="type-body mb-2 text-[13px]" style={{ color: 'var(--error)' }}>{error}</p>}
           <button onClick={handleLoad} disabled={busy} className="btn-primary lift px-4 py-2.5 text-sm">
@@ -342,7 +342,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da suspensão…"
                 rows={3}
-                className="input-base type-body mt-2 w-full p-2.5"
+                className="input-base mt-2 w-full p-2.5"
                 style={{ borderColor: 'rgba(225,29,72,0.35)' }}
               />
               {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
@@ -371,7 +371,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da reativação…"
                 rows={3}
-                className="input-base type-body mt-2 w-full p-2.5"
+                className="input-base mt-2 w-full p-2.5"
               />
               {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
               <div className="mt-3 flex gap-2.5">
@@ -438,7 +438,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                     value={recoveryTargetStockCountId}
                     onChange={(e) => setRecoveryTargetStockCountId(e.target.value)}
                     placeholder="initial-2"
-                    className="input-base type-body mb-1 w-full p-2.5"
+                    className="input-base mb-1 w-full p-2.5"
                     style={{ borderColor: 'var(--warning)' }}
                   />
                   <button
@@ -457,7 +457,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da recuperação (ex: cliente confirmou Capital Inicial por engano)…"
                 rows={3}
-                className="input-base type-body mb-2 w-full p-2.5"
+                className="input-base mb-2 w-full p-2.5"
               />
               {actionError && <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
               <div className="flex gap-2.5">
@@ -553,7 +553,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                   value={businessWorthTargetSnapshotId}
                   onChange={(e) => setBusinessWorthTargetSnapshotId(e.target.value)}
                   placeholder="bws-stockcount-periodic-..."
-                  className="input-base type-body w-full p-2.5 font-mono"
+                  className="input-base w-full p-2.5 font-mono"
                 />
               </div>
 
@@ -562,7 +562,7 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
                 onChange={(e) => setActionJustification(e.target.value)}
                 placeholder="Motivo da recuperação (ex: cliente contactou o suporte após o prazo de 3 horas)…"
                 rows={3}
-                className="input-base type-body mb-2 w-full p-2.5"
+                className="input-base mb-2 w-full p-2.5"
               />
               {actionError && <p className="type-body text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
               <div className="flex gap-2.5">

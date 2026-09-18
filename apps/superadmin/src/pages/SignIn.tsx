@@ -96,7 +96,7 @@ export default function SignIn() {
             onChange={(e) => setEmail(e.target.value)}
             required
             autoComplete="username"
-            className="input-base type-body w-full py-2.5 pl-9 pr-3"
+            className="input-base w-full py-2.5 pl-9 pr-3"
           />
         </div>
 
@@ -109,7 +109,7 @@ export default function SignIn() {
             onChange={(e) => setPassword(e.target.value)}
             required
             autoComplete="current-password"
-            className="input-base type-body w-full py-2.5 pl-9 pr-3"
+            className="input-base w-full py-2.5 pl-9 pr-3"
           />
         </div>
 

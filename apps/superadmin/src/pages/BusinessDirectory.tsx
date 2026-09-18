@@ -116,14 +116,14 @@ export default function BusinessDirectory({ onOpenBusiness }: Props) {
             onChange={(e) => setFilters((f) => ({ ...f, search: e.target.value }))}
             onKeyDown={(e) => e.key === 'Enter' && handleApply()}
             placeholder="Nome ou ID do negócio…"
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           />
         </Field>
         <Field label="Atividade Operacional">
           <select
             value={filters.operationalActivity ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, operationalActivity: (e.target.value || undefined) as DirectoryOperationalActivityFilter | undefined }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           >
             <option value="">Todas</option>
             <option value="new">Novo</option>
@@ -136,7 +136,7 @@ export default function BusinessDirectory({ onOpenBusiness }: Props) {
           <select
             value={filters.subscriptionState ?? ''}
             onChange={(e) => setFilters((f) => ({ ...f, subscriptionState: e.target.value || undefined }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           >
             <option value="">Todos</option>
             {DIRECTORY_SUBSCRIPTION_STATES.map((s) => (
@@ -148,7 +148,7 @@ export default function BusinessDirectory({ onOpenBusiness }: Props) {
           <select
             value={filters.suspended === undefined ? '' : String(filters.suspended)}
             onChange={(e) => setFilters((f) => ({ ...f, suspended: e.target.value === '' ? undefined : e.target.value === 'true' }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           >
             <option value="">Todos</option>
             <option value="false">Ativo</option>
@@ -159,7 +159,7 @@ export default function BusinessDirectory({ onOpenBusiness }: Props) {
           <select
             value={filters.sortBy ?? 'lastActivityAt'}
             onChange={(e) => setFilters((f) => ({ ...f, sortBy: e.target.value as DirectorySortField }))}
-            className="input-base type-body px-2.5 py-2"
+            className="input-base px-2.5 py-2"
           >
             <option value="lastActivityAt">Última Atividade</option>
             <option value="createdAt">Data de Criação</option>

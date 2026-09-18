@@ -169,9 +169,9 @@ export default function Operators() {
             value={newUid}
             onChange={(e) => setNewUid(e.target.value)}
             placeholder="uid (Firebase Auth)"
-            className="input-base type-body px-3 py-2.5"
+            className="input-base px-3 py-2.5"
           />
-          <select value={newRole} onChange={(e) => setNewRole(e.target.value as PlatformRole)} className="input-base type-body px-3 py-2.5">
+          <select value={newRole} onChange={(e) => setNewRole(e.target.value as PlatformRole)} className="input-base px-3 py-2.5">
             <option value="support">support</option>
             <option value="developer">developer</option>
             <option value="superadmin">superadmin</option>

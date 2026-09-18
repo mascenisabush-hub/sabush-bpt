@@ -41,7 +41,7 @@ export default function BusinessSearch({ onOpenBusiness }: Props) {
             onChange={(e) => setQ(e.target.value)}
             onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
             placeholder="Nome ou ID do negócio…"
-            className="input-base type-body w-full py-2.5 pl-9 pr-3"
+            className="input-base w-full py-2.5 pl-9 pr-3"
           />
         </div>
         <button onClick={handleSearch} disabled={busy} className="btn-primary lift px-4 py-2.5 text-sm">
