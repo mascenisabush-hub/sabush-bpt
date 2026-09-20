@@ -17,6 +17,7 @@
 import express, { Request, Response, NextFunction } from 'express';
 import cors from 'cors';
 import path from 'path';
+import fs from 'fs';
 import crypto from 'crypto';
 import { fileURLToPath } from 'url';
 import { initializeApp, cert, type ServiceAccount } from 'firebase-admin/app';
@@ -3876,9 +3877,51 @@ expressApp.post('/api/client-error', (req: Request, res: Response) => {
 // Serve the built SPA for everything else.
 // ------------------------------------------------------------------
 const distPath = path.resolve(__dirname, process.env.STATIC_DIST_DIR || 'dist');
+
+// [Diagnostics — SuperAdmin panel "not working" investigation] A missing
+// build output (e.g. the SuperAdmin Railway service built with
+// `npm run build` instead of `npm run build:all`, so dist-superadmin/ was
+// never produced) used to surface only as a generic JSON 500 from the
+// catch-all below, with nothing in the logs saying why. Checked once at
+// startup, logged with the resolved mode, and reported through the
+// existing alerting channel. Purely additive: does not block startup and
+// does not change what is served when the build output exists.
+const spaIndexPath = path.join(distPath, 'index.html');
+const spaBuilt = fs.existsSync(spaIndexPath);
+console.log(
+  `[startup] SERVICE_MODE=${SERVICE_MODE} — serving SPA from ${distPath} ` +
+    `(index.html ${spaBuilt ? 'found' : 'MISSING'})`
+);
+if (!spaBuilt) {
+  reportCriticalFailure(
+    '[startup]',
+    'SPA build output missing — the app cannot be served. Check that this service\'s build command runs `npm run build:all` and that STATIC_DIST_DIR matches the built folder.',
+    { serviceMode: SERVICE_MODE, staticDistDir: process.env.STATIC_DIST_DIR || 'dist', distPath }
+  );
+}
+
+// Unauthenticated liveness/diagnostic probe. Exposes nothing sensitive —
+// only which mode this process resolved and whether its SPA build exists.
+// Lets an operator tell "the domain reaches the right Railway service" apart
+// from "DNS/custom-domain routing is wrong" in one request:
+//   https://<host>/healthz  ->  {"status":"ok","mode":"superadmin","spaBuilt":true}
+expressApp.get('/healthz', (_req, res) => {
+  res.status(200).json({ status: 'ok', mode: SERVICE_MODE, spaBuilt });
+});
+
 expressApp.use(express.static(distPath));
 expressApp.get('*', (_req, res) => {
-  res.sendFile(path.join(distPath, 'index.html'));
+  if (!spaBuilt) {
+    res
+      .status(503)
+      .type('text/plain')
+      .send(
+        `Service misconfigured: SPA build output not found (mode=${SERVICE_MODE}). ` +
+          'The build command must produce the app bundle (npm run build:all).'
+      );
+    return;
+  }
+  res.sendFile(spaIndexPath);
 });
 
 // ------------------------------------------------------------------
