@@ -116,6 +116,7 @@ import { generateBatchNumber, getNextBatchSeq, resolveSupplierForPurchase } from
 import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib/restockObservation';
 import { getTodayDateString } from '../utils/formatters';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
+import { buildPendingPayment } from '../utils/paymentSubmission';
 
 // [Smart Stock Entry — Tier 1] Client-side mirror of the server's
 // FieldState<T>/proposal shapes (server/smartStockEntry.ts) — duplicated
@@ -5578,18 +5579,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     if (!currentUser) throw new Error('Sessão expirada. Inicie sessão novamente.');
     if (!reference.trim()) throw new Error('Indique a referência do pagamento.');
 
-    const newPayment: Payment = {
+    // [Bug fix] buildPendingPayment omits `notes` entirely when it is empty.
+    // The previous inline construction assigned a literal `undefined` to
+    // notes whenever the box was blank, which made setDoc() throw
+    // "Unsupported field value: undefined" (Firestore's
+    // ignoreUndefinedProperties is off) for every client who left the
+    // optional notes box empty — see utils/paymentSubmission.ts.
+    const newPayment: Payment = buildPendingPayment({
       id: 'pmt-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4),
       businessId: activeBusinessId,
       amount: SUBSCRIPTION_PLAN_PRICE_MZN,
       currency: SUBSCRIPTION_PLAN_CURRENCY,
       method,
-      reference: reference.trim(),
+      reference,
       submittedAt: new Date().toISOString(),
       submittedBy: currentUser.uid,
-      status: 'pending',
-      notes: notes ? notes.trim() : undefined,
-    };
+      notes,
+    });
 
     await setDoc(doc(db, 'businesses', activeBusinessId, 'payments', newPayment.id), newPayment);
 

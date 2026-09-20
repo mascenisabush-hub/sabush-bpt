@@ -148,7 +148,16 @@ export const SubscriptionContactModal: React.FC<SubscriptionContactModalProps> =
       await submitPayment({ method: selectedMethod, reference, notes: notes || undefined });
       setJustSubmitted(true);
     } catch (err: any) {
-      setError(err?.message || t('subscription.subscribe.errorGeneric'));
+      // [Bug fix] The raw SDK message (e.g. "Function setDoc() called with
+      // invalid data. Unsupported field value: undefined ...") was being
+      // shown verbatim to the client, which made a code defect look like
+      // a problem with their payment. Log the real error for diagnosis and
+      // only surface messages this app itself wrote (plain Errors thrown
+      // by submitPayment, in Portuguese); any Firebase/SDK error — it
+      // carries a string `code` — gets the translated generic message.
+      console.error('[SubscriptionContactModal] submitPayment failed', err);
+      const isSdkError = typeof err?.code === 'string' || /firestore|firebase|setDoc|Unsupported field value/i.test(err?.message ?? '');
+      setError(!isSdkError && err?.message ? err.message : t('subscription.subscribe.errorGeneric'));
     } finally {
       setIsSubmitting(false);
     }
