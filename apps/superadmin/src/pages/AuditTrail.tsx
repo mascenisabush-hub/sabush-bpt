@@ -14,6 +14,7 @@ import { fetchAuditLog, KNOWN_ACTION_TYPES, type AuditLogEntryRow, type AuditLog
 const ACTION_LABELS: Record<string, string> = {
   'payment.confirmed': 'Pagamento confirmado',
   'payment.rejected': 'Pagamento rejeitado',
+  'subscription.directly_activated': 'Subscrição ativada diretamente',
   'operator.provisioned': 'Operador provisionado',
   'operator.revoked': 'Operador revogado',
   'business.viewed': 'Negócio consultado',

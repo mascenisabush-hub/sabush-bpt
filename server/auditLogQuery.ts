@@ -48,6 +48,10 @@
 export const KNOWN_ACTION_TYPES = [
   'payment.confirmed',
   'payment.rejected',
+  // [SuperAdmin Direct Subscription Activation — emergency capability,
+  // 2026-09-20] Added in the same change that introduces this actionType,
+  // per this allowlist's own maintenance rule (see server/superadminDirectActivation.ts).
+  'subscription.directly_activated',
   'operator.provisioned',
   'operator.revoked',
   'business.viewed',

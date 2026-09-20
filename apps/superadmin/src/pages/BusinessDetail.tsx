@@ -1,9 +1,11 @@
 import { useState } from 'react';
 import { ArrowLeft, CheckCircle2, ShieldAlert, TriangleAlert } from 'lucide-react';
+import type { PaymentMethod } from '@sabush/shared-types';
 import {
   fetchBusinessDetail,
   suspendBusiness,
   reactivateBusiness,
+  activateSubscriptionDirectly,
   authorizeInitialStockRecovery,
   authorizeBusinessWorthRecovery,
   type BusinessDetailResponse,
@@ -24,7 +26,14 @@ interface Props {
 // CONFIRMED) adds the suspend/reactivate actions below. This page
 // remains read-only otherwise — no other field is ever writable from
 // here, no subscription/payment control, no deletion.
-type PendingAction = null | 'suspend' | 'reactivate' | 'authorize-recovery' | 'authorize-business-worth-recovery';
+type PendingAction = null | 'suspend' | 'reactivate' | 'activate-subscription' | 'authorize-recovery' | 'authorize-business-worth-recovery';
+
+// Mirrors server/superadminDirectActivation.ts DIRECT_ACTIVATION_ELIGIBLE_STATUSES
+// — the only states the subscription engine transitions to 'active' on a
+// payment. The server re-checks and refuses anything else; this only decides
+// whether the button is offered.
+const DIRECT_ACTIVATION_ELIGIBLE = ['trial_completed', 'grace_period', 'expired'];
+const DIRECT_ACTIVATION_METHOD_LABELS: Record<PaymentMethod, string> = { mpesa: 'M-Pesa', emola: 'e-Mola', bim: 'BIM (transferência)' };
 
 export default function BusinessDetail({ businessId, onBack }: Props) {
   const [justification, setJustification] = useState('');
@@ -37,6 +46,8 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
   const [actionBusy, setActionBusy] = useState(false);
   const [actionError, setActionError] = useState<string | null>(null);
   const [actionResult, setActionResult] = useState<string | null>(null);
+  const [activationMethod, setActivationMethod] = useState<PaymentMethod>('mpesa');
+  const [activationReference, setActivationReference] = useState('');
   // [SuperAdmin-Assisted Initial Stock Recovery] The confirmation slot
   // to authorize — 'initial' covers the primary case (the original
   // confirmation, legacy or expired-window). A future iteration could
@@ -122,6 +133,47 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
         setActionError('Este negócio já está ativo.');
       } else {
         setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao reativar o negócio.');
+      }
+    } finally {
+      setActionBusy(false);
+    }
+  }
+
+  // [SuperAdmin Direct Subscription Activation — emergency capability,
+  // 2026-09-20] Same justification-required / error / result shape as
+  // handleSuspend/handleReactivate. Never writes subscription state from
+  // here — the server records the payment and drives the existing
+  // confirm -> subscription-engine chain.
+  async function handleActivateSubscription() {
+    if (!activationReference.trim()) {
+      setActionError('É obrigatório indicar a referência do pagamento.');
+      return;
+    }
+    if (!actionJustification.trim()) {
+      setActionError('É obrigatório indicar uma justificação.');
+      return;
+    }
+    setActionBusy(true);
+    setActionError(null);
+    try {
+      const result = await activateSubscriptionDirectly(businessId, {
+        method: activationMethod,
+        reference: activationReference.trim(),
+        justification: actionJustification.trim(),
+      });
+      setActionResult(
+        'Subscrição ativada com sucesso. O pagamento foi registado e confirmado.' +
+          (result.auditLogged === false ? ' Aviso: o registo de auditoria falhou ao gravar.' : '')
+      );
+      setPendingAction(null);
+      setActionJustification('');
+      setActivationReference('');
+      await fetchBusinessDetail(businessId, justification.trim()).then(setData);
+    } catch (err) {
+      setActionError(err instanceof SuperAdminApiError ? err.message : 'Ocorreu um erro ao ativar a subscrição.');
+      // A 409 means the state changed underneath us — refresh what the operator sees.
+      if (err instanceof SuperAdminApiError && err.status === 409) {
+        await fetchBusinessDetail(businessId, justification.trim()).then(setData).catch(() => undefined);
       }
     } finally {
       setActionBusy(false);
@@ -303,14 +355,82 @@ export default function BusinessDetail({ businessId, onBack }: Props) {
             </div>
           )}
 
-          <h3 className="type-title mt-6 mb-2.5">Suspensão</h3>
-
+          {/* Shared result banner for every action below (Subscrição, Suspensão,
+              recoveries) — rendered once, above them all, so a result never
+              appears under the wrong section heading. */}
           {actionResult && (
-            <div className="mb-3 flex items-start gap-2 rounded-lg border p-3" style={{ background: 'rgba(5,150,105,0.08)', borderColor: 'rgba(5,150,105,0.3)' }}>
+            <div className="mt-6 mb-3 flex items-start gap-2 rounded-lg border p-3" style={{ background: 'rgba(5,150,105,0.08)', borderColor: 'rgba(5,150,105,0.3)' }}>
               <CheckCircle2 className="mt-0.5 h-4 w-4 shrink-0" style={{ color: 'var(--success)' }} />
               <p className="type-body text-[13px]">{actionResult}</p>
             </div>
           )}
+
+          <h3 className="type-title mt-6 mb-2.5">Subscrição</h3>
+          <p className="type-body mb-2.5 text-[12.5px]" style={{ color: 'var(--muted-foreground)' }}>
+            Ativação direta após confirmar o pagamento por outra via (captura de ecrã, WhatsApp, extrato), sem esperar que o cliente submeta a referência. O sistema regista o pagamento e aplica a ativação pelo motor de subscrições normal — fica tudo na Auditoria.
+          </p>
+
+          {pendingAction === null && (
+            DIRECT_ACTIVATION_ELIGIBLE.includes(data.subscriptionStatus ?? '') ? (
+              <button
+                onClick={() => { setPendingAction('activate-subscription'); setActionError(null); setActionResult(null); }}
+                className="btn-primary lift px-4 py-2.5 text-sm"
+              >
+                Ativar subscrição
+              </button>
+            ) : (
+              <p className="type-body text-[12.5px]" style={{ color: 'var(--muted-foreground)' }}>
+                {data.subscriptionStatus === 'active'
+                  ? 'A subscrição já está ativa.'
+                  : `Ativação direta indisponível no estado atual (${data.subscriptionStatus ?? 'sem registo de subscrição'}) — só é permitida com o período de teste terminado, em período de carência ou expirada.`}
+              </p>
+            )
+          )}
+
+          {pendingAction === 'activate-subscription' && (
+            <div className="card-premium is-action p-4">
+              <p className="type-body">
+                Ativar a subscrição de <strong className="font-bold">{data.name ?? businessId}</strong> (estado atual: {data.subscriptionStatus})? Confirme que o pagamento foi realmente recebido — esta ação regista um pagamento confirmado e fica na Auditoria.
+              </p>
+              <label className="type-label mt-3 block">Método de pagamento</label>
+              <select
+                value={activationMethod}
+                onChange={(e) => setActivationMethod(e.target.value as PaymentMethod)}
+                className="input-base mt-1 w-full p-2.5"
+              >
+                {(Object.keys(DIRECT_ACTIVATION_METHOD_LABELS) as PaymentMethod[]).map((m) => (
+                  <option key={m} value={m}>{DIRECT_ACTIVATION_METHOD_LABELS[m]}</option>
+                ))}
+              </select>
+              <label className="type-label mt-3 block">Referência / ID da transação</label>
+              <input
+                type="text"
+                value={activationReference}
+                onChange={(e) => setActivationReference(e.target.value)}
+                placeholder="Ex: QGH7X2K9P1"
+                className="input-base mt-1 w-full p-2.5"
+              />
+              <label className="type-label mt-3 block">Justificação</label>
+              <textarea
+                value={actionJustification}
+                onChange={(e) => setActionJustification(e.target.value)}
+                placeholder="Como o pagamento foi verificado (ex.: captura de ecrã enviada por WhatsApp)…"
+                rows={3}
+                className="input-base mt-1 w-full p-2.5"
+              />
+              {actionError && <p className="type-body mt-2 text-[13px]" style={{ color: 'var(--error)' }}>{actionError}</p>}
+              <div className="mt-3 flex gap-2.5">
+                <button onClick={handleActivateSubscription} disabled={actionBusy} className="btn-primary lift px-4 py-2 text-sm">
+                  {actionBusy ? 'A ativar…' : 'Sim, ativar subscrição'}
+                </button>
+                <button onClick={() => { setPendingAction(null); setActionError(null); setActionJustification(''); setActivationReference(''); }} className="btn-secondary lift px-4 py-2 text-sm">
+                  Cancelar
+                </button>
+              </div>
+            </div>
+          )}
+
+          <h3 className="type-title mt-6 mb-2.5">Suspensão</h3>
 
           {pendingAction === null && (
             data.suspended ? (

@@ -10,6 +10,52 @@ here. This file is short-term memory only.
 
 ---
 
+## EMERGENCY session 2026-09-20 (Product Architect-directed) — read first
+
+**1. SuperAdmin Direct Subscription Activation — built under emergency
+instruction, OUTSIDE the signed governance chain.** `POST
+/api/superadmin/businesses/:businessId/activate-subscription`
+(`requireSuperAdmin` only; body `{method, reference, justification}`), logic in
+`server/superadminDirectActivation.ts`, UI in `apps/superadmin/src/pages/BusinessDetail.tsx`
+("Subscrição" section). It records a Payment server-side (`submittedBy` = operator,
+plan amount 699 MZN, no justification on the owner-readable doc) and drives the EXISTING
+unmodified `confirmPayment()` -> Subscription Lifecycle Engine chain — it never writes
+`subscriptions/*` itself. One audit entry `subscription.directly_activated` (justification
+lives only there). **Eligible states = exactly what the engine governs: `trial_completed`,
+`grace_period`, `expired`.** `trial_pending`/`trial_active`/`active`/no-subscription are refused
+with nothing written, because governance has never decided whether a payment during a trial
+converts to active (see `subscriptionEngine.ts` header) — enabling that needs a Product
+Architect policy decision, not an engineering guess. **Needs a retroactive BDR/Policy/Spec/
+Rule 8/Authorization record** — none exists yet. Not run against a real SuperAdmin token or
+real Firestore (sandbox has neither); covered by `tests/superadmin-direct-activation.test.ts`
+(17 tests, real confirmPayment + real engine over an in-memory Firestore).
+
+**2. Bug fix `963f9e6` — subscription payment submission failed for every client who left the
+optional notes box empty** (`notes: undefined` -> Firestore rejects; `ignoreUndefinedProperties`
+is off). Fixed via `apps/tenant/src/utils/paymentSubmission.ts`; regression test
+`tests/payment-submission.test.ts`. **Same bug class, NOT fixed (different module):**
+`addWithdrawal` in `AppContext.tsx` writes `reason`/`notes` as `undefined` via `WriteBatch.set`
+— confirmed with the real SDK that this throws. Verify in production before assuming it works.
+
+**3. Screenshot/proof-of-payment upload — NOT built.** New capability: needs `storage.rules`
+path, Payment schema field, SuperAdmin viewer, and business decisions (is a screenshot
+alone enough without a reference? size/type limits? who can view?). Awaiting decisions.
+
+**4. Admin panel (`adminbpt.sabushtech.com`) "not working" — not reproduced, cause unconfirmed.**
+Public DNS resolves correctly (CNAME -> `sabush-bpt-superadmin-production-52c6.up.railway.app`,
+Cloudflare DNS-only). Server boots and serves correctly in `SERVICE_MODE=superadmin`. Open
+leads (all outside the repo): the CNAME target looks like the service's default domain, not a
+Railway custom-domain target like the tenant's; missing `VITE_FIREBASE_*` at BUILD time gives a
+blank page (`auth/invalid-api-key` at module load); Google Cloud API-key referrer restrictions
+not including the admin domain; local ISP resolver cache. Diagnostics patch (startup SPA check,
+`/healthz`, config-guard screen) is on branch `wip/admin-panel-diagnostics`, untested, NOT on main.
+
+**Test baseline:** 68 `test:all` scripts run individually = 1260 pass, 1 pre-existing failure
+(`staff-management-multishop-authorization`, fails identically on clean main). Note `test:all`
+is chained with `&&`, so that failure hides every suite after it — run scripts individually.
+
+---
+
 ## Also landed this session (unrelated to the above)
 
 **Bug fix, `apps/tenant/src/components/AddStockView.tsx`:** Owner-reported —

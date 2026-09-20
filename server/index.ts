@@ -34,6 +34,7 @@ import { registerBusinessWorthNotificationPolicyAndTemplates, createBusinessWort
 import { createBusinessWorthRecoveryExpiryAuditSweep, type BusinessWorthRecoveryExpiryAuditDb } from './businessWorthRecoveryExpiryAudit';
 import { createSubscriptionEngine } from './subscriptionEngine';
 import { confirmPayment, rejectPayment, type PaymentConfirmationDb } from './paymentConfirmation';
+import { directlyActivateSubscription, parseDirectActivationInput, type DirectActivationDb } from './superadminDirectActivation';
 import { createRequirePlatformOperator, requireSuperAdmin, requireSupportEligibleOperator, type PlatformOperatorRequest } from './superadminAuth';
 import type { PlatformRole } from '../packages/shared-types';
 import { writeAuditLogEntry } from './platformAuditLog';
@@ -3070,6 +3071,113 @@ expressApp.post(
     res.json({
       outcome: 'rejected',
       subscriptionStatus, // unchanged, by design (BR-2) — returned so the UI can show "no effect" explicitly rather than the operator having to infer it
+      ...(auditLogged ? {} : { auditLogged: false }),
+    });
+  }
+);
+
+// ------------------------------------------------------------------
+// POST /api/superadmin/businesses/:businessId/activate-subscription
+// Body: { method, reference, justification } — all required.
+//
+// EMERGENCY capability (Product Architect, 2026-09-20): SuperAdmin may
+// activate a subscription directly after verifying the payment out-of-band,
+// without waiting for the client to submit a payment reference. See
+// server/superadminDirectActivation.ts's header for the full boundary
+// reasoning. In short: records a Payment, then drives the existing,
+// unmodified confirmPayment() -> Subscription Lifecycle Engine chain; never
+// writes subscription state itself; refuses (writing nothing) for any state
+// the engine does not govern (trial_pending, trial_active, active).
+// requireSuperAdmin only — support/developer roles cannot use this.
+// ------------------------------------------------------------------
+expressApp.post(
+  '/api/superadmin/businesses/:businessId/activate-subscription',
+  requireAuth,
+  requirePlatformOperator,
+  requireSuperAdmin,
+  async (req: SuperAdminRequest, res: Response) => {
+    const { businessId } = req.params;
+    const operator = req.platformOperator!;
+
+    const parsed = parseDirectActivationInput(req.body);
+    if (!parsed.ok || !parsed.value) {
+      res.status(400).json({ error: 'invalid-input', message: parsed.message ?? 'Pedido inválido.' });
+      return;
+    }
+    const input = parsed.value;
+
+    let result;
+    try {
+      result = await directlyActivateSubscription(
+        {
+          db: db as unknown as DirectActivationDb,
+          confirm: (p) => confirmPayment(paymentConfirmationDb, subscriptionEngine, p),
+        },
+        { businessId, operatorUid: operator.uid, ...input },
+      );
+    } catch (err) {
+      console.error('[superadmin/activate-subscription] failed', { businessId, operatorUid: operator.uid, error: err instanceof Error ? err.message : String(err) });
+      res.status(500).json({ error: 'internal', message: 'Ocorreu um erro ao ativar a subscrição. Verifique o estado do negócio antes de tentar novamente.' });
+      return;
+    }
+
+    if (result.outcome === 'business-not-found') {
+      res.status(404).json({ error: 'not-found', message: 'Negócio não encontrado.' });
+      return;
+    }
+    if (result.outcome === 'state-not-eligible') {
+      res.status(409).json({
+        error: 'state-not-eligible',
+        currentStatus: result.currentStatus,
+        message:
+          result.currentStatus === 'active'
+            ? 'A subscrição deste negócio já está ativa.'
+            : 'A ativação direta só é permitida para subscrições com o período de teste terminado, em período de carência ou expiradas' +
+              (result.currentStatus ? ` (estado atual: ${result.currentStatus}).` : ' (este negócio não tem registo de subscrição).'),
+      });
+      return;
+    }
+
+    // From here a Payment was recorded and confirmed — audit it regardless
+    // of whether the engine applied the transition, since money was recorded.
+    let auditLogged = true;
+    try {
+      await writeAuditLogEntry(db, {
+        actorUid: operator.uid,
+        actorRole: operator.platformRole,
+        actionType: 'subscription.directly_activated',
+        targetBusinessId: businessId,
+        justification: `[${input.method} · ref ${input.reference} · pagamento ${result.paymentId}] ${input.justification}`,
+      });
+    } catch (err) {
+      console.error('[superadmin/activate-subscription] audit log write failed after activation', { businessId, paymentId: result.paymentId, operatorUid: operator.uid, error: err instanceof Error ? err.message : String(err) });
+      auditLogged = false;
+    }
+
+    if (result.outcome === 'activation-not-applied') {
+      res.status(409).json({
+        error: 'activation-not-applied',
+        paymentId: result.paymentId,
+        message: 'O pagamento foi registado e confirmado, mas o estado da subscrição mudou entretanto e não foi alterado. Verifique o estado atual do negócio.',
+        ...(auditLogged ? {} : { auditLogged: false }),
+      });
+      return;
+    }
+
+    // Same best-effort, isolated owner notification the normal confirm route sends.
+    try {
+      await notificationPlatform.evaluateBusinessEvent(
+        buildPaymentConfirmedEvent(businessId, result.paymentId, new Date().toISOString()),
+      );
+    } catch (err) {
+      console.error('[superadmin/activate-subscription] payment-confirmed notification failed, continuing', { businessId, paymentId: result.paymentId, error: err instanceof Error ? err.message : String(err) });
+    }
+
+    res.json({
+      outcome: 'activated',
+      paymentId: result.paymentId,
+      transitionReason: result.lifecycleTransition.reason,
+      subscriptionStatus: result.lifecycleTransition.status,
       ...(auditLogged ? {} : { auditLogged: false }),
     });
   }

@@ -296,6 +296,29 @@ export async function suspendBusiness(businessId: string, justification: string)
   })) as SuspendBusinessResult;
 }
 
+// [SuperAdmin Direct Subscription Activation — emergency capability,
+// 2026-09-20] Records the payment the SuperAdmin verified out-of-band and
+// drives the existing confirm -> subscription-engine chain server-side.
+// Only valid for trial_completed / grace_period / expired subscriptions —
+// the server refuses (409, nothing written) for any other state.
+export interface ActivateSubscriptionResult {
+  outcome: 'activated';
+  paymentId: string;
+  transitionReason: string;
+  subscriptionStatus: string;
+  auditLogged?: false;
+}
+
+export async function activateSubscriptionDirectly(
+  businessId: string,
+  input: { method: PaymentMethod; reference: string; justification: string }
+): Promise<ActivateSubscriptionResult> {
+  return (await authedFetch(`/businesses/${encodeURIComponent(businessId)}/activate-subscription`, {
+    method: 'POST',
+    body: JSON.stringify(input),
+  })) as ActivateSubscriptionResult;
+}
+
 export interface ReactivateBusinessResult {
   outcome: 'reactivated';
   businessId: string;
@@ -386,6 +409,9 @@ export interface AuditLogEntryRow {
 export const KNOWN_ACTION_TYPES = [
   'payment.confirmed',
   'payment.rejected',
+  // Kept in sync by hand with server/auditLogQuery.ts (emergency capability,
+  // 2026-09-20 — see server/superadminDirectActivation.ts).
+  'subscription.directly_activated',
   'operator.provisioned',
   'operator.revoked',
   'business.viewed',
