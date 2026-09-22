@@ -3441,8 +3441,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // autosave call in this file; the ordinary '__meta__' save
     // scheduled below already drives the visible draftSaveState
     // indicator for this action.
+    //
+    // [Emergency fix follow-up — same stale-same-writer gap the ordinary
+    // per-row edit path at scheduleRowDraftSave/performRowSaveAttempt was
+    // patched for (2737ffa), applied here] This call site was explicitly
+    // left unaudited by that emergency fix. It has the identical
+    // vulnerability: a dormant device (same account signed in elsewhere,
+    // e.g. a phone left open beside the active desktop) holds its own
+    // stale copy of `manualRows` in memory. If a removal fires from that
+    // dormant device — or this device's own in-memory rows are simply
+    // behind what another editor already wrote to these target keys —
+    // this reindex writes shift stale content into `manual:{i}` for
+    // every row at/after `index`, sharing this session's own UID with
+    // whatever is already on the server, which without a baseRev check
+    // is accepted unconditionally and silently discards newer real data
+    // with zero conflict, zero warning. Passing `rev`, this device's own
+    // last-known server rev for the exact TARGET key each write lands
+    // on (not the source row's rev — the target document is what the
+    // transaction compares against), routes a stale reindex write to
+    // the same genuine-collision/CONFLICT path an ordinary stale edit
+    // now takes, instead of letting it win by default.
     nextManualRows.forEach((row, i) => {
-      if (i >= index) savePeriodicStockDraftItem(`manual:${i}`, workingRowToDraftItem(row)).catch(() => {});
+      if (i >= index) {
+        const targetKey = `manual:${i}`;
+        const knownRev = latestPeriodicStockDraftItemsByKeyRef.current[targetKey]?.rev;
+        savePeriodicStockDraftItem(targetKey, { ...workingRowToDraftItem(row), rev: knownRev }).catch(() => {});
+      }
     });
     removePeriodicStockDraftItem(`manual:${manualRows.length - 1}`).catch(() => {});
     // [Decision 39a; Implementation Authorization §1 item 5] Re-index
