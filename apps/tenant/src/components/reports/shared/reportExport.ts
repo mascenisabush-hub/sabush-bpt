@@ -216,7 +216,12 @@ export async function generateReportPdfPreview(
   tables: ExportTable[]
 ): Promise<ReportPdfPreview> {
   const { doc, fileName } = await buildReportPdfDocument(reportTitle, businessName, periodLabel, kpis, tables);
-  const blobUrl: string = doc.output('bloburl');
+  // jsPDF's own types return a URL object for 'bloburl', not a string —
+  // ReportPdfPreview.blobUrl is typed string (it's handed straight to an
+  // <iframe src> and to URL.revokeObjectURL, both of which want a
+  // string), so this is a real, correct type mismatch, not a type-only
+  // formality: stringify it once here rather than loosen the interface.
+  const blobUrl: string = doc.output('bloburl').toString();
   return {
     blobUrl,
     fileName,

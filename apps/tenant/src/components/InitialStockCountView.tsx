@@ -6,6 +6,7 @@ import { UNIT_GUESS_DICTIONARY } from '../data/unitGuessDictionary';
 import { Wallet, Plus, Trash2, ArrowRight, Info, CheckCircle2, ShieldCheck, ChevronDown, ChevronUp } from 'lucide-react';
 import { SubscriptionBlockedNotice } from './SubscriptionBlockedNotice';
 import { ReadOnlyDraftRecovery } from './ReadOnlyDraftRecovery';
+import { InfoHint } from './InfoHint';
 import { InitialStockDraftItem, UnitRelationship, InitialCapitalBasis } from '../types';
 import { resolveInitialCapitalValue } from '../utils/calculations';
 import { isValidUnitRelationship } from '../lib/unitRelationship';
