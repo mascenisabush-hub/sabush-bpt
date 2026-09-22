@@ -2124,7 +2124,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         : rowKey.startsWith('manual:')
         ? mr[parseInt(rowKey.slice('manual:'.length), 10)]
         : undefined;
-      rawSavePromise = row ? savePeriodicStockDraftItem(rowKey, workingRowToDraftItem(row)) : Promise.resolve('');
+      // [Emergency fix — stale same-writer write] Read live, current
+      // state HERE, at fire-time (same discipline as latestFlushArgs
+      // above) — the server `rev` this device's own listener last
+      // actually knew for this row, so AppContext.tsx's transaction
+      // can tell "this write is based on what's really there" apart
+      // from "this write is a dormant device's own stale copy," even
+      // though both share this device's own UID.
+      const knownRev = latestPeriodicStockDraftItemsByKeyRef.current[rowKey]?.rev;
+      rawSavePromise = row
+        ? savePeriodicStockDraftItem(rowKey, { ...workingRowToDraftItem(row), rev: knownRev })
+        : Promise.resolve('');
     }
     const savePromise = rawSavePromise
       .then((updatedAt) => {

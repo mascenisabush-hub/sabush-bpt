@@ -7354,11 +7354,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
     const writerRole: 'owner' | 'delegate' = isOwner ? 'owner' : 'delegate';
     const nowIso = new Date().toISOString();
-    // Strip any rev/state/writer/conflict fields the caller might
-    // still be carrying in its own local copy of this row — never
-    // trusted, always recomputed inside the transaction below.
+    // Strip any state/writer/conflict fields the caller might still be
+    // carrying in its own local copy of this row — never trusted,
+    // always recomputed inside the transaction below. `rev` is the one
+    // exception: it is NOT discarded, it is kept as `baseRev` — the
+    // server rev this caller last actually knew about for this row
+    // (from its own live listener), used below purely as a staleness
+    // check. It is never written verbatim; the transaction still always
+    // computes the real next `rev` itself from what it reads
+    // server-side.
     const {
-      rev: _ignoredRev,
+      rev: baseRev,
       state: _ignoredState,
       lastWriterUid: _ignoredWriterUid,
       lastWriterRole: _ignoredWriterRole,
@@ -7477,15 +7483,47 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // never `lastWriterRole`: two different delegated Editors can
       // share the same role label, and treating that as "the same
       // person" would silently discard a genuine second person's
-      // observation, exactly what Decision 55 prohibits. Handled
-      // identically to the same-value branch immediately above — no
-      // CONFLICT, no observation recorded, the new value simply
-      // becomes authoritative — because Decision 55's no-automatic-
-      // winner principle governs disagreement between two DIFFERENT
-      // people; it was never written to apply to one person changing
-      // their own mind, and this branch is reached only when the
-      // identity check below confirms that is exactly what happened.
-      if (current.lastWriterUid === currentUser.uid) {
+      // observation, exactly what Decision 55 prohibits.
+      //
+      // [Emergency fix — stale same-writer write, reported live in
+      // session, Product Architect direct instruction to implement
+      // immediately, governance to follow retroactively per the same
+      // pattern already used for Decision 60] Same UID is NOT
+      // sufficient on its own to call this a self-correction. One
+      // authenticated account is routinely open on more than one
+      // device at once (e.g. the Owner's own phone, left signed in and
+      // dormant, alongside the device actually being used). A write
+      // from that second device carries the same `lastWriterUid` but
+      // was decided from whatever stale content that device last
+      // happened to hold locally — it is not a deliberate correction
+      // of the value actually on the server right now, and blindly
+      // accepting it silently discards newer, real data with no
+      // conflict, no warning, nothing (confirmed live: a Contagem's
+      // running total dropping in real time with no one touching the
+      // active device). `baseRev` is the server `rev` this caller's
+      // own local copy last actually knew about this row (see above —
+      // never trusted for the write itself, only for this comparison).
+      // Only when it still matches the server's current `rev` is this
+      // write actually based on what's really there right now, and
+      // only then is it safe to treat as a genuine self-correction and
+      // let it through unconditionally, exactly as before. A same-UID
+      // write built on a stale `baseRev` no longer takes this branch
+      // at all — it falls through to the genuine-collision handling
+      // below, so it is never silently applied and never silently
+      // lost either: both observations are preserved and the row is
+      // routed to manual resolution, same as an honest two-person
+      // disagreement. Sharing a UID with the current server value
+      // stops being a free pass the moment the write wasn't actually
+      // looking at that value. A caller that does not supply a
+      // `baseRev` at all (not every call site has been updated to
+      // track it yet — e.g. the manual-row reindex-on-removal path)
+      // is treated exactly as before this fix: `baseRev === undefined`
+      // does not trigger the stale-write check, only an explicit
+      // mismatch does. This keeps the fix scoped to the call site that
+      // actually produces ordinary per-row edits — the one confirmed
+      // responsible for the reported bug — without changing behavior
+      // for a different, not-yet-audited path under time pressure.
+      if (current.lastWriterUid === currentUser.uid && (baseRev === undefined || baseRev === currentRev)) {
         tx.set(itemRef, {
           ...content,
           rev: currentRev + 1,
@@ -7512,15 +7550,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return;
       }
 
-      // [Decision 47/55 §5 items 1-3; Technical Design §7/§8] Genuine
-      // collision: the value this transaction just read from the
-      // server differs from this editor's own new value, AND the
-      // server's current value was written by a DIFFERENT person (the
-      // same-writer branch, immediately above, already exits this
-      // transaction for the same-person case). Both observations are
-      // preserved; the row's own `quantity` is left exactly as the
-      // server already has it — never overwritten by either side, per
-      // Decision 55's no-automatic-winner requirement.
+      // [Decision 47/55 §5 items 1-3; Technical Design §7/§8; extended
+      // by the stale-same-writer fix above] Collision: the value this
+      // transaction just read from the server differs from this
+      // editor's own new value, and either (a) the server's current
+      // value was written by a DIFFERENT person, or (b) it was written
+      // by the SAME person but this write's own `baseRev` no longer
+      // matches what's actually on the server (the same-writer branch,
+      // immediately above, only exits this transaction early when
+      // BOTH the UID matches AND the write was based on the current
+      // server state). Both observations are preserved; the row's own
+      // `quantity` is left exactly as the server already has it —
+      // never overwritten by either side, per Decision 55's
+      // no-automatic-winner requirement. This is deliberately the same
+      // outcome for (a) and (b): a stale write from a dormant device is
+      // not a "self" the way an active, informed correction is, and
+      // must not get a different, more dangerous default than an
+      // honest two-person disagreement gets.
       tx.set(itemRef, {
         ...current,
         state: 'CONFLICT',
