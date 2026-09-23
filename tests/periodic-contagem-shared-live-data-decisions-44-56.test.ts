@@ -854,18 +854,18 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     assert.match(body, /nextCatalogRows\[productId\] = candidate;/);
   });
 
-  it('a clean manual row (no local edit, no conflict) is adopted from periodicStockDraftItemsByKey into manualRows, existing indices only', () => {
+  it('a clean manual row (no local edit, no conflict) is adopted from periodicStockDraftItemsByKey into manualRows, matched by each row\'s own stable sourceRowKey (Option B — closes the raw-suffix-as-array-index defect confirmed live)', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 7000);
-    assert.match(body, /const index = parseInt\(rowKey\.slice\('manual:'\.length\), 10\);/);
-    assert.match(body, /const existing = manualRows\[index\];/);
-    assert.match(body, /if \(!existing\) continue; \/\/ scope: existing local rows only/);
-    assert.match(body, /nextManualRows\[index\] = candidate;/);
+    const body = viewSource.slice(idx, idx + 9000);
+    assert.match(body, /const existingIdx = manualRows\.findIndex\(\(r\) => r\.sourceRowKey === rowKey\);/);
+    assert.match(body, /if \(existingIdx === -1\) continue; \/\/ scope: existing local rows only/);
+    assert.match(body, /const existing = manualRows\[existingIdx\];/);
+    assert.match(body, /nextManualRows\[existingIdx\] = candidate;/);
   });
 
   it('adoption is skipped when the candidate is identical to the existing row (no needless re-render/churn)', () => {
     const idx = viewSource.indexOf('Genuine per-row live\n  // adoption');
-    const body = viewSource.slice(idx, idx + 7000);
+    const body = viewSource.slice(idx, idx + 9000);
     const occurrences = body.match(/JSON\.stringify\(workingRowToDraftItem\(existing\)\) === JSON\.stringify\(workingRowToDraftItem\(candidate\)\)/g);
     assert.ok(occurrences && occurrences.length === 2, 'expected the equality guard on both the catalog and manual branches');
   });

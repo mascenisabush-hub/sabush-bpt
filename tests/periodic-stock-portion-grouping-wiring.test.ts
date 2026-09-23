@@ -89,8 +89,13 @@ describe('PeriodicStockCountView.tsx — requirement 5/no duplicate-product dete
 });
 
 describe('PeriodicStockCountView.tsx — requirement: draft/finalization pipeline untouched', () => {
-  it('handleResumeDraft still branches on item.productId to route each portion to the correct array — the exact mechanism that lets multiple portions of one product resurrect without colliding', () => {
-    assert.match(source, /if \(item\.productId\)\s*\{\s*\n\s*nextCatalogRows\[item\.productId\] = row;\s*\n\s*\}\s*else\s*\{\s*\n\s*nextManualRows\.push\(row\);/);
+  it('handleResumeDraft still routes catalog portions by item.productId, and every manual portion is still pushed individually into nextManualRows — the exact mechanism that lets multiple portions of one product resurrect without colliding. (Restructured by Option B — the manual half is now built from periodicStockDraftItemsByKey directly, to retain each item\'s own raw key for sourceRowKey stamping — but the "each manual portion becomes its own pushed row, never merged" invariant this test protects is unchanged.)', () => {
+    assert.match(source, /if \(item\.productId\)\s*\{\s*\n\s*const row: StockCountWorkingRow = draftItemToWorkingRow\(item\);\s*\n\s*nextCatalogRows\[item\.productId\] = row;/);
+    assert.match(
+      source,
+      /for \(const \{ rowKey, item \} of manualEntries\) \{\s*\n\s*const row: StockCountWorkingRow = \{ \.\.\.draftItemToWorkingRow\(item\), sourceRowKey: rowKey \};\s*\n\s*nextManualRows\.push\(row\);/,
+      'every manual portion is still individually pushed — never merged/collapsed by product name'
+    );
   });
 
   it('allWorkingRows still combines catalogRows and manualRows with no product-level grouping/merging step', () => {

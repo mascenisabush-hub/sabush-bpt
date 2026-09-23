@@ -259,6 +259,37 @@ export interface StockCountWorkingRow {
   // this file's other UI-only fields, above) — never persisted, never
   // part of the draft schema.
   manualRowIndex?: number;
+  // [Bug fix — Option B, live incident, confirmed structural defect]
+  // A manual row's OWN, stable Firestore document key — e.g.
+  // "manual:259" — set once this row's own data has actually been
+  // saved (handleResumeDraft on load; performRowSaveAttempt's success
+  // callback on this row's own first save; handleRemoveManualRow's
+  // reindex loop, which re-saves a SURVIVING row under a NEW key when
+  // an earlier row is removed and must update this field to match, or
+  // it goes stale the moment reindexing happens — see that function's
+  // own comment). This exists because `manualRowIndex`, immediately
+  // above, is explicitly NOT this: it is UI-only, review-screen-scoped
+  // identity, never persisted, and this file's own prior comment on it
+  // states plainly "a manual row has no other stable identity today."
+  // `sourceRowKey` closes that gap specifically for the live-adoption
+  // effect (PeriodicStockCountView.tsx), which previously matched a
+  // remote update to a local row by parsing this same key's numeric
+  // suffix and using it directly as an array index — correct only
+  // when no earlier row has ever been removed from this exact draft;
+  // once any gap exists between the raw suffix and the row's actual
+  // compacted array position (confirmed to occur in production — see
+  // tests/periodic-contagem-manual-index-suffix-mismatch.test.ts), a
+  // remote update addressed to one Firestore document could silently
+  // overwrite a different, unrelated local row. Deliberately NOT
+  // referenced by workingRowToDraftItem/draftItemToWorkingRow, below —
+  // both build explicit field-by-field literals, so this stays
+  // excluded from the persisted draft schema by construction, exactly
+  // like manualRowIndex already is. A row with no `sourceRowKey` yet
+  // (never saved, or resumed from a draft written before this field
+  // existed) is simply never matched by the live-adoption effect —
+  // identical, already-safe fallback behavior to what happens today
+  // when `manualRows[index]` is `undefined`.
+  sourceRowKey?: string;
   // [Product Memory / UOM — Increment A, Checkpoint 2c] UI-only fields,
   // meaningful only for a manually-added row (productId undefined) that
   // does not match any existing catalog product — the Periodic Contagem

@@ -1638,13 +1638,31 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         if (!nextCatalogRows) nextCatalogRows = { ...catalogRows };
         nextCatalogRows[productId] = candidate;
       } else if (rowKey.startsWith('manual:')) {
-        const index = parseInt(rowKey.slice('manual:'.length), 10);
-        const existing = manualRows[index];
-        if (!existing) continue; // scope: existing local rows only — see comment above
-        const candidate = draftItemToWorkingRow(item);
+        // [Bug fix — Option B, live incident, confirmed structural
+        // defect] Was: `const index = parseInt(...); const existing =
+        // manualRows[index];` — matching a remote update to a local
+        // row by treating the raw Firestore suffix as a live array
+        // index. Correct only when no earlier row has ever been
+        // removed from this draft; once a gap exists between a row's
+        // raw suffix and its actual compacted array position (which
+        // handleResumeDraft's own compaction produces whenever any
+        // row has been removed — confirmed to occur in production),
+        // this could silently write one document's update into a
+        // DIFFERENT, unrelated row's slot. Now matches by each row's
+        // own `sourceRowKey` (StockCountWorkingRow's own field,
+        // stamped at resume/save/reindex — see its own declaration
+        // comment, stockCount.ts) instead of position. A row with no
+        // `sourceRowKey` yet (never saved, or resumed from a draft
+        // written before this field existed) is simply never matched
+        // here — identical, already-safe fallback to the prior
+        // `if (!existing) continue` behavior.
+        const existingIdx = manualRows.findIndex((r) => r.sourceRowKey === rowKey);
+        if (existingIdx === -1) continue; // scope: existing local rows only — see comment above
+        const existing = manualRows[existingIdx];
+        const candidate = { ...draftItemToWorkingRow(item), sourceRowKey: rowKey };
         if (JSON.stringify(workingRowToDraftItem(existing)) === JSON.stringify(workingRowToDraftItem(candidate))) continue;
         if (!nextManualRows) nextManualRows = [...manualRows];
-        nextManualRows[index] = candidate;
+        nextManualRows[existingIdx] = candidate;
       }
       // Every other key ('__meta__', 'newProductInfo:*') never appears
       // in periodicStockDraftItemsByKey — that map only ever holds
@@ -2201,6 +2219,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // that mechanism never reads.
         if (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) {
           delete rowHasUnsavedLocalEditRef.current[rowKey];
+        }
+        // [Bug fix — Option B, sourceRowKey stamping point 2 of 3] This
+        // row's own data has just been confirmed durably saved under
+        // exactly `rowKey` — stamp that as its stable identity now, so
+        // the live-adoption effect can match future remote updates to
+        // it by key rather than by array position. Catalog rows are
+        // already stably keyed by productId and need no equivalent
+        // stamp. Reads manualRowsRef.current (not the manualRows
+        // closure) for the same same-render-race reasons every other
+        // manual-row mutation in this file already does; a row that no
+        // longer exists at this index by the time this async callback
+        // fires (removed, or shifted by a reindex in between) is
+        // simply not found and nothing is stamped — safe, since that
+        // row's own reindex-triggered save (see handleRemoveManualRow)
+        // stamps it correctly under its own callback regardless.
+        if (rowKey.startsWith('manual:')) {
+          const idx = parseInt(rowKey.slice('manual:'.length), 10);
+          const currentRow = manualRowsRef.current[idx];
+          if (currentRow && currentRow.sourceRowKey !== rowKey) {
+            const stamped = [...manualRowsRef.current];
+            stamped[idx] = { ...currentRow, sourceRowKey: rowKey };
+            setManualRowsSynced(stamped);
+          }
         }
       })
       .catch((err) => {
@@ -3485,7 +3526,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     submissionIdRef.current = null;
     // [Bug fix — same-index manual-row collision] Base is
     // manualRowsRef.current, not the manualRows closure variable.
-    const nextManualRows = manualRowsRef.current.filter((_, i) => i !== index);
+    //
+    // [Bug fix — Option B, sourceRowKey stamping point 3 of 3] Every
+    // row at or after `index` is about to be re-saved under a NEW
+    // target key below (this function's own existing reindex
+    // behavior — unchanged) — its `sourceRowKey` must be updated to
+    // match in this SAME synchronous step, or it goes stale the
+    // instant this removal happens: a row's own `sourceRowKey` from
+    // before this point would still name a Firestore document that
+    // this exact reindex is about to overwrite with a DIFFERENT row's
+    // content. Updated here, before the async saves below even fire,
+    // so local state and the true post-reindex target key are never
+    // out of sync, even momentarily.
+    const nextManualRows = manualRowsRef.current
+      .filter((_, i) => i !== index)
+      .map((row, i) => (i >= index ? { ...row, sourceRowKey: `manual:${i}` } : row));
     setManualRowsSynced(nextManualRows);
     // [Bug fix — per-product independent draft persistence] Manual
     // rows persist as individual `manual:{index}` documents
@@ -3830,12 +3885,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const nextCatalogRows: CatalogRowState = {};
     const nextManualRows: StockCountWorkingRow[] = [];
     for (const item of periodicStockDraft.items) {
-      const row: StockCountWorkingRow = draftItemToWorkingRow(item);
       if (item.productId) {
+        const row: StockCountWorkingRow = draftItemToWorkingRow(item);
         nextCatalogRows[item.productId] = row;
-      } else {
-        nextManualRows.push(row);
       }
+    }
+    // [Bug fix — Option B, sourceRowKey stamping point 1 of 3] Built
+    // directly from periodicStockDraftItemsByKey rather than
+    // periodicStockDraft.items, specifically to retain each manual
+    // item's OWN raw Firestore key — periodicStockDraft.items
+    // (AppContext.tsx's own useMemo) already sorted these by numeric
+    // suffix before this component ever sees them, but does not carry
+    // each item's originating key alongside it, which sourceRowKey
+    // needs. Mirrors that same useMemo's own sort exactly (ascending
+    // by numeric suffix) so the resulting row order is unchanged from
+    // before this fix — this is a stamping addition, not a reordering.
+    const manualEntries: { index: number; rowKey: string; item: PeriodicStockDraftItem }[] = [];
+    for (const [rowKey, item] of Object.entries(periodicStockDraftItemsByKey)) {
+      if (rowKey.startsWith('manual:')) {
+        const index = parseInt(rowKey.slice('manual:'.length), 10);
+        if (Number.isFinite(index)) manualEntries.push({ index, rowKey, item });
+      }
+    }
+    manualEntries.sort((a, b) => a.index - b.index);
+    for (const { rowKey, item } of manualEntries) {
+      const row: StockCountWorkingRow = { ...draftItemToWorkingRow(item), sourceRowKey: rowKey };
+      nextManualRows.push(row);
     }
     for (const product of products) {
       if (!nextCatalogRows[product.id]) {
