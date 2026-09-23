@@ -1035,7 +1035,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // not state: it is read only inside that effect (at the moment a
   // remote snapshot arrives), never during render, so no re-render
   // should be triggered merely by it changing.
-  const rowHasUnsavedLocalEditRef = useRef<Record<string, boolean>>({});
+  // [Bug fix — dirty-flag stable-identity correction, live incident,
+  // deployed commit 850759b's own follow-up] Was `Record<string,
+  // boolean>`. The KEY here must be a row's stable identity (its
+  // `sourceRowKey`, when it has one — a brand-new row's own
+  // save-target key otherwise, matching the live-adoption effect's own
+  // "no sourceRowKey yet -> never matched anyway" convention), to line
+  // up with the live-adoption effect's own raw-key lookup (unchanged,
+  // below) — this can differ from a row's CURRENT array-position
+  // save-target/content-lookup key once any earlier row has ever been
+  // removed from this draft (confirmed to occur in production — the
+  // gaps 850759b's own diagnostic already proved). The flush path
+  // (below) still needs that current save-target key to actually save
+  // the row, so the VALUE stored here is that key, not a bare `true`
+  // — truthiness still works identically everywhere this is only ever
+  // checked for presence (the live-adoption effect, the un-
+  // validate/Voltar pair), and the flush path now reads the stored
+  // VALUES rather than the ref's own keys to recover valid save
+  // targets. For every non-manual save (catalog/meta/newProductInfo/
+  // caixerDraft — all already stably keyed, never vulnerable to this
+  // defect), key and value are always identical, so this is a strict,
+  // behavior-preserving superset of the prior boolean map for every
+  // caller except the ones this fix specifically corrects.
+  const rowHasUnsavedLocalEditRef = useRef<Record<string, string>>({});
   // [Bug fix — Area A dirty-flag lifecycle, corrective session] A save
   // attempt that is REJECTED specifically because the row is already
   // `state: 'CONFLICT'` (savePeriodicStockDraftItem's own explicit
@@ -2151,7 +2173,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // the row version it was scheduled for (§8/§6): if a newer edit has
   // since bumped the row's generation, this attempt no-ops rather than
   // writing a stale value or clobbering the newer attempt's own state.
-  const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {
+  const performRowSaveAttempt = async (
+    rowKey: string,
+    protectionKey: string,
+    generation: number,
+    attemptNumber: number
+  ) => {
     const belongsToCurrentGeneration = () => rowRetryRef.current.get(rowKey)?.generation === generation;
     if (!belongsToCurrentGeneration()) return;
 
@@ -2218,7 +2245,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // consults; skipped here to avoid growing this ref with keys
         // that mechanism never reads.
         if (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) {
-          delete rowHasUnsavedLocalEditRef.current[rowKey];
+          delete rowHasUnsavedLocalEditRef.current[protectionKey];
         }
         // [Bug fix — Option B, sourceRowKey stamping point 2 of 3] This
         // row's own data has just been confirmed durably saved under
@@ -2252,7 +2279,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           if (delay !== null) {
             setDraftSaveState('retrying');
             const timer = setTimeout(() => {
-              performRowSaveAttempt(rowKey, generation, attemptNumber + 1);
+              performRowSaveAttempt(rowKey, protectionKey, generation, attemptNumber + 1);
             }, delay);
             rowRetryRef.current.set(rowKey, { timer, generation });
             return;
@@ -2326,7 +2353,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) &&
           latestPeriodicStockDraftItemsByKeyRef.current[rowKey]?.state === 'CONFLICT'
         ) {
-          delete rowHasUnsavedLocalEditRef.current[rowKey];
+          delete rowHasUnsavedLocalEditRef.current[protectionKey];
         }
         manualRetryEligibleRowsRef.current.add(rowKey);
         setDraftSaveState('save-unknown');
@@ -2337,7 +2364,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     draftInFlightSaveRef.current = savePromise;
   };
 
-  const scheduleRowDraftSave = (rowKey: string) => {
+  const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {
     // [Decision 41E §7/§13 — no incidental autosave while subscription-
     // blocked] Only ever called from an onChange handler inside the
     // editable form, which never renders while blocked — unreachable
@@ -2370,16 +2397,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // ever consults; '__meta__'/'newProductInfo:*' edits are
     // deliberately excluded so this ref only ever grows for row keys
     // Stage 2 actually protects.
-    if (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) {
-      rowHasUnsavedLocalEditRef.current[rowKey] = true;
+    //
+    // [Bug fix — dirty-flag stable-identity correction] Keyed by
+    // `protectionKey` (a row's stable identity — see
+    // rowHasUnsavedLocalEditRef's own declaration comment), not
+    // `rowKey` (the save-target/content-lookup key, which can drift
+    // from a row's identity once any earlier row has been removed).
+    // Every caller except the two manual-row call sites this fix
+    // corrects omits the second argument, so protectionKey defaults to
+    // rowKey — identical behavior to before this fix for all of them.
+    if (protectionKey.startsWith('catalog:') || protectionKey.startsWith('manual:')) {
+      rowHasUnsavedLocalEditRef.current[protectionKey] = rowKey;
     }
     const generation = cancelRowRetry(rowKey);
     const timer = setTimeout(() => {
       rowDebounceTimersRef.current.delete(rowKey);
-      performRowSaveAttempt(rowKey, generation, 1);
+      performRowSaveAttempt(rowKey, protectionKey, generation, 1);
     }, 800);
     rowDebounceTimersRef.current.set(rowKey, timer);
   };
+
 
   // [Decision 41C §9] Manual retry for `save-failed` / `save-unknown`
   // rows — the operator's explicit choice, never automatic (§9: "Manual
@@ -2397,9 +2434,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // with every other write-triggering handler in this file.
     if (subscriptionBlocksNewRecords) return;
     const rowKeys = Array.from(manualRetryEligibleRowsRef.current);
+    // [Bug fix — dirty-flag stable-identity correction] protectionKey
+    // derived the same way every other lookup-based call site in this
+    // file now does — falls back to rowKey itself for catalog/meta/
+    // other non-manual keys (identical to today), and for a manual key
+    // looks up the row's own current sourceRowKey, since this handler
+    // only ever has the save-target rowKey string to start from (no
+    // row reference reaches it directly).
+    const { manualRows: mrForRetry } = latestFlushArgs.current;
     rowKeys.forEach((rowKey) => {
+      const protectionKey = rowKey.startsWith('manual:')
+        ? mrForRetry[parseInt(rowKey.slice('manual:'.length), 10)]?.sourceRowKey ?? rowKey
+        : rowKey;
       const generation = cancelRowRetry(rowKey);
-      performRowSaveAttempt(rowKey, generation, 1);
+      performRowSaveAttempt(rowKey, protectionKey, generation, 1);
     });
   };
 
@@ -2940,7 +2988,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // real edit to flush — but the explicit guard makes that
     // structurally certain rather than incidental.
     if (subscriptionBlocksNewRecords) return;
-    const notYetAttemptedKeys = Array.from(rowDebounceTimersRef.current.keys());
+    // [Bug fix — dirty-flag stable-identity correction] Was:
+    // `Array.from(rowDebounceTimersRef.current.keys())` used directly
+    // as both save-target and protection key. rowDebounceTimersRef is
+    // keyed by save-target (unchanged — scheduleRowDraftSave's own
+    // `rowDebounceTimersRef.current.set(rowKey, timer)`), so the keys
+    // here are still valid save targets; each one's OWN protectionKey
+    // is derived the same way the live-adoption effect's own matching
+    // does, since the debounce map itself never stored it alongside
+    // the timer.
+    const { manualRows: mrForFlush } = latestFlushArgs.current;
+    const notYetAttemptedEntries: { rowKey: string; protectionKey: string }[] = Array.from(
+      rowDebounceTimersRef.current.keys()
+    ).map((rowKey) => {
+      if (rowKey.startsWith('manual:')) {
+        const row = mrForFlush[parseInt(rowKey.slice('manual:'.length), 10)];
+        return { rowKey, protectionKey: row?.sourceRowKey ?? rowKey };
+      }
+      return { rowKey, protectionKey: rowKey };
+    });
     // [Decision 39a; Implementation Authorization §1 item 4] Still
     // cancel EVERY pending per-row debounce timer — each one is about
     // to receive an immediate attempt below instead of waiting out its
@@ -2954,9 +3020,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // existing generation/ref machinery (rowRetryRef, `useRef`-based)
     // is already safe to keep running past this point, whether or not
     // this component remains mounted to observe it.
-    const dirtyRowKeys = Object.keys(rowHasUnsavedLocalEditRef.current).filter(
-      (rowKey) => rowHasUnsavedLocalEditRef.current[rowKey]
-    );
+    //
+    // [Bug fix — dirty-flag stable-identity correction] Was:
+    // `Object.keys(rowHasUnsavedLocalEditRef.current)`, treating the
+    // ref's own KEYS (now protection keys, not save-target keys — see
+    // that ref's own declaration comment) directly as save targets —
+    // for any row whose identity has ever diverged from its array
+    // position, this would attempt to save under a key that does not
+    // correspond to a valid content-lookup index, silently failing to
+    // flush a genuinely dirty row at exactly the moment (tab closing)
+    // this mechanism exists to protect. Now reads the ref's VALUES
+    // (each entry's own correct, current save-target key, stored there
+    // by scheduleRowDraftSave) instead, pairing each with its own
+    // protection key (the entry's key) explicitly.
+    const dirtyEntries: { rowKey: string; protectionKey: string }[] = Object.entries(
+      rowHasUnsavedLocalEditRef.current
+    )
+      .filter(([, saveTargetKey]) => saveTargetKey)
+      .map(([protectionKey, saveTargetKey]) => ({ rowKey: saveTargetKey, protectionKey }));
     // [Decision 58] Every row still owed a save attempt — whichever of
     // the two ever applies to a given key. `performRowSaveAttempt`
     // itself (via its existing `savePeriodicStockDraftItem`/
@@ -2964,14 +3045,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // `draftInFlightSaveRef` serialization) is the one, already-
     // governed mechanism now used for every row here — no separate
     // batch write, no separate persistence path.
-    const candidateKeys = new Set<string>([...notYetAttemptedKeys, ...dirtyRowKeys]);
-    candidateKeys.forEach((rowKey) => {
+    //
+    // Deduplicated by rowKey (the actual save target) — a row can
+    // legitimately appear in both source lists (still pending its
+    // debounce AND already dirty-flagged); a Map keyed by the true
+    // save target naturally collapses these to one attempt each while
+    // keeping a correct protectionKey for it.
+    const candidateByRowKey = new Map<string, string>();
+    for (const { rowKey, protectionKey } of [...notYetAttemptedEntries, ...dirtyEntries]) {
+      candidateByRowKey.set(rowKey, protectionKey);
+    }
+    candidateByRowKey.forEach((protectionKey, rowKey) => {
       // A row already mid-retry keeps its own scheduled attempt —
       // triggering a second one here would either duplicate it or
       // reset it back to attempt 1, neither of which is wanted.
       if (rowRetryRef.current.get(rowKey)?.timer) return;
       const generation = cancelRowRetry(rowKey);
-      performRowSaveAttempt(rowKey, generation, 1);
+      performRowSaveAttempt(rowKey, protectionKey, generation, 1);
     });
   };
 
@@ -3487,7 +3577,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // `manualRowSaveError`'s own existing identity scheme (§2 of the
     // Implementation Plan). Never resets another manual row's, or any
     // catalog row's, own timer.
-    scheduleRowDraftSave(`manual:${index}`);
+    //
+    // [Bug fix — dirty-flag stable-identity correction] Second
+    // argument protects this edit by the row's own stable identity
+    // (falls back to the save-target key itself for a not-yet-saved
+    // row — see rowHasUnsavedLocalEditRef's own declaration comment).
+    scheduleRowDraftSave(`manual:${index}`, nextManualRows[index].sourceRowKey ?? `manual:${index}`);
   };
 
   const handleAddManualRow = () => {
@@ -3850,7 +3945,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // its real save on every keystroke, exactly like every other
     // per-row edit in this file already does.
     for (const index of affectedIndices) {
-      scheduleRowDraftSave(`manual:${index}`);
+      scheduleRowDraftSave(`manual:${index}`, nextManualRows[index].sourceRowKey ?? `manual:${index}`);
     }
   };
 
@@ -5173,7 +5268,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // `!row.validated`. Marking the row protected here, exactly
           // like `scheduleRowDraftSave` already does for an ordinary
           // typed edit, closes that race the same way.
-          rowHasUnsavedLocalEditRef.current[`catalog:${id}`] = true;
+          //
+          // [Bug fix — dirty-flag stable-identity correction] Ref type
+          // is now Record<string, string> (see its own declaration
+          // comment) — catalog rows are always stably keyed by
+          // productId, so key and value are simply identical here,
+          // preserving today's truthy-check behavior exactly.
+          rowHasUnsavedLocalEditRef.current[`catalog:${id}`] = `catalog:${id}`;
         }
       }
       return changed ? next : prev;
@@ -5185,7 +5286,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           changed = true;
           // Same protection, same reasoning, for the manual-row half —
           // see the catalog-row comment immediately above.
-          rowHasUnsavedLocalEditRef.current[`manual:${index}`] = true;
+          //
+          // [Bug fix — dirty-flag stable-identity correction] Keyed by
+          // this row's own stable identity (falls back to its current
+          // save-target key if not yet saved once — see
+          // rowHasUnsavedLocalEditRef's own declaration comment),
+          // valued by its current save-target key, so the flush path
+          // can still recover a valid target regardless of which
+          // identity this entry is keyed under.
+          rowHasUnsavedLocalEditRef.current[row.sourceRowKey ?? `manual:${index}`] = `manual:${index}`;
           return { ...row, validated: false };
         }
         return row;
@@ -5274,11 +5383,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // leaving it set forever) ensures this product keeps receiving
       // ordinary live updates from other editors after this inspect-
       // only visit, instead of being silently frozen out of them.
+      //
+      // [Bug fix — dirty-flag stable-identity correction] Cleared
+      // under each row's CURRENT sourceRowKey (manualRowsRef.current,
+      // read now — not whatever it may have been when this product was
+      // originally reopened), so the clear correctly matches whatever
+      // key reopenExistingProductForEditing actually set, even if a
+      // removal elsewhere shifted this row's position in the
+      // meantime. Falls back to the position-based key for a row with
+      // no sourceRowKey yet, matching every other fallback in this
+      // fix.
       for (const id of catalogIdsToRestore) {
         delete rowHasUnsavedLocalEditRef.current[`catalog:${id}`];
       }
       for (const index of manualIndicesToRestore) {
-        delete rowHasUnsavedLocalEditRef.current[`manual:${index}`];
+        const key = manualRowsRef.current[index]?.sourceRowKey ?? `manual:${index}`;
+        delete rowHasUnsavedLocalEditRef.current[key];
       }
       scheduleRowDraftSave('__meta__');
     }

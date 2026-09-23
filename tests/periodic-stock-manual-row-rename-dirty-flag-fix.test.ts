@@ -62,10 +62,10 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     assert.match(fnMatch![0], /scheduleRowDraftSave\('__meta__'\);/);
   });
 
-  it('ALSO schedules scheduleRowDraftSave for every affected row\'s own manual:${index} key — the actual fix', () => {
+  it('ALSO schedules scheduleRowDraftSave for every affected row\'s own manual:${index} key, protected by that row\'s own stable identity — the actual fix (extended by the dirty-flag stable-identity correction to also pass protectionKey)', () => {
     assert.match(
       fnMatch![0],
-      /for \(const index of affectedIndices\) \{\s*\n\s*scheduleRowDraftSave\(`manual:\$\{index\}`\);\s*\n\s*\}/
+      /for \(const index of affectedIndices\) \{\s*\n\s*scheduleRowDraftSave\(`manual:\$\{index\}`, nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\);\s*\n\s*\}/
     );
   });
 
@@ -78,24 +78,28 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     assert.ok(metaScheduleIdx < perRowLoopIdx, 'per-row scheduling must come after the __meta__ schedule, not before it');
   });
 
-  it('scheduleRowDraftSave itself re-arms rowHasUnsavedLocalEditRef ONLY for catalog:/manual: keys — confirming why __meta__ alone could never have protected the renamed row', () => {
-    const scheduleFnMatch = periodicSrc.match(/const scheduleRowDraftSave = \(rowKey: string\) => \{[\s\S]*?\n  \};/);
+  it('scheduleRowDraftSave itself re-arms rowHasUnsavedLocalEditRef ONLY for catalog:/manual: keys — confirming why __meta__ alone could never have protected the renamed row (now keyed by protectionKey, valued by rowKey — see the dirty-flag stable-identity correction)', () => {
+    const scheduleFnMatch = periodicSrc.match(
+      /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/
+    );
     assert.ok(scheduleFnMatch, 'expected to find scheduleRowDraftSave');
     assert.match(
       scheduleFnMatch![0],
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[rowKey\] = true;\s*\n\s*\}/
+      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*\}/
     );
   });
 
   it('performRowSaveAttempt reads live, current manualRows state at fire-time (latestFlushArgs.current) — so the debounced save this fix schedules will persist whatever was most recently typed, not a stale snapshot', () => {
-    const performMatch = periodicSrc.match(/const performRowSaveAttempt = async \(rowKey: string, generation: number, attemptNumber: number\) => \{[\s\S]*?const \{ catalogRows: cr, manualRows: mr,[\s\S]{0,80}\} = latestFlushArgs\.current;/);
+    const performMatch = periodicSrc.match(
+      /const performRowSaveAttempt = async \(\s*\n\s*rowKey: string,\s*\n\s*protectionKey: string,\s*\n\s*generation: number,\s*\n\s*attemptNumber: number\s*\n\s*\) => \{[\s\S]*?const \{ catalogRows: cr, manualRows: mr,[\s\S]{0,80}\} = latestFlushArgs\.current;/
+    );
     assert.ok(performMatch, 'expected performRowSaveAttempt to read latestFlushArgs.current live');
   });
 
-  it('a successful row save clears rowHasUnsavedLocalEditRef for that exact manual:${index} key, resuming normal live-adoption protection once the fix\'s own save lands', () => {
+  it('a successful row save clears rowHasUnsavedLocalEditRef for that exact row\'s protectionKey, resuming normal live-adoption protection once the fix\'s own save lands', () => {
     assert.match(
       periodicSrc,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
     );
   });
 
@@ -106,9 +110,12 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     );
   });
 
-  it('does not modify updateManualRow (the already-correct first-keystroke path, used while the name is still blank)', () => {
+  it('does not modify updateManualRow beyond the dirty-flag stable-identity correction\'s own protectionKey argument (already-correct first-keystroke path, used while the name is still blank)', () => {
     const updateManualRowMatch = periodicSrc.match(/const updateManualRow = \(\s*\n\s*index: number,[\s\S]*?\n  \};/);
     assert.ok(updateManualRowMatch, 'expected to find updateManualRow');
-    assert.match(updateManualRowMatch![0], /scheduleRowDraftSave\(`manual:\$\{index\}`\);/);
+    assert.match(
+      updateManualRowMatch![0],
+      /scheduleRowDraftSave\(`manual:\$\{index\}`, nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\);/
+    );
   });
 });

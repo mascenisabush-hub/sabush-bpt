@@ -806,21 +806,21 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
 // specific structural properties that produce each required behavior,
 // rather than rendering and simulating keystrokes.
 describe('Implementation Authorization §2 item 1 — genuine per-row live adoption (Stage 2)', () => {
-  it('rowHasUnsavedLocalEditRef exists and is a plain ref, not React state (never re-renders on its own)', () => {
-    assert.match(viewSource, /const rowHasUnsavedLocalEditRef = useRef<Record<string, boolean>>\(\{\}\);/);
+  it('rowHasUnsavedLocalEditRef exists and is a plain ref, not React state (never re-renders on its own). Type widened to Record<string, string> by the dirty-flag stable-identity correction — the ref now stores each entry\'s own current save-target key as its value, not a bare boolean, so the flush path can recover a valid target even when the entry is keyed by a row\'s stable identity rather than its array position.', () => {
+    assert.match(viewSource, /const rowHasUnsavedLocalEditRef = useRef<Record<string, string>>\(\{\}\);/);
   });
 
-  it('scheduling a row edit (scheduleRowDraftSave) marks that exact row dirty for catalog:/manual: keys only', () => {
-    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string) => {');
-    assert.ok(idx >= 0, 'expected scheduleRowDraftSave to exist');
-    const body = viewSource.slice(idx, idx + 2500);
+  it('scheduling a row edit (scheduleRowDraftSave) marks that exact row dirty for catalog:/manual: keys only, keyed by protectionKey (a row\'s stable identity, defaulting to rowKey for every non-manual caller — unchanged behavior for those), valued by the actual save-target rowKey', () => {
+    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
+    assert.ok(idx >= 0, 'expected scheduleRowDraftSave to exist with the protectionKey parameter');
+    const body = viewSource.slice(idx, idx + 3200);
     assert.match(
       body,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[rowKey\] = true;\s*\n\s*\}/
+      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*\}/
     );
   });
 
-  it('a successful save (performRowSaveAttempt) clears the dirty flag only once belongsToCurrentGeneration is confirmed', () => {
+  it('a successful save (performRowSaveAttempt) clears the dirty flag only once belongsToCurrentGeneration is confirmed, under the same protectionKey the save was scheduled with', () => {
     const thenIdx = viewSource.indexOf(".then((updatedAt) => {");
     assert.ok(thenIdx >= 0, 'expected the save-success callback to exist');
     const body = viewSource.slice(thenIdx, thenIdx + 1500);
@@ -829,7 +829,7 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return;/);
     assert.match(
       body,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
     );
   });
 
@@ -923,13 +923,13 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
 // authoritative resolution. Same source-level regression convention as
 // every describe block above.
 describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)', () => {
-  it('1. a save rejected because the row is already CONFLICT clears the dirty flag, checking the TRUE current remote state via a dedicated live ref', () => {
+  it('1. a save rejected because the row is already CONFLICT clears the dirty flag, checking the TRUE current remote state via a dedicated live ref, under the same protectionKey it was scheduled with', () => {
     const idx = viewSource.indexOf("if (classification === 'transient') {");
     assert.ok(idx >= 0, 'expected the classification branch to exist');
     const body = viewSource.slice(idx, idx + 5200);
     assert.match(
       body,
-      /if \(\s*\n\s*\(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) &&\s*\n\s*latestPeriodicStockDraftItemsByKeyRef\.current\[rowKey\]\?\.state === 'CONFLICT'\s*\n\s*\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+      /if \(\s*\n\s*\(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) &&\s*\n\s*latestPeriodicStockDraftItemsByKeyRef\.current\[rowKey\]\?\.state === 'CONFLICT'\s*\n\s*\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
     );
   });
 
@@ -963,14 +963,15 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     assert.doesNotMatch(body, /item\.state !== 'ACCEPTED'/); // no third gate was added
   });
 
-  it('4. a genuinely new local edit after resolution re-establishes the dirty flag through the entirely unmodified scheduleRowDraftSave path', () => {
-    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string) => {');
-    const body = viewSource.slice(idx, idx + 2500);
+  it('4. a genuinely new local edit after resolution re-establishes the dirty flag through the entirely unmodified scheduleRowDraftSave path (now keyed by protectionKey, valued by rowKey — see the ref\'s own declaration comment)', () => {
+    const idx = viewSource.indexOf('const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
+    assert.ok(idx >= 0, 'expected scheduleRowDraftSave to exist with the protectionKey parameter');
+    const body = viewSource.slice(idx, idx + 3200);
     // Unconditional set — scheduleRowDraftSave has no awareness of
     // conflict/resolution history for a row; every genuine edit sets it.
     assert.match(
       body,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[rowKey\] = true;\s*\n\s*\}/
+      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*\}/
     );
   });
 
@@ -991,13 +992,13 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     assert.match(contextSource, /const resolvePeriodicConflict = async \(rowKey: string, resolvedValue: string\) => \{/);
   });
 
-  it('7. the existing successful-save dirty-clearing path (ordinary ACCEPTED save) is unchanged', () => {
+  it('7. the existing successful-save dirty-clearing path (ordinary ACCEPTED save) is unchanged in every respect except now clearing by protectionKey', () => {
     const thenIdx = viewSource.indexOf('.then((updatedAt) => {');
     const body = viewSource.slice(thenIdx, thenIdx + 1500);
     assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return; \/\/ superseded/);
     assert.match(
       body,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[rowKey\];\s*\n\s*\}/
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
     );
   });
 
