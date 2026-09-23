@@ -975,6 +975,52 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // already typed into an existing one.
   const [catalogRows, setCatalogRows] = useState<CatalogRowState>({});
   const [manualRows, setManualRows] = useState<StockCountWorkingRow[]>([]);
+  // [Bug fix — live incident, same-index manual-row collision silently
+  // discarding real counted data] Every manual-row mutation below used
+  // to read the `manualRows` closure variable as its base — correct
+  // for exactly one call per render, but not for two calls fired
+  // before React has re-rendered in between (e.g. a large catalog
+  // making a render visibly slow, an operator clicking "Adicionar
+  // produto" a second time because the first click appeared to do
+  // nothing). Both calls then compute their own "next" array from the
+  // IDENTICAL stale base, so the second `setManualRows(...)` call
+  // fully replaces the first's result rather than building on it — one
+  // click's new/edited row is silently discarded from local state
+  // before it is ever saved, and worse, two different products typed
+  // in quick succession can be assigned the exact same `manual:{index}`
+  // key, so their autosaves simply overwrite each other in Firestore
+  // itself with no conflict ever raised (same device, same instant —
+  // nothing about that looks stale to the same-writer check). Confirmed
+  // live: a product entered by the operator (rev: 5 on its final
+  // document — five separate writes landed on that one key) survived
+  // while at least one other product typed into that same colliding
+  // slot moments earlier did not, with no trace left anywhere,
+  // including Firestore itself.
+  //
+  // `manualRowsRef` is kept synchronously current — updated the instant
+  // any handler below computes a new array, not merely on next render
+  // — and every one of those handlers now reads ITS base array from
+  // this ref rather than from the `manualRows` closure variable. A
+  // second click arriving before React has re-rendered therefore still
+  // sees the first click's result as its starting point, exactly as if
+  // the two had been serialized, eliminating the collision at its
+  // source rather than merely detecting it after the fact.
+  const manualRowsRef = useRef<StockCountWorkingRow[]>(manualRows);
+  const setManualRowsSynced = (next: StockCountWorkingRow[]) => {
+    manualRowsRef.current = next;
+    setManualRows(next);
+  };
+  // Catch-all sync for the paths that legitimately still call
+  // setManualRows directly (the live-adoption effect, handleResumeDraft,
+  // the shop-switch full reset, and the few call sites already using
+  // React's own functional-updater form) — none of those are the rapid
+  // double-click pattern this fix targets, but keeping the ref current
+  // after every render regardless is what makes it safe to trust
+  // manualRowsRef.current as this file's one source of truth everywhere
+  // else, rather than only after a setManualRowsSynced call specifically.
+  useEffect(() => {
+    manualRowsRef.current = manualRows;
+  }, [manualRows]);
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
   // Design §6; Implementation Plan Area A; Implementation Authorization
   // §2 item 1] `rowHasUnsavedLocalEdit`, keyed by this file's own
@@ -3391,8 +3437,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       };
       resolvedFields = applySellingConfigurationEditRules(currentRow, fields, product, groupReference, options?.isReferenceDerived);
     }
-    const nextManualRows = manualRows.map((row, i) => (i === index ? { ...row, ...resolvedFields } : row));
-    setManualRows(nextManualRows);
+    // [Bug fix — same-index manual-row collision] Base is
+    // manualRowsRef.current, not the manualRows closure variable — see
+    // manualRowsRef's own declaration comment.
+    const nextManualRows = manualRowsRef.current.map((row, i) => (i === index ? { ...row, ...resolvedFields } : row));
+    setManualRowsSynced(nextManualRows);
     // [Decision 39a] Keyed by this row's own array index — matching
     // `manualRowSaveError`'s own existing identity scheme (§2 of the
     // Implementation Plan). Never resets another manual row's, or any
@@ -3402,8 +3451,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const handleAddManualRow = () => {
     submissionIdRef.current = null;
-    const nextManualRows = [...manualRows, createManualRow()];
-    setManualRows(nextManualRows);
+    // [Bug fix — same-index manual-row collision, the confirmed cause
+    // of a live data-loss incident] Base is manualRowsRef.current, not
+    // the manualRows closure variable — see manualRowsRef's own
+    // declaration comment for the full mechanism this closes. A second
+    // click landing before React re-renders now still appends after
+    // the first click's own new row, instead of both computing the
+    // same index from the same stale base and silently discarding one
+    // of them.
+    const nextManualRows = [...manualRowsRef.current, createManualRow()];
+    setManualRowsSynced(nextManualRows);
     // [Decision 39a] A structural add, not one existing row's own
     // content edit — scheduled under the shared '__meta__' key, same
     // as type/label/date changes below.
@@ -3426,8 +3483,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
     submissionIdRef.current = null;
-    const nextManualRows = manualRows.filter((_, i) => i !== index);
-    setManualRows(nextManualRows);
+    // [Bug fix — same-index manual-row collision] Base is
+    // manualRowsRef.current, not the manualRows closure variable.
+    const nextManualRows = manualRowsRef.current.filter((_, i) => i !== index);
+    setManualRowsSynced(nextManualRows);
     // [Bug fix — per-product independent draft persistence] Manual
     // rows persist as individual `manual:{index}` documents
     // (scheduleRowDraftSave's own rowKey convention) — removing a row
@@ -3656,8 +3715,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         };
       }
     }
-    const nextManualRows = [...manualRows, newRow];
-    setManualRows(nextManualRows);
+    // [Bug fix — same-index manual-row collision, the confirmed cause
+    // of a live data-loss incident] Base is manualRowsRef.current, not
+    // the manualRows closure variable — this was the exact handler
+    // behind "clicking Add Product flashes an already-counted product
+    // into the new row": a second click landing before React
+    // re-rendered computed the same target index as the first, so the
+    // new row silently landed on an existing document's key instead of
+    // a genuinely free one.
+    const nextManualRows = [...manualRowsRef.current, newRow];
+    setManualRowsSynced(nextManualRows);
     // [Bug fix] A portion added to an already-open workspace must join
     // it immediately, by its own new stable index — never rely on a
     // later re-derivation from its (shared) name, which is exactly the
@@ -3692,12 +3759,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // CURRENT manualRows — these are the row indices this rename
     // actually touches, keyed exactly like scheduleRowDraftSave's own
     // `manual:${index}` convention.
-    const affectedIndices = manualRows.reduce<number[]>((acc, row, index) => {
+    // [Bug fix — same-index manual-row collision] Base is
+    // manualRowsRef.current, not the manualRows closure variable.
+    const affectedIndices = manualRowsRef.current.reduce<number[]>((acc, row, index) => {
       if (productKeyFor(row.productName) === groupKey) acc.push(index);
       return acc;
     }, []);
-    const nextManualRows = manualRows.map((row) => (productKeyFor(row.productName) === groupKey ? { ...row, productName: newName } : row));
-    setManualRows(nextManualRows);
+    const nextManualRows = manualRowsRef.current.map((row) => (productKeyFor(row.productName) === groupKey ? { ...row, productName: newName } : row));
+    setManualRowsSynced(nextManualRows);
     // [Decision 39a] A bulk rename spans potentially several manual
     // rows at once, not one row's own edit — scheduled under '__meta__'
     // in addition to (never instead of) each row's own key below.

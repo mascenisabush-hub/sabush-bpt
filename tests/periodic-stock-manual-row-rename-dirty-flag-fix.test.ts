@@ -51,10 +51,10 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     assert.ok(fnMatch, 'expected to find handleRenameManualGroup');
   });
 
-  it('collects the affected row indices BEFORE renaming, matched by productKeyFor against the current manualRows', () => {
+  it('collects the affected row indices BEFORE renaming, matched by productKeyFor against the current manualRows (read via manualRowsRef.current — the same-index-collision fix, not the manualRows closure variable)', () => {
     assert.match(
       fnMatch![0],
-      /const affectedIndices = manualRows\.reduce<number\[\]>\(\(acc, row, index\) => \{\s*\n\s*if \(productKeyFor\(row\.productName\) === groupKey\) acc\.push\(index\);/
+      /const affectedIndices = manualRowsRef\.current\.reduce<number\[\]>\(\(acc, row, index\) => \{\s*\n\s*if \(productKeyFor\(row\.productName\) === groupKey\) acc\.push\(index\);/
     );
   });
 
@@ -69,8 +69,8 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     );
   });
 
-  it('the manual:${index} scheduling happens AFTER the rename (setManualRows) and AFTER the __meta__ schedule, so it operates on the row\'s new name, not a stale one', () => {
-    const setManualRowsIdx = fnMatch![0].indexOf('setManualRows(nextManualRows)');
+  it('the manual:${index} scheduling happens AFTER the rename (setManualRowsSynced) and AFTER the __meta__ schedule, so it operates on the row\'s new name, not a stale one', () => {
+    const setManualRowsIdx = fnMatch![0].indexOf('setManualRowsSynced(nextManualRows)');
     const metaScheduleIdx = fnMatch![0].indexOf("scheduleRowDraftSave('__meta__')");
     const perRowLoopIdx = fnMatch![0].indexOf('for (const index of affectedIndices)');
     assert.ok(setManualRowsIdx >= 0 && metaScheduleIdx >= 0 && perRowLoopIdx >= 0);
