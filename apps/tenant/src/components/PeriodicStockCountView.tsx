@@ -3842,6 +3842,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         nextCatalogRows[product.id] = buildCatalogRow(product);
       }
     }
+    // [DIAGNOSTIC — TEMPORARY — same incident/removal criteria as the
+    // AppContext.tsx counterpart, see there] Booleans and counts only.
+    console.log('[DIAG-contagem-resume]', {
+      totalItemsFromDraft: periodicStockDraft.items.length,
+      manualRowCount: nextManualRows.length,
+      hasTrigoByName: nextManualRows.some((r) => r.productName.trim() === 'Trigo'),
+    });
     setCatalogRows(nextCatalogRows);
     setManualRows(nextManualRows);
     // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]

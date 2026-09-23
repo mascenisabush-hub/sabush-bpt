@@ -2629,6 +2629,17 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         snap.forEach((itemDoc) => {
           byKey[itemDoc.id] = itemDoc.data() as PeriodicStockDraftItem;
         });
+        // [DIAGNOSTIC — TEMPORARY — remove after SABUSH BPT Contagem
+        // visibility incident is resolved; see incident thread dated
+        // 2026-09-23] Read-only console output, this session only,
+        // nothing persisted or transmitted. Counts and one known
+        // document-key presence check only — no product names,
+        // quantities, or prices logged.
+        console.log('[DIAG-contagem-items]', {
+          businessId,
+          documentCount: Object.keys(byKey).length,
+          hasManual259: Object.prototype.hasOwnProperty.call(byKey, 'manual:259'),
+        });
         setPeriodicStockDraftItemsByKey(byKey);
         setPeriodicStockDraftItemsLoaded(true);
         // [Decision 41D] This sub-listener never asserts draft
