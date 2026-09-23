@@ -3918,26 +3918,78 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // decision merely because the component remounted. This effect
   // auto-invokes the exact same handleResumeDraft immediately above —
   // previously reachable only via an explicit button click — the
-  // moment a meaningful existing draft is confirmed loaded. Guarded by
-  // `autoResumedRef` so it fires EXACTLY once per mount: a later,
-  // unrelated `periodicStockDraft` update (e.g. another editor's live
-  // change arriving afterward) must never re-trigger a fresh "resume,"
-  // which could silently overwrite whatever the operator has been
-  // typing since. The system must never silently discard the active
-  // Contagem (§13.A item 4) — this effect never discards anything; a
-  // genuinely new count (no meaningful content to resume) is simply
-  // marked handled with no further action, leaving the ordinary blank/
-  // auto-populated catalog rows already in place exactly as they are.
-  // Authoritative shared state itself is never at risk here — this
-  // only decides WHETHER to call the existing, unmodified
-  // handleResumeDraft; that function's own body is what actually reads
-  // the live, always-current `periodicStockDraft` (Rule 8 Assessment
-  // §2.B: the underlying listener never stopped running while this
-  // component was unmounted, so this is already the latest
-  // authoritative shared state, not a stale snapshot).
+  // moment a meaningful existing draft is confirmed loaded.
+  //
+  // [Bug fix — live incident, confirmed root cause of orphaned real
+  // data becoming permanently invisible after every refresh]
+  // `periodicStockDraftLoaded` is `periodicStockDraftMetaLoaded &&
+  // periodicStockDraftItemsLoaded` (AppContext.tsx) — each flips true
+  // the instant its OWN listener delivers its first snapshot, with no
+  // distinction between a `fromCache: true` snapshot (Firestore's own
+  // locally-persisted copy, possibly incomplete relative to the server
+  // if this browser's cache hadn't fully caught up with very recent
+  // writes before the page was reloaded) and a genuine server-confirmed
+  // one. The ORIGINAL version of this effect fired `handleResumeDraft`
+  // EXACTLY once, gated by `autoResumedRef`, the moment that combined
+  // flag first went true — meaning if the FIRST items snapshot
+  // delivered was an incomplete cache read, the workspace was built
+  // from that incomplete picture and FROZEN there for the rest of the
+  // session: the fuller, server-confirmed snapshot arriving moments
+  // later updated `periodicStockDraftItemsByKey` correctly, but nothing
+  // ever re-ran `handleResumeDraft` to pick it up, and the separate
+  // live-adoption effect (above) explicitly, deliberately never
+  // synthesizes a brand-new local row slot for a remote key with no
+  // existing local position — so a genuinely real, saved row could
+  // never surface again on its own. Confirmed live: a real, owner-
+  // written, repeatedly-edited product (`rev: 5` on its Firestore
+  // document) was invisible in the UI on every single refresh, while a
+  // fresh "Adicionar produto" click — which appends a new row at
+  // whatever index `manualRowsRef.current.length` currently is —
+  // happened to land on that exact same already-occupied key, at which
+  // point the live-adoption effect (which DOES protect/update an
+  // EXISTING slot) finally had somewhere to deliver the real content
+  // into, producing the reported "click Add Product, an already-
+  // counted product flashes in" symptom, repeatable once per orphaned
+  // row, and undone again by the very next refresh restarting the same
+  // incomplete-first-snapshot cycle.
+  //
+  // Fix: `autoResumedRef` still guards against re-resuming for the
+  // ordinary reasons this effect's own comment below describes (never
+  // once the operator has started actively typing, never merely
+  // because a different editor's unrelated later change arrived) — but
+  // no longer treats "already resumed once" as permanent once the true
+  // remote item count is later found to be LARGER than what that first
+  // resume actually saw, and only for as long as this operator has not
+  // yet begun a genuine local edit (no dirty row). This is a strict
+  // superset merge, never an overwrite: handleResumeDraft rebuilds
+  // catalogRows/manualRows from periodicStockDraft.items wholesale, so
+  // re-running it only when the true item count has grown is exactly
+  // "pick up the rows the first, incomplete snapshot missed," with the
+  // existing dirty-row check already preventing it from ever discarding
+  // active typing.
+  //
+  // The remaining, original reasoning below still governs every other
+  // aspect of when this effect does and does not act:
+  //
+  // a later, unrelated `periodicStockDraft` update (e.g. another
+  // editor's live change arriving afterward) must never re-trigger a
+  // fresh "resume" once the operator has started typing, which could
+  // silently overwrite whatever the operator has been typing since. The
+  // system must never silently discard the active Contagem (§13.A item
+  // 4) — this effect never discards anything; a genuinely new count (no
+  // meaningful content to resume) is simply marked handled with no
+  // further action, leaving the ordinary blank/auto-populated catalog
+  // rows already in place exactly as they are. Authoritative shared
+  // state itself is never at risk here — this only decides WHETHER to
+  // call the existing, unmodified handleResumeDraft; that function's
+  // own body is what actually reads the live, always-current
+  // `periodicStockDraft` (Rule 8 Assessment §2.B: the underlying
+  // listener never stopped running while this component was unmounted,
+  // so this is already the latest authoritative shared state, not a
+  // stale snapshot).
   const autoResumedRef = useRef(false);
+  const lastAutoResumedItemCountRef = useRef(0);
   useEffect(() => {
-    if (autoResumedRef.current) return;
     if (!periodicStockDraftLoaded) return;
     if (!periodicStockDraft) {
       autoResumedRef.current = true;
@@ -3950,10 +4002,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const hasMeaningfulContent = periodicStockDraft.items.some(
       (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
     );
-    autoResumedRef.current = true;
-    if (hasMeaningfulContent) {
-      handleResumeDraft();
+    if (!hasMeaningfulContent) {
+      autoResumedRef.current = true;
+      return;
     }
+    const currentItemCount = periodicStockDraft.items.length;
+    if (autoResumedRef.current) {
+      // Already resumed at least once — only re-resume if the true
+      // remote item count has since grown (the incomplete-first-
+      // snapshot case this fix targets) AND this operator has not yet
+      // started a genuine local edit anywhere (never override active
+      // typing, matching every other guard in this file).
+      const hasAnyDirtyRow = Object.values(rowHasUnsavedLocalEditRef.current).some(Boolean);
+      if (hasAnyDirtyRow || currentItemCount <= lastAutoResumedItemCountRef.current) return;
+    }
+    autoResumedRef.current = true;
+    lastAutoResumedItemCountRef.current = currentItemCount;
+    handleResumeDraft();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [periodicStockDraftLoaded, periodicStockDraft]);
 
