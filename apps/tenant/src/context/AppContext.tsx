@@ -5980,15 +5980,36 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       let product = tempProducts.find((p) => p.name.toLowerCase() === norm.productName.toLowerCase());
       let productId = product?.id;
 
-      // [Product Identity Existing/New Resolution — Implementation
-      // Authorization, Checkpoint C, Required Behavioral Guarantee 1]
-      // Safety boundary, re-checked HERE at the actual write path —
-      // never merely trusted from whatever PeriodicStockCountView.tsx's
-      // own UI gating showed. Deliberately scoped to type !== 'initial'
-      // only — Initial Stock/Capital Inicial is explicitly out of this
-      // authorization's scope (per the accepted plan §2/§16); its own
-      // existing first-time-entry behavior is entirely unchanged.
-      if (type !== 'initial' && !product && !confirmedNewProductByName.get(norm.productName.toLowerCase())) {
+      // [Bug fix — urgent, live, same reasoning as
+      // PeriodicStockCountView.tsx's own handleConfirmSave fix, commit
+      // 5f89b55] Also scoped to the ORIGINAL catalog being empty
+      // (products.length, captured once at tempProducts' own
+      // initialization above — NEVER tempProducts.length itself, which
+      // GROWS during this very loop as each genuinely-new item creates
+      // its own product, L6057 below. Checking the live, growing
+      // tempProducts.length would have only skipped this check for the
+      // very first unmatched item in a batch, then immediately resumed
+      // blocking for every item after it the instant tempProducts
+      // gained its first entry — reproducing the exact "resolves one
+      // product, another appears, endlessly" symptom this fix exists
+      // to close, merely shifted by one item. This is a SEPARATE,
+      // independent re-check from that earlier UI-layer fix — a
+      // defense-in-depth boundary at the actual write path, not merely
+      // trusting the UI's own gating — and was missed when that first
+      // fix shipped, since it lives in a different file (AppContext.tsx)
+      // guarding the shared recordStockCount finalization function
+      // rather than the UI's own pre-check. With an empty ORIGINAL
+      // catalog (this business's first Periodic Contagem, nothing yet
+      // created before this confirmation began), every item is
+      // unmatched by definition, with no "existing" possibility to
+      // distinguish it from. Once the original catalog is non-empty
+      // (from any earlier confirmation), this defensive re-check
+      // resumes exactly as before, unchanged, for every item in that
+      // later run — including ones this same run itself creates, since
+      // `product` (found via tempProducts, including this run's own
+      // earlier creations) already correctly satisfies the `!product`
+      // half of this condition for those.
+      if (type !== 'initial' && products.length > 0 && !product && !confirmedNewProductByName.get(norm.productName.toLowerCase())) {
         throw new Error(
           `Unresolved product identity for "${norm.productName}": explicit Existing/New confirmation is required before this item can be saved.`
         );

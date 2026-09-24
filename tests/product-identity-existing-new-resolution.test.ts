@@ -69,12 +69,12 @@ describe('Requirement A — unresolved identity cannot silently create a Product
   it('recordStockCount refuses to create a Product for Periodic Contagem with no existing match and no confirmedNewProductByName entry (Checkpoint C)', () => {
     assert.match(
       appContextSource,
-      /if\s*\(type !== 'initial' && !product && !confirmedNewProductByName\.get\(norm\.productName\.toLowerCase\(\)\)\)\s*\{\s*\n\s*throw new Error/
+      /if\s*\(type !== 'initial' && products\.length > 0 && !product && !confirmedNewProductByName\.get\(norm\.productName\.toLowerCase\(\)\)\)\s*\{\s*\n\s*throw new Error/
     );
   });
 
   it('recordStockCount\'s guard is scoped to type !== \'initial\' only — Initial Stock is explicitly out of this authorization\'s scope', () => {
-    assert.match(appContextSource, /type !== 'initial' && !product && !confirmedNewProductByName/);
+    assert.match(appContextSource, /type !== 'initial' && products\.length > 0 && !product && !confirmedNewProductByName/);
   });
 
   it('AddStockView.tsx re-checks identity resolution at handleSubmit (defensive re-check, never trusting render-level state alone)', () => {
