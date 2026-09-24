@@ -2,7 +2,12 @@ Acceptance Record
 
 # Product Architect Acceptance — Periodic Contagem Data-Protection Decisions (PA-01 through PA-16)
 
-**Status:** ✅ **ACCEPTED AND RECORDED.** Sixteen decisions (PA-01–PA-16),
+**Status:** ✅ **ACCEPTED AND RECORDED** (PA-01 amended — see
+[`periodic-contagem-data-protection-decisions-pa-01-clarification-amendment.md`](./periodic-contagem-data-protection-decisions-pa-01-clarification-amendment.md),
+which clarifies that PA-01's stable identifier is the manual row's
+actual Firestore document key, and correspondingly scopes PA-04/PA-05;
+the original PA-01–PA-16 wording below is preserved unaltered as the
+historical record). Sixteen decisions (PA-01–PA-16),
 delivered directly by the Product Architect in conversation, recorded
 here against the repository state at this session's clone of `main`.
 This acceptance does **not** itself constitute an Implementation Plan
