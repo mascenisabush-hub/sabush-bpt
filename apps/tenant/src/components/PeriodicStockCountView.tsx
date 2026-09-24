@@ -5942,7 +5942,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // that would silently create a Product for an identity the owner
     // never actually resolved. Scoped to type !== 'initial' only —
     // Initial Stock is explicitly out of this authorization's scope.
-    if (type !== 'initial') {
+    //
+    // [Bug fix — urgent, live] Also scoped to products.length > 0.
+    // isGenuinelyNewProductName's own check is `!products.some(...)`
+    // — with an empty catalog (this business's very first Periodic
+    // Contagem, nothing yet created), EVERY counted item is
+    // "genuinely new" by definition, with no "existing" possibility
+    // for it to be distinguished from at all. Forcing a per-item
+    // "new or existing?" resolution in that situation blocks
+    // confirmation entirely while protecting against nothing — there
+    // is no duplicate risk to guard against when the catalog this
+    // check compares against is empty. Once the catalog is non-empty
+    // (this Contagem's own confirmation, or any earlier one, having
+    // created real Products), this defensive re-check resumes exactly
+    // as before, unchanged.
+    if (type !== 'initial' && products.length > 0) {
       const unresolvedItem = pendingTally.countedItems.find(
         (item) => isGenuinelyNewProductName(item.productName) && !manualIdentityConfirmedNew.has(productKeyFor(item.productName))
       );
