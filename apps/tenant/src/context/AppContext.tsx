@@ -978,6 +978,16 @@ interface AppContextType {
   // exactly like the prior function did, for the identical "don't
   // report saved before the server actually has it" reason.
   savePeriodicStockDraftItem: (rowKey: string, item: PeriodicStockDraftItem) => Promise<string>;
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 items 2, 3] Transactionally allocates the next `orderIndex` for
+  // a genuinely new manual row. See the function's own definition,
+  // below, for the concurrency-safety rationale. Resolves with the
+  // allocated integer once the transaction has genuinely committed —
+  // no separate readback needed, unlike savePeriodicStockDraftItem's
+  // own timestamp-confirmation pattern immediately above, since a
+  // successful transaction resolution is already sufficient proof of
+  // commit for a simple counter allocation.
+  allocatePeriodicOrderIndex: () => Promise<number>;
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
   // 55 §5 items 1-6] The true rowKey -> row map, exposed so UI callers
   // (conflict rendering/resolution) can address a specific row without
@@ -7372,6 +7382,48 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // is what actually detects a genuine same-row collision (a plain
   // `baseRev` comparison is redundant once the transaction itself
   // always reads the true, current server value at write time).
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 items 2, 3] Transactionally allocates the next `orderIndex`
+  // value for a genuinely new manual row, reading and incrementing
+  // `nextOrderIndex` on the periodic meta document inside a single
+  // Firestore transaction — the mechanism this engagement's own
+  // investigation established is required for cross-client
+  // concurrency safety, after confirming (by direct source reading)
+  // that the existing local `useRef` counter precedent
+  // (`entrySequenceRef`/`sellingPriceEditSequenceRef`) provides no
+  // such guarantee: two independently-reseeded local counters can
+  // allocate the identical next value with no way to notice. A
+  // genuine Firestore transaction serializes two concurrent callers on
+  // the same meta document — whichever commits first advances the
+  // counter; the other's transaction is automatically retried
+  // (documented platform behavior) with a fresh read, guaranteeing
+  // distinct values.
+  //
+  // Absent `nextOrderIndex` (a draft that predates this feature, or
+  // has never had a new manual row created under this scheme) is
+  // treated as 0, per this field's own documented default. Never
+  // decremented — a deleted row's own allocated value is never
+  // reclaimed or reused, consistent with this architecture's broader
+  // "retired identity is never reused" principle already established
+  // for tombstones.
+  const allocatePeriodicOrderIndex = async (): Promise<number> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão não autenticada.');
+    if (!isActiveContagemEditor) {
+      throw new Error('Não tem autorização para editar esta Contagem.');
+    }
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    return runTransaction(db, async (tx) => {
+      const metaSnap = await tx.get(metaRef);
+      if (!metaSnap.exists()) {
+        throw new Error('Esta Contagem já não está ativa — a alteração não foi guardada.');
+      }
+      const current = metaSnap.data().nextOrderIndex ?? 0;
+      tx.set(metaRef, { nextOrderIndex: current + 1 }, { merge: true });
+      return current;
+    });
+  };
+
   const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!currentUser) throw new Error('Sessão não autenticada.');
@@ -9507,6 +9559,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         periodicStockDraftLoaded,
         periodicStockDraftListenerState,
         savePeriodicStockDraftItem,
+        allocatePeriodicOrderIndex,
         resolvePeriodicConflict,
         correctOpenConflictCountIfDrifted,
         removePeriodicStockDraftItem,
