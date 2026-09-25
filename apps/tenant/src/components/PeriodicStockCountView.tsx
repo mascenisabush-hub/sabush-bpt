@@ -34,6 +34,7 @@ import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanoni
 // own header comment, below).
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { computePortionLabels, groupRowsByProductName, groupRowsByProductIdentity } from '../lib/stockCountPortionGrouping';
+import { writePeriodicRecoverySnapshot } from '../lib/periodicContagemRecovery';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
 import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
@@ -2385,6 +2386,40 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // one of the specific paths to verify directly rather than trust
     // by inference from the surrounding JSX.
     if (subscriptionBlocksNewRecords) return;
+    // [Periodic Contagem Expanded Phase 2 — Implementation
+    // Authorization §2 items 10, 11, Stage 9] Synchronous, per-row
+    // recovery snapshot — captured here, at the single existing entry
+    // point every edit already passes through, before the 800ms
+    // Firestore debounce below even starts. Wrapped defensively:
+    // localStorage can throw (quota, disabled storage, private
+    // browsing in some browsers) and this must never block or corrupt
+    // the ordinary save path if it does.
+    if (activeBusinessId) {
+      try {
+        const currentContent = rowKey.startsWith('manual:')
+          ? manualRowsRef.current[Number(rowKey.slice('manual:'.length))]
+          : rowKey.startsWith('catalog:')
+            ? catalogRows[rowKey.slice('catalog:'.length)]
+            : undefined;
+        if (currentContent) {
+          const baseRev = periodicStockDraftItemsByKey[rowKey]?.rev ?? 0;
+          writePeriodicRecoverySnapshot(activeBusinessId, rowKey, {
+            savedAt: new Date().toISOString(),
+            baseRev,
+            content: {
+              productName: currentContent.productName,
+              quantity: currentContent.quantity,
+              unit: currentContent.unit,
+              costPrice: currentContent.costPrice,
+              sellingPrice: currentContent.sellingPrice,
+            },
+          });
+        }
+      } catch {
+        // Never let a recovery-snapshot failure block or corrupt the
+        // ordinary, already-protected save path below.
+      }
+    }
     const existing = rowDebounceTimersRef.current.get(rowKey);
     if (existing) clearTimeout(existing);
     // `editing`: local changes exist, not yet acknowledged by Firestore
