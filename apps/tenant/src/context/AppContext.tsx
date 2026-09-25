@@ -988,6 +988,11 @@ interface AppContextType {
   // successful transaction resolution is already sufficient proof of
   // commit for a simple counter allocation.
   allocatePeriodicOrderIndex: () => Promise<number>;
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 item 4; Stage 4] Migrates exactly one legacy manual row to its
+  // stable destination identity. See the function's own definition,
+  // below, for the complete absent-source/collision-handling contract.
+  migratePeriodicLegacyManualRow: (legacyKey: string) => Promise<'migrated' | 'already-migrated' | 'deleted' | 'ambiguous'>;
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
   // 55 §5 items 1-6] The true rowKey -> row map, exposed so UI callers
   // (conflict rendering/resolution) can address a specific row without
@@ -7424,6 +7429,148 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 item 4; Stage 4] Migrates exactly one legacy `manual:{index}`-
+  // keyed manual row to its new, stable, non-positional destination
+  // identity. Resumable and idempotent by construction — safe to call
+  // repeatedly for the same legacyKey, from any state.
+  //
+  // Destination identity is deterministically derived from the exact
+  // legacy key alone — never from array position, product name, or
+  // any mutable row content — so a repeated migration attempt for the
+  // same legacy row always computes the identical destination,
+  // matching the already-approved architecture exactly.
+  const deriveMigratedDestinationKey = (legacyKey: string): string => `manual:migrated-${legacyKey.slice('manual:'.length)}`;
+
+  const parseLegacyOrderIndex = (legacyKey: string): number => {
+    const suffix = legacyKey.slice('manual:'.length);
+    const parsed = Number(suffix);
+    return Number.isFinite(parsed) ? parsed : 0;
+  };
+
+  // [Stage 4 note, per this stage's own §14] Tombstones themselves are
+  // Stage 5 scope, not implemented here. This read targets the exact
+  // future tombstone path the approved architecture specifies
+  // (`stockCountDrafts/periodic/tombstones/{key}`) so Case B below
+  // works correctly the moment Stage 5 begins writing to it, with zero
+  // redesign of this function — reading a not-yet-existing collection
+  // simply and safely returns "does not exist" today, which is exactly
+  // the correct, honest state before Stage 5 ships.
+  type PeriodicMigrationOutcome = 'migrated' | 'already-migrated' | 'deleted' | 'ambiguous';
+
+  const migratePeriodicLegacyManualRow = async (legacyKey: string): Promise<PeriodicMigrationOutcome> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão não autenticada.');
+    if (!isActiveContagemEditor) {
+      throw new Error('Não tem autorização para editar esta Contagem.');
+    }
+    const legacyRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', legacyKey);
+    const destinationKey = deriveMigratedDestinationKey(legacyKey);
+    const destinationRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', destinationKey);
+    const tombstoneRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'tombstones', legacyKey);
+    const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
+    const itemsCollection = collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items');
+
+    // [Corrected pattern — this engagement's own investigation
+    // confirmed the client Firestore SDK's transaction API supports
+    // reading only by direct document reference, never an arbitrary
+    // query, inside `runTransaction`. A candidate is found here,
+    // outside the transaction, via an ordinary query — then
+    // re-verified by direct reference, inside the transaction, before
+    // it is ever trusted. This is Case A's own safety mechanism, not
+    // a shortcut around it.
+    let candidateAlreadyMigratedKey: string | null = null;
+    const outerLegacySnap = await getDoc(legacyRef);
+    if (!outerLegacySnap.exists()) {
+      const outerMatch = await getDocs(query(itemsCollection, where('migratedFromLegacyKey', '==', legacyKey)));
+      if (outerMatch.docs.length === 1) {
+        candidateAlreadyMigratedKey = outerMatch.docs[0].id;
+      }
+      // More than one match is itself a genuine anomaly (conflicting
+      // provenance) — left as null here, deliberately, so it falls
+      // through to the fail-closed `ambiguous` outcome below rather
+      // than guessing which one is correct.
+    }
+
+    return runTransaction(db, async (tx) => {
+      // Every read this transaction needs, across every branch, is
+      // issued before any write — Firestore's own transaction
+      // requirement, and the reason `nextOrderIndex` seeding (§9,
+      // this stage's own spec) is read here rather than in a second,
+      // separate step.
+      const [legacySnap, metaSnap] = await Promise.all([tx.get(legacyRef), tx.get(metaRef)]);
+
+      if (legacySnap.exists()) {
+        const destSnap = await tx.get(destinationRef);
+        if (destSnap.exists()) {
+          const destData = destSnap.data() as PeriodicStockDraftItem;
+          if (destData.migratedFromLegacyKey === legacyKey) {
+            // The destination already correctly exists (a prior,
+            // interrupted attempt got this far but not the final
+            // legacy delete) — finish the one remaining step, do not
+            // re-write content that's already correct.
+            tx.delete(legacyRef);
+            return 'migrated';
+          }
+          // §7 — conflicting provenance. Fail closed. Never overwrite,
+          // never choose, never delete either side.
+          throw new Error(
+            `migration-collision: destination ${destinationKey} exists with unrelated provenance`
+          );
+        }
+        const legacyData = legacySnap.data() as PeriodicStockDraftItem;
+        const orderIndex = parseLegacyOrderIndex(legacyKey);
+        tx.set(destinationRef, {
+          ...legacyData,
+          migratedFromLegacyKey: legacyKey,
+          orderIndex,
+        });
+        tx.delete(legacyRef);
+        // §9 — keep nextOrderIndex correctly ahead of every migrated
+        // value, resumable/interruption-safe: each row's own
+        // migration independently ensures this, rather than relying
+        // on a single, separately-sequenced pass over every row.
+        const currentNextOrderIndex = metaSnap.exists() ? (metaSnap.data().nextOrderIndex ?? 0) : 0;
+        if (currentNextOrderIndex <= orderIndex) {
+          tx.set(metaRef, { nextOrderIndex: orderIndex + 1 }, { merge: true });
+        }
+        return 'migrated';
+      }
+
+      // Legacy source absent — §6, three distinct states, never
+      // collapsed into one generic branch.
+      if (candidateAlreadyMigratedKey) {
+        const candidateRef = doc(
+          db,
+          'businesses',
+          activeBusinessId,
+          'stockCountDrafts',
+          'periodic',
+          'items',
+          candidateAlreadyMigratedKey
+        );
+        const candidateSnap = await tx.get(candidateRef);
+        if (candidateSnap.exists() && candidateSnap.data().migratedFromLegacyKey === legacyKey) {
+          // Case A — already migrated.
+          return 'already-migrated';
+        }
+        // The outer query's own finding no longer holds by the time
+        // this transaction's own consistent snapshot was taken —
+        // fall through to the tombstone/ambiguous checks below,
+        // rather than trusting a now-stale candidate.
+      }
+
+      const tombstoneSnap = await tx.get(tombstoneRef);
+      if (tombstoneSnap.exists()) {
+        // Case B — intentionally deleted.
+        return 'deleted';
+      }
+
+      // Case C — ambiguous. Fail closed.
+      return 'ambiguous';
+    });
+  };
+
   const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!currentUser) throw new Error('Sessão não autenticada.');
@@ -9560,6 +9707,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         periodicStockDraftListenerState,
         savePeriodicStockDraftItem,
         allocatePeriodicOrderIndex,
+        migratePeriodicLegacyManualRow,
         resolvePeriodicConflict,
         correctOpenConflictCountIfDrifted,
         removePeriodicStockDraftItem,
