@@ -3894,7 +3894,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // accepting"] Manual-row counterpart to handleEditCatalogRow's own
     // identical guard, immediately above — see that guard's comment
     // for the full mechanism.
-    if (periodicStockDraftItemsByKey[`manual:${index}`]?.state === 'CONFLICT') {
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 3
+    // prerequisite fix] Corrected: manual:${index} no longer reliably
+    // names this row's own live Firestore document — sourceRowKey
+    // does. Falls back to the positional key only for a row that is,
+    // for any reason, still not yet stable. Missing this fix would
+    // mean a genuine CONFLICT on a UUID-keyed row is silently never
+    // detected here, allowing an edit into an unresolved conflict —
+    // exactly the class of defect this check exists to prevent.
+    if (periodicStockDraftItemsByKey[row.sourceRowKey ?? `manual:${index}`]?.state === 'CONFLICT') {
       window.alert(
         'Este produto tem um conflito por resolver — não pode ser editado diretamente. Resolva o conflito na secção "Conflitos por resolver", acima.'
       );
@@ -5019,6 +5027,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         kind: 'catalog' as const,
         catalogProductId: productId as string | null,
         manualRowIndex: null as number | null,
+        sourceRowKey: undefined as string | undefined,
         productName: row.productName,
         quantity: row.quantity,
         unit: row.unit,
@@ -5075,6 +5084,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         kind: 'manual' as const,
         catalogProductId: null as string | null,
         manualRowIndex: idx as number | null,
+        // [Periodic Contagem Expanded Phase 2 — Integration Point 3]
+        // Carried through explicitly so every downstream lookup
+        // against periodicStockDraftItemsByKey can use this row's own
+        // genuine, live Firestore key instead of re-deriving a
+        // position-based one — see the three fixed call sites this
+        // same pass corrected (handleEditManualRow's conflict guard,
+        // findNextUnvalidatedEntry, hasOnlyConflictedUnvalidatedEntries,
+        // and the render loop's own conflict check).
+        sourceRowKey: row.sourceRowKey as string | undefined,
         productName: row.productName,
         quantity: row.quantity,
         unit: row.unit,
@@ -5083,7 +5101,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         entrySequence: row.entrySequence,
         activationKey: productKeyFor(row.productName),
         firstWriteAt:
-          periodicStockDraftItemsByKey[`manual:${idx}`]?.firstWriteAt ?? periodicStockDraftItemsByKey[`manual:${idx}`]?.lastWriteAt,
+          // [Periodic Contagem Expanded Phase 2 — Integration Point 3
+          // prerequisite fix] Corrected: manual:${idx} is no longer a
+          // reliable lookup key for a row's own live Firestore data,
+          // now that sourceRowKey is a stable UUID assigned at
+          // creation rather than derived from array position — the
+          // same class of fix already applied to
+          // scheduleRowDraftSave's own recovery-content resolution.
+          // Falls back to the positional key only for a row that is,
+          // for any reason, still not yet stable.
+          periodicStockDraftItemsByKey[row.sourceRowKey ?? `manual:${idx}`]?.firstWriteAt ??
+          periodicStockDraftItemsByKey[row.sourceRowKey ?? `manual:${idx}`]?.lastWriteAt,
         // A manual row never has a productId to look up in
         // correctionOriginalOrderRef — any product that WAS part of the
         // original Contagem and still exists in the catalog is already
@@ -5193,7 +5221,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const findNextUnvalidatedEntry = (): (typeof visibleUnifiedListEntries)[number] | null => {
     for (const entry of visibleUnifiedListEntries) {
       if (entry.validated) continue;
-      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : `manual:${entry.manualRowIndex}`;
+      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
       if (periodicStockDraftItemsByKey[key]?.state === 'CONFLICT') continue;
       return entry;
     }
@@ -5206,7 +5234,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const hasOnlyConflictedUnvalidatedEntries = (): boolean =>
     visibleUnifiedListEntries.some((entry) => {
       if (entry.validated) return false;
-      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : `manual:${entry.manualRowIndex}`;
+      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
       return periodicStockDraftItemsByKey[key]?.state === 'CONFLICT';
     });
 
@@ -9599,7 +9627,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                     // before the operator wastes an edit finding that
                     // out the hard way.
                     const conflictRowKey =
-                      entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : `manual:${entry.manualRowIndex}`;
+                      entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
                     const isRowConflicted = periodicStockDraftItemsByKey[conflictRowKey]?.state === 'CONFLICT';
                     const disabled = isWorkspaceActive;
                     const handleEntryActivation = () => {

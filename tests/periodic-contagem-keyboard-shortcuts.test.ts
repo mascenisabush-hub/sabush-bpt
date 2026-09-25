@@ -197,7 +197,7 @@ describe('Ctrl/Cmd+Enter', () => {
 
   it('findNextUnvalidatedEntry skips CONFLICT-state entries using the same key convention and sentinel as the render-site conflict check', () => {
     const body = extractFunctionBody(periodicSrc, 'const findNextUnvalidatedEntry = ()');
-    assert.match(body, /entry\.kind === 'catalog' \? `catalog:\$\{entry\.catalogProductId\}` : `manual:\$\{entry\.manualRowIndex\}`/, 'must use the identical key convention');
+    assert.match(body, /entry\.kind === 'catalog' \? `catalog:\$\{entry\.catalogProductId\}` : entry\.sourceRowKey \?\? `manual:\$\{entry\.manualRowIndex\}`/, 'must use the identical key convention');
     assert.match(body, /periodicStockDraftItemsByKey\[key\]\?\.state === 'CONFLICT'/, 'must check the identical CONFLICT sentinel');
   });
 
