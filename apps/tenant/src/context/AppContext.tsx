@@ -1006,6 +1006,12 @@ interface AppContextType {
   // row.
   resolvePeriodicConflict: (rowKey: string, resolvedValue: string) => Promise<void>;
   correctOpenConflictCountIfDrifted: (trueOpenConflictCount: number) => Promise<void>;
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 items 5, 7, 11; Stage 5] Coordinated, tombstone-writing
+  // deletion. Additive alongside removePeriodicStockDraftItem
+  // (immediately below) — see the function's own definition for why
+  // both currently coexist.
+  deletePeriodicManualRow: (believedKey: string) => Promise<'deleted' | 'ambiguous'>;
   removePeriodicStockDraftItem: (rowKey: string) => Promise<void>;
   savePeriodicStockDraftMeta: (
     type: StockCountType,
@@ -6794,6 +6800,15 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items')
       );
       periodicDraftItemsSnap.forEach((itemDoc) => fsBatch.delete(itemDoc.ref));
+      // [Periodic Contagem Expanded Phase 2 — Implementation
+      // Authorization §1 item 5; Stage 5] Same reasoning as
+      // clearPeriodicStockDraft's own identical extension — tombstones
+      // are cleaned only at draft-lifecycle endpoints, and successful
+      // finalization is the other one.
+      const periodicTombstonesSnap = await getDocs(
+        collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'tombstones')
+      );
+      periodicTombstonesSnap.forEach((tombstoneDoc) => fsBatch.delete(tombstoneDoc.ref));
       fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic'));
     }
     await fsBatch.commit();
@@ -7997,6 +8012,98 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // reindex-on-delete path below (handleRemoveManualRow's own tail
   // document, whose index no longer has a corresponding in-memory row
   // once the array shifts down by one).
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 items 5, 7, 11; Stage 5] Coordinated, tombstone-writing
+  // deletion, replacing the deletion side of the eventual stable-
+  // identity model. Additive — `removePeriodicStockDraftItem`
+  // (immediately below) remains the live function behind the current,
+  // still-in-production reindex-based deletion flow; wiring the UI to
+  // call this function instead is deliberately out of this stage's
+  // scope, matching Stage 4's own "migration function implemented,
+  // not yet wired into resume" discipline exactly.
+  //
+  // Handles, in order: the ordinary case (row exists at the believed
+  // key, delete it and write its tombstone atomically); the
+  // already-deleted case (a tombstone already exists — idempotent
+  // no-op, never a second write); the migrated-elsewhere case (the
+  // believed key is a legacy key migration has already relocated —
+  // redirects the delete to the actual destination, using the
+  // corrected query-outside/verify-by-reference pattern this
+  // engagement's own investigation established as the only form the
+  // client SDK actually supports inside a transaction); and the
+  // genuinely ambiguous case (neither explanation holds — fails
+  // closed rather than guessing).
+  const deletePeriodicManualRow = async (believedKey: string): Promise<'deleted' | 'ambiguous'> => {
+    if (!activeBusinessId) throw new Error('Sem negócio associado.');
+    if (!currentUser) throw new Error('Sessão não autenticada.');
+    if (!isActiveContagemEditor) {
+      throw new Error('Não tem autorização para editar esta Contagem.');
+    }
+    const itemsCollection = collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items');
+    const rowRef = (key: string) => doc(itemsCollection, key);
+    const tombstoneRef = (key: string) =>
+      doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'tombstones', key);
+    const writeTombstone = (key: string, redirectedFrom?: string) => ({
+      deletedAt: new Date().toISOString(),
+      deletedByUid: currentUser.uid,
+      ...(redirectedFrom ? { redirectedFrom } : {}),
+    });
+
+    const MAX_ATTEMPTS = 3;
+    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+      // Step A — outside the transaction. An ordinary query, fully
+      // supported by the client SDK. Its result is a CANDIDATE only,
+      // never trusted directly — re-verified by direct reference
+      // inside the transaction, below, before anything is written.
+      let candidateMigratedKey: string | null = null;
+      const outerRowSnap = await getDoc(rowRef(believedKey));
+      if (!outerRowSnap.exists()) {
+        const outerMatch = await getDocs(
+          query(itemsCollection, where('migratedFromLegacyKey', '==', believedKey))
+        );
+        if (outerMatch.docs.length === 1) {
+          candidateMigratedKey = outerMatch.docs[0].id;
+        }
+        // More than one match is itself a genuine anomaly — left null
+        // deliberately, falling through to the ambiguous outcome
+        // rather than guessing which is correct.
+      }
+
+      const outcome = await runTransaction(db, async (tx) => {
+        const rowSnap = await tx.get(rowRef(believedKey));
+        if (rowSnap.exists()) {
+          tx.delete(rowRef(believedKey));
+          tx.set(tombstoneRef(believedKey), writeTombstone(believedKey));
+          return 'done' as const;
+        }
+
+        const existingTombstone = await tx.get(tombstoneRef(believedKey));
+        if (existingTombstone.exists()) {
+          return 'done' as const; // Already deleted — idempotent no-op.
+        }
+
+        if (candidateMigratedKey) {
+          const candidateSnap = await tx.get(rowRef(candidateMigratedKey));
+          if (candidateSnap.exists() && candidateSnap.data().migratedFromLegacyKey === believedKey) {
+            tx.delete(rowRef(candidateMigratedKey));
+            tx.set(tombstoneRef(candidateMigratedKey), writeTombstone(candidateMigratedKey, believedKey));
+            return 'done' as const;
+          }
+          // Candidate no longer matches — someone changed it since
+          // Step A. Retry with a fresh query rather than trusting it.
+          return 'retry' as const;
+        }
+
+        return 'ambiguous' as const;
+      });
+
+      if (outcome === 'done') return 'deleted';
+      if (outcome === 'ambiguous') return 'ambiguous';
+      // outcome === 'retry' — loop back to Step A with a fresh query.
+    }
+    return 'ambiguous';
+  };
+
   const removePeriodicStockDraftItem = async (rowKey: string) => {
     if (!activeBusinessId) return;
     await deleteDoc(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey));
@@ -8201,9 +8308,23 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const itemsSnap = await getDocs(collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items'));
     const fsBatch = createFirestoreBatch(db);
     itemsSnap.forEach((itemDoc) => fsBatch.delete(itemDoc.ref));
+    // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+    // §1 item 5; Stage 5] Extended, per this engagement's own
+    // investigation finding: this function previously enumerated only
+    // `items`, never `tombstones` — a draft discarded mid-migration
+    // would leave orphaned tombstone records behind indefinitely,
+    // since no separate, time-based cleanup exists (deliberately, per
+    // the approved architecture). Tombstones are cleaned only at
+    // draft-lifecycle endpoints — this one, and finalization's own
+    // cleanup, below — never on a timer.
+    const tombstonesSnap = await getDocs(
+      collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'tombstones')
+    );
+    tombstonesSnap.forEach((tombstoneDoc) => fsBatch.delete(tombstoneDoc.ref));
     fsBatch.delete(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
     await fsBatch.commit();
   };
+
 
 
   // [Durable Purchase Capture Amendment v1.0] Upserts the persistent,
@@ -9710,6 +9831,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         migratePeriodicLegacyManualRow,
         resolvePeriodicConflict,
         correctOpenConflictCountIfDrifted,
+        deletePeriodicManualRow,
         removePeriodicStockDraftItem,
         savePeriodicStockDraftMeta,
         flushPeriodicStockDraftRows,
