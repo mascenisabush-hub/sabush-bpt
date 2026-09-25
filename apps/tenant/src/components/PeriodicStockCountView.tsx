@@ -680,6 +680,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     periodicStockDraftListenerState,
     registerPendingContagemFlush,
     savePeriodicStockDraftItem,
+    // [Periodic Contagem Expanded Phase 2 — Implementation
+    // Authorization, Stage 1-to-live-UI integration] Added for the
+    // migration/deletion wiring below — both were previously
+    // implemented and tested (Stages 4, 5) but not yet destructured
+    // into this component at all.
+    migratePeriodicLegacyManualRow,
+    migrateAllLegacyPeriodicRows,
+    deletePeriodicManualRow,
     removePeriodicStockDraftItem,
     savePeriodicStockDraftMeta,
     flushPeriodicStockDraftRows,
@@ -1110,6 +1118,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // and fixable the moment it's made.
   const [catalogRowSaveError, setCatalogRowSaveError] = useState<Record<string, string>>({});
   const [manualRowSaveError, setManualRowSaveError] = useState<Record<number, string>>({});
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization,
+  // Stage 1-to-live-UI integration] Tracks migration's own progress
+  // across a draft resume. 'idle' before any resume has run this
+  // session; 'migrating' while legacy rows are being processed;
+  // 'complete' once every legacy row has resolved to migrated,
+  // already-migrated, or deleted, with no ambiguous rows remaining;
+  // 'blocked' if any row resolved to 'ambiguous' — finalization must
+  // never proceed while this is 'blocked', per the approved
+  // architecture's fail-closed principle.
+  const [migrationStatus, setMigrationStatus] = useState<'idle' | 'migrating' | 'complete' | 'blocked'>('idle');
+  const [ambiguousMigrationKeys, setAmbiguousMigrationKeys] = useState<string[]>([]);
   const [productSearch, setProductSearch] = useState('');
   // [Implementation Authorization — Periodic Contagem Keyboard
   // Shortcuts, docs/engineering/periodic-contagem-keyboard-shortcuts-
@@ -4087,8 +4106,40 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // this draft was last saved simply isn't in `periodicStockDraft.items`
   // yet, so it's merged in here as a fresh blank row, same reasoning as
   // that effect's own merge-only behavior.
-  const handleResumeDraft = () => {
+  const handleResumeDraft = async () => {
     if (!periodicStockDraft) return;
+    // [Periodic Contagem Expanded Phase 2 — Implementation
+    // Authorization, Stage 1-to-live-UI integration] Migration runs
+    // first, before this resume builds its own row state. Uses a
+    // fresh read internally (migrateAllLegacyPeriodicRows), not the
+    // reactive listener's current state, specifically because that
+    // listener may not yet reflect the writes this step is about to
+    // make. After migration settles, the state-building logic below
+    // reads from periodicStockDraftItemsByKey as it currently exists
+    // in this render — if the live listener has not yet caught up to
+    // the just-completed migration writes, the resumed rows may
+    // briefly still display under their legacy keys for one render;
+    // this is not unsafe (no wrong row is touched, no content is
+    // lost) and self-corrects automatically via the SAME reactive
+    // "live adoption" mechanism already governing every other update
+    // on this page, once the listener's next snapshot event arrives —
+    // it is a momentary display characteristic, not a data-integrity
+    // gap. Ambiguous rows are tracked and block finalization
+    // separately (handleRequestConfirmation, below), never silently
+    // ignored.
+    setMigrationStatus('migrating');
+    try {
+      const { ambiguousKeys } = await migrateAllLegacyPeriodicRows();
+      setAmbiguousMigrationKeys(ambiguousKeys);
+      setMigrationStatus(ambiguousKeys.length > 0 ? 'blocked' : 'complete');
+    } catch {
+      // A migration failure here must not prevent the operator from
+      // resuming and continuing to work with whatever rows already
+      // have a resolved identity — surfaced as 'blocked' (the same,
+      // conservative fail-closed state) rather than silently treated
+      // as 'complete'.
+      setMigrationStatus('blocked');
+    }
     const nextCatalogRows: CatalogRowState = {};
     const nextManualRows: StockCountWorkingRow[] = [];
     for (const item of periodicStockDraft.items) {
@@ -5778,6 +5829,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // tree around it.
     if (subscriptionBlocksNewRecords) return;
 
+    // [Periodic Contagem Expanded Phase 2 — Implementation
+    // Authorization, Stage 1-to-live-UI integration] A draft whose
+    // migration resolved any row as ambiguous must never reach
+    // finalization — the fail-closed principle this entire
+    // architecture is built on. Guarded at this exact entry point,
+    // matching the belt-and-suspenders discipline already used for
+    // subscriptionBlocksNewRecords immediately above.
+    if (migrationStatus === 'blocked') {
+      setError(
+        `Existem ${ambiguousMigrationKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+      );
+      return;
+    }
+
     // [Owner-only finalization — Product Architect decision] Only the
     // Owner/Admin may ever finalize a Contagem — matching
     // firestore.rules' own `stockCounts`/`businessWorthSnapshots`
@@ -6063,6 +6128,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // one path that could otherwise finalize a NEW StockCount — §12's
     // explicit requirement.
     if (subscriptionBlocksNewRecords) return;
+    // [Periodic Contagem Expanded Phase 2 — Implementation
+    // Authorization, Stage 1-to-live-UI integration] Same
+    // belt-and-suspenders reasoning as immediately above —
+    // handleRequestConfirmation's own identical guard already prevents
+    // pendingTally from ever being set while migration is blocked, but
+    // this is the actual, final write-triggering action, so it is
+    // guarded here explicitly too, not left to rely solely on the
+    // earlier screen having enforced it correctly.
+    if (migrationStatus === 'blocked') return;
     // [Owner-only finalization — Product Architect decision] Same
     // belt-and-suspenders reasoning as immediately above, and as
     // handleRequestConfirmation's own identical guard: in practice

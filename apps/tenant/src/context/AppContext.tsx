@@ -993,6 +993,12 @@ interface AppContextType {
   // stable destination identity. See the function's own definition,
   // below, for the complete absent-source/collision-handling contract.
   migratePeriodicLegacyManualRow: (legacyKey: string) => Promise<'migrated' | 'already-migrated' | 'deleted' | 'ambiguous'>;
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization,
+  // Stage 1-to-live-UI integration] Batch entry point for draft
+  // resume — discovers and migrates every legacy row via a fresh
+  // read. See the function's own definition for why a fresh read,
+  // rather than the reactive listener's current state, is required.
+  migrateAllLegacyPeriodicRows: () => Promise<{ ambiguousKeys: string[] }>;
   // [Decisions 44-56 — Periodic Contagem Shared Live Data; Decision
   // 55 §5 items 1-6] The true rowKey -> row map, exposed so UI callers
   // (conflict rendering/resolution) can address a specific row without
@@ -7586,6 +7592,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     });
   };
 
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization,
+  // Stage 1-to-live-UI integration] Discovers and migrates every
+  // legacy manual:{index}-keyed row for the active business's periodic
+  // draft, via a fresh, one-time read — deliberately not the reactive
+  // listener's own current state, since that state may not yet
+  // reflect writes this same call is about to make. Sequential, not
+  // parallel: each row's own transaction is already safe to run
+  // concurrently with another (confirmed this engagement's own
+  // investigation), but running them one at a time here keeps this
+  // function's own behavior simple to reason about and avoids
+  // unnecessary Firestore write contention on the shared meta document
+  // during nextOrderIndex seeding. Returns which keys, if any, resolved
+  // ambiguous — the caller is responsible for surfacing that and
+  // blocking finalization; this function itself never recreates a
+  // tombstoned row and never overwrites anything, by construction (see
+  // migratePeriodicLegacyManualRow's own documented safety properties).
+  const migrateAllLegacyPeriodicRows = async (): Promise<{ ambiguousKeys: string[] }> => {
+    if (!activeBusinessId) return { ambiguousKeys: [] };
+    const itemsSnap = await getDocs(
+      collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items')
+    );
+    const legacyKeys = itemsSnap.docs
+      .map((d) => d.id)
+      .filter((key) => /^manual:\d+$/.test(key));
+    const ambiguousKeys: string[] = [];
+    for (const legacyKey of legacyKeys) {
+      const outcome = await migratePeriodicLegacyManualRow(legacyKey);
+      if (outcome === 'ambiguous') ambiguousKeys.push(legacyKey);
+    }
+    return { ambiguousKeys };
+  };
+
   const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!currentUser) throw new Error('Sessão não autenticada.');
@@ -9829,6 +9867,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         savePeriodicStockDraftItem,
         allocatePeriodicOrderIndex,
         migratePeriodicLegacyManualRow,
+        migrateAllLegacyPeriodicRows,
         resolvePeriodicConflict,
         correctOpenConflictCountIfDrifted,
         deletePeriodicManualRow,

@@ -683,7 +683,7 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
   it('handleRequestConfirmation — the true entry point into the review screen — returns early for a non-Owner, matching the existing subscriptionBlocksNewRecords belt-and-suspenders guard immediately above it', () => {
     const start = viewSource.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
     assert.notEqual(start, -1, 'could not locate handleRequestConfirmation');
-    const body = viewSource.slice(start, start + 2000);
+    const body = viewSource.slice(start, start + 3200);
     const subscriptionGuardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
     const ownerGuardIdx = body.indexOf('if (!isOwner) return;');
     assert.notEqual(subscriptionGuardIdx, -1, 'the pre-existing subscription guard must still be present, unmodified');
@@ -699,7 +699,11 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
     // (identity resolution, scoped to type !== 'initial') sits between
     // the Owner guard and setIsSaving(true), pushing the distance to
     // 2334 chars.
-    const body = viewSource.slice(start, start + 2600);
+    // [Periodic Contagem Expanded Phase 2 — live-UI integration]
+    // Widened again, 2600 to 4200: the new migration-blocked guard
+    // added immediately after the subscription guard pushes the
+    // distance to 3760 chars.
+    const body = viewSource.slice(start, start + 4200);
     assert.match(body, /if \(!pendingTally\) return;/);
     assert.match(body, /if \(subscriptionBlocksNewRecords\) return;/);
     assert.match(body, /if \(!isOwner\) return;/);

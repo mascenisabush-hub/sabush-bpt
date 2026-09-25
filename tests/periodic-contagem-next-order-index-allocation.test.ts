@@ -73,7 +73,7 @@ describe('allocatePeriodicOrderIndex — transactional nextOrderIndex allocation
   it('is exposed through the actual context value, alongside savePeriodicStockDraftItem', () => {
     assert.match(
       appContextSource,
-      /savePeriodicStockDraftItem,\s*\n\s*allocatePeriodicOrderIndex,\s*\n\s*migratePeriodicLegacyManualRow,\s*\n\s*resolvePeriodicConflict,/
+      /savePeriodicStockDraftItem,\s*\n\s*allocatePeriodicOrderIndex,\s*\n\s*migratePeriodicLegacyManualRow,\s*\n\s*migrateAllLegacyPeriodicRows,\s*\n\s*resolvePeriodicConflict,/
     );
   });
 });

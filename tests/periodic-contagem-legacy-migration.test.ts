@@ -163,7 +163,7 @@ describe('migratePeriodicLegacyManualRow — legacy manual-row migration', () =>
   it('is exposed through the actual context value', () => {
     assert.match(
       appContextSource,
-      /allocatePeriodicOrderIndex,\s*\n\s*migratePeriodicLegacyManualRow,\s*\n\s*resolvePeriodicConflict,/
+      /allocatePeriodicOrderIndex,\s*\n\s*migratePeriodicLegacyManualRow,\s*\n\s*migrateAllLegacyPeriodicRows,\s*\n\s*resolvePeriodicConflict,/
     );
   });
 });
