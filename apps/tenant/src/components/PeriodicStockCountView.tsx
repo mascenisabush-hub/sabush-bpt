@@ -3758,7 +3758,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // typed quantity/price data on a single misclick] Only prompts when
   // there's real data to lose — a still-blank manually-added row
   // removes instantly, same as before.
-  const handleRemoveManualRow = (index: number) => {
+  const handleRemoveManualRow = async (index: number) => {
     const row = manualRows[index];
     if (
       row &&
@@ -3768,74 +3768,49 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
     submissionIdRef.current = null;
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 2]
+    // Replaces the entire prior reindex-save mechanism. Every manual
+    // row now has a genuine, position-independent stable key
+    // (sourceRowKey — see createManualRow/handleAddPortionToManualGroup,
+    // both fixed as this integration's own prerequisite) — deleting
+    // one row therefore never requires touching, re-saving, or
+    // re-keying any other row's own persisted document. If this row
+    // was never actually saved (sourceRowKey absent — created this
+    // session, removed before its first save completed), there is
+    // nothing server-side to delete at all; only the local array
+    // entry is removed.
+    if (row?.sourceRowKey) {
+      const outcome = await deletePeriodicManualRow(row.sourceRowKey);
+      if (outcome === 'ambiguous') {
+        // [Integration Point 2 — fail-closed, per the approved
+        // architecture] The authoritative row must remain exactly as
+        // it was — never silently removed from local state on an
+        // unresolved server outcome. Surfaced via the existing
+        // manualRowSaveError channel, keyed by this row's own current
+        // index, matching every other per-row error this file already
+        // shows the same way.
+        setManualRowSaveError((prev) => ({
+          ...prev,
+          [index]: 'Não foi possível remover esta linha com segurança — o estado não pôde ser confirmado. Tente novamente.',
+        }));
+        return;
+      }
+    }
     // [Bug fix — same-index manual-row collision] Base is
     // manualRowsRef.current, not the manualRows closure variable.
-    //
-    // [Bug fix — Option B, sourceRowKey stamping point 3 of 3] Every
-    // row at or after `index` is about to be re-saved under a NEW
-    // target key below (this function's own existing reindex
-    // behavior — unchanged) — its `sourceRowKey` must be updated to
-    // match in this SAME synchronous step, or it goes stale the
-    // instant this removal happens: a row's own `sourceRowKey` from
-    // before this point would still name a Firestore document that
-    // this exact reindex is about to overwrite with a DIFFERENT row's
-    // content. Updated here, before the async saves below even fire,
-    // so local state and the true post-reindex target key are never
-    // out of sync, even momentarily.
-    const nextManualRows = manualRowsRef.current
-      .filter((_, i) => i !== index)
-      .map((row, i) => (i >= index ? { ...row, sourceRowKey: `manual:${i}` } : row));
+    const nextManualRows = manualRowsRef.current.filter((_, i) => i !== index);
     setManualRowsSynced(nextManualRows);
-    // [Bug fix — per-product independent draft persistence] Manual
-    // rows persist as individual `manual:{index}` documents
-    // (scheduleRowDraftSave's own rowKey convention) — removing a row
-    // shifts every LATER row down by one position in memory, so their
-    // PERSISTED documents need the identical reindex, or a later row's
-    // saved data would sit under its OLD key while a different row now
-    // occupies that index, and the removed row's own now-excess tail
-    // document would be orphaned in Firestore forever. Only rows at or
-    // after `index` actually moved — rows before it keep their existing
-    // key/content untouched. Fire-and-forget, matching every other
-    // autosave call in this file; the ordinary '__meta__' save
-    // scheduled below already drives the visible draftSaveState
-    // indicator for this action.
-    //
-    // [Emergency fix follow-up — same stale-same-writer gap the ordinary
-    // per-row edit path at scheduleRowDraftSave/performRowSaveAttempt was
-    // patched for (2737ffa), applied here] This call site was explicitly
-    // left unaudited by that emergency fix. It has the identical
-    // vulnerability: a dormant device (same account signed in elsewhere,
-    // e.g. a phone left open beside the active desktop) holds its own
-    // stale copy of `manualRows` in memory. If a removal fires from that
-    // dormant device — or this device's own in-memory rows are simply
-    // behind what another editor already wrote to these target keys —
-    // this reindex writes shift stale content into `manual:{i}` for
-    // every row at/after `index`, sharing this session's own UID with
-    // whatever is already on the server, which without a baseRev check
-    // is accepted unconditionally and silently discards newer real data
-    // with zero conflict, zero warning. Passing `rev`, this device's own
-    // last-known server rev for the exact TARGET key each write lands
-    // on (not the source row's rev — the target document is what the
-    // transaction compares against), routes a stale reindex write to
-    // the same genuine-collision/CONFLICT path an ordinary stale edit
-    // now takes, instead of letting it win by default.
-    nextManualRows.forEach((row, i) => {
-      if (i >= index) {
-        const targetKey = `manual:${i}`;
-        const knownRev = latestPeriodicStockDraftItemsByKeyRef.current[targetKey]?.rev;
-        savePeriodicStockDraftItem(targetKey, { ...workingRowToDraftItem(row), rev: knownRev }).catch(() => {});
-      }
-    });
-    removePeriodicStockDraftItem(`manual:${manualRows.length - 1}`).catch(() => {});
-    // [Decision 39a; Implementation Authorization §1 item 5] Re-index
-    // the manual-row timer map FIRST — mirroring
-    // `manualRowSaveError`'s own existing pattern immediately below,
-    // exactly (same i < index / i > index shift) — so a pending timer
-    // scheduled against a later row never
-    // ends up firing under a now-reused, different row's index. The
-    // removed row's own timer (if any) is cancelled outright; every
-    // later row's timer is re-keyed, never cancelled, so its own
-    // pending edit is not lost, only correctly re-addressed.
+    // [Decision 39a; Implementation Authorization §1 item 5] Local UI
+    // bookkeeping only — rowDebounceTimersRef and manualRowSaveError
+    // remain array-index-keyed (unlike the row's own persisted
+    // identity, now stable), so a pending timer or displayed error
+    // still needs re-addressing to the now-shifted index of whatever
+    // row remains in that slot. This is purely cosmetic/local
+    // re-indexing, not a data-persistence operation — nothing here
+    // touches Firestore, and getting it wrong at worst misattributes
+    // a local error message or timer, never loses or misidentifies
+    // persisted data. Unchanged from the prior mechanism's own
+    // equivalent logic.
     const removedKey = `manual:${index}`;
     const removedTimer = rowDebounceTimersRef.current.get(removedKey);
     if (removedTimer) clearTimeout(removedTimer);
@@ -3855,22 +3830,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     rowDebounceTimersRef.current = shifted;
     scheduleRowDraftSave('__meta__');
     // [Feature — per-row Save + confirm] `manualRowSaveError` is keyed
-    // by array index, same as every other manual-row identity in this
-    // file (updateManualRow, this function itself) — removing a row
-    // shifts every LATER index down by one, so this map is re-indexed
-    // here or a later row's error status would silently attach to the
-    // wrong row after this deletion.
-    // [Decision 40 — Validar Workflow, FR-N9; Implementation
-    // Authorization §1 items 4/8] `validated` status needs NO
-    // equivalent re-indexing block here — it was moved off a
-    // parallel, index-keyed Set (`confirmedManualRowIndices`, removed)
-    // and onto the row object itself (`StockCountWorkingRow.validated`).
-    // `manualRows.filter((_, i) => i !== index)`, above, already
-    // carries each remaining row's own `validated` flag forward with
-    // it automatically, exactly like it already carries `quantity`/
-    // `costPrice`/every other field — this is the concrete
-    // simplification Rule 8 §C/this Plan's §1c named as the reason to
-    // store validated state on the row rather than in a Set.
+    // by array index — removing a row shifts every LATER index down
+    // by one, so this map is re-indexed here or a later row's error
+    // status would silently attach to the wrong row after this
+    // deletion.
     setManualRowSaveError((prev) => {
       const next: Record<number, string> = {};
       Object.entries(prev).forEach(([key, value]) => {
