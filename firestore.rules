@@ -1644,6 +1644,36 @@ service cloud.firestore {
 
           allow delete: if isActiveContagemEditor(businessId);
         }
+
+        // [Periodic Contagem Expanded Phase 2 — Implementation
+        // Authorization §2 item 12, Stage 10] Tombstones — deletion
+        // evidence, used by both the migration algorithm (distinguishing
+        // "intentionally deleted" from a genuinely ambiguous absent
+        // legacy row) and the deletion-redirect algorithm's own
+        // idempotency check. Same permission level as the periodic
+        // items block immediately above, matching this design's own
+        // established principle that tombstone-writing is part of the
+        // same coordinated act as the row deletion it records, not a
+        // separately-privileged operation.
+        match /tombstones/{key} {
+          allow read: if isMemberOf(businessId);
+
+          // Written once, atomically, in the same client transaction
+          // as the row deletion (or migration redirect) it records —
+          // never updated afterward. Deliberately no `allow update`
+          // rule: a tombstone is immutable once created, consistent
+          // with it being deletion EVIDENCE, not a mutable status
+          // field.
+          allow create: if isActiveContagemEditor(businessId) &&
+            request.resource.data.get('deletedAt', null) is string &&
+            request.resource.data.get('deletedByUid', null) == request.auth.uid;
+
+          // [Stage 5] Deleted only at the two draft-lifecycle
+          // endpoints (successful finalization, explicit "Começar de
+          // novo") — never on a timer, per the recorded non-negotiable
+          // that no expiry-based tombstone cleanup exists.
+          allow delete: if isActiveContagemEditor(businessId);
+        }
       }
 
       // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
