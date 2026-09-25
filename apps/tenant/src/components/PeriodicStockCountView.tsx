@@ -1557,8 +1557,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   useEffect(() => {
     if (!periodicStockDraftLoaded) return;
     if (!periodicStockDraft) return;
+    // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+    // §2 item 5, Stage 6] Previously `(!item.productId && item.productName.trim() !== '')`
+    // — this engagement's own investigation confirmed this relied on
+    // manual rows never carrying productId as an implicit signal.
+    // Now that Stage 6 retains productId on manual rows matched to an
+    // existing product, that assumption no longer holds: a row with a
+    // real product match but still-blank quantity is normal, common,
+    // and genuinely meaningful — the correct question was always
+    // whether a product name is present, not whether productId is
+    // absent. Identical fix applied at all four sites that previously
+    // used this exact condition (confirmed via repository-wide search,
+    // no other occurrence exists).
     const hasMeaningfulContent = periodicStockDraft.items.some(
-      (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
+      (item) => item.quantity.trim() !== '' || (item.productName.trim() !== '')
     );
     if (hasMeaningfulContent && !draftBannerDismissed) return;
     if (periodicStockDraft.updatedAt === lastLocalDraftWriteRef.current) return;
@@ -1642,7 +1654,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (!periodicStockDraftLoaded) return;
     if (periodicStockDraft) {
       const hasMeaningfulContent = periodicStockDraft.items.some(
-        (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
+        (item) => item.quantity.trim() !== '' || (item.productName.trim() !== '')
       );
       if (hasMeaningfulContent && !draftBannerDismissed) return;
     }
@@ -3568,6 +3580,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       };
       resolvedFields = applySellingConfigurationEditRules(currentRow, fields, product, groupReference, options?.isReferenceDerived);
     }
+    // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+    // §2 item 4C, Stage 6] A name change on an already-identified row
+    // must clear its existing productId immediately, in this same
+    // synchronous update — never silently retaining the previous
+    // product's identity under new text. Deliberately does NOT
+    // re-match the new text against the catalog in this same
+    // operation (rule C) — that is the separate, later-timed
+    // useEffect below (rule D), genuinely decoupled in time from this
+    // call. Rule E — explicit identity precedence — is respected by
+    // checking first whether the incoming `fields` itself already
+    // supplies a new productId; if so, that explicit value is never
+    // overridden by this clearing logic. Applied AFTER
+    // applySellingConfigurationEditRules so this is the final word on
+    // productId for this update, not something that rule could
+    // silently reintroduce.
+    if (
+      currentRow &&
+      fields.productName !== undefined &&
+      fields.productName !== currentRow.productName &&
+      fields.productId === undefined
+    ) {
+      resolvedFields = { ...resolvedFields, productId: undefined };
+    }
     // [Bug fix — same-index manual-row collision] Base is
     // manualRowsRef.current, not the manualRows closure variable — see
     // manualRowsRef's own declaration comment.
@@ -3584,6 +3619,33 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // row — see rowHasUnsavedLocalEditRef's own declaration comment).
     scheduleRowDraftSave(`manual:${index}`, nextManualRows[index].sourceRowKey ?? `manual:${index}`);
   };
+
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §2 items 4A/4D, Stage 6] Generalizes exact-match productId
+  // assignment to every manual row, not only rows created via
+  // "+ Adicionar Porção" (handleAddPortionToManualGroup, above, now
+  // already retains the ID at creation time for that specific path).
+  // Deliberately a separate effect, not fused into updateManualRow's
+  // own rename-clearing logic — this is rule D ("a later exact match
+  // may assign a new productId"), genuinely decoupled in time from
+  // any rename, since an effect only runs after the render caused by
+  // the state update that cleared productId has already committed,
+  // never within that same synchronous operation (rule C). Naturally
+  // self-terminating: once a row's productId is assigned, it no
+  // longer satisfies this effect's own condition on the next render,
+  // so this never loops.
+  useEffect(() => {
+    manualRows.forEach((row, index) => {
+      if (row.productId) return;
+      const trimmedName = row.productName.trim().toLowerCase();
+      if (!trimmedName) return;
+      const matchedProduct = products.find((p) => p.name.trim().toLowerCase() === trimmedName);
+      if (matchedProduct) {
+        updateManualRow(index, { productId: matchedProduct.id });
+      }
+    });
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [manualRows, products]);
 
   const handleAddManualRow = () => {
     submissionIdRef.current = null;
@@ -3829,10 +3891,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // occur in practice — this handler is only ever invoked for an
     // already-known group/product name), falls back to the existing,
     // unmodified wholly-blank createManualRow() behavior.
+    // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+    // §2 item 4A, Stage 6] `productId: undefined` removed — this was
+    // the deliberate override this engagement's own investigation
+    // identified: matchedProduct's real ID was already looked up,
+    // above, and buildCatalogRow already includes it; this line simply
+    // discarded it. Retaining it here is the entire fix rule A
+    // requires — matchedProduct is only ever set when the exact-match
+    // lookup, above, genuinely found a single existing product.
     const trimmedName = groupDisplayName.trim().toLowerCase();
     const matchedProduct = products.find((p) => p.name.trim().toLowerCase() === trimmedName);
     let newRow: StockCountWorkingRow = matchedProduct
-      ? { ...buildCatalogRow(matchedProduct), productId: undefined, productName: groupDisplayName }
+      ? { ...buildCatalogRow(matchedProduct), productName: groupDisplayName }
       : { ...createManualRow(), productName: groupDisplayName };
     // [Implementation Authorization §14 item 1 — closes Rule 8
     // Assessment §17.1 Gap B] If this product's group already has an
@@ -3915,7 +3985,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       if (productKeyFor(row.productName) === groupKey) acc.push(index);
       return acc;
     }, []);
-    const nextManualRows = manualRowsRef.current.map((row) => (productKeyFor(row.productName) === groupKey ? { ...row, productName: newName } : row));
+    // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+    // §2 item 4C, Stage 6] Same rule as updateManualRow's own solo-row
+    // rename handling, immediately above — a bulk rename must also
+    // clear productId, never silently retaining the previous
+    // product's identity under new text.
+    const nextManualRows = manualRowsRef.current.map((row) =>
+      productKeyFor(row.productName) === groupKey ? { ...row, productName: newName, productId: undefined } : row
+    );
     setManualRowsSynced(nextManualRows);
     // [Decision 39a] A bulk rename spans potentially several manual
     // rows at once, not one row's own edit — scheduled under '__meta__'
@@ -4177,7 +4254,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // here) — same reasoning as the remote-update-notice effect's own
     // identical duplication, above.
     const hasMeaningfulContent = periodicStockDraft.items.some(
-      (item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== '')
+      (item) => item.quantity.trim() !== '' || (item.productName.trim() !== '')
     );
     if (!hasMeaningfulContent) {
       autoResumedRef.current = true;
@@ -7233,7 +7310,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // write, or was created and abandoned before any quantity was typed)
   // isn't worth interrupting the operator's flow with a banner over.
   const draftHasMeaningfulContent = (draft: PeriodicStockDraft | null): boolean =>
-    !!draft && draft.items.some((item) => item.quantity.trim() !== '' || (!item.productId && item.productName.trim() !== ''));
+    !!draft && draft.items.some((item) => item.quantity.trim() !== '' || (item.productName.trim() !== ''));
 
   // Gate the main form on resolving the stale-draft banner (§6: never
   // silently auto-loaded) — but only when there's actually something to
