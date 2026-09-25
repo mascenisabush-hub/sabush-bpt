@@ -7406,6 +7406,41 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...content
     } = item;
 
+    // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+    // §1 item 6, D1 write contract] `migratedFromLegacyKey` and
+    // `orderIndex` are lifecycle/identity-adjacent fields (per
+    // PeriodicStockDraftItem's own doc comment) — a caller performing
+    // an ordinary content edit (e.g. `updateManualRow`, whose own
+    // `StockCountWorkingRow` shape does not carry either field) would
+    // never include them in `content` above, and this transaction's
+    // three non-conflict branches are all full-document `tx.set()`
+    // writes — so without this explicit preservation, the very next
+    // ordinary edit after a row is migrated (or after a new row's
+    // `orderIndex` is allocated) would silently erase both fields from
+    // the stored document, exactly the class of defect D1 exists to
+    // close. Preserved from `current` whenever the caller's own
+    // `content` doesn't explicitly supply a value — mirroring
+    // `firstWriteAt`'s own established `current.firstWriteAt ?? ...`
+    // preservation pattern immediately below, generalized to two
+    // fields via one small local helper rather than repeating the
+    // conditional three times. Never included as a literal `undefined`
+    // key — this codebase's own established discipline (confirmed
+    // throughout this file and `types.ts`): a key is either present
+    // with a real value, or entirely absent from the object literal,
+    // exactly how `conflict` is already handled in these same three
+    // branches (never a key at all unless the conflict branch itself
+    // sets it).
+    const preservedLifecycleFields = (
+      currentDoc: PeriodicStockDraftItem | null
+    ): Partial<Pick<PeriodicStockDraftItem, 'migratedFromLegacyKey' | 'orderIndex'>> => {
+      const migratedFromLegacyKey = content.migratedFromLegacyKey ?? currentDoc?.migratedFromLegacyKey;
+      const orderIndex = content.orderIndex ?? currentDoc?.orderIndex;
+      return {
+        ...(migratedFromLegacyKey !== undefined ? { migratedFromLegacyKey } : {}),
+        ...(orderIndex !== undefined ? { orderIndex } : {}),
+      };
+    };
+
     await runTransaction(db, async (tx) => {
       const [currentSnap, metaSnap] = await Promise.all([tx.get(itemRef), tx.get(metaRef)]);
       const current = currentSnap.exists() ? (currentSnap.data() as PeriodicStockDraftItem) : null;
@@ -7450,6 +7485,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // First write for this row.
         tx.set(itemRef, {
           ...content,
+          ...preservedLifecycleFields(null),
           rev: 1,
           state: 'ACCEPTED',
           lastWriterUid: currentUser.uid,
@@ -7474,6 +7510,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         // Advance rev/writer, no conflict.
         tx.set(itemRef, {
           ...content,
+          ...preservedLifecycleFields(current),
           rev: currentRev + 1,
           state: 'ACCEPTED',
           lastWriterUid: currentUser.uid,
@@ -7558,6 +7595,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       if (current.lastWriterUid === currentUser.uid && (baseRev === undefined || baseRev === currentRev)) {
         tx.set(itemRef, {
           ...content,
+          ...preservedLifecycleFields(current),
           rev: currentRev + 1,
           state: 'ACCEPTED',
           lastWriterUid: currentUser.uid,
