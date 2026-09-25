@@ -2831,7 +2831,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
     if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
-    reopenExistingProductForEditing(productKeyFor(row.productName));
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 3, Step
+    // 1] productId is already this function's own parameter — a
+    // catalog row's own explicit identity.
+    reopenExistingProductForEditing(productKeyFor(row.productName), productId);
   };
 
   // [Manual data-entry error investigation, Finding 3 — Owner-requested]
@@ -2925,15 +2928,48 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // `manualRows` live (a plain function call, not a memo), so it
   // always captures whatever rows currently share this key at the
   // exact instant it's called.
-  const computeWorkspaceRowIdentity = (key: string): { catalogIds: string[]; manualIndices: number[] } => ({
-    catalogIds: Object.entries(catalogRows)
-      .filter(([, row]) => !row.removed && productKeyFor(row.productName) === key)
-      .map(([id]) => id),
-    manualIndices: manualRows
-      .map((row, index) => ({ row, index }))
-      .filter(({ row }) => !row.removed && productKeyFor(row.productName) === key)
-      .map(({ index }) => index),
-  });
+  // [Periodic Contagem Expanded Phase 2 — Integration Point 3, Step 1]
+  // Corrected: workspace membership now prefers an explicit productId
+  // over name matching, closing the exact risk the design assessment
+  // identified — two different, explicitly-identified products
+  // sharing a display name must never be merged into one workspace.
+  //
+  // With an explicit productId supplied: matches ONLY the catalog row
+  // at that exact id (a catalog row's own key IS its productId, so
+  // this is a direct lookup, never a name comparison) and ONLY manual
+  // rows whose own `productId` field equals it exactly — name is
+  // never consulted at all in this branch.
+  //
+  // Without one (a genuinely productId-less activation): falls back
+  // to name matching, but explicit identity still takes precedence —
+  // every catalog row inherently carries its own explicit productId,
+  // so catalogIds is always empty here; only manual rows that are
+  // THEMSELVES productId-less are matched by name. A row carrying its
+  // own explicit productId is never silently pulled into a
+  // productId-less fallback workspace merely because its name
+  // coincides.
+  const computeWorkspaceRowIdentity = (
+    nameKey: string,
+    explicitProductId?: string
+  ): { catalogIds: string[]; manualIndices: number[] } => {
+    if (explicitProductId) {
+      return {
+        catalogIds:
+          catalogRows[explicitProductId] && !catalogRows[explicitProductId].removed ? [explicitProductId] : [],
+        manualIndices: manualRows
+          .map((row, index) => ({ row, index }))
+          .filter(({ row }) => !row.removed && row.productId === explicitProductId)
+          .map(({ index }) => index),
+      };
+    }
+    return {
+      catalogIds: [],
+      manualIndices: manualRows
+        .map((row, index) => ({ row, index }))
+        .filter(({ row }) => !row.removed && !row.productId && productKeyFor(row.productName) === nameKey)
+        .map(({ index }) => index),
+    };
+  };
 
   // [Business Worth Evolution — Decision 37, B.1: Product-Level
   // First-Time Contagem Information Panel; B.2: Arbitrary-Length
@@ -3910,7 +3946,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
     if (!window.confirm('Este produto já foi validado. Queres editá-lo?')) return;
-    reopenExistingProductForEditing(productKeyFor(row.productName));
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 3, Step
+    // 1] row.productId is this specific manual row's own explicit
+    // identity, if it has one.
+    reopenExistingProductForEditing(productKeyFor(row.productName), row.productId);
   };
 
   // [Business Worth Evolution — Decision 37, B.3: Multiple
@@ -4976,13 +5015,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     [pickerManualRowGroupsRaw, manualRows]
   );
 
-  const handleSelectExistingProductForWorkspace = (key: string) => {
+  const handleSelectExistingProductForWorkspace = (key: string, explicitProductId?: string) => {
     setActiveWorkspaceKey(key);
     setActiveNewManualRowIndex(null);
     // [Bug fix] Snapshot which rows belong to this workspace right now
     // — see activeWorkspaceRowIdentity's own declaration for why this
     // must never be re-derived from the live name afterward.
-    setActiveWorkspaceRowIdentity(computeWorkspaceRowIdentity(key));
+    setActiveWorkspaceRowIdentity(computeWorkspaceRowIdentity(key, explicitProductId));
     // [Existing-Product Edit/Confirm Workflow] Picking an ordinary,
     // not-yet-validated product from the picker table is never a
     // "reopen an already-counted product" action — clears any stale
@@ -5203,7 +5242,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
       return;
     }
-    handleSelectExistingProductForWorkspace(entry.activationKey);
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 3, Step
+    // 1] Derives the explicit productId, if any, directly from the
+    // clicked entry — a catalog entry's own id, or the current live
+    // productId of the specific manual row clicked (looked up by
+    // index here, at the moment of the click, not cached on the entry
+    // itself — the entry's own sourceRowKey/manualRowIndex already
+    // identify exactly which row this is).
+    const explicitProductId =
+      entry.kind === 'catalog'
+        ? entry.catalogProductId ?? undefined
+        : entry.manualRowIndex !== null
+          ? manualRows[entry.manualRowIndex]?.productId
+          : undefined;
+    handleSelectExistingProductForWorkspace(entry.activationKey, explicitProductId);
   };
 
   // [Implementation Authorization — Periodic Contagem Keyboard
@@ -5428,7 +5480,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // by construction. No new row is created; no new activation pathway
   // is introduced; this is the exact same `handleSelectExistingProductForWorkspace`
   // mechanism, just reached from a second entry point.
-  const reopenExistingProductForEditing = (key: string) => {
+  const reopenExistingProductForEditing = (key: string, explicitProductId?: string) => {
     // [Single-Active-Product Rule, §9] Defense in depth — the
     // "Editar" buttons that call this are already `disabled` (below)
     // whenever a DIFFERENT product is active, exactly like the
@@ -5443,7 +5495,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // for why this must never be re-derived from the live name
     // afterward — this is the one fix for "editing the name makes the
     // whole workspace disappear."
-    setActiveWorkspaceRowIdentity(computeWorkspaceRowIdentity(key));
+    setActiveWorkspaceRowIdentity(computeWorkspaceRowIdentity(key, explicitProductId));
     // [Voltar edge-case fix] Snapshot WHICH rows are validated for this
     // product right now — BEFORE the un-validation below touches
     // anything — by their stable identity only (catalog row id / manual
