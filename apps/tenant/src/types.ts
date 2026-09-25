@@ -1570,7 +1570,32 @@ export interface PeriodicStockDraftItem {
     resolverRole?: 'owner' | 'delegate';
     resolvedAt?: string; // ISO string
   };
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 items 1, 4] Additive, optional, following this interface's own
+  // "omit entirely when absent" discipline — no row written before
+  // this feature exists has either field.
+  //
+  // Present only on a manual row created by migrating a legacy
+  // `manual:{index}`-keyed document to its new, stable, non-positional
+  // key. Provenance/audit information only — never itself the
+  // authority for a destructive operation (deletion targets a row's
+  // own stable key, never this field). Absent on catalog rows, on
+  // genuinely new manual rows, and on any manual row not yet migrated.
+  migratedFromLegacyKey?: string;
+  // Durable ordering, deliberately separate from identity (the
+  // document key) and from `entrySequence` (session-local, ephemeral,
+  // never persisted — confirmed insufficient for this purpose during
+  // this engagement's own investigation). A migrated row's value is
+  // its legacy numeric suffix, preserving relative order exactly. A
+  // genuinely new row's value is transactionally allocated from the
+  // parent draft's own `nextOrderIndex` counter (see
+  // `PeriodicStockDraftMeta`, below), guaranteeing distinct values
+  // under concurrent clients. Absent on any row not yet migrated/
+  // created under this scheme; read sites treat absence as
+  // sort-last, never as zero.
+  orderIndex?: number;
 }
+
 
 // [Decisions 44-56 — Periodic Contagem Shared Live Data; Technical
 // Design §8] One preserved physical observation inside a `conflict`
@@ -1661,6 +1686,19 @@ export interface PeriodicStockDraft {
   // is correctly never blocked from finalizing for a reason that does
   // not apply to it).
   openConflictCount?: number;
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §1 items 2, 3] Denormalized allocation counter for `orderIndex`
+  // (see `PeriodicStockDraftItem`, above), maintained transactionally
+  // in the SAME transaction that allocates a value from it — never
+  // derived by a separate read/recompute step, mirroring
+  // `openConflictCount`'s own established pattern immediately above.
+  // Seeded, during migration, to one past the highest legacy-suffix-
+  // derived `orderIndex` found in the draft, so every genuinely new
+  // row sorts after every migrated one. Never decremented on row
+  // deletion. Absent = 0 = no new-row allocation has occurred yet for
+  // this draft (a business whose draft predates this feature, or has
+  // no manual rows at all, is unaffected).
+  nextOrderIndex?: number;
   updatedAt: string; // ISO string
 }
 
