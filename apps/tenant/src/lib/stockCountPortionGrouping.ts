@@ -191,3 +191,72 @@ export function groupRowsByProductName<T extends PortionGroupableRow>(rows: T[])
 
   return groups;
 }
+
+// ------------------------------------------------------------------
+// [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+// §2 items 4A/4F, Stage 7] Combined catalog + manual product grouping.
+// Presentation-only, exactly like groupRowsByProductName above — no
+// persistence, no financial aggregation, no change to any underlying
+// row's own identity or content. Distinct from groupRowsByProductName
+// in one deliberate way: keys primarily on productId, falling back to
+// name only for rows genuinely lacking one, so that two different
+// products that happen to share a display name are NEVER merged —
+// the specific risk this engagement's own investigation flagged with
+// name-only matching. A row with a real productId can only ever land
+// in the group keyed by that exact ID; a same-named row with a
+// DIFFERENT (or absent) productId can never join it.
+// ------------------------------------------------------------------
+
+export interface IdentifiableGroupableRow extends PortionGroupableRow {
+  productId?: string;
+}
+
+/**
+ * Groups `rows` by product identity: primarily `productId` where
+ * present, falling back to the trimmed/lowercased product name only
+ * for rows without one — mirroring `groupRowsByProductName`'s own
+ * blank-name handling for the no-identity-at-all case. Two rows with
+ * different `productId`s are NEVER merged, even if their `productName`
+ * values are identical — the key spaces for "has an ID" and "falls
+ * back to name" are entirely disjoint (`id:{productId}` vs.
+ * `name:{trimmedLowerName}`), so a coincidental name match between a
+ * genuinely different product and this one can never cause them to be
+ * treated as the same displayed group.
+ */
+export function groupRowsByProductIdentity<T extends IdentifiableGroupableRow>(rows: T[]): RowGroup<T>[] {
+  const groups: RowGroup<T>[] = [];
+  const groupIndexByKey = new Map<string, number>();
+
+  for (const row of rows) {
+    if (row.productId) {
+      const key = `id:${row.productId}`;
+      const existingIndex = groupIndexByKey.get(key);
+      if (existingIndex === undefined) {
+        groupIndexByKey.set(key, groups.length);
+        groups.push({ key, displayName: row.productName, rows: [row] });
+      } else {
+        groups[existingIndex].rows.push(row);
+      }
+      continue;
+    }
+
+    const trimmed = row.productName.trim();
+    if (!trimmed) {
+      // Never grouped with anything — its own singleton, same
+      // reasoning as groupRowsByProductName's identical rule.
+      groups.push({ key: '', displayName: row.productName, rows: [row] });
+      continue;
+    }
+
+    const key = `name:${trimmed.toLowerCase()}`;
+    const existingIndex = groupIndexByKey.get(key);
+    if (existingIndex === undefined) {
+      groupIndexByKey.set(key, groups.length);
+      groups.push({ key, displayName: row.productName, rows: [row] });
+    } else {
+      groups[existingIndex].rows.push(row);
+    }
+  }
+
+  return groups;
+}

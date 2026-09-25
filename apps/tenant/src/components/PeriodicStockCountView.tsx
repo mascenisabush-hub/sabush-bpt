@@ -33,7 +33,7 @@ import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanoni
 // per this file's own established precedent (see ExistingProductSummary's
 // own header comment, below).
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
-import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
+import { computePortionLabels, groupRowsByProductName, groupRowsByProductIdentity } from '../lib/stockCountPortionGrouping';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
 import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
@@ -4542,6 +4542,35 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     () => groupRowsByProductName(manualRows.map((row, idx) => ({ id: `manual-${idx}`, idx, productName: row.productName }))),
     [manualRows]
   );
+
+  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
+  // §2 item 4F, Stage 7] Combined catalog + manual product grouping —
+  // the "one displayed product row" computation. Additive, alongside
+  // manualRowGroups above, not yet wired into unifiedListEntries'
+  // actual rendering (that wiring is its own, separately verified
+  // follow-on, matching this engagement's own established discipline
+  // of implementing a mechanism fully before wiring it into the UI —
+  // see Stage 4's migration function and Stage 5's deletion function,
+  // both implemented and tested, neither wired into their own call
+  // sites in the same commit). Keys on productId first (both catalog
+  // rows, which always carry one, and manual rows that Stage 6 now
+  // retains one on when matched) — falling back to name only for
+  // rows genuinely without a productId, per groupRowsByProductIdentity's
+  // own disjoint-key-space guarantee: two different products sharing a
+  // display name can never merge.
+  const combinedProductGroups = useMemo(() => {
+    const catalogEntries = Object.entries(catalogRows).map(([productId, row]) => ({
+      id: `catalog-${productId}`,
+      productId,
+      productName: row.productName,
+    }));
+    const manualEntries = manualRows.map((row, idx) => ({
+      id: `manual-${idx}`,
+      productId: row.productId,
+      productName: row.productName,
+    }));
+    return groupRowsByProductIdentity([...catalogEntries, ...manualEntries]);
+  }, [catalogRows, manualRows]);
 
   // [Fix — product search only filtered the catalog grid, doing nothing
   // for a manually-added product] productSearch/visibleCatalogEntries
