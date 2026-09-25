@@ -791,6 +791,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     unit: suggestedUnits[0] || 'un',
     costPrice: '',
     sellingPrice: '',
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 2
+    // prerequisite] Assigned at creation, not derived from array
+    // position or stamped after the first save — closing a genuine
+    // gap this integration pass found: the original architecture
+    // specified crypto.randomUUID() for every genuinely new manual
+    // row, but no row-creation call site ever actually generated one;
+    // `sourceRowKey` was instead being stamped to the row's own
+    // position-derived save-target key on first save, which is not
+    // stable identity at all. `manual:{uuid}` matches the same key
+    // format migrated legacy rows use, so every existing
+    // `rowKey.startsWith('manual:')` check throughout this file
+    // continues to work unchanged for both kinds of manual row.
+    sourceRowKey: `manual:${crypto.randomUUID()}`,
   });
 
   // [Product Memory / UOM — Increment A, Checkpoint 2c] Identical
@@ -2415,8 +2428,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // the ordinary save path if it does.
     if (activeBusinessId) {
       try {
+        // [Periodic Contagem Expanded Phase 2 — Integration Point 2
+        // prerequisite fix] Corrected: a manual row's save-target key
+        // is no longer always a numeric array-position suffix — a
+        // genuinely new row's key is now `manual:{uuid}` from
+        // creation. Resolves by matching the row whose OWN
+        // sourceRowKey equals rowKey, rather than assuming the suffix
+        // parses as an index — correct for both a UUID-keyed row and
+        // a not-yet-migrated legacy row still mid-transition, and
+        // correct regardless of the row's current array position.
         const currentContent = rowKey.startsWith('manual:')
-          ? manualRowsRef.current[Number(rowKey.slice('manual:'.length))]
+          ? manualRowsRef.current.find((row) => row.sourceRowKey === rowKey) ??
+            manualRowsRef.current[Number(rowKey.slice('manual:'.length))]
           : rowKey.startsWith('catalog:')
             ? catalogRows[rowKey.slice('catalog:'.length)]
             : undefined;
@@ -3671,7 +3694,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // argument protects this edit by the row's own stable identity
     // (falls back to the save-target key itself for a not-yet-saved
     // row — see rowHasUnsavedLocalEditRef's own declaration comment).
-    scheduleRowDraftSave(`manual:${index}`, nextManualRows[index].sourceRowKey ?? `manual:${index}`);
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 2
+    // prerequisite] First argument (the actual Firestore write
+    // target) now also prefers the row's own stable key — every row
+    // created going forward always has one (createManualRow/
+    // handleAddPortionToManualGroup, both fixed this same pass) — the
+    // positional fallback remains only for a genuinely not-yet-stable
+    // row (should not occur post-fix, kept defensive).
+    scheduleRowDraftSave(
+      nextManualRows[index].sourceRowKey ?? `manual:${index}`,
+      nextManualRows[index].sourceRowKey ?? `manual:${index}`
+    );
   };
 
   // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
@@ -3955,8 +3988,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // lookup, above, genuinely found a single existing product.
     const trimmedName = groupDisplayName.trim().toLowerCase();
     const matchedProduct = products.find((p) => p.name.trim().toLowerCase() === trimmedName);
+    // [Periodic Contagem Expanded Phase 2 — Integration Point 2
+    // prerequisite] buildCatalogRow does not set sourceRowKey (it
+    // builds a catalog row, which naturally keys by productId
+    // instead) — this branch needs its own explicit assignment,
+    // matching createManualRow's own new behavior immediately above.
     let newRow: StockCountWorkingRow = matchedProduct
-      ? { ...buildCatalogRow(matchedProduct), productName: groupDisplayName }
+      ? { ...buildCatalogRow(matchedProduct), productName: groupDisplayName, sourceRowKey: `manual:${crypto.randomUUID()}` }
       : { ...createManualRow(), productName: groupDisplayName };
     // [Implementation Authorization §14 item 1 — closes Rule 8
     // Assessment §17.1 Gap B] If this product's group already has an
@@ -4076,7 +4114,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // its real save on every keystroke, exactly like every other
     // per-row edit in this file already does.
     for (const index of affectedIndices) {
-      scheduleRowDraftSave(`manual:${index}`, nextManualRows[index].sourceRowKey ?? `manual:${index}`);
+      // [Periodic Contagem Expanded Phase 2 — Integration Point 2
+      // prerequisite] Same fix as updateManualRow's own identical
+      // call, above — the row's own stable key is now the actual
+      // save target, not just the protection key.
+      scheduleRowDraftSave(
+        nextManualRows[index].sourceRowKey ?? `manual:${index}`,
+        nextManualRows[index].sourceRowKey ?? `manual:${index}`
+      );
     }
   };
 

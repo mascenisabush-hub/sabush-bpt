@@ -199,12 +199,15 @@ describe('scheduleRowDraftSave — synchronous recovery-write wiring', () => {
     assert.ok(tryIndex < writeIndex && writeIndex < catchIndex);
   });
 
-  it('resolves the row\'s current content from manualRowsRef.current (synchronously up to date, per setManualRowsSynced) or catalogRows, by parsing the rowKey prefix', () => {
+  it('resolves the row\'s current content by matching sourceRowKey against rowKey (correct for a genuinely new, UUID-keyed row), with a positional fallback for a not-yet-stamped legacy row, or catalogRows, by parsing the rowKey prefix', () => {
     const fnMatch = componentSource.match(
       /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{[\s\S]*?\n  \};/
     );
     const body = fnMatch![0];
-    assert.match(body, /rowKey\.startsWith\('manual:'\)\s*\n\s*\? manualRowsRef\.current\[Number\(rowKey\.slice\('manual:'\.length\)\)\]/);
+    assert.match(
+      body,
+      /rowKey\.startsWith\('manual:'\)\s*\n\s*\? manualRowsRef\.current\.find\(\(row\) => row\.sourceRowKey === rowKey\) \?\?\s*\n\s*manualRowsRef\.current\[Number\(rowKey\.slice\('manual:'\.length\)\)\]/
+    );
     assert.match(body, /: rowKey\.startsWith\('catalog:'\)\s*\n\s*\? catalogRows\[rowKey\.slice\('catalog:'\.length\)\]/);
   });
 

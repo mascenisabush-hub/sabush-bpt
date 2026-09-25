@@ -62,10 +62,10 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     assert.match(fnMatch![0], /scheduleRowDraftSave\('__meta__'\);/);
   });
 
-  it('ALSO schedules scheduleRowDraftSave for every affected row\'s own manual:${index} key, protected by that row\'s own stable identity — the actual fix (extended by the dirty-flag stable-identity correction to also pass protectionKey)', () => {
+  it('ALSO schedules scheduleRowDraftSave for every affected row\'s own stable key, protected by that row\'s own stable identity — the actual fix, now using the row\'s own sourceRowKey as the actual save target too (Integration Point 2 prerequisite)', () => {
     assert.match(
       fnMatch![0],
-      /for \(const index of affectedIndices\) \{\s*\n\s*scheduleRowDraftSave\(`manual:\$\{index\}`, nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\);\s*\n\s*\}/
+      /for \(const index of affectedIndices\) \{\s*\n[\s\S]*?scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\s*\n\s*\);/
     );
   });
 
@@ -110,12 +110,12 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     );
   });
 
-  it('does not modify updateManualRow beyond the dirty-flag stable-identity correction\'s own protectionKey argument (already-correct first-keystroke path, used while the name is still blank)', () => {
+  it('updateManualRow\'s save-target call now uses the row\'s own sourceRowKey for both arguments (Integration Point 2 prerequisite), not just the position-derived key', () => {
     const updateManualRowMatch = periodicSrc.match(/const updateManualRow = \(\s*\n\s*index: number,[\s\S]*?\n  \};/);
     assert.ok(updateManualRowMatch, 'expected to find updateManualRow');
     assert.match(
       updateManualRowMatch![0],
-      /scheduleRowDraftSave\(`manual:\$\{index\}`, nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\);/
+      /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`\s*\n\s*\);/
     );
   });
 });

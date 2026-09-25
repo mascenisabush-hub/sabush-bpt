@@ -22,7 +22,7 @@ describe('Stage 6 — productId lifecycle', () => {
     assert.ok(fnMatch, 'expected handleAddPortionToManualGroup to exist');
     assert.match(
       fnMatch![0],
-      /let newRow: StockCountWorkingRow = matchedProduct\s*\n\s*\? \{ \.\.\.buildCatalogRow\(matchedProduct\), productName: groupDisplayName \}/
+      /let newRow: StockCountWorkingRow = matchedProduct\s*\n\s*\? \{ \.\.\.buildCatalogRow\(matchedProduct\), productName: groupDisplayName, sourceRowKey: `manual:\$\{crypto\.randomUUID\(\)\}` \}/
     );
     // Confirm the override is gone from the actual object-literal
     // expression, not merely absent from the file as a whole — the
