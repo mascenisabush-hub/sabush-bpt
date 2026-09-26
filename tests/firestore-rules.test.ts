@@ -786,28 +786,22 @@ describe('stockCounts', () => {
   });
 
   // [Amendment v1.0 — 10-expected-stock-value-amendment.md, Part 3]
-  it('Owner can update/delete a non-initial count, but never an initial count — no exceptions', async () => {
+  it('Owner cannot update OR delete a non-initial count, and never an initial count either — no exceptions (Decision 56/57)', async () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { id: 'sc-periodic', type: 'monthly', countedAt: new Date().toISOString() }));
-    await assertSucceeds(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { countedAt: new Date().toISOString() }));
+    // [Bug fix — this assertion was stale, found and fixed via a real
+    // emulator run] `allow update: if false;` is unconditional for
+    // every stockCounts type (Decision 56, commit d3b8d9b) — this
+    // assertion previously read assertSucceeds, contradicting the rule
+    // it was meant to exercise. The test's own title is corrected
+    // above to match: update was never actually allowed once Decision
+    // 56 landed, for ANY stockCounts type, not just 'initial'.
+    await assertFails(updateDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic'), { countedAt: new Date().toISOString() }));
     // [Decision 57 — Intentional Removal of Finalized Periodic Contagem
     // History, Option B; Implementation Authorization (decision-57-
     // clear-all-data-finalized-history-implementation-authorization.md)
     // §3 item 1] `delete` is now unconditionally `false` for every
-    // stockCounts type — this assertion previously read
-    // assertSucceeds, matching this test's own pre-Decision-57 title
-    // ("Owner can update/delete a non-initial count"); the `delete`
-    // half of that title is now factually wrong, updated below to the
-    // now-correct assertFails. NOTE, left deliberately unfixed here:
-    // the `updateDoc` assertSucceeds two lines above already
-    // contradicts `allow update: if false;` (unconditional since
-    // Decision 56, commit d3b8d9b) and was already stale before this
-    // change — that is a separate, pre-existing test-maintenance gap
-    // unrelated to Decision 57, not fixed by this edit; see Rule 8
-    // §IV.O-n §H and the Decision 57 Implementation Authorization §4.
-    // This whole file requires a real Firestore emulator to execute at
-    // all and could not be run in this environment to confirm the
-    // edit below passes.
+    // stockCounts type.
     await assertFails(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCounts', 'sc-periodic')));
 
     // [Capital Inicial Retirement — Implementation Authorization
@@ -1661,7 +1655,7 @@ describe('stockCountDrafts', () => {
   // that the existing generic `stockCountDrafts/{draftId}` rule block
   // already covers `periodic` with zero rule-text changes, rather than
   // just asserting that in prose.
-  it('Owner can read/create/update/delete their own PERIODIC draft; Staff and other businesses cannot', async () => {
+  it('Owner can read/create/update/delete their own PERIODIC draft; Staff can read (Decision 52 — any business member) but cannot write; other businesses cannot read or write at all', async () => {
     const ownerDb = ctxFor(OWNER_UID).firestore();
     const periodicDraftBody = { items: [], type: 'monthly', date: '2026-08-01', updatedAt: new Date().toISOString() };
     await assertSucceeds(setDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), periodicDraftBody));
@@ -1670,7 +1664,18 @@ describe('stockCountDrafts', () => {
     await assertSucceeds(deleteDoc(doc(ownerDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
 
     const staffDb = ctxFor(STAFF_UID).firestore();
-    await assertFails(getDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
+    // [Bug fix — this assertion was stale, found and fixed via a real
+    // emulator run] stockCountDrafts/periodic's own `allow read: if
+    // isMemberOf(businessId);` (Decision 52 — "Any authorized business
+    // member may read the shared Contagem meta document — Owner/Admin,
+    // the current delegated Editor, and every Viewer alike") makes
+    // this assertion's own prior expectation (staff denied read)
+    // factually wrong; it was written before Decision 52 broadened
+    // read access. Write remains correctly denied below — Decision 52
+    // only ever broadened read, never write, which stays
+    // isActiveContagemEditor-gated (Owner/Admin or the current
+    // delegated Editor only).
+    await assertSucceeds(getDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic')));
     await assertFails(setDoc(doc(staffDb, 'businesses', BIZ, 'stockCountDrafts', 'periodic'), periodicDraftBody));
 
     await testEnv.withSecurityRulesDisabled(async (ctx) => {
