@@ -34,9 +34,16 @@ import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanoni
 // own header comment, below).
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
 import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
-import { writePeriodicRecoverySnapshot } from '../lib/periodicContagemRecovery';
+import {
+  writePeriodicRecoverySnapshot,
+  listPeriodicRecoveryRowKeys,
+  readPeriodicRecoverySnapshot,
+  clearPeriodicRecoverySnapshot,
+  reconcilePeriodicRecoverySnapshot,
+  type PeriodicRecoveryReconciliation,
+} from '../lib/periodicContagemRecovery';
 import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
-import type { PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
+import { derivePeriodicRowPersistenceState, type PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
 import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
@@ -1082,6 +1089,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // behavior-preserving superset of the prior boolean map for every
   // caller except the ones this fix specifically corrects.
   const rowHasUnsavedLocalEditRef = useRef<Record<string, string>>({});
+  // [PA-08 persistence-state UI integration] A React ref's mutation
+  // never triggers a re-render on its own — this counter is bumped
+  // (never read for its own value) at every existing write site to
+  // rowHasUnsavedLocalEditRef and manualRetryEligibleRowsRef, below,
+  // solely so groupableUnifiedEntries's own useMemo recomputes
+  // whenever either ref's TRUE state changes. The refs' own read/write
+  // behavior at every existing call site is completely unmodified —
+  // this makes their existing signals reactive without altering how
+  // they work.
+  const [persistenceStateTick, setPersistenceStateTick] = useState(0);
+  const bumpPersistenceStateTick = () => setPersistenceStateTick((t) => t + 1);
   // [Bug fix — Area A dirty-flag lifecycle, corrective session] A save
   // attempt that is REJECTED specifically because the row is already
   // `state: 'CONFLICT'` (savePeriodicStockDraftItem's own explicit
@@ -1144,6 +1162,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // architecture's fail-closed principle.
   const [migrationStatus, setMigrationStatus] = useState<'idle' | 'migrating' | 'complete' | 'blocked'>('idle');
   const [ambiguousMigrationKeys, setAmbiguousMigrationKeys] = useState<string[]>([]);
+  // [Durable recovery UI integration — Rule 8 checkpoint, PART B]
+  // Populated at resume time (handleResumeDraft, below) from
+  // reconcilePeriodicRecoverySnapshot's own four-case outcome —
+  // 'unacknowledged', 'diverged', and 'fail-closed' are all stored
+  // here, keyed by rowKey; 'already-synced' is never stored, since it
+  // clears its own local evidence and requires no operator visibility.
+  // Never resolved automatically — cleared only by the operator's own
+  // re-entry through the normal, unmodified edit/save pipeline (which
+  // clears the underlying localStorage snapshot on confirmed save,
+  // per Stage 9's own existing wiring), or by this same reconciliation
+  // re-running and finding 'already-synced' on a later resume.
+  const [unresolvedRecoveryEvidence, setUnresolvedRecoveryEvidence] = useState<
+    Record<string, PeriodicRecoveryReconciliation>
+  >({});
   const [productSearch, setProductSearch] = useState('');
   // [Implementation Authorization — Periodic Contagem Keyboard
   // Shortcuts, docs/engineering/periodic-contagem-keyboard-shortcuts-
@@ -1851,6 +1883,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // fire and write into the newly active business.
     cancelAllRowRetries();
     manualRetryEligibleRowsRef.current.clear();
+    bumpPersistenceStateTick();
     hasSeenProductsRef.current = false;
     // [Implementation Authorization §2 item 1] A business switch clears
     // every row this device might have been protecting from live
@@ -1858,6 +1891,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // catalogRows/manualRows themselves have just been reset to empty,
     // immediately above.
     rowHasUnsavedLocalEditRef.current = {};
+    bumpPersistenceStateTick();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [activeBusinessId]);
 
@@ -2278,6 +2312,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       .then((updatedAt) => {
         if (!belongsToCurrentGeneration()) return; // superseded — the newer attempt owns the visible state now
         manualRetryEligibleRowsRef.current.delete(rowKey);
+        bumpPersistenceStateTick();
         // [Cross-Device Live-Update Notice] Record our own write so
         // the incoming Firestore echo of it isn't mistaken for a
         // remote change, above.
@@ -2293,6 +2328,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // that mechanism never reads.
         if (rowKey.startsWith('catalog:') || rowKey.startsWith('manual:')) {
           delete rowHasUnsavedLocalEditRef.current[protectionKey];
+          bumpPersistenceStateTick();
         }
         // [Bug fix — Option B, sourceRowKey stamping point 2 of 3] This
         // row's own data has just been confirmed durably saved under
@@ -2333,6 +2369,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           }
           // Retries exhausted (§3).
           manualRetryEligibleRowsRef.current.add(rowKey);
+          bumpPersistenceStateTick();
           setDraftSaveState('save-failed');
           return;
         }
@@ -2401,8 +2438,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           latestPeriodicStockDraftItemsByKeyRef.current[rowKey]?.state === 'CONFLICT'
         ) {
           delete rowHasUnsavedLocalEditRef.current[protectionKey];
+          bumpPersistenceStateTick();
         }
         manualRetryEligibleRowsRef.current.add(rowKey);
+        bumpPersistenceStateTick();
         setDraftSaveState('save-unknown');
       })
       .finally(() => {
@@ -2481,6 +2520,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // attempt it eventually starts is tied to THIS edit, not whichever
     // edit happens to be current 800ms from now.
     manualRetryEligibleRowsRef.current.delete(rowKey);
+    bumpPersistenceStateTick();
     // [Implementation Authorization §2 item 1] Set the instant a
     // genuine edit is scheduled for this exact row — the live-adoption
     // effect above must never overwrite it with a remote value while
@@ -2499,6 +2539,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // rowKey — identical behavior to before this fix for all of them.
     if (protectionKey.startsWith('catalog:') || protectionKey.startsWith('manual:')) {
       rowHasUnsavedLocalEditRef.current[protectionKey] = rowKey;
+      bumpPersistenceStateTick();
     }
     const generation = cancelRowRetry(rowKey);
     const timer = setTimeout(() => {
@@ -4241,6 +4282,46 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     });
     setCatalogRows(nextCatalogRows);
     setManualRows(nextManualRows);
+    // [Durable recovery UI integration — Rule 8 checkpoint, PART B]
+    // Discovers every locally-stored recovery snapshot for this
+    // business's periodic draft and reconciles each against the
+    // server state this resume just built — never against a cached or
+    // assumed value. Uses periodicStockDraftItemsByKey (the same
+    // reactive source, and the same "may not yet reflect the
+    // just-completed migration writes for one render" characteristic
+    // already documented above for the migration step itself — not a
+    // new caveat, the same one, extended to this step). Case 2
+    // (already-synced) clears its own evidence silently, per the
+    // approved contract; cases 1/3/4 are stored for the operator to
+    // see and are never resolved automatically here.
+    if (activeBusinessId) {
+      const candidateKeys = listPeriodicRecoveryRowKeys(activeBusinessId);
+      const nextUnresolved: Record<string, PeriodicRecoveryReconciliation> = {};
+      for (const rowKey of candidateKeys) {
+        const snapshot = readPeriodicRecoverySnapshot(activeBusinessId, rowKey);
+        if (!snapshot) continue;
+        const serverItem = periodicStockDraftItemsByKey[rowKey];
+        const outcome = reconcilePeriodicRecoverySnapshot(snapshot, {
+          exists: !!serverItem,
+          rev: serverItem?.rev,
+          content: serverItem
+            ? {
+                productName: serverItem.productName,
+                quantity: serverItem.quantity,
+                unit: serverItem.unit,
+                costPrice: serverItem.costPrice,
+                sellingPrice: serverItem.sellingPrice,
+              }
+            : undefined,
+        });
+        if (outcome.outcome === 'already-synced') {
+          clearPeriodicRecoverySnapshot(activeBusinessId, rowKey);
+          continue;
+        }
+        nextUnresolved[rowKey] = outcome;
+      }
+      setUnresolvedRecoveryEvidence(nextUnresolved);
+    }
     // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]
     // Re-seed the in-session edit-sequence counter to one past the
     // highest sellingPriceEditSequence found among every resumed row
@@ -4306,6 +4387,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // edit is in progress on any of them yet, so the live-adoption
     // effect above must not treat any row as protected from the outset.
     rowHasUnsavedLocalEditRef.current = {};
+    bumpPersistenceStateTick();
     setDraftBannerDismissed(true);
   };
 
@@ -4452,6 +4534,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // [Implementation Authorization §2 item 1] Nothing remote is left
       // to protect any row from once the draft itself has been cleared.
       rowHasUnsavedLocalEditRef.current = {};
+      bumpPersistenceStateTick();
       setDraftBannerDismissed(true);
     }
   };
@@ -5196,15 +5279,56 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             : entry.manualRowIndex !== null
               ? manualRows[entry.manualRowIndex]?.productId
               : undefined;
+        // [PA-08 persistence-state UI integration] Sources every input
+        // from the same signals already governing this row's real
+        // save lifecycle elsewhere in this file — nothing new is
+        // invented here, and no new state name beyond
+        // derivePeriodicRowPersistenceState's own approved six is
+        // introduced. persistenceStateTick (read only for its
+        // dependency-array effect, never its own value) is what makes
+        // rowHasUnsavedLocalEditRef/manualRetryEligibleRowsRef's
+        // otherwise non-reactive ref mutations actually recompute this
+        // memo.
+        //
+        // isBlockedPendingReview: ambiguousMigrationKeys holds each
+        // unresolved row's own legacy document key, which equals its
+        // current sourceRowKey for any row still unmigrated — the
+        // same key this conflictKey computation already produces.
+        //
+        // saveError: two genuinely distinct existing sources,
+        // combined — manualRowSaveError (delete-ambiguity/validation
+        // errors, index-keyed, matching this repository's own existing
+        // convention for that map) and manualRetryEligibleRowsRef
+        // (ordinary save-retry exhaustion, key-based). Neither alone
+        // covers both real failure paths.
+        //
+        // isCurrentlySaving/isOccupiedTargetRejection: no dedicated
+        // existing signal exists for either. hasUnsavedLocalEdit
+        // already maps to 'saving' in derivePeriodicRowPersistenceState's
+        // own precedence, so the common in-flight case is still
+        // correctly covered without inventing a new signal;
+        // isOccupiedTargetRejection is left undefined rather than
+        // fabricated.
+        const hasUnsavedLocalEdit = !!rowHasUnsavedLocalEditRef.current[conflictKey];
+        const hasRetryExhaustedError = manualRetryEligibleRowsRef.current.has(conflictKey);
+        const hasIndexedSaveError = entry.manualRowIndex !== null && !!manualRowSaveError[entry.manualRowIndex];
+        const persistenceState = derivePeriodicRowPersistenceState({
+          serverState: periodicStockDraftItemsByKey[conflictKey]?.state,
+          hasUnsavedLocalEdit,
+          isCurrentlySaving: false,
+          saveError: hasRetryExhaustedError || hasIndexedSaveError ? 'save-error' : undefined,
+          isBlockedPendingReview: ambiguousMigrationKeys.includes(conflictKey),
+        });
         return {
           ...entry,
           id: entry.rowKey,
           productId,
           isConflicted,
-          persistenceState: (isConflicted ? 'conflict' : 'saved') as PeriodicRowPersistenceState,
+          persistenceState,
         };
       }),
-    [unifiedListEntries, periodicStockDraftItemsByKey, manualRows]
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [unifiedListEntries, periodicStockDraftItemsByKey, manualRows, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick]
   );
 
   // [Integration Point 3, Step 3] Groups the COMPLETE, unfiltered
@@ -5608,6 +5732,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // productId, so key and value are simply identical here,
           // preserving today's truthy-check behavior exactly.
           rowHasUnsavedLocalEditRef.current[`catalog:${id}`] = `catalog:${id}`;
+          bumpPersistenceStateTick();
         }
       }
       return changed ? next : prev;
@@ -5628,6 +5753,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // can still recover a valid target regardless of which
           // identity this entry is keyed under.
           rowHasUnsavedLocalEditRef.current[row.sourceRowKey ?? `manual:${index}`] = `manual:${index}`;
+          bumpPersistenceStateTick();
           return { ...row, validated: false };
         }
         return row;
@@ -5728,10 +5854,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // fix.
       for (const id of catalogIdsToRestore) {
         delete rowHasUnsavedLocalEditRef.current[`catalog:${id}`];
+        bumpPersistenceStateTick();
       }
       for (const index of manualIndicesToRestore) {
         const key = manualRowsRef.current[index]?.sourceRowKey ?? `manual:${index}`;
         delete rowHasUnsavedLocalEditRef.current[key];
+        bumpPersistenceStateTick();
       }
       scheduleRowDraftSave('__meta__');
     }
@@ -5980,6 +6108,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (migrationStatus === 'blocked') {
       setError(
         `Existem ${ambiguousMigrationKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+      );
+      return;
+    }
+    // [Durable recovery UI integration — Rule 8 checkpoint, PART B]
+    // Mirrors the migration gate immediately above, exactly — unresolved
+    // recovery evidence (an edit that may never have reached the
+    // server, or a genuine conflict with what did) must block
+    // finalization the same way an unresolved identity does, never
+    // silently proceeding past it.
+    if (Object.keys(unresolvedRecoveryEvidence).length > 0) {
+      setError(
+        `Existem ${Object.keys(unresolvedRecoveryEvidence).length} linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar.`
       );
       return;
     }
@@ -6278,6 +6418,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // guarded here explicitly too, not left to rely solely on the
     // earlier screen having enforced it correctly.
     if (migrationStatus === 'blocked') return;
+    if (Object.keys(unresolvedRecoveryEvidence).length > 0) return;
     // [Owner-only finalization — Product Architect decision] Same
     // belt-and-suspenders reasoning as immediately above, and as
     // handleRequestConfirmation's own identical guard: in practice
@@ -9819,19 +9960,60 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         }`}
                       >
                         <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
-                          {group.anyConflicted ? (
+                          {/* [PA-08 persistence-state UI integration]
+                              Extends the prior conflicted/validated
+                              two-flag display to the full, approved
+                              six-state model (derivePeriodicRowPersistenceState/
+                              deriveGroupPersistenceState) — a "saving"
+                              or "save-unknown" row must never look
+                              identical to a genuinely saved one, and a
+                              failed/uncertain state must remain
+                              visible, never silently collapsed behind
+                              a differently-labeled icon. group.anyConflicted/
+                              group.allValidated (read below, for the
+                              row background/button styling, and by
+                              existing tests) remain exactly as before —
+                              this is an additive display refinement,
+                              not a replacement of that existing logic. */}
+                          {group.persistenceState === 'save-blocked' ? (
+                            <ShieldAlert
+                              className="w-3.5 h-3.5 text-amber-700 shrink-0"
+                              strokeWidth={2.5}
+                              aria-hidden="true"
+                            />
+                          ) : group.anyConflicted ? (
                             <AlertTriangle
                               className="w-3.5 h-3.5 text-amber-600 shrink-0"
                               strokeWidth={2.5}
                               aria-hidden="true"
                             />
+                          ) : group.persistenceState === 'occupied-target-rejected' || group.persistenceState === 'save-unknown' ? (
+                            <AlertTriangle
+                              className="w-3.5 h-3.5 text-red-500 shrink-0"
+                              strokeWidth={2.5}
+                              aria-hidden="true"
+                            />
+                          ) : group.persistenceState === 'saving' ? (
+                            <RotateCw className="w-3.5 h-3.5 text-gray-400 shrink-0 animate-spin" strokeWidth={2.5} aria-hidden="true" />
                           ) : group.allValidated ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           ) : (
                             <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
                           <span className="sr-only">
-                            {group.anyConflicted ? 'Conflito por resolver' : group.allValidated ? 'Validado' : 'Não validado'}
+                            {group.persistenceState === 'save-blocked'
+                              ? 'Bloqueado — requer revisão'
+                              : group.anyConflicted
+                                ? 'Conflito por resolver'
+                                : group.persistenceState === 'occupied-target-rejected'
+                                  ? 'Rejeitado — posição já ocupada'
+                                  : group.persistenceState === 'save-unknown'
+                                    ? 'Falha ao guardar — estado desconhecido'
+                                    : group.persistenceState === 'saving'
+                                      ? 'A guardar'
+                                      : group.allValidated
+                                        ? 'Validado'
+                                        : 'Não validado'}
                           </span>
                           {/* [Bug fix — product name visibility] `title`
                               surfaces the FULL name on hover/focus even on

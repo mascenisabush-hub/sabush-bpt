@@ -85,7 +85,7 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
     assert.ok(scheduleFnMatch, 'expected to find scheduleRowDraftSave');
     assert.match(
       scheduleFnMatch![0],
-      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*\}/
+      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 
@@ -99,7 +99,7 @@ describe('Bug fix — manual-row rename no longer freezes/reverts mid-typing', (
   it('a successful row save clears rowHasUnsavedLocalEditRef for that exact row\'s protectionKey, resuming normal live-adoption protection once the fix\'s own save lands', () => {
     assert.match(
       periodicSrc,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 

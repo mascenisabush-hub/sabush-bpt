@@ -211,10 +211,10 @@ describe('scheduleRowDraftSave — synchronous recovery-write wiring', () => {
     assert.match(body, /: rowKey\.startsWith\('catalog:'\)\s*\n\s*\? catalogRows\[rowKey\.slice\('catalog:'\.length\)\]/);
   });
 
-  it('is imported correctly', () => {
+  it('is imported correctly, alongside the additional recovery functions wired into handleResumeDraft (PA-08/recovery UI integration)', () => {
     assert.match(
       componentSource,
-      /import \{ writePeriodicRecoverySnapshot \} from '\.\.\/lib\/periodicContagemRecovery';/
+      /import \{\s*\n\s*writePeriodicRecoverySnapshot,\s*\n\s*listPeriodicRecoveryRowKeys,\s*\n\s*readPeriodicRecoverySnapshot,\s*\n\s*clearPeriodicRecoverySnapshot,\s*\n\s*reconcilePeriodicRecoverySnapshot,\s*\n\s*type PeriodicRecoveryReconciliation,\s*\n\s*\} from '\.\.\/lib\/periodicContagemRecovery';/
     );
   });
 });

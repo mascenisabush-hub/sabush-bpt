@@ -683,7 +683,7 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
   it('handleRequestConfirmation — the true entry point into the review screen — returns early for a non-Owner, matching the existing subscriptionBlocksNewRecords belt-and-suspenders guard immediately above it', () => {
     const start = viewSource.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
     assert.notEqual(start, -1, 'could not locate handleRequestConfirmation');
-    const body = viewSource.slice(start, start + 3200);
+    const body = viewSource.slice(start, start + 4200);
     const subscriptionGuardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
     const ownerGuardIdx = body.indexOf('if (!isOwner) return;');
     assert.notEqual(subscriptionGuardIdx, -1, 'the pre-existing subscription guard must still be present, unmodified');
@@ -820,7 +820,7 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     const body = viewSource.slice(idx, idx + 6000);
     assert.match(
       body,
-      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*\}/
+      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 
@@ -833,7 +833,7 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
     assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return;/);
     assert.match(
       body,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 
@@ -883,15 +883,15 @@ describe('Implementation Authorization §2 item 1 — genuine per-row live adopt
   it('rowHasUnsavedLocalEditRef is reset on business switch, on draft resume, and on draft discard — never leaks across contexts', () => {
     assert.match(
       viewSource,
-      /hasSeenProductsRef\.current = false;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*\/\/ eslint-disable-next-line react-hooks\/exhaustive-deps\s*\n\s*\}, \[activeBusinessId\]\);/
+      /hasSeenProductsRef\.current = false;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\/\/ eslint-disable-next-line react-hooks\/exhaustive-deps\s*\n\s*\}, \[activeBusinessId\]\);/
     );
     assert.match(
       viewSource,
-      /lastLocalDraftWriteRef\.current = periodicStockDraft\.updatedAt;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*setDraftBannerDismissed\(true\);\s*\n\s*\};/
+      /lastLocalDraftWriteRef\.current = periodicStockDraft\.updatedAt;\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,400}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*setDraftBannerDismissed\(true\);\s*\n\s*\};/
     );
     assert.match(
       viewSource,
-      /\} finally \{\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,250}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*setDraftBannerDismissed\(true\);\s*\n\s*\}/
+      /\} finally \{\s*\n\s*\/\/ \[Implementation Authorization §2 item 1\][\s\S]{0,250}rowHasUnsavedLocalEditRef\.current = \{\};\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*setDraftBannerDismissed\(true\);\s*\n\s*\}/
     );
   });
 
@@ -933,7 +933,7 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     const body = viewSource.slice(idx, idx + 5200);
     assert.match(
       body,
-      /if \(\s*\n\s*\(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) &&\s*\n\s*latestPeriodicStockDraftItemsByKeyRef\.current\[rowKey\]\?\.state === 'CONFLICT'\s*\n\s*\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
+      /if \(\s*\n\s*\(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) &&\s*\n\s*latestPeriodicStockDraftItemsByKeyRef\.current\[rowKey\]\?\.state === 'CONFLICT'\s*\n\s*\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 
@@ -975,7 +975,7 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     // conflict/resolution history for a row; every genuine edit sets it.
     assert.match(
       body,
-      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*\}/
+      /if \(protectionKey\.startsWith\('catalog:'\) \|\| protectionKey\.startsWith\('manual:'\)\) \{\s*\n\s*rowHasUnsavedLocalEditRef\.current\[protectionKey\] = rowKey;\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 
@@ -1002,7 +1002,7 @@ describe('Bug fix — Area A dirty-flag lifecycle (already-CONFLICT rejection)',
     assert.match(body, /if \(!belongsToCurrentGeneration\(\)\) return; \/\/ superseded/);
     assert.match(
       body,
-      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*\}/
+      /if \(rowKey\.startsWith\('catalog:'\) \|\| rowKey\.startsWith\('manual:'\)\) \{\s*\n\s*delete rowHasUnsavedLocalEditRef\.current\[protectionKey\];\s*\n\s*bumpPersistenceStateTick\(\);\s*\n\s*\}/
     );
   });
 
