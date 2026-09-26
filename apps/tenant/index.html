@@ -6,6 +6,22 @@
     <title>Sabush</title>
     <link rel="manifest" href="/manifest.json" />
     <meta name="theme-color" content="#0B1F3A" />
+    <!-- [PWA installability — Android Chrome + iPhone Safari]
+         mobile-web-app-capable is the modern, non-vendor-prefixed
+         standard (Chrome/Android); apple-mobile-web-app-capable is
+         still required for iOS Safari specifically, which does not
+         yet honor the standard tag alone. iOS never fires Chrome's
+         own beforeinstallprompt/install-banner event — "Add to Home
+         Screen" there is only ever available through Safari's own
+         Share menu — but once a user does that, these tags are what
+         make the resulting home-screen icon launch as a real,
+         standalone app (status bar matching the brand color, no
+         Safari chrome) instead of just a bookmark shortcut that opens
+         an ordinary browser tab. -->
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="apple-mobile-web-app-title" content="Sabush" />
     <link rel="icon" type="image/png" sizes="32x32" href="/favicon-32.png" />
     <link rel="icon" type="image/png" sizes="16x16" href="/favicon-16.png" />
     <link rel="apple-touch-icon" sizes="180x180" href="/apple-touch-icon.png" />

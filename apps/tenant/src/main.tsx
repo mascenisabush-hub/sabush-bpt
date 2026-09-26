@@ -4,6 +4,7 @@ import App from './App.tsx';
 import './index.css';
 import {ErrorBoundary} from './components/ErrorBoundary';
 import {reportClientError} from './lib/reportClientError';
+import {registerServiceWorker} from './lib/registerServiceWorker';
 
 // Fix #8 — Production Observability. Covers the two crash classes a
 // React Error Boundary structurally cannot catch: errors thrown
@@ -26,3 +27,5 @@ createRoot(document.getElementById('root')!).render(
     </ErrorBoundary>
   </StrictMode>,
 );
+
+registerServiceWorker();
