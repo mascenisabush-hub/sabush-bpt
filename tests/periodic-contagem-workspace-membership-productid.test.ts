@@ -55,7 +55,7 @@ describe('computeWorkspaceRowIdentity — productId-aware workspace membership',
 describe('Call sites — explicit productId correctly threaded through from the clicked/reopened row', () => {
   it('handleUnifiedEntryClick derives explicitProductId from the entry itself (catalog id, or the live row\'s own productId for manual)', () => {
     const clickFnMatch = componentSource.match(
-      /const handleUnifiedEntryClick = \(entry: \(typeof unifiedListEntries\)\[number\]\) => \{[\s\S]*?\n  \};/
+      /const handleUnifiedEntryClick = \(entry: \{[\s\S]*?\}\) => \{[\s\S]*?\n  \};/
     );
     assert.ok(clickFnMatch);
     assert.match(

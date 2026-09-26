@@ -189,16 +189,17 @@ describe('Ctrl/Cmd+Enter', () => {
     assert.doesNotMatch(body, /pendingTally|handleRequestConfirmation|handleConfirmSave/, 'Ctrl/Cmd+Enter must never be able to reach finalization');
   });
 
-  it('findNextUnvalidatedEntry reads visibleUnifiedListEntries exclusively, never unifiedListEntries or sortedUnifiedListEntries directly', () => {
+  it('findNextUnvalidatedEntry iterates visibleProductDisplayGroups (Integration Point 3, Step 3 — one displayed row per logical product), then within each group\'s own members, never the pre-grouped flat entry list', () => {
     const body = extractFunctionBody(periodicSrc, 'const findNextUnvalidatedEntry = ()');
-    assert.match(body, /for \(const entry of visibleUnifiedListEntries\)/, 'must iterate visibleUnifiedListEntries');
-    assert.doesNotMatch(body, /for \(const entry of (unifiedListEntries|sortedUnifiedListEntries)\)/, 'must not iterate the pre-filter/pre-exclusion arrays');
+    assert.match(body, /for \(const group of visibleProductDisplayGroups\) \{/, 'must iterate visibleProductDisplayGroups');
+    assert.match(body, /for \(const member of group\.members\) \{/, 'must then search within each group\'s own members');
+    assert.doesNotMatch(body, /for \(const entry of visibleUnifiedListEntries\)/, 'must not iterate the old, pre-grouping flat list');
   });
 
-  it('findNextUnvalidatedEntry skips CONFLICT-state entries using the same key convention and sentinel as the render-site conflict check', () => {
+  it('findNextUnvalidatedEntry skips a member whose conflict/validation state (pre-computed by groupableUnifiedEntries, the single source of truth for this) marks it unresolved', () => {
     const body = extractFunctionBody(periodicSrc, 'const findNextUnvalidatedEntry = ()');
-    assert.match(body, /entry\.kind === 'catalog' \? `catalog:\$\{entry\.catalogProductId\}` : entry\.sourceRowKey \?\? `manual:\$\{entry\.manualRowIndex\}`/, 'must use the identical key convention');
-    assert.match(body, /periodicStockDraftItemsByKey\[key\]\?\.state === 'CONFLICT'/, 'must check the identical CONFLICT sentinel');
+    assert.match(body, /if \(member\.validated\) continue;/);
+    assert.match(body, /if \(member\.isConflicted\) continue;/, 'must skip a conflicted member using the pre-computed isConflicted field, not re-deriving the conflict key here');
   });
 
   it('(pure logic) findNextUnvalidatedEntryForTest returns the first non-conflicted unvalidated entry, skipping a conflicted one', () => {
@@ -276,27 +277,27 @@ describe('↑ / ↓ (arrow navigation)', () => {
     assert.equal(nextHighlightedIndex(2, 'down', 5), 3);
   });
 
-  it('handleSearchKeyDown and the row-level handleRowArrowKey both use Math.min/Math.max clamping, never modulo, against visibleUnifiedListEntries', () => {
+  it('handleSearchKeyDown and the row-level handleRowArrowKey both use Math.min/Math.max clamping, never modulo, against visibleProductDisplayGroups (Integration Point 3, Step 3 — navigation now moves between displayed product groups, not individual portions)', () => {
     const searchBody = extractFunctionBody(periodicSrc, 'const handleSearchKeyDown = (');
-    assert.match(searchBody, /Math\.min\(currentIndex \+ 1, visibleUnifiedListEntries\.length - 1\)/);
+    assert.match(searchBody, /Math\.min\(currentIndex \+ 1, visibleProductDisplayGroups\.length - 1\)/);
     assert.match(searchBody, /Math\.max\(currentIndex - 1, 0\)/);
-    assert.doesNotMatch(searchBody, /%\s*visibleUnifiedListEntries\.length/, 'must not use modulo (which would wrap around)');
+    assert.doesNotMatch(searchBody, /%\s*visibleProductDisplayGroups\.length/, 'must not use modulo (which would wrap around)');
 
     const rowArrowMarker = 'const handleRowArrowKey = (e: React.KeyboardEvent) => {';
     const idx = periodicSrc.indexOf(rowArrowMarker);
     assert.notEqual(idx, -1, 'could not locate handleRowArrowKey');
     const rowBody = periodicSrc.slice(idx, idx + 700);
-    assert.match(rowBody, /Math\.min\(currentIndex \+ 1, visibleUnifiedListEntries\.length - 1\)/);
+    assert.match(rowBody, /Math\.min\(currentIndex \+ 1, visibleProductDisplayGroups\.length - 1\)/);
     assert.match(rowBody, /Math\.max\(currentIndex - 1, 0\)/);
   });
 
-  it('row activation (Enter/Space) is checked before arrow handling in the row onKeyDown, and is unmodified from the existing activation call', () => {
+  it('row activation (Enter/Space) is checked before arrow handling in the row onKeyDown, now calling handleGroupActivation (Integration Point 3, Step 3\'s replacement for the old per-entry handleEntryActivation)', () => {
     const marker = 'onKeyDown={(e) => {\n                          if (!disabled && (e.key ===';
     const idx = periodicSrc.indexOf(marker);
     assert.notEqual(idx, -1, 'could not locate the row onKeyDown handler');
     const body = periodicSrc.slice(idx, idx + 300);
-    assert.match(body, /handleEntryActivation\(\);/, 'Enter/Space must still call the existing, unmodified handleEntryActivation');
-    const enterIdx = body.indexOf('handleEntryActivation();');
+    assert.match(body, /handleGroupActivation\(\);/, 'Enter/Space must call handleGroupActivation, the group-level replacement for the old handleEntryActivation');
+    const enterIdx = body.indexOf('handleGroupActivation();');
     const arrowIdx = body.indexOf('handleRowArrowKey(e);');
     assert.ok(enterIdx < arrowIdx, 'Enter/Space activation must be checked (and returned from) before arrow handling runs');
   });

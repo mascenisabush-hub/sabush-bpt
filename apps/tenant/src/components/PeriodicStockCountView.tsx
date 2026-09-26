@@ -33,8 +33,10 @@ import { resolveUnitAwarePrice, findLatestRememberedProductMemory, resolveCanoni
 // per this file's own established precedent (see ExistingProductSummary's
 // own header comment, below).
 import { getConversionFactor } from '../lib/purchaseToSellingConversion';
-import { computePortionLabels, groupRowsByProductName, groupRowsByProductIdentity } from '../lib/stockCountPortionGrouping';
+import { computePortionLabels, groupRowsByProductName } from '../lib/stockCountPortionGrouping';
 import { writePeriodicRecoverySnapshot } from '../lib/periodicContagemRecovery';
+import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
+import type { PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
 import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
@@ -4684,34 +4686,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     [manualRows]
   );
 
-  // [Periodic Contagem Expanded Phase 2 — Implementation Authorization
-  // §2 item 4F, Stage 7] Combined catalog + manual product grouping —
-  // the "one displayed product row" computation. Additive, alongside
-  // manualRowGroups above, not yet wired into unifiedListEntries'
-  // actual rendering (that wiring is its own, separately verified
-  // follow-on, matching this engagement's own established discipline
-  // of implementing a mechanism fully before wiring it into the UI —
-  // see Stage 4's migration function and Stage 5's deletion function,
-  // both implemented and tested, neither wired into their own call
-  // sites in the same commit). Keys on productId first (both catalog
-  // rows, which always carry one, and manual rows that Stage 6 now
-  // retains one on when matched) — falling back to name only for
-  // rows genuinely without a productId, per groupRowsByProductIdentity's
-  // own disjoint-key-space guarantee: two different products sharing a
-  // display name can never merge.
-  const combinedProductGroups = useMemo(() => {
-    const catalogEntries = Object.entries(catalogRows).map(([productId, row]) => ({
-      id: `catalog-${productId}`,
-      productId,
-      productName: row.productName,
-    }));
-    const manualEntries = manualRows.map((row, idx) => ({
-      id: `manual-${idx}`,
-      productId: row.productId,
-      productName: row.productName,
-    }));
-    return groupRowsByProductIdentity([...catalogEntries, ...manualEntries]);
-  }, [catalogRows, manualRows]);
+  // [Periodic Contagem Expanded Phase 2 — Integration Point 3, Step 3]
+  // Stage 7's original combinedProductGroups (the additive, not-yet-
+  // wired "one displayed product row" computation, using
+  // groupRowsByProductIdentity directly) is removed here — it has now
+  // been genuinely wired into the render pipeline (productDisplayGroups,
+  // below, via buildProductDisplayGroups, which wraps
+  // groupRowsByProductIdentity with the additional validation/conflict/
+  // persistence/sort/search semantics Step 2 established), superseding
+  // Stage 7's own computation entirely rather than leaving two parallel,
+  // duplicate grouping paths in this file.
 
   // [Fix — product search only filtered the catalog grid, doing nothing
   // for a manually-added product] productSearch/visibleCatalogEntries
@@ -5180,48 +5164,104 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // already read, applied the same way (trim + lowercase substring
   // match against productName), now filtering the one unified list
   // instead of the picker table alone.
-  const filteredUnifiedListEntries = useMemo(() => {
-    const search = productSearch.trim().toLowerCase();
-    if (!search) return unifiedListEntries;
-    return unifiedListEntries.filter((entry) => entry.productName.toLowerCase().includes(search));
-  }, [unifiedListEntries, productSearch]);
+  // [Integration Point 3, Step 3] filteredUnifiedListEntries/
+  // sortedUnifiedListEntries/visibleUnifiedListEntries (the old flat
+  // pipeline) are removed here — grouping now happens on
+  // unifiedListEntries directly (via groupableUnifiedEntries, below),
+  // before any filtering, per Step 2's own established rule.
 
-  // Sorting reuses `sortByValidatedMode`/`validatedSortMode` (declared
-  // below, hoisting-safe since this is only read inside a later
-  // render), the SAME function/state the validated list already used —
-  // one shared sort control for the one shared list, rather than two
-  // independent ones.
-  const sortedUnifiedListEntries = useMemo(
+  // [Periodic Contagem Expanded Phase 2 — Integration Point 3, Step 3]
+  // Augments each flat entry with the three fields
+  // buildProductDisplayGroups (Step 2) needs but unifiedListEntries
+  // does not itself carry: the entry's own productId (catalog: its own
+  // id; manual: the current live row's own productId field), whether
+  // it is currently conflicted (the identical lookup the render loop
+  // itself already performs, reused here rather than duplicated), and
+  // a persistence state. The persistence state derivation here is
+  // deliberately minimal — 'conflict' or 'saved' — matching exactly
+  // the granularity of signal this codebase actually tracks reactively
+  // today; the full PA-08 state model (Saving/Occupied-target-rejected/
+  // Save-unknown/Save-blocked) is separately-scoped integration work,
+  // not implemented here, and is not silently invented to look more
+  // complete than it is.
+  const groupableUnifiedEntries = useMemo(
     () =>
-      sortByValidatedMode(
-        filteredUnifiedListEntries,
-        (entry) => entry.productName,
-        (entry) => (entry.quantity.trim() === '' ? 0 : Number(entry.quantity) || 0) * (Number(entry.sellingPrice) || 0),
-        validatedSortMode,
-        (entry) => entry.entrySequence,
-        (entry) => entry.firstWriteAt,
-        (entry) => entry.originalOrderIndex
-      ),
-    [filteredUnifiedListEntries, validatedSortMode]
+      unifiedListEntries.map((entry) => {
+        const conflictKey =
+          entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
+        const isConflicted = periodicStockDraftItemsByKey[conflictKey]?.state === 'CONFLICT';
+        const productId =
+          entry.kind === 'catalog'
+            ? entry.catalogProductId ?? undefined
+            : entry.manualRowIndex !== null
+              ? manualRows[entry.manualRowIndex]?.productId
+              : undefined;
+        return {
+          ...entry,
+          id: entry.rowKey,
+          productId,
+          isConflicted,
+          persistenceState: (isConflicted ? 'conflict' : 'saved') as PeriodicRowPersistenceState,
+        };
+      }),
+    [unifiedListEntries, periodicStockDraftItemsByKey, manualRows]
   );
 
-  // [Single-Active-Product Rule, §9 — extended to the unified list]
-  // While a product is open in the active workspace, its OWN entries
-  // are hidden from this list entirely — "it comes solo to the editing
-  // zone" — rather than merely shown-and-disabled, since the workspace
-  // above already displays that exact product in full. Every OTHER
-  // entry remains visible but is rendered disabled (see
-  // `isUnifiedEntryDisabled`, at the render site) so a second,
-  // independent product can never be opened at the same time — the
-  // same guarantee `editDisabled` already enforced for the old
-  // validated-only list, now covering every entry instead of only the
-  // validated ones.
-  const visibleUnifiedListEntries = useMemo(
+  // [Integration Point 3, Step 3] Groups the COMPLETE, unfiltered
+  // entry set first — per Step 2's own established rule, grouping
+  // must happen before search filtering, so a group correctly retains
+  // every member even when only one of them matches. Reuses
+  // buildProductDisplayGroups directly; no grouping logic is
+  // duplicated here.
+  const productDisplayGroups = useMemo(() => buildProductDisplayGroups(groupableUnifiedEntries), [groupableUnifiedEntries]);
+
+  // [Integration Point 3, Step 3] filterGroupsBySearch (Step 2) — a
+  // group is visible if ANY member matches; every member remains once
+  // it does.
+  const filteredProductDisplayGroups = useMemo(
+    () => filterGroupsBySearch(productDisplayGroups, productSearch),
+    [productDisplayGroups, productSearch]
+  );
+
+  // [Integration Point 3, Step 3] Feeds each group's Step-2-derived
+  // representative values (the minimum member value per criterion)
+  // into the SAME, completely unmodified sortByValidatedMode already
+  // used above — no new sort implementation, no sort by array index.
+  const sortedProductDisplayGroups = useMemo(
     () =>
-      sortedUnifiedListEntries.filter(
-        (entry) => !isWorkspaceActive || entry.activationKey !== activeWorkspaceProductKey
+      sortByValidatedMode(
+        filteredProductDisplayGroups,
+        (group) => group.displayName,
+        (group) => group.displayAggregateValue,
+        validatedSortMode,
+        (group) => group.sortRepresentative.entrySequence,
+        (group) => group.sortRepresentative.firstWriteAt,
+        (group) => group.sortRepresentative.originalOrderIndex
       ),
-    [sortedUnifiedListEntries, isWorkspaceActive, activeWorkspaceProductKey]
+    [filteredProductDisplayGroups, validatedSortMode]
+  );
+
+  // [Integration Point 3, Step 3] The active workspace's own precise
+  // membership snapshot (activeWorkspaceRowIdentity, Step 1) is the
+  // exact, already-correct source of truth for "which rows are
+  // actually in the open workspace right now" — a group is the active
+  // one if ANY of its members appears in that snapshot, checked by
+  // stable identity (catalog id / manual array index at read time,
+  // the same identity the snapshot itself was built from), never by
+  // name. This avoids needing a second, separately-maintained
+  // "active group key" concept that could drift from the workspace's
+  // own real membership.
+  const visibleProductDisplayGroups = useMemo(
+    () =>
+      sortedProductDisplayGroups.filter((group) => {
+        if (!isWorkspaceActive) return true;
+        return !group.members.some(
+          (member) =>
+            (member.catalogProductId && activeWorkspaceRowIdentity.catalogIds.includes(member.catalogProductId)) ||
+            (member.manualRowIndex !== null && activeWorkspaceRowIdentity.manualIndices.includes(member.manualRowIndex))
+        );
+      }),
+    [sortedProductDisplayGroups, isWorkspaceActive, activeWorkspaceRowIdentity]
   );
 
   // Single click handler for the unified list: routes to whichever
@@ -5232,7 +5272,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // same "queres editar?" confirmation the old "Editar" button used,
   // via `handleEditCatalogRow`/`handleEditManualRow` (both declared
   // above, unmodified).
-  const handleUnifiedEntryClick = (entry: (typeof unifiedListEntries)[number]) => {
+  const handleUnifiedEntryClick = (entry: {
+    kind: 'catalog' | 'manual';
+    catalogProductId: string | null;
+    manualRowIndex: number | null;
+    validated: boolean;
+    activationKey: string;
+  }) => {
     if (isWorkspaceActive && entry.activationKey !== activeWorkspaceProductKey) return;
     if (entry.validated) {
       if (entry.kind === 'catalog' && entry.catalogProductId) {
@@ -5259,36 +5305,36 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   };
 
   // [Implementation Authorization — Periodic Contagem Keyboard
-  // Shortcuts, §4.2] Ctrl/Cmd+Enter's "next eligible unvalidated entry"
-  // lookup. Reads `visibleUnifiedListEntries` exclusively — never
-  // `unifiedListEntries`/`sortedUnifiedListEntries` — so the operator's
-  // active `productSearch` filter and current `validatedSortMode`
-  // remain authoritative, exactly as specified. Skips any entry whose
-  // corresponding draft item is in `CONFLICT`, using the identical key
-  // convention and sentinel the render-site `isRowConflicted` check
-  // (below, in the JSX) already uses — this is the exact fix for the
-  // gap the specification's own §4.2 and the Rule 8 Assessment's §2.C
-  // identified: a keyboard-triggered advance must never open a
-  // conflicted row the way `handleUnifiedEntryClick` alone would.
-  const findNextUnvalidatedEntry = (): (typeof visibleUnifiedListEntries)[number] | null => {
-    for (const entry of visibleUnifiedListEntries) {
-      if (entry.validated) continue;
-      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
-      if (periodicStockDraftItemsByKey[key]?.state === 'CONFLICT') continue;
-      return entry;
+  // [Implementation Authorization §4.2] Ctrl/Cmd+Enter's "next eligible
+  // unvalidated entry" lookup. [Integration Point 3, Step 3] Searches
+  // through visibleProductDisplayGroups in their own displayed order,
+  // then within each group's members — so a keyboard-triggered advance
+  // navigates group by group, never opening a group merely because
+  // some later group's first member happens to already be validated.
+  // Skips any member whose corresponding draft item is in CONFLICT,
+  // using the same key convention and sentinel the render-site check
+  // already uses. Returns the specific member entry (not the group) —
+  // handleUnifiedEntryClick's own existing signature is preserved
+  // unchanged; it already derives the correct explicit productId from
+  // whichever entry it receives.
+  const findNextUnvalidatedEntry = (): GroupableUnifiedEntry | null => {
+    for (const group of visibleProductDisplayGroups) {
+      for (const member of group.members) {
+        if (member.validated) continue;
+        if (member.isConflicted) continue;
+        return member;
+      }
     }
     return null;
   };
 
-  // True only when every remaining unvalidated entry is itself
-  // conflicted — the "route toward the conflict panel rather than
-  // opening a conflict row" case from §4.2.
+  // True only when every remaining unvalidated member, across every
+  // visible group, is itself conflicted — the "route toward the
+  // conflict panel rather than opening a conflict row" case from §4.2.
   const hasOnlyConflictedUnvalidatedEntries = (): boolean =>
-    visibleUnifiedListEntries.some((entry) => {
-      if (entry.validated) return false;
-      const key = entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
-      return periodicStockDraftItemsByKey[key]?.state === 'CONFLICT';
-    });
+    visibleProductDisplayGroups.some((group) =>
+      group.members.some((member) => !member.validated && member.isConflicted)
+    ) && findNextUnvalidatedEntry() === null;
 
   // [Implementation Authorization §4.2] Ctrl/Cmd+Enter's advance step —
   // called only after a genuine, successful Validar transition has
@@ -5328,7 +5374,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // cancelled zero-quantity `window.confirm` both leave `validated`
   // unchanged, so this effect correctly advances nothing for either.
   // This closes over the CURRENT render's `advanceAfterValidation`
-  // (itself closing over the current `visibleUnifiedListEntries`/
+  // (itself closing over the current `visibleProductDisplayGroups`/
   // `periodicStockDraftItemsByKey`) because a plain `useEffect` is torn
   // down and recreated on every dependency change — no separate "latest
   // ref" indirection is needed the way a `requestAnimationFrame`
@@ -5394,33 +5440,40 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   };
 
   // [Implementation Authorization §4.4] ↑/↓ navigation from the search
-  // input — moves a highlighted pointer over `visibleUnifiedListEntries`
-  // (the same array Ctrl/Cmd+Enter's own lookup uses, so both stay
-  // consistent with the operator's current search/sort state), with no
-  // wraparound at either boundary. Activation itself is never
-  // duplicated here — Enter on a highlighted row is handled by that
-  // row's own existing `onKeyDown` (below, in the JSX), unchanged.
+  // input — moves a highlighted pointer over `visibleProductDisplayGroups`
+  // (the SAME array Ctrl/Cmd+Enter's own lookup uses, so both stay
+  // consistent with the operator's current search/sort state) — one
+  // group per step, no wraparound at either boundary. [Integration
+  // Point 3, Step 3] Now navigates displayed product groups, not
+  // individual portions — highlightedRowKey/rowRefsMapRef are keyed by
+  // each group's own stable `key` (productId-first, name fallback —
+  // never array index), not by any individual portion's rowKey.
+  // Activation itself is never duplicated here — Enter on a
+  // highlighted row is handled by that row's own existing `onKeyDown`
+  // (below, in the JSX), unchanged.
   const handleSearchKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
     if (e.key === 'Enter') {
       e.preventDefault();
       return;
     }
     if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
-    if (visibleUnifiedListEntries.length === 0) return;
+    if (visibleProductDisplayGroups.length === 0) return;
     e.preventDefault();
-    const currentIndex = highlightedRowKey ? visibleUnifiedListEntries.findIndex((en) => en.rowKey === highlightedRowKey) : -1;
+    const currentIndex = highlightedRowKey
+      ? visibleProductDisplayGroups.findIndex((g) => g.key === highlightedRowKey)
+      : -1;
     const nextIndex =
       e.key === 'ArrowDown'
         ? currentIndex === -1
           ? 0
-          : Math.min(currentIndex + 1, visibleUnifiedListEntries.length - 1)
+          : Math.min(currentIndex + 1, visibleProductDisplayGroups.length - 1)
         : currentIndex === -1
         ? 0
         : Math.max(currentIndex - 1, 0);
-    const nextEntry = visibleUnifiedListEntries[nextIndex];
-    if (!nextEntry) return;
-    setHighlightedRowKey(nextEntry.rowKey);
-    rowRefsMapRef.current.get(nextEntry.rowKey)?.focus();
+    const nextGroup = visibleProductDisplayGroups[nextIndex];
+    if (!nextGroup) return;
+    setHighlightedRowKey(nextGroup.key);
+    rowRefsMapRef.current.get(nextGroup.key)?.focus();
   };
 
   // [Implementation Authorization §4.2/§4.6 — Focus Architecture] A
@@ -9519,9 +9572,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               visible, always-expanded list, in the validated list's own
               full-detail card style, covering every product regardless
               of its `validated` state. Reads `unifiedListEntries` (and
-              its derived `sortedUnifiedListEntries`/
-              `visibleUnifiedListEntries`, all declared far above,
-              alongside `handleSelectExistingProductForWorkspace`) —
+              its derived, grouped `visibleProductDisplayGroups` (Step
+              2/3, one row per logical product — productId first, name
+              fallback only for productId-less rows), alongside `handleSelectExistingProductForWorkspace`) —
               search and sort now apply to this one list instead of
               being split (search used to belong only to the picker,
               sort only to the validated list). Clicking a row routes
@@ -9537,7 +9590,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             <div className="flex items-center justify-between gap-2">
               <p className="text-[13px] font-bold text-[#111827]">
                 Produtos
-                <span className="text-gray-500 font-normal ml-1.5">({visibleUnifiedListEntries.length})</span>
+                <span className="text-gray-500 font-normal ml-1.5">({visibleProductDisplayGroups.length})</span>
               </p>
               {/* [Owner-requested — PDF export before confirmation] */}
               <button
@@ -9627,11 +9680,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               </p>
             )}
 
-            {productSearch.trim() && visibleUnifiedListEntries.length === 0 && (
+            {productSearch.trim() && visibleProductDisplayGroups.length === 0 && (
               <p className="text-[13px] text-gray-500 italic">Nenhum produto encontrado para "{productSearch.trim()}".</p>
             )}
 
-            {visibleUnifiedListEntries.length > 0 && (
+            {visibleProductDisplayGroups.length > 0 && (
               <>
                 <div className={`hidden sm:grid ${unifiedRowGridClass.replace('sm:items-center', '')} pb-1.5 border-b border-[#F0EEE4]`}>
                   <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Nome</span>
@@ -9641,117 +9694,144 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   <span className="text-[10px] font-bold uppercase tracking-wide text-gray-500">Valor</span>
                 </div>
                 <div className="space-y-1.5">
-                  {visibleUnifiedListEntries.map((entry) => {
-                    const row =
-                      entry.kind === 'catalog' && entry.catalogProductId
-                        ? catalogRows[entry.catalogProductId]
-                        : entry.manualRowIndex !== null
-                        ? manualRows[entry.manualRowIndex]
-                        : undefined;
-                    if (!row) return null;
-                    const q = row.quantity.trim() === '' ? 0 : Number(row.quantity) || 0;
-                    const sellingPriceNum = Number(row.sellingPrice) || 0;
-                    const rowValue = q * sellingPriceNum;
-                    const priceCheck = checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling'));
+                  {visibleProductDisplayGroups.map((group) => {
+                    const representative = group.members[0];
+                    if (!representative) return null;
+                    const isMultiPortion = group.memberCount > 1;
+                    // [Integration Point 3, Step 3] For the common,
+                    // single-portion case, quantity/unit/price display
+                    // exactly as before — reading the SAME live row
+                    // data the old per-entry render already used, so a
+                    // product with only one portion is visually
+                    // unchanged from today. For a genuine multi-portion
+                    // group, these three per-field columns cannot show
+                    // one value (the portions may differ in each), so
+                    // a portion-count indicator is shown instead — the
+                    // smallest change consistent with the existing
+                    // visual language, not a redesign. The value
+                    // column always uses group.displayAggregateValue
+                    // (Step 2, explicitly presentation-only, confirmed
+                    // by test never to feed tallyStockCountRows),
+                    // which correctly equals the single portion's own
+                    // value in the single-member case.
+                    const singleRow = isMultiPortion
+                      ? undefined
+                      : representative.kind === 'catalog' && representative.catalogProductId
+                        ? catalogRows[representative.catalogProductId]
+                        : representative.manualRowIndex !== null
+                          ? manualRows[representative.manualRowIndex]
+                          : undefined;
+                    const q = singleRow ? (singleRow.quantity.trim() === '' ? 0 : Number(singleRow.quantity) || 0) : 0;
+                    const sellingPriceNum = singleRow ? Number(singleRow.sellingPrice) || 0 : 0;
+                    const priceCheck = singleRow
+                      ? checkPriceDeviation(parseFloat(singleRow.sellingPrice), getRememberedPriceForRow(singleRow, 'selling'))
+                      : { showWarning: false };
                     const hasPriceWarning = priceCheck.showWarning;
-                    const hasModeAWarning = getModeANonConvertibleWarning(row.productName);
-                    // [Single-Active-Product Rule, §9 — extended] Every
-                    // entry remaining in this list once a workspace is
-                    // active belongs to a DIFFERENT product than the one
-                    // open (the active product's own entries are already
-                    // excluded by `visibleUnifiedListEntries`, above) —
-                    // so simply `isWorkspaceActive` itself is the correct
-                    // disabled condition here, matching the old
-                    // `editDisabled` guard's effect exactly.
-                    // [Bug fix — reported live, "editing a validated
-                    // product is not accepting"] Cross-references this
-                    // entry against the AUTHORITATIVE server-side
-                    // draft-item state (`periodicStockDraftItemsByKey`,
-                    // keyed exactly as `savePeriodicStockDraftItem`/the
-                    // live-adoption effect above already key it) —
-                    // never `entry.validated` alone, which is a purely
-                    // local flag the live-adoption effect deliberately
-                    // leaves untouched for a CONFLICT row (see that
-                    // effect's own comment). A row in this state can
-                    // never be saved via the ordinary edit path
-                    // (`savePeriodicStockDraftItem`'s own explicit
-                    // CONFLICT refusal) — surfaced here proactively,
-                    // before the operator wastes an edit finding that
-                    // out the hard way.
-                    const conflictRowKey =
-                      entry.kind === 'catalog' ? `catalog:${entry.catalogProductId}` : entry.sourceRowKey ?? `manual:${entry.manualRowIndex}`;
-                    const isRowConflicted = periodicStockDraftItemsByKey[conflictRowKey]?.state === 'CONFLICT';
+                    const hasModeAWarning = getModeANonConvertibleWarning(group.displayName);
+                    // [Single-Active-Product Rule, §9 — extended]
+                    // isWorkspaceActive is the correct disabled
+                    // condition here, matching the old per-entry guard
+                    // exactly — the active workspace's own group is
+                    // already excluded from visibleProductDisplayGroups
+                    // entirely (above), so every remaining group here
+                    // belongs to a genuinely different product.
                     const disabled = isWorkspaceActive;
-                    const handleEntryActivation = () => {
+                    // [Integration Point 3, Step 3] Group-level
+                    // activation, replacing handleUnifiedEntryClick at
+                    // this call site — routes through the SAME,
+                    // completely unmodified handleEditCatalogRow/
+                    // handleEditManualRow/handleSelectExistingProductForWorkspace
+                    // functions a single-entry click already used,
+                    // using one representative member to supply the
+                    // parameters those functions already expect. If
+                    // the group is already fully validated, reopening
+                    // via the representative correctly pulls in every
+                    // member (reopenExistingProductForEditing's own
+                    // Step-1-corrected, productId-aware membership
+                    // resolution already handles this). If not, opens
+                    // a fresh workspace using the group's own explicit
+                    // productId (derived directly from its own stable
+                    // key), never falling back to name for an
+                    // explicitly-identified product.
+                    const handleGroupActivation = () => {
                       if (disabled) return;
-                      if (isRowConflicted) {
+                      if (group.anyConflicted) {
                         scrollToConflictPanel();
                         return;
                       }
-                      handleUnifiedEntryClick(entry);
+                      if (group.allValidated) {
+                        if (representative.kind === 'catalog' && representative.catalogProductId) {
+                          handleEditCatalogRow(representative.catalogProductId);
+                        } else if (representative.kind === 'manual' && representative.manualRowIndex !== null) {
+                          handleEditManualRow(representative.manualRowIndex);
+                        }
+                        return;
+                      }
+                      const explicitProductId = group.key.startsWith('id:') ? group.key.slice(3) : undefined;
+                      handleSelectExistingProductForWorkspace(representative.activationKey, explicitProductId);
                     };
                     // [Implementation Authorization §4.4] ↑/↓ moves the
-                    // highlighted pointer to the previous/next entry in
-                    // this SAME `visibleUnifiedListEntries` array — no
-                    // wraparound, no second ordering system. Enter/Space
-                    // activation below is completely unmodified.
+                    // highlighted pointer to the previous/next GROUP in
+                    // this SAME `visibleProductDisplayGroups` array —
+                    // no wraparound, no second ordering system.
+                    // Enter/Space activation below is unmodified.
                     const handleRowArrowKey = (e: React.KeyboardEvent) => {
                       if (e.key !== 'ArrowDown' && e.key !== 'ArrowUp') return;
                       e.preventDefault();
-                      const currentIndex = visibleUnifiedListEntries.findIndex((en) => en.rowKey === entry.rowKey);
+                      const currentIndex = visibleProductDisplayGroups.findIndex((g) => g.key === group.key);
                       const nextIndex =
                         e.key === 'ArrowDown'
-                          ? Math.min(currentIndex + 1, visibleUnifiedListEntries.length - 1)
+                          ? Math.min(currentIndex + 1, visibleProductDisplayGroups.length - 1)
                           : Math.max(currentIndex - 1, 0);
-                      const nextEntry = visibleUnifiedListEntries[nextIndex];
-                      if (!nextEntry) return;
-                      setHighlightedRowKey(nextEntry.rowKey);
-                      rowRefsMapRef.current.get(nextEntry.rowKey)?.focus();
+                      const nextGroup = visibleProductDisplayGroups[nextIndex];
+                      if (!nextGroup) return;
+                      setHighlightedRowKey(nextGroup.key);
+                      rowRefsMapRef.current.get(nextGroup.key)?.focus();
                     };
                     return (
                       <div
-                        key={entry.rowKey}
+                        key={group.key}
                         ref={(el) => {
-                          if (el) rowRefsMapRef.current.set(entry.rowKey, el);
-                          else rowRefsMapRef.current.delete(entry.rowKey);
+                          if (el) rowRefsMapRef.current.set(group.key, el);
+                          else rowRefsMapRef.current.delete(group.key);
                         }}
                         role="button"
                         tabIndex={disabled ? -1 : 0}
-                        onClick={handleEntryActivation}
-                        onFocus={() => setHighlightedRowKey(entry.rowKey)}
+                        onClick={handleGroupActivation}
+                        onFocus={() => setHighlightedRowKey(group.key)}
                         onKeyDown={(e) => {
                           if (!disabled && (e.key === 'Enter' || e.key === ' ')) {
-                            handleEntryActivation();
+                            handleGroupActivation();
                             return;
                           }
                           handleRowArrowKey(e);
                         }}
                         className={`${unifiedRowGridClass} border rounded-xl px-3 py-2 transition-colors duration-150 ${
-                          highlightedRowKey === entry.rowKey ? 'ring-2 ring-[#D4AF37]' : ''
+                          highlightedRowKey === group.key ? 'ring-2 ring-[#D4AF37]' : ''
                         } ${
                           disabled
                             ? 'bg-gray-50 border-gray-100 opacity-60 cursor-not-allowed'
-                            : isRowConflicted
+                            : group.anyConflicted
                             ? 'bg-amber-50 border-amber-300 hover:bg-amber-100/70 cursor-pointer'
-                            : entry.validated
+                            : group.allValidated
                             ? 'bg-white border-emerald-200/70 hover:bg-emerald-50/40 cursor-pointer'
                             : 'bg-white border-[#F0EEE4] hover:bg-[#D4AF37]/[0.05] cursor-pointer'
                         }`}
                       >
                         <div className="col-span-2 sm:col-span-1 flex items-center gap-1.5 min-w-0">
-                          {isRowConflicted ? (
+                          {group.anyConflicted ? (
                             <AlertTriangle
                               className="w-3.5 h-3.5 text-amber-600 shrink-0"
                               strokeWidth={2.5}
                               aria-hidden="true"
                             />
-                          ) : entry.validated ? (
+                          ) : group.allValidated ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           ) : (
                             <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
                           <span className="sr-only">
-                            {isRowConflicted ? 'Conflito por resolver' : entry.validated ? 'Validado' : 'Não validado'}
+                            {group.anyConflicted ? 'Conflito por resolver' : group.allValidated ? 'Validado' : 'Não validado'}
                           </span>
                           {/* [Bug fix — product name visibility] `title`
                               surfaces the FULL name on hover/focus even on
@@ -9759,25 +9839,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               truncate it despite the guaranteed 96px floor
                               above — a low-cost, standard affordance, not
                               a layout change. */}
-                          <span className="text-[13px] font-semibold text-[#111827] truncate min-w-0" title={row.productName}>
-                            {row.productName}
+                          <span className="text-[13px] font-semibold text-[#111827] truncate min-w-0" title={group.displayName}>
+                            {group.displayName}
                           </span>
+                          {/* [Integration Point 3, Step 3] The smallest
+                              change consistent with the existing visual
+                              language that still makes clear multiple
+                              underlying portions exist, without merging
+                              their records — a single-portion product
+                              (the common case) shows nothing extra here,
+                              exactly as before this step. */}
+                          {isMultiPortion && (
+                            <span className="text-[11px] font-semibold text-gray-500 bg-gray-100 rounded-full px-1.5 py-0.5 shrink-0">
+                              {group.memberCount} porções
+                            </span>
+                          )}
                           {(hasPriceWarning || hasModeAWarning) && (
                             <AlertTriangle className="w-3 h-3 text-amber-600 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
                         </div>
                         <div>
                           <span className={`${fieldLabelClass} sm:hidden`}>Qtd</span>
-                          <span className="text-[13px] text-gray-700 tabular-nums">{row.quantity.trim() === '' ? '—' : q}</span>
+                          <span className="text-[13px] text-gray-700 tabular-nums">
+                            {isMultiPortion ? '—' : !singleRow || singleRow.quantity.trim() === '' ? '—' : q}
+                          </span>
                         </div>
                         <div>
                           <span className={`${fieldLabelClass} sm:hidden`}>Unid</span>
-                          <span className="text-[13px] text-gray-700">{row.quantity.trim() === '' ? '—' : row.unit || 'un'}</span>
+                          <span className="text-[13px] text-gray-700">
+                            {isMultiPortion ? '—' : !singleRow || singleRow.quantity.trim() === '' ? '—' : singleRow.unit || 'un'}
+                          </span>
                         </div>
                         <div className="min-w-0">
                           <span className={`${fieldLabelClass} sm:hidden`}>Venda/Un</span>
                           <span className="block text-[13px] text-gray-700 tabular-nums truncate">
-                            {row.quantity.trim() === '' ? '—' : formatCurrency(sellingPriceNum, currencySymbol)}
+                            {isMultiPortion ? '—' : !singleRow || singleRow.quantity.trim() === '' ? '—' : formatCurrency(sellingPriceNum, currencySymbol)}
                           </span>
                         </div>
                         {/* [Bug fix — carried over from the original
@@ -9789,13 +9885,21 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             above) has even less room than the old 190px
                             column for value+action side by side. */}
                         <div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">
+                          {/* [Integration Point 3, Step 3] group.displayAggregateValue
+                              is presentation-only (Step 2, confirmed by
+                              test never to feed tallyStockCountRows) —
+                              equals the single portion's own value in
+                              the single-member case, the sum across
+                              portions otherwise. */}
                           <span className="text-[13px] font-semibold text-[#633806] tabular-nums whitespace-nowrap">
-                            {row.quantity.trim() === '' ? '—' : formatCurrency(rowValue, currencySymbol)}
+                            {group.displayAggregateValue === 0 && !isMultiPortion && (!singleRow || singleRow.quantity.trim() === '')
+                              ? '—'
+                              : formatCurrency(group.displayAggregateValue, currencySymbol)}
                           </span>
                           {/* [Concept C, Hard Requirement §2 — carried over] The
                               action stays a clearly labeled, visible-text
                               control, never icon-only, even though the whole
-                              row is also clickable (handleUnifiedEntryClick,
+                              row is also clickable (handleGroupActivation,
                               above) — a real <button> so it remains reachable
                               and announced independently of the row's own
                               onClick/role="button" wrapper. `stopPropagation`
@@ -9806,26 +9910,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                             type="button"
                             onClick={(e) => {
                               e.stopPropagation();
-                              handleEntryActivation();
+                              handleGroupActivation();
                             }}
                             disabled={disabled}
                             className={`px-2 py-1 rounded-lg text-[11px] font-bold transition-colors duration-150 whitespace-nowrap shrink-0 ${
                               disabled
                                 ? 'text-gray-400 bg-gray-100 cursor-not-allowed'
-                                : isRowConflicted
+                                : group.anyConflicted
                                 ? 'text-amber-800 bg-amber-100 hover:bg-amber-200'
-                                : entry.validated
+                                : group.allValidated
                                 ? 'text-emerald-700 bg-emerald-50 hover:bg-emerald-100'
                                 : 'text-[#0B1F3A] bg-[#D4AF37]/[0.12] hover:bg-[#D4AF37]/[0.22]'
                             }`}
                           >
-                            {disabled ? 'Produto aberto' : isRowConflicted ? 'Resolver conflito' : entry.validated ? 'Editar' : 'Abrir'}
+                            {disabled ? 'Produto aberto' : group.anyConflicted ? 'Resolver conflito' : group.allValidated ? 'Editar' : 'Abrir'}
                           </button>
                         </div>
                         {hasPriceWarning && (
                           <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
-                            Este preço é {Math.round(priceCheck.deviationPercent! * 100)}%{' '}
-                            {priceCheck.isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
+                            Este preço é {Math.round((priceCheck as { deviationPercent?: number }).deviationPercent! * 100)}%{' '}
+                            {(priceCheck as { isAboveRemembered?: boolean }).isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
                             produto — confirme que não é um erro de digitação.
                           </p>
                         )}

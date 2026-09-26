@@ -97,31 +97,27 @@ describe('combinedProductGroups — additive wiring in the component', () => {
     'utf8'
   );
 
-  it('is computed additively, alongside manualRowGroups, from both catalogRows and manualRows', () => {
-    assert.match(
-      componentSource,
-      /const combinedProductGroups = useMemo\(\(\) => \{\s*\n\s*const catalogEntries = Object\.entries\(catalogRows\)\.map\(\(\[productId, row\]\) => \(\{\s*\n\s*id: `catalog-\$\{productId\}`,\s*\n\s*productId,\s*\n\s*productName: row\.productName,/
-    );
-    assert.match(
-      componentSource,
-      /const manualEntries = manualRows\.map\(\(row, idx\) => \(\{\s*\n\s*id: `manual-\$\{idx\}`,\s*\n\s*productId: row\.productId,\s*\n\s*productName: row\.productName,/
-    );
-    assert.match(
-      componentSource,
-      /return groupRowsByProductIdentity\(\[\.\.\.catalogEntries, \.\.\.manualEntries\]\);/
-    );
+  it('Stage 7\'s original combinedProductGroups is superseded, correctly, by the Integration Point 3 Step 3 pipeline (buildProductDisplayGroups/productDisplayGroups) — not left as dead, parallel code', () => {
+    const codeOnly = componentSource
+      .split('\n')
+      .filter((line) => !line.trim().startsWith('//'))
+      .join('\n');
+    assert.doesNotMatch(codeOnly, /combinedProductGroups/, 'the superseded computation should be fully removed from live code');
+    assert.match(componentSource, /const productDisplayGroups = useMemo\(\(\) => buildProductDisplayGroups\(groupableUnifiedEntries\), \[groupableUnifiedEntries\]\);/);
   });
 
-  it('is not yet wired into unifiedListEntries\'s actual rendering — deliberately deferred, per this stage\'s own scope', () => {
-    const unifiedMatch = componentSource.match(/const unifiedListEntries = useMemo\(\(\) => \{[\s\S]*?\n  \}, \[/);
-    assert.ok(unifiedMatch, 'expected unifiedListEntries to exist');
-    assert.doesNotMatch(unifiedMatch![0], /combinedProductGroups/);
+  it('is now genuinely wired into the render pipeline — the deferral this Stage originally noted is resolved, not still pending', () => {
+    assert.match(componentSource, /visibleProductDisplayGroups\.map\(\(group\) => \{/);
   });
 
-  it('is imported correctly, alongside groupRowsByProductName', () => {
+  it('groupRowsByProductName remains imported for its own, distinct, still-valid purpose (manualRowGroups\' "+ Adicionar Porção" picker) — groupRowsByProductIdentity is no longer imported directly, superseded by buildProductDisplayGroups', () => {
     assert.match(
       componentSource,
-      /import \{ computePortionLabels, groupRowsByProductName, groupRowsByProductIdentity \} from '\.\.\/lib\/stockCountPortionGrouping';/
+      /import \{ computePortionLabels, groupRowsByProductName \} from '\.\.\/lib\/stockCountPortionGrouping';/
+    );
+    assert.match(
+      componentSource,
+      /import \{ buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry \} from '\.\.\/lib\/periodicContagemGroupedView';/
     );
   });
 });

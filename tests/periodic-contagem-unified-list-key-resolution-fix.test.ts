@@ -50,14 +50,14 @@ describe('handleEditManualRow — conflict guard corrected', () => {
 });
 
 describe('Unified-list conflict-key lookups — all three sites corrected', () => {
-  it('every occurrence of the catalog/manual key-selection ternary now prefers entry.sourceRowKey for the manual branch', () => {
+  it('the catalog/manual key-selection ternary is now centralized in groupableUnifiedEntries (Integration Point 3, Step 3) rather than duplicated across three separate functions — a genuine improvement, not a regression', () => {
     const occurrences = [...componentSource.matchAll(
       /entry\.kind === 'catalog' \? `catalog:\$\{entry\.catalogProductId\}` : entry\.sourceRowKey \?\? `manual:\$\{entry\.manualRowIndex\}`/g
     )];
-    assert.equal(occurrences.length, 3, 'expected exactly three corrected occurrences: findNextUnvalidatedEntry, hasOnlyConflictedUnvalidatedEntries, and the render loop\'s own conflict check');
+    assert.equal(occurrences.length, 1, 'findNextUnvalidatedEntry and the render loop\'s own conflict check now read the pre-computed member.isConflicted/group.anyConflicted instead of re-deriving this key themselves — only groupableUnifiedEntries, the single source of truth, still computes it directly');
   });
 
-  it('the obsolete, uncorrected form no longer exists anywhere', () => {
+  it('the obsolete, uncorrected form (position-derived key with no sourceRowKey preference) no longer exists anywhere', () => {
     assert.doesNotMatch(
       componentSource,
       /entry\.kind === 'catalog' \? `catalog:\$\{entry\.catalogProductId\}` : `manual:\$\{entry\.manualRowIndex\}`/
