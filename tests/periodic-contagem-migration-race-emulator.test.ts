@@ -102,21 +102,39 @@ async function migrate(uid: string): Promise<'migrated' | 'already-migrated'> {
   const metaRef = doc(db, 'businesses', BIZ, 'stockCountDrafts', 'periodic');
   return runTransaction(db, async (tx) => {
     const [legacySnap, metaSnap] = await Promise.all([tx.get(legacyRef), tx.get(metaRef)]);
-    if (!legacySnap.exists()) {
+    if (legacySnap.exists()) {
+      // [Bug fix — this test's own earlier version omitted this check]
+      // Faithfully matching migratePeriodicLegacyManualRow's own
+      // complete logic (AppContext.tsx): even when the legacy row
+      // still exists on THIS attempt's own read, a concurrent winner
+      // may already have created the destination between this read
+      // and this transaction's own commit. Checking here, inside the
+      // SAME transaction, is what makes Firestore's retry mechanism
+      // correctly re-evaluate this on conflict, rather than blindly
+      // attempting a tx.set() that could land as an update against an
+      // already-written document under an unrelated rule branch.
       const destSnap = await tx.get(destinationRef);
-      if (destSnap.exists() && destSnap.data()?.migratedFromLegacyKey === LEGACY_KEY) {
-        return 'already-migrated';
+      if (destSnap.exists()) {
+        if (destSnap.data()?.migratedFromLegacyKey === LEGACY_KEY) {
+          tx.delete(legacyRef);
+          return 'migrated';
+        }
+        throw new Error('migration-collision: destination exists with unrelated provenance');
       }
-      throw new Error('migration-collision: legacy gone but destination missing or unrelated — genuine anomaly');
+      const legacyData = legacySnap.data();
+      tx.set(destinationRef, { ...legacyData, migratedFromLegacyKey: LEGACY_KEY, orderIndex: 3 });
+      tx.delete(legacyRef);
+      const currentNextOrderIndex = metaSnap.exists() ? (metaSnap.data()?.nextOrderIndex ?? 0) : 0;
+      if (currentNextOrderIndex <= 3) {
+        tx.set(metaRef, { nextOrderIndex: 4 }, { merge: true });
+      }
+      return 'migrated';
     }
-    const legacyData = legacySnap.data();
-    tx.set(destinationRef, { ...legacyData, migratedFromLegacyKey: LEGACY_KEY, orderIndex: 3 });
-    tx.delete(legacyRef);
-    const currentNextOrderIndex = metaSnap.exists() ? (metaSnap.data()?.nextOrderIndex ?? 0) : 0;
-    if (currentNextOrderIndex <= 3) {
-      tx.set(metaRef, { nextOrderIndex: 4 }, { merge: true });
+    const destSnap = await tx.get(destinationRef);
+    if (destSnap.exists() && destSnap.data()?.migratedFromLegacyKey === LEGACY_KEY) {
+      return 'already-migrated';
     }
-    return 'migrated';
+    throw new Error('migration-collision: legacy gone but destination missing or unrelated — genuine anomaly');
   });
 }
 
