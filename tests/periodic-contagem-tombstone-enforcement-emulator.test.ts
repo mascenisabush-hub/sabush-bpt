@@ -47,7 +47,15 @@ after(async () => {
 });
 
 beforeEach(async () => {
-  await testEnv.clearFirestore();
+  // [Same emulator-settling artifact found and fixed in the other two
+  // new emulator test files this session — applied here preemptively,
+  // since this file has the identical beforeEach pattern.]
+  try {
+    await testEnv.clearFirestore();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await testEnv.clearFirestore();
+  }
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'users', OWNER_UID), { role: 'owner', businessId: BIZ });

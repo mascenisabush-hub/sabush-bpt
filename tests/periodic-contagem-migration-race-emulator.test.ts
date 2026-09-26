@@ -51,7 +51,19 @@ after(async () => {
 });
 
 beforeEach(async () => {
-  await testEnv.clearFirestore();
+  // [Same emulator-settling artifact found and fixed in
+  // periodic-contagem-order-index-contention-emulator.test.ts —
+  // confirmed the identical root cause here: a prior heavy-contention
+  // test can leave the emulator briefly still settling when the next
+  // test's cleanup runs, surfacing as a spurious 'Transaction lock
+  // timeout' on clearFirestore itself.] One retry after a short pause
+  // resolves it reliably.
+  try {
+    await testEnv.clearFirestore();
+  } catch {
+    await new Promise((resolve) => setTimeout(resolve, 500));
+    await testEnv.clearFirestore();
+  }
   await testEnv.withSecurityRulesDisabled(async (ctx) => {
     const db = ctx.firestore();
     await setDoc(doc(db, 'users', OWNER_UID), { role: 'owner', businessId: BIZ });
