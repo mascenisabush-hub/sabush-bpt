@@ -6186,6 +6186,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       return;
     }
 
+    // [Implementation Authorization §1d, Decision B] Finalization must
+    // not proceed while any row's persistence state is unresolved —
+    // conflict, save-blocked, occupied-target-rejected, or
+    // save-unknown. Mirrors the two gates immediately above exactly:
+    // same entry point, same style, reusing isRowSafeToProgress
+    // unchanged from Stage 2 (Decision A) rather than a new check.
+    // Every existing row is checked, not only ones already counted —
+    // an unresolved row with no quantity entered yet still represents
+    // a problem the Owner must address before finalizing.
+    const unsafeRowEntries = [
+      ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
+      ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
+    ].filter((conflictKey) => !isRowSafeToProgress(conflictKey));
+    if (unsafeRowEntries.length > 0) {
+      setError(
+        `Existem ${unsafeRowEntries.length} linha(s) com um problema de gravação por resolver — reveja-as antes de confirmar.`
+      );
+      return;
+    }
+
     // [Owner-only finalization — Product Architect decision] Only the
     // Owner/Admin may ever finalize a Contagem — matching
     // firestore.rules' own `stockCounts`/`businessWorthSnapshots`
@@ -6481,6 +6501,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // earlier screen having enforced it correctly.
     if (migrationStatus === 'blocked') return;
     if (Object.keys(unresolvedRecoveryEvidence).length > 0) return;
+    // [Implementation Authorization §1d, Decision B] Same
+    // belt-and-suspenders reasoning as immediately above — this is the
+    // actual, final write-triggering action, so the third gate added
+    // to handleRequestConfirmation is re-checked here independently
+    // too, not left to rely solely on that earlier screen having
+    // enforced it correctly.
+    const hasUnsafeRow = [
+      ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
+      ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
+    ].some((conflictKey) => !isRowSafeToProgress(conflictKey));
+    if (hasUnsafeRow) return;
     // [Owner-only finalization — Product Architect decision] Same
     // belt-and-suspenders reasoning as immediately above, and as
     // handleRequestConfirmation's own identical guard: in practice

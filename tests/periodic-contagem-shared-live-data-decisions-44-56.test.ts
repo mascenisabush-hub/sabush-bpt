@@ -683,7 +683,12 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
   it('handleRequestConfirmation — the true entry point into the review screen — returns early for a non-Owner, matching the existing subscriptionBlocksNewRecords belt-and-suspenders guard immediately above it', () => {
     const start = viewSource.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
     assert.notEqual(start, -1, 'could not locate handleRequestConfirmation');
-    const body = viewSource.slice(start, start + 4200);
+    // [Implementation Authorization §1d, Decision B — Stage 4] Widened
+    // from 4200 to 5200: the new persistence-state finalization gate
+    // sits between the recovery-evidence guard and the Owner guard,
+    // pushing the distance further, exactly the same class of change
+    // this file's own precedent immediately below already documents.
+    const body = viewSource.slice(start, start + 5200);
     const subscriptionGuardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
     const ownerGuardIdx = body.indexOf('if (!isOwner) return;');
     assert.notEqual(subscriptionGuardIdx, -1, 'the pre-existing subscription guard must still be present, unmodified');
@@ -703,7 +708,11 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
     // Widened again, 2600 to 4200: the new migration-blocked guard
     // added immediately after the subscription guard pushes the
     // distance to 3760 chars.
-    const body = viewSource.slice(start, start + 4200);
+    // [Implementation Authorization §1d, Decision B — Stage 4] Widened
+    // again, 4200 to 5200: the new persistence-state finalization gate
+    // (handleConfirmSave's own belt-and-suspenders re-check) sits
+    // between the recovery-evidence guard and the Owner guard.
+    const body = viewSource.slice(start, start + 5200);
     assert.match(body, /if \(!pendingTally\) return;/);
     assert.match(body, /if \(subscriptionBlocksNewRecords\) return;/);
     assert.match(body, /if \(!isOwner\) return;/);
