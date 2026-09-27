@@ -1,11 +1,13 @@
 Periodic Contagem — Unit/Selling-Price Validation, Live-Total Integrity, Finalization Safety (§48 + Decisions A/B/C)
 
-**Status:** ⏳ **PREPARED — PENDING PRODUCT ARCHITECT SIGNATURE.**
+**Status:** ✅ **SIGNED AND AUTHORIZED FOR IMPLEMENTATION.**
 
 Prepared following review of the complete Rule 8 Assessment
 (`docs/engineering/periodic-contagem-validation-live-total-persistence-safety-rule8-assessment.md`,
 committed `d33af68`), which found no remaining independent blocker for
-the scope below. Not authorized until signed (§5).
+the scope below. Signed by the Product Architect (§5). Implementation
+of exactly the scope in §1 may now proceed; nothing here authorizes
+deployment.
 
 ---
 
@@ -159,13 +161,12 @@ adequate visible treatment).
 
 ## 5. Product Architect Signature
 
-**Status:** ⏳ **Pending.**
+**Status:** ✅ **Signed and Authorized.**
 
-This authorization is prepared, not yet signed. It authorizes exactly
-the scope in §1, nothing more, once signed. Implementation must not
-proceed against this document until this section is completed by the
-Product Architect.
+This authorization is signed. It authorizes exactly the scope in §1,
+nothing more.
 
-**Product Architect:** _____________________
-**Decision:** _____________________
-**Date:** _____________________
+**Product Architect:** SABUSHIMIKE MASCENI
+**Decision:** ACCEPTED / SIGNED
+**Authorization:** AUTHORIZED FOR IMPLEMENTATION
+**Date:** 27 September 2026
