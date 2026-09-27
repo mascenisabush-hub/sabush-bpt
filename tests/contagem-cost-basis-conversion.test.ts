@@ -293,7 +293,13 @@ describe('tallyStockCountRows — FR-67 integration (Owner-facing preview)', () 
     quantity: '',
     unit: 'Cx',
     costPrice: '',
-    sellingPrice: '',
+    // [§48 E — Implementation Authorization §1c] Selling price is now
+    // required for a row to be counted; this describe block tests
+    // FR-67 cost-basis derivation (totalPurchaseValue) exclusively and
+    // has never cared about selling price, so a valid arbitrary value
+    // is supplied here rather than touching what each test actually
+    // asserts.
+    sellingPrice: '100',
     ...overrides,
   });
 

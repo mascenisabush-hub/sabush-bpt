@@ -504,6 +504,28 @@ export function tallyStockCountRows(
       continue;
     }
 
+    // [§48 E — Product Architect Decision, Implementation Authorization
+    // §1c, docs/engineering/periodic-contagem-validation-live-total-
+    // persistence-safety-implementation-authorization.md] The live
+    // total must never silently substitute an invalid/missing Selling
+    // Price with zero, nor a missing Unit, and let the Owner proceed as
+    // though the product were correctly counted. Applies the identical
+    // validity check validateWorkingRowForSave already enforces at
+    // "Validar" time, the same way blank quantity is already excluded
+    // above -- not a new mechanism, an application of the one that
+    // already exists. The row itself is untouched and remains fully
+    // visible in the rendered list; this only governs the summed
+    // totals below.
+    const rawUnit = row.unit.trim();
+    const rawSellingPrice = row.sellingPrice.trim();
+    const parsedSellingPrice = rawSellingPrice === '' ? NaN : Number(rawSellingPrice);
+    const isIncomplete = rawUnit === '' || !Number.isFinite(parsedSellingPrice) || parsedSellingPrice <= 0;
+
+    if (isIncomplete) {
+      notCountedProductNames.push(trimmedName);
+      continue;
+    }
+
     const quantity = parsedQuantity;
     const unit = row.unit.trim() || 'un';
     const costPrice = Number(row.costPrice) || 0;

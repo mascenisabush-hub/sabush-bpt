@@ -31,7 +31,7 @@ describe('tallyStockCountRows — §17 canonical worked example (Pretinha), cata
       quantity: '6',
       unit: 'Cx',
       costPrice: '820',
-      sellingPrice: '',
+      sellingPrice: '100',
     };
     const manualRow: StockCountWorkingRow = {
       productId: undefined,
@@ -39,7 +39,7 @@ describe('tallyStockCountRows — §17 canonical worked example (Pretinha), cata
       quantity: '4',
       unit: 'Un',
       costPrice: '50',
-      sellingPrice: '',
+      sellingPrice: '100',
     };
 
     const result = tallyStockCountRows([catalogRow, manualRow]);
@@ -64,8 +64,8 @@ describe('tallyStockCountRows — §17 canonical worked example (Pretinha), cata
 
   it('two manually-added rows for the same product (no catalog entry at all) sum correctly', () => {
     const rows: StockCountWorkingRow[] = [
-      { productId: undefined, productName: 'Savanna', quantity: '2', unit: 'Cx', costPrice: '1250', sellingPrice: '' },
-      { productId: undefined, productName: 'Savanna', quantity: '5', unit: 'Un', costPrice: '55', sellingPrice: '' },
+      { productId: undefined, productName: 'Savanna', quantity: '2', unit: 'Cx', costPrice: '1250', sellingPrice: '100' },
+      { productId: undefined, productName: 'Savanna', quantity: '5', unit: 'Un', costPrice: '55', sellingPrice: '100' },
     ];
     const result = tallyStockCountRows(rows);
     assert.equal(result.countedItems.length, 2);
@@ -74,10 +74,10 @@ describe('tallyStockCountRows — §17 canonical worked example (Pretinha), cata
 
   it('a multi-portion product coexists correctly alongside unrelated single-portion catalog/manual rows', () => {
     const rows: StockCountWorkingRow[] = [
-      { productId: 'prod-arroz', productName: 'Arroz', quantity: '10', unit: 'Saco', costPrice: '500', sellingPrice: '' },
-      { productId: 'prod-pretinha', productName: 'Pretinha', quantity: '6', unit: 'Cx', costPrice: '820', sellingPrice: '' },
-      { productId: undefined, productName: 'Pretinha', quantity: '4', unit: 'Un', costPrice: '50', sellingPrice: '' },
-      { productId: undefined, productName: 'Feijão', quantity: '3', unit: 'Saco', costPrice: '300', sellingPrice: '' },
+      { productId: 'prod-arroz', productName: 'Arroz', quantity: '10', unit: 'Saco', costPrice: '500', sellingPrice: '100' },
+      { productId: 'prod-pretinha', productName: 'Pretinha', quantity: '6', unit: 'Cx', costPrice: '820', sellingPrice: '100' },
+      { productId: undefined, productName: 'Pretinha', quantity: '4', unit: 'Un', costPrice: '50', sellingPrice: '100' },
+      { productId: undefined, productName: 'Feijão', quantity: '3', unit: 'Saco', costPrice: '300', sellingPrice: '100' },
     ];
     const result = tallyStockCountRows(rows);
     assert.equal(result.countedItems.length, 4);
@@ -98,8 +98,8 @@ describe('tallyStockCountRows — §17 canonical worked example (Pretinha), cata
 
   it('one portion Not Counted (blank quantity) and the other Counted are handled independently — no forced all-or-nothing per product', () => {
     const rows: StockCountWorkingRow[] = [
-      { productId: 'prod-pretinha', productName: 'Pretinha', quantity: '6', unit: 'Cx', costPrice: '820', sellingPrice: '' },
-      { productId: undefined, productName: 'Pretinha', quantity: '', unit: 'Un', costPrice: '50', sellingPrice: '' }, // owner hasn't counted this portion yet
+      { productId: 'prod-pretinha', productName: 'Pretinha', quantity: '6', unit: 'Cx', costPrice: '820', sellingPrice: '100' },
+      { productId: undefined, productName: 'Pretinha', quantity: '', unit: 'Un', costPrice: '50', sellingPrice: '100' }, // owner hasn't counted this portion yet
     ];
     const result = tallyStockCountRows(rows);
     assert.equal(result.countedItems.length, 1);
@@ -200,8 +200,8 @@ describe('workingRowToDraftItem / draftItemToWorkingRow — §17 draft round-tri
   });
 
   it('a catalog portion and a manual portion of the same product resurrect into the correct, non-colliding array each', () => {
-    const catalogRow: StockCountWorkingRow = { productId: 'prod-pretinha', productName: 'Pretinha', quantity: '6', unit: 'Cx', costPrice: '820', sellingPrice: '' };
-    const manualRow: StockCountWorkingRow = { productId: undefined, productName: 'Pretinha', quantity: '4', unit: 'Un', costPrice: '50', sellingPrice: '' };
+    const catalogRow: StockCountWorkingRow = { productId: 'prod-pretinha', productName: 'Pretinha', quantity: '6', unit: 'Cx', costPrice: '820', sellingPrice: '100' };
+    const manualRow: StockCountWorkingRow = { productId: undefined, productName: 'Pretinha', quantity: '4', unit: 'Un', costPrice: '50', sellingPrice: '100' };
 
     const items = [workingRowToDraftItem(catalogRow), workingRowToDraftItem(manualRow)];
 

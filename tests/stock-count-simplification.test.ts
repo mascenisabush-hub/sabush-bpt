@@ -131,16 +131,31 @@ describe('tallyStockCountRows — no item-level expected quantity or forbidden f
   });
 });
 
-describe('tallyStockCountRows — unit and price handling', () => {
-  it('falls back to "un" when unit is blank', () => {
+describe('tallyStockCountRows — unit and price handling (superseded by §48 -- unit/selling-price now required, not coerced)', () => {
+  // [§48 E — Product Architect Decision, Implementation Authorization
+  // §1c] These two tests previously asserted silent coercion (blank
+  // unit defaulting to "un"; invalid/missing cost or selling price
+  // coercing to 0) -- exactly the behavior §48 intentionally closes.
+  // Rewritten to assert the new, signed behavior directly, rather than
+  // simply patching their fixtures to avoid the now-correct exclusion,
+  // since the old assertions describe behavior that no longer exists
+  // by design.
+  it('a blank unit is now excluded from countedItems, not defaulted to "un"', () => {
     const result = tallyStockCountRows([row({ quantity: '3', unit: '' })]);
-    assert.equal(result.countedItems[0].unit, 'un');
+    assert.equal(result.countedItems.length, 0);
+    assert.deepEqual(result.notCountedProductNames, ['Arroz']);
   });
 
-  it('missing/invalid cost or selling price coerces to 0, never throws', () => {
-    const result = tallyStockCountRows([row({ quantity: '3', costPrice: '', sellingPrice: 'n/a' })]);
+  it('missing cost price does not exclude the row (cost price remains optional, §44) -- coerces to 0, never throws', () => {
+    const result = tallyStockCountRows([row({ quantity: '3', costPrice: '' })]);
+    assert.equal(result.countedItems.length, 1);
     assert.equal(result.countedItems[0].costPrice, 0);
-    assert.equal(result.countedItems[0].sellingPrice, 0);
+  });
+
+  it('invalid/missing selling price is now excluded from countedItems, never silently coerced to 0', () => {
+    const result = tallyStockCountRows([row({ quantity: '3', sellingPrice: 'n/a' })]);
+    assert.equal(result.countedItems.length, 0);
+    assert.deepEqual(result.notCountedProductNames, ['Arroz']);
   });
 });
 
