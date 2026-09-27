@@ -2775,13 +2775,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (!Number.isFinite(qty) || qty < 0) {
       return 'Introduza uma quantidade válida (0 ou mais).';
     }
+    // [§48 C — Product Architect Decision, Implementation Authorization
+    // §1a, docs/engineering/periodic-contagem-validation-live-total-
+    // persistence-safety-implementation-authorization.md] Unit is
+    // required for Contagem validation — a blank Unit is invalid.
+    // Exact message per the signed authorization. No enum/whitelist is
+    // introduced; any non-blank string remains acceptable, unchanged.
+    if (row.unit.trim() === '') {
+      return 'Introduza a unidade contada.';
+    }
     if (row.costPrice.trim() !== '') {
       const cost = parseFloat(row.costPrice);
       if (!Number.isFinite(cost) || cost < 0) return 'Introduza um preço de custo válido.';
     }
-    if (row.sellingPrice.trim() !== '') {
-      const selling = parseFloat(row.sellingPrice);
-      if (!Number.isFinite(selling) || selling < 0) return 'Introduza um preço de venda válido.';
+    // [§48 D — Product Architect Decision, Implementation Authorization
+    // §1a] Selling Price is required and must be strictly positive —
+    // blank, zero, negative, and non-numeric are all invalid. This
+    // replaces the prior "only validated if non-blank" check, per the
+    // signed authorization's own explicit instruction not to
+    // reinterpret zero as a legitimate selling value for Periodic
+    // Contagem. Exact message per the signed authorization.
+    const sellingRaw = row.sellingPrice.trim();
+    const selling = sellingRaw === '' ? NaN : parseFloat(sellingRaw);
+    if (!Number.isFinite(selling) || selling <= 0) {
+      return 'Introduza um preço de venda válido, maior que zero.';
     }
     return null;
   };
