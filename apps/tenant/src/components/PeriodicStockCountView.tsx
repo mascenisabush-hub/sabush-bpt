@@ -5032,11 +5032,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   //     than left pointing at nothing.
   useEffect(() => {
     if (!isWorkspaceActive) return;
-    const rows = [
-      ...visibleCatalogEntries.map(([, row]) => row),
-      ...visibleManualRowGroups.flatMap((group) => group.rows.map((r) => manualRows[r.idx])),
-    ].filter((row): row is StockCountWorkingRow => row !== undefined);
-    if (rows.length === 0 || rows.every((row) => row.validated)) {
+    // [Implementation Authorization §1b, Decision A] Restructured to
+    // carry each row's own conflictKey alongside it — needed to check
+    // persistence safety per row, not just validated. The set of rows
+    // considered, and the emptiness/all-validated conditions below,
+    // are otherwise unchanged from the existing safety-net.
+    const entries = [
+      ...visibleCatalogEntries.map(([productId, row]) => ({ row, conflictKey: `catalog:${productId}` })),
+      ...visibleManualRowGroups.flatMap((group) =>
+        group.rows.map((r) => ({
+          row: manualRows[r.idx],
+          conflictKey: manualRows[r.idx]?.sourceRowKey ?? `manual:${r.idx}`,
+        }))
+      ),
+    ].filter((entry): entry is { row: StockCountWorkingRow; conflictKey: string } => entry.row !== undefined);
+    if (
+      entries.length === 0 ||
+      entries.every((entry) => entry.row.validated && isRowSafeToProgress(entry.conflictKey))
+    ) {
       setActiveWorkspaceKey(null);
       setActiveNewManualRowIndex(null);
       // [Bug fix] Cleared alongside the two writes above — nothing
@@ -5284,6 +5297,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // Save-unknown/Save-blocked) is separately-scoped integration work,
   // not implemented here, and is not silently invented to look more
   // complete than it is.
+  // [Periodic Contagem — Implementation Authorization §1b, Decision A,
+  // signed 27 September 2026] Shared "safe to progress" check — a row
+  // is only safe to advance past, or count toward auto-close, once its
+  // persistence state is genuinely saved, or transiently saving
+  // (Decision A3 — held briefly, never treated as an error here).
+  // conflict/save-blocked/occupied-target-rejected/save-unknown all
+  // remain unsafe. Reuses the exact same signals groupableUnifiedEntries
+  // already derives its own persistenceState from — no new signal, no
+  // duplicated derivation logic, just the identical inputs consulted
+  // at these two additional call sites.
+  const isRowSafeToProgress = (conflictKey: string): boolean => {
+    const hasUnsavedLocalEdit = !!rowHasUnsavedLocalEditRef.current[conflictKey];
+    const hasRetryExhaustedError = manualRetryEligibleRowsRef.current.has(conflictKey);
+    const persistenceState = derivePeriodicRowPersistenceState({
+      serverState: periodicStockDraftItemsByKey[conflictKey]?.state,
+      hasUnsavedLocalEdit,
+      isCurrentlySaving: false,
+      saveError: hasRetryExhaustedError ? 'save-error' : undefined,
+      isBlockedPendingReview: ambiguousMigrationKeys.includes(conflictKey),
+    });
+    return persistenceState === 'saved' || persistenceState === 'saving';
+  };
+
   const groupableUnifiedEntries = useMemo(
     () =>
       unifiedListEntries.map((entry) => {
@@ -5533,7 +5569,16 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         ? manualRows[request.manualRowIndex]
         : undefined;
     if (wasValidatedBeforeRef.current === false && row?.validated === true) {
-      advanceAfterValidation();
+      // [Implementation Authorization §1b, Decision A] Advance only
+      // once this specific row's persistence state is safe — a
+      // validated:true transition alone is no longer sufficient.
+      const conflictKey =
+        request.kind === 'catalog'
+          ? `catalog:${request.catalogProductId}`
+          : row.sourceRowKey ?? `manual:${request.manualRowIndex}`;
+      if (isRowSafeToProgress(conflictKey)) {
+        advanceAfterValidation();
+      }
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [catalogRows, manualRows]);
