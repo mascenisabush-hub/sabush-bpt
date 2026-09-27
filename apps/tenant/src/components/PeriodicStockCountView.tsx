@@ -10105,20 +10105,66 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           ) : (
                             <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           )}
-                          <span className="sr-only">
-                            {group.persistenceState === 'save-blocked'
-                              ? 'Bloqueado — requer revisão'
-                              : group.anyConflicted
-                                ? 'Conflito por resolver'
+                          {/* [Implementation Authorization §1f, C.1]
+                              save-blocked/occupied-target-rejected/
+                              save-unknown are the three states where
+                              the Owner genuinely needs to act — made
+                              visible here, in the same compact badge
+                              style already used for the porções count
+                              immediately below. saving and conflict
+                              keep their existing, unchanged treatment
+                              (a transient spinner needs no visible
+                              text; conflict already has its own
+                              existing, adequate surfaced messaging
+                              elsewhere) — only these three text labels
+                              move out of sr-only. */}
+                          {group.persistenceState === 'save-blocked' ||
+                          (!group.anyConflicted &&
+                            (group.persistenceState === 'occupied-target-rejected' ||
+                              group.persistenceState === 'save-unknown')) ? (
+                            <span
+                              className={`text-[11px] font-semibold rounded-full px-1.5 py-0.5 shrink-0 ${
+                                group.persistenceState === 'save-blocked'
+                                  ? 'text-amber-700 bg-amber-50'
+                                  : 'text-red-600 bg-red-50'
+                              }`}
+                            >
+                              {group.persistenceState === 'save-blocked'
+                                ? 'Bloqueado — requer revisão'
                                 : group.persistenceState === 'occupied-target-rejected'
                                   ? 'Rejeitado — posição já ocupada'
-                                  : group.persistenceState === 'save-unknown'
-                                    ? 'Falha ao guardar — estado desconhecido'
-                                    : group.persistenceState === 'saving'
-                                      ? 'A guardar'
-                                      : group.allValidated
-                                        ? 'Validado'
-                                        : 'Não validado'}
+                                  : 'Falha ao guardar — estado desconhecido'}
+                            </span>
+                          ) : null}
+                          <span className="sr-only">
+                            {group.persistenceState === 'save-blocked' ||
+                            (!group.anyConflicted &&
+                              (group.persistenceState === 'occupied-target-rejected' ||
+                                group.persistenceState === 'save-unknown'))
+                              ? // [Implementation Authorization §1f] These
+                                // three now have their own genuinely visible
+                                // text immediately above, which a screen
+                                // reader already announces on its own — this
+                                // branch exists only so this remaining
+                                // sr-only content never wrongly falls
+                                // through to a different label for these
+                                // three states, without duplicating what's
+                                // already visible. Checked first, matching
+                                // the icon's own existing priority order
+                                // immediately above (save-blocked before
+                                // anyConflicted) — the same row could, in
+                                // principle, have both signals true at
+                                // once, and this must never announce
+                                // something inconsistent with what the
+                                // icon/visible badge actually show.
+                                ''
+                              : group.anyConflicted
+                                ? 'Conflito por resolver'
+                                : group.persistenceState === 'saving'
+                                  ? 'A guardar'
+                                  : group.allValidated
+                                    ? 'Validado'
+                                    : 'Não validado'}
                           </span>
                           {/* [Bug fix — product name visibility] `title`
                               surfaces the FULL name on hover/focus even on
