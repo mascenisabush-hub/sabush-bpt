@@ -4338,6 +4338,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         nextUnresolved[rowKey] = outcome;
       }
       setUnresolvedRecoveryEvidence(nextUnresolved);
+      // [Implementation Authorization §1e, Decision C — Option 1]
+      // Surfaced immediately upon resume, not deferred until a
+      // finalization attempt — reusing the exact existing message
+      // text already used at the finalization gate (handleRequestConfirmation),
+      // only shown earlier. `error` is the same general-purpose banner
+      // already rendered on this main counting screen, immediately
+      // above the form.
+      if (Object.keys(nextUnresolved).length > 0) {
+        setError(
+          `Existem ${Object.keys(nextUnresolved).length} linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar.`
+        );
+      }
     }
     // [FR-89–FR-94, Implementation Authorization §2 item 4 / Plan §6.2]
     // Re-seed the in-session edit-sequence counter to one past the
