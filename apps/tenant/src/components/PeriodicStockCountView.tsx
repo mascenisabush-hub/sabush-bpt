@@ -2695,6 +2695,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // with every other write-triggering handler in this file.
     if (subscriptionBlocksNewRecords) return;
     const rowKeys = Array.from(manualRetryEligibleRowsRef.current);
+    // Meta-document writes first. A row's first write is refused while the draft's meta document does
+    // not exist ("Esta Contagem já não está ativa"); retried in insertion order, a row whose failure was
+    // caused by a failed bootstrap meta save was retried before that meta save and failed again, so the
+    // Owner had to tap "Tentar novamente" twice. performRowSaveAttempt sets draftInFlightSaveRef
+    // synchronously when nothing is in flight, and every row attempt awaits it, so starting the meta
+    // attempt first is enough to serialize them. Array.prototype.sort is stable: rows keep their order.
+    const isMetaDocumentKey = (key: string) => key === '__meta__' || key === 'caixerDraft' || key.startsWith('newProductInfo:');
+    rowKeys.sort((a, b) => Number(isMetaDocumentKey(b)) - Number(isMetaDocumentKey(a)));
     // [Bug fix — dirty-flag stable-identity correction] protectionKey
     // derived the same way every other lookup-based call site in this
     // file now does — falls back to rowKey itself for catalog/meta/
