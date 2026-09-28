@@ -445,11 +445,11 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
     // is equally field-agnostic, and every debounce timer scheduleRowDraftSave
     // creates always calls it with the SAME generic signature
     // (rowKey, generation, 1) — no field name ever passed through.
-    const attemptBody = extractFunctionBody(source, 'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {');
+    const attemptBody = extractFunctionBody(source, 'const performRowSaveAttempt = async (\n    rowKey: string,\n    protectionKey: string,\n    generation: number,\n    attemptNumber: number\n  ) => {');
     assert.doesNotMatch(attemptBody, /validated/, 'performRowSaveAttempt must also have no field-specific logic.');
     assert.match(attemptBody, /latestFlushArgs\.current/);
     assert.match(attemptBody, /workingRowToDraftItem\(row\)/);
-    assert.match(body, /performRowSaveAttempt\(rowKey, generation, 1\);/);
+    assert.match(body, /performRowSaveAttempt\(rowKey, protectionKey, generation, 1\);/);
   });
 
   it('flushPeriodicDraftNow (interruption/SPA-unmount flush) is equally generic — no validated-specific branch exists there either, and every at-risk row — one never yet attempted AND one with a genuine unsaved local edit — still reaches the same governed save path', () => {
@@ -490,7 +490,7 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
     assert.match(body, /new Set<string>\(\[\.\.\.notYetAttemptedKeys, \.\.\.dirtyRowKeys\]\)/, 'both at-risk categories must be combined into one set, not handled as alternatives');
     // The one governed save mechanism — never a second, parallel write
     // path invented for the flush case specifically.
-    assert.match(body, /performRowSaveAttempt\(rowKey, generation, 1\)/, 'every candidate row must still go through the same performRowSaveAttempt every other save path uses');
+    assert.match(body, /performRowSaveAttempt\(rowKey, protectionKey, generation, 1\)/, 'every candidate row must still go through the same performRowSaveAttempt every other save path uses');
   });
 
   it('updateCatalogRow/updateManualRow (the write path Validar/Editar/Corrigir all use to set validated) schedule their row\'s own existing timer key — no new timer key scheme was introduced for validated', () => {

@@ -128,7 +128,7 @@ describe('§7 item 8 / Decision 58 — flushPeriodicDraftNow cancels the pending
   const flushBody = extractFlushFunctionBodyOnly(source);
 
   it('flushPeriodicDraftNow exists and calls performRowSaveAttempt (Decision 58 — no longer flushPeriodicStockDraftRows)', () => {
-    const saveIndex = flushBody.indexOf('performRowSaveAttempt(rowKey, generation, 1)');
+    const saveIndex = flushBody.indexOf('performRowSaveAttempt(rowKey, protectionKey, generation, 1)');
     assert.notEqual(saveIndex, -1, 'Expected flushPeriodicDraftNow to call performRowSaveAttempt for each row still owed a save.');
     assert.doesNotMatch(
       stripLineComments(flushBody),
@@ -139,7 +139,7 @@ describe('§7 item 8 / Decision 58 — flushPeriodicDraftNow cancels the pending
 
   it('every pending per-row debounce timer is cancelled before any interruption-triggered attempt is issued', () => {
     const clearIndex = flushBody.indexOf('rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));');
-    const attemptIndex = flushBody.indexOf('performRowSaveAttempt(rowKey, generation, 1)');
+    const attemptIndex = flushBody.indexOf('performRowSaveAttempt(rowKey, protectionKey, generation, 1)');
     assert.notEqual(clearIndex, -1, 'Expected flushPeriodicDraftNow to iterate and clearTimeout every entry in rowDebounceTimersRef.');
     assert.notEqual(attemptIndex, -1);
     assert.ok(
@@ -217,14 +217,14 @@ describe('§7 item 10 — the per-row autosave scheduler awaits draftInFlightSav
   // debounce firing, bounded automatic retries, and manual retry alike.
   // scheduleRowDraftSave now only owns debounce scheduling + generation
   // bookkeeping, and delegates the actual attempt to
-  // performRowSaveAttempt(rowKey, generation, 1).
+  // performRowSaveAttempt(rowKey, protectionKey, generation, 1).
   const performRowSaveAttemptBody = extractFunctionBody(
     source,
-    'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {'
+    'const performRowSaveAttempt = async (\n    rowKey: string,\n    protectionKey: string,\n    generation: number,\n    attemptNumber: number\n  ) => {'
   );
 
   it('scheduleRowDraftSave delegates to performRowSaveAttempt, which calls savePeriodicStockDraftItem/savePeriodicStockDraftMeta', () => {
-    assert.match(scheduleRowDraftSaveBody, /performRowSaveAttempt\(rowKey, generation, 1\);/);
+    assert.match(scheduleRowDraftSaveBody, /performRowSaveAttempt\(rowKey, protectionKey, generation, 1\);/);
     assert.match(performRowSaveAttemptBody, /savePeriodicStockDraftItem\(/, 'Expected performRowSaveAttempt to call savePeriodicStockDraftItem for an ordinary row edit.');
     assert.match(performRowSaveAttemptBody, /savePeriodicStockDraftMeta\(/, 'Expected performRowSaveAttempt to call savePeriodicStockDraftMeta for a header-level (__meta__/newProductInfo) edit.');
   });
@@ -271,7 +271,7 @@ describe('§5b — newProductInfo reaches every meta-document write path for the
   it('performRowSaveAttempt sources newProductInfo live from latestFlushArgs.current and forwards it to savePeriodicStockDraftMeta', () => {
     const performRowSaveAttemptBody = extractFunctionBody(
       source,
-      'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {'
+      'const performRowSaveAttempt = async (\n    rowKey: string,\n    protectionKey: string,\n    generation: number,\n    attemptNumber: number\n  ) => {'
     );
     assert.match(
       performRowSaveAttemptBody,

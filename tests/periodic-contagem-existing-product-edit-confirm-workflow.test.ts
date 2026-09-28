@@ -39,7 +39,7 @@ function extractFunctionBody(source: string, signatureMarker: string): string {
   return nextConstMatch === -1 ? rest : rest.slice(0, signatureMarker.length + nextConstMatch);
 }
 
-const reopenBody = extractFunctionBody(periodicSrc, 'const reopenExistingProductForEditing = (key: string) => {');
+const reopenBody = extractFunctionBody(periodicSrc, 'const reopenExistingProductForEditing = (key: string, explicitProductId?: string) => {');
 const leaveBody = extractFunctionBody(periodicSrc, 'const handleLeaveWorkspaceUnchanged = () => {');
 const editCatalogBody = extractFunctionBody(periodicSrc, 'const handleEditCatalogRow = (productId: string) => {');
 const editManualBody = extractFunctionBody(periodicSrc, 'const handleEditManualRow = (index: number) => {');
@@ -50,7 +50,7 @@ const editManualBody = extractFunctionBody(periodicSrc, 'const handleEditManualR
 describe('A — Clicking an existing counted (catalog) product opens its existing data', () => {
   it('handleEditCatalogRow resolves the row it was clicked for, then hands its product-name key to reopenExistingProductForEditing — never a blank/new activation', () => {
     assert.match(editCatalogBody, /const row = catalogRows\[productId\];/);
-    assert.match(editCatalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    assert.match(editCatalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\), (productId|row\.productId)\)/);
   });
 
   it('reopenExistingProductForEditing activates the workspace via the SAME activeWorkspaceKey mechanism the picker itself uses — not a new/second activation pathway', () => {
@@ -72,7 +72,7 @@ describe('A — Clicking an existing counted (catalog) product opens its existin
 describe('B — Clicking an existing counted (manual) product opens its existing data', () => {
   it('handleEditManualRow resolves the row it was clicked for, then hands its product-name key to reopenExistingProductForEditing', () => {
     assert.match(editManualBody, /const row = manualRows\[index\];/);
-    assert.match(editManualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    assert.match(editManualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\), (productId|row\.productId)\)/);
   });
 
   it('the activated key resolves back to the SAME existing manual-row group via the STABLE identity snapshot (activeWorkspaceRowIdentity.manualIndices), never by re-matching each group\'s current name against the key — same fix, same reasoning, as the catalog-row case above', () => {

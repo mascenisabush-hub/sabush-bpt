@@ -212,8 +212,8 @@ describe('G — The validated product remains represented in the existing persis
     const manualBody = extractFunctionBody(periodicSrc, 'const handleEditManualRow = (index: number) => {');
     assert.match(catalogBody, /window\.confirm\('Este produto já foi validado\. Queres editá-lo\?'\)/);
     assert.match(manualBody, /window\.confirm\('Este produto já foi validado\. Queres editá-lo\?'\)/);
-    assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
-    assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\), (productId|row\.productId)\)/);
+    assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\), (productId|row\.productId)\)/);
   });
 
   it('handleEditCatalogRow/handleEditManualRow are now reached from the unified list via handleUnifiedEntryClick, for a validated entry specifically', () => {

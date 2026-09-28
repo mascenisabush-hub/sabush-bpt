@@ -56,7 +56,7 @@ function extractFunctionBody(source: string, signatureMarker: string): string {
   return nextConstMatch === -1 ? rest : rest.slice(0, signatureMarker.length + nextConstMatch);
 }
 
-const reopenBody = extractFunctionBody(periodicSrc, 'const reopenExistingProductForEditing = (key: string) => {');
+const reopenBody = extractFunctionBody(periodicSrc, 'const reopenExistingProductForEditing = (key: string, explicitProductId?: string) => {');
 const leaveBody = extractFunctionBody(periodicSrc, 'const handleLeaveWorkspaceUnchanged = () => {');
 const createManualRowBody = extractFunctionBody(periodicSrc, 'const createManualRow = ');
 const handleAddManualRowBody = extractFunctionBody(periodicSrc, 'const handleAddManualRow = () => {');

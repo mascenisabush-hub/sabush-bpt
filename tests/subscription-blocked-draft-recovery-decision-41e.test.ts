@@ -166,7 +166,7 @@ describe('PeriodicStockCountView.tsx — Decision 41E write-path audit (§13)', 
   });
 
   it('test 7/8 — scheduleRowDraftSave (the debounce-scheduling entry point) guards on subscriptionBlocksNewRecords before doing anything else', () => {
-    const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string) => {');
+    const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
     const guardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
     const firstRealWorkIdx = body.indexOf('const existing = rowDebounceTimersRef.current.get(rowKey);');
     assert.notEqual(guardIdx, -1);
@@ -369,7 +369,13 @@ describe('Decision 41E — Staff restrictions and tenant isolation untouched (§
 
   it("Decision 41D's own Staff-vs-Owner branch in AppContext.tsx (the actual access-control decision) is unmodified — 41E adds no new isOwner check of its own, since the EXISTING listener-state machine already fully determines what a Staff session ever sees here", () => {
     const appContextSrc = readFileSync(new URL('../apps/tenant/src/context/AppContext.tsx', import.meta.url), 'utf-8');
-    const isOwnerCount = (appContextSrc.match(/if \(isOwner\) \{/g) || []).length;
+    // Scoped to the draft-listener section (initialDraftRef .. periodic items listener). A whole-file
+    // count stopped meaning anything once unrelated later modules added their own `if (isOwner)` guards.
+    const sectionStart = appContextSrc.indexOf("const initialDraftRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial');");
+    const sectionEnd = appContextSrc.indexOf("const contagemAuthorityRef = doc(db, 'businesses', businessId, 'contagemAuthority', 'current');");
+    assert.ok(sectionStart !== -1 && sectionEnd > sectionStart);
+    const draftListenerSection = appContextSrc.slice(sectionStart, sectionEnd);
+    const isOwnerCount = (draftListenerSection.match(/if \(isOwner\) \{/g) || []).length;
     // Exactly the three 41D error-callback branches (initial, periodic
     // meta, periodic items) — unchanged count from 41D, proving 41E
     // added no fourth.

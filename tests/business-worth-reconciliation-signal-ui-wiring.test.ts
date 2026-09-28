@@ -142,15 +142,19 @@ describe('PeriodicStockCountView.tsx — the reconciliation card is actually wir
   });
 
   it('the 2200ms auto-navigate is skipped whenever there is a reconciliation payload to show, so the Owner isn\'t swept away before reading it', () => {
-    const start = periodicSrc.indexOf('submissionIdRef.current = null;');
+    // Anchored on handleConfirmSave's own success-path setter (submissionIdRef.current = null; now
+    // appears at many earlier sites, so the first occurrence no longer lands in this function).
+    const start = periodicSrc.indexOf('setSavedReconciliation(saved.businessWorthReconciliation);');
+    assert.notEqual(start, -1);
     const end = periodicSrc.indexOf('} catch (err: any) {', start);
     const body = periodicSrc.slice(start, end);
     assert.match(body, /if \(!saved\.businessWorthReconciliation\) \{\s*autoAdvanceTimerRef\.current = setTimeout\(\(\) => onComplete\(\), 2200\);\s*\}/);
   });
 
   it('payables/receivables are destructured from useApp() — not fetched a second, separate way', () => {
+    // The whole useApp() destructure (it grew well past the original 600-char window).
     const start = periodicSrc.indexOf('} = useApp();');
-    const before = periodicSrc.slice(Math.max(0, start - 600), start);
+    const before = periodicSrc.slice(periodicSrc.lastIndexOf('const {', start), start);
     assert.match(before, /payables,/);
     assert.match(before, /receivables,/);
   });

@@ -107,7 +107,10 @@ describe('AppContext.tsx — Decision 41C §2 readback-unconfirmed wrapping', ()
 
   it('every wrapped write still calls setDoc/commit BEFORE the try/getDocFromServer block — the write itself is never swallowed by the wrapping', () => {
     const saveItemBody = extractFunctionBody(appContextSrc, 'const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {');
-    const setDocIdx = saveItemBody.indexOf('await setDoc(itemRef, item);');
+    // The row write is now transactional (Decisions 44-56: conflict detection needs a read-then-write),
+    // no longer a plain setDoc. The invariant is unchanged: the write is awaited outside, and before,
+    // the readback try/catch, so its own errors are never swallowed or re-wrapped.
+    const setDocIdx = saveItemBody.indexOf('await runTransaction(db, async (tx) => {');
     const tryIdx = saveItemBody.indexOf('try {');
     assert.notEqual(setDocIdx, -1);
     assert.notEqual(tryIdx, -1);
@@ -160,7 +163,7 @@ describe('PeriodicStockCountView.tsx — cancelRowRetry (§6/§8 generation/inva
 });
 
 describe('PeriodicStockCountView.tsx — scheduleRowDraftSave (§6: newer edit cancels old retry)', () => {
-  const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string) => {');
+  const body = extractFunctionBody(periodicSrc, 'const scheduleRowDraftSave = (rowKey: string, protectionKey: string = rowKey) => {');
 
   it('cancels the row\'s pending retry (via cancelRowRetry) BEFORE scheduling the new debounce timer — not only when the timer eventually fires', () => {
     const cancelIdx = body.indexOf('const generation = cancelRowRetry(rowKey);');
@@ -175,7 +178,7 @@ describe('PeriodicStockCountView.tsx — scheduleRowDraftSave (§6: newer edit c
   });
 
   it('captures the freshly bumped generation and passes it into the debounce timer\'s own closure for attempt 1', () => {
-    assert.match(body, /performRowSaveAttempt\(rowKey, generation, 1\);/);
+    assert.match(body, /performRowSaveAttempt\(rowKey, protectionKey, generation, 1\);/);
   });
 
   it('still clears any pre-existing DEBOUNCE timer for the row (unchanged pre-41C behavior)', () => {
@@ -186,7 +189,7 @@ describe('PeriodicStockCountView.tsx — scheduleRowDraftSave (§6: newer edit c
 describe('PeriodicStockCountView.tsx — performRowSaveAttempt (§1/§3/§4/§7/§8/§9)', () => {
   const body = extractFunctionBody(
     periodicSrc,
-    'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {'
+    'const performRowSaveAttempt = async (\n    rowKey: string,\n    protectionKey: string,\n    generation: number,\n    attemptNumber: number\n  ) => {'
   );
 
   it('verifies the attempt still belongs to the current generation before doing any work (§8 stale-attempt guard)', () => {
@@ -227,7 +230,7 @@ describe('PeriodicStockCountView.tsx — performRowSaveAttempt (§1/§3/§4/§7/
     const transientIdx = body.indexOf("if (classification === 'transient') {");
     const delayIdx = body.indexOf('const delay = nextRetryDelayMs(attemptNumber);');
     const retryStateIdx = body.indexOf("setDraftSaveState('retrying');");
-    const rescheduleIdx = body.indexOf('performRowSaveAttempt(rowKey, generation, attemptNumber + 1);');
+    const rescheduleIdx = body.indexOf('performRowSaveAttempt(rowKey, protectionKey, generation, attemptNumber + 1);');
     const storeIdx = body.indexOf('rowRetryRef.current.set(rowKey, { timer, generation });');
     assert.notEqual(transientIdx, -1);
     assert.notEqual(delayIdx, -1);
@@ -240,7 +243,7 @@ describe('PeriodicStockCountView.tsx — performRowSaveAttempt (§1/§3/§4/§7/
   it("on 'transient' with retries exhausted (delay === null): adds the row to manualRetryEligibleRowsRef and sets 'save-failed' — never automatically retried further", () => {
     assert.match(
       body,
-      /\/\/ Retries exhausted \(§3\)\.\s*\n\s*manualRetryEligibleRowsRef\.current\.add\(rowKey\);\s*\n\s*setDraftSaveState\('save-failed'\);/
+      /\/\/ Retries exhausted \(§3\)\.\s*\n\s*manualRetryEligibleRowsRef\.current\.add\(rowKey\);\s*\n(\s*bumpPersistenceStateTick\(\);\s*\n)?\s*setDraftSaveState\('save-failed'\);/
     );
   });
 
@@ -285,7 +288,7 @@ describe('PeriodicStockCountView.tsx — handleManualRetryDraftSave (§9 manual 
   });
 
   it('restarts each row at a fresh generation (attempt 1), reusing performRowSaveAttempt — no parallel retry mechanism', () => {
-    assert.match(body, /const generation = cancelRowRetry\(rowKey\);\s*\n\s*performRowSaveAttempt\(rowKey, generation, 1\);/);
+    assert.match(body, /const generation = cancelRowRetry\(rowKey\);\s*\n\s*performRowSaveAttempt\(rowKey, protectionKey, generation, 1\);/);
   });
 });
 
@@ -316,7 +319,7 @@ describe('PeriodicStockCountView.tsx — cancelAllRowRetries wired into every ex
     // triggered attempt — only the separate, already-scheduled RETRY
     // timers (rowRetryRef) are left alone.
     const clearIdx = body.indexOf('rowDebounceTimersRef.current.clear();');
-    const attemptIdx = body.indexOf('performRowSaveAttempt(rowKey, generation, 1)');
+    const attemptIdx = body.indexOf('performRowSaveAttempt(rowKey, protectionKey, generation, 1)');
     assert.notEqual(clearIdx, -1);
     assert.notEqual(attemptIdx, -1);
     assert.ok(clearIdx < attemptIdx);

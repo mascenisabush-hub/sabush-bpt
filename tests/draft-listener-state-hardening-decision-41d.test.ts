@@ -264,7 +264,11 @@ describe("AppContext.tsx — all three listener-state setters reset to 'loading'
   it('the business-switch reset (the [activeBusinessId] effect) resets all three, unconditionally on every switch — not only when activeBusinessId becomes falsy', () => {
     const idx = appContextSrc.indexOf('// full on a direct Business A → Business B switch');
     assert.notEqual(idx, -1);
-    const block = appContextSrc.slice(idx, idx + 2500);
+    // Up to and including the first `if (!activeBusinessId) {` after the comment (a fixed 2500-char
+    // window stopped reaching it once the comment block grew).
+    const gate = appContextSrc.indexOf('if (!activeBusinessId) {', idx);
+    assert.notEqual(gate, -1);
+    const block = appContextSrc.slice(idx, gate + 'if (!activeBusinessId) {'.length);
     const initialResetIdx = block.indexOf("setInitialStockDraftListenerState('loading');");
     const metaResetIdx = block.indexOf("setPeriodicStockDraftMetaListenerState('loading');");
     const itemsResetIdx = block.indexOf("setPeriodicStockDraftItemsListenerState('loading');");
