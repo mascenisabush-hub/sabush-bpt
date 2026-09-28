@@ -108,9 +108,42 @@ export function listPeriodicRecoveryRowKeys(businessId: string): string[] {
   return keys;
 }
 
+/**
+ * Clears EVERY recovery snapshot for one business's periodic draft. Called only when the draft's lifecycle
+ * ends (the count is finalized, or the draft is discarded/restarted): row keys such as `catalog:{productId}`
+ * are reused by the next count, so a snapshot left behind would be compared against a brand-new draft's rows
+ * and reported as an "unconfirmed change" that never existed.
+ */
+export function clearAllPeriodicRecoverySnapshots(businessId: string): void {
+  try {
+    for (const rowKey of listPeriodicRecoveryRowKeys(businessId)) {
+      clearPeriodicRecoverySnapshot(businessId, rowKey);
+    }
+  } catch {
+    // Local storage unavailable — nothing to clear.
+  }
+}
+
 // ------------------------------------------------------------------
 // Reconciliation — the four-case contract, exact.
 // ------------------------------------------------------------------
+
+// Device clocks can differ; a snapshot only counts as older than its row when it is older by a wide margin,
+// so clock skew can only ever make us keep evidence, never discard a real unsaved edit.
+const OBSOLETE_SNAPSHOT_MARGIN_MS = 10 * 60 * 1000;
+
+/**
+ * True when the snapshot was captured well BEFORE the server row was first created, i.e. it belongs to an
+ * earlier lifecycle of that row key (e.g. last month's count; `catalog:{productId}` keys are reused) and can
+ * never be an unsaved edit of the current row. Deliberately NOT a fifth reconciliation outcome — the four-case
+ * contract in reconcilePeriodicRecoverySnapshot is untouched; this is a pre-check the caller applies first.
+ */
+export function isSnapshotFromEarlierLifecycle(snapshotSavedAt: string, rowFirstWriteAt: string | undefined): boolean {
+  if (!rowFirstWriteAt) return false;
+  const rowCreatedAt = Date.parse(rowFirstWriteAt);
+  const snapshotAt = Date.parse(snapshotSavedAt);
+  return Number.isFinite(rowCreatedAt) && Number.isFinite(snapshotAt) && snapshotAt < rowCreatedAt - OBSOLETE_SNAPSHOT_MARGIN_MS;
+}
 
 export type PeriodicRecoveryReconciliation =
   | { outcome: 'unacknowledged'; snapshot: PeriodicRecoverySnapshot }

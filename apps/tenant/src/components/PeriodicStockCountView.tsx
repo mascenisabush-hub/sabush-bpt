@@ -42,6 +42,7 @@ import {
   reconcilePeriodicRecoverySnapshot,
   type PeriodicRecoveryReconciliation,
 } from '../lib/periodicContagemRecovery';
+import { isSnapshotFromEarlierLifecycle } from '../lib/periodicContagemRecovery';
 import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
 import { derivePeriodicRowPersistenceState, type PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
@@ -707,6 +708,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // into this component at all.
     migratePeriodicLegacyManualRow,
     migrateAllLegacyPeriodicRows,
+    listPeriodicTombstoneKeys,
     deletePeriodicManualRow,
     removePeriodicStockDraftItem,
     savePeriodicStockDraftMeta,
@@ -1187,6 +1189,26 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const [unresolvedRecoveryEvidence, setUnresolvedRecoveryEvidence] = useState<
     Record<string, PeriodicRecoveryReconciliation>
   >({});
+
+  // [Fix] `unresolvedRecoveryEvidence` is captured once, at resume. A snapshot that is later cleared (its row's
+  // save was confirmed, the row was deleted, ...) is no longer evidence, yet the captured list kept blocking
+  // "Rever e Confirmar Contagem" with entries that no longer exist. Re-sync it whenever persistence state ticks.
+  // Only ever REMOVES entries whose snapshot is gone; never adds one, never touches the gate itself.
+  useEffect(() => {
+    if (!activeBusinessId) return;
+    const keys = Object.keys(unresolvedRecoveryEvidence);
+    if (keys.length === 0) return;
+    const stillPresent = keys.filter((rowKey) => {
+      try {
+        return readPeriodicRecoverySnapshot(activeBusinessId, rowKey) !== null;
+      } catch {
+        return true; // cannot tell — keep the evidence
+      }
+    });
+    if (stillPresent.length !== keys.length) {
+      setUnresolvedRecoveryEvidence((prev) => Object.fromEntries(Object.entries(prev).filter(([rowKey]) => stillPresent.includes(rowKey))));
+    }
+  }, [persistenceStateTick, unresolvedRecoveryEvidence, activeBusinessId]);
   const [productSearch, setProductSearch] = useState('');
   // [Implementation Authorization — Periodic Contagem Keyboard
   // Shortcuts, docs/engineering/periodic-contagem-keyboard-shortcuts-
@@ -2364,6 +2386,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             setManualRowsSynced(stamped);
           }
         }
+        // [Fix] The edit is durably on the server (and this is still the newest attempt for the row, per the
+        // generation check above), so its browser-local recovery snapshot has done its job. It was never
+        // cleared here, so every row ever saved left evidence behind that later blocked "Rever e Confirmar".
+        if (activeBusinessId) {
+          try {
+            clearPeriodicRecoverySnapshot(activeBusinessId, rowKey);
+          } catch {
+            /* storage unavailable */
+          }
+        }
+        // (No extra bumpPersistenceStateTick here — the dirty-flag branch above already bumps in this same
+        // synchronous turn, and React batches it, so the evidence-sync effect sees the cleared snapshot.)
       })
       .catch((err) => {
         if (!belongsToCurrentGeneration()) return; // superseded — nothing to classify against a stale attempt
@@ -4355,10 +4389,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (activeBusinessId) {
       const candidateKeys = listPeriodicRecoveryRowKeys(activeBusinessId);
       const nextUnresolved: Record<string, PeriodicRecoveryReconciliation> = {};
+      // Rows the operator deliberately deleted are recorded as tombstones; a snapshot of such a row is not an
+      // unsaved edit. A failed read simply leaves the evidence in place (fail-closed).
+      let tombstonedKeys = new Set<string>();
+      if (candidateKeys.length > 0) {
+        try {
+          tombstonedKeys = new Set(await listPeriodicTombstoneKeys());
+        } catch {
+          /* keep every snapshot */
+        }
+      }
       for (const rowKey of candidateKeys) {
         const snapshot = readPeriodicRecoverySnapshot(activeBusinessId, rowKey);
         if (!snapshot) continue;
         const serverItem = periodicStockDraftItemsByKey[rowKey];
+        // [Fix] Two situations where the snapshot cannot be an unsaved edit, checked before the four-case
+        // reconciliation (which is unchanged): the operator deliberately deleted the row (tombstone), or the
+        // snapshot predates the row's creation (left over from an earlier count that reused this row key).
+        if (
+          (!serverItem && tombstonedKeys.has(rowKey)) ||
+          (serverItem && isSnapshotFromEarlierLifecycle(snapshot.savedAt, serverItem.firstWriteAt))
+        ) {
+          clearPeriodicRecoverySnapshot(activeBusinessId, rowKey);
+          continue;
+        }
         const outcome = reconcilePeriodicRecoverySnapshot(snapshot, {
           exists: !!serverItem,
           rev: serverItem?.rev,

@@ -118,6 +118,11 @@ import { computeRestockObservation, findMostRecentBatchForProduct } from '../lib
 import { getTodayDateString } from '../utils/formatters';
 import { SUBSCRIPTION_PLAN_PRICE_MZN, SUBSCRIPTION_PLAN_CURRENCY } from '../data/subscriptionPlan';
 import { buildPendingPayment } from '../utils/paymentSubmission';
+import {
+  readPeriodicRecoverySnapshot,
+  clearPeriodicRecoverySnapshot,
+  clearAllPeriodicRecoverySnapshots,
+} from '../lib/periodicContagemRecovery';
 
 // [Smart Stock Entry — Tier 1] Client-side mirror of the server's
 // FieldState<T>/proposal shapes (server/smartStockEntry.ts) — duplicated
@@ -1052,6 +1057,7 @@ interface AppContextType {
     caixerDraft?: { cash?: string; emola?: string; mpesa?: string; banco?: string }
   ) => Promise<string>;
   clearPeriodicStockDraft: () => Promise<void>;
+  listPeriodicTombstoneKeys: () => Promise<string[]>;
   // [Durable Purchase Capture Amendment v1.0] Persistent, per-user
   // Purchase Draft — null until the current user starts one for this
   // business, cleared automatically the moment it's finalized. NOT
@@ -6819,6 +6825,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic'));
     }
     await fsBatch.commit();
+    // [Fix] The periodic draft (and every row in it) is gone: its browser-local recovery snapshots are
+    // now meaningless and, because row keys are reused, would block the NEXT count.
+    if (type !== 'initial') clearAllPeriodicRecoverySnapshots(businessId);
 
     if (type === 'initial') {
       // [Initial Stock Dual-Valuation-Basis — Implementation
@@ -7631,8 +7640,38 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     for (const legacyKey of legacyKeys) {
       const outcome = await migratePeriodicLegacyManualRow(legacyKey);
       if (outcome === 'ambiguous') ambiguousKeys.push(legacyKey);
+      if (outcome === 'migrated') {
+        // [Fix] The row now lives under a new key, so a recovery snapshot filed under the OLD key would be
+        // reported as "row missing" forever. If it holds exactly what was migrated, nothing is at risk and it
+        // is cleared; a snapshot with DIFFERENT content is kept (it may be a real unsaved edit).
+        try {
+          const snapshot = readPeriodicRecoverySnapshot(activeBusinessId, legacyKey);
+          const migratedDoc = itemsSnap.docs.find((d) => d.id === legacyKey)?.data() as
+            | { productName?: string; quantity?: string; unit?: string; costPrice?: string; sellingPrice?: string }
+            | undefined;
+          if (
+            snapshot &&
+            migratedDoc &&
+            snapshot.content.productName === migratedDoc.productName &&
+            snapshot.content.quantity === migratedDoc.quantity &&
+            snapshot.content.unit === migratedDoc.unit &&
+            snapshot.content.costPrice === migratedDoc.costPrice &&
+            snapshot.content.sellingPrice === migratedDoc.sellingPrice
+          ) {
+            clearPeriodicRecoverySnapshot(activeBusinessId, legacyKey);
+          }
+        } catch { /* storage unavailable */ }
+      }
     }
     return { ambiguousKeys };
+  };
+
+  // [Fix] Keys the operator deliberately deleted from this draft (tombstones). Used at resume to recognise
+  // recovery snapshots of rows that were removed on purpose — not unsaved edits.
+  const listPeriodicTombstoneKeys = async (): Promise<string[]> => {
+    if (!activeBusinessId) return [];
+    const snap = await getDocs(collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'tombstones'));
+    return snap.docs.map((d) => d.id);
   };
 
   const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
@@ -8146,7 +8185,14 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         return 'ambiguous' as const;
       });
 
-      if (outcome === 'done') return 'deleted';
+      if (outcome === 'done') {
+        // [Fix] The operator deliberately removed this row — its recovery snapshot is no longer an unsaved edit.
+        try {
+          clearPeriodicRecoverySnapshot(activeBusinessId, believedKey);
+          if (candidateMigratedKey) clearPeriodicRecoverySnapshot(activeBusinessId, candidateMigratedKey);
+        } catch { /* storage unavailable */ }
+        return 'deleted';
+      }
       if (outcome === 'ambiguous') return 'ambiguous';
       // outcome === 'retry' — loop back to Step A with a fresh query.
     }
@@ -8394,6 +8440,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     tombstonesSnap.forEach((tombstoneDoc) => fsBatch.delete(tombstoneDoc.ref));
     fsBatch.delete(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic'));
     await fsBatch.commit();
+    clearAllPeriodicRecoverySnapshots(activeBusinessId);
   };
 
 
@@ -9908,6 +9955,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         savePeriodicStockDraftMeta,
         flushPeriodicStockDraftRows,
         clearPeriodicStockDraft,
+        listPeriodicTombstoneKeys,
         purchaseDraft,
         purchaseDraftLoaded,
         savePurchaseDraft,
