@@ -47,6 +47,7 @@ import RecoveryEvidenceReview, { type RecoveryEvidenceEntry } from './RecoveryEv
 import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
 import { derivePeriodicRowPersistenceState, type PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
+import { shouldBootstrapPeriodicDraftMeta } from '../lib/periodicDraftMetaBootstrap';
 import {
   collectPendingRowKeys,
   buildPendingRowsByKey,
@@ -1618,6 +1619,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // is never permanently blocked.
   const hasSeenProductsRef = useRef(false);
   const draftInFlightSaveRef = useRef<Promise<void> | null>(null);
+  // [Fix — first row write of a brand-new count had no draft document to land
+  // in] See lib/periodicDraftMetaBootstrap.ts. `draftMetaSeenThisLifecycleRef`
+  // is true once THIS device has seen the draft document exist in the current
+  // count lifecycle; it is reset only by this device's own lifecycle ends
+  // (business switch, discarding the draft, finalizing), never by another
+  // device removing the draft — that is exactly the case the row-write guard
+  // ("Esta Contagem já não está ativa") must keep refusing.
+  const periodicDraftExistsRef = useRef(false);
+  periodicDraftExistsRef.current = !!periodicStockDraft;
+  const periodicDraftListenerStateRef = useRef(periodicStockDraftListenerState);
+  periodicDraftListenerStateRef.current = periodicStockDraftListenerState;
+  const draftMetaSeenThisLifecycleRef = useRef(false);
+  const draftMetaBootstrapRequestedRef = useRef(false);
+  if (periodicStockDraft) {
+    draftMetaSeenThisLifecycleRef.current = true;
+    draftMetaBootstrapRequestedRef.current = false;
+  }
   // [Decision 41C §5/§6/§8/§9] Per-row retry ownership. Keyed exactly
   // like rowDebounceTimersRef/scheduleRowDraftSave's own row keys
   // ('catalog:<productId>', 'manual:<index>', '__meta__',
@@ -1956,6 +1974,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     cancelAllRowRetries();
     manualRetryEligibleRowsRef.current.clear();
     bumpPersistenceStateTick();
+    draftMetaSeenThisLifecycleRef.current = false;
+    draftMetaBootstrapRequestedRef.current = false;
     hasSeenProductsRef.current = false;
     // [Implementation Authorization §2 item 1] A business switch clears
     // every row this device might have been protecting from live
@@ -2586,6 +2606,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // Never let a recovery-snapshot failure block or corrupt the
         // ordinary, already-protected save path below.
       }
+    }
+    // [Fix — first row write of a brand-new count] Make sure the count's own
+    // meta document is created BEFORE this row's first write (scheduled first,
+    // so its timer fires first and the row's attempt awaits it through
+    // draftInFlightSaveRef). Only when the listener has confirmed no draft and
+    // this device has never seen one in this lifecycle — see the helper.
+    if (
+      shouldBootstrapPeriodicDraftMeta({
+        rowKey,
+        listenerState: periodicDraftListenerStateRef.current,
+        draftExists: periodicDraftExistsRef.current,
+        metaSeenThisLifecycle: draftMetaSeenThisLifecycleRef.current,
+        bootstrapAlreadyRequested: draftMetaBootstrapRequestedRef.current,
+        metaSaveAlreadyPending: rowDebounceTimersRef.current.has('__meta__'),
+      })
+    ) {
+      draftMetaBootstrapRequestedRef.current = true;
+      scheduleRowDraftSave('__meta__');
     }
     const existing = rowDebounceTimersRef.current.get(rowKey);
     if (existing) clearTimeout(existing);
@@ -4696,6 +4734,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     } finally {
       // [Implementation Authorization §2 item 1] Nothing remote is left
       // to protect any row from once the draft itself has been cleared.
+      draftMetaSeenThisLifecycleRef.current = false;
+      draftMetaBootstrapRequestedRef.current = false;
       rowHasUnsavedLocalEditRef.current = {};
       bumpPersistenceStateTick();
       setDraftBannerDismissed(true);
@@ -7059,6 +7099,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // confirmation — cleared here so a later, entirely unrelated
       // Contagem never silently inherits it.
       if (pendingBusinessWorthCorrection) clearBusinessWorthCorrection();
+      draftMetaSeenThisLifecycleRef.current = false;
+      draftMetaBootstrapRequestedRef.current = false;
       // [Implementation Task, Section 4b] Finalized — this identity has
       // done its job. A future periodic count (after onComplete moves
       // the operator away from this screen) needs a fresh one; leaving
