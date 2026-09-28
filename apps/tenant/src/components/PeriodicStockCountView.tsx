@@ -4037,9 +4037,32 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // session, removed before its first save completed), there is
     // nothing server-side to delete at all; only the local array
     // entry is removed.
+    // [Fix — removed row resurrected by its own pending save] A manual row's autosave timer, retry and
+    // dirty flag are keyed by its stable sourceRowKey, not by `manual:${index}` (the index-keyed cleanup
+    // below predates stable identity). Left running, the row's pending save could fire while
+    // deletePeriodicManualRow was awaiting the network; if the delete committed first, the save's
+    // first-write branch re-created the removed row in the shared draft (nothing checks tombstones on
+    // write). So: cancel this row's own debounce and retry first (cancelRowRetry also invalidates any
+    // in-flight attempt's result handling), then let an already-in-flight write settle before deleting,
+    // so the delete always lands after it. If the delete turns out ambiguous the row stays, and its
+    // cancelled save is rescheduled so the edit is not lost.
+    const rowSaveKey = row?.sourceRowKey ?? `manual:${index}`;
+    const pendingRowTimer = rowDebounceTimersRef.current.get(rowSaveKey);
+    const hadPendingRowSave = !!pendingRowTimer || !!rowRetryRef.current.get(rowSaveKey)?.timer;
+    if (pendingRowTimer) clearTimeout(pendingRowTimer);
+    rowDebounceTimersRef.current.delete(rowSaveKey);
+    cancelRowRetry(rowSaveKey);
+    if (draftInFlightSaveRef.current) {
+      try {
+        await draftInFlightSaveRef.current;
+      } catch {
+        // the in-flight attempt handles its own failure
+      }
+    }
     if (row?.sourceRowKey) {
       const outcome = await deletePeriodicManualRow(row.sourceRowKey);
       if (outcome === 'ambiguous') {
+        if (hadPendingRowSave) scheduleRowDraftSave(rowSaveKey, rowSaveKey);
         // [Integration Point 2 — fail-closed, per the approved
         // architecture] The authoritative row must remain exactly as
         // it was — never silently removed from local state on an
@@ -4069,6 +4092,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // a local error message or timer, never loses or misidentifies
     // persisted data. Unchanged from the prior mechanism's own
     // equivalent logic.
+    // The row is gone: nothing of it may keep the draft looking "unsaved" or retry-eligible, including
+    // a save scheduled by a keystroke that landed while the delete was awaiting.
+    const lateRowTimer = rowDebounceTimersRef.current.get(rowSaveKey);
+    if (lateRowTimer) clearTimeout(lateRowTimer);
+    rowDebounceTimersRef.current.delete(rowSaveKey);
+    cancelRowRetry(rowSaveKey);
+    delete rowHasUnsavedLocalEditRef.current[rowSaveKey];
+    manualRetryEligibleRowsRef.current.delete(rowSaveKey);
+    bumpPersistenceStateTick();
+    // Legacy positional keys only (rows without a sourceRowKey). A surviving row's own stable key can
+    // itself look positional (an unmigrated legacy key such as `manual:259`) and must never be renamed.
+    const survivingRowKeys = new Set(nextManualRows.map((r) => r.sourceRowKey).filter(Boolean) as string[]);
     const removedKey = `manual:${index}`;
     const removedTimer = rowDebounceTimersRef.current.get(removedKey);
     if (removedTimer) clearTimeout(removedTimer);
@@ -4076,7 +4111,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const shifted = new Map<string, ReturnType<typeof setTimeout>>();
     rowDebounceTimersRef.current.forEach((timer, key) => {
       const match = /^manual:(\d+)$/.exec(key);
-      if (!match) {
+      if (!match || survivingRowKeys.has(key)) {
         shifted.set(key, timer);
         return;
       }

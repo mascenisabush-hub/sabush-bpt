@@ -56,7 +56,7 @@ const scheduleRowDraftSaveBody = extractFunctionBody(source, 'const scheduleRowD
 // only, not a weakening of what either test actually proves (still
 // exactly one live-state read site, still the exact same await-before-
 // write serialization).
-const performRowSaveAttemptBody = extractFunctionBody(source, 'const performRowSaveAttempt = async (rowKey: string, generation: number, attemptNumber: number) => {');
+const performRowSaveAttemptBody = extractFunctionBody(source, 'const performRowSaveAttempt = async (\n    rowKey: string,\n    protectionKey: string,\n    generation: number,\n    attemptNumber: number\n  ) => {');
 
 describe('A — independent per-row timers (Decision 39a FR-N1)', () => {
   it('rowDebounceTimersRef is a Map keyed by row identity, replacing the prior single shared draftDebounceTimerRef', () => {
@@ -82,12 +82,14 @@ describe('A — independent per-row timers (Decision 39a FR-N1)', () => {
 
   it('updateManualRow schedules a timer keyed by this row\'s own array index', () => {
     const body = extractFunctionBody(source, 'const updateManualRow = (');
-    assert.match(body, /scheduleRowDraftSave\(`manual:\$\{index\}`\)/);
+    // [850759b Option B] Keyed by the row's own stable sourceRowKey; `manual:${index}` is only the fallback
+    // for a row without one. The array-index key was the raw-suffix-as-array-index defect.
+    assert.match(body, /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,/);
   });
 
   it('editing a catalog row and editing a manual row use disjoint key prefixes ("catalog:" vs "manual:"), so neither can ever collide with or reset the other\'s timer', () => {
     assert.match(source, /scheduleRowDraftSave\(`catalog:\$\{productId\}`\)/);
-    assert.match(source, /scheduleRowDraftSave\(`manual:\$\{index\}`\)/);
+    assert.match(source, /scheduleRowDraftSave\(\s*\n\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,/);
   });
 
   it('count-level, non-row-specific changes (type/label/date) use a shared "__meta__" key, never a specific row\'s key', () => {
@@ -121,7 +123,7 @@ describe('C — live-state sourcing / T0-T100 stale-write protection (Decision 3
     // scheduleRowDraftSave's own parameter list must be JUST the row
     // key — no nextCatalogRows/nextManualRows/etc. argument exists to
     // capture a stale snapshot in the first place.
-    assert.match(source, /const scheduleRowDraftSave = \(rowKey: string\) => \{/);
+    assert.match(source, /const scheduleRowDraftSave = \(rowKey: string, protectionKey: string = rowKey\) => \{/);
   });
 
   it('latestFlushArgs is reassigned unconditionally on every render, so it is always current by the time any row\'s 800ms timer actually fires', () => {
@@ -173,30 +175,47 @@ describe('D — global write serialization is preserved (Decision 39a FR-N3, Rul
   });
 });
 
-describe('E — manual-row removal re-indexes pending timers correctly (Implementation Plan §1b)', () => {
-  const removeBody = extractFunctionBody(source, 'const handleRemoveManualRow = (');
+describe('E — manual-row removal cancels the removed row\'s own pending save (stable keys; Implementation Plan §1b as superseded by 850759b / 7c698f2)', () => {
+  // The original §1b re-indexed `manual:${index}` timers on removal. Since 850759b (Option B, stable per-row
+  // identity) and 7c698f2 (coordinated deletion), a manual row's timer/retry/dirty flag are keyed by its
+  // stable sourceRowKey, which never shifts. The index-keyed cleanup missed that key, so a pending save could
+  // fire during the awaited delete and re-create the removed row. These pin the corrected contract.
+  const removeBody = extractFunctionBody(source, 'const handleRemoveManualRow = async (index: number) => {');
 
-  it('cancels the removed row\'s own pending timer outright', () => {
-    assert.match(removeBody, /const removedKey = `manual:\$\{index\}`;/);
-    assert.match(removeBody, /const removedTimer = rowDebounceTimersRef\.current\.get\(removedKey\);/);
-    assert.match(removeBody, /if \(removedTimer\) clearTimeout\(removedTimer\);/);
+  it('cancels the removed row\'s own debounce and retry, keyed by its stable sourceRowKey, BEFORE the awaited delete', () => {
+    assert.match(removeBody, /const rowSaveKey = row\?\.sourceRowKey \?\? `manual:\$\{index\}`;/);
+    const clearIdx = removeBody.indexOf('rowDebounceTimersRef.current.delete(rowSaveKey);');
+    const cancelIdx = removeBody.indexOf('cancelRowRetry(rowSaveKey);');
+    const deleteIdx = removeBody.indexOf('await deletePeriodicManualRow(row.sourceRowKey)');
+    assert.ok(clearIdx !== -1 && cancelIdx !== -1 && deleteIdx !== -1);
+    assert.ok(clearIdx < deleteIdx && cancelIdx < deleteIdx);
   });
 
-  it('re-keys every later manual row\'s own timer down by one, using the identical i < index / i > index shift confirmedManualRowIndices/manualRowSaveError already use', () => {
-    assert.match(removeBody, /if \(i < index\) shifted\.set\(key, timer\);/);
+  it('lets an already in-flight write settle before deleting, so the delete always lands after it', () => {
+    const awaitIdx = removeBody.indexOf('await draftInFlightSaveRef.current;');
+    assert.ok(awaitIdx !== -1 && awaitIdx < removeBody.indexOf('await deletePeriodicManualRow(row.sourceRowKey)'));
+  });
+
+  it('an ambiguous delete keeps the row AND reschedules the save it cancelled, so no edit is lost', () => {
+    assert.match(removeBody, /if \(outcome === 'ambiguous'\) \{\s*\n\s*if \(hadPendingRowSave\) scheduleRowDraftSave\(rowSaveKey, rowSaveKey\);/);
+  });
+
+  it('after removal, the row leaves no dirty flag, retry eligibility, or late-scheduled save behind', () => {
+    const afterFilter = removeBody.slice(removeBody.indexOf('setManualRowsSynced(nextManualRows);'));
+    assert.match(afterFilter, /delete rowHasUnsavedLocalEditRef\.current\[rowSaveKey\];/);
+    assert.match(afterFilter, /manualRetryEligibleRowsRef\.current\.delete\(rowSaveKey\);/);
+    assert.match(afterFilter, /cancelRowRetry\(rowSaveKey\);/);
+  });
+
+  it('the legacy positional re-key never renames a surviving row\'s own stable key (e.g. an unmigrated `manual:259`)', () => {
+    assert.match(removeBody, /if \(!match \|\| survivingRowKeys\.has\(key\)\) \{\s*\n\s*shifted\.set\(key, timer\);\s*\n\s*return;\s*\n\s*\}/);
     assert.match(removeBody, /else if \(i > index\) shifted\.set\(`manual:\$\{i - 1\}`, timer\);/);
   });
 
-  it('non-manual-row timer keys (catalog:*, __meta__, newProductInfo:*) pass through the re-indexing step untouched', () => {
-    assert.match(removeBody, /if \(!match\) \{\s*\n\s*shifted\.set\(key, timer\);\s*\n\s*return;\s*\n\s*\}/);
-  });
-
-  it('re-indexing happens before the resulting save is scheduled', () => {
+  it('the positional re-key still happens before the resulting meta save is scheduled', () => {
     const shiftedAssignIdx = removeBody.indexOf('rowDebounceTimersRef.current = shifted;');
     const scheduleIdx = removeBody.indexOf("scheduleRowDraftSave('__meta__')");
-    assert.notEqual(shiftedAssignIdx, -1);
-    assert.notEqual(scheduleIdx, -1);
-    assert.ok(shiftedAssignIdx < scheduleIdx);
+    assert.ok(shiftedAssignIdx !== -1 && scheduleIdx !== -1 && shiftedAssignIdx < scheduleIdx);
   });
 });
 
@@ -275,8 +294,8 @@ describe('G — Validar (formerly Guardar) now persists via the exact same per-r
   it('handleEditCatalogRow and handleEditManualRow — superseded by the later, separate "Existing-Product Edit/Confirm Workflow" authorization: both now route the inverse (validated: false) transition through the new reopenExistingProductForEditing helper (which also activates the workspace and covers every sibling portion sharing the product\'s name, not only the clicked row) rather than calling updateCatalogRow/updateManualRow directly for a single row', () => {
     const catalogBody = extractFunctionBody(source, 'const handleEditCatalogRow = (');
     const manualBody = extractFunctionBody(source, 'const handleEditManualRow = (');
-    assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
-    assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\)\)/);
+    assert.match(catalogBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\), (productId|row\.productId)\)/);
+    assert.match(manualBody, /reopenExistingProductForEditing\(productKeyFor\(row\.productName\), (productId|row\.productId)\)/);
     // The inverse transition itself (validated: false) still happens,
     // just inside the shared helper now — proven directly against
     // that helper's own body, applied across every row (catalog AND
@@ -284,7 +303,7 @@ describe('G — Validar (formerly Guardar) now persists via the exact same per-r
     // setManualRows (a bulk, multi-row update — updateCatalogRow/
     // updateManualRow only ever touch one row by id/index, which
     // cannot express "every row sharing this name" in one write).
-    const reopenBody = extractFunctionBody(source, 'const reopenExistingProductForEditing = (key: string) => {');
+    const reopenBody = extractFunctionBody(source, 'const reopenExistingProductForEditing = (key: string, explicitProductId?: string) => {');
     assert.match(reopenBody, /validated:\s*false/);
     assert.match(reopenBody, /setCatalogRows\(/);
     assert.match(reopenBody, /setManualRows\(/);
