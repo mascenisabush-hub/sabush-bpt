@@ -8289,6 +8289,21 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           return 'retry' as const;
         }
 
+        // [Bug fix — urgent: new rows could not be deleted in Contagem]
+        // Every row created via "Adicionar produto"/"Adicionar Porção" gets a
+        // stable key (manual:<uuid>) at creation, BEFORE its first save.
+        // Removing it before that save lands (the caller cancels the pending
+        // save first) finds no document, no tombstone and no migration
+        // candidate — it was simply never persisted. A stable key has no
+        // other possible location, so this is not ambiguous: record the
+        // deletion (the tombstone also stops recovery from resurrecting it)
+        // and report success. Legacy positional keys (manual:<n>) keep the
+        // conservative 'ambiguous' outcome, since they may have been migrated.
+        if (!/^manual:\d+$/.test(believedKey)) {
+          tx.set(tombstoneRef(believedKey), writeTombstone(believedKey));
+          return 'done' as const;
+        }
+
         return 'ambiguous' as const;
       });
 

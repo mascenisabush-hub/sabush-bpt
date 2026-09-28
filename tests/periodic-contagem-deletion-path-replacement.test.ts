@@ -49,7 +49,7 @@ describe('handleRemoveManualRow — replaced with coordinated, stable-key deleti
 
   it('an ambiguous outcome leaves authoritative local state intact — no setManualRowsSynced call before this check resolves', () => {
     const ambiguousIndex = fnMatch![0].indexOf("outcome === 'ambiguous'");
-    const filterIndex = fnMatch![0].indexOf('manualRowsRef.current.filter((_, i) => i !== index)');
+    const filterIndex = fnMatch![0].indexOf('currentRows.filter((_, i) => i !== removeIndex)');
     assert.ok(ambiguousIndex > -1 && filterIndex > -1);
     assert.ok(ambiguousIndex < filterIndex, 'the ambiguous check must occur, and return early, before local state is ever touched');
     assert.match(fnMatch![0], /if \(outcome === 'ambiguous'\) \{[\s\S]*?return;\s*\n\s*\}/);
@@ -75,11 +75,13 @@ describe('handleRemoveManualRow — replaced with coordinated, stable-key deleti
     assert.doesNotMatch(fnMatch![0], /sourceRowKey: `manual:\$\{i\}`/);
     // The only .map/.filter over manualRowsRef.current is a plain
     // filter, confirming no per-row content mutation occurs at all.
-    assert.match(fnMatch![0], /const nextManualRows = manualRowsRef\.current\.filter\(\(_, i\) => i !== index\);/);
+    // [Bug fix] position re-located by stable key after the awaited delete.
+    assert.match(fnMatch![0], /const currentRows = manualRowsRef\.current;/);
+    assert.match(fnMatch![0], /const nextManualRows = currentRows\.filter\(\(_, i\) => i !== removeIndex\);/);
   });
 
   it('local UI bookkeeping (debounce timers, manualRowSaveError) is preserved, unchanged — this is cosmetic array-position tracking, not persistence, and re-indexing it carries no data-integrity risk', () => {
-    assert.match(fnMatch![0], /const removedKey = `manual:\$\{index\}`;/);
+    assert.match(fnMatch![0], /const removedKey = `manual:\$\{removeIndex\}`;/);
     assert.match(fnMatch![0], /rowDebounceTimersRef\.current\.delete\(removedKey\);/);
     assert.match(fnMatch![0], /const shifted = new Map<string, ReturnType<typeof setTimeout>>\(\);/);
     assert.match(

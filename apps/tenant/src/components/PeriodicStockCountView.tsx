@@ -4079,8 +4079,47 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
     // [Bug fix — same-index manual-row collision] Base is
     // manualRowsRef.current, not the manualRows closure variable.
-    const nextManualRows = manualRowsRef.current.filter((_, i) => i !== index);
+    // [Bug fix — wrong/no row removed after a concurrent removal] `index`
+    // is the row's position when the bin was clicked; the awaits above
+    // can span another removal that shifts positions. Re-locate the SAME
+    // row by its stable key (or by identity for a not-yet-stable row) in
+    // the latest rows before removing, and use that position below.
+    const currentRows = manualRowsRef.current;
+    const removeIndex = row?.sourceRowKey
+      ? currentRows.findIndex((r) => r.sourceRowKey === row.sourceRowKey)
+      : currentRows[index] === row
+        ? index
+        : currentRows.indexOf(row as (typeof currentRows)[number]);
+    if (removeIndex === -1) return; // already gone
+    const nextManualRows = currentRows.filter((_, i) => i !== removeIndex);
     setManualRowsSynced(nextManualRows);
+    // [Bug fix — urgent: deleting a row in an open product] The open
+    // workspace tracks its manual rows by array POSITION. Removing a row
+    // shifts every later row down by one, so without re-addressing, a row
+    // of a DIFFERENT product could slide into the open workspace (looking
+    // as if the delete did nothing) and Voltar could restore the wrong row.
+    const shiftIndex = (i: number) => (i > removeIndex ? i - 1 : i);
+    setActiveWorkspaceRowIdentity((prev) => ({
+      ...prev,
+      manualIndices: prev.manualIndices.filter((i) => i !== removeIndex).map(shiftIndex),
+    }));
+    setReopenedValidatedManualRowIndices((prev) =>
+      prev === null ? null : prev.filter((i) => i !== removeIndex).map(shiftIndex)
+    );
+    if (activeNewManualRowIndex !== null) {
+      if (activeNewManualRowIndex !== removeIndex) {
+        setActiveNewManualRowIndex(shiftIndex(activeNewManualRowIndex));
+      } else {
+        // The row that anchored a newly added product was removed. If
+        // portions of that product remain open, keep the workspace on them
+        // by name; if none remain, the existing auto-clear effect closes it.
+        const removedKey = productKeyFor(row?.productName ?? '');
+        setActiveNewManualRowIndex(null);
+        if (removedKey && nextManualRows.some((r) => productKeyFor(r.productName) === removedKey)) {
+          setActiveWorkspaceKey(removedKey);
+        }
+      }
+    }
     // [Decision 39a; Implementation Authorization §1 item 5] Local UI
     // bookkeeping only — rowDebounceTimersRef and manualRowSaveError
     // remain array-index-keyed (unlike the row's own persisted
@@ -4104,7 +4143,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // Legacy positional keys only (rows without a sourceRowKey). A surviving row's own stable key can
     // itself look positional (an unmigrated legacy key such as `manual:259`) and must never be renamed.
     const survivingRowKeys = new Set(nextManualRows.map((r) => r.sourceRowKey).filter(Boolean) as string[]);
-    const removedKey = `manual:${index}`;
+    const removedKey = `manual:${removeIndex}`;
     const removedTimer = rowDebounceTimersRef.current.get(removedKey);
     if (removedTimer) clearTimeout(removedTimer);
     rowDebounceTimersRef.current.delete(removedKey);
@@ -4116,8 +4155,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         return;
       }
       const i = Number(match[1]);
-      if (i < index) shifted.set(key, timer);
-      else if (i > index) shifted.set(`manual:${i - 1}`, timer);
+      if (i < removeIndex) shifted.set(key, timer);
+      else if (i > removeIndex) shifted.set(`manual:${i - 1}`, timer);
       // i === index already handled (cancelled) above.
     });
     rowDebounceTimersRef.current = shifted;
@@ -4131,8 +4170,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       const next: Record<number, string> = {};
       Object.entries(prev).forEach(([key, value]) => {
         const i = Number(key);
-        if (i < index) next[i] = value;
-        else if (i > index) next[i - 1] = value;
+        if (i < removeIndex) next[i] = value;
+        else if (i > removeIndex) next[i - 1] = value;
       });
       return next;
     });
@@ -9429,7 +9468,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               type="button"
                               onClick={() => handleRemoveCatalogRow(productId)}
                               aria-label={`Remover ${row.productName}`}
-                              className="shrink-0 p-1.5 rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                              className="shrink-0 p-1.5 rounded-lg text-gray-400 opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
                             >
                               <Trash2 className="w-3.5 h-3.5" />
                             </button>
@@ -10026,7 +10065,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                     type="button"
                                     onClick={() => handleRemoveManualRow(idx)}
                                     aria-label={`Remover porção`}
-                                    className="shrink-0 p-1.5 rounded-lg text-gray-300 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 sm:group-focus-within:opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
+                                    className="shrink-0 p-1.5 rounded-lg text-gray-400 opacity-100 hover:text-rose-600 hover:bg-rose-50 transition-all duration-150"
                                   >
                                     <Trash2 className="w-3.5 h-3.5" />
                                   </button>

@@ -209,7 +209,7 @@ describe('E — manual-row removal cancels the removed row\'s own pending save (
 
   it('the legacy positional re-key never renames a surviving row\'s own stable key (e.g. an unmigrated `manual:259`)', () => {
     assert.match(removeBody, /if \(!match \|\| survivingRowKeys\.has\(key\)\) \{\s*\n\s*shifted\.set\(key, timer\);\s*\n\s*return;\s*\n\s*\}/);
-    assert.match(removeBody, /else if \(i > index\) shifted\.set\(`manual:\$\{i - 1\}`, timer\);/);
+    assert.match(removeBody, /else if \(i > removeIndex\) shifted\.set\(`manual:\$\{i - 1\}`, timer\);/);
   });
 
   it('the positional re-key still happens before the resulting meta save is scheduled', () => {

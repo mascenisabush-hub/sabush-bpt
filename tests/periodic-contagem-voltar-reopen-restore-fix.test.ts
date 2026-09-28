@@ -144,7 +144,9 @@ describe('C — a newly-added portion (added after reopen) cannot be swept into 
   });
 
   it('handleAddManualRow appends the new row to the END of the array (manualRows is strictly append-only) — so it lands at a brand-new index that could not have existed in a snapshot captured earlier', () => {
-    assert.match(handleAddManualRowBody, /const nextManualRows = \[\.\.\.manualRows, createManualRow\(\)\];/);
+    // [Bug fix — same-index manual-row collision] now built from
+    // manualRowsRef.current (latest rows), still appended at the END.
+    assert.match(handleAddManualRowBody, /const nextManualRows = \[\.\.\.manualRowsRef\.current, createManualRow\(\)\];/);
   });
 
   it('handleAddPortionToManualGroup (the "+ Adicionar Porção" affordance for an existing product) also produces an unvalidated row, never validated: true, by construction', () => {
@@ -163,7 +165,14 @@ describe('C — a newly-added portion (added after reopen) cannot be swept into 
       assert.ok(arg === 'null' || arg === 'validatedCatalogRowIdsAtReopen',
         `setReopenedValidatedCatalogRowIds must only ever be called with the fresh capture or null to clear it, found: ${arg}`);
     }
+    // [Bug fix — row removal] handleRemoveManualRow re-addresses the
+    // captured positions after a delete via a (prev) => updater that only
+    // FILTERS/SHIFTS existing entries — it can never add a new one.
+    const removeStart = periodicSrc.indexOf('const handleRemoveManualRow = async');
+    const removeBody = periodicSrc.slice(removeStart, periodicSrc.indexOf('\n  };', removeStart));
+    assert.match(removeBody, /setReopenedValidatedManualRowIndices\(\(prev\) =>\s*prev === null \? null : prev\.filter\(\(i\) => i !== removeIndex\)\.map\(shiftIndex\)\s*\);/);
     for (const arg of otherWritersManual) {
+      if (arg === '(prev') continue; // the filter/shift-only updater verified above
       assert.ok(arg === 'null' || arg === 'validatedManualRowIndicesAtReopen',
         `setReopenedValidatedManualRowIndices must only ever be called with the fresh capture or null to clear it, found: ${arg}`);
     }
@@ -213,7 +222,9 @@ describe('F — Total value in the unified list is no longer squeezed alongside 
   it('the unified list\'s single shared value+action cell stacks the Total value above the button (flex-col), instead of splitting one fixed-width row between them (flex justify-between)', () => {
     assert.match(
       periodicSrc,
-      /<div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">\s*\n\s*<span className="text-\[13px\] font-semibold text-\[#633806\] tabular-nums whitespace-nowrap">\s*\n\s*\{row\.quantity\.trim\(\) === '' \? '—' : formatCurrency\(rowValue, currencySymbol\)\}\s*\n\s*<\/span>/
+      // [Per-product grouping — Integration Point 3] the value is now the
+      // product's summed portion value (group.displayAggregateValue).
+      /<div className="col-span-2 sm:col-span-1 flex flex-col items-end gap-1">\s*\n\s*(?:\{\/\*[\s\S]*?\*\/\}\s*\n\s*)?<span className="text-\[13px\] font-semibold text-\[#633806\] tabular-nums whitespace-nowrap">\s*\n\s*\{group\.displayAggregateValue === 0[\s\S]*?: formatCurrency\(group\.displayAggregateValue, currencySymbol\)\}\s*\n\s*<\/span>/
     );
   });
 
@@ -223,8 +234,11 @@ describe('F — Total value in the unified list is no longer squeezed alongside 
   });
 
   it('no calculation changed: the same pre-existing rowValue = q * sellingPriceNum expression still feeds the Total value — only its surrounding layout changed', () => {
-    const matches = periodicSrc.match(/const rowValue = q \* sellingPriceNum;/g) ?? [];
-    assert.ok(matches.length >= 1, 'Expected the existing rowValue calculation to still appear for the unified list, unmodified.');
+    // Per-portion quantity * sellingPrice, summed once in
+    // periodicContagemGroupedView.ts (presentation only).
+    const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
+    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
+    assert.match(periodicSrc, /formatCurrency\(group\.displayAggregateValue, currencySymbol\)/);
   });
 
   it('the unified list uses its own unifiedRowGridClass template, deliberately narrower than rowGridClass for its narrower right-column container — rowGridClass itself is untouched', () => {
