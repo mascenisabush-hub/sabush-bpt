@@ -371,3 +371,16 @@ describe('H — per-product independent draft persistence (superseding Decision 
     );
   });
 });
+
+describe('reopen marks manual rows dirty under their REAL document key (stable identity)', () => {
+  // Regression: reopenExistingProductForEditing stored the save target as `manual:${index}`. With stable
+  // (UUID) keys, findManualRowIndexByKey never matches that, so the interruption flush resolved it as a no-op
+  // "success", cleared the dirty flag, and the reopen (validated: false) was never persisted.
+  const reopenBody = extractFunctionBody(source, 'const reopenExistingProductForEditing = (key: string, explicitProductId?: string) => {');
+  it('uses manualRowKey for both the protection key and the save target', () => {
+    assert.match(reopenBody, /rowHasUnsavedLocalEditRef\.current\[manualRowKey\(row, index\)\] = manualRowKey\(row, index\);/);
+  });
+  it('no site in the view stores a positional save target for a manual row', () => {
+    assert.doesNotMatch(source.split("\n").filter((l) => !l.trim().startsWith("//")).join("\n"), /rowHasUnsavedLocalEditRef\.current\[[^\]]+\] = `manual:\$\{index\}`/);
+  });
+});

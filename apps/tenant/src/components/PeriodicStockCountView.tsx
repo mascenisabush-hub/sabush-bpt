@@ -6050,7 +6050,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           // valued by its current save-target key, so the flush path
           // can still recover a valid target regardless of which
           // identity this entry is keyed under.
-          rowHasUnsavedLocalEditRef.current[row.sourceRowKey ?? `manual:${index}`] = `manual:${index}`;
+          // Save target = the row's own document key (manualRowKey), same as updateManualRow. A positional
+          // `manual:${index}` never matches a stable-keyed row in findManualRowIndexByKey, so the flush on
+          // tab hide/close resolved it as a no-op "success", cleared the flag, and the reopen was never saved.
+          rowHasUnsavedLocalEditRef.current[manualRowKey(row, index)] = manualRowKey(row, index);
           bumpPersistenceStateTick();
           return { ...row, validated: false };
         }
