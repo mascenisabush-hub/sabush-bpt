@@ -386,8 +386,8 @@ describe('Corrigir (Decision 40 FR-N11; Implementation Authorization §1 item 7,
     // describes: the manualRowIndex tagging above is local to
     // rowsForTally/tally construction, never mutating the shared
     // catalogRows/manualRows state itself.
-    assert.match(body, /for \(const \[productId, row\] of Object\.entries\(catalogRows\)\) rowsByKey\[`catalog:\$\{productId\}`\] = workingRowToDraftItem\(row\);/);
-    assert.match(body, /manualRows\.forEach\(\(row, index\) => \{/);
+    // [Fix] The identity write now persists ONLY rows with a pending edit, built from the untagged catalogRows/manualRows.
+    assert.match(body, /buildPendingRowsByKey\(pendingRowKeysAtReview, catalogRows, manualRows, workingRowToDraftItem\)/);
   });
 });
 

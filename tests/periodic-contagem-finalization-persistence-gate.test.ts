@@ -16,7 +16,7 @@ const source = readFileSync(
 describe('handleRequestConfirmation — third gate added, existing two gates unchanged', () => {
   it('the two existing gates (migrationStatus, unresolvedRecoveryEvidence) remain present, unmodified, in the same order', () => {
     const fnStart = source.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
-    const region = source.slice(fnStart, fnStart + 3000);
+    const region = source.slice(fnStart, fnStart + 7500); // widened from 3000: the identity-check retry and the duplicate gate now sit before this gate
     const migrationIdx = region.indexOf("migrationStatus === 'blocked'");
     const recoveryIdx = region.indexOf('unresolvedRecoveryEvidence).length > 0');
     const newGateIdx = region.indexOf('unsafeRowEntries.length > 0');
@@ -26,13 +26,13 @@ describe('handleRequestConfirmation — third gate added, existing two gates unc
 
   it('the new gate reuses isRowSafeToProgress unchanged from Stage 2 -- no new persistence-state derivation introduced', () => {
     const fnStart = source.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
-    const region = source.slice(fnStart, fnStart + 3000);
+    const region = source.slice(fnStart, fnStart + 7500); // widened from 3000: the identity-check retry and the duplicate gate now sit before this gate
     assert.match(region, /\.filter\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\)/);
   });
 
   it('checks every existing row (catalog and manual), using the same catalog:${id} / sourceRowKey ?? manual:${index} pattern used everywhere else in this file', () => {
     const fnStart = source.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
-    const region = source.slice(fnStart, fnStart + 3000);
+    const region = source.slice(fnStart, fnStart + 7500); // widened from 3000: the identity-check retry and the duplicate gate now sit before this gate
     assert.match(region, /Object\.entries\(catalogRows\)\.map\(\(\[productId\]\) => `catalog:\$\{productId\}`\)/);
     assert.match(region, /manualRows\.map\(\(row, idx\) => row\.sourceRowKey \?\? `manual:\$\{idx\}`\)/);
   });

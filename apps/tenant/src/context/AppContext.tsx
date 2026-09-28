@@ -29,6 +29,7 @@ import {
 import { ref as storageRef, uploadBytes, getDownloadURL } from 'firebase/storage';
 import { auth, db, storage, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
+import { selectLegacyKeysToMigrate, type PortionLike } from '../utils/periodicRowIdentity';
 import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
@@ -7613,9 +7614,11 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     const itemsSnap = await getDocs(
       collection(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items')
     );
-    const legacyKeys = itemsSnap.docs
-      .map((d) => d.id)
-      .filter((key) => /^manual:\d+$/.test(key));
+    // [Fix] A legacy position-named document that is identical to another document is a COPY, not something the
+    // owner typed: it is left exactly as it is (not moved, not deleted).
+    const { migrate: legacyKeys } = selectLegacyKeysToMigrate(
+      itemsSnap.docs.map((d) => ({ id: d.id, data: d.data() as PortionLike }))
+    );
     const ambiguousKeys: string[] = [];
     for (const legacyKey of legacyKeys) {
       const outcome = await migratePeriodicLegacyManualRow(legacyKey);
@@ -8297,12 +8300,34 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     await runTransaction(db, async (tx) => {
       const metaSnap = await tx.get(metaRef);
       const currentOpenConflictCount = metaSnap.exists() ? (metaSnap.data().openConflictCount ?? 0) : 0;
+      // [Fix] Read each row's CURRENT server state inside the transaction (all reads before any write), so a row that
+      // another writer changed since this device last saw it, or that is in conflict, is never overwritten.
+      const rowEntriesToWrite = Object.entries(rowsByKey);
+      const serverItemSnaps = await Promise.all(
+        rowEntriesToWrite.map(([rowKey]) =>
+          tx.get(doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey))
+        )
+      );
+      const serverItemByKey = new Map<string, PeriodicStockDraftItem | undefined>(
+        rowEntriesToWrite.map(([rowKey], i) => [
+          rowKey,
+          serverItemSnaps[i].exists() ? (serverItemSnaps[i].data() as PeriodicStockDraftItem) : undefined,
+        ])
+      );
       tx.set(metaRef, {
         ...meta,
         ...(currentOpenConflictCount > 0 ? { openConflictCount: currentOpenConflictCount } : {}),
       });
       for (const [rowKey, item] of Object.entries(rowsByKey)) {
-        const known = periodicStockDraftItemsByKey[rowKey];
+        const serverItem = serverItemByKey.get(rowKey);
+        // Never overwrite an unresolved conflict, and never overwrite a version another writer saved since
+        // this device last saw the row (Decision 55): such a row is left untouched and stays pending, so the
+        // normal per-row save detects the conflict. Only a row whose server revision is the one this device
+        // already knows is written, at the next revision.
+        if (serverItem?.state === 'CONFLICT') continue;
+        const locallyKnownRev = periodicStockDraftItemsByKey[rowKey]?.rev ?? 0;
+        if ((serverItem?.rev ?? 0) !== locallyKnownRev) continue;
+        const known = serverItem;
         const {
           rev: _ignoredRev,
           state: _ignoredState,

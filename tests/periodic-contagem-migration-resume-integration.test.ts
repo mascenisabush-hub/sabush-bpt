@@ -30,7 +30,9 @@ describe('migrateAllLegacyPeriodicRows — batch discovery and migration', () =>
   });
 
   it('filters strictly to the legacy manual:{digits} format, excluding already-migrated or genuinely new UUID-keyed rows', () => {
-    assert.match(fnMatch![0], /\.filter\(\(key\) => \/\^manual:\\d\+\$\/\.test\(key\)\);/);
+    // [Fix] The legacy-format filter now lives in selectLegacyKeysToMigrate, which also skips COPIES.
+    assert.match(fnMatch![0], /selectLegacyKeysToMigrate\(/);
+    assert.match(readFileSync('apps/tenant/src/utils/periodicRowIdentity.ts', 'utf8'), /LEGACY_POSITIONAL_KEY = \/\^manual:\\d\+\$\//);
   });
 
   it('processes each legacy key sequentially through migratePeriodicLegacyManualRow, collecting ambiguous outcomes', () => {
@@ -90,7 +92,7 @@ describe('Finalization blocked while migration is ambiguous', () => {
     assert.ok(fnMatch);
     assert.match(
       fnMatch![0],
-      /if \(migrationStatus === 'blocked'\) \{\s*\n\s*setError\(/
+      /if \(migrationStatus === 'blocked'\) \{\s*\n\s*if \(ambiguousMigrationKeys\.length > 0\) \{\s*\n\s*setError\(/
     );
   });
 

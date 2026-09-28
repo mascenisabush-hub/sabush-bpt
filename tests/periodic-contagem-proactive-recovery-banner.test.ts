@@ -51,7 +51,7 @@ describe('handleResumeDraft — proactive recovery banner (§1e, Decision C Opti
 describe('The pre-existing finalization-gate message and behavior are completely unaffected', () => {
   it('handleRequestConfirmation\'s own recovery gate is unchanged -- same condition, same message, same position relative to the other two gates', () => {
     const fnStart = source.indexOf('const handleRequestConfirmation = async (e: React.FormEvent) => {');
-    const region = source.slice(fnStart, fnStart + 3000);
+    const region = source.slice(fnStart, fnStart + 7500); // widened from 3000: the identity-check retry and the duplicate gate now sit before this gate
     assert.match(region, /if \(Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0\) \{/);
   });
 });

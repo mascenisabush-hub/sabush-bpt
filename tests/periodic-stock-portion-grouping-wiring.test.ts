@@ -93,7 +93,7 @@ describe('PeriodicStockCountView.tsx — requirement: draft/finalization pipelin
     assert.match(source, /if \(item\.productId\)\s*\{\s*\n\s*const row: StockCountWorkingRow = draftItemToWorkingRow\(item\);\s*\n\s*nextCatalogRows\[item\.productId\] = row;/);
     assert.match(
       source,
-      /for \(const \{ rowKey, item \} of manualEntries\) \{\s*\n\s*const row: StockCountWorkingRow = \{ \.\.\.draftItemToWorkingRow\(item\), sourceRowKey: rowKey \};\s*\n\s*nextManualRows\.push\(row\);/,
+      /for \(const \{ rowKey, item \} of keptManualEntries\) {\s*\n\s*const row: StockCountWorkingRow = \{ \.\.\.draftItemToWorkingRow\(item\), sourceRowKey: rowKey \};\s*\n\s*nextManualRows\.push\(row\);/,
       'every manual portion is still individually pushed — never merged/collapsed by product name'
     );
   });

@@ -198,7 +198,7 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
     const flushBody = extractBody('const flushPeriodicStockDraftRows = async (');
     assert.match(
       flushBody,
-      /await runTransaction\(db, async \(tx\) => \{\s*\n\s*const metaSnap = await tx\.get\(metaRef\);\s*\n\s*const currentOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;\s*\n\s*tx\.set\(metaRef, \{/,
+      /await runTransaction\(db, async \(tx\) => \{\s*\n\s*const metaSnap = await tx\.get\(metaRef\);\s*\n\s*const currentOpenConflictCount = metaSnap\.exists\(\) \? \(metaSnap\.data\(\)\.openConflictCount \?\? 0\) : 0;[\s\S]*?tx\.set\(metaRef, \{/,
       'flushPeriodicStockDraftRows must read openConflictCount fresh, via tx.get, before writing it back'
     );
     assert.doesNotMatch(
@@ -213,15 +213,19 @@ describe('Decisions 44-56 — concurrency/conflict mechanism (AppContext.tsx)', 
     assert.match(flushBody, /tx\.set\(doc\(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic', 'items', rowKey\), \{/);
   });
 
-  it('the fresh transactional read for openConflictCount is the ONLY read either function performs — the row-writing loop\'s own deliberate, pre-existing behavior (blind overwrite based on the local rev mirror, relying on firestore.rules\' own rev check) is completely unchanged', () => {
+  it('the flush reads each pending row inside the transaction (every read before any write) and writes a row only when its server revision is the one this device already knows — never a newer version from another writer, never a conflict', () => {
     const start = contextSource.indexOf('const flushPeriodicStockDraftRows = async (');
     assert.notEqual(start, -1);
     const rest = contextSource.slice(start);
     const nextConstMatch = rest.slice('const flushPeriodicStockDraftRows = async ('.length).search(/\n  const \w+[:\s]*=/);
     const flushBody = nextConstMatch === -1 ? rest : rest.slice(0, 'const flushPeriodicStockDraftRows = async ('.length + nextConstMatch);
-    const txGetOccurrences = flushBody.match(/tx\.get\(/g) ?? [];
-    assert.equal(txGetOccurrences.length, 1, 'expected exactly one tx.get call — the single metaRef read — no per-row read was added');
-    assert.match(flushBody, /rev: \(known\?\.rev \?\? 0\) \+ 1,/, 'row writes must still derive rev from the local periodicStockDraftItemsByKey mirror, unchanged');
+    // [Fix — nothing un-typed is written by an automatic action] Previously exactly one read (the meta) and a blind
+    // overwrite of EVERY row by position. Now: the meta read plus one server read per PENDING row, all before any write.
+    assert.equal((flushBody.match(/tx\.get\(/g) ?? []).length, 2, 'the metaRef read and the per-row server reads');
+    assert.ok(flushBody.lastIndexOf('tx.get(') < flushBody.indexOf('tx.set(metaRef'), 'all reads must precede the first write');
+    assert.match(flushBody, /if \(serverItem\?\.state === 'CONFLICT'\) continue;/);
+    assert.match(flushBody, /if \(\(serverItem\?\.rev \?\? 0\) !== locallyKnownRev\) continue;/);
+    assert.match(flushBody, /rev: \(known\?\.rev \?\? 0\) \+ 1,/, 'a written row is at the next revision after the one this device knew');
   });
 
   it('recordStockCount refuses to finalize a non-initial count while a real conflict-row exists — computed from ground truth (periodicStockDraft.items\' own state field), never the separately-cached openConflictCount counter', () => {
@@ -688,7 +692,7 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
     // sits between the recovery-evidence guard and the Owner guard,
     // pushing the distance further, exactly the same class of change
     // this file's own precedent immediately below already documents.
-    const body = viewSource.slice(start, start + 5200);
+    const body = viewSource.slice(start, start + 8500); // widened from 5200: identity-check retry + duplicate gate sit before the Owner guard
     const subscriptionGuardIdx = body.indexOf('if (subscriptionBlocksNewRecords) return;');
     const ownerGuardIdx = body.indexOf('if (!isOwner) return;');
     assert.notEqual(subscriptionGuardIdx, -1, 'the pre-existing subscription guard must still be present, unmodified');
@@ -712,7 +716,7 @@ describe('Owner-only finalization — Product Architect decision (delegated Edit
     // again, 4200 to 5200: the new persistence-state finalization gate
     // (handleConfirmSave's own belt-and-suspenders re-check) sits
     // between the recovery-evidence guard and the Owner guard.
-    const body = viewSource.slice(start, start + 5200);
+    const body = viewSource.slice(start, start + 8500); // widened from 5200: identity-check retry + duplicate gate sit before the Owner guard
     assert.match(body, /if \(!pendingTally\) return;/);
     assert.match(body, /if \(subscriptionBlocksNewRecords\) return;/);
     assert.match(body, /if \(!isOwner\) return;/);

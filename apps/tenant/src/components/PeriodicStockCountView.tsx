@@ -45,6 +45,17 @@ import {
 import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
 import { derivePeriodicRowPersistenceState, type PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
+import {
+  collectPendingRowKeys,
+  buildPendingRowsByKey,
+  findManualRowIndexByKey,
+  findDuplicateProductNames,
+  isDuplicatePortion,
+  manualRowKey,
+  planManualRowsFromDraft,
+  DUPLICATE_PORTION_MESSAGE,
+  type PortionLike,
+} from '../utils/periodicRowIdentity';
 import { classifyDraftSaveError, nextRetryDelayMs } from '../lib/draftSaveFailureClassification';
 // [Feature — reconciliation signal reaching the Owner] The SAME pure,
 // independently-tested function calculations.ts already exports for
@@ -2294,7 +2305,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       const row = rowKey.startsWith('catalog:')
         ? cr[rowKey.slice('catalog:'.length)]
         : rowKey.startsWith('manual:')
-        ? mr[parseInt(rowKey.slice('manual:'.length), 10)]
+        ? mr[findManualRowIndexByKey(mr, rowKey)]
         : undefined;
       // [Emergency fix — stale same-writer write] Read live, current
       // state HERE, at fire-time (same discipline as latestFlushArgs
@@ -2345,8 +2356,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         // row's own reindex-triggered save (see handleRemoveManualRow)
         // stamps it correctly under its own callback regardless.
         if (rowKey.startsWith('manual:')) {
-          const idx = parseInt(rowKey.slice('manual:'.length), 10);
-          const currentRow = manualRowsRef.current[idx];
+          const idx = findManualRowIndexByKey(manualRowsRef.current, rowKey);
+          const currentRow = idx >= 0 ? manualRowsRef.current[idx] : undefined;
           if (currentRow && currentRow.sourceRowKey !== rowKey) {
             const stamped = [...manualRowsRef.current];
             stamped[idx] = { ...currentRow, sourceRowKey: rowKey };
@@ -2576,7 +2587,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const { manualRows: mrForRetry } = latestFlushArgs.current;
     rowKeys.forEach((rowKey) => {
       const protectionKey = rowKey.startsWith('manual:')
-        ? mrForRetry[parseInt(rowKey.slice('manual:'.length), 10)]?.sourceRowKey ?? rowKey
+        ? mrForRetry[findManualRowIndexByKey(mrForRetry, rowKey)]?.sourceRowKey ?? rowKey
         : rowKey;
       const generation = cancelRowRetry(rowKey);
       performRowSaveAttempt(rowKey, protectionKey, generation, 1);
@@ -2803,12 +2814,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return null;
   };
 
+  // [Fix — duplicates must never exist] A portion identical to another portion of the same product
+  // (same quantity, Unit and Selling Price) is refused at Validar.
+  const duplicatePortionMessageFor = (row: PortionLike, selfKey: string): string | null => {
+    const others: PortionLike[] = [];
+    Object.entries(catalogRows).forEach(([productId, other]) => {
+      if (`catalog:${productId}` !== selfKey) others.push(other);
+    });
+    manualRows.forEach((other, otherIndex) => {
+      if (manualRowKey(other, otherIndex) !== selfKey) others.push(other);
+    });
+    return isDuplicatePortion(row, others) ? DUPLICATE_PORTION_MESSAGE : null;
+  };
+
   const handleSaveCatalogRow = (productId: string) => {
     const row = catalogRows[productId];
     if (!row) return;
     const message = validateWorkingRowForSave(row);
     if (message) {
       setCatalogRowSaveError((prev) => ({ ...prev, [productId]: message }));
+      return;
+    }
+    const duplicateMessage = duplicatePortionMessageFor(row, `catalog:${productId}`);
+    if (duplicateMessage) {
+      setCatalogRowSaveError((prev) => ({ ...prev, [productId]: duplicateMessage }));
       return;
     }
     // [Feature — Owner-requested] Quantity 0 passes validation (it's a
@@ -3187,7 +3216,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       rowDebounceTimersRef.current.keys()
     ).map((rowKey) => {
       if (rowKey.startsWith('manual:')) {
-        const row = mrForFlush[parseInt(rowKey.slice('manual:'.length), 10)];
+        const row = mrForFlush[findManualRowIndexByKey(mrForFlush, rowKey)];
         return { rowKey, protectionKey: row?.sourceRowKey ?? rowKey };
       }
       return { rowKey, protectionKey: rowKey };
@@ -3315,6 +3344,15 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // moving on. Reuses flushPeriodicStockDraftRows/latestFlushArgs
   // unmodified — no new write-construction logic, no parallel
   // persistence path.
+  // [Fix — nothing un-typed is written by an automatic action] Rows with an edit that is not yet confirmed
+  // saved: debounce pending, retry pending, or dirty. Flushes persist ONLY these, under their real keys.
+  const collectPendingRowKeysNow = (): Set<string> =>
+    collectPendingRowKeys({
+      timerKeys: rowDebounceTimersRef.current.keys(),
+      retryKeys: rowRetryRef.current.keys(),
+      dirtySaveTargets: Object.values(rowHasUnsavedLocalEditRef.current),
+    });
+
   const flushForSwitchIfNeeded = async (): Promise<{ success: boolean }> => {
     // [Decision 41E §7/§8/§13] If the subscription is blocked, any
     // write this flush could attempt would be rejected by
@@ -3339,6 +3377,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (rowDebounceTimersRef.current.size === 0 && !draftInFlightSaveRef.current && rowRetryRef.current.size === 0) {
       return { success: true }; // nothing pending — no unnecessary Firestore call
     }
+    const pendingRowKeysAtSwitch = collectPendingRowKeysNow();
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
     // [Decision 41C §11] Cancel every pending retry before this flush's
@@ -3355,11 +3394,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         await draftInFlightSaveRef.current;
       }
       const { catalogRows: cr, manualRows: mr, type: t, label: l, date: d, newProductInfo: npi, caixerDraft: cxd } = latestFlushArgs.current;
-      const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
-      for (const [productId, row] of Object.entries(cr)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
-      mr.forEach((row, index) => {
-        rowsByKey[`manual:${index}`] = workingRowToDraftItem(row);
-      });
+      // [Fix] Only rows with an edit still pending, under their real keys. Never every row, never positional copies.
+      const rowsByKey = buildPendingRowsByKey(pendingRowKeysAtSwitch, cr, mr, workingRowToDraftItem);
       const updatedAt = await flushPeriodicStockDraftRows(
         rowsByKey,
         t,
@@ -3953,6 +3989,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       setManualRowSaveError((prev) => ({ ...prev, [index]: message }));
       return;
     }
+    const duplicateMessage = duplicatePortionMessageFor(row, manualRowKey(row, index));
+    if (duplicateMessage) {
+      setManualRowSaveError((prev) => ({ ...prev, [index]: duplicateMessage }));
+      return;
+    }
     // [Feature — Owner-requested] Manual-row counterpart to
     // handleSaveCatalogRow's own identical confirmation, above.
     if (parseFloat(row.quantity) === 0 && !window.confirm(`Confirmas que "${row.productName}" tem mesmo 0 em stock?`)) {
@@ -4273,15 +4314,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // needs. Mirrors that same useMemo's own sort exactly (ascending
     // by numeric suffix) so the resulting row order is unchanged from
     // before this fix — this is a stamping addition, not a reordering.
-    const manualEntries: { index: number; rowKey: string; item: PeriodicStockDraftItem }[] = [];
+    const manualDraftEntries: { rowKey: string; item: PeriodicStockDraftItem }[] = [];
     for (const [rowKey, item] of Object.entries(periodicStockDraftItemsByKey)) {
-      if (rowKey.startsWith('manual:')) {
-        const index = parseInt(rowKey.slice('manual:'.length), 10);
-        if (Number.isFinite(index)) manualEntries.push({ index, rowKey, item });
-      }
+      if (rowKey.startsWith('manual:')) manualDraftEntries.push({ rowKey, item });
     }
-    manualEntries.sort((a, b) => a.index - b.index);
-    for (const { rowKey, item } of manualEntries) {
+    // [Fix] Every manual document is read (UUID keys used to be dropped by a numeric parse) and an identical
+    // portion is never loaded twice. Nothing is deleted or written here.
+    const { keep: keptManualEntries } = planManualRowsFromDraft(manualDraftEntries);
+    for (const { rowKey, item } of keptManualEntries) {
       const row: StockCountWorkingRow = { ...draftItemToWorkingRow(item), sourceRowKey: rowKey };
       nextManualRows.push(row);
     }
@@ -6180,8 +6220,41 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // matching the belt-and-suspenders discipline already used for
     // subscriptionBlocksNewRecords immediately above.
     if (migrationStatus === 'blocked') {
+      if (ambiguousMigrationKeys.length > 0) {
+        setError(
+          `Existem ${ambiguousMigrationKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+        );
+        return;
+      }
+      // [Fix — "0 linha(s)" dead end] Blocked with ZERO ambiguous rows means the automatic identity check itself
+      // FAILED with an error. That is not something the owner can review, so re-run the check now instead of
+      // refusing to continue.
+      setMigrationStatus('migrating');
+      try {
+        const { ambiguousKeys } = await migrateAllLegacyPeriodicRows();
+        setAmbiguousMigrationKeys(ambiguousKeys);
+        if (ambiguousKeys.length > 0) {
+          setMigrationStatus('blocked');
+          setError(
+            `Existem ${ambiguousKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+          );
+          return;
+        }
+        setMigrationStatus('complete');
+      } catch {
+        setMigrationStatus('blocked');
+        setError(
+          'Não foi possível verificar as linhas desta Contagem (erro de ligação ou de gravação). Verifique a ligação e toque de novo em "Rever e Confirmar Contagem".'
+        );
+        return;
+      }
+    }
+    // [Fix — duplicates must never exist] Identical portions of the same product (same quantity, Unit and
+    // Selling Price) are refused before they can reach the total.
+    const duplicateProductNames = findDuplicateProductNames([...Object.values(catalogRows), ...manualRows]);
+    if (duplicateProductNames.length > 0) {
       setError(
-        `Existem ${ambiguousMigrationKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+        `Existem porções repetidas (mesmo produto, quantidade, unidade e preço): ${duplicateProductNames.join(', ')}. Some as quantidades numa única porção antes de confirmar.`
       );
       return;
     }
@@ -6293,6 +6366,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // superseded by the immediate write below regardless — clear it so
     // it can't fire a second, now-redundant write moments later.
     // [Decision 39a] Every pending per-row timer, not a single ref.
+    const pendingRowKeysAtReview = collectPendingRowKeysNow();
     rowDebounceTimersRef.current.forEach((timer) => clearTimeout(timer));
     rowDebounceTimersRef.current.clear();
     // [Decision 41C §7] Same reasoning — this identity write is about
@@ -6336,11 +6410,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // plus the meta document (submissionId included), preserving the
     // exact same guarantee this comment already describes: everything
     // durably written together before finalization ever proceeds.
-    const rowsByKey: Record<string, PeriodicStockDraftItem> = {};
-    for (const [productId, row] of Object.entries(catalogRows)) rowsByKey[`catalog:${productId}`] = workingRowToDraftItem(row);
-    manualRows.forEach((row, index) => {
-      rowsByKey[`manual:${index}`] = workingRowToDraftItem(row);
-    });
+    // [Fix] Only rows with an edit still pending, under their real keys. Never every row, never positional copies.
+    const rowsByKey = buildPendingRowsByKey(pendingRowKeysAtReview, catalogRows, manualRows, workingRowToDraftItem);
     identityWriteRef.current = flushPeriodicStockDraftRows(
       rowsByKey,
       type,
