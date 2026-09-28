@@ -10253,9 +10253,25 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                           : undefined;
                     const q = singleRow ? (singleRow.quantity.trim() === '' ? 0 : Number(singleRow.quantity) || 0) : 0;
                     const sellingPriceNum = singleRow ? Number(singleRow.sellingPrice) || 0 : 0;
-                    const priceCheck = singleRow
-                      ? checkPriceDeviation(parseFloat(singleRow.sellingPrice), getRememberedPriceForRow(singleRow, 'selling'))
-                      : { showWarning: false };
+                    // [Fix — multi-portion deviation warning] The unified list must visibly indicate an active
+                    // selling-price deviation (its own Hard Requirement §2). Integration Point 3 hard-coded
+                    // `{ showWarning: false }` for multi-portion groups, so a mistyped price on any portion of a
+                    // product counted in several portions was never flagged here. Same function, same inputs,
+                    // per member row; the group is flagged if any portion deviates (like isConflicted).
+                    const memberRowsForWarning = group.members
+                      .map((member) =>
+                        member.kind === 'catalog' && member.catalogProductId
+                          ? catalogRows[member.catalogProductId]
+                          : member.manualRowIndex !== null
+                            ? manualRows[member.manualRowIndex]
+                            : undefined
+                      )
+                      .filter((row): row is StockCountWorkingRow => !!row);
+                    // The first deviating portion supplies the percentage/direction shown in the message.
+                    const priceCheck =
+                      memberRowsForWarning
+                        .map((row) => checkPriceDeviation(parseFloat(row.sellingPrice), getRememberedPriceForRow(row, 'selling')))
+                        .find((check) => check.showWarning) ?? { showWarning: false };
                     const hasPriceWarning = priceCheck.showWarning;
                     const hasModeAWarning = getModeANonConvertibleWarning(group.displayName);
                     // [Single-Active-Product Rule, §9 — extended]
@@ -10545,7 +10561,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         </div>
                         {hasPriceWarning && (
                           <p className="col-span-2 sm:col-span-5 text-[11px] text-amber-600 font-medium leading-snug">
-                            Este preço é {Math.round((priceCheck as { deviationPercent?: number }).deviationPercent! * 100)}%{' '}
+                            {isMultiPortion ? 'O preço de uma das porções é' : 'Este preço é'}{' '}
+                            {Math.round((priceCheck as { deviationPercent?: number }).deviationPercent! * 100)}%{' '}
                             {(priceCheck as { isAboveRemembered?: boolean }).isAboveRemembered ? 'acima' : 'abaixo'} do último preço registado para este
                             produto — confirme que não é um erro de digitação.
                           </p>

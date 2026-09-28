@@ -256,7 +256,9 @@ describe('D/E — Mode A explanatory text and warning are fully visible, not too
     // i.e. as real element content.
     assert.match(
       body,
-      /<span>\s*O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas\. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente\.\s*<\/span>/
+      // [8bb980d] Owner's explicit choice: collapsed into InfoHint ("info kept, hidden by default"), not
+      // deleted and not a title attribute. The full sentence remains real element content.
+      /<InfoHint>\s*O preço de cada porção é calculado automaticamente a partir deste preço único — as quantidades e unidades físicas contadas não são alteradas\. Para vender uma porção a um preço diferente, edite o preço dessa porção diretamente\.\s*<\/InfoHint>/
     );
   });
 
@@ -305,7 +307,8 @@ describe('F/G — New Product fields and selling-unit explanation always visible
   it('the full original selling-unit explanatory sentence is rendered as visible text (not tooltip-only)', () => {
     assert.match(
       body,
-      /<span className="text-\[11px\] text-gray-500 basis-full">\s*A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra\.\s*<\/span>/
+      // [8bb980d] Same Owner decision: full sentence kept inside InfoHint, revealed on tap.
+      /<InfoHint>\s*A unidade em que o preço de venda deste produto será registado — pode ser diferente da unidade de compra\.\s*<\/InfoHint>/
     );
   });
 

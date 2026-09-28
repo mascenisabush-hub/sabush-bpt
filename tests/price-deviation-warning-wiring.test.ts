@@ -74,7 +74,9 @@ describe('PeriodicStockCountView.tsx — getRememberedPriceForRow', () => {
 
   it('is called from both the catalog-row and manual-row price fields, in both the active and Concept C validated-summary areas — 4 call sites total (§44: cost removed, selling only; Concept C: each of the 2 remaining fields also rendered in the compact validated view)', () => {
     const callCount = (periodicSrc.match(/getRememberedPriceForRow\(row, '(cost|selling)'\)/g) || []).length;
-    assert.equal(callCount, 4);
+    // Concept C's two validated-summary loops (catalog + manual) were merged into the Owner-requested unified
+    // list's single shared loop: 2 active rows + 1 unified list = 3 (matches concept-b-compaction's own pin).
+    assert.equal(callCount, 3);
     // Every remaining call must be 'selling' — none 'cost' (FR-77: the
     // Cost Price invocation is retired; Selling Price is unaffected).
     const costCallCount = (periodicSrc.match(/getRememberedPriceForRow\(row, 'cost'\)/g) || []).length;
@@ -90,7 +92,9 @@ describe('PeriodicStockCountView.tsx — the warning is actually rendered next t
 
   it('the catalog-row and manual-row Venda/Un fields each still check for a Selling Price deviation warning, in both the active and Concept C validated-summary areas — 4 call sites total, unaffected by §44 itself', () => {
     const sellingWarningCount = (periodicSrc.match(/checkPriceDeviation\(parseFloat\(row\.sellingPrice\), getRememberedPriceForRow\(row, 'selling'\)\)/g) || []).length;
-    assert.equal(sellingWarningCount, 4);
+    // Concept C's two validated-summary loops (catalog + manual) were merged into the Owner-requested unified
+    // list's single shared loop: 2 active rows + 1 unified list = 3 (matches concept-b-compaction's own pin).
+    assert.equal(sellingWarningCount, 3);
   });
 
   it('warnings only render when check.showWarning is true — never an empty/always-visible note (§44: 2 remaining, both Selling Price)', () => {
