@@ -31,6 +31,7 @@ import { auth, db, storage, firebaseConfig } from '../lib/firebase';
 import { normalizeStockCountItems } from '../utils/stockCount';
 import { selectLegacyKeysToMigrate, type PortionLike } from '../utils/periodicRowIdentity';
 import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
+import { newProductId } from '../lib/newProductId';
 import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
@@ -6051,7 +6052,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       }
 
       if (!product) {
-        productId = 'prod-' + Date.now() + '-' + Math.random().toString(36).substr(2, 4);
+        productId = newProductId();
         // [Product Memory / UOM — Increment A] Only ever reached for a
         // genuinely NEW product (this whole block is inside `if
         // (!product)`) — an existing product's unitRelationship is
