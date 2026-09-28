@@ -10,6 +10,32 @@ here. This file is short-term memory only.
 
 ---
 
+## Session 2026-09-28 (contagem UX blockers) — read first
+
+**Landed (3 fixes, each with tests; full-suite diff vs clean main = 0 regressions, +20 passing):**
+- `9953d70` Draft listeners (Initial Stock + Periodic meta/items) now re-attach after an error via
+  `lib/resubscribeOnError.ts` (backoff 2/5/10/20s, then every 30s). Before: one transient error left the
+  Owner on the "tentará novamente automaticamente" card until reload. Owner branch only; Staff denial unchanged.
+- `06995fd` Stale-conflict banner no longer promises "o botão ativa-se sozinho" (the heal gives up after ~37s);
+  Editors get "Tentar novamente" reusing `correctOpenConflictCountIfDrifted` unchanged.
+- `34de279` "Tentar novamente" (draft save) retries meta-document keys before rows, so a row refused for a
+  missing meta doc no longer needs a second tap.
+
+**Investigated and deliberately NOT changed — need a decision:**
+- 2.2s auto-advance after a confirmed count (receipt buttons are easy to miss on mobile). Deliberate,
+  twice-kept behavior pinned by `business-worth-reconciliation-signal-ui-wiring.test.ts` — product call.
+- Finalization error returning to the editing screen: governed (CAIXER Impl. Authorization §44 Checkpoint 2);
+  `caixerDraft` persists, so nothing is re-typed. Not a bug.
+- `[DIAG-contagem-items]` / `[DIAG-contagem-resume]` TEMPORARY logs: removal condition is "incident of
+  2026-09-23 resolved"; that thread isn't in the repo — incident owner must confirm closure.
+
+**Test baseline (all 250 non-emulator files, run individually):** 4025 pass / 83 fail / 413 cancelled
+(emulator/network). The 83 failures are identical on clean main, across 32 files — mostly stale
+source-text pins after signature changes. 67 of 71 contagem test files are NOT in `test:all`, so CI never
+sees them. **Next: triage those 83 (stale pin vs real regression), repair, then wire contagem suites into CI.**
+
+---
+
 ## EMERGENCY session 2026-09-20 (Product Architect-directed) — read first
 
 **1. SuperAdmin Direct Subscription Activation — built under emergency
