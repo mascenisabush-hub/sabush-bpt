@@ -45,3 +45,20 @@ describe('banner does not claim "0 linhas em conflito" while the counter is mere
     assert.match(view, /O estado de conflitos desta Contagem está a ser atualizado/);
   });
 });
+
+describe('stale-counter banner stays honest once automatic retries are exhausted', () => {
+  const start = view.indexOf('O estado de conflitos desta Contagem está a ser atualizado');
+  const block = view.slice(start - 600, start + 1600);
+  it('no longer promises the button will always enable itself', () => {
+    assert.doesNotMatch(view, /o botão ativa-se sozinho/);
+  });
+  it('offers the Editor a manual retry through the existing heal function, never a second write path', () => {
+    assert.match(block, /\{isActiveContagemEditor && \(/);
+    assert.match(block, /await correctOpenConflictCountIfDrifted\(unresolvedConflictRows\.length\);/);
+    assert.match(block, /disabled=\{conflictHealRetrying \|\| isSaving\}/);
+  });
+  it('the retry-state hook is declared unconditionally at component top level', () => {
+    const hookIdx = view.indexOf('const [conflictHealRetrying, setConflictHealRetrying] = useState(false);');
+    assert.ok(hookIdx !== -1 && hookIdx < view.indexOf("if (periodicStockDraftListenerState === 'loading') {"));
+  });
+});

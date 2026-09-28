@@ -787,6 +787,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     (item) => item.state === 'CONFLICT'
   );
   const hasUnresolvedConflicts = (periodicStockDraft?.openConflictCount ?? unresolvedConflictRows.length) > 0;
+  const [conflictHealRetrying, setConflictHealRetrying] = useState(false);
 
   // [Bug fix — openConflictCount permanent-drift correction] Self-
   // heals automatically: whenever the live-computed truth
@@ -7924,7 +7925,29 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                 // The stored counter (what firestore.rules check) is above zero but no row is actually
                 // in CONFLICT: a stale counter that the self-heal effect is already correcting. Saying
                 // "0 linhas em conflito por resolver" here left the Owner with nothing to do or understand.
-                <>O estado de conflitos desta Contagem está a ser atualizado. Aguarde alguns segundos: o botão ativa-se sozinho.</>
+                // The automatic heal gives up after a bounded number of retries, so this must not promise
+                // the button will always enable itself; the Editor gets a manual retry that reuses the same
+                // correctOpenConflictCountIfDrifted (its generation token supersedes any pending retry).
+                <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
+                  <span>O estado de conflitos desta Contagem está a ser atualizado. Normalmente o botão fica disponível em poucos segundos.</span>
+                  {isActiveContagemEditor && (
+                    <button
+                      type="button"
+                      onClick={async () => {
+                        setConflictHealRetrying(true);
+                        try {
+                          await correctOpenConflictCountIfDrifted(unresolvedConflictRows.length);
+                        } finally {
+                          setConflictHealRetrying(false);
+                        }
+                      }}
+                      disabled={conflictHealRetrying || isSaving}
+                      className="text-[12px] font-bold text-amber-900 bg-amber-100 hover:bg-amber-200 transition-colors duration-150 disabled:opacity-60 rounded-lg px-2.5 py-1"
+                    >
+                      {conflictHealRetrying ? 'A tentar…' : 'Tentar novamente'}
+                    </button>
+                  )}
+                </div>
               ) : (
                 <>
                   Existem {unresolvedConflictRows.length === 1 ? 'uma linha' : `${unresolvedConflictRows.length} linhas`} em conflito por resolver nesta Contagem.
