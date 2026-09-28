@@ -4217,6 +4217,76 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     updateManualRow(index, { validated: true, entrySequence: row.entrySequence ?? nextEntrySequence() });
   };
 
+  // [Owner-requested — validate a multi-portion product in ONE click]
+  // Opening a product (Editar/Abrir) shows all of its portions together, so
+  // validating them one by one was redundant. This validates every
+  // still-unvalidated portion in the open workspace at once, reusing the
+  // exact per-row checks (validateWorkingRowForSave, duplicate-portion check,
+  // zero-stock confirmation) and the same updateCatalogRow/updateManualRow
+  // write path the per-row Validar uses. All-or-nothing: if any portion has
+  // a problem, its error is shown on that portion and NOTHING is validated,
+  // so the product never ends up half-validated.
+  const getWorkspacePendingPortions = () => {
+    const catalog = visibleCatalogEntries
+      .filter(([, row]) => !row.validated)
+      .map(([productId, row]) => ({ kind: 'catalog' as const, productId, row }));
+    const manual = visibleManualRowGroups.flatMap((group) =>
+      group.rows
+        .filter(({ idx }) => manualRowsRef.current[idx] && !manualRowsRef.current[idx].validated)
+        .map(({ idx }) => ({ kind: 'manual' as const, idx, row: manualRowsRef.current[idx] }))
+    );
+    return [...catalog, ...manual];
+  };
+
+  const handleValidateWorkspaceProduct = () => {
+    const pending = getWorkspacePendingPortions();
+    if (pending.length === 0) return;
+    const catalogErrors: Record<string, string> = {};
+    const manualErrors: Record<number, string> = {};
+    for (const portion of pending) {
+      const key = portion.kind === 'catalog' ? `catalog:${portion.productId}` : manualRowKey(portion.row, portion.idx);
+      const message = validateWorkingRowForSave(portion.row) ?? duplicatePortionMessageFor(portion.row, key);
+      if (!message) continue;
+      if (portion.kind === 'catalog') catalogErrors[portion.productId] = message;
+      else manualErrors[portion.idx] = message;
+    }
+    if (Object.keys(catalogErrors).length > 0 || Object.keys(manualErrors).length > 0) {
+      setCatalogRowSaveError((prev) => ({ ...prev, ...catalogErrors }));
+      setManualRowSaveError((prev) => ({ ...prev, ...manualErrors }));
+      return;
+    }
+    const zeroPortions = pending.filter((portion) => parseFloat(portion.row.quantity) === 0);
+    if (
+      zeroPortions.length > 0 &&
+      !window.confirm(
+        zeroPortions.length === pending.length
+          ? `Confirmas que "${pending[0].row.productName}" tem mesmo 0 em stock?`
+          : `Confirmas que ${zeroPortions.length} porção(ões) de "${pending[0].row.productName}" têm mesmo 0 em stock?`
+      )
+    ) {
+      return;
+    }
+    const pendingCatalogIds = new Set(pending.flatMap((p) => (p.kind === 'catalog' ? [p.productId] : [])));
+    const pendingManualIndices = new Set(pending.flatMap((p) => (p.kind === 'manual' ? [p.idx] : [])));
+    setCatalogRowSaveError((prev) => {
+      if (!Object.keys(prev).some((id) => pendingCatalogIds.has(id))) return prev;
+      const next = { ...prev };
+      pendingCatalogIds.forEach((id) => delete next[id]);
+      return next;
+    });
+    setManualRowSaveError((prev) => {
+      if (!Object.keys(prev).some((i) => pendingManualIndices.has(Number(i)))) return prev;
+      const next = { ...prev };
+      pendingManualIndices.forEach((i) => delete next[i]);
+      return next;
+    });
+    for (const portion of pending) {
+      const entrySequence = portion.row.entrySequence ?? nextEntrySequence();
+      if (portion.kind === 'catalog') updateCatalogRow(portion.productId, { validated: true, entrySequence });
+      else updateManualRow(portion.idx, { validated: true, entrySequence });
+    }
+  };
+
   // [Existing-Product Edit/Confirm Workflow] Manual-row counterpart to
   // handleEditCatalogRow's own identical fix, above — same reasoning:
   // previously ended at un-validating this one row; now also routes
@@ -5292,6 +5362,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return [];
   }, [manualRowGroups, activeNewManualRowIndex, activeWorkspaceProductKey, activeWorkspaceRowIdentity]);
 
+  // [Owner-requested — one-click validation] Number of still-unvalidated
+  // portions in the open product; 2+ switches the workspace to a single
+  // product-level Validar (see handleValidateWorkspaceProduct).
+  const workspacePendingPortionCount =
+    visibleCatalogEntries.filter(([, row]) => !row.validated).length +
+    visibleManualRowGroups.reduce(
+      (sum, group) => sum + group.rows.filter(({ idx }) => manualRows[idx] && !manualRows[idx].validated).length,
+      0
+    );
+  const isMultiPortionWorkspace = workspacePendingPortionCount >= 2;
+
   // [Implementation Authorization — Single-Product Workspace] Safety
   // net for two edge cases, neither of which changes any business
   // semantics — both only ever clear the two pieces of UI-only state
@@ -5881,7 +5962,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       wasValidatedBeforeRef.current = currentRow?.validated === true;
       ctrlEnterRequestedRef.current = { kind, catalogProductId, manualRowIndex: manualRowIndexArg };
     }
-    if (kind === 'catalog' && catalogProductId) {
+    if (isMultiPortionWorkspace && (catalogProductId || manualRowIndexArg !== null)) {
+      handleValidateWorkspaceProduct();
+    } else if (kind === 'catalog' && catalogProductId) {
       handleSaveCatalogRow(catalogProductId);
     } else if (kind === 'manual' && manualRowIndexArg !== null) {
       handleSaveManualRow(manualRowIndexArg);
@@ -9455,7 +9538,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               >
                                 Editar
                               </button>
-                            ) : (
+                            ) : isMultiPortionWorkspace ? null : (
                               <button
                                 type="button"
                                 onClick={() => handleSaveCatalogRow(productId)}
@@ -10052,7 +10135,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                     >
                                       Editar
                                     </button>
-                                  ) : (
+                                  ) : isMultiPortionWorkspace ? null : (
                                     <button
                                       type="button"
                                       onClick={() => handleSaveManualRow(idx)}
@@ -10096,6 +10179,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   );
                 })}
               </div>
+            </div>
+          )}
+
+          {/* [Owner-requested — one-click validation of a multi-portion
+              product] Replaces the per-portion Validar buttons (hidden
+              above while this shows). */}
+          {isMultiPortionWorkspace && (
+            <div className="rounded-xl border border-[#D4AF37]/40 bg-[#D4AF37]/[0.06] p-3 flex flex-col sm:flex-row sm:items-center gap-2 sm:justify-between">
+              <p className="text-[12px] text-gray-600 leading-snug">
+                Este produto tem {workspacePendingPortionCount} porções por validar — são validadas todas de uma vez.
+              </p>
+              <button
+                type="button"
+                onClick={handleValidateWorkspaceProduct}
+                className="px-4 py-2 rounded-lg text-[13px] font-bold text-[#0B1F3A] bg-[#D4AF37] hover:bg-[#C9A42F] transition-colors duration-150 whitespace-nowrap"
+              >
+                Validar produto ({workspacePendingPortionCount} porções)
+              </button>
             </div>
           )}
 

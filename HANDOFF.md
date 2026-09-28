@@ -10,6 +10,16 @@ here. This file is short-term memory only.
 
 ---
 
+## Session 2026-09-28 (d) — one-click validation of multi-portion products
+
+- Periodic Contagem workspace: when the open product has 2+ unvalidated portions, per-portion Validar is
+  replaced by one "Validar produto (N porções)" button (`handleValidateWorkspaceProduct`). Same per-row checks
+  and write path; all-or-nothing (any error → shown on its portion, nothing validated); one zero-stock confirm;
+  Enter in a quantity field validates the whole product. Single-portion products unchanged.
+  Test: `tests/periodic-contagem-validate-product-one-click.test.ts`. Full suite 0 failures (emulator suites not run).
+
+---
+
 ## Session 2026-09-28 (c) — URGENT: rows could not be deleted in Contagem + test suite green
 
 - **Delete fix (urgent, live):** rows created via "Adicionar produto" / "Adicionar Porção" get a stable
