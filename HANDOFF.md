@@ -10,6 +10,17 @@ here. This file is short-term memory only.
 
 ---
 
+## Session 2026-09-28 (e) — Enter validates the open product from anywhere
+
+- Periodic Contagem: the document-level keydown effect now handles Enter while a product is open — validates
+  it (single portion via per-row Validar, 2+ via `handleValidateWorkspaceProduct`); Ctrl/Cmd+Enter also
+  advances, via the same `ctrlEnterRequestedRef` path. Skipped on buttons/links/selects/textareas/role=button,
+  date inputs, fields marked `data-enter-validate="off"` (search, count label, existing-product lookup), the
+  review screen, and events the quantity field already handled (`enterHandledByFieldRef`). Never finalizes the
+  count. Tests: `periodic-contagem-enter-validates-anywhere.test.ts`; keyboard-shortcuts pin updated.
+
+---
+
 ## Session 2026-09-28 (d) — one-click validation of multi-portion products
 
 - Periodic Contagem workspace: when the open product has 2+ unvalidated portions, per-portion Validar is

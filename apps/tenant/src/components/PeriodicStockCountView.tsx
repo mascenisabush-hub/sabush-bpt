@@ -1292,6 +1292,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     manualRowIndex: number | null;
   } | null>(null);
   const wasValidatedBeforeRef = useRef(false);
+  // [Owner-requested — Enter validates from anywhere] The native keydown a
+  // quantity field's own handler already acted on, so the document-level
+  // Enter shortcut (global keyboard effect, below) never validates twice.
+  const enterHandledByFieldRef = useRef<Event | null>(null);
   // [Implementation Authorization — Single-Product Workspace] UI-only,
   // ephemeral, never persisted to the draft (autosave already saves
   // the entire catalogRows/manualRows tree regardless of what's
@@ -4287,6 +4291,27 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     }
   };
 
+  // [Owner-requested — Enter validates from anywhere] Validates the open
+  // product exactly as Enter in its quantity field does: the single pending
+  // portion via its own per-row Validar, or every portion at once via
+  // handleValidateWorkspaceProduct. With Ctrl/Cmd, arms the SAME
+  // validate-and-advance request the quantity field's Ctrl/Cmd+Enter uses.
+  const handleValidateOpenProductShortcut = (advanceAfter: boolean) => {
+    const pending = getWorkspacePendingPortions();
+    if (pending.length === 0) return;
+    const first = pending[0];
+    if (advanceAfter) {
+      wasValidatedBeforeRef.current = false;
+      ctrlEnterRequestedRef.current =
+        first.kind === 'catalog'
+          ? { kind: 'catalog', catalogProductId: first.productId, manualRowIndex: null }
+          : { kind: 'manual', catalogProductId: null, manualRowIndex: first.idx };
+    }
+    if (pending.length >= 2) handleValidateWorkspaceProduct();
+    else if (first.kind === 'catalog') handleSaveCatalogRow(first.productId);
+    else handleSaveManualRow(first.idx);
+  };
+
   // [Existing-Product Edit/Confirm Workflow] Manual-row counterpart to
   // handleEditCatalogRow's own identical fix, above — same reasoning:
   // previously ended at un-validating this one row; now also routes
@@ -5956,6 +5981,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   ) => {
     if (e.key !== 'Enter') return;
     e.preventDefault();
+    enterHandledByFieldRef.current = e.nativeEvent;
     const isCtrlOrCmd = e.ctrlKey || e.metaKey;
     if (isCtrlOrCmd) {
       const currentRow = kind === 'catalog' ? (catalogProductId ? catalogRows[catalogProductId] : undefined) : manualRowIndexArg !== null ? manualRows[manualRowIndexArg] : undefined;
@@ -6466,6 +6492,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         return;
       }
 
+      // [Owner-requested — Enter validates from anywhere] While a product is
+      // open, Enter validates it wherever the cursor is. Left alone where
+      // Enter already means something else: buttons/links/dropdowns/text
+      // areas (Enter activates them natively — e.g. the bin or Voltar),
+      // clickable rows, and fields marked data-enter-validate="off" (search,
+      // label, date, existing-product lookup). A quantity field's own
+      // handler already validated this event — never twice.
+      if (e.key === 'Enter') {
+        if (!isWorkspaceActive || pendingTally || showShortcutHelp || e.isComposing) return;
+        if (enterHandledByFieldRef.current === e) return;
+        if (target) {
+          if (['BUTTON', 'A', 'SELECT', 'TEXTAREA', 'SUMMARY'].includes(target.tagName)) return;
+          if (target.closest('[role="button"], [data-enter-validate="off"]')) return;
+          if (target.isContentEditable) return;
+          if (target.tagName === 'INPUT') {
+            const type = (target as HTMLInputElement).type;
+            if (['button', 'submit', 'reset', 'checkbox', 'radio', 'file', 'date'].includes(type)) return;
+          }
+        }
+        e.preventDefault();
+        handleValidateOpenProductShortcut(e.ctrlKey || e.metaKey);
+        return;
+      }
+
       if (e.key.toLowerCase() === 'n') {
         if (isTypingTarget) return;
         if (!isActiveContagemEditor) return;
@@ -6487,6 +6537,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     subscriptionBlocksNewRecords,
     handleLeaveWorkspaceUnchanged,
     handleAddNewProductToWorkspace,
+    pendingTally,
+    handleValidateOpenProductShortcut,
   ]);
 
   // [§44 — Periodic Contagem Cost-Price Removal, FR-74] `diff`/`diffPct`
@@ -8845,6 +8897,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   id="periodic-contagem-label"
                   type="text"
                   placeholder="Ex: Antes do Natal"
+                  data-enter-validate="off"
                   value={label}
                   onChange={(e) => handleLabelChange(e.target.value)}
                   onKeyDown={suppressEnterSubmit}
@@ -9741,6 +9794,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                                       onChange={(e) => setIdentityResolutionSearchText(e.target.value)}
                                       onKeyDown={suppressEnterSubmit}
                                       placeholder="Procurar produto existente pelo nome..."
+                                      data-enter-validate="off"
                                       className="w-full bg-white border border-amber-200 rounded-lg px-2.5 py-1.5 text-[13px] text-[#111827] placeholder-gray-400 focus:outline-none focus:border-amber-400 focus:ring-2 focus:ring-amber-200"
                                     />
                                     {searchResults.length > 0 && (
@@ -10288,6 +10342,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   value={productSearch}
                   onChange={(e) => setProductSearch(e.target.value)}
                   onKeyDown={handleSearchKeyDown}
+                  data-enter-validate="off"
                   className={`${fieldClass} pl-8`}
                 />
               </div>
@@ -10922,7 +10977,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             </div>
             <div className="px-5 sm:px-6 py-4 space-y-2.5 text-[13px]">
               {[
-                ['Enter', 'Validar a quantidade atual'],
+                ['Enter', 'Validar o produto aberto (em qualquer lugar da página)'],
                 ['Ctrl/Cmd + Enter', 'Validar e avançar para o próximo produto'],
                 ['/', 'Focar a pesquisa de produtos'],
                 ['↑ / ↓', 'Navegar na lista de produtos'],

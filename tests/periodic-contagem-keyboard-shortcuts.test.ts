@@ -542,8 +542,20 @@ describe('Rejected shortcuts remain absent', () => {
   });
 
   it('no global Ctrl/Cmd+Enter finalization path exists — Ctrl/Cmd+Enter handling lives only inside handleQuantityKeyDown, scoped to the quantity input', () => {
+    // [Owner-requested — Enter validates from anywhere] Ctrl/Cmd is now
+    // also read by the document-level Enter shortcut, but ONLY to arm the
+    // same validate-and-advance-to-next-product the quantity field does,
+    // and only while a product is open. It still never finalizes the count.
     const occurrences = periodicSrc.match(/e\.ctrlKey \|\| e\.metaKey/g) ?? [];
-    assert.equal(occurrences.length, 1, 'ctrlKey/metaKey should be checked in exactly one place — the quantity input handler — never at the document/form level');
+    assert.equal(occurrences.length, 2, 'ctrlKey/metaKey: the quantity input handler and the open-product Enter shortcut only');
+    const enterStart = periodicSrc.indexOf("if (e.key === 'Enter') {\n        if (!isWorkspaceActive");
+    assert.notEqual(enterStart, -1);
+    const enterBlock = periodicSrc.slice(enterStart, periodicSrc.indexOf("if (e.key.toLowerCase() === 'n')", enterStart));
+    assert.match(enterBlock, /handleValidateOpenProductShortcut\(e\.ctrlKey \|\| e\.metaKey\)/);
+    assert.doesNotMatch(enterBlock, /handleRequestConfirmation|handleConfirmSave|tallyStockCountRows|requestSubmit|submit\(/, 'the global Enter shortcut must never finalize the count');
+    const shortcutStart = periodicSrc.indexOf('const handleValidateOpenProductShortcut = (advanceAfter: boolean) => {');
+    const shortcutBody = periodicSrc.slice(shortcutStart, periodicSrc.indexOf('\n  };', shortcutStart));
+    assert.doesNotMatch(shortcutBody, /handleRequestConfirmation|handleConfirmSave|tallyStockCountRows/);
   });
 });
 
