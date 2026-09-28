@@ -55,6 +55,7 @@ import {
   evaluateUnitRelationshipReplacement,
   type UnitRelationshipProposal,
 } from '../lib/unitRelationship';
+import { isSameWriterSelfCorrection } from '../lib/periodicDraftSelfCorrection';
 import { buildDerivedSellingValuationSnapshot, computeRatePerPurchaseUnit, type ProductMemorySnapshot } from '../lib/purchaseToSellingConversion';
 import { initializeApp, deleteApp } from 'firebase/app';
 import {
@@ -7674,6 +7675,20 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     return snap.docs.map((d) => d.id);
   };
 
+  // [Fix — false self-conflict on a lagging listener] The exact server state
+  // (`rev` + `lastWriteAt`) this device itself last COMMITTED for each draft
+  // row. `baseRev` (below) comes from the live listener, which can lag a
+  // commit this same device has just made (slow or flaky connection): the
+  // next edit to that row then carries a stale `baseRev`, the same-writer
+  // check fails, and the person's own consecutive edits were routed to
+  // CONFLICT against themselves — locking the row and blocking Review &
+  // Confirm. Comparing against what THIS device last wrote is exact: when
+  // the server's current document is precisely our own last write, an edit
+  // built on it is a genuine self-correction, whatever the listener shows.
+  // A dormant second device never matches (another write has since changed
+  // `rev`/`lastWriteAt`), so the stale-write protection is unchanged.
+  const ownCommittedDraftWriteRef = useRef<Map<string, { rev: number; lastWriteAt: string }>>(new Map());
+
   const savePeriodicStockDraftItem = async (rowKey: string, item: PeriodicStockDraftItem) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!currentUser) throw new Error('Sessão não autenticada.');
@@ -7743,7 +7758,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       };
     };
 
+    let committedOwnWrite = null as { rev: number; lastWriteAt: string } | null;
     await runTransaction(db, async (tx) => {
+      committedOwnWrite = null; // a retried transaction body starts clean
       const [currentSnap, metaSnap] = await Promise.all([tx.get(itemRef), tx.get(metaRef)]);
       const current = currentSnap.exists() ? (currentSnap.data() as PeriodicStockDraftItem) : null;
       const currentState = current?.state ?? 'ACCEPTED';
@@ -7800,6 +7817,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // this row is subsequently edited or corrected.
           firstWriteAt: nowIso,
         });
+        committedOwnWrite = { rev: 1, lastWriteAt: nowIso };
         return;
       }
 
@@ -7835,6 +7853,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // write.
           firstWriteAt: current.firstWriteAt ?? current.lastWriteAt ?? nowIso,
         });
+        committedOwnWrite = { rev: currentRev + 1, lastWriteAt: nowIso };
         return;
       }
 
@@ -7894,7 +7913,16 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       // actually produces ordinary per-row edits — the one confirmed
       // responsible for the reported bug — without changing behavior
       // for a different, not-yet-audited path under time pressure.
-      if (current.lastWriterUid === currentUser.uid && (baseRev === undefined || baseRev === currentRev)) {
+      if (
+        isSameWriterSelfCorrection({
+          currentLastWriterUid: current.lastWriterUid,
+          currentUserUid: currentUser.uid,
+          baseRev,
+          currentRev,
+          currentLastWriteAt: current.lastWriteAt,
+          ownLastCommit: ownCommittedDraftWriteRef.current.get(`${activeBusinessId}::${rowKey}`),
+        })
+      ) {
         tx.set(itemRef, {
           ...content,
           ...preservedLifecycleFields(current),
@@ -7919,6 +7947,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // than the instant of the correction itself.
           firstWriteAt: current.firstWriteAt ?? current.lastWriteAt ?? nowIso,
         });
+        committedOwnWrite = { rev: currentRev + 1, lastWriteAt: nowIso };
         return;
       }
 
@@ -7963,6 +7992,10 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const priorOpenConflictCount = metaSnap.exists() ? (metaSnap.data().openConflictCount ?? 0) : 0;
       tx.set(metaRef, { openConflictCount: priorOpenConflictCount + 1 }, { merge: true });
     });
+
+    if (committedOwnWrite) {
+      ownCommittedDraftWriteRef.current.set(`${activeBusinessId}::${rowKey}`, committedOwnWrite);
+    }
 
     // [Bug fix — a device with a poor/interrupted connection can show
     // "saved" while the write never reaches the server] Same reasoning

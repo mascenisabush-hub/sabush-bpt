@@ -54,7 +54,7 @@ describe('D1 write contract — lifecycle field preservation', () => {
   it('the same-writer/self-correction branch also calls preservedLifecycleFields(current)', () => {
     assert.match(
       appContextSource,
-      /if \(current\.lastWriterUid === currentUser\.uid && \(baseRev === undefined \|\| baseRev === currentRev\)\) \{\s*\n\s*tx\.set\(itemRef, \{\s*\n\s*\.\.\.content,\s*\n\s*\.\.\.preservedLifecycleFields\(current\),\s*\n\s*rev: currentRev \+ 1,/
+      /if \(\s*isSameWriterSelfCorrection\(\{[\s\S]*?\}\)\s*\) \{\s*\n\s*tx\.set\(itemRef, \{\s*\n\s*\.\.\.content,\s*\n\s*\.\.\.preservedLifecycleFields\(current\),\s*\n\s*rev: currentRev \+ 1,/
     );
   });
 
