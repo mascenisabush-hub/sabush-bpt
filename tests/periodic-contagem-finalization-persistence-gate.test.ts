@@ -39,18 +39,18 @@ describe('handleRequestConfirmation — third gate added, existing two gates unc
 });
 
 describe('handleConfirmSave — belt-and-suspenders re-check, matching the existing two gates\' own pattern exactly', () => {
-  it('the new gate is present, silent (a plain return, no setError -- matching the existing two gates here, not the setError style used in handleRequestConfirmation)', () => {
+  it('the gate is present and re-checked here; it reports via setError (was a silent bare return -- a dead Confirm button, see periodic-contagem-confirm-gate-messages.test.ts)', () => {
     const fnStart = source.indexOf('const handleConfirmSave = async () => {');
-    const region = source.slice(fnStart, fnStart + 2000);
-    assert.match(region, /const hasUnsafeRow = \[[\s\S]*?\]\.some\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\);\s*\n\s*if \(hasUnsafeRow\) return;/);
+    const region = source.slice(fnStart, fnStart + 4000);
+    assert.match(region, /const unsafeRowCount = \[[\s\S]*?\]\.filter\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\)\.length;\s*\n\s*if \(unsafeRowCount > 0\) \{\s*\n\s*setError\(unsafeRowsMessage\(unsafeRowCount\)\);\s*\n\s*return;/);
   });
 
   it('comes after the two existing gates here too, in the same order', () => {
     const fnStart = source.indexOf('const handleConfirmSave = async () => {');
-    const region = source.slice(fnStart, fnStart + 2000);
+    const region = source.slice(fnStart, fnStart + 4000);
     const migrationIdx = region.indexOf("migrationStatus === 'blocked'");
-    const recoveryIdx = region.indexOf('unresolvedRecoveryEvidence).length > 0');
-    const newGateIdx = region.indexOf('hasUnsafeRow');
+    const recoveryIdx = region.indexOf('unresolvedRecoveryEvidence).length');
+    const newGateIdx = region.indexOf('unsafeRowCount');
     assert.ok(migrationIdx < recoveryIdx && recoveryIdx < newGateIdx);
   });
 });

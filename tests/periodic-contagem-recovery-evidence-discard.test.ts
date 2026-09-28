@@ -67,7 +67,7 @@ describe('Descartar wiring in PeriodicStockCountView', () => {
     assert.match(panel, /window\.confirm\(/);
     assert.equal((panel.match(/window\.confirm\(/g) ?? []).length, 2);
   });
-  it('the finalization gate and its message are untouched', () => {
-    assert.match(view, /if \(Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0\) \{\s*setError\(\s*`Existem \$\{Object\.keys\(unresolvedRecoveryEvidence\)\.length\} linha\(s\) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar\.`/);
+  it('the finalization gate and its message are unchanged (message text now from the shared helper)', () => {
+    assert.match(view, /if \(Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0\) \{\s*setError\(\s*unresolvedRecoveryEvidenceMessage\(Object\.keys\(unresolvedRecoveryEvidence\)\.length\)/);
   });
 });

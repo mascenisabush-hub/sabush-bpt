@@ -82,6 +82,12 @@ import { deriveModeAPortionValuations, canApplyModeA, resolveDefaultSellingConfi
 // Contagem can never disagree. See that module's own header comment
 // for the full authoritative-cost-basis and fallback rules.
 import { buildProductCostBasisMap, type ProductCostBasis } from '../lib/fr67CostBasisConversion';
+import {
+  identityCheckNotRunMessage,
+  identityCheckPendingMessage,
+  unresolvedRecoveryEvidenceMessage,
+  unsafeRowsMessage,
+} from '../lib/periodicFinalizationGateMessages';
 // [Feature — optional local download of a confirmed Contagem]
 // Reuses the SAME PDF/Excel export engine every Relatórios report
 // already uses (reports/shared/reportExport.ts) — jsPDF/xlsx are
@@ -4519,7 +4525,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // above the form.
       if (Object.keys(nextUnresolved).length > 0) {
         setError(
-          `Existem ${Object.keys(nextUnresolved).length} linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar.`
+          unresolvedRecoveryEvidenceMessage(Object.keys(nextUnresolved).length)
         );
       }
     }
@@ -6356,7 +6362,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (migrationStatus === 'blocked') {
       if (ambiguousMigrationKeys.length > 0) {
         setError(
-          `Existem ${ambiguousMigrationKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+          identityCheckPendingMessage(ambiguousMigrationKeys.length)
         );
         return;
       }
@@ -6370,7 +6376,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         if (ambiguousKeys.length > 0) {
           setMigrationStatus('blocked');
           setError(
-            `Existem ${ambiguousKeys.length} linha(s) desta Contagem com um estado de identidade não resolvido e precisam de revisão antes de poder confirmar.`
+            identityCheckPendingMessage(ambiguousKeys.length)
           );
           return;
         }
@@ -6402,7 +6408,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // silently proceeding past it.
     if (Object.keys(unresolvedRecoveryEvidence).length > 0) {
       setError(
-        `Existem ${Object.keys(unresolvedRecoveryEvidence).length} linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar.`
+        unresolvedRecoveryEvidenceMessage(Object.keys(unresolvedRecoveryEvidence).length)
       );
       return;
     }
@@ -6422,7 +6428,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     ].filter((conflictKey) => !isRowSafeToProgress(conflictKey));
     if (unsafeRowEntries.length > 0) {
       setError(
-        `Existem ${unsafeRowEntries.length} linha(s) com um problema de gravação por resolver — reveja-as antes de confirmar.`
+        unsafeRowsMessage(unsafeRowEntries.length)
       );
       return;
     }
@@ -6701,45 +6707,34 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   const handleConfirmSave = async () => {
     if (!pendingTally) return;
-    // [Decision 41E §12/§13 — belt-and-suspenders] Same reasoning as
-    // handleRequestConfirmation's own guard above: this handler is only
-    // ever wired to the confirmation step's own button, unreachable
-    // while subscription-blocked (that entire step never renders — see
-    // the render gate above), but guarded explicitly anyway rather than
-    // relying solely on the surrounding JSX never mounting. This is the
-    // one path that could otherwise finalize a NEW StockCount — §12's
-    // explicit requirement.
+    // [Decision 41E §12/§13; Phase 2 Stage 1 migration gate; §1d Decision B; Owner-only finalization]
+    // Belt-and-suspenders re-check of every Review-time gate, since this is the write-triggering action.
+    // These gates were bare `return`s: if any became true between Review and Confirm the button did
+    // nothing and said nothing. Each now reports why (same text as Review, via one shared module).
+    // subscriptionBlocksNewRecords never reaches here (the whole view is swapped for the notice) and
+    // !isOwner has its own always-visible notice + a disabled button, so those two stay silent returns.
     if (subscriptionBlocksNewRecords) return;
-    // [Periodic Contagem Expanded Phase 2 — Implementation
-    // Authorization, Stage 1-to-live-UI integration] Same
-    // belt-and-suspenders reasoning as immediately above —
-    // handleRequestConfirmation's own identical guard already prevents
-    // pendingTally from ever being set while migration is blocked, but
-    // this is the actual, final write-triggering action, so it is
-    // guarded here explicitly too, not left to rely solely on the
-    // earlier screen having enforced it correctly.
-    if (migrationStatus === 'blocked') return;
-    if (Object.keys(unresolvedRecoveryEvidence).length > 0) return;
-    // [Implementation Authorization §1d, Decision B] Same
-    // belt-and-suspenders reasoning as immediately above — this is the
-    // actual, final write-triggering action, so the third gate added
-    // to handleRequestConfirmation is re-checked here independently
-    // too, not left to rely solely on that earlier screen having
-    // enforced it correctly.
-    const hasUnsafeRow = [
+    if (migrationStatus === 'blocked') {
+      setError(
+        ambiguousMigrationKeys.length > 0
+          ? identityCheckPendingMessage(ambiguousMigrationKeys.length)
+          : identityCheckNotRunMessage
+      );
+      return;
+    }
+    const unresolvedEvidenceCount = Object.keys(unresolvedRecoveryEvidence).length;
+    if (unresolvedEvidenceCount > 0) {
+      setError(unresolvedRecoveryEvidenceMessage(unresolvedEvidenceCount));
+      return;
+    }
+    const unsafeRowCount = [
       ...Object.entries(catalogRows).map(([productId]) => `catalog:${productId}`),
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
-    ].some((conflictKey) => !isRowSafeToProgress(conflictKey));
-    if (hasUnsafeRow) return;
-    // [Owner-only finalization — Product Architect decision] Same
-    // belt-and-suspenders reasoning as immediately above, and as
-    // handleRequestConfirmation's own identical guard: in practice
-    // this branch is only reachable via handleRequestConfirmation
-    // having already let a non-Owner through to set `pendingTally`,
-    // which its own guard now prevents — but this function never
-    // relies solely on that upstream guard for its own safety. Reading
-    // `isOwner` only; touches no draft state, no autosave, no
-    // persistence path.
+    ].filter((conflictKey) => !isRowSafeToProgress(conflictKey)).length;
+    if (unsafeRowCount > 0) {
+      setError(unsafeRowsMessage(unsafeRowCount));
+      return;
+    }
     if (!isOwner) return;
     // [Product Identity Existing/New Resolution — Implementation
     // Authorization, Checkpoint C, Required Behavioral Guarantee 1]

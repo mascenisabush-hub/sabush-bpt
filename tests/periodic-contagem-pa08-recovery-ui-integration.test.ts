@@ -136,8 +136,12 @@ describe('unresolvedRecoveryEvidence — reactive state, correctly typed, never 
   });
 
   it('5/finalization gating: both handleRequestConfirmation and handleConfirmSave block on unresolved recovery evidence, mirroring the existing migrationStatus gate exactly', () => {
-    const occurrences = [...componentSource.matchAll(/Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0/g)];
-    assert.equal(occurrences.length, 2, 'expected exactly two gates, one in each function, matching the two existing migrationStatus === \'blocked\' gates');
+    // Review: `if (Object.keys(unresolvedRecoveryEvidence).length > 0) { setError(...message(...)) }`.
+    // Confirm: the same check via a named count (it now reports instead of a bare return).
+    const reviewGate = [...componentSource.matchAll(/Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0/g)];
+    const confirmGate = [...componentSource.matchAll(/const unresolvedEvidenceCount = Object\.keys\(unresolvedRecoveryEvidence\)\.length;\s*\n\s*if \(unresolvedEvidenceCount > 0\)/g)];
+    assert.equal(reviewGate.length, 1, 'expected exactly one gate in handleRequestConfirmation');
+    assert.equal(confirmGate.length, 1, 'expected exactly one gate in handleConfirmSave');
   });
 
   it('6. resolution happens only through the normal, unmodified save pipeline — no new "apply recovered value" write path was introduced', () => {

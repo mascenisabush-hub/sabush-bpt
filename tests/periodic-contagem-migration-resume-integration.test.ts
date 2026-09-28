@@ -96,10 +96,10 @@ describe('Finalization blocked while migration is ambiguous', () => {
     );
   });
 
-  it('handleConfirmSave — the finalization action itself — also returns early, as defense-in-depth', () => {
+  it('handleConfirmSave — the finalization action itself — also returns early (with a visible error), as defense-in-depth', () => {
     const fnMatch = componentSource.match(/const handleConfirmSave = async \(\) => \{[\s\S]*?\n\s+if \(!isOwner/);
     assert.ok(fnMatch);
-    assert.match(fnMatch![0], /if \(migrationStatus === 'blocked'\) return;/);
+    assert.match(fnMatch![0], /if \(migrationStatus === 'blocked'\) \{\s*\n\s*setError\(/);
   });
 
   it('migrationStatus and ambiguousMigrationKeys are declared as reactive state, not refs — needed for this gate to actually re-render the confirmation UI', () => {

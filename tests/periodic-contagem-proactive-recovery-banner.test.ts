@@ -6,6 +6,7 @@
 import { readFileSync } from 'node:fs';
 import { describe, it } from 'node:test';
 import assert from 'node:assert/strict';
+import { unresolvedRecoveryEvidenceMessage } from '../apps/tenant/src/lib/periodicFinalizationGateMessages.ts';
 
 const source = readFileSync(
   new URL('../apps/tenant/src/components/PeriodicStockCountView.tsx', import.meta.url),
@@ -20,19 +21,13 @@ describe('handleResumeDraft — proactive recovery banner (§1e, Decision C Opti
     assert.match(region, /if \(Object\.keys\(nextUnresolved\)\.length > 0\) \{\s*\n\s*setError\(/);
   });
 
-  it('reuses the EXACT SAME message text already used at the finalization gate -- not reworded, per the signed authorization\'s own instruction', () => {
-    const resumeMsg = source.match(/setError\(\s*\n\s*`Existem \$\{Object\.keys\(nextUnresolved\)\.length\} linha\(s\) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar\.`/);
-    const finalizationMsg = source.match(/setError\(\s*\n\s*`Existem \$\{Object\.keys\(unresolvedRecoveryEvidence\)\.length\} linha\(s\) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar\.`/);
-    assert.ok(resumeMsg, 'expected the proactive resume message');
-    assert.ok(finalizationMsg, 'expected the original finalization-gate message to remain unchanged');
-    // Both messages are the identical human-readable text, differing
-    // only in which variable's .length they read (and incidental
-    // indentation from their different nesting depth in the source) --
-    // confirming no rewording occurred, only earlier timing.
-    const normalize = (s: string) => s.replace(/\s+/g, ' ').trim();
-    const resumeText = normalize(resumeMsg![0].replace('nextUnresolved', 'X'));
-    const finalizationText = normalize(finalizationMsg![0].replace('unresolvedRecoveryEvidence', 'X'));
-    assert.equal(resumeText, finalizationText);
+  it('reuses the EXACT SAME message text already used at the finalization gate -- one shared helper, not reworded', () => {
+    assert.match(source, /setError\(unresolvedRecoveryEvidenceMessage\(Object\.keys\(nextUnresolved\)\.length\)\)|setError\(\s*\n\s*unresolvedRecoveryEvidenceMessage\(Object\.keys\(nextUnresolved\)\.length\)/, 'expected the proactive resume message to use the shared helper');
+    assert.match(source, /unresolvedRecoveryEvidenceMessage\(Object\.keys\(unresolvedRecoveryEvidence\)\.length\)/, 'expected the finalization-gate message to use the shared helper');
+    assert.equal(
+      unresolvedRecoveryEvidenceMessage(2),
+      'Existem 2 linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar.'
+    );
   });
 
   it('a silently-resolved case (already-synced) never reaches nextUnresolved, so the banner never fires for it -- system-handled-silently is preserved, unchanged', () => {
