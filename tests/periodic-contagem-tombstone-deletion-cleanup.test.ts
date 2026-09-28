@@ -120,10 +120,10 @@ describe('Tombstone cleanup at draft-lifecycle endpoints', () => {
     assert.ok(tombstoneIndex > -1 && tombstoneIndex < commitIndex, 'tombstone deletion must be part of the same batch, before the single commit');
   });
 
-  it('recordStockCount\'s finalization cleanup also enumerates and deletes tombstones, in the same batch as items and the meta document', () => {
+  it('recordStockCount\'s finalization cleanup also enumerates and deletes tombstones, through the same finalization batch as items and the meta document (one atomic batch unless it would exceed 500 ops -- see lib/finalizationBatch.ts)', () => {
     assert.match(
       appContextSource,
-      /const periodicTombstonesSnap = await getDocs\(\s*\n\s*collection\(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'tombstones'\)\s*\n\s*\);\s*\n\s*periodicTombstonesSnap\.forEach\(\(tombstoneDoc\) => fsBatch\.delete\(tombstoneDoc\.ref\)\);/
+      /const periodicTombstonesSnap = await getDocs\(\s*\n\s*collection\(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'tombstones'\)\s*\n\s*\);\s*\n\s*periodicTombstonesSnap\.forEach\(\(tombstoneDoc\) => fsBatch\.deleteCleanup\(tombstoneDoc\.ref\)\);/
     );
   });
 

@@ -32,6 +32,7 @@ import { normalizeStockCountItems } from '../utils/stockCount';
 import { selectLegacyKeysToMigrate, type PortionLike } from '../utils/periodicRowIdentity';
 import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { newProductId } from '../lib/newProductId';
+import { createFinalizationBatch } from '../lib/finalizationBatch';
 import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
@@ -5824,7 +5825,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const businessId = activeBusinessId;
-    const fsBatch = createFirestoreBatch(db);
+    const fsBatch = createFinalizationBatch(() => createFirestoreBatch(db));
     const tempProducts = [...products];
 
     // [Product Memory / UOM — Increment A] Correlates each raw item's
@@ -6322,6 +6323,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // FieldValue.
     const stockCountWritePayload: WithFieldValue<StockCount> =
       type === 'initial' ? { ...newCount, confirmedAt: serverTimestamp() } : newCount;
+    // Everything from here to the end of the snapshot/correction writes is one atomic unit (see
+    // lib/finalizationBatch.ts) — count + snapshot must never be split across batches.
+    fsBatch.beginTail();
     fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts', newCount.id), stockCountWritePayload);
 
     // [Business Worth Evolution — Implementation Authorization,
@@ -6814,7 +6818,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const periodicDraftItemsSnap = await getDocs(
         collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items')
       );
-      periodicDraftItemsSnap.forEach((itemDoc) => fsBatch.delete(itemDoc.ref));
+      periodicDraftItemsSnap.forEach((itemDoc) => fsBatch.deleteCleanup(itemDoc.ref));
       // [Periodic Contagem Expanded Phase 2 — Implementation
       // Authorization §1 item 5; Stage 5] Same reasoning as
       // clearPeriodicStockDraft's own identical extension — tombstones
@@ -6823,10 +6827,13 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       const periodicTombstonesSnap = await getDocs(
         collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'tombstones')
       );
-      periodicTombstonesSnap.forEach((tombstoneDoc) => fsBatch.delete(tombstoneDoc.ref));
-      fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic'));
+      periodicTombstonesSnap.forEach((tombstoneDoc) => fsBatch.deleteCleanup(tombstoneDoc.ref));
+      fsBatch.deleteCleanup(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic')); // meta LAST
     }
-    await fsBatch.commit();
+    const commitResult = await fsBatch.commit();
+    if (commitResult.cleanupIncomplete) {
+      console.warn('[periodic-contagem] count saved, but some draft rows could not be cleaned up; discard the leftover draft.');
+    }
     // [Fix] The periodic draft (and every row in it) is gone: its browser-local recovery snapshots are
     // now meaningless and, because row keys are reused, would block the NEXT count.
     if (type !== 'initial') clearAllPeriodicRecoverySnapshots(businessId);

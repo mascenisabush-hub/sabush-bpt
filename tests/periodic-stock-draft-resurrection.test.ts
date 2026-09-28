@@ -236,7 +236,7 @@ describe('recordStockCount (AppContext.tsx) — periodic branch enforces and use
 
   it('queues the stockCountDrafts/periodic delete on the same batch as the stockCounts write for non-initial types', () => {
     const setIndex = recordStockCountCodeOnly.indexOf("fsBatch.set(doc(db, 'businesses', businessId, 'stockCounts'");
-    const periodicDeleteIndex = recordStockCountCodeOnly.indexOf("fsBatch.delete(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic')");
+    const periodicDeleteIndex = recordStockCountCodeOnly.indexOf("fsBatch.deleteCleanup(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic')");
     const commitIndex = recordStockCountCodeOnly.indexOf('await fsBatch.commit()');
     assert.notEqual(setIndex, -1);
     assert.notEqual(periodicDeleteIndex, -1, 'Expected recordStockCount to queue a stockCountDrafts/periodic delete for the periodic branch.');
