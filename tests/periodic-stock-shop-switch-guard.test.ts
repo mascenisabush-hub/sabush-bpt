@@ -37,9 +37,12 @@ describe('PeriodicStockCountView.tsx — shop-switch guard is wired in', () => {
   it('calls detectShopSwitch inside a useEffect keyed on [activeBusinessId]', () => {
     const idx = src.indexOf('detectShopSwitch(activeBusinessId ?? null, loadedForBusinessId)');
     assert.notEqual(idx, -1, 'expected a detectShopSwitch(...) call');
-    const nearby = src.slice(Math.max(0, idx - 400), idx + 2000);
-    assert.match(nearby, /useEffect\(\(\) => \{/);
-    assert.match(nearby, /\}, \[activeBusinessId\]\);/);
+    // The effect that CONTAINS the call, up to its own dependency array (its reset body outgrew a fixed window).
+    const effectStart = src.lastIndexOf('useEffect(() => {', idx);
+    const effectEnd = src.indexOf('\n  }, [', idx);
+    assert.ok(effectStart !== -1 && effectEnd !== -1);
+    assert.equal(src.slice(effectStart, idx).match(/useEffect\(/g)?.length, 1, 'call must be directly inside this effect');
+    assert.ok(src.slice(effectEnd).startsWith('\n  }, [activeBusinessId]);'));
   });
 
   it('resets catalogRows and manualRows on a detected switch — the two pieces of state that actually reference product ids', () => {

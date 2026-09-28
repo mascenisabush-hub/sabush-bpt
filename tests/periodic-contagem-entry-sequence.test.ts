@@ -337,7 +337,7 @@ describe('Re-edit and Voltar preserve the original entrySequence — never reass
 
 describe('Resume restores entrySequence and reseeds the counter to max + 1 (tests 6, 7)', () => {
   it('handleResumeDraft reseeds entrySequenceRef.current to the highest resumed entrySequence + 1, mirroring the sellingPriceEditSequenceRef reseed exactly', () => {
-    const body = extractFunctionBody(source, 'const handleResumeDraft = () => {');
+    const body = extractFunctionBody(source, 'const handleResumeDraft = async () => {');
     assert.match(
       body,
       /const highestResumedEntrySequence = allResumedRows\.reduce\(\s*\n\s*\(max, row\) => \(row\.entrySequence !== undefined && row\.entrySequence > max \? row\.entrySequence : max\),\s*\n\s*0\s*\n\s*\);/

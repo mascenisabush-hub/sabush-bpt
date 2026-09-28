@@ -454,7 +454,7 @@ describe('L — Sorting (Authorization §8): four modes, using only existing dat
 
 describe('M — Existing (pre-Authorization) draft compatibility', () => {
   it('handleResumeDraft rebuilds catalogRows/manualRows from EVERY persisted draft item via the existing, unmodified draftItemToWorkingRow — validated status included, nothing filtered out by validation state', () => {
-    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = async () => {');
     assert.match(body, /for \(const item of periodicStockDraft\.items\) \{/);
     assert.match(body, /draftItemToWorkingRow\(item\)/);
     assert.doesNotMatch(body, /\.filter\(.*validated/);
@@ -463,7 +463,7 @@ describe('M — Existing (pre-Authorization) draft compatibility', () => {
   });
 
   it('handleResumeDraft never sets activeWorkspaceKey or activeNewManualRowIndex — the workspace always starts EMPTY after resuming any draft, old or new, per Authorization §10', () => {
-    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = async () => {');
     assert.doesNotMatch(body, /setActiveWorkspaceKey|setActiveNewManualRowIndex/);
   });
 
@@ -496,7 +496,7 @@ describe('M — Existing (pre-Authorization) draft compatibility', () => {
   });
 
   it('no automatic migration exists anywhere: handleResumeDraft never recalculates a value, never merges rows, never changes a productId/unit/quantity/sellingPrice, never marks anything validated automatically', () => {
-    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = async () => {');
     assert.doesNotMatch(body, /validated: true/);
     assert.doesNotMatch(body, /\.reduce\(.*merge/i);
     assert.doesNotMatch(body, /recalculate|reconcile/i);

@@ -162,7 +162,8 @@ describe('Ctrl/Cmd+Enter', () => {
     const marker = 'useEffect(() => {\n    const request = ctrlEnterRequestedRef.current;';
     const idx = periodicSrc.indexOf(marker);
     assert.notEqual(idx, -1, 'could not locate the advance-detection effect');
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     const clearIdx = body.indexOf('ctrlEnterRequestedRef.current = null;');
     const advanceIdx = body.indexOf('advanceAfterValidation()');
     assert.notEqual(clearIdx, -1, 'the ref must be cleared inside the effect');
@@ -173,14 +174,16 @@ describe('Ctrl/Cmd+Enter', () => {
   it('the advance-detection effect only advances on a genuine false→true validated transition, never unconditionally', () => {
     const marker = 'useEffect(() => {\n    const request = ctrlEnterRequestedRef.current;';
     const idx = periodicSrc.indexOf(marker);
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     assert.match(body, /wasValidatedBeforeRef\.current === false && row\?\.validated === true/, 'must gate the advance on both the "before" snapshot and the "after" read');
   });
 
   it('the advance-detection effect depends on catalogRows and manualRows — the only two things a successful Validar can change', () => {
     const marker = 'useEffect(() => {\n    const request = ctrlEnterRequestedRef.current;';
     const idx = periodicSrc.indexOf(marker);
-    const body = periodicSrc.slice(idx, idx + 900);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     assert.match(body, /\}, \[catalogRows, manualRows\]\);/, 'the effect must be keyed on catalogRows/manualRows, not an arbitrary or empty dependency array');
   });
 
@@ -344,7 +347,8 @@ describe('Esc', () => {
     const marker = "if (e.key === 'Escape') {";
     const idx = periodicSrc.indexOf(marker);
     assert.notEqual(idx, -1, 'could not locate the Escape branch');
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     const helpIdx = body.indexOf('showShortcutHelp');
     const modalIdx = body.indexOf('viewingCount !== null');
     const discardIdx = body.indexOf("discardConfirmState === 'confirming'");
@@ -355,7 +359,8 @@ describe('Esc', () => {
   it('Esc never calls handleDiscardDraft — only setDiscardConfirmState(\'idle\'), matching the banner\'s own "Cancelar" button', () => {
     const marker = "if (e.key === 'Escape') {";
     const idx = periodicSrc.indexOf(marker);
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     assert.doesNotMatch(body, /handleDiscardDraft/, 'Esc must never invoke the destructive discard action');
     assert.match(body, /setDiscardConfirmState\('idle'\)/, 'must call the identical non-destructive setter the Cancelar button uses');
   });
@@ -363,14 +368,16 @@ describe('Esc', () => {
   it('Esc calls setViewingCount(null) — the same setter the historical modal\'s own backdrop click uses', () => {
     const marker = "if (e.key === 'Escape') {";
     const idx = periodicSrc.indexOf(marker);
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     assert.match(body, /setViewingCount\(null\)/);
   });
 
   it('Esc calls the existing, unmodified handleLeaveWorkspaceUnchanged for the active-workspace case', () => {
     const marker = "if (e.key === 'Escape') {";
     const idx = periodicSrc.indexOf(marker);
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     assert.match(body, /handleLeaveWorkspaceUnchanged\(\);/);
   });
 
@@ -385,7 +392,8 @@ describe('Esc', () => {
   it('setPendingTally is referenced only by the review screen\'s own existing call sites — Esc never references it (regression: finalization-review Esc stays excluded)', () => {
     const marker = "if (e.key === 'Escape') {";
     const idx = periodicSrc.indexOf(marker);
-    const body = periodicSrc.slice(idx, idx + 700);
+    // Whole effect up to its dependency array (comments inside it outgrew a fixed window).
+    const body = periodicSrc.slice(idx, periodicSrc.indexOf('\n  }, [', idx) + 40);
     assert.doesNotMatch(body, /setPendingTally/, 'Esc must not reach the finalization review branch — explicitly out of scope');
   });
 });

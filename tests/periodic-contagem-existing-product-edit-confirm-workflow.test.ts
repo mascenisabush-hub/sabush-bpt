@@ -284,7 +284,7 @@ describe('J — Draft/autosave behavior is preserved', () => {
   });
 
   it('handleResumeDraft (restoring a saved draft) is completely untouched by this workflow — a reopened-then-interrupted product still resumes via the exact same pre-existing path', () => {
-    const resumeBody = extractFunctionBody(periodicSrc, 'const handleResumeDraft = () => {');
+    const resumeBody = extractFunctionBody(periodicSrc, 'const handleResumeDraft = async () => {');
     assert.match(resumeBody, /setCatalogRows\(nextCatalogRows\);/);
     assert.match(resumeBody, /setManualRows\(nextManualRows\);/);
     assert.doesNotMatch(resumeBody, /reopenExistingProductForEditing/);

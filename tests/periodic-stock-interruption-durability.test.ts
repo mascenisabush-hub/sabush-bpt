@@ -296,15 +296,23 @@ describe('§5b — newProductInfo reaches every meta-document write path for the
     // live from latestFlushArgs.current and forward it to
     // savePeriodicStockDraftMeta — flushPeriodicDraftNow itself must not
     // duplicate that logic.
-    assert.doesNotMatch(
-      stripLineComments(flushBody),
-      /latestFlushArgs\.current/,
-      'flushPeriodicDraftNow should no longer read latestFlushArgs.current directly — performRowSaveAttempt already does this, live, at the moment each row\'s attempt actually fires.'
-    );
+    // [4acb821] flushPeriodicDraftNow now reads latestFlushArgs.current for ONE thing only: mapping each
+    // not-yet-attempted manual timer key to that row's protectionKey. It still never builds a payload or
+    // reads newProductInfo itself - that stays in performRowSaveAttempt.
+    const flushNoComments = stripLineComments(flushBody);
+    const latestReads = flushNoComments.match(/latestFlushArgs\.current/g) || [];
+    assert.equal(latestReads.length, 1);
+    assert.match(flushNoComments, /const \{ manualRows: mrForFlush \} = latestFlushArgs\.current;/);
+    assert.doesNotMatch(flushNoComments, /newProductInfo|savePeriodicStockDraftMeta|savePeriodicStockDraftItem/,
+      'flushPeriodicDraftNow must not build or forward a payload itself.');
     assert.match(
       flushBody,
-      /const notYetAttemptedKeys = Array\.from\(rowDebounceTimersRef\.current\.keys\(\)\);/,
+      /const notYetAttemptedEntries: \{ rowKey: string; protectionKey: string \}\[\] = Array\.from\(\s*rowDebounceTimersRef\.current\.keys\(\)\s*\)\.map\(/,
       'Expected flushPeriodicDraftNow to capture every pending debounce-timer key (which includes any dirty \'__meta__\'/\'newProductInfo:*\' key) before clearing those timers, so a pending meta/newProductInfo edit still receives an interruption-triggered attempt.'
+    );
+    assert.ok(
+      flushBody.indexOf('rowDebounceTimersRef.current.keys()') < flushBody.indexOf('rowDebounceTimersRef.current.clear();'),
+      'pending keys must be captured before the timers are cleared'
     );
   });
 
@@ -318,7 +326,7 @@ describe('§5b — newProductInfo reaches every meta-document write path for the
   });
 
   it('handleResumeDraft restores newProductInfo from the draft, defaulting to an empty object when absent (backward compatibility)', () => {
-    const handleResumeDraftBody = extractFunctionBody(source, 'const handleResumeDraft = () => {');
+    const handleResumeDraftBody = extractFunctionBody(source, 'const handleResumeDraft = async () => {');
     assert.match(
       handleResumeDraftBody,
       /setNewProductInfo\(periodicStockDraft\.newProductInfo\s*\?\?\s*\{\}\)/,
@@ -430,7 +438,8 @@ describe('Decision 58 — interruption persistence is per dirty row, not per who
   it('builds its candidate set from rowHasUnsavedLocalEditRef (dirty rows) and rowDebounceTimersRef keys (not-yet-attempted rows), not from catalogRows/manualRows directly', () => {
     assert.match(
       flushBody,
-      /Object\.keys\(rowHasUnsavedLocalEditRef\.current\)\.filter\(\s*\(rowKey\) => rowHasUnsavedLocalEditRef\.current\[rowKey\]\s*\)/,
+      // [4acb821] The dirty map is protectionKey -> saveTargetKey now; the same ref, read as entries.
+      /Object\.entries\(\s*rowHasUnsavedLocalEditRef\.current\s*\)\s*\.filter\(\(\[, saveTargetKey\]\) => saveTargetKey\)/,
       'Expected flushPeriodicDraftNow to derive its dirty-row set from the existing rowHasUnsavedLocalEditRef, not a new dirty-state mechanism.'
     );
     assert.doesNotMatch(

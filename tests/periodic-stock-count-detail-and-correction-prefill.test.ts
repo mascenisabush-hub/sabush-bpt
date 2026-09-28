@@ -34,7 +34,8 @@ describe('PeriodicStockCountView.tsx — view past count details (any count, no 
     assert.notEqual(idx, -1);
     const nearby = src.slice(idx, idx + 400);
     assert.match(nearby, /<button\b/);
-    assert.match(nearby, /onClick=\{\(\) => setViewingCount\(count\)\}/);
+    // 08ef225 added a stale-PDF-error reset to the same click; it still opens the viewer for this count.
+    assert.match(nearby, /onClick=\{\(\) => (setViewingCount\(count\)|\{\s*\n\s*setHistoricalPdfError\(null\);\s*\n\s*setViewingCount\(count\);\s*\n\s*\})\}/);
   });
 
   it('the detail overlay is gated on viewingCount, not on the correction window or any date check', () => {

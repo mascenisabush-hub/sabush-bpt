@@ -79,7 +79,7 @@ describe('§2/§3 — "Cancelar" leaves the draft completely intact', () => {
 
 describe('§4 — Retomar Contagem is now automatic (Decision 60 §13.A), not button-gated', () => {
   it('handleResumeDraft itself is untouched — still exists, still keyed off periodicStockDraft', () => {
-    assert.match(source, /const handleResumeDraft = \(\) => \{/);
+    assert.match(source, /const handleResumeDraft = async \(\) => \{/);
     assert.match(source, /if \(!periodicStockDraft\) return;/);
   });
 
@@ -90,10 +90,16 @@ describe('§4 — Retomar Contagem is now automatic (Decision 60 §13.A), not bu
   // banner this suite originally tested is removed entirely;
   // handleResumeDraft is now invoked automatically, exactly once per
   // mount, by a dedicated effect — never by a button click.
-  it('handleResumeDraft is invoked automatically, exactly once, by a dedicated effect guarded against re-firing', () => {
+  it('handleResumeDraft is invoked automatically by a dedicated effect, guarded so it can never overwrite active typing', () => {
+    // [3e2d35d EMERGENCY fix] "exactly once" became "once, and again ONLY if the true remote item count has
+    // grown since (an incomplete first snapshot) AND no row has an unsaved local edit". The never-overwrite
+    // guarantee this test protects is unchanged; the permanent once-only latch was the freeze bug.
     assert.match(source, /const autoResumedRef = useRef\(false\);/);
-    const effectMatch = source.match(/useEffect\(\(\) => \{\s*if \(autoResumedRef\.current\) return;[\s\S]*?handleResumeDraft\(\);[\s\S]*?\}, \[periodicStockDraftLoaded, periodicStockDraft\]\);/);
-    assert.ok(effectMatch, 'Expected a dedicated effect that calls handleResumeDraft() exactly once, guarded by autoResumedRef.');
+    const effectMatch = source.match(/useEffect\(\(\) => \{\s*if \(!periodicStockDraftLoaded\) return;[\s\S]*?handleResumeDraft\(\);[\s\S]*?\}, \[periodicStockDraftLoaded, periodicStockDraft\]\);/);
+    assert.ok(effectMatch, 'Expected the dedicated auto-resume effect.');
+    const effect = effectMatch![0];
+    assert.match(effect, /if \(autoResumedRef\.current\) \{[\s\S]*?const hasAnyDirtyRow = Object\.values\(rowHasUnsavedLocalEditRef\.current\)\.some\(Boolean\);\s*\n\s*if \(hasAnyDirtyRow \|\| currentItemCount <= lastAutoResumedItemCountRef\.current\) return;/);
+    assert.ok(effect.indexOf('autoResumedRef.current = true;\n    lastAutoResumedItemCountRef.current = currentItemCount;') < effect.indexOf('handleResumeDraft();'));
   });
 
   it('no button in this component is wired directly to handleResumeDraft anymore — the full-screen banner it used to live in is removed', () => {

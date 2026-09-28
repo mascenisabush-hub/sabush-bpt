@@ -84,7 +84,17 @@ describe('PeriodicStockCountView.tsx — requirement 5/no duplicate-product dete
     // "never read," so the check is corrected to test that directly.
     const updateManualRowMatch = source.match(/const updateManualRow = \([\s\S]*?\n  \};/);
     assert.ok(updateManualRowMatch, 'expected to find updateManualRow');
-    assert.doesNotMatch(updateManualRowMatch![0], /productId:\s|\.productId\s*=/, 'updateManualRow must never assign/write productId, though reading it to resolve the row\'s own product is permitted');
+    // [612179c, Expanded Phase 2 Stage 6, Rules C/D/E] Superseded in part: exact-name matching is now
+    // authorized, but NOT inside updateManualRow. updateManualRow may only CLEAR productId, on a rename,
+    // and only when the incoming update does not carry its own id (Rules C/E); a real id is assigned
+    // later by a separate effect (Rule D), never fused into the edit itself.
+    const body = updateManualRowMatch![0];
+    const writes = body.match(/productId:\s*[^,}\s]+/g) || [];
+    assert.deepEqual(writes, ['productId: undefined'], 'updateManualRow may only ever write productId: undefined');
+    assert.match(body, /fields\.productName !== currentRow\.productName &&\s*\n\s*fields\.productId === undefined\s*\n\s*\) \{\s*\n\s*resolvedFields = \{ \.\.\.resolvedFields, productId: undefined \};/);
+    assert.doesNotMatch(body, /\.productId\s*=[^=]/);
+    // Rule D: the only exact-match assignment is the separate effect, and only for rows lacking an id.
+    assert.match(source, /manualRows\.forEach\(\(row, index\) => \{\s*\n\s*if \(row\.productId\) return;[\s\S]{0,300}?updateManualRow\(index, \{ productId: matchedProduct\.id \}\);/);
   });
 });
 

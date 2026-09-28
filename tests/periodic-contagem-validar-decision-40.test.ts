@@ -543,13 +543,13 @@ describe('Resume (Retomar Contagem) restores validated status automatically (Dec
   });
 
   it('handleResumeDraft still routes every item through draftItemToWorkingRow unmodified — no special-cased re-population of any validated Set', () => {
-    const body = extractFunctionBody(source, 'const handleResumeDraft = () => {');
+    const body = extractFunctionBody(source, 'const handleResumeDraft = async () => {');
     assert.match(body, /draftItemToWorkingRow\(item\)/);
     assert.doesNotMatch(body, /setConfirmedCatalogProductIds|setConfirmedManualRowIndices/);
   });
 
   it('handleResumeDraft has no minimum-active-row invariant that would reject an all-validated resumed draft', () => {
-    const body = extractFunctionBody(source, 'const handleResumeDraft = () => {');
+    const body = extractFunctionBody(source, 'const handleResumeDraft = async () => {');
     assert.doesNotMatch(body, /throw new Error/);
   });
 });

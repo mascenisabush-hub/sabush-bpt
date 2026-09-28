@@ -142,7 +142,9 @@ describe('submission identity regeneration — cleared on edit, reused on retry 
       'handleDateChange',
     ];
     for (const name of handlerNames) {
-      const body = extractFunctionBody(source, `const ${name} = (`);
+      // handleRemoveManualRow became async (coordinated deletion, 7c698f2); match either form.
+      const marker = source.includes(`const ${name} = async (`) ? `const ${name} = async (` : `const ${name} = (`;
+      const body = extractFunctionBody(source, marker);
       assert.match(
         body,
         /submissionIdRef\.current\s*=\s*null/,

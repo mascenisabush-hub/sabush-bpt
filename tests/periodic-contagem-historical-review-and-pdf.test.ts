@@ -312,14 +312,16 @@ describe('D3 — Owner-requested: preview before download, for all four PDF expo
   it('generateReportPdfPreview never calls doc.save() itself — only the returned download() does, on demand, so nothing downloads merely by opening the preview', () => {
     const previewBody = previewSrc.slice(
       previewSrc.indexOf('export async function generateReportPdfPreview('),
-      previewSrc.indexOf('export async function generateReportPdfPreview(') + 600
+      // whole function (a type-fix comment pushed download() past a fixed 600-char window)
+      previewSrc.indexOf('\n}\n', previewSrc.indexOf('export async function generateReportPdfPreview('))
     );
     assert.doesNotMatch(previewBody.split('download: () =>')[0], /doc\.save\(/, 'must not save before returning — only the download() callback may');
     assert.match(previewBody, /download: \(\) => doc\.save\(fileName\)/);
   });
 
   it('generateReportPdfPreview returns a real revoke() that calls URL.revokeObjectURL on the exact blob URL it produced', () => {
-    assert.match(previewSrc, /const blobUrl: string = doc\.output\('bloburl'\);/);
+    // dba97d6: jsPDF types 'bloburl' as a URL object; stringified once (same URL) for <iframe src>/revoke.
+    assert.match(previewSrc, /const blobUrl: string = doc\.output\('bloburl'\)(\.toString\(\))?;/);
     assert.match(previewSrc, /revoke: \(\) => URL\.revokeObjectURL\(blobUrl\)/);
   });
 

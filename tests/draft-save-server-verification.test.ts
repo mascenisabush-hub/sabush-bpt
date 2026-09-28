@@ -73,8 +73,12 @@ describe('AppContext.tsx — getDocFromServer imported and used by all three dra
   // actually has it" guarantee for every one of them.
   it('savePeriodicStockDraftItem calls getDocFromServer after setDoc — one row, one independent document', () => {
     const body = extractFunctionBody(appContextSrc, 'const savePeriodicStockDraftItem = async (');
-    assert.match(body, /await setDoc\(itemRef, item\);/);
-    assert.match(body, /await getDocFromServer\(itemRef\);/);
+    // The row write is a transaction now (Decisions 44-56 conflict detection), still on the one row's own
+    // itemRef, and still followed by a server readback of that same document.
+    const writeIdx = body.indexOf('await runTransaction(db, async (tx) => {');
+    const readbackIdx = body.indexOf('await getDocFromServer(itemRef);');
+    assert.ok(writeIdx !== -1 && readbackIdx > writeIdx);
+    assert.match(body, /tx\.set\(itemRef,/);
   });
 
   it('savePeriodicStockDraftMeta commits its write via a transaction (needed to read openConflictCount fresh — see the bug fix for the resurrection race) then calls getDocFromServer afterward', () => {
