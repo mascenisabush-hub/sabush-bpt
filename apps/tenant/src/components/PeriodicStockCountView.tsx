@@ -10314,6 +10314,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                         return;
                       }
                       const explicitProductId = group.key.startsWith('id:') ? group.key.slice(3) : undefined;
+                      // [Bug fix — validated portion unreachable in a mixed group] When SOME
+                      // (not all) portions are already validated, the plain workspace open
+                      // left those portions validated, and the workspace's active-row loop
+                      // hides validated rows — so they could not be seen, edited or deleted
+                      // (no trash button), yet still counted in "Porção X/Y" and the total.
+                      // Reopen through the same path "Editar" uses so every portion becomes
+                      // editable/removable; Voltar still restores their validated state.
+                      if (group.members.some((m) => m.validated)) {
+                        reopenExistingProductForEditing(representative.activationKey, explicitProductId);
+                        return;
+                      }
                       handleSelectExistingProductForWorkspace(representative.activationKey, explicitProductId);
                     };
                     // [Implementation Authorization §4.4] ↑/↓ moves the

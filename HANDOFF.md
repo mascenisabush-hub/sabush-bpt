@@ -10,6 +10,17 @@ here. This file is short-term memory only.
 
 ---
 
+## Session 2026-09-28 (b) — mixed-validated portion group fix
+
+- Periodic Contagem: clicking "Abrir" on a group where only SOME portions were validated left those
+  portions validated and hidden from the workspace (active loop filters validated rows) — they could
+  not be edited or deleted, yet still counted. `handleGroupActivation` now reopens any group with a
+  validated member via `reopenExistingProductForEditing` (Voltar restore unchanged).
+  Test: `tests/periodic-contagem-mixed-validated-group-reopen.test.ts`. Tenant tsc + build green;
+  contagem test failure counts identical to clean main (pre-existing, see below).
+
+---
+
 ## Session 2026-09-28 (contagem UX blockers) — read first
 
 **Landed (3 fixes, each with tests; full-suite diff vs clean main = 0 regressions, +20 passing):**
