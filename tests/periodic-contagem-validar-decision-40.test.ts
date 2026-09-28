@@ -284,7 +284,10 @@ describe('Accumulated/validated area (Decision 40 FR-N8; Implementation Authoriz
     // one, combined in one place — is unaffected by the rendering
     // change; only which derived array the render site reads changed
     // as an intentional consequence of unifying the two lists.
-    assert.match(source, /visibleUnifiedListEntries\.map\(/);
+    // [Per-product grouping — Integration Point 3] grouped per product,
+    // built from the same unifiedListEntries.
+    assert.match(source, /visibleProductDisplayGroups\.map\(/);
+    assert.match(source, /buildProductDisplayGroups\(/);
     const entriesBody = extractFunctionBody(source, 'const unifiedListEntries = useMemo(() => {');
     assert.match(entriesBody, /Object\.entries\(catalogRows\)/);
     assert.match(entriesBody, /manualRows/);
@@ -300,7 +303,11 @@ describe('Accumulated/validated area (Decision 40 FR-N8; Implementation Authoriz
     const editManualCallSites = (source.match(/handleEditManualRow\(idx\)/g) || []).length;
     assert.equal(editCatalogCallSites, 1, 'Expected exactly one literal call site left: the active-workspace Editar button.');
     assert.equal(editManualCallSites, 1, 'Expected exactly one literal call site left: the active-workspace Editar button.');
-    const clickBody = extractFunctionBody(source, 'const handleUnifiedEntryClick = (entry: (typeof unifiedListEntries)[number]) => {');
+    const clickBody = extractFunctionBody(source, 'const handleUnifiedEntryClick = (entry: {');
+    const groupStart = source.indexOf('const handleGroupActivation = () => {');
+    const groupBody = source.slice(groupStart, source.indexOf('\n                    };', groupStart));
+    assert.match(groupBody, /handleEditCatalogRow\(representative\.catalogProductId\)/);
+    assert.match(groupBody, /handleEditManualRow\(representative\.manualRowIndex\)/);
     assert.match(clickBody, /handleEditCatalogRow\(entry\.catalogProductId\)/);
     assert.match(clickBody, /handleEditManualRow\(entry\.manualRowIndex\)/);
   });
@@ -393,7 +400,7 @@ describe('Corrigir (Decision 40 FR-N11; Implementation Authorization §1 item 7,
 
 describe('Manual-row removal/re-indexing with a validated row involved (Decision 40 FR-N9)', () => {
   it('handleRemoveManualRow contains no re-indexing structure for validated status — no parallel Set exists to re-key', () => {
-    const body = extractFunctionBody(source, 'const handleRemoveManualRow = (index: number) => {');
+    const body = extractFunctionBody(source, 'const handleRemoveManualRow = async (index: number) => {');
     assert.doesNotMatch(body, /setConfirmedManualRowIndices/);
     // manualRowSaveError's own existing re-indexing block is untouched
     // and still present — only the validated-specific one was removed.
@@ -401,8 +408,12 @@ describe('Manual-row removal/re-indexing with a validated row involved (Decision
   });
 
   it('the array .filter used to remove a row is the same, single mechanism that already carries every other field (including validated) forward for surviving rows', () => {
-    const body = extractFunctionBody(source, 'const handleRemoveManualRow = (index: number) => {');
-    assert.match(body, /manualRows\.filter\(\(_, i\) => i !== index\)/);
+    const body = extractFunctionBody(source, 'const handleRemoveManualRow = async (index: number) => {');
+    assert.match(body, /currentRows\.filter\(\(_, i\) => i !== removeIndex\)/);
+    // [Bug fix] the row is re-located by its stable key after the awaited
+    // server delete, so a concurrent removal can't shift the wrong row out.
+    assert.match(body, /currentRows\.findIndex\(\(r\) => r\.sourceRowKey === row\.sourceRowKey\)/);
+    assert.match(body, /if \(removeIndex === -1\) return;/);
   });
 });
 
@@ -479,15 +490,16 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
     // T0: a row still on its very first, never-yet-attempted ordinary
     // debounce timer when the tab closes/unmounts — its timer is
     // cancelled and immediately re-attempted here rather than lost.
-    assert.match(body, /notYetAttemptedKeys/, 'must still capture rows that have never had a save attempt yet');
+    // Restructured to carry each row's protectionKey; same two categories.
+    assert.match(body, /notYetAttemptedEntries/, 'must still capture rows that have never had a save attempt yet');
     // T100: a row with a genuine unsaved local edit (already attempted
     // at least once, or edited again since) — covered independently of
     // the above, so neither category can silently shadow the other.
-    assert.match(body, /dirtyRowKeys/, 'must still capture rows with an unsaved local edit, independently of notYetAttemptedKeys');
+    assert.match(body, /dirtyEntries/, 'must still capture rows with an unsaved local edit, independently of notYetAttemptedEntries');
     // Both categories are unioned (not just one or the other) before
     // being iterated — the actual completeness property this test's
     // own T0-T100 name refers to.
-    assert.match(body, /new Set<string>\(\[\.\.\.notYetAttemptedKeys, \.\.\.dirtyRowKeys\]\)/, 'both at-risk categories must be combined into one set, not handled as alternatives');
+    assert.match(body, /\[\.\.\.notYetAttemptedEntries, \.\.\.dirtyEntries\]/, 'both at-risk categories must be combined, not handled as alternatives');
     // The one governed save mechanism — never a second, parallel write
     // path invented for the flush case specifically.
     assert.match(body, /performRowSaveAttempt\(rowKey, protectionKey, generation, 1\)/, 'every candidate row must still go through the same performRowSaveAttempt every other save path uses');
@@ -497,7 +509,8 @@ describe('Validation-state autosave / T0-T100 correctness (Decision 40 FR-N10; R
     const catalogBody = extractFunctionBody(source, 'const updateCatalogRow = (');
     const manualBody = extractFunctionBody(source, 'const updateManualRow = (');
     assert.match(catalogBody, /scheduleRowDraftSave\(`catalog:\$\{productId\}`\)/);
-    assert.match(manualBody, /scheduleRowDraftSave\(`manual:\$\{index\}`\)/);
+    // [Integration Point 2] prefers the row's stable key, positional fallback.
+    assert.match(manualBody, /scheduleRowDraftSave\(\s*nextManualRows\[index\]\.sourceRowKey \?\? `manual:\$\{index\}`,/);
   });
 });
 

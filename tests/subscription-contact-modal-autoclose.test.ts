@@ -57,7 +57,7 @@ describe('the fix — subscription is consumed and watched for a transition to a
   it('destructures subscription from useApp()', () => {
     assert.match(
       source,
-      /const \{ payments, submitPayment, subscription \} = useApp\(\);/,
+      /const \{ payments, submitPayment, subscription(?:, [A-Za-z]+)* \} = useApp\(\);/,
       'Expected subscription to be destructured from useApp() alongside the existing payments/submitPayment.'
     );
   });

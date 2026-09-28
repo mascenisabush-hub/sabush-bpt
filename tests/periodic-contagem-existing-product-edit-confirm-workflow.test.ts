@@ -59,7 +59,8 @@ describe('A — Clicking an existing counted (catalog) product opens its existin
   });
 
   it('reopenExistingProductForEditing captures the STABLE row identity (catalog ids / manual indices) belonging to this key at the moment it opens, alongside activating the workspace — never re-derived from the row\'s live name afterward (Bug fix — "editing a name, everything disappears")', () => {
-    assert.match(reopenBody, /setActiveWorkspaceRowIdentity\(computeWorkspaceRowIdentity\(key\)\)/);
+    // [Integration Point 3] identity is now productId-aware as well.
+    assert.match(reopenBody, /setActiveWorkspaceRowIdentity\(computeWorkspaceRowIdentity\(key, explicitProductId\)\)/);
   });
 
   it('the activated key resolves back to the SAME existing row via the STABLE identity snapshot (activeWorkspaceRowIdentity.catalogIds), never by re-matching the row\'s current name against the key — proving this opens the existing row, not a placeholder, and stays open even if its name is edited afterward', () => {
@@ -170,7 +171,8 @@ describe('F — Validar with zero changes is safe (no duplicate, no altered valu
 
   it('the auto-clear-to-empty effect (fires once every visible row is validated) is untouched by this workflow — a reopened, then re-validated product returns the workspace to empty via the SAME pre-existing mechanism', () => {
     const autoClearBody = extractFunctionBody(periodicSrc, '  useEffect(() => {\n    if (!isWorkspaceActive) return;');
-    assert.match(autoClearBody, /rows\.length === 0 \|\| rows\.every\(\(row\) => row\.validated\)/);
+    // Later hardening: also waits until each row's save is safe to progress.
+    assert.match(autoClearBody, /entries\.length === 0 \|\|\s*entries\.every\(\(entry\) => entry\.row\.validated && isRowSafeToProgress\(entry\.conflictKey\)\)/);
   });
 });
 
@@ -243,8 +245,14 @@ describe('I — The single-active-product rule applies to reopening an existing 
     // for the actual key comparison this simplification relies on.
     const disabledMatches = periodicSrc.match(/const disabled = isWorkspaceActive;/g) ?? [];
     assert.equal(disabledMatches.length, 1, 'Expected the disabled guard in the unified list.');
-    const visibleEntriesBody = extractFunctionBody(periodicSrc, 'const visibleUnifiedListEntries = useMemo(');
-    assert.match(visibleEntriesBody, /!isWorkspaceActive \|\| entry\.activationKey !== activeWorkspaceProductKey/);
+    // [Per-product grouping — Integration Point 3] the active product's
+    // own group is excluded from visibleProductDisplayGroups.
+    const visibleStart = periodicSrc.indexOf('const visibleProductDisplayGroups = useMemo(');
+    assert.notEqual(visibleStart, -1);
+    const visibleBody = periodicSrc.slice(visibleStart, periodicSrc.indexOf('\n  );', visibleStart));
+    assert.match(visibleBody, /if \(!isWorkspaceActive\) return true;/);
+    assert.match(visibleBody, /activeWorkspaceRowIdentity\.catalogIds\.includes/);
+    assert.match(visibleBody, /activeWorkspaceRowIdentity\.manualIndices\.includes/);
     // [Bug fix — "editing a validated product is not accepting"] The
     // click is now routed through `handleEntryActivation`, a small
     // per-entry wrapper that ALSO redirects a CONFLICT row to the
@@ -253,10 +261,10 @@ describe('I — The single-active-product rule applies to reopening an existing 
     // product guarantee this test exists to protect is unchanged.
     assert.match(
       periodicSrc,
-      /const handleEntryActivation = \(\) => \{\s*if \(disabled\) return;/,
-      'Expected handleEntryActivation to refuse activation whenever disabled, before considering anything else.'
+      /const handleGroupActivation = \(\) => \{\s*if \(disabled\) return;/,
+      'Expected handleGroupActivation to refuse activation whenever disabled, before considering anything else.'
     );
-    assert.match(periodicSrc, /disabled=\{disabled\}[\s\S]{0,400}handleEntryActivation\(\);|handleEntryActivation\(\)[\s\S]{0,200}disabled=\{disabled\}/);
+    assert.match(periodicSrc, /handleGroupActivation\(\);\s*\}\}\s*disabled=\{disabled\}/);
   });
 
   it('the idle-state left column (formerly the picker table) remains hidden while a product (new or reopened) is active — the SAME `{!isWorkspaceActive && (...)}` gate, unmodified by this workflow', () => {
@@ -316,8 +324,9 @@ describe('K — Existing calculation/valuation paths are completely untouched by
     // once for the unified list (plus once for the active-workspace
     // row's own rowSellingValue — a differently-named but equally
     // pre-existing sibling expression, unaffected by this workflow).
-    const matches = periodicSrc.match(/const rowValue = q \* sellingPriceNum;/g) ?? [];
-    assert.ok(matches.length >= 1, 'Expected the existing rowValue calculation to still appear for the unified list.');
+    const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
+    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
+    assert.match(periodicSrc, /formatCurrency\(group\.displayAggregateValue, currencySymbol\)/);
   });
 });
 
@@ -345,7 +354,7 @@ describe('L — "Voltar (deixar sem alterações)" is retained, not removed, and
   });
 
   it('reopenedExistingProductKey is cleared on every path that could otherwise leave it stale: ordinary picker selection, adding a new product, the auto-clear-on-all-validated effect, and Voltar itself', () => {
-    const selectBody = extractFunctionBody(periodicSrc, 'const handleSelectExistingProductForWorkspace = (key: string) => {');
+    const selectBody = extractFunctionBody(periodicSrc, 'const handleSelectExistingProductForWorkspace = (key: string, explicitProductId?: string) => {');
     const addNewBody = extractFunctionBody(periodicSrc, 'const handleAddNewProductToWorkspace = () => {');
     const autoClearBody = extractFunctionBody(periodicSrc, '  useEffect(() => {\n    if (!isWorkspaceActive) return;');
     assert.match(selectBody, /setReopenedExistingProductKey\(null\)/);

@@ -59,15 +59,16 @@ const section = validatedSection();
 // ---------------------------------------------------------------------
 describe('A — validated compact representation shows every required field', () => {
   it('shows the product name', () => {
-    assert.match(section, /row\.productName/);
+    // [Per-product grouping — Integration Point 3] one row per product.
+    assert.match(section, /\{group\.displayName\}/);
   });
 
   it('shows quantity', () => {
-    assert.match(section, /row\.quantity\.trim\(\) === '' \? '—' : q/);
+    assert.match(section, /singleRow\.quantity\.trim\(\) === '' \? '—' : q\}/);
   });
 
   it('shows unit', () => {
-    assert.match(section, /row\.unit \|\| 'un'/);
+    assert.match(section, /singleRow\.unit \|\| 'un'/);
   });
 
   it('shows selling price (Venda\\/Un), formatted via the shared currency formatter', () => {
@@ -76,8 +77,7 @@ describe('A — validated compact representation shows every required field', ()
   });
 
   it('shows a computed value distinct from the per-unit selling price', () => {
-    assert.match(section, /const rowValue = q \* sellingPriceNum;/);
-    assert.match(section, /formatCurrency\(rowValue, currencySymbol\)/);
+    assert.match(section, /formatCurrency\(group\.displayAggregateValue, currencySymbol\)/);
   });
 
   it('shows a validated-state indicator (CheckCircle2 icon)', () => {
@@ -102,7 +102,7 @@ describe('A — validated compact representation shows every required field', ()
     // never icon-only, which remains this test's own actual guarantee.
     const ternaryMatches =
       section.match(
-        /\{disabled \? 'Produto aberto' : isRowConflicted \? 'Resolver conflito' : entry\.validated \? 'Editar' : 'Abrir'\}/g
+        /\{disabled \? 'Produto aberto' : group\.anyConflicted \? 'Resolver conflito' : group\.allValidated \? 'Editar' : 'Abrir'\}/g
       ) ?? [];
     assert.equal(ternaryMatches.length, 1, 'Expected the shared Editar/Abrir/Resolver-conflito/Produto-aberto ternary exactly once.');
   });
@@ -116,7 +116,7 @@ describe('A — validated compact representation shows every required field', ()
     // next to it (`{row.productName}` inside the same span), so no
     // information is exclusively behind the tooltip; this is a
     // supplementary affordance, not a Concept C violation.
-    const titleMatches = section.match(/title=\{row\.productName\}/g) ?? [];
+    const titleMatches = section.match(/title=\{group\.displayName\}/g) ?? [];
     assert.equal(titleMatches.length, 1, 'Expected exactly one title= attribute, on the name span.');
     const otherTitleMatches = (section.match(/title=/g) ?? []).length;
     assert.equal(otherTitleMatches, 1, 'No other title= attribute should exist in this section.');
@@ -134,11 +134,11 @@ describe('B — warnings are visibly represented when active', () => {
 
   it('renders the price-deviation warning as visible text, not tooltip-only, when showWarning is true', () => {
     assert.match(section, /\{hasPriceWarning && \(/);
-    assert.match(section, /Este preço é \{Math\.round\(priceCheck\.deviationPercent! \* 100\)\}%\{' '\}/);
+    assert.match(section, /'Este preço é'\}\{' '\}\s*\{Math\.round\(\(priceCheck as \{ deviationPercent\?: number \}\)\.deviationPercent! \* 100\)\}%/);
   });
 
   it('reuses the same Mode A non-convertible condition ModeAValuationControl itself evaluates (via getModeANonConvertibleWarning), never a simplified rule', () => {
-    const matches = section.match(/getModeANonConvertibleWarning\(row\.productName\)/g) ?? [];
+    const matches = section.match(/getModeANonConvertibleWarning\(group\.displayName\)/g) ?? [];
     assert.equal(matches.length, 1, 'Expected getModeANonConvertibleWarning called once, in the one shared unified-list loop.');
   });
 
@@ -181,8 +181,10 @@ describe('C — Editar reuses the existing edit handlers, no alternative mechani
     // once it has confirmed the entry isn't disabled and isn't a
     // CONFLICT row needing redirect instead. No alternative edit
     // mechanism was introduced.
-    const cardMatches = section.match(/onClick=\{handleEntryActivation\}/g) ?? [];
-    const activationBodyMatches = section.match(/const handleEntryActivation = \(\) => \{[\s\S]*?handleUnifiedEntryClick\(entry\);[\s\S]*?\};/g) ?? [];
+    // [Per-product grouping — Integration Point 3] the shared wrapper is
+    // now handleGroupActivation, routing to the same existing handlers.
+    const cardMatches = section.match(/onClick=\{handleGroupActivation\}/g) ?? [];
+    const activationBodyMatches = section.match(/const handleGroupActivation = \(\) => \{[\s\S]*?handleEditCatalogRow\([\s\S]*?handleEditManualRow\([\s\S]*?handleSelectExistingProductForWorkspace\([\s\S]*?\};/g) ?? [];
     // [Bug fix — "editing a validated product is not accepting"]
     // `handleEntryActivation();` now legitimately appears twice in this
     // section — once for the row's own onKeyDown (Enter/Space
@@ -191,7 +193,7 @@ describe('C — Editar reuses the existing edit handlers, no alternative mechani
     // once. Both still resolve to the exact same single wrapper, which
     // is what actually matters; neither introduces an alternative edit
     // mechanism.
-    const callMatches = section.match(/handleEntryActivation\(\);/g) ?? [];
+    const callMatches = section.match(/handleGroupActivation\(\);/g) ?? [];
     assert.equal(cardMatches.length, 1, 'Expected the card-level click handler exactly once.');
     assert.equal(activationBodyMatches.length, 1, 'Expected handleEntryActivation to still call handleUnifiedEntryClick.');
     assert.equal(callMatches.length, 2, 'Expected exactly two direct calls: the row\'s onKeyDown and the button\'s onClick.');
@@ -218,7 +220,7 @@ describe('C — Editar reuses the existing edit handlers, no alternative mechani
     assert.notEqual(start, -1);
     const end = periodicSrc.indexOf('\n  };', start) + 6;
     const body = periodicSrc.slice(start, end);
-    assert.match(body, /handleSelectExistingProductForWorkspace\(entry\.activationKey\)/);
+    assert.match(body, /handleSelectExistingProductForWorkspace\(entry\.activationKey, explicitProductId\)/);
   });
 
   it('no second/alternative edit handler is defined for the unified list (e.g. a Concept-C-only handler)', () => {
@@ -276,8 +278,12 @@ describe('F — validation path, persistence, Mode A, and valuation are untouche
   });
 
   it('the unified list computes rowValue as quantity * sellingPrice — the same shape as the active row\'s own rowSellingValue — never a second valuation formula', () => {
-    const matches = section.match(/const rowValue = q \* sellingPriceNum;/g) ?? [];
-    assert.equal(matches.length, 1);
+    // Per-product value = sum of each portion's quantity * sellingPrice,
+    // computed once in periodicContagemGroupedView.ts (presentation only).
+    assert.equal((section.match(/group\.displayAggregateValue/g) ?? []).length >= 1, true);
+    assert.doesNotMatch(section, /\* sellingPriceNum/);
+    const grouped = src('apps/tenant/src/lib/periodicContagemGroupedView.ts');
+    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
   });
 
   it('deriveModeAPortionValuations and applyModeAToGroup (Mode A\'s write-back path) are not referenced in the validated section', () => {
@@ -312,7 +318,7 @@ describe('G — responsive and accessibility structure', () => {
     // accessible text label, never conveyed by icon alone.
     const matches =
       section.match(
-        /<span className="sr-only">\s*\{isRowConflicted \? 'Conflito por resolver' : entry\.validated \? 'Validado' : 'Não validado'\}\s*<\/span>/g
+        /: group\.anyConflicted\s*\? 'Conflito por resolver'\s*: group\.persistenceState === 'saving'\s*\? 'A guardar'\s*: group\.allValidated\s*\? 'Validado'\s*: 'Não validado'\}\s*<\/span>/g
       ) ?? [];
     assert.equal(matches.length, 1, 'Expected the shared sr-only validated-state label exactly once.');
   });

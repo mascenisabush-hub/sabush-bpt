@@ -366,9 +366,12 @@ describe('TEST 7 — Contagem UI selling-price denomination caption (Implementat
     const unifiedSectionEnd = periodicSrc.indexOf('Valor Físico (Custo) Contado até Agora', unifiedSectionStart);
     assert.notEqual(unifiedSectionEnd, -1);
     const unifiedSection = periodicSrc.slice(unifiedSectionStart, unifiedSectionEnd);
-    const quantityMatches = unifiedSection.match(/<span className="text-\[13px\] text-gray-700 tabular-nums">\{row\.quantity\.trim\(\) === '' \? '—' : q\}<\/span>/g) ?? [];
+    // [Per-product grouping — Integration Point 3] One row per product;
+    // a single-portion product shows its own quantity/unit, a
+    // multi-portion one shows '—' (its portions differ by unit).
+    const quantityMatches = unifiedSection.match(/\{isMultiPortion \? '—' : !singleRow \|\| singleRow\.quantity\.trim\(\) === '' \? '—' : q\}/g) ?? [];
     assert.equal(quantityMatches.length, 1, 'expected one shared quantity expression covering both catalog and manual entries');
-    const unitMatches = unifiedSection.match(/<span className="text-\[13px\] text-gray-700">\{row\.quantity\.trim\(\) === '' \? '—' : row\.unit \|\| 'un'\}<\/span>/g) ?? [];
+    const unitMatches = unifiedSection.match(/\{isMultiPortion \? '—' : !singleRow \|\| singleRow\.quantity\.trim\(\) === '' \? '—' : singleRow\.unit \|\| 'un'\}/g) ?? [];
     assert.equal(unitMatches.length, 1, 'expected one shared unit expression covering both catalog and manual entries');
   });
 });

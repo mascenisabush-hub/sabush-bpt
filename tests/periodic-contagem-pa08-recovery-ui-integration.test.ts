@@ -52,9 +52,19 @@ describe('persistenceStateTick — bumped at every existing write site, never in
     assert.match(componentSource, /const bumpPersistenceStateTick = \(\) => setPersistenceStateTick\(\(t\) => t \+ 1\);/);
   });
 
-  it('3. is bumped at all 15 existing write sites to rowHasUnsavedLocalEditRef/manualRetryEligibleRowsRef, confirmed by exact count', () => {
-    const occurrences = [...componentSource.matchAll(/bumpPersistenceStateTick\(\);/g)];
-    assert.equal(occurrences.length, 15, 'expected exactly 15 bump-call sites, matching the 15 write sites traced during the Rule 8 checkpoint');
+  it('3. every write site to rowHasUnsavedLocalEditRef/manualRetryEligibleRowsRef is followed by a bump (originally 15 sites; later fixes such as row removal added more)', () => {
+    const lines = componentSource.split('\n');
+    const writeRe = /(rowHasUnsavedLocalEditRef\.current(\[[^\]]+\])?\s*=(?!=)|delete rowHasUnsavedLocalEditRef\.current\[|manualRetryEligibleRowsRef\.current\.(add|delete|clear)\()/;
+    let writeSites = 0;
+    const missing: number[] = [];
+    lines.forEach((line, i) => {
+      if (line.trim().startsWith('//') || !writeRe.test(line)) return;
+      writeSites++;
+      const next = lines.slice(i + 1, i + 6).filter((l) => !l.trim().startsWith('//')).slice(0, 3).join('\n');
+      if (!/bumpPersistenceStateTick\(\);/.test(next)) missing.push(i + 1);
+    });
+    assert.ok(writeSites >= 15, `expected at least the 15 originally traced write sites, found ${writeSites}`);
+    assert.deepEqual(missing, [], `write sites without a following bumpPersistenceStateTick(): lines ${missing.join(', ')}`);
   });
 
   it('the refs\' own read/write mechanics are otherwise unmodified — no site\'s existing write itself was altered, only a bump call added', () => {

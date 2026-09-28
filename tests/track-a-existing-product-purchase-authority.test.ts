@@ -78,7 +78,10 @@ describe('Track A §A/§C/§D — purchase unit/cost are never sourced from hist
     // prefer the row's own already-present unit, only falling back to the
     // generic default when the row genuinely has none yet — and must never
     // again go straight to the generic default with no such preference.]
-    assert.match(body, /newUnit = \(existingUnit && existingUnit\.trim\(\)\) \|\| suggestedUnits\[0\] \|\| 'un';/);
+    // [Later urgent fix] the product's own default unit (getDefaultUnit) now
+    // sits between the row's existing unit and the generic default — still
+    // never memory.unit, still preferring the row's own unit first.
+    assert.match(body, /newUnit = \(existingUnit && existingUnit\.trim\(\)\) \|\| getDefaultUnit\(product\) \|\| suggestedUnits\[0\] \|\| 'un';/);
     assert.doesNotMatch(body, /let newUnit = suggestedUnits\[0\] \|\| 'un';/, 'must not regress to unconditionally discarding the row\'s own existing unit');
   });
 

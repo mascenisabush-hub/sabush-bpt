@@ -10,6 +10,23 @@ here. This file is short-term memory only.
 
 ---
 
+## Session 2026-09-28 (c) — URGENT: rows could not be deleted in Contagem + test suite green
+
+- **Delete fix (urgent, live):** rows created via "Adicionar produto" / "Adicionar Porção" get a stable
+  `manual:<uuid>` key before their first save. Deleting one cancels that save, so the server had nothing and
+  `deletePeriodicManualRow` returned 'ambiguous' → row refused to go. Now a missing stable-key row is
+  tombstoned and reported deleted (legacy `manual:<n>` keys stay fail-closed). Also: `handleRemoveManualRow`
+  re-locates the row by stable key after the await (concurrent deletes removed the wrong/no row) and
+  re-addresses the open workspace's position-based identity; the bin is always visible (was hover-only on desktop).
+  Test: `tests/periodic-contagem-delete-new-row.test.ts`.
+- **SuperAdmin:** Audit Center filter was missing the 9 `support_session.*` action types the server writes — added.
+- **Suite:** all 257 files run individually → 0 failures (was 51 in 17 files). Everything else was stale
+  source-text pins after the per-product unified-list redesign and later hardening; each was checked against
+  the code's actual behaviour before updating. Emulator-only suites (Firestore rules etc.) still need
+  `firebase emulators:exec` (Java) — not run here.
+
+---
+
 ## Session 2026-09-28 (b) — mixed-validated portion group fix
 
 - Periodic Contagem: clicking "Abrir" on a group where only SOME portions were validated left those

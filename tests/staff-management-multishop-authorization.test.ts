@@ -192,11 +192,13 @@ describe('Fix #6 — ownedBusinessIds derivation matches the existing trusted pa
     // route's own membership check, which deliberately reuses this exact
     // trusted derivation verbatim rather than inventing a seventh shape.
     // Each re-reads the requester's own server-fetched Firestore profile
-    // and is never trusted from the client, in all six.
+    // and is never trusted from the client, in all of them.
+    // Seventh: verifyOwnerOnlyAction (Clear-Data password routes), which
+    // reuses the same derivation verbatim from the server-fetched profile.
     assert.equal(
       occurrences.length,
-      6,
-      'Expected this exact derivation guard in six places: addShop, activate-trial, verifyStaffManagementAction, the Smart Stock Entry extraction route, /api/business/touch-activity, and /api/product-recognition/semantic-match.'
+      7,
+      'Expected this exact derivation guard in seven places: addShop, activate-trial, verifyStaffManagementAction, verifyOwnerOnlyAction, the Smart Stock Entry extraction route, /api/business/touch-activity, and /api/product-recognition/semantic-match.'
     );
   });
 });

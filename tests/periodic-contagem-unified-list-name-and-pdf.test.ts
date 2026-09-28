@@ -68,7 +68,8 @@ const section = unifiedListSection();
 // ---------------------------------------------------------------------
 describe('A — Product name is rendered in the unified list, for both catalog and manual entries', () => {
   it('the unified list renders row.productName as real, visible text (not sr-only, not decorative)', () => {
-    const matches = section.match(/<span className="text-\[13px\] font-semibold text-\[#111827\] truncate min-w-0" title=\{row\.productName\}>\s*\n\s*\{row\.productName\}\s*\n\s*<\/span>/g) ?? [];
+    // [Per-product grouping — Integration Point 3] one row per product.
+    const matches = section.match(/<span className="text-\[13px\] font-semibold text-\[#111827\] truncate min-w-0" title=\{group\.displayName\}>\s*\n\s*\{group\.displayName\}\s*\n\s*<\/span>/g) ?? [];
     assert.equal(matches.length, 1, 'Expected exactly one visible product-name span in the unified list.');
   });
 
@@ -77,15 +78,15 @@ describe('A — Product name is rendered in the unified list, for both catalog a
     // entries — unlike the old two-list split, which had a separate
     // catalog loop and a separate manual loop (a real historical risk:
     // a name fix applied to one loop and not the other).
-    const mapMatches = section.match(/visibleUnifiedListEntries\.map\(\(entry\) => \{/g) ?? [];
+    const mapMatches = section.match(/visibleProductDisplayGroups\.map\(\(group\) => \{/g) ?? [];
     assert.equal(mapMatches.length, 1, 'Expected exactly one shared row-rendering loop for catalog and manual entries alike.');
     // The `row` each iteration renders is resolved from EITHER
     // catalogRows OR manualRows depending on `entry.kind` — both
     // branches feed the exact same downstream JSX (including the name
     // span asserted above), so neither kind can silently omit it.
-    const rowResolutionBody = section.slice(section.indexOf('const row ='), section.indexOf('if (!row) return null;'));
-    assert.match(rowResolutionBody, /catalogRows\[entry\.catalogProductId\]/);
-    assert.match(rowResolutionBody, /manualRows\[entry\.manualRowIndex\]/);
+    const rowResolutionBody = section.slice(section.indexOf('const singleRow ='), section.indexOf('const q = singleRow'));
+    assert.match(rowResolutionBody, /catalogRows\[representative\.catalogProductId\]/);
+    assert.match(rowResolutionBody, /manualRows\[representative\.manualRowIndex\]/);
   });
 
   it('unifiedListEntries itself is built from BOTH catalogRows and manualRows, each carrying its own productName straight from the source row — no field is dropped or renamed in transit', () => {
@@ -125,7 +126,7 @@ describe('B — The row grid template guarantees a real minimum width for the na
   });
 
   it('a title= tooltip carries the full name for the rare still-narrow case, in ADDITION to (never instead of) the visible inline text — not a Concept C violation', () => {
-    const titleMatches = section.match(/title=\{row\.productName\}/g) ?? [];
+    const titleMatches = section.match(/title=\{group\.displayName\}/g) ?? [];
     assert.equal(titleMatches.length, 1);
     // The same span that carries title= also renders {row.productName}
     // as ordinary visible text — see Suite A's own assertion.

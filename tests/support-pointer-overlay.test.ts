@@ -186,7 +186,9 @@ describe('Checkpoint 5 — mounted in App.tsx alongside the existing app-wide ov
     // assertion is widened to allow that, while still requiring
     // SupportPointerOverlay to render unconditionally, directly after
     // the banner group and before SupportDesktopCapture.
-    assert.match(appSrc, /<BusinessSuspendedBanner \/>\s*\n\s*<SupportSessionBanner \/>\s*\n\s*<SupportPointerOverlay \/>/);
+    // InstallAppBanner (PWA install prompt) was later added to the same
+    // self-gating banner group, just before SupportPointerOverlay.
+    assert.match(appSrc, /<BusinessSuspendedBanner \/>\s*\n\s*<SupportSessionBanner \/>\s*\n\s*(?:<InstallAppBanner \/>\s*\n\s*)?<SupportPointerOverlay \/>\s*\n\s*<SupportDesktopCapture \/>/);
   });
 });
 

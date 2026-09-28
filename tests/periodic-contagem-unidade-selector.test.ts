@@ -290,6 +290,8 @@ describe('H — calculation engine untouched', () => {
   });
 
   it('the unified-list duplicated display formula (previously documented finding) is unchanged by this work — still present, still not modified here', () => {
-    assert.match(periodicSrc, /const rowValue = q \* sellingPriceNum;/);
+    // The unified list now shows one row per product; its value is the
+    // grouped view's summed portion value — still not modified here.
+    assert.match(periodicSrc, /formatCurrency\(group\.displayAggregateValue, currencySymbol\)/);
   });
 });

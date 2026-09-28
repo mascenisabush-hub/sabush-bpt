@@ -281,7 +281,13 @@ describe('Requirement G — tenant isolation: no new Firestore query, candidate 
   });
 
   it('addMultipleStockBatches\'/recordStockCount\'s new guards reference only the already-loaded tempProducts/products arrays, never a fresh query', () => {
-    assert.match(appContextSource, /let product = tempProducts\.find\(\(p\) => p\.name\.toLowerCase\(\) === trimmedName\.toLowerCase\(\)\);\s*\n\s*let productId = product\?\.id;\s*\n\s*\n\s*\/\/ \[Product Identity/);
+    const lookup = 'let product = tempProducts.find((p) => p.name.toLowerCase() === trimmedName.toLowerCase());';
+    const start = appContextSource.indexOf(lookup);
+    assert.notEqual(start, -1, 'expected the in-memory tempProducts lookup');
+    const guard = appContextSource.indexOf('if (!product && !item.confirmedNewProduct)', start);
+    assert.notEqual(guard, -1, 'expected the Existing/New confirmation guard after the lookup');
+    const between = appContextSource.slice(start, guard).replace(/\/\/.*$/gm, '');
+    assert.doesNotMatch(between, /getDocs?\(|getDocFromServer\(|query\(/, 'the guard must not be preceded by a fresh Firestore query');
   });
 });
 

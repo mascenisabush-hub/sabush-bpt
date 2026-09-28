@@ -426,6 +426,19 @@ export const KNOWN_ACTION_TYPES = [
   'initial_stock_recovery.consumed',
   'business_worth_recovery.authorized',
   'business_worth_recovery.expired',
+  // [SuperAdmin Agent Attended Support Session — FR-44/FR-45] Kept in
+  // sync by hand with server/auditLogQuery.ts, which added these values;
+  // without them the Audit Center filter could not select support-session
+  // events.
+  'support_session.invited',
+  'support_session.established',
+  'support_session.code_attempt_failed',
+  'support_session.locked',
+  'support_session.invitation_expired',
+  'support_session.ended_by_customer',
+  'support_session.ended_by_support',
+  'support_session.completed',
+  'support_session.ended_by_abandonment',
 ] as const;
 
 export interface AuditLogFilters {

@@ -88,7 +88,7 @@ describe('A — Empty workspace is allowed by default', () => {
 
 describe('B — One product can become active, by selection or by adding a new one', () => {
   it('handleSelectExistingProductForWorkspace sets activeWorkspaceKey to a single string key, and clears the other reference', () => {
-    const body = extractFunctionBody(periodicSrc, 'const handleSelectExistingProductForWorkspace = (key: string) => {');
+    const body = extractFunctionBody(periodicSrc, 'const handleSelectExistingProductForWorkspace = (key: string, explicitProductId?: string) => {');
     assert.match(body, /setActiveWorkspaceKey\(key\)/);
     assert.match(body, /setActiveNewManualRowIndex\(null\)/);
   });
@@ -111,10 +111,14 @@ describe('C — A second independent product cannot be activated while one is al
   });
 
   it('the unified list itself is NOT gated on !isWorkspaceActive (it stays visible either way) — instead, every entry belonging to a DIFFERENT product than the active one is individually disabled, and the active product\'s own entries are excluded entirely', () => {
-    assert.match(unifiedList, /visibleUnifiedListEntries\.map/);
+    // [Per-product grouping — Integration Point 3] one row per product;
+    // the active product's own group is excluded, the rest disabled.
+    assert.match(unifiedList, /visibleProductDisplayGroups\.map/);
     assert.match(unifiedList, /const disabled = isWorkspaceActive;/);
-    const visibleEntriesBody = extractFunctionBody(periodicSrc, 'const visibleUnifiedListEntries = useMemo(');
-    assert.match(visibleEntriesBody, /!isWorkspaceActive \|\| entry\.activationKey !== activeWorkspaceProductKey/);
+    const visibleStart = periodicSrc.indexOf('const visibleProductDisplayGroups = useMemo(');
+    const visibleBody = periodicSrc.slice(visibleStart, periodicSrc.indexOf('\n  );', visibleStart));
+    assert.match(visibleBody, /if \(!isWorkspaceActive\) return true;/);
+    assert.match(visibleBody, /activeWorkspaceRowIdentity\.manualIndices\.includes/);
   });
 
   it('a disabled entry cannot be clicked — both the card and its own button route through handleEntryActivation, which itself only ever calls handleUnifiedEntryClick when !disabled', () => {
@@ -125,9 +129,9 @@ describe('C — A second independent product cannot be activated while one is al
     // instead of being opened — but the disabled guard is still the
     // very first thing checked, before anything else, so a disabled
     // entry remains exactly as unclickable as before.
-    assert.match(unifiedList, /onClick=\{handleEntryActivation\}/);
-    assert.match(unifiedList, /const handleEntryActivation = \(\) => \{\s*if \(disabled\) return;/);
-    assert.match(unifiedList, /handleUnifiedEntryClick\(entry\);/);
+    assert.match(unifiedList, /onClick=\{handleGroupActivation\}/);
+    assert.match(unifiedList, /const handleGroupActivation = \(\) => \{\s*if \(disabled\) return;/);
+    assert.match(unifiedList, /handleSelectExistingProductForWorkspace\(representative\.activationKey, explicitProductId\);/);
   });
 
   it('activeWorkspaceKey/activeNewManualRowIndex are plain nullable scalars, never an array or Set — structurally impossible to hold two products at once', () => {
@@ -175,7 +179,8 @@ describe('E — A portion can be added to the active product, and doing so does 
 describe('F — Validating the active product\'s entire portion set empties the workspace', () => {
   it('a useEffect clears both workspace references once every row currently in the workspace is validated', () => {
     const body = extractFunctionBody(periodicSrc, '  useEffect(() => {\n    if (!isWorkspaceActive) return;');
-    assert.match(body, /rows\.length === 0 \|\| rows\.every\(\(row\) => row\.validated\)/);
+    // Later hardening: also waits until each row's save is safe.
+    assert.match(body, /entries\.length === 0 \|\|\s*entries\.every\(\(entry\) => entry\.row\.validated && isRowSafeToProgress\(entry\.conflictKey\)\)/);
     assert.match(body, /setActiveWorkspaceKey\(null\);/);
     assert.match(body, /setActiveNewManualRowIndex\(null\);/);
   });
@@ -200,7 +205,7 @@ describe('F — Validating the active product\'s entire portion set empties the 
 describe('G — The validated product remains represented in the existing persistent list — now the one unified list, unchanged in its underlying identity', () => {
   it('the unified list section reads visibleUnifiedListEntries (itself sorted via sortByValidatedMode, per Authorization §8), which includes every validated entry — never a separate validated-only derivation', () => {
     const section = unifiedListSection();
-    assert.match(section, /visibleUnifiedListEntries\.map/);
+    assert.match(section, /visibleProductDisplayGroups\.map/);
     const entriesBody = extractFunctionBody(periodicSrc, 'const unifiedListEntries = useMemo(');
     // Confirms validated rows are NOT filtered out of the source data —
     // both validated and unvalidated rows flow into the same list.
@@ -217,7 +222,7 @@ describe('G — The validated product remains represented in the existing persis
   });
 
   it('handleEditCatalogRow/handleEditManualRow are now reached from the unified list via handleUnifiedEntryClick, for a validated entry specifically', () => {
-    const clickBody = extractFunctionBody(periodicSrc, 'const handleUnifiedEntryClick = (entry: (typeof unifiedListEntries)[number]) => {');
+    const clickBody = extractFunctionBody(periodicSrc, 'const handleUnifiedEntryClick = (entry: {');
     assert.match(clickBody, /if \(entry\.validated\) \{/);
     assert.match(clickBody, /handleEditCatalogRow\(entry\.catalogProductId\)/);
     assert.match(clickBody, /handleEditManualRow\(entry\.manualRowIndex\)/);
@@ -235,12 +240,14 @@ describe('H — After the workspace empties, a subsequent product can become act
 
 describe('I — Search selects one product into the workspace; it never activates more than one', () => {
   it('handleSelectExistingProductForWorkspace takes a single string key, not a list', () => {
-    assert.match(periodicSrc, /const handleSelectExistingProductForWorkspace = \(key: string\) => \{/);
+    assert.match(periodicSrc, /const handleSelectExistingProductForWorkspace = \(key: string, explicitProductId\?: string\) => \{/);
   });
 
   it('productSearch now filters the unified list (filteredUnifiedListEntries), never the workspace-scoped visibleCatalogEntries/visibleManualRowGroups', () => {
-    const filteredBody = extractFunctionBody(periodicSrc, 'const filteredUnifiedListEntries = useMemo(() => {');
-    assert.match(filteredBody, /productSearch/);
+    // Search now filters the per-product groups (filterGroupsBySearch).
+    const filteredStart = periodicSrc.indexOf('filterGroupsBySearch(');
+    assert.notEqual(filteredStart, -1);
+    assert.match(periodicSrc.slice(filteredStart, filteredStart + 200), /productSearch/);
     const workspaceCatalogBody = extractFunctionBody(periodicSrc, 'const visibleCatalogEntries = useMemo(() => {');
     assert.doesNotMatch(workspaceCatalogBody, /productSearch/);
   });
@@ -253,7 +260,7 @@ describe('I — Search selects one product into the workspace; it never activate
     // directly) — still exactly one shared row template, still mapped
     // once per entry via the same closure-captured `entry`/`disabled`,
     // so per-row independence is unchanged.
-    const onClickMatches = unifiedList.match(/onClick=\{handleEntryActivation\}/g) ?? [];
+    const onClickMatches = unifiedList.match(/onClick=\{handleGroupActivation\}/g) ?? [];
     assert.equal(onClickMatches.length, 1);
     // The per-row independence lives one level up, in how
     // `entry.activationKey` is computed for EACH entry independently —
@@ -422,11 +429,15 @@ describe('L — Sorting (Authorization §8): four modes, using only existing dat
   });
 
   it('sortedUnifiedListEntries derives from sortByValidatedMode, fed by unifiedListEntries (covering both catalog and manual, validated and not) and computing value as quantity*sellingPrice — the same formula each render block already used before sorting existed', () => {
-    const sortedBody = extractFunctionBody(periodicSrc, 'const sortedUnifiedListEntries = useMemo(');
-    assert.match(sortedBody, /sortByValidatedMode\(/);
-    assert.match(sortedBody, /filteredUnifiedListEntries/);
-    assert.match(sortedBody, /Number\(entry\.quantity\)/);
-    assert.match(sortedBody, /Number\(entry\.sellingPrice\)/);
+    // [Per-product grouping] groups are built from unifiedListEntries and
+    // sorted through the same sortByValidatedMode; value is quantity *
+    // sellingPrice per portion, summed in periodicContagemGroupedView.ts.
+    assert.match(periodicSrc, /buildProductDisplayGroups\(/);
+    const sortedStart = periodicSrc.indexOf('const sortedProductDisplayGroups = useMemo(');
+    assert.notEqual(sortedStart, -1);
+    assert.match(periodicSrc.slice(sortedStart, sortedStart + 1500), /sortByValidatedMode|sortGroups/);
+    const grouped = readFileSync(new URL('../apps/tenant/src/lib/periodicContagemGroupedView.ts', import.meta.url), 'utf-8');
+    assert.match(grouped, /sum \+ numericQuantity\(row\) \* \(Number\(row\.sellingPrice\) \|\| 0\)/);
   });
 
   it('a single <select> control drives validatedSortMode with exactly the four required options — one shared control for the one shared list, rather than the old validated-only control', () => {
@@ -499,7 +510,9 @@ describe('M — Existing (pre-Authorization) draft compatibility', () => {
     const body = extractFunctionBody(periodicSrc, 'const handleResumeDraft = async () => {');
     assert.doesNotMatch(body, /validated: true/);
     assert.doesNotMatch(body, /\.reduce\(.*merge/i);
-    assert.doesNotMatch(body, /recalculate|reconcile/i);
+    // Comments legitimately mention the (unchanged) recovery reconciliation;
+    // only CODE is checked for recalculation.
+    assert.doesNotMatch(body.replace(/\/\/.*$/gm, ''), /recalculate|reconcile(?!PeriodicRecoverySnapshot)/i);
   });
 
   it('draft serialization (workingRowToDraftItem) was completely unmodified by the single-product-workspace commit this diff-based check was originally written for — a LATER, separately-authorized change (Periodic Contagem Entry-Order Sort Mode) does legitimately touch it, which this assertion now accounts for rather than asserting against', () => {

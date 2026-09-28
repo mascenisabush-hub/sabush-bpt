@@ -102,7 +102,7 @@ describe('AuditTrail.tsx — the four newly-authorized action types are present 
 });
 
 describe('The two independently-maintained KNOWN_ACTION_TYPES copies were kept in sync (the exact failure mode the governing investigation found)', () => {
-  it('apps/superadmin/src/lib/superadminApi.ts\'s own KNOWN_ACTION_TYPES contains exactly the same 11 values as server/auditLogQuery.ts\'s', () => {
+  it('apps/superadmin/src/lib/superadminApi.ts\'s own KNOWN_ACTION_TYPES contains exactly the same values as server/auditLogQuery.ts\'s', () => {
     const match = CLIENT_API_SOURCE.match(/export const KNOWN_ACTION_TYPES = \[([\s\S]*?)\] as const;/);
     assert.ok(match, 'Expected to find KNOWN_ACTION_TYPES in superadminApi.ts');
     // Line-anchored: only a line that IS an array element (optionally

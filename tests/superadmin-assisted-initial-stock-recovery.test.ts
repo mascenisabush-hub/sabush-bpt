@@ -163,7 +163,9 @@ describe('AppContext.tsx — voidInitialStockConfirmation() consumption wiring (
   it('consumes the Authorization ONLY when the ordinary window is NOT already eligible — never spends a still-needed grant', () => {
     assert.match(
       appContextSource,
-      /!initialStockVoidEligibility\.eligible && initialStockAuthorizedRecoveryEligibility\.eligible/
+      // Later hardening: the authorization is re-read from the server
+      // (authoritative...) before deciding — same ordinary-window-first rule.
+      /!initialStockVoidEligibility\.eligible && authoritativeInitialStockAuthorizedRecoveryEligibility\.eligible/
     );
   });
 
@@ -264,10 +266,12 @@ describe('firestore.rules — SuperAdmin-Assisted Initial Stock Recovery', () =>
     assert.match(matchBlock![0], /allow delete: if false;/);
   });
 
-  it('the original stockCounts allow update/delete line is completely unmodified (immutability untouched by this capability)', () => {
-    assert.match(
-      rulesSource,
-      /allow update, delete: if isOwnerOf\(businessId\) && resource\.data\.get\('type', null\) != 'initial';/
-    );
+  it('stockCounts stay immutable to clients (this capability never opened update/delete; Decisions 56/57 later narrowed both to false)', () => {
+    const block = rulesSource.slice(rulesSource.indexOf('match /stockCounts/{stockCountId} {'));
+    const end = block.indexOf('\n      }\n');
+    const body = block.slice(0, end);
+    assert.match(body, /allow update: if false;/);
+    assert.match(body, /allow delete: if false;/);
+    assert.doesNotMatch(body.replace(/\/\/.*$/gm, ''), /allow (update|delete)[^;]*isOwnerOf/);
   });
 });
