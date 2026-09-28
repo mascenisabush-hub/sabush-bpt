@@ -10,6 +10,19 @@ here. This file is short-term memory only.
 
 ---
 
+## Session 2026-09-28 (f) — URGENT: row delete still failing live → ACTION: deploy firestore.rules
+
+- **Likely root cause:** `firestore.rules` is not deployed by any CI step (see 19-v1 audit §3c). Since
+  2026-09-25 `deletePeriodicManualRow` reads/writes `stockCountDrafts/periodic/tombstones`, whose rules were
+  added that same day with no record of deployment. If they are not live → permission-denied → the click
+  handler had no try/catch → delete silently did nothing.
+- **Fixes:** (1) permission-denied on the tombstone path falls back to a plain row delete (pre-09-25
+  behaviour; legacy `manual:<n>` keys found nowhere stay 'ambiguous') + console warning; (2)
+  `handleRemoveManualRow` catches any error, keeps the row, restores its cancelled save, shows the reason.
+- **OWED (owner):** `firebase deploy --only firestore:rules --project sabush-bpt` so tombstones work as designed.
+
+---
+
 ## Session 2026-09-28 (e) — Enter validates the open product from anywhere
 
 - Periodic Contagem: the document-level keydown effect now handles Enter while a product is open — validates

@@ -32,7 +32,7 @@ describe('handleRemoveManualRow — replaced with coordinated, stable-key deleti
   });
 
   it('KEY ACCEPTANCE CONDITION — the deletion target is the row\'s own stable sourceRowKey, never manual:${index}', () => {
-    assert.match(fnMatch![0], /if \(row\?\.sourceRowKey\) \{\s*\n\s*const outcome = await deletePeriodicManualRow\(row\.sourceRowKey\);/);
+    assert.match(fnMatch![0], /if \(row\?\.sourceRowKey\) \{[\s\S]*?try \{\s*outcome = await deletePeriodicManualRow\(row\.sourceRowKey\);/);
     // Confirm the array index is never passed as the deletion target
     // anywhere in this function — the only manual:${index}
     // occurrences remaining are for the purely local timer map, never

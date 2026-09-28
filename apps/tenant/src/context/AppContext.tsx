@@ -8244,81 +8244,126 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
       ...(redirectedFrom ? { redirectedFrom } : {}),
     });
 
-    const MAX_ATTEMPTS = 3;
-    for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
-      // Step A — outside the transaction. An ordinary query, fully
-      // supported by the client SDK. Its result is a CANDIDATE only,
-      // never trusted directly — re-verified by direct reference
-      // inside the transaction, below, before anything is written.
-      let candidateMigratedKey: string | null = null;
-      const outerRowSnap = await getDoc(rowRef(believedKey));
-      if (!outerRowSnap.exists()) {
-        const outerMatch = await getDocs(
-          query(itemsCollection, where('migratedFromLegacyKey', '==', believedKey))
-        );
-        if (outerMatch.docs.length === 1) {
-          candidateMigratedKey = outerMatch.docs[0].id;
-        }
-        // More than one match is itself a genuine anomaly — left null
-        // deliberately, falling through to the ambiguous outcome
-        // rather than guessing which is correct.
-      }
-
-      const outcome = await runTransaction(db, async (tx) => {
-        const rowSnap = await tx.get(rowRef(believedKey));
-        if (rowSnap.exists()) {
-          tx.delete(rowRef(believedKey));
-          tx.set(tombstoneRef(believedKey), writeTombstone(believedKey));
-          return 'done' as const;
-        }
-
-        const existingTombstone = await tx.get(tombstoneRef(believedKey));
-        if (existingTombstone.exists()) {
-          return 'done' as const; // Already deleted — idempotent no-op.
+    // [Bug fix — urgent: Contagem rows could not be deleted] Firestore
+    // rules are deployed separately from the app (no CI step). The
+    // tombstone rules this transaction needs arrived 2026-09-25; where they
+    // are not yet live, every tombstone read/write is refused with
+    // permission-denied and — with no error handling in the caller — the
+    // delete silently did nothing. Fall back to deleting the row document
+    // alone (the long-deployed items delete rule, i.e. pre-2026-09-25
+    // behaviour) and warn. Any other error is re-thrown for the caller to show.
+    const tombstoneDelete = async (): Promise<'deleted' | 'ambiguous'> => {
+      const MAX_ATTEMPTS = 3;
+      for (let attempt = 0; attempt < MAX_ATTEMPTS; attempt++) {
+        // Step A — outside the transaction. An ordinary query, fully
+        // supported by the client SDK. Its result is a CANDIDATE only,
+        // never trusted directly — re-verified by direct reference
+        // inside the transaction, below, before anything is written.
+        let candidateMigratedKey: string | null = null;
+        const outerRowSnap = await getDoc(rowRef(believedKey));
+        if (!outerRowSnap.exists()) {
+          const outerMatch = await getDocs(
+            query(itemsCollection, where('migratedFromLegacyKey', '==', believedKey))
+          );
+          if (outerMatch.docs.length === 1) {
+            candidateMigratedKey = outerMatch.docs[0].id;
+          }
+          // More than one match is itself a genuine anomaly — left null
+          // deliberately, falling through to the ambiguous outcome
+          // rather than guessing which is correct.
         }
 
-        if (candidateMigratedKey) {
-          const candidateSnap = await tx.get(rowRef(candidateMigratedKey));
-          if (candidateSnap.exists() && candidateSnap.data().migratedFromLegacyKey === believedKey) {
-            tx.delete(rowRef(candidateMigratedKey));
-            tx.set(tombstoneRef(candidateMigratedKey), writeTombstone(candidateMigratedKey, believedKey));
+        const outcome = await runTransaction(db, async (tx) => {
+          const rowSnap = await tx.get(rowRef(believedKey));
+          if (rowSnap.exists()) {
+            tx.delete(rowRef(believedKey));
+            tx.set(tombstoneRef(believedKey), writeTombstone(believedKey));
             return 'done' as const;
           }
-          // Candidate no longer matches — someone changed it since
-          // Step A. Retry with a fresh query rather than trusting it.
-          return 'retry' as const;
+
+          const existingTombstone = await tx.get(tombstoneRef(believedKey));
+          if (existingTombstone.exists()) {
+            return 'done' as const; // Already deleted — idempotent no-op.
+          }
+
+          if (candidateMigratedKey) {
+            const candidateSnap = await tx.get(rowRef(candidateMigratedKey));
+            if (candidateSnap.exists() && candidateSnap.data().migratedFromLegacyKey === believedKey) {
+              tx.delete(rowRef(candidateMigratedKey));
+              tx.set(tombstoneRef(candidateMigratedKey), writeTombstone(candidateMigratedKey, believedKey));
+              return 'done' as const;
+            }
+            // Candidate no longer matches — someone changed it since
+            // Step A. Retry with a fresh query rather than trusting it.
+            return 'retry' as const;
+          }
+
+          // [Bug fix — urgent: new rows could not be deleted in Contagem]
+          // Every row created via "Adicionar produto"/"Adicionar Porção" gets a
+          // stable key (manual:<uuid>) at creation, BEFORE its first save.
+          // Removing it before that save lands (the caller cancels the pending
+          // save first) finds no document, no tombstone and no migration
+          // candidate — it was simply never persisted. A stable key has no
+          // other possible location, so this is not ambiguous: record the
+          // deletion (the tombstone also stops recovery from resurrecting it)
+          // and report success. Legacy positional keys (manual:<n>) keep the
+          // conservative 'ambiguous' outcome, since they may have been migrated.
+          if (!/^manual:\d+$/.test(believedKey)) {
+            tx.set(tombstoneRef(believedKey), writeTombstone(believedKey));
+            return 'done' as const;
+          }
+
+          return 'ambiguous' as const;
+        });
+
+        if (outcome === 'done') {
+          // [Fix] The operator deliberately removed this row — its recovery snapshot is no longer an unsaved edit.
+          try {
+            clearPeriodicRecoverySnapshot(activeBusinessId, believedKey);
+            if (candidateMigratedKey) clearPeriodicRecoverySnapshot(activeBusinessId, candidateMigratedKey);
+          } catch { /* storage unavailable */ }
+          return 'deleted';
         }
-
-        // [Bug fix — urgent: new rows could not be deleted in Contagem]
-        // Every row created via "Adicionar produto"/"Adicionar Porção" gets a
-        // stable key (manual:<uuid>) at creation, BEFORE its first save.
-        // Removing it before that save lands (the caller cancels the pending
-        // save first) finds no document, no tombstone and no migration
-        // candidate — it was simply never persisted. A stable key has no
-        // other possible location, so this is not ambiguous: record the
-        // deletion (the tombstone also stops recovery from resurrecting it)
-        // and report success. Legacy positional keys (manual:<n>) keep the
-        // conservative 'ambiguous' outcome, since they may have been migrated.
-        if (!/^manual:\d+$/.test(believedKey)) {
-          tx.set(tombstoneRef(believedKey), writeTombstone(believedKey));
-          return 'done' as const;
-        }
-
-        return 'ambiguous' as const;
-      });
-
-      if (outcome === 'done') {
-        // [Fix] The operator deliberately removed this row — its recovery snapshot is no longer an unsaved edit.
-        try {
-          clearPeriodicRecoverySnapshot(activeBusinessId, believedKey);
-          if (candidateMigratedKey) clearPeriodicRecoverySnapshot(activeBusinessId, candidateMigratedKey);
-        } catch { /* storage unavailable */ }
-        return 'deleted';
+        if (outcome === 'ambiguous') return 'ambiguous';
+        // outcome === 'retry' — loop back to Step A with a fresh query.
       }
-      if (outcome === 'ambiguous') return 'ambiguous';
-      // outcome === 'retry' — loop back to Step A with a fresh query.
+      return 'ambiguous';
+    };
+
+    try {
+      return await tombstoneDelete();
+    } catch (error) {
+      if ((error as { code?: string })?.code !== 'permission-denied') throw error;
+      console.warn(
+        '[deletePeriodicManualRow] tombstone write refused (permission-denied) — Firestore rules may be outdated; ' +
+          'deploy them with `firebase deploy --only firestore:rules`. Falling back to a plain row delete.',
+        error
+      );
     }
-    return 'ambiguous';
+
+    let targetKey: string | null = believedKey;
+    const directSnap = await getDoc(rowRef(believedKey));
+    if (!directSnap.exists()) {
+      targetKey = null;
+      const migrated = await getDocs(query(itemsCollection, where('migratedFromLegacyKey', '==', believedKey)));
+      if (migrated.docs.length === 1) targetKey = migrated.docs[0].id;
+    }
+    if (targetKey) {
+      const keyToDelete = targetKey;
+      await runTransaction(db, async (tx) => {
+        const snap = await tx.get(rowRef(keyToDelete));
+        if (snap.exists()) tx.delete(rowRef(keyToDelete));
+      });
+    } else if (/^manual:\d+$/.test(believedKey)) {
+      // Legacy positional key found nowhere: still genuinely ambiguous.
+      return 'ambiguous';
+    }
+    // else: a stable-key row that was never saved — nothing on the server.
+    try {
+      clearPeriodicRecoverySnapshot(activeBusinessId, believedKey);
+      if (targetKey && targetKey !== believedKey) clearPeriodicRecoverySnapshot(activeBusinessId, targetKey);
+    } catch { /* storage unavailable */ }
+    return 'deleted';
   };
 
   const removePeriodicStockDraftItem = async (rowKey: string) => {

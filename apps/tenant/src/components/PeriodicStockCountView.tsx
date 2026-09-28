@@ -4064,7 +4064,24 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
     }
     if (row?.sourceRowKey) {
-      const outcome = await deletePeriodicManualRow(row.sourceRowKey);
+      // [Bug fix — urgent: delete silently did nothing] An error thrown by
+      // the server delete (network, permissions, session) used to escape
+      // this async click handler unhandled: no removal, no message. Keep
+      // the row (fail closed, like 'ambiguous'), restore its cancelled
+      // save, and show the reason on the row itself.
+      let outcome: 'deleted' | 'ambiguous';
+      try {
+        outcome = await deletePeriodicManualRow(row.sourceRowKey);
+      } catch (error) {
+        console.error('[handleRemoveManualRow] delete failed', error);
+        if (hadPendingRowSave) scheduleRowDraftSave(rowSaveKey, rowSaveKey);
+        const reason = error instanceof Error && error.message ? ` (${error.message})` : '';
+        setManualRowSaveError((prev) => ({
+          ...prev,
+          [index]: `Não foi possível remover esta linha — verifique a ligação e tente novamente.${reason}`,
+        }));
+        return;
+      }
       if (outcome === 'ambiguous') {
         if (hadPendingRowSave) scheduleRowDraftSave(rowSaveKey, rowSaveKey);
         // [Integration Point 2 — fail-closed, per the approved

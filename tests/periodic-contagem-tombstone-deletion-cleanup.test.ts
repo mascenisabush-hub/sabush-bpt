@@ -79,7 +79,9 @@ describe('deletePeriodicManualRow — coordinated, tombstone-writing deletion', 
   it('the retry loop is bounded, not infinite', () => {
     assert.match(body, /const MAX_ATTEMPTS = 3;/);
     assert.match(body, /for \(let attempt = 0; attempt < MAX_ATTEMPTS; attempt\+\+\) \{/);
-    assert.match(body, /return 'ambiguous';\s*\n\s*\};?\s*$/);
+    // The bounded loop now lives in tombstoneDelete (permission-denied
+    // fallback follows it); exhausting it still ends in 'ambiguous'.
+    assert.match(body, /\n      return 'ambiguous';\s*\n\s*\};/);
   });
 
   it('never uses tx.get with a query argument — confirmed compatible with the actual client SDK', () => {

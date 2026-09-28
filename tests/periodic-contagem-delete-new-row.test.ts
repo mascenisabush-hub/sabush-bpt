@@ -55,3 +55,29 @@ test('the bin is always visible, not hover-only on desktop', () => {
   assert.doesNotMatch(view, /aria-label=\{`Remover porção`\}\s*className="[^"]*sm:opacity-0/);
   assert.equal((view.match(/text-gray-400 opacity-100 hover:text-rose-600/g) ?? []).length, 2);
 });
+
+// [Follow-up — delete still silently failing live] Firestore rules deploy
+// separately from the app; where the 2026-09-25 tombstone rules are not yet
+// live, the tombstone write is refused (permission-denied).
+test('a refused tombstone (permission-denied) falls back to deleting the row alone', () => {
+  const body = fnBody(ctx, 'const deletePeriodicManualRow = async');
+  const tryIdx = body.indexOf('return await tombstoneDelete();');
+  assert.ok(tryIdx > 0);
+  const after = body.slice(tryIdx);
+  assert.match(after, /\(error as \{ code\?: string \}\)\?\.code !== 'permission-denied'\) throw error;/);
+  assert.match(after, /firebase deploy --only firestore:rules/);
+  assert.match(after, /if \(snap\.exists\(\)\) tx\.delete\(rowRef\(keyToDelete\)\);/);
+  // fallback never touches tombstones (their rules may be missing)
+  assert.doesNotMatch(after.slice(after.indexOf('let targetKey')), /tombstoneRef\(/);
+  // legacy positional keys found nowhere stay fail-closed
+  assert.match(after, /else if \(\/\^manual:\\d\+\$\/\.test\(believedKey\)\) \{[\s\S]*?return 'ambiguous';/);
+});
+
+test('a thrown delete error is shown on the row, never swallowed', () => {
+  const body = fnBody(view, 'const handleRemoveManualRow = async (index: number) => {');
+  assert.match(body, /try \{\s*outcome = await deletePeriodicManualRow\(row\.sourceRowKey\);\s*\} catch \(error\) \{/);
+  const catchBlock = body.slice(body.indexOf('} catch (error) {'));
+  assert.match(catchBlock, /if \(hadPendingRowSave\) scheduleRowDraftSave\(rowSaveKey, rowSaveKey\);/);
+  assert.match(catchBlock, /setManualRowSaveError\(\(prev\) => \(\{/);
+  assert.match(catchBlock.slice(0, catchBlock.indexOf('if (outcome')), /return;/);
+});

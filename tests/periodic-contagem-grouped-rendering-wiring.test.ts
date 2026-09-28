@@ -102,7 +102,7 @@ describe('9/10. Deletion targets the individual member only — no whole-product
   it('deletePeriodicManualRow remains the sole deletion mechanism, entirely unchanged by this step — no group-level delete call exists', () => {
     assert.doesNotMatch(componentSource, /deleteProductGroup|handleDeleteGroup|handleRemoveGroup/);
     assert.match(componentSource, /const handleRemoveManualRow = async \(index: number\) => \{/);
-    assert.match(componentSource, /if \(row\?\.sourceRowKey\) \{\s*\n\s*const outcome = await deletePeriodicManualRow\(row\.sourceRowKey\);/);
+    assert.match(componentSource, /if \(row\?\.sourceRowKey\) \{[\s\S]*?try \{\s*outcome = await deletePeriodicManualRow\(row\.sourceRowKey\);/);
   });
 });
 
