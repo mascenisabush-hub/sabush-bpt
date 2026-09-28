@@ -7542,10 +7542,18 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         }
         const legacyData = legacySnap.data() as PeriodicStockDraftItem;
         const orderIndex = parseLegacyOrderIndex(legacyKey);
+        // [Fix — migration always denied for any row edited more than once] firestore.rules'
+        // `items/{rowKey}` CREATE branch requires `rev == 1` and `lastWriterUid == request.auth.uid`.
+        // The old document's own `rev` (e.g. 12) and lastWriterUid were carried over by the spread above, so
+        // the create was rejected every time and the identity check could never finish. The destination is a
+        // brand-new document, so it starts at rev 1 and is stamped with the migrating user; every content
+        // field (quantity, prices, unit, productId ...) is still the exact legacy value.
         tx.set(destinationRef, {
           ...legacyData,
           migratedFromLegacyKey: legacyKey,
           orderIndex,
+          rev: 1,
+          lastWriterUid: currentUser.uid,
         });
         tx.delete(legacyRef);
         // §9 — keep nextOrderIndex correctly ahead of every migrated

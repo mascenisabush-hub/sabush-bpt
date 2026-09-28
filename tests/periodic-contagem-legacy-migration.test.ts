@@ -46,7 +46,7 @@ describe('migratePeriodicLegacyManualRow — legacy manual-row migration', () =>
   it('Test 3/4 — the ordinary migration write spreads the full legacy content, then adds migratedFromLegacyKey and orderIndex', () => {
     assert.match(
       body,
-      /tx\.set\(destinationRef, \{\s*\n\s*\.\.\.legacyData,\s*\n\s*migratedFromLegacyKey: legacyKey,\s*\n\s*orderIndex,\s*\n\s*\}\);/
+      /tx\.set\(destinationRef, \{\s*\n\s*\.\.\.legacyData,\s*\n\s*migratedFromLegacyKey: legacyKey,\s*\n\s*orderIndex,\s*\n\s*rev: 1,\s*\n\s*lastWriterUid: currentUser\.uid,\s*\n\s*\}\);/
     );
   });
 
@@ -165,5 +165,17 @@ describe('migratePeriodicLegacyManualRow — legacy manual-row migration', () =>
       appContextSource,
       /allocatePeriodicOrderIndex,\s*\n\s*migratePeriodicLegacyManualRow,\s*\n\s*migrateAllLegacyPeriodicRows,\s*\n\s*resolvePeriodicConflict,/
     );
+  });
+});
+
+describe('migration write satisfies firestore.rules items CREATE (regression: rev 12 was denied forever)', () => {
+  const rules = readFileSync(new URL('../firestore.rules', import.meta.url), 'utf8');
+  it('rules still require rev == 1 and lastWriterUid == request.auth.uid on create', () => {
+    assert.match(rules, /request\.resource\.data\.get\('rev', null\) == 1 &&\s*request\.resource\.data\.get\('lastWriterUid', null\) == request\.auth\.uid/);
+  });
+  it('migration overrides any carried-over rev/lastWriterUid after the legacy spread', () => {
+    const body = fnMatch ? fnMatch[0] : '';
+    const spread = body.indexOf('...legacyData');
+    assert.ok(spread > 0 && body.indexOf('rev: 1') > spread && body.indexOf('lastWriterUid: currentUser.uid') > spread);
   });
 });

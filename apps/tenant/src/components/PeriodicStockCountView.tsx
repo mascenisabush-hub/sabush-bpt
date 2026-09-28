@@ -4288,7 +4288,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       const { ambiguousKeys } = await migrateAllLegacyPeriodicRows();
       setAmbiguousMigrationKeys(ambiguousKeys);
       setMigrationStatus(ambiguousKeys.length > 0 ? 'blocked' : 'complete');
-    } catch {
+    } catch (migrationErr) {
+      console.error('[periodic-contagem] identity check (migration) failed on resume:', migrationErr);
       // A migration failure here must not prevent the operator from
       // resuming and continuing to work with whatever rows already
       // have a resolved identity — surfaced as 'blocked' (the same,
@@ -6241,7 +6242,9 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           return;
         }
         setMigrationStatus('complete');
-      } catch {
+      } catch (migrationErr) {
+        // The real cause used to be swallowed, so every failure read as "connection error".
+        console.error('[periodic-contagem] identity check (migration) failed:', migrationErr);
         setMigrationStatus('blocked');
         setError(
           'Não foi possível verificar as linhas desta Contagem (erro de ligação ou de gravação). Verifique a ligação e toque de novo em "Rever e Confirmar Contagem".'

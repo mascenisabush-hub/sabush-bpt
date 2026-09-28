@@ -76,7 +76,7 @@ describe('handleResumeDraft — migration wired into the live resume flow', () =
   it('a migration failure is treated as blocked, not silently as complete', () => {
     assert.match(
       fnMatch![0],
-      /\} catch \{[\s\S]{0,400}?setMigrationStatus\('blocked'\);/
+      /\} catch(?: \(\w+\))? \{[\s\S]{0,600}?setMigrationStatus\('blocked'\);/
     );
   });
 
