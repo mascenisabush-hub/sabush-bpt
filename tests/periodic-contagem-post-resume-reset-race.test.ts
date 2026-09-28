@@ -66,7 +66,7 @@ describe('Structural gating — is "resume happens before the reset has ever run
     // periodic draft listeners further down this same effect are ever
     // reached.
     assert.match(body, /return;/);
-    const periodicItemsIdx = appContextSrc.indexOf('const unsubPeriodicDraftItems = onSnapshot(');
+    const periodicItemsIdx = appContextSrc.indexOf('const unsubPeriodicDraftItems = subscribeWithRetry((retryAfterError) => onSnapshot(');
     assert.ok(
       periodicItemsIdx > gateIdx,
       'the periodic items listener setup must appear AFTER the activeBusinessId falsy-guard in source order, confirming it is unreachable while activeBusinessId is null'

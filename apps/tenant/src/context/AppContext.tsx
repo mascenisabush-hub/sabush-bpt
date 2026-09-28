@@ -33,6 +33,7 @@ import { selectLegacyKeysToMigrate, type PortionLike } from '../utils/periodicRo
 import { buildProductCostBasisMap } from '../lib/fr67CostBasisConversion';
 import { newProductId } from '../lib/newProductId';
 import { createFinalizationBatch } from '../lib/finalizationBatch';
+import { subscribeWithRetry } from '../lib/resubscribeOnError';
 import { selectSellingMemoryByProductName } from '../lib/sellingMemorySelection';
 import { planDeleteProduct } from '../utils/deleteProductPlan';
 import { computeBatchIdsToCheck, computeBatchesToClose, type CheckedBatchSnapshot } from '../lib/openBatchSupersession';
@@ -2578,7 +2579,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // throughout this same component without being redeclared as a
     // dependency of every effect that touches it.
     const initialDraftRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'initial');
-    const unsubInitialDraft = onSnapshot(
+    const unsubInitialDraft = subscribeWithRetry((retryAfterError) => onSnapshot(
       initialDraftRef,
       (snap) => {
         // [Decision 41D §6] A successful snapshot is the ONLY thing
@@ -2604,6 +2605,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           // alongside it rather than changing that flag's behavior.
           console.error('Error fetching initial stock draft:', err);
           setInitialStockDraftListenerState('load-error');
+          // Listener is dead after an error; re-attach with backoff (lib/resubscribeOnError.ts).
+          retryAfterError();
           setInitialStockDraftLoaded(true);
         } else {
           // [Decision 41D §4] Staff permission denial — expected,
@@ -2619,7 +2622,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setInitialStockDraftListenerState('confirmed-no-draft');
         }
       }
-    );
+    ));
 
     // [Stock Count Data-Loss Resilience — Implementation Task, Section
     // 6] Persistent Periodic Contagem draft. [Bug fix — per-product
@@ -2634,7 +2637,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // fields (type/label/date/submissionId/newProductInfo) or to any
     // OTHER row's own document.
     const periodicDraftMetaRef = doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic');
-    const unsubPeriodicDraftMeta = onSnapshot(
+    const unsubPeriodicDraftMeta = subscribeWithRetry((retryAfterError) => onSnapshot(
       periodicDraftMetaRef,
       (snap) => {
         setPeriodicStockDraftMeta(snap.exists() ? (snap.data() as Omit<PeriodicStockDraft, 'items'>) : null);
@@ -2650,6 +2653,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (isOwner) {
           console.error('Error fetching periodic stock draft meta:', err);
           setPeriodicStockDraftMetaListenerState('load-error');
+          // Listener is dead after an error; re-attach with backoff (lib/resubscribeOnError.ts).
+          retryAfterError();
           setPeriodicStockDraftMetaLoaded(true);
         } else {
           setPeriodicStockDraftMeta(null);
@@ -2657,9 +2662,9 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setPeriodicStockDraftMetaListenerState('confirmed-no-draft');
         }
       }
-    );
+    ));
     const periodicDraftItemsRef = collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items');
-    const unsubPeriodicDraftItems = onSnapshot(
+    const unsubPeriodicDraftItems = subscribeWithRetry((retryAfterError) => onSnapshot(
       periodicDraftItemsRef,
       (snap) => {
         const byKey: Record<string, PeriodicStockDraftItem> = {};
@@ -2691,6 +2696,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
         if (isOwner) {
           console.error('Error fetching periodic stock draft items:', err);
           setPeriodicStockDraftItemsListenerState('load-error');
+          // Listener is dead after an error; re-attach with backoff (lib/resubscribeOnError.ts).
+          retryAfterError();
           setPeriodicStockDraftItemsLoaded(true);
         } else {
           setPeriodicStockDraftItemsByKey({});
@@ -2698,7 +2705,7 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
           setPeriodicStockDraftItemsListenerState('confirmed-no-draft');
         }
       }
-    );
+    ));
 
     // [Decisions 44-56 — Periodic Contagem Shared Live Data;
     // Implementation Authorization §2 items 2, 4] The authoritative
