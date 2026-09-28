@@ -5746,6 +5746,33 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     );
   };
 
+  // Returns the already-committed periodic count for this submission, or null (absent OR unreachable).
+  const findAlreadyFinalizedPeriodicCount = async (businessId: string, submissionId: string): Promise<StockCount | null> => {
+    try {
+      const snap = await getDocFromServer(doc(db, 'businesses', businessId, 'stockCounts', 'stockcount-periodic-' + submissionId));
+      return snap.exists() ? ({ ...(snap.data() as StockCount), id: snap.id }) : null;
+    } catch (err) {
+      console.warn('[periodic-contagem] could not check whether this submission already finalized; continuing:', err);
+      return null;
+    }
+  };
+
+  // Deletes whatever is left of the periodic draft (items, tombstones, meta). Best-effort by design:
+  // it only runs after the count is safely stored, so it must never turn that into an error.
+  const cleanupPeriodicDraftBestEffort = async (businessId: string): Promise<void> => {
+    try {
+      const cleanup = createFinalizationBatch(() => createFirestoreBatch(db));
+      const items = await getDocs(collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'items'));
+      items.forEach((d) => cleanup.deleteCleanup(d.ref));
+      const tombstones = await getDocs(collection(db, 'businesses', businessId, 'stockCountDrafts', 'periodic', 'tombstones'));
+      tombstones.forEach((d) => cleanup.deleteCleanup(d.ref));
+      cleanup.deleteCleanup(doc(db, 'businesses', businessId, 'stockCountDrafts', 'periodic'));
+      await cleanup.commit();
+    } catch (err) {
+      console.warn('[periodic-contagem] leftover draft cleanup after an already-finalized count failed:', err);
+    }
+  };
+
   const recordStockCount = async ({ type, label, date, items, expectedValueAtCount, submissionId, initialCapitalBasis, redoesConfirmationId, producesBusinessWorthSnapshot, caixerCash, caixerEmola, caixerMpesa, caixerBanco, correctionOfSnapshotId, correctionKind, workingRowDeliberateEntries, referencePriceEntries }: RecordStockCountParams) => {
     if (!activeBusinessId) throw new Error('Sem negócio associado.');
     if (!items.length) throw new Error('Adicione pelo menos um produto à contagem.');
@@ -5825,6 +5852,24 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     }
 
     const businessId = activeBusinessId;
+
+    // [Retry after a lost acknowledgement] The count id is deterministic per submissionId, but
+    // firestore.rules make stockCounts immutable (`allow update: if false`, Decision 57), so a retry
+    // whose FIRST attempt actually committed (ack lost / timeout) would be rejected as an update to an
+    // existing document: the Owner sees a permission error although the count is saved. (The older
+    // comment below claiming periodic counts stay Owner-updatable predates Decision 57.) Ask the
+    // SERVER (never the cache, which cannot tell a queued write from a committed one) whether this
+    // submission already finalized; if so it is a success, not a second write.
+    // An unreachable server is not treated as "exists": fall through to the normal path.
+    if (type !== 'initial' && submissionId) {
+      const alreadyFinalized = await findAlreadyFinalizedPeriodicCount(businessId, submissionId);
+      if (alreadyFinalized) {
+        await cleanupPeriodicDraftBestEffort(businessId);
+        clearAllPeriodicRecoverySnapshots(businessId);
+        return alreadyFinalized;
+      }
+    }
+
     const fsBatch = createFinalizationBatch(() => createFirestoreBatch(db));
     const tempProducts = [...products];
 
