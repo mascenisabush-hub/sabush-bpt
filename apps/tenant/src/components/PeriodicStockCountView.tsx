@@ -43,6 +43,7 @@ import {
   type PeriodicRecoveryReconciliation,
 } from '../lib/periodicContagemRecovery';
 import { isSnapshotFromEarlierLifecycle } from '../lib/periodicContagemRecovery';
+import RecoveryEvidenceReview, { type RecoveryEvidenceEntry } from './RecoveryEvidenceReview';
 import { buildProductDisplayGroups, filterGroupsBySearch, type ProductDisplayGroup, type GroupableUnifiedEntry } from '../lib/periodicContagemGroupedView';
 import { derivePeriodicRowPersistenceState, type PeriodicRowPersistenceState } from '../lib/periodicContagemPersistenceState';
 import { detectShopSwitch } from '../lib/shopSwitchGuard';
@@ -1209,6 +1210,44 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       setUnresolvedRecoveryEvidence((prev) => Object.fromEntries(Object.entries(prev).filter(([rowKey]) => stillPresent.includes(rowKey))));
     }
   }, [persistenceStateTick, unresolvedRecoveryEvidence, activeBusinessId]);
+
+  // [Descartar] Operator-triggered, local-only: removes this device's recovery copy of the chosen rows and drops
+  // them from the evidence list. Nothing is written to, or deleted from, Firestore. Never automatic.
+  const handleDiscardRecoveryEvidence = (rowKeys: string[]) => {
+    if (activeBusinessId) {
+      for (const rowKey of rowKeys) {
+        try {
+          clearPeriodicRecoverySnapshot(activeBusinessId, rowKey);
+        } catch {
+          /* storage unavailable — the entry stays listed */
+          return;
+        }
+      }
+    }
+    setUnresolvedRecoveryEvidence((prev) => Object.fromEntries(Object.entries(prev).filter(([rowKey]) => !rowKeys.includes(rowKey))));
+    // The resume/gate banner quotes a count that is now out of date; the gate re-states it accurately if needed.
+    setError((prev) => (prev && prev.includes('alterações não confirmadas') ? null : prev));
+  };
+
+  const recoveryEvidenceEntries: RecoveryEvidenceEntry[] = Object.entries(unresolvedRecoveryEvidence).flatMap(([rowKey, evidence]) => {
+    if (evidence.outcome === 'already-synced') return [];
+    const serverItem = periodicStockDraftItemsByKey[rowKey];
+    return [
+      {
+        rowKey,
+        outcome: evidence.outcome,
+        local: {
+          productName: evidence.snapshot.content.productName,
+          quantity: evidence.snapshot.content.quantity,
+          unit: evidence.snapshot.content.unit,
+          sellingPrice: evidence.snapshot.content.sellingPrice,
+        },
+        server: serverItem
+          ? { productName: serverItem.productName, quantity: serverItem.quantity, unit: serverItem.unit, sellingPrice: serverItem.sellingPrice }
+          : undefined,
+      },
+    ];
+  });
   const [productSearch, setProductSearch] = useState('');
   // [Implementation Authorization — Periodic Contagem Keyboard
   // Shortcuts, docs/engineering/periodic-contagem-keyboard-shortcuts-
@@ -8476,6 +8515,8 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             {error}
           </div>
         )}
+
+        <RecoveryEvidenceReview entries={recoveryEvidenceEntries} onDiscard={handleDiscardRecoveryEvidence} />
 
         <form onSubmit={handleRequestConfirmation} className="space-y-2">
           {/* [Local layout compaction, round 2 — further reduction after
