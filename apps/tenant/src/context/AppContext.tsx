@@ -8163,21 +8163,35 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
   // error banner for something the operator did not initiate; a
   // transient failure here simply means the next render's effect
   // tries again.
+  // [Retry on transient failure] The comment above says a failed self-heal is "retried by the next
+  // render's effect", but that effect only re-runs when its dependencies change, and after a failure
+  // they have not: one flaky-network failure left the stored counter stuck above the real count,
+  // which keeps "Confirmar Contagem" disabled (and firestore.rules refuse finalization) until the
+  // page is reloaded. So retry here with backoff. `driftHealGenerationRef` makes only the LATEST
+  // call allowed to retry or write: a retry must never apply a `trueOpenConflictCount` that was
+  // captured before a conflict got resolved or created (the effect issues a fresh call for that).
+  const driftHealGenerationRef = useRef(0);
+  const DRIFT_HEAL_RETRY_DELAYS_MS = [2000, 5000, 10000, 20000];
   const correctOpenConflictCountIfDrifted = async (trueOpenConflictCount: number) => {
     if (!activeBusinessId) return;
     const metaRef = doc(db, 'businesses', activeBusinessId, 'stockCountDrafts', 'periodic');
-    try {
-      await runTransaction(db, async (tx) => {
-        const metaSnap = await tx.get(metaRef);
-        if (!metaSnap.exists()) return;
-        const storedOpenConflictCount = metaSnap.data().openConflictCount ?? 0;
-        if (storedOpenConflictCount === trueOpenConflictCount) return;
-        tx.set(metaRef, { openConflictCount: trueOpenConflictCount }, { merge: true });
-      });
-    } catch {
-      // Best-effort — see comment above. Silently retried by the next
-      // render of the calling effect, exactly like any other
-      // background reconciliation in this file.
+    const generation = ++driftHealGenerationRef.current;
+    for (let attempt = 0; attempt <= DRIFT_HEAL_RETRY_DELAYS_MS.length; attempt++) {
+      if (generation !== driftHealGenerationRef.current) return; // superseded by a newer, fresher call
+      try {
+        await runTransaction(db, async (tx) => {
+          const metaSnap = await tx.get(metaRef);
+          if (!metaSnap.exists()) return;
+          const storedOpenConflictCount = metaSnap.data().openConflictCount ?? 0;
+          if (storedOpenConflictCount === trueOpenConflictCount) return;
+          tx.set(metaRef, { openConflictCount: trueOpenConflictCount }, { merge: true });
+        });
+        return;
+      } catch {
+        // Best-effort — see comment above: never throws, never surfaces an error banner.
+      }
+      if (attempt === DRIFT_HEAL_RETRY_DELAYS_MS.length) return;
+      await new Promise((resolve) => setTimeout(resolve, DRIFT_HEAL_RETRY_DELAYS_MS[attempt]));
     }
   };
 

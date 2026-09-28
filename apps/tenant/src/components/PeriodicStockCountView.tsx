@@ -7920,8 +7920,17 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
             // this only keeps the UI from implying finalization is
             // available when it is not.
             <div className="rounded-lg border border-amber-300 bg-amber-50 px-4 py-3 text-sm text-amber-800">
-              Existem {unresolvedConflictRows.length === 1 ? 'uma linha' : `${unresolvedConflictRows.length} linhas`} em conflito por resolver nesta Contagem.
-              Resolva {unresolvedConflictRows.length === 1 ? 'o conflito' : 'todos os conflitos'} antes de finalizar (ver abaixo).
+              {unresolvedConflictRows.length === 0 ? (
+                // The stored counter (what firestore.rules check) is above zero but no row is actually
+                // in CONFLICT: a stale counter that the self-heal effect is already correcting. Saying
+                // "0 linhas em conflito por resolver" here left the Owner with nothing to do or understand.
+                <>O estado de conflitos desta Contagem está a ser atualizado. Aguarde alguns segundos: o botão ativa-se sozinho.</>
+              ) : (
+                <>
+                  Existem {unresolvedConflictRows.length === 1 ? 'uma linha' : `${unresolvedConflictRows.length} linhas`} em conflito por resolver nesta Contagem.
+                  Resolva {unresolvedConflictRows.length === 1 ? 'o conflito' : 'todos os conflitos'} antes de finalizar (ver abaixo).
+                </>
+              )}
             </div>
           )}
 
