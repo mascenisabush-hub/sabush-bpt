@@ -3,7 +3,6 @@ import { useApp } from '../context/AppContext';
 import { Store, DollarSign, Users, UserPlus, Trash2, X, Check, ShieldCheck, Sparkles, Key, AlertCircle, Edit3, UserMinus, UserX, UserCheck, Loader2, KeyRound, Smartphone, RefreshCw, Lock } from 'lucide-react';
 import { StaffMember } from '../types';
 import { BUSINESS_CATEGORY_GROUPS } from '../data/businessCategories';
-import { CURRENCY_OPTIONS } from '../utils/formatters';
 import { BusinessProfileSetupModal } from './BusinessProfileSetupModal';
 import { BusinessDataResetModal } from './BusinessDataResetModal';
 
@@ -46,7 +45,6 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
     isOwner,
     canManagerManageStaff,
     currencySymbol,
-    setCurrencySymbol,
     businessCategory,
     setBusinessCategory,
     updateBusinessProfile,
@@ -69,6 +67,7 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
 
   const [activeSection, setActiveSection] = useState<'general' | 'staff'>('general');
   const [showProfileEdit, setShowProfileEdit] = useState(autoOpenProfileEdit);
+  const [showCategoryPicker, setShowCategoryPicker] = useState(false);
 
   // Staff creation states
   const [staffName, setStaffName] = useState('');
@@ -348,55 +347,59 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
                 </div>
               </div>
 
-              {/* Category selector */}
+              {/* Category selector — once one is chosen only it is shown; "Alterar" reopens the list. */}
               <div>
-                <label className="block text-xs font-semibold text-gray-700 mb-1.5">
-                  Ramo de Negócio
-                </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
-                  {BUSINESS_CATEGORY_GROUPS.flatMap(g => g.categories).map(catName => {
-                    const isSel = businessCategory === catName;
-                    return (
-                      <button
-                        key={catName}
-                        onClick={() => setBusinessCategory(catName)}
-                        className={`p-2.5 rounded-xl border text-left text-xs font-medium transition flex items-center justify-between ${
-                          isSel
-                            ? 'bg-blue-50 border-blue-500 text-blue-700'
-                            : 'bg-gray-100/60 border-gray-200 text-gray-700 hover:bg-gray-100/60'
-                        }`}
-                      >
-                        <span className="truncate font-semibold">{catName}</span>
-                        {isSel && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />}
-                      </button>
-                    );
-                  })}
+                <div className="flex items-center justify-between mb-1.5">
+                  <label className="block text-xs font-semibold text-gray-700">
+                    Ramo de Negócio
+                  </label>
+                  {businessCategory && (
+                    <button
+                      type="button"
+                      onClick={() => setShowCategoryPicker(v => !v)}
+                      className="text-[11px] text-blue-600 font-semibold hover:underline"
+                    >
+                      {showCategoryPicker ? 'Voltar' : 'Alterar'}
+                    </button>
+                  )}
                 </div>
+                {businessCategory && !showCategoryPicker ? (
+                  <div className="px-3.5 py-2.5 rounded-xl border bg-blue-50 border-blue-500 text-blue-700 text-sm font-semibold flex items-center justify-between gap-2">
+                    <span className="truncate">{businessCategory}</span>
+                    <Check className="w-4 h-4 text-blue-600 shrink-0" />
+                  </div>
+                ) : (
+                  <div className="grid grid-cols-2 sm:grid-cols-3 gap-2 max-h-48 overflow-y-auto pr-1">
+                    {BUSINESS_CATEGORY_GROUPS.flatMap(g => g.categories).map(catName => {
+                      const isSel = businessCategory === catName;
+                      return (
+                        <button
+                          key={catName}
+                          type="button"
+                          onClick={() => { setBusinessCategory(catName); setShowCategoryPicker(false); }}
+                          className={`p-2.5 rounded-xl border text-left text-xs font-medium transition flex items-center justify-between ${
+                            isSel
+                              ? 'bg-blue-50 border-blue-500 text-blue-700'
+                              : 'bg-gray-100/60 border-gray-200 text-gray-700 hover:bg-gray-100/60'
+                          }`}
+                        >
+                          <span className="truncate font-semibold">{catName}</span>
+                          {isSel && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0 ml-1" />}
+                        </button>
+                      );
+                    })}
+                  </div>
+                )}
               </div>
 
-              {/* Currency selector */}
+              {/* Currency is fixed: Mozambique -> Metical (MT). */}
               <div>
                 <label className="block text-xs font-semibold text-gray-700 mb-1.5">
                   Moeda Principal
                 </label>
-                <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
-                  {CURRENCY_OPTIONS.map(opt => {
-                    const isSel = currencySymbol === opt.symbol;
-                    return (
-                      <button
-                        key={opt.code}
-                        onClick={() => setCurrencySymbol(opt.symbol)}
-                        className={`p-2.5 rounded-xl border text-xs font-medium transition flex items-center justify-between ${
-                          isSel
-                            ? 'bg-blue-50 border-blue-500 text-blue-700'
-                            : 'bg-gray-100/60 border-gray-200 text-gray-700 hover:bg-gray-100/60'
-                        }`}
-                      >
-                        <span>{opt.label} ({opt.symbol})</span>
-                        {isSel && <Check className="w-3.5 h-3.5 text-blue-600 shrink-0" />}
-                      </button>
-                    );
-                  })}
+                <div className="px-3.5 py-2.5 rounded-xl border bg-blue-50 border-blue-500 text-blue-700 text-sm font-semibold flex items-center justify-between gap-2">
+                  <span>Metical (MT)</span>
+                  <Check className="w-4 h-4 text-blue-600 shrink-0" />
                 </div>
               </div>
 

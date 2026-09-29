@@ -1625,7 +1625,8 @@ export const AppProvider: React.FC<{ children: React.ReactNode }> = ({ children 
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [isOwner, JSON.stringify(ownedBusinessIds)]);
 
-  const currencySymbol = business?.currencySymbol || 'MT';
+  // Mozambique-only product: currency is always the Metical, whatever an old record says.
+  const currencySymbol = 'MT';
   const businessCategory = business?.category || '';
 
   // ============================================================

@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { Search, Store, Check, X, Building2, Phone, MapPin, Mail, User, Sparkles } from 'lucide-react';
+import { Search, Store, Check, Building2, Phone, MapPin, Mail, User, Sparkles } from 'lucide-react';
 import { BUSINESS_CATEGORY_GROUPS, detectCategoryFromName } from '../data/businessCategories';
 
 interface BusinessProfileSetupModalProps {
@@ -74,6 +74,9 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
     } else {
       setIsCustomMode(false);
       setSelectedCat(cat);
+      // Once chosen, the other categories disappear; "Alterar" brings them back.
+      setShowCategoryPicker(false);
+      setSearchTerm('');
     }
   };
 
@@ -135,27 +138,29 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
             </div>
           </div>
 
-          {/* Save is ALSO up here so it is always in reach, however tall the form is
-              and whatever the phone's browser toolbar covers at the bottom. */}
-          <div className="flex items-center gap-1.5 shrink-0 ml-2">
+        </div>
+
+        {/* Action bar at the TOP, directly under the title: the gold save button and
+            Voltar are always visible, never under a phone's browser toolbar. */}
+        <div className="flex items-center gap-2 shrink-0">
+          {onClose && (
             <button
               type="button"
-              onClick={handleSave}
+              onClick={onClose}
               disabled={isSaving}
-              className="btn-primary py-2 px-3 text-xs disabled:opacity-60"
+              className="flex-1 sm:flex-none py-2.5 px-5 rounded-xl border border-gray-300 bg-white text-sm font-semibold text-gray-700 disabled:opacity-60"
             >
-              <span>{isSaving ? 'A guardar...' : isFirstTimeSetup ? 'Concluir' : 'Guardar'}</span>
+              Voltar
             </button>
-            {!isFirstTimeSetup && onClose && (
-              <button
-                onClick={onClose}
-                aria-label="Fechar"
-                className="p-1.5 text-gray-500 hover:text-gray-800 rounded-xl hover:bg-gray-50 transition shrink-0"
-              >
-                <X className="w-5 h-5" />
-              </button>
-            )}
-          </div>
+          )}
+          <button
+            type="button"
+            onClick={handleSave}
+            disabled={isSaving}
+            className="btn-primary flex-1 sm:flex-none py-2.5 px-6 text-sm disabled:opacity-60"
+          >
+            <span>{isSaving ? 'A guardar...' : isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
+          </button>
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto space-y-5 pr-1">
@@ -346,17 +351,6 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
           </div>
         </div>
 
-        {/* Footer */}
-        <div className="pt-3 pb-[env(safe-area-inset-bottom)] border-t border-gray-200 flex items-center justify-end gap-3 shrink-0">
-          <button
-            type="button"
-            onClick={handleSave}
-            disabled={isSaving}
-            className="btn-primary w-full sm:w-auto py-3 sm:py-2.5 px-6 text-sm disabled:opacity-60"
-          >
-            <span>{isSaving ? 'A guardar...' : isFirstTimeSetup ? 'Concluir Configuração' : 'Guardar Alterações'}</span>
-          </button>
-        </div>
       </div>
     </div>
   );
