@@ -1215,12 +1215,63 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       }
     });
     if (stillPresent.length !== keys.length) {
-      setUnresolvedRecoveryEvidence((prev) => Object.fromEntries(Object.entries(prev).filter(([rowKey]) => stillPresent.includes(rowKey))));
+      const remaining = Object.fromEntries(
+        Object.entries(unresolvedRecoveryEvidence).filter(([rowKey]) => stillPresent.includes(rowKey))
+      );
+      setUnresolvedRecoveryEvidence(remaining);
+      // [Bug fix] The entry resolved itself (e.g. its save was confirmed a
+      // moment after resume) but the red message kept saying "1 linha(s)…"
+      // with nothing left to review below it.
+      syncRecoveryEvidenceError(remaining);
     }
   }, [persistenceStateTick, unresolvedRecoveryEvidence, activeBusinessId]);
 
   // [Descartar] Operator-triggered, local-only: removes this device's recovery copy of the chosen rows and drops
   // them from the evidence list. Nothing is written to, or deleted from, Firestore. Never automatic.
+  // [Owner-requested — name the products behind a warning] Resolves a row
+  // key (catalog:<productId> / manual:<uuid> / legacy manual:<n>) to the
+  // product name the operator sees. Falls back to the server copy's name,
+  // then to an empty string (formatted as "(sem nome)").
+  const productNameForRowKey = (rowKey: string): string => {
+    if (rowKey.startsWith('catalog:')) {
+      const id = rowKey.slice('catalog:'.length);
+      return catalogRows[id]?.productName ?? products.find((p) => p.id === id)?.name ?? '';
+    }
+    const byKey = manualRowsRef.current.find((row) => row.sourceRowKey === rowKey);
+    if (byKey) return byKey.productName;
+    const legacy = /^manual:(\d+)$/.exec(rowKey);
+    if (legacy) return manualRowsRef.current[Number(legacy[1])]?.productName ?? '';
+    return periodicStockDraftItemsByKey[rowKey]?.productName ?? '';
+  };
+  const recoveryEvidenceProductNames = (evidence: Record<string, PeriodicRecoveryReconciliation>): string[] =>
+    Object.entries(evidence).map(([rowKey, entry]) =>
+      entry.outcome !== 'already-synced' && entry.snapshot.content.productName.trim()
+        ? entry.snapshot.content.productName
+        : productNameForRowKey(rowKey)
+    );
+  // Keeps the red recovery message in step with what is still unresolved:
+  // updated (with names) while entries remain, cleared once none do. Other
+  // errors are never touched.
+  const syncRecoveryEvidenceError = (remaining: Record<string, PeriodicRecoveryReconciliation>) => {
+    const count = Object.keys(remaining).length;
+    setError((prev) =>
+      prev && prev.includes('alterações não confirmadas')
+        ? count > 0
+          ? unresolvedRecoveryEvidenceMessage(count, recoveryEvidenceProductNames(remaining))
+          : null
+        : prev
+    );
+  };
+
+  // Names of the rows the finalization gate would refuse (same filter).
+  const unsafeRowProductNames = (): string[] =>
+    [
+      ...Object.keys(catalogRows).map((productId) => `catalog:${productId}`),
+      ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
+    ]
+      .filter((conflictKey) => !isRowSafeToProgress(conflictKey))
+      .map(productNameForRowKey);
+
   const handleDiscardRecoveryEvidence = (rowKeys: string[]) => {
     if (activeBusinessId) {
       for (const rowKey of rowKeys) {
@@ -1232,9 +1283,11 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         }
       }
     }
-    setUnresolvedRecoveryEvidence((prev) => Object.fromEntries(Object.entries(prev).filter(([rowKey]) => !rowKeys.includes(rowKey))));
-    // The resume/gate banner quotes a count that is now out of date; the gate re-states it accurately if needed.
-    setError((prev) => (prev && prev.includes('alterações não confirmadas') ? null : prev));
+    const remaining = Object.fromEntries(Object.entries(unresolvedRecoveryEvidence).filter(([rowKey]) => !rowKeys.includes(rowKey)));
+    setUnresolvedRecoveryEvidence(remaining);
+    // The banner quoted a count/names now out of date: re-state it for what
+    // remains (with names), or clear it when nothing does.
+    syncRecoveryEvidenceError(remaining);
   };
 
   const recoveryEvidenceEntries: RecoveryEvidenceEntry[] = Object.entries(unresolvedRecoveryEvidence).flatMap(([rowKey, evidence]) => {
@@ -4750,7 +4803,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       // above the form.
       if (Object.keys(nextUnresolved).length > 0) {
         setError(
-          unresolvedRecoveryEvidenceMessage(Object.keys(nextUnresolved).length)
+          unresolvedRecoveryEvidenceMessage(Object.keys(nextUnresolved).length, recoveryEvidenceProductNames(nextUnresolved))
         );
       }
     }
@@ -6680,7 +6733,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (migrationStatus === 'blocked') {
       if (ambiguousMigrationKeys.length > 0) {
         setError(
-          identityCheckPendingMessage(ambiguousMigrationKeys.length)
+          identityCheckPendingMessage(ambiguousMigrationKeys.length, ambiguousMigrationKeys.map(productNameForRowKey))
         );
         return;
       }
@@ -6694,7 +6747,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
         if (ambiguousKeys.length > 0) {
           setMigrationStatus('blocked');
           setError(
-            identityCheckPendingMessage(ambiguousKeys.length)
+            identityCheckPendingMessage(ambiguousKeys.length, ambiguousKeys.map(productNameForRowKey))
           );
           return;
         }
@@ -6726,7 +6779,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // silently proceeding past it.
     if (Object.keys(unresolvedRecoveryEvidence).length > 0) {
       setError(
-        unresolvedRecoveryEvidenceMessage(Object.keys(unresolvedRecoveryEvidence).length)
+        unresolvedRecoveryEvidenceMessage(Object.keys(unresolvedRecoveryEvidence).length, recoveryEvidenceProductNames(unresolvedRecoveryEvidence))
       );
       return;
     }
@@ -6752,7 +6805,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     ].filter((conflictKey) => !isRowSafeToProgress(conflictKey));
     if (unsafeRowEntries.length > 0) {
       setError(
-        unsafeRowsMessage(unsafeRowEntries.length)
+        unsafeRowsMessage(unsafeRowEntries.length, unsafeRowEntries.map(productNameForRowKey))
       );
       return;
     }
@@ -7041,14 +7094,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (migrationStatus === 'blocked') {
       setError(
         ambiguousMigrationKeys.length > 0
-          ? identityCheckPendingMessage(ambiguousMigrationKeys.length)
+          ? identityCheckPendingMessage(ambiguousMigrationKeys.length, ambiguousMigrationKeys.map(productNameForRowKey))
           : identityCheckNotRunMessage
       );
       return;
     }
     const unresolvedEvidenceCount = Object.keys(unresolvedRecoveryEvidence).length;
     if (unresolvedEvidenceCount > 0) {
-      setError(unresolvedRecoveryEvidenceMessage(unresolvedEvidenceCount));
+      setError(unresolvedRecoveryEvidenceMessage(unresolvedEvidenceCount, recoveryEvidenceProductNames(unresolvedRecoveryEvidence)));
       return;
     }
     // [Firestore usage reduction] Rows still inside the (now longer) typing
@@ -7062,7 +7115,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       ...manualRows.map((row, idx) => row.sourceRowKey ?? `manual:${idx}`),
     ].filter((conflictKey) => !isRowSafeToProgress(conflictKey)).length;
     if (unsafeRowCount > 0) {
-      setError(unsafeRowsMessage(unsafeRowCount));
+      setError(unsafeRowsMessage(unsafeRowCount, unsafeRowProductNames()));
       return;
     }
     if (!isOwner) return;

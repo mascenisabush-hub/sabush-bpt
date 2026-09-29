@@ -68,6 +68,6 @@ describe('Descartar wiring in PeriodicStockCountView', () => {
     assert.equal((panel.match(/window\.confirm\(/g) ?? []).length, 2);
   });
   it('the finalization gate and its message are unchanged (message text now from the shared helper)', () => {
-    assert.match(view, /if \(Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0\) \{\s*setError\(\s*unresolvedRecoveryEvidenceMessage\(Object\.keys\(unresolvedRecoveryEvidence\)\.length\)/);
+    assert.match(view, /if \(Object\.keys\(unresolvedRecoveryEvidence\)\.length > 0\) \{\s*setError\(\s*unresolvedRecoveryEvidenceMessage\(Object\.keys\(unresolvedRecoveryEvidence\)\.length, recoveryEvidenceProductNames\(unresolvedRecoveryEvidence\)\)/);
   });
 });

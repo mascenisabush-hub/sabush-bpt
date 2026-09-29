@@ -42,7 +42,7 @@ describe('handleConfirmSave — belt-and-suspenders re-check, matching the exist
   it('the gate is present and re-checked here; it reports via setError (was a silent bare return -- a dead Confirm button, see periodic-contagem-confirm-gate-messages.test.ts)', () => {
     const fnStart = source.indexOf('const handleConfirmSave = async () => {');
     const region = source.slice(fnStart, fnStart + 4000);
-    assert.match(region, /const unsafeRowCount = \[[\s\S]*?\]\.filter\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\)\.length;\s*\n\s*if \(unsafeRowCount > 0\) \{\s*\n\s*setError\(unsafeRowsMessage\(unsafeRowCount\)\);\s*\n\s*return;/);
+    assert.match(region, /const unsafeRowCount = \[[\s\S]*?\]\.filter\(\(conflictKey\) => !isRowSafeToProgress\(conflictKey\)\)\.length;\s*\n\s*if \(unsafeRowCount > 0\) \{\s*\n\s*setError\(unsafeRowsMessage\(unsafeRowCount, unsafeRowProductNames\(\)\)\);\s*\n\s*return;/);
   });
 
   it('comes after the two existing gates here too, in the same order', () => {

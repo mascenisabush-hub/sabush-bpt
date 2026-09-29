@@ -22,11 +22,11 @@ describe('handleResumeDraft — proactive recovery banner (§1e, Decision C Opti
   });
 
   it('reuses the EXACT SAME message text already used at the finalization gate -- one shared helper, not reworded', () => {
-    assert.match(source, /setError\(unresolvedRecoveryEvidenceMessage\(Object\.keys\(nextUnresolved\)\.length\)\)|setError\(\s*\n\s*unresolvedRecoveryEvidenceMessage\(Object\.keys\(nextUnresolved\)\.length\)/, 'expected the proactive resume message to use the shared helper');
-    assert.match(source, /unresolvedRecoveryEvidenceMessage\(Object\.keys\(unresolvedRecoveryEvidence\)\.length\)/, 'expected the finalization-gate message to use the shared helper');
+    assert.match(source, /setError\(\s*\n?\s*unresolvedRecoveryEvidenceMessage\(Object\.keys\(nextUnresolved\)\.length, recoveryEvidenceProductNames\(nextUnresolved\)\)/, 'expected the proactive resume message to use the shared helper');
+    assert.match(source, /unresolvedRecoveryEvidenceMessage\(Object\.keys\(unresolvedRecoveryEvidence\)\.length, recoveryEvidenceProductNames\(unresolvedRecoveryEvidence\)\)/, 'expected the finalization-gate message to use the shared helper');
     assert.equal(
       unresolvedRecoveryEvidenceMessage(2),
-      'Existem 2 linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as antes de confirmar.'
+      'Existem 2 linha(s) com alterações não confirmadas encontradas ao retomar esta Contagem — reveja-as no quadro abaixo antes de confirmar.'
     );
   });
 
