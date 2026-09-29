@@ -70,7 +70,7 @@ test('the snapshot records exactly the value shown: normalize uses the passed se
 const view = readFileSync(new URL('../apps/tenant/src/components/PeriodicStockCountView.tsx', import.meta.url), 'utf-8');
 
 test('every figure on the Contagem screen uses the same rule', () => {
-  assert.match(view, /tallyStockCountRows\(allWorkingRows, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName\)/);
+  assert.match(view, /tallyStockCountRows\(onlyValidatedCounts\(allWorkingRows\), effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName\)/);
   assert.match(view, /tallyStockCountRows\(rowsForTally, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName\)/);
   assert.match(view, /sellingValue: item\.sellingValue,/);
   assert.match(view, /sellingValue: sourceRow && entry\.quantity\.trim\(\) !== '' \? rowSellingValueFor\(sourceRow\) : undefined,/);

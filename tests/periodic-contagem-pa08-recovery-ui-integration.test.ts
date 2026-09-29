@@ -79,7 +79,9 @@ describe('4/5/6/7. Rendered group-level state — all six states distinguishable
   it('the render loop\'s status icon now switches on group.persistenceState across all six states, not just the old conflicted/validated binary', () => {
     assert.match(componentSource, /group\.persistenceState === 'save-blocked' \? \(/);
     assert.match(componentSource, /group\.persistenceState === 'occupied-target-rejected' \|\| group\.persistenceState === 'save-unknown' \? \(/);
-    assert.match(componentSource, /group\.persistenceState === 'saving' \? \(/);
+    // [2026-09-29] the spinner is shown only for validated products (a real
+    // save in flight); unvalidated work is not auto-saved while typing.
+    assert.match(componentSource, /group\.persistenceState === 'saving' && group\.allValidated \? \(/);
   });
 
   it('group.anyConflicted and group.allValidated remain exactly as before — additive, not replaced (existing tests/behavior relying on them still hold)', () => {

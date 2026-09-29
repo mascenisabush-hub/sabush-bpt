@@ -50,8 +50,14 @@ via the product's unit relationship; unconvertible → not valued ("Rever preço
 blocked with the product named. `tallyStockCountRows(rows, costBasis, relationshipFor)`; tally item `sellingValue` is
 passed to `recordStockCount` and used as-is by `normalizeStockCountItems` (snapshot = what the operator saw). Group
 list uses entry `sellingValue`. Review screen lists "Não contados" names (5 inline + "Ver todos").
-Test: tests/contagem-valuation-price-unit.test.ts. **Pending discussion with Owner:** live total counting only
-validated rows, and saving to the server only on "Validar" (no-data-loss analysis given in chat).
+Test: tests/contagem-valuation-price-unit.test.ts.
+
+**Also (this session): "Validar" = counts + saves (Owner decision).** Live total = validated rows only
+(`onlyValidatedCounts`). Typing on catalog:/manual: rows arms NO server timer (local recovery snapshot still written
+first; leave/hide flush unchanged); Validar saves immediately; a failed Validar sends a not-yet-counted safety copy
+(`saveUnvalidatedSafetyCopy`). "Produtos por validar" panel (`pendingValidationEntries`, reason = the Validar checks)
++ amber reminder in the sticky bar; "Rever e Confirmar" blocked while any remain, naming them. Reopened (Editar)
+products leave the total until re-validated. Test: tests/contagem-validar-counts-and-saves.test.ts.
 
 **Next:** optional mobile layout for the live total (bottom bar on phones; shrink main nav on scroll) — Owner has
 not decided.

@@ -2638,6 +2638,14 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // immediately (ROW_SAVE_IMMEDIATE_DELAY_MS — see updateCatalogRow /
   // updateManualRow); (3) flushPeriodicDraftNow still saves every pending
   // row at once when the page is hidden, closed or left.
+  // [Owner decision, 2026-09-29 — "Validar" is the save signal] Row edits
+  // (catalog:/manual:) no longer arm ANY automatic server save while
+  // typing: a row reaches the server when Validar is clicked (immediately,
+  // ROW_SAVE_IMMEDIATE_DELAY_MS — even when that click's checks fail, as a
+  // not-yet-counted safety copy), or when the page is hidden/closed/left
+  // (flushPeriodicDraftNow). Every keystroke is still written to the local
+  // recovery snapshot synchronously, below. ROW_SAVE_IDLE_DELAY_MS now
+  // applies only to non-row keys (draft meta, new-product info, Caixa).
   const ROW_SAVE_IDLE_DELAY_MS = 5000;
   const ROW_SAVE_IMMEDIATE_DELAY_MS = 0;
 
@@ -2755,6 +2763,13 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
       bumpPersistenceStateTick();
     }
     const generation = cancelRowRetry(rowKey);
+    const isRowKey = rowKey.startsWith('catalog:') || rowKey.startsWith('manual:');
+    if (isRowKey && options?.delayMs === undefined) {
+      // Typing: kept locally (snapshot above) and marked dirty — saved on
+      // Validar, or by the leave/hide flush. No timer.
+      rowDebounceTimersRef.current.delete(rowKey);
+      return;
+    }
     const timer = setTimeout(() => {
       rowDebounceTimersRef.current.delete(rowKey);
       performRowSaveAttempt(rowKey, protectionKey, generation, 1);
@@ -3045,17 +3060,30 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return isDuplicatePortion(row, others) ? DUPLICATE_PORTION_MESSAGE : null;
   };
 
+  // [Owner decision — a failed Validar never risks the work] Clicking
+  // Validar is always the signal "save this product". When validation
+  // fails (or the zero-stock confirmation is cancelled) the row is NOT
+  // validated and NOT counted, but its current content is still sent to
+  // the server right away as an unvalidated safety copy — only when it has
+  // unsaved edits, so a repeated click costs nothing.
+  const saveUnvalidatedSafetyCopy = (rowKey: string) => {
+    if (!rowHasUnsavedLocalEditRef.current[rowKey]) return;
+    scheduleRowDraftSave(rowKey, rowKey, { delayMs: ROW_SAVE_IMMEDIATE_DELAY_MS });
+  };
+
   const handleSaveCatalogRow = (productId: string) => {
     const row = catalogRows[productId];
     if (!row) return;
     const message = validateWorkingRowForSave(row);
     if (message) {
       setCatalogRowSaveError((prev) => ({ ...prev, [productId]: message }));
+      saveUnvalidatedSafetyCopy(`catalog:${productId}`);
       return;
     }
     const duplicateMessage = duplicatePortionMessageFor(row, `catalog:${productId}`);
     if (duplicateMessage) {
       setCatalogRowSaveError((prev) => ({ ...prev, [productId]: duplicateMessage }));
+      saveUnvalidatedSafetyCopy(`catalog:${productId}`);
       return;
     }
     // [Feature — Owner-requested] Quantity 0 passes validation (it's a
@@ -3065,6 +3093,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // explicitly before it's locked in, distinct from every other
     // valid quantity, which saves immediately with no extra step.
     if (parseFloat(row.quantity) === 0 && !window.confirm(`Confirmas que "${row.productName}" tem mesmo 0 em stock?`)) {
+      saveUnvalidatedSafetyCopy(`catalog:${productId}`);
       return;
     }
     setCatalogRowSaveError((prev) => {
@@ -4295,18 +4324,22 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     const row = manualRows[index];
     if (!row) return;
     const message = validateWorkingRowForSave(row);
+    const safetyKey = row.sourceRowKey ?? `manual:${index}`;
     if (message) {
       setManualRowSaveError((prev) => ({ ...prev, [index]: message }));
+      saveUnvalidatedSafetyCopy(safetyKey);
       return;
     }
     const duplicateMessage = duplicatePortionMessageFor(row, manualRowKey(row, index));
     if (duplicateMessage) {
       setManualRowSaveError((prev) => ({ ...prev, [index]: duplicateMessage }));
+      saveUnvalidatedSafetyCopy(safetyKey);
       return;
     }
     // [Feature — Owner-requested] Manual-row counterpart to
     // handleSaveCatalogRow's own identical confirmation, above.
     if (parseFloat(row.quantity) === 0 && !window.confirm(`Confirmas que "${row.productName}" tem mesmo 0 em stock?`)) {
+      saveUnvalidatedSafetyCopy(safetyKey);
       return;
     }
     setManualRowSaveError((prev) => {
@@ -4351,6 +4384,12 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   const handleValidateWorkspaceProduct = () => {
     const pending = getWorkspacePendingPortions();
     if (pending.length === 0) return;
+    // A failed product-level Validar still sends every portion's unsaved
+    // work as an unvalidated safety copy (see saveUnvalidatedSafetyCopy).
+    const safetyCopyOf = (portion: (typeof pending)[number]) =>
+      saveUnvalidatedSafetyCopy(
+        portion.kind === 'catalog' ? `catalog:${portion.productId}` : portion.row.sourceRowKey ?? `manual:${portion.idx}`
+      );
     const catalogErrors: Record<string, string> = {};
     const manualErrors: Record<number, string> = {};
     for (const portion of pending) {
@@ -4363,6 +4402,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     if (Object.keys(catalogErrors).length > 0 || Object.keys(manualErrors).length > 0) {
       setCatalogRowSaveError((prev) => ({ ...prev, ...catalogErrors }));
       setManualRowSaveError((prev) => ({ ...prev, ...manualErrors }));
+      pending.forEach(safetyCopyOf);
       return;
     }
     const zeroPortions = pending.filter((portion) => parseFloat(portion.row.quantity) === 0);
@@ -4374,6 +4414,7 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
           : `Confirmas que ${zeroPortions.length} porção(ões) de "${pending[0].row.productName}" têm mesmo 0 em stock?`
       )
     ) {
+      pending.forEach(safetyCopyOf);
       return;
     }
     const pendingCatalogIds = new Set(pending.flatMap((p) => (p.kind === 'catalog' ? [p.productId] : [])));
@@ -5215,8 +5256,58 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     return price === null ? null : (Number(row.quantity) || 0) * price;
   };
 
+  // [Owner decision, 2026-09-29] Every product the operator has started but
+  // not validated — never in the live total, always shown with what to
+  // change. A catalog row is "started" once it has a quantity (its price
+  // comes pre-filled from the catalog); a manual row as soon as it has a
+  // name or a quantity (it was deliberately added). `reason` is the exact
+  // check Validar runs; null = nothing missing, only the click.
+  type PendingValidationEntry = {
+    rowKey: string;
+    productName: string;
+    productId?: string;
+    reason: string | null;
+  };
+  const pendingValidationEntries: PendingValidationEntry[] = [
+    ...Object.entries(catalogRows)
+      .filter(([, row]) => !row.removed && !row.validated && row.quantity.trim() !== '')
+      .map(([productId, row]) => ({
+        rowKey: `catalog:${productId}`,
+        productName: row.productName,
+        productId,
+        reason: validateWorkingRowForSave(row) ?? duplicatePortionMessageFor(row, `catalog:${productId}`),
+      })),
+    ...manualRows
+      .map((row, index) => ({ row, index }))
+      .filter(({ row }) => !row.removed && !row.validated && (row.productName.trim() !== '' || row.quantity.trim() !== ''))
+      .map(({ row, index }) => ({
+        rowKey: row.sourceRowKey ?? `manual:${index}`,
+        productName: row.productName,
+        productId: row.productId,
+        reason: validateWorkingRowForSave(row) ?? duplicatePortionMessageFor(row, manualRowKey(row, index)),
+      })),
+  ];
+  const pendingValidationProductNames = (): string[] => {
+    const seen = new Set<string>();
+    return pendingValidationEntries
+      .map((entry) => entry.productName)
+      .filter((name) => {
+        const key = name.trim().toLowerCase();
+        if (seen.has(key)) return false;
+        seen.add(key);
+        return true;
+      });
+  };
+
+  // [Owner decision, 2026-09-29] A product enters the live total when it
+  // is VALIDATED — never before. An unvalidated row is tallied as not yet
+  // counted (blank quantity) and is listed, with what to fix, in the
+  // "Produtos por validar" panel instead (pendingValidationEntries).
+  const onlyValidatedCounts = (rows: StockCountWorkingRow[]): StockCountWorkingRow[] =>
+    rows.map((row) => (row.validated ? row : { ...row, quantity: '' }));
+
   const liveTally = useMemo(
-    () => tallyStockCountRows(allWorkingRows, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName),
+    () => tallyStockCountRows(onlyValidatedCounts(allWorkingRows), effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName),
     // getEffectiveUnitRelationshipForProductName reads newProductInfo and
     // the catalog; both are listed so a relationship change re-values.
     [allWorkingRows, effectiveCostBasisByProductName, newProductInfo, products]
@@ -6884,10 +6975,20 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     // tagging is never persisted — `manualRowIndex` is excluded by
     // construction from workingRowToDraftItem's explicit literal (see
     // that function's own comment, utils/stockCount.ts).
-    const rowsForTally: StockCountWorkingRow[] = [
+    // [Owner decision] Nothing unvalidated may enter the count: the operator
+    // is told which products and shown the list with what to change.
+    if (pendingValidationEntries.length > 0) {
+      setError(
+        `Existem ${pendingValidationEntries.length} produto(s) por validar, que não entram na contagem: ${formatProductNames(pendingValidationProductNames())}. Valide-os (ou apague a quantidade) antes de continuar — veja "Produtos por validar".`
+      );
+      document.getElementById('contagem-pending-validation')?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+      return;
+    }
+
+    const rowsForTally: StockCountWorkingRow[] = onlyValidatedCounts([
       ...Object.values(catalogRows),
       ...manualRows.map((row, idx) => ({ ...row, manualRowIndex: idx })),
-    ];
+    ]);
     const tally = tallyStockCountRows(rowsForTally, effectiveCostBasisByProductName, getEffectiveUnitRelationshipForProductName);
     if (tally.unconvertiblePriceProductNames.length > 0) {
       setError(
@@ -8762,6 +8863,23 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               the highest `entrySequence`, regardless of the current
               `validatedSortMode`. Hidden only when nothing has been
               entered yet this session (`lastEnteredEntry === null`). */}
+          {/* [Owner decision] Unvalidated products are not in the total
+              above — say so right where the total is read, and take the
+              operator to the list of what to fix. */}
+          {pendingValidationEntries.length > 0 && (
+            <button
+              type="button"
+              onClick={() =>
+                document.getElementById('contagem-pending-validation')?.scrollIntoView({ behavior: 'smooth', block: 'center' })
+              }
+              className="self-start flex items-center gap-1.5 text-[12px] font-semibold text-amber-300 hover:text-amber-200 underline-offset-2 hover:underline"
+            >
+              <AlertTriangle className="w-3.5 h-3.5 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+              {pendingValidationEntries.length === 1
+                ? '1 produto por validar — não incluído no total'
+                : `${pendingValidationEntries.length} produtos por validar — não incluídos no total`}
+            </button>
+          )}
           {lastEnteredEntry && (
             <button
               type="button"
@@ -8777,8 +8895,10 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                   written to Firestore is never shown as saved here. */}
               {lastEnteredEntry.persistenceState === 'saved' ? (
                 <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.5} aria-hidden="true" />
-              ) : lastEnteredEntry.persistenceState === 'saving' ? (
+              ) : lastEnteredEntry.persistenceState === 'saving' && lastEnteredEntry.validated ? (
                 <RotateCw className="w-3.5 h-3.5 text-white/50 shrink-0 animate-spin" strokeWidth={2.5} aria-hidden="true" />
+              ) : !lastEnteredEntry.validated ? (
+                <Circle className="w-3.5 h-3.5 text-amber-400 shrink-0" strokeWidth={2.5} aria-hidden="true" />
               ) : (
                 <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" strokeWidth={2.5} aria-hidden="true" />
               )}
@@ -9394,6 +9514,53 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
               unchanged. */}
           <div className={`grid grid-cols-1 ${isWorkspaceActive ? 'lg:grid-cols-2' : ''} gap-6 items-start`}>
           <div className="space-y-6">
+          {/* [Owner decision, 2026-09-29] Always-visible list of products
+              started but not validated: not in the live total, not in the
+              count, each with the exact thing Validar would complain
+              about (or "Pronto" when only the click is missing). */}
+          {pendingValidationEntries.length > 0 && (
+            <div id="contagem-pending-validation" className="rounded-2xl border border-amber-200 bg-amber-50/70 p-4 space-y-3">
+              <div className="flex items-start gap-2.5">
+                <AlertTriangle className="w-4 h-4 text-amber-600 shrink-0 mt-[2px]" strokeWidth={2.25} aria-hidden="true" />
+                <div className="min-w-0">
+                  <p className="text-[14px] font-semibold text-amber-900">
+                    Produtos por validar ({pendingValidationEntries.length})
+                  </p>
+                  <p className="text-[12px] text-amber-800 leading-relaxed">
+                    Ainda não entram no total nem na contagem. Abra cada produto, corrija o que falta e clique em Validar.
+                    O que já escreveu está guardado neste dispositivo.
+                  </p>
+                </div>
+              </div>
+              <ul className="divide-y divide-amber-100 rounded-xl bg-white border border-amber-100 max-h-72 overflow-y-auto">
+                {pendingValidationEntries.map((entry) => {
+                  const openKey = productKeyFor(entry.productName);
+                  return (
+                    <li key={entry.rowKey} className="flex items-center gap-3 px-3 py-2.5">
+                      <div className="min-w-0 flex-1">
+                        <p className="text-[13px] font-semibold text-[#111827] truncate">{entry.productName.trim() || '(sem nome)'}</p>
+                        <p className={`text-[12px] leading-snug ${entry.reason ? 'text-rose-700' : 'text-emerald-700'}`}>
+                          {entry.reason ?? 'Pronto — falta apenas clicar em Validar.'}
+                        </p>
+                      </div>
+                      {openKey && !isWorkspaceActive && (
+                        <button
+                          type="button"
+                          onClick={() => handleSelectExistingProductForWorkspace(openKey, entry.productId)}
+                          className="shrink-0 px-3 py-1.5 rounded-lg text-[12px] font-semibold text-[#0B1F3A] bg-[#F6EFD9] hover:bg-[#EFE3BF] transition-colors"
+                        >
+                          Abrir
+                        </button>
+                      )}
+                      {openKey && isWorkspaceActive && activeWorkspaceProductKey === openKey && (
+                        <span className="shrink-0 text-[11px] font-semibold text-gray-500">Aberto</span>
+                      )}
+                    </li>
+                  );
+                })}
+              </ul>
+            </div>
+          )}
           {/* [Owner-requested — single unified product list] The
               separate compact picker table that used to live here is
               removed — selecting an existing product (validated or
@@ -10951,12 +11118,18 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
                               strokeWidth={2.5}
                               aria-hidden="true"
                             />
-                          ) : group.persistenceState === 'saving' ? (
+                          ) : group.persistenceState === 'saving' && group.allValidated ? (
                             <RotateCw className="w-3.5 h-3.5 text-gray-400 shrink-0 animate-spin" strokeWidth={2.5} aria-hidden="true" />
                           ) : group.allValidated ? (
                             <CheckCircle2 className="w-3.5 h-3.5 text-emerald-500 shrink-0" strokeWidth={2.5} aria-hidden="true" />
                           ) : (
-                            <Circle className="w-3.5 h-3.5 text-gray-300 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+                            // Unvalidated: started (amber) or untouched (grey) — never
+                            // a spinner, since typing is no longer auto-saved.
+                            <Circle
+                              className={`w-3.5 h-3.5 shrink-0 ${group.members.some((m) => m.quantity.trim() !== '') ? 'text-amber-500' : 'text-gray-300'}`}
+                              strokeWidth={2.5}
+                              aria-hidden="true"
+                            />
                           )}
                           {/* [Implementation Authorization §1f, C.1]
                               save-blocked/occupied-target-rejected/

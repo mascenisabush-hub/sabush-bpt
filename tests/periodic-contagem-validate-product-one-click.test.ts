@@ -30,7 +30,9 @@ test('reuses the exact per-row checks, all-or-nothing before any write', () => {
 
 test('zero-stock confirmation is asked once for the product, and a cancel validates nothing', () => {
   assert.match(body, /const zeroPortions = pending\.filter/);
-  assert.match(body, /!window\.confirm\([\s\S]*?\)\s*\)\s*\{\s*return;\s*\}/);
+  // a cancel validates nothing — it only sends the unsaved work as a
+  // not-yet-counted safety copy, then returns before any updateXRow.
+  assert.match(body, /!window\.confirm\([\s\S]*?\)\s*\)\s*\{\s*pending\.forEach\(safetyCopyOf\);\s*return;\s*\}/);
 });
 
 test('writes through the same updateCatalogRow/updateManualRow path as per-row Validar', () => {
