@@ -112,8 +112,8 @@ export const BusinessProfileSetupModal: React.FC<BusinessProfileSetupModalProps>
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-4">
-      <div className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 max-h-full flex flex-col">
+    <div className="modal-overlay z-50 bg-black/80 backdrop-blur-sm">
+      <div className="bg-white border border-gray-200 rounded-3xl max-w-xl w-full p-4 sm:p-6 shadow-2xl space-y-4 sm:space-y-5 modal-card flex flex-col">
         {/* Modal Header */}
         <div className="flex items-start justify-between border-b border-gray-200 pb-4 shrink-0">
           <div className="flex items-center space-x-3">

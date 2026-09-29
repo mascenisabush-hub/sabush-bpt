@@ -272,8 +272,8 @@ export const SettingsModal: React.FC<SettingsModalProps> = ({ onClose, autoOpenP
   };
 
   return (
-    <div className="fixed inset-0 z-50 bg-black/80 backdrop-blur-sm flex items-center justify-center p-3 sm:p-5">
-      <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col max-h-full">
+    <div className="modal-overlay z-50 bg-black/80 backdrop-blur-sm">
+      <div className="bg-white border border-gray-200 rounded-3xl w-full max-w-2xl shadow-2xl overflow-hidden flex flex-col modal-card">
         {/* Header */}
         <div className="flex items-center justify-between p-5 border-b border-gray-200 shrink-0">
           <div>

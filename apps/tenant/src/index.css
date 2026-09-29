@@ -496,3 +496,42 @@ button, a, [role="button"], input[type="checkbox"], input[type="radio"], select 
 .table-clean tbody tr:hover {
   background-color: rgba(11,31,58,0.03);
 }
+
+/* ==========================================================================
+   Phone-safe modals.
+   Height is capped by the SMALL viewport (100svh = the screen with the
+   browser's address bar / bottom toolbar showing), so a modal's bottom edge,
+   and the action buttons pinned there, can never sit under the toolbar.
+   Never size a modal with vh or with % of a fixed inset-0 overlay: on phones
+   both are measured against the taller "toolbars hidden" viewport.
+   Use: overlay = "modal-overlay", card = "modal-card".
+   ========================================================================== */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 100vh;
+  height: 100svh;
+  display: flex;
+  align-items: flex-start;
+  justify-content: center;
+  padding: 0.75rem;
+  overflow: hidden;
+}
+@media (min-width: 640px) {
+  .modal-overlay {
+    align-items: center;
+    padding: 1rem;
+  }
+}
+.modal-card {
+  max-height: calc(100vh - 6rem);
+  max-height: calc(100svh - 1.5rem - env(safe-area-inset-bottom, 0px));
+}
+@media (min-width: 640px) {
+  .modal-card {
+    max-height: calc(100vh - 2rem);
+    max-height: calc(100svh - 2rem);
+  }
+}
