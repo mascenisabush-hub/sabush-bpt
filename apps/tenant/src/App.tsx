@@ -111,7 +111,16 @@ function MainApp() {
 
   return (
   <div className="min-h-screen bg-[#FBF9F4] text-gray-900 font-sans antialiased flex flex-col">
-      <div className="sticky top-0 z-30 bg-white border-b border-[#EEF0F3] shadow-[0_1px_0_rgba(11,31,58,0.02)]">
+      {/* [CONTAGEM — Always-Visible Live Total + Last Entered Product]
+          `data-app-sticky-header` is a measurement hook only (no
+          visual/behavioral change) — PeriodicStockCountView reads this
+          element's own rendered height at runtime so its own sticky
+          summary bar can position itself directly below this existing
+          sticky header, at every breakpoint, without a second
+          overlapping sticky element and without hardcoding a pixel
+          value that would drift whenever this header's real content
+          (business name, notifications, etc.) changes its height. */}
+      <div data-app-sticky-header className="sticky top-0 z-30 bg-white border-b border-[#EEF0F3] shadow-[0_1px_0_rgba(11,31,58,0.02)]">
         <Header activeTab={activeTab} setActiveTab={setActiveTab} />
       </div>
       <NavigationTabs activeTab={activeTab} setActiveTab={setActiveTab} />

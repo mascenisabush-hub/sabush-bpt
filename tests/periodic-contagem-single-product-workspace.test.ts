@@ -414,10 +414,32 @@ describe('K — Responsive layout (Authorization §10, extended for idle-state s
 });
 
 describe('L — Sorting (Authorization §8): four modes, using only existing data', () => {
-  it('validatedSortMode is a plain, UI-only, unpersisted piece of state with exactly the four required modes', () => {
+  it('validatedSortMode is a plain, UI-only piece of state with exactly the four required modes', () => {
     const body = extractFunctionBody(periodicSrc, 'const [validatedSortMode, setValidatedSortMode] = useState<');
     assert.match(body, /'name-asc' \| 'name-desc' \| 'value-desc' \| 'value-asc'/);
-    assert.match(body, /'name-asc'\s*\n?\s*\);/);
+  });
+
+  // [CONTAGEM — Always-Visible Live Total + Last Entered Product §4;
+  // re-pin, intentional behavior change] The initial default is now
+  // 'entry-order' ("Ordem de registo") instead of 'name-asc', so a
+  // fresh counting session shows products in registration order by
+  // default. A user with an existing persisted sort preference is
+  // unaffected — the restore effect immediately below this
+  // `useState` still overwrites this initial value with their saved
+  // preference the moment it loads (see the next test), so this
+  // default only ever applies to a user with no saved preference yet.
+  it('defaults to entry-order ("Ordem de registo") before any persisted preference loads', () => {
+    const body = extractFunctionBody(periodicSrc, 'const [validatedSortMode, setValidatedSortMode] = useState<');
+    assert.match(body, /'entry-order'\s*\n?\s*\);/);
+  });
+
+  it('a loaded persisted sort preference unconditionally overwrites the entry-order default, exactly once per mount', () => {
+    const start = periodicSrc.indexOf('const sortModeRestoredRef = useRef(false);');
+    assert.notEqual(start, -1, 'Could not locate the sort-mode restore effect.');
+    const body = periodicSrc.slice(start, periodicSrc.indexOf('}, [periodicContagemUserPrefsLoaded]);', start));
+    assert.match(body, /if \(!periodicContagemUserPrefsLoaded\) return;/);
+    assert.match(body, /sortModeRestoredRef\.current = true;/);
+    assert.match(body, /if \(periodicContagemUserPrefs\?\.sortMode\) \{\s*\n\s*setValidatedSortMode\(periodicContagemUserPrefs\.sortMode\);/);
   });
 
   it('sortByValidatedMode reads only productName and a locally-computed quantity*sellingPrice value — no new field, no new calculation', () => {

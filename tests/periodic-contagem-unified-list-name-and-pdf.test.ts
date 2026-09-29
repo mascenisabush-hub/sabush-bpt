@@ -179,10 +179,16 @@ describe('D — PDF export includes the overall total, matching the live list\'s
 
   it('liveTally.totalSellingValue is the EXACT SAME value the live list\'s own "Valor de Venda Contado até Agora" card displays — not a second computation', () => {
     const totalSellingValueFormatCalls = periodicSrc.match(/formatCurrency\(liveTally\.totalSellingValue, currencySymbol\)/g) ?? [];
-    // One occurrence in the live card (JSX), one in the PDF KPI builder
-    // (plain object literal) — same expression, same source value,
-    // reused verbatim in both places rather than recomputed.
-    assert.equal(totalSellingValueFormatCalls.length, 2, 'Expected liveTally.totalSellingValue formatted identically in both the live card and the PDF export.');
+    // [CONTAGEM — Always-Visible Live Total + Last Entered Product §7;
+    // re-pin, intentional addition] Was 2 (the bottom live card's JSX,
+    // and the PDF KPI builder's plain object literal). A third
+    // occurrence is added by this feature's own sticky summary bar —
+    // the SAME expression, reused verbatim a third time rather than a
+    // new formula, exactly the "only one source of truth" requirement
+    // this feature's own spec (§7) demands. Never 1 (that would mean
+    // two of the three surfaces silently drifted from a shared source)
+    // and never anything read from a differently-named/derived value.
+    assert.equal(totalSellingValueFormatCalls.length, 3, 'Expected liveTally.totalSellingValue formatted identically in the live card, the sticky summary bar, and the PDF export.');
   });
 });
 

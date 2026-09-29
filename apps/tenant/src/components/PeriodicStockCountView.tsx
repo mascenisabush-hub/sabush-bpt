@@ -1418,9 +1418,19 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
   // `entrySequence` and never conflated with either. `'entry-order'`
   // itself is UNCHANGED by this addition — it remains available,
   // still ordinal, still not time-based.
+  // [CONTAGEM — Always-Visible Live Total + Last Entered Product §4]
+  // Default changed from 'name-asc' to 'entry-order' ("Ordem de
+  // registo") so a fresh counting session shows products in the order
+  // the operator entered them, by default. This is ONLY the initial
+  // value read before any persisted preference loads — the restore
+  // effect immediately below still overwrites it with
+  // `periodicContagemUserPrefs.sortMode` the moment that preference
+  // loads, exactly as it already did before this change, so a user
+  // with an existing saved preference is completely unaffected; only
+  // a user with no saved preference ever keeps this new default.
   const [validatedSortMode, setValidatedSortMode] = useState<
     'name-asc' | 'name-desc' | 'value-desc' | 'value-asc' | 'entry-order' | 'time-desc' | 'time-asc' | 'original-order'
-  >('name-asc');
+  >('entry-order');
   // [Decision 60 §13.B — Sort-Mode Persistence] Guards the one-time
   // restore below so it applies exactly once per mount, never
   // repeatedly overriding a later in-session change the operator makes
@@ -5782,6 +5792,56 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
     [unifiedListEntries, periodicStockDraftItemsByKey, manualRows, ambiguousMigrationKeys, manualRowSaveError, persistenceStateTick]
   );
 
+  // [CONTAGEM — Always-Visible Live Total + Last Entered Product]
+  // The row with the HIGHEST `entrySequence` among every current
+  // (non-removed) row is, by `entrySequence`'s own existing contract
+  // (see entrySequenceRef's declaration comment: advances only on a
+  // row's first successful Validar, never re-advanced on a later
+  // re-Validar), the most recently entered product THIS session —
+  // independent of `validatedSortMode`, so switching the visible
+  // list's sort order can never change which row this picks. Rows
+  // never yet validated have no `entrySequence` (`undefined`) and are
+  // therefore never candidates here, exactly like every other
+  // `entrySequence` consumer in this file (`sortByValidatedMode`'s own
+  // 'entry-order'/tie-break handling) already treats an absent
+  // sequence. No new persistence, no new sequence source — this reads
+  // the exact same `entrySequence` value groupableUnifiedEntries
+  // already carries on every entry.
+  const lastEnteredEntry = useMemo(() => {
+    let best: (typeof groupableUnifiedEntries)[number] | null = null;
+    for (const entry of groupableUnifiedEntries) {
+      if (entry.entrySequence === undefined) continue;
+      if (best === null || (best.entrySequence as number) < entry.entrySequence) {
+        best = entry;
+      }
+    }
+    return best;
+  }, [groupableUnifiedEntries]);
+
+  // [CONTAGEM — Always-Visible Live Total + Last Entered Product §1]
+  // Measures the EXISTING app-level sticky header
+  // (`data-app-sticky-header`, App.tsx) at runtime rather than
+  // hardcoding a pixel offset, so this screen's own sticky summary
+  // bar can sit directly below it — never overlapping — at every
+  // breakpoint and regardless of that header's own real content
+  // height (business name length, notification state, etc.), which
+  // this component has no other way to know. Purely presentational;
+  // reads no app state and writes nothing.
+  const [contagemStickyBarOffsetPx, setContagemStickyBarOffsetPx] = useState(0);
+  useEffect(() => {
+    const headerEl = document.querySelector('[data-app-sticky-header]');
+    if (!headerEl) return;
+    const measure = () => setContagemStickyBarOffsetPx(headerEl.getBoundingClientRect().height);
+    measure();
+    const observer = new ResizeObserver(measure);
+    observer.observe(headerEl);
+    window.addEventListener('resize', measure);
+    return () => {
+      observer.disconnect();
+      window.removeEventListener('resize', measure);
+    };
+  }, []);
+
   // [Integration Point 3, Step 3] Groups the COMPLETE, unfiltered
   // entry set first — per Step 2's own established rule, grouping
   // must happen before search filtering, so a group correctly retains
@@ -8473,6 +8533,109 @@ export const PeriodicStockCountView: React.FC<PeriodicStockCountViewProps> = ({ 
 
   return (
     <div className="max-w-7xl mx-auto pb-12 space-y-4">
+      {/* [CONTAGEM — Always-Visible Live Total + Last Entered Product]
+          Sticky summary bar (§1) + last-entered strip (§2). Positioned
+          directly below App.tsx's own sticky header via
+          `contagemStickyBarOffsetPx` (measured above, from
+          `data-app-sticky-header`) so the two sticky elements never
+          overlap, at every breakpoint, without hardcoding either
+          header's height. Reads ONLY existing state:
+          `liveTally.totalSellingValue` is the exact same value/
+          calculation the existing "Valor de Venda Contado até Agora"
+          card further down this same form already renders (§7 — no
+          second formula); `draftSaveState` is the same whole-draft
+          save-state model already rendered near the top of this form
+          (no new save-state source). `lastEnteredEntry` (declared
+          above, alongside `groupableUnifiedEntries`) is derived purely
+          from each row's existing `entrySequence`, independent of
+          `validatedSortMode` — changing the list's sort can never
+          change what this strip shows (§3). Tapping it reuses the
+          exact same `handleUnifiedEntryClick` every ordinary list row
+          already uses — no new editing/reopening path (§3). */}
+      <div className="sticky z-20 -mx-4 sm:-mx-8 px-4 sm:px-8" style={{ top: contagemStickyBarOffsetPx }}>
+        <div className="bg-[#0B1F3A] rounded-b-2xl sm:rounded-2xl sm:mt-2 shadow-[0_6px_20px_-8px_rgba(11,31,58,0.35)] px-3.5 py-2 sm:py-2.5 flex flex-col gap-1.5">
+          {/* [§1] Live total + overall draft save state. */}
+          <div className="flex items-center justify-between gap-3">
+            <span className="text-[11px] font-semibold text-white/60 uppercase tracking-wide shrink-0 truncate min-w-0">
+              Valor de Venda Contado até Agora
+            </span>
+            <div className="flex items-center gap-3 shrink-0">
+              <span className="font-display font-semibold text-[16px] sm:text-[18px] text-[#D4AF37] tabular-nums leading-none">
+                {formatCurrency(liveTally.totalSellingValue, currencySymbol)}
+              </span>
+              {/* [§6/§10 — save-state honesty] Reuses `draftSaveState`
+                  unchanged — never a locally-invented signal. Every
+                  non-'editing'/'saved' state is presented as a failure
+                  ("Falha ao guardar"), matching this task's required
+                  three-state vocabulary (guardado/a guardar/falha)
+                  without collapsing any of it into a false "saved". */}
+              {draftSaveState !== 'editing' && (
+                <span className="text-[11px] font-semibold flex items-center gap-1 whitespace-nowrap">
+                  {(draftSaveState === 'saving' || draftSaveState === 'retrying') && (
+                    <>
+                      <RotateCw className="w-3 h-3 text-white/50 animate-spin" strokeWidth={2.5} aria-hidden="true" />
+                      <span className="text-white/60">A guardar…</span>
+                    </>
+                  )}
+                  {draftSaveState === 'saved' && (
+                    <>
+                      <CheckCircle2 className="w-3 h-3 text-emerald-400" strokeWidth={2.5} aria-hidden="true" />
+                      <span className="text-emerald-400">Rascunho guardado</span>
+                    </>
+                  )}
+                  {(draftSaveState === 'save-failed' || draftSaveState === 'save-unknown' || draftSaveState === 'save-blocked') && (
+                    <>
+                      <AlertTriangle className="w-3 h-3 text-rose-400" strokeWidth={2.5} aria-hidden="true" />
+                      <span className="text-rose-400">Falha ao guardar</span>
+                    </>
+                  )}
+                </span>
+              )}
+            </div>
+          </div>
+
+          {/* [§2/§3] Last-entered product strip — always the row with
+              the highest `entrySequence`, regardless of the current
+              `validatedSortMode`. Hidden only when nothing has been
+              entered yet this session (`lastEnteredEntry === null`). */}
+          {lastEnteredEntry && (
+            <button
+              type="button"
+              onClick={() => handleUnifiedEntryClick(lastEnteredEntry)}
+              className="flex items-center gap-2 bg-white/[0.06] hover:bg-white/[0.1] rounded-lg px-2.5 py-1.5 text-left transition-colors duration-150"
+            >
+              <span className="text-[10px] font-bold uppercase tracking-wide text-white/45 shrink-0">
+                Último produto registado
+              </span>
+              {/* [§2 — save state must be visually unambiguous] Same
+                  `persistenceState` every ordinary row already carries
+                  (`groupableUnifiedEntries`) — a row never successfully
+                  written to Firestore is never shown as saved here. */}
+              {lastEnteredEntry.persistenceState === 'saved' ? (
+                <CheckCircle2 className="w-3.5 h-3.5 text-emerald-400 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+              ) : lastEnteredEntry.persistenceState === 'saving' ? (
+                <RotateCw className="w-3.5 h-3.5 text-white/50 shrink-0 animate-spin" strokeWidth={2.5} aria-hidden="true" />
+              ) : (
+                <AlertTriangle className="w-3.5 h-3.5 text-rose-400 shrink-0" strokeWidth={2.5} aria-hidden="true" />
+              )}
+              <span className="text-[13px] font-semibold text-white truncate min-w-0">{lastEnteredEntry.productName}</span>
+              <span className="text-[12px] text-white/60 tabular-nums shrink-0">
+                {lastEnteredEntry.quantity.trim() === '' ? '—' : lastEnteredEntry.quantity} {lastEnteredEntry.unit || ''}
+              </span>
+              {lastEnteredEntry.sellingPrice.trim() !== '' && (
+                <span className="text-[12px] font-semibold text-[#D4AF37] tabular-nums shrink-0 ml-auto">
+                  {formatCurrency(
+                    (lastEnteredEntry.quantity.trim() === '' ? 0 : Number(lastEnteredEntry.quantity) || 0) *
+                      (Number(lastEnteredEntry.sellingPrice) || 0),
+                    currencySymbol
+                  )}
+                </span>
+              )}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* [Layout — wider working area] Was `max-w-5xl` (1024px), a
           SECOND, tighter cap stacked directly on top of App.tsx's own
           `<main className="max-w-7xl ...">` wrapper — the two nested
